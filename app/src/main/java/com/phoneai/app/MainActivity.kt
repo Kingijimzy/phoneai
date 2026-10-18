@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
@@ -9,7 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
-import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -21,10 +22,11 @@ import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** The setup screen: turn things on, save the key, test it. */
+/** The setup screen: turn things on, save keys, choose the AI, test it. */
 class MainActivity : Activity() {
     private lateinit var status: TextView
-    private lateinit var keyBox: EditText
+    private lateinit var chatBtn: Button
+    private lateinit var visionBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -52,7 +54,7 @@ class MainActivity : Activity() {
         return b
     }
 
-    private fun add(col: LinearLayout, v: android.view.View, top: Int = 12) {
+    private fun add(col: LinearLayout, v: View, top: Int = 12) {
         val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.setMargins(0, dp(top), 0, 0)
         col.addView(v, lp)
@@ -93,28 +95,24 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         }, 8)
 
-        add(col, text("3. NVIDIA key", 18f, 0xFFE9EEF2.toInt(), true), 24)
-        keyBox = EditText(this)
-        keyBox.hint = "nvapi-..."
-        keyBox.setHintTextColor(0xFF8A96A3.toInt())
-        keyBox.setTextColor(0xFFE9EEF2.toInt())
-        keyBox.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        keyBox.setSingleLine(true)
-        add(col, keyBox, 8)
-        add(col, button("Save key", true) {
-            val k = keyBox.text.toString().trim()
-            if (k.isEmpty()) {
-                Toast.makeText(this, "Paste your key first.", Toast.LENGTH_SHORT).show()
-            } else {
-                Prefs.setKey(this, k)
-                keyBox.setText("")
-                Toast.makeText(this, "Key saved.", Toast.LENGTH_SHORT).show()
-                refresh()
-            }
-        })
+        add(col, text("3. AI service and key", 18f, 0xFFE9EEF2.toInt(), true), 24)
+        add(
+            col,
+            text(
+                "Add a key for any service (NVIDIA, Google Gemini, Groq, OpenRouter). " +
+                    "Suggested: Groq for chat (fast), Gemini for reading the screen.",
+                13f, 0xFF8A96A3.toInt()
+            ),
+            4
+        )
+        add(col, button("Add or change an API key", true) { keyDialog() }, 8)
+        chatBtn = button("", false) { providerDialog(false) }
+        add(col, chatBtn, 8)
+        visionBtn = button("", false) { providerDialog(true) }
+        add(col, visionBtn, 8)
         add(col, button("Test the AI", false) { testAi() }, 8)
-        add(col, button("Choose AI model (chat)", false) { pickModel(false) }, 8)
-        add(col, button("Choose AI model (screen vision)", false) { pickModel(true) }, 8)
+        add(col, button("Choose model for chat", false) { pickModel(false) }, 8)
+        add(col, button("Choose model for screen vision", false) { pickModel(true) }, 8)
 
         add(col, text("4. Voice", 18f, 0xFFE9EEF2.toInt(), true), 24)
         val voiceSw = Switch(this)
@@ -144,8 +142,8 @@ class MainActivity : Activity() {
             col,
             text(
                 "Safety: it asks you before sending, paying, buying or deleting, and it never types " +
-                    "passwords or codes. Tap Stop at any time. Games can ban accounts that use automation, " +
-                    "so use a spare account.",
+                    "passwords or codes. Tap Stop at any time. Free AI services may keep or read what " +
+                    "you send them, so avoid private screens. Games can ban accounts that use automation.",
                 12f, 0xFF8A96A3.toInt()
             ),
             20
@@ -160,29 +158,93 @@ class MainActivity : Activity() {
     private fun refresh() {
         val acc = if (PhoneAiService.instance != null) "ON" else "OFF"
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
-        val key = if (Prefs.key(this).isNotEmpty()) "saved" else "missing"
-        status.text = "Accessibility: $acc\nMicrophone:    $mic\nNVIDIA key:    $key"
-        keyBox.hint = if (Prefs.key(this).isNotEmpty()) "Key saved. Paste a new one to replace it." else "nvapi-..."
+        val sb = StringBuilder()
+        sb.append("Accessibility: $acc\n")
+        sb.append("Microphone:    $mic\n")
+        sb.append("Keys saved:    ")
+        val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
+        sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
+        status.text = sb.toString()
+        chatBtn.text = "Chat AI: " + Prefs.provider(this, false).label + "  (tap to change)"
+        visionBtn.text = "Screen-vision AI: " + Prefs.provider(this, true).label + "  (tap to change)"
     }
 
-    /** Shows every model your key can see; tap one to use it. */
+    /** Pick a service, then paste its key. */
+    private fun keyDialog() {
+        val labels = Providers.all.map { it.label + if (Prefs.hasKey(this, it.id)) "  (saved)" else "" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Which service is the key for?")
+            .setItems(labels) { _, which -> pasteKey(Providers.all[which]) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun pasteKey(p: Provider) {
+        val box = EditText(this)
+        box.hint = p.keyHint
+        box.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        box.setSingleLine(true)
+        val pad = dp(20)
+        val wrap = LinearLayout(this)
+        wrap.setPadding(pad, dp(8), pad, 0)
+        wrap.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        AlertDialog.Builder(this)
+            .setTitle(p.label + " key")
+            .setMessage("Long-press the box and tap Paste.")
+            .setView(wrap)
+            .setPositiveButton("Save") { _, _ ->
+                val k = box.text.toString().trim()
+                if (k.isEmpty()) {
+                    Toast.makeText(this, "Nothing pasted.", Toast.LENGTH_SHORT).show()
+                } else {
+                    // If the chat or vision AI had no key yet, point it at this service.
+                    val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
+                    val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
+                    Prefs.setKey(this, p.id, k)
+                    if (chatNeeds) Prefs.setProvider(this, false, p.id)
+                    if (visionNeeds) Prefs.setProvider(this, true, p.id)
+                    Toast.makeText(this, p.label + " key saved.", Toast.LENGTH_SHORT).show()
+                    refresh()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun providerDialog(vision: Boolean) {
+        val labels = Providers.all.map { it.label + if (Prefs.hasKey(this, it.id)) "" else "  (no key yet)" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(if (vision) "Which AI reads the screen?" else "Which AI answers chat?")
+            .setItems(labels) { _, which ->
+                val p = Providers.all[which]
+                Prefs.setProvider(this, vision, p.id)
+                if (!Prefs.hasKey(this, p.id)) {
+                    Toast.makeText(this, "Add a " + p.label + " key first.", Toast.LENGTH_LONG).show()
+                }
+                refresh()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Shows every model the chosen service offers; tap one to use it. */
     private fun pickModel(vision: Boolean) {
-        Toast.makeText(this, "Loading models...", Toast.LENGTH_SHORT).show()
+        val p = Prefs.provider(this, vision)
+        Toast.makeText(this, "Loading " + p.label + " models...", Toast.LENGTH_SHORT).show()
         Thread {
             try {
                 val nim = Nim(this)
-                val all = nim.allModels()
-                // Show every model. Vision models come first in the vision list.
+                val all = nim.allModels(p)
                 val list = if (vision) all.sortedBy { if (nim.isVision(it)) 0 else 1 } else all
                 runOnUiThread {
                     if (list.isEmpty()) {
-                        Toast.makeText(this, "No models found (${all.size} total).", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "No models found.", Toast.LENGTH_LONG).show()
                     } else {
                         val items = list.toTypedArray()
-                        android.app.AlertDialog.Builder(this)
-                            .setTitle(if (vision) "Pick a vision model" else "Pick a chat model")
+                        AlertDialog.Builder(this)
+                            .setTitle(p.label + (if (vision) " vision model" else " chat model"))
                             .setItems(items) { _, which ->
-                                if (vision) Prefs.setVisionModel(this, items[which]) else Prefs.setTextModel(this, items[which])
+                                Prefs.setModel(this, p, vision, items[which])
                                 Toast.makeText(this, "Using " + items[which] + ". Now tap Test the AI.", Toast.LENGTH_LONG).show()
                             }
                             .setNegativeButton("Cancel", null)
@@ -198,15 +260,24 @@ class MainActivity : Activity() {
     private fun testAi() {
         Toast.makeText(this, "Testing...", Toast.LENGTH_SHORT).show()
         Thread {
-            val msg = try {
-                val m = JSONArray().put(JSONObject().put("role", "user").put("content", "Reply with the single word: ok"))
-                val r = Nim(this).chat(m, false, 10, 0.0)
-                "AI works. Model: " + Prefs.textModel(this) + " said: " + r.take(30)
-            } catch (e: Exception) {
-                "Problem: " + e.message
+            val sb = StringBuilder()
+            for (vision in listOf(false, true)) {
+                val p = Prefs.provider(this, vision)
+                val name = if (vision) "Screen vision" else "Chat"
+                try {
+                    val m = JSONArray().put(JSONObject().put("role", "user").put("content", "Reply with the single word: ok"))
+                    val r = Nim(this).chat(m, vision, 10, 0.0)
+                    sb.append("$name: ${p.label} works.\n  Model: ${Prefs.model(this, p, vision)}\n  Said: ${r.take(30)}\n\n")
+                } catch (e: Exception) {
+                    sb.append("$name: ${p.label} FAILED.\n  ${e.message}\n\n")
+                }
             }
             runOnUiThread {
-                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                AlertDialog.Builder(this)
+                    .setTitle("Test result")
+                    .setMessage(sb.toString().trim())
+                    .setPositiveButton("OK", null)
+                    .show()
                 refresh()
             }
         }.start()

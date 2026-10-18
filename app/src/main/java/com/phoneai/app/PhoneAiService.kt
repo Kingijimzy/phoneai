@@ -480,8 +480,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun submit(text: String) {
         val t = text.trim()
         if (t.isEmpty() || running) return
-        if (Prefs.key(this).isEmpty()) {
-            Toast.makeText(this, "Open the Phone AI app and save your NVIDIA key first.", Toast.LENGTH_LONG).show()
+        if (!Prefs.hasAnyKey(this)) {
+            Toast.makeText(this, "Open the Phone AI app and add an API key first.", Toast.LENGTH_LONG).show()
             return
         }
         transcript.add(Pair("me", t))

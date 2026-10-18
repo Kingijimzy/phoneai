@@ -6,31 +6,50 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Talks to the NVIDIA NIM API. If a model is gone or not allowed, it tries others. */
+/** Talks to the chosen AI service. If a model is gone or not allowed, it tries others. */
 class Nim(private val ctx: Context) {
-    private val base = "https://integrate.api.nvidia.com/v1"
     private val bad = listOf(
         "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
         "whisper", "tts", "asr", "nemoguard", "riva", "fastpitch", "diffusion", "stable",
-        "flux", "sdxl", "bria", "cosmos", "grounding", "segment", "ocr", "detect", "nvclip"
+        "flux", "sdxl", "bria", "cosmos", "grounding", "segment", "ocr", "detect", "nvclip",
+        "image", "imagen", "veo", "live", "transcribe", "translate", "audio", "moderation", "orpheus"
     )
-    private val visionKeys = listOf("vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "phi-3.5-vision", "phi-4-multimodal")
+    private val visionKeys = listOf(
+        "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal",
+        "llama-4", "gemma-3", "gemini"
+    )
     private val preferred = listOf(
         "llama-3.3-nemotron", "llama-3.3-70b", "llama-3.1-nemotron", "llama-3.1-70b",
         "llama-4", "qwen", "mistral-large", "mixtral", "llama-3.1-8b", "gemma", "mistral", "phi"
     )
-    private val fallbackText = listOf(
-        "nvidia/nemotron-3.5-super-vl-120b-a12b", "ibm/granite-8b-code-instruct",
-        "meta/llama-3.3-70b-instruct", "meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct",
-        "nvidia/llama-3.1-nemotron-70b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1",
-        "qwen/qwen2.5-72b-instruct", "qwen/qwen2.5-7b-instruct", "mistralai/mistral-7b-instruct-v0.3",
-        "mistralai/mixtral-8x22b-instruct-v0.1", "google/gemma-2-9b-it", "microsoft/phi-3-medium-128k-instruct"
-    )
-    private val fallbackVision = listOf(
-        "nvidia/nemotron-3.5-super-vl-120b-a12b",
-        "meta/llama-3.2-90b-vision-instruct", "meta/llama-3.2-11b-vision-instruct",
-        "microsoft/phi-3.5-vision-instruct", "nvidia/vila", "meta/llama-4-maverick-17b-128e-instruct",
-        "meta/llama-4-scout-17b-16e-instruct"
+    private val fallbacks: Map<String, Pair<List<String>, List<String>>> = mapOf(
+        "nvidia" to Pair(
+            listOf(
+                "nvidia/nemotron-3.5-super-vl-120b-a12b", "ibm/granite-8b-code-instruct",
+                "meta/llama-3.3-70b-instruct", "meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct",
+                "nvidia/llama-3.1-nemotron-70b-instruct", "qwen/qwen2.5-7b-instruct",
+                "mistralai/mistral-7b-instruct-v0.3", "google/gemma-2-9b-it"
+            ),
+            listOf(
+                "nvidia/nemotron-3.5-super-vl-120b-a12b", "meta/llama-3.2-90b-vision-instruct",
+                "meta/llama-3.2-11b-vision-instruct", "microsoft/phi-3.5-vision-instruct"
+            )
+        ),
+        "gemini" to Pair(
+            listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
+            listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite")
+        ),
+        "groq" to Pair(
+            listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b"),
+            listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct")
+        ),
+        "openrouter" to Pair(
+            listOf(
+                "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free",
+                "qwen/qwen-2.5-72b-instruct:free"
+            ),
+            listOf("google/gemma-3-27b-it:free", "qwen/qwen2.5-vl-72b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free")
+        )
     )
 
     private class Http(val code: Int, val body: String)
@@ -58,8 +77,8 @@ class Nim(private val ctx: Context) {
         }
     }
 
-    private fun request(method: String, path: String, body: String?, key: String, readMs: Int = 50000): Http {
-        val conn = URL(base + path).openConnection() as HttpURLConnection
+    private fun request(p: Provider, method: String, path: String, body: String?, key: String, readMs: Int = 50000): Http {
+        val conn = URL(p.base + path).openConnection() as HttpURLConnection
         active = conn
         try {
             conn.requestMethod = method
@@ -81,58 +100,80 @@ class Nim(private val ctx: Context) {
         }
     }
 
-    /** Every model id the key can see, unfiltered. Throws with a readable message on failure. */
-    fun allModels(): List<String> {
-        val key = Prefs.key(ctx)
-        if (key.isEmpty()) throw IllegalStateException("No NVIDIA key saved.")
+    private fun keyBad(r: Http): Boolean =
+        r.code == 401 || r.code == 403 ||
+            (r.code == 400 && (r.body.contains("API key", true) || r.body.contains("api_key", true)))
+
+    /** Every model id this provider's key can see. Throws with a readable message on failure. */
+    fun allModels(p: Provider): List<String> {
+        val key = Prefs.key(ctx, p.id)
+        if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
         val r = try {
-            request("GET", "/models", null, key, 25000)
+            request(p, "GET", "/models", null, key, 25000)
         } catch (e: java.io.IOException) {
-            throw RuntimeException("Cannot reach NVIDIA. Check your internet connection. (${e.javaClass.simpleName})")
+            throw RuntimeException("Cannot reach ${p.label}. Check your internet connection. (${e.javaClass.simpleName})")
         }
-        if (r.code == 401 || r.code == 403) throw RuntimeException("NVIDIA rejected the key (${r.code}). Make a new key and save it again.")
+        if (keyBad(r)) throw RuntimeException("${p.label} rejected the key (${r.code}). Make a new key and save it again.")
         if (r.code !in 200..299) throw RuntimeException("Could not list models: HTTP ${r.code} ${r.body.take(120)}")
         val arr = JSONObject(r.body).optJSONArray("data") ?: return emptyList()
         val ids = ArrayList<String>()
-        for (i in 0 until arr.length()) ids.add(arr.getJSONObject(i).optString("id"))
+        for (i in 0 until arr.length()) ids.add(arr.getJSONObject(i).optString("id").removePrefix("models/"))
         return ids.filter { it.isNotBlank() }.sorted()
     }
 
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
-    private fun candidates(vision: Boolean): List<String> {
+    private fun candidates(p: Provider, vision: Boolean): List<String> {
         val ids = try {
-            allModels()
+            allModels(p)
         } catch (e: Exception) {
             emptyList()
         }
         val ok = ids.filter { id -> bad.none { id.lowercase().contains(it) } }
-        val vis = ok.filter { isVision(it) }
         val out = ArrayList<String>()
-        if (vision) {
-            out.addAll(vis)
-            out.addAll(fallbackVision)
-        } else {
-            val txt = ok.filter { it !in vis }
-            for (p in preferred) {
-                for (id in txt) {
-                    if (id.lowercase().contains(p) && id !in out) out.add(id)
+        val fb: Pair<List<String>, List<String>> = fallbacks[p.id] ?: Pair(emptyList<String>(), emptyList<String>())
+        when (p.id) {
+            "gemini" -> {
+                val g = ok.filter { it.lowercase().contains("gemini") }
+                out.addAll(g.filter { it.contains("flash") && !it.contains("lite") })
+                out.addAll(g.filter { it.contains("lite") })
+                out.addAll(if (vision) fb.second else fb.first)
+            }
+            "openrouter" -> {
+                val free = ok.filter { it.endsWith(":free") }
+                out.addAll(if (vision) free.filter { isVision(it) } else free)
+                out.addAll(if (vision) fb.second else fb.first)
+            }
+            else -> {
+                val vis = ok.filter { isVision(it) }
+                if (vision) {
+                    out.addAll(vis)
+                } else {
+                    val txt = ok.filter { it !in vis }
+                    for (pref in preferred) {
+                        for (id in txt) {
+                            if (id.lowercase().contains(pref) && id !in out) out.add(id)
+                        }
+                    }
+                    for (id in txt) {
+                        if (id !in out) out.add(id)
+                    }
                 }
+                out.addAll(if (vision) fb.second else fb.first)
             }
-            for (id in txt) {
-                if (id !in out) out.add(id)
-            }
-            out.addAll(fallbackText)
         }
         return out.distinct()
     }
 
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 600, temperature: Double = 0.2): String {
-        val key = Prefs.key(ctx)
+        val p = Prefs.provider(ctx, vision)
+        val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) {
-            throw IllegalStateException("No NVIDIA key saved. Open the Phone AI app and save your key.")
+            throw IllegalStateException("No ${p.label} key saved. Open Phone AI > Add or change an API key.")
         }
-        val queue = mutableListOf(if (vision) Prefs.visionModel(ctx) else Prefs.textModel(ctx))
+        // Gemini models "think" first and that uses up the token budget, so leave room.
+        val tokens = if (p.id == "gemini") maxOf(maxTokens * 4, 1024) else maxTokens
+        val queue = mutableListOf(Prefs.model(ctx, p, vision))
         val tried = HashSet<String>()
         var refilled = false
         var lastNote = ""
@@ -143,34 +184,34 @@ class Nim(private val ctx: Context) {
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
             attempts++
-            onStatus?.invoke("Asking " + model.substringAfterLast('/') + "...")
+            onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
             val payload = JSONObject()
                 .put("model", model)
                 .put("messages", messages)
                 .put("temperature", temperature)
-                .put("max_tokens", maxTokens)
+                .put("max_tokens", tokens)
             val r: Http? = try {
-                request("POST", "/chat/completions", payload.toString(), key)
+                request(p, "POST", "/chat/completions", payload.toString(), key)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                throw RuntimeException("Cannot reach NVIDIA. Check your internet connection. (${e.javaClass.simpleName})")
+                throw RuntimeException("Cannot reach ${p.label}. Check your internet connection. (${e.javaClass.simpleName})")
             }
             if (r == null) {
                 lastNote = "$model -> too slow (no answer in 50s)"
                 if (!refilled) {
                     refilled = true
                     onStatus?.invoke("That model is slow. Looking for another...")
-                    queue.addAll(candidates(vision))
+                    queue.addAll(candidates(p, vision))
                 }
                 continue
             }
-            if (r.code == 401 || r.code == 403) {
-                throw RuntimeException("NVIDIA rejected the key (${r.code}). Make a new key at build.nvidia.com and save it again.")
+            if (keyBad(r)) {
+                throw RuntimeException("${p.label} rejected the key (${r.code}). Make a new key and save it again.")
             }
             if (r.code == 429) {
-                throw RuntimeException("NVIDIA says too many requests (429). Wait a minute and try again.")
+                throw RuntimeException("${p.label} says you hit the free limit (429). Wait a minute, or switch AI in Phone AI.")
             }
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
                 (r.code == 400 && r.body.isNotEmpty())
@@ -178,21 +219,31 @@ class Nim(private val ctx: Context) {
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
                 if (!refilled) {
                     refilled = true
-                    queue.addAll(candidates(vision))
+                    queue.addAll(candidates(p, vision))
                 }
                 continue
             }
             if (r.code !in 200..299) {
-                throw RuntimeException("NVIDIA error ${r.code}: ${r.body.take(160)}")
+                throw RuntimeException("${p.label} error ${r.code}: ${r.body.take(160)}")
             }
-            if (vision) Prefs.setVisionModel(ctx, model) else Prefs.setTextModel(ctx, model)
-            return JSONObject(r.body)
-                .getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
+            val content = try {
+                JSONObject(r.body).getJSONArray("choices").getJSONObject(0)
+                    .getJSONObject("message").optString("content", "")
+            } catch (e: Exception) {
+                ""
+            }
+            if (content.isBlank() || content == "null") {
+                lastNote = "$model -> empty reply"
+                if (!refilled) {
+                    refilled = true
+                    queue.addAll(candidates(p, vision))
+                }
+                continue
+            }
+            Prefs.setModel(ctx, p, vision, model)
+            return content
         }
-        val kind = if (vision) "vision" else "text"
-        throw RuntimeException("No $kind model worked after $attempts tries. Last: $lastNote. Open Phone AI > Choose AI model and pick one yourself.")
+        val kind = if (vision) "vision" else "chat"
+        throw RuntimeException("No ${p.label} $kind model worked after $attempts tries. Last: $lastNote")
     }
 }
