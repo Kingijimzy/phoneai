@@ -302,6 +302,7 @@ class MainActivity : Activity() {
                 Prefs.setAvatarStyle(this, chosen)
                 orbView.style = runCatching { OrbView.Style.valueOf(chosen) }
                     .getOrDefault(OrbView.Style.ORION_ORB)
+                PhoneAiService.instance?.refreshAvatar()
                 refresh()
                 Toast.makeText(this, avatarLabel(chosen) + " selected.", Toast.LENGTH_SHORT).show()
             }
