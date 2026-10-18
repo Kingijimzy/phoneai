@@ -288,7 +288,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
                 else -> OrbView.Mode.IDLE
             }
-            for (o in orbs()) o.mode = m
+            val selectedStyle = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this)) }
+                .getOrDefault(OrbView.Style.ORION_ORB)
+            for (o in orbs()) {
+                o.style = selectedStyle
+                o.mode = m
+            }
             micBtnRef?.text = if (listening) "Stop" else "Mic"
             panelStatus?.text = when (m) {
                 OrbView.Mode.IDLE -> if (Prefs.wake(this)) "Say \"Orion\" or tap the mic" else "Ready"
@@ -304,7 +309,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun showBubble() {
         if (bubble != null || running || panel != null) return
-        val b = OrbView(this)
+        val b = OrbView(this).apply {
+            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@PhoneAiService)) }
+                .getOrDefault(OrbView.Style.ORION_ORB)
+        }
         b.backing = true
         val lp = WindowManager.LayoutParams(dp(64), dp(64), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
@@ -383,7 +391,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        val orb = OrbView(this)
+        val orb = OrbView(this).apply {
+            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@PhoneAiService)) }
+                .getOrDefault(OrbView.Style.ORION_ORB)
+        }
         head.addView(orb, LinearLayout.LayoutParams(dp(76), dp(76)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
@@ -544,7 +555,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.gravity = Gravity.CENTER_VERTICAL
         row.background = rounded(0xF00E1522.toInt(), dp(22).toFloat(), Theme.CYAN)
         row.setPadding(dp(8), dp(6), dp(10), dp(6))
-        val orb = OrbView(this)
+        val orb = OrbView(this).apply {
+            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@PhoneAiService)) }
+                .getOrDefault(OrbView.Style.ORION_ORB)
+        }
         row.addView(orb, LinearLayout.LayoutParams(dp(48), dp(48)))
         val t = label(text, 14f, Theme.TEXT)
         t.maxLines = 3
