@@ -77,7 +77,7 @@ Rules:
 - Keep "say" short (under 25 words) when doing tasks. For questions, answer clearly but briefly.
 - Prefer read_screen or click_text over guessing coordinates. If a step fails twice, try another approach or explain.
 - MEMORY: when the user tells you a lasting preference, a project, a decision, or leaves work unfinished, call remember (one short fact each) and carry on. Use update_memory or forget to fix or finish old items. Do not save passwords, secrets or one-off trivia. Use what you remember naturally, without announcing that you remember.
-- TASKS: if the user asks you to track work, create a task with create_task and include a due_at timestamp only when the deadline is clear. Use list_tasks to check progress, update_task to change status, and ask_user before delete_task. Tasks are stored locally; a saved deadline is not yet a guaranteed notification/alarm.
+- TASKS: if the user asks you to track work, create a task with create_task and include a due_at timestamp only when the deadline is clear. Use list_tasks to check progress, update_task to change status, and ask_user before delete_task. Tasks are stored locally. A future due_at schedules an on-device notification; Android battery settings may delay delivery.
 """
 
         fun systemPrompt(svc: PhoneAiService): String {
