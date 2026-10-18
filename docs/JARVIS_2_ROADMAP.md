@@ -15,14 +15,17 @@ Build a practical Android personal assistant that can talk, understand the curre
 - Screen vision and screen recording workflows.
 - GitHub Actions builds a debug APK and publishes it as a GitHub Release.
 - First persistent task store and agent tools were added in build 8.
+- Native avatar presets (Orion, Nova, Atlas, Lumen) are available; the selected preset is saved on-device.
+- Local task deadline notifications are scheduled from task create/update operations and restored after reboot; Android may delay delivery.
 
 ## Milestones
 
-### 1. Reliable task management (in progress)
+### 1. Reliable task management (foundation implemented; device verification pending)
 - Keep tasks on-device and available after app/process restarts.
 - Show tasks in the app UI, including status, priority, and optional deadline.
 - Support create, update, complete, cancel, and delete.
-- Next: implement Android notifications and reboot-safe scheduling for due tasks. Use supported Android scheduling APIs and explain battery/permission restrictions. A saved deadline alone is not a notification.
+- Schedule local Android notifications for future deadlines and restore alarms after reboot.
+- Verify notification permission behavior, reboot restoration, and battery/doze delays on a real device.
 
 ### 2. Memory that the user controls
 - Reuse the existing MemoryStore instead of creating a second competing memory database.
@@ -32,12 +35,13 @@ Build a practical Android personal assistant that can talk, understand the curre
 - Never save API keys, passwords, one-time verification codes, or sensitive screen contents by default.
 - Consider local-first storage; explain clearly before adding cloud sync.
 
-### 3. Avatar and voice
-- Inspect the actual avatar_front_end source, scripts, environment requirements, license, and LiveKit flow before integration.
-- Prefer a lightweight WebView-hosted avatar if the existing frontend requires web technologies; otherwise choose the simplest maintainable option.
+### 3. Avatar and voice (native character presets implemented; LiveKit integration pending)
+- Native lightweight character presets: Orion energy orb, Nova friendly face, Atlas tactical visor, and Lumen warm guide.
+- Existing avatar_front_end is a Next.js/React LiveKit voice-agent starter, not a ready-made 3D human character pack.
+- Next: configure and deploy its server-side LiveKit token endpoint, then integrate through a WebView only after a stable HTTPS URL and server-side secrets are available.
 - Connect avatar states to real app states: idle, listening, thinking, speaking, executing, waiting for approval, and error.
-- Keep a usable native fallback when the avatar cannot load or the network is unavailable.
-- Do not embed API secrets in the Android APK. Any server-side LiveKit token endpoint must keep secrets server-side.
+- Keep a usable native fallback when the web avatar cannot load or the network is unavailable.
+- Never embed LiveKit API secrets in the Android APK.
 
 ### 4. Safe phone actions
 - Use Android APIs and AccessibilityService only with user-granted permissions.
@@ -64,12 +68,13 @@ Build a practical Android personal assistant that can talk, understand the curre
 
 ## Suggested implementation order
 
-1. Task list/create/update UI.
-2. Android deadline notifications and reboot-safe scheduling.
-3. Verify memory retrieval and memory safety.
-4. Inspect and integrate the avatar frontend with real voice/agent states.
-5. Add resumable multi-step task execution and an action log.
-6. Run cloud build and test on a real Android device.
+1. Task list/create/update UI — implemented.
+2. Android deadline notifications and reboot-safe scheduling — implemented; device verification pending.
+3. Native avatar character picker — implemented; build/device verification pending.
+4. Verify memory retrieval and memory safety.
+5. Deploy and integrate the LiveKit frontend with real voice/agent states.
+6. Add resumable multi-step task execution and an action log.
+7. Run cloud build and test on a real Android device.
 
 ## Constraints
 
