@@ -280,6 +280,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun orbs(): List<OrbView> = listOfNotNull(bubble, panelOrb, stripOrb)
 
     /** Decides what the avatar should be doing and what the status line says. Main thread. */
+    fun refreshAvatar() = refreshMode()
+
     private fun refreshMode() {
         main.post {
             val m = when {
