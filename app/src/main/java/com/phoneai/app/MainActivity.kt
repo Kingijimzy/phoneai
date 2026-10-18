@@ -208,12 +208,20 @@ class MainActivity : Activity() {
         memBtn = button("", true) { memoryDialog() }
         add(s4, memBtn, 8)
 
-        // ---- 5. recording
+        // ---- 5. persistent tasks
         val s5 = card(
-            col, "5. Screen recording",
+            col, "5. Tasks and reminders",
+            "Tasks stay saved on this phone across app restarts. Deadlines are stored, but notifications are a follow-up feature."
+        )
+        add(s5, button("Open saved tasks", true) { tasksDialog() }, 10)
+        add(s5, button("Create a task", false) { addTaskDialog() }, 8)
+
+        // ---- 6. recording
+        val s6 = card(
+            col, "6. Screen recording",
             "Say \"record my screen\" to Orion, or test here. Android asks permission each time. Videos are saved in Movies/Orion."
         )
-        add(s5, button("Start a test recording", false) {
+        add(s6, button("Start a test recording", false) {
             if (RecordService.state == "recording") {
                 Toast.makeText(this, "Already recording.", Toast.LENGTH_SHORT).show()
             } else {
@@ -221,7 +229,7 @@ class MainActivity : Activity() {
                 startActivity(Intent(this, RecordRequestActivity::class.java))
             }
         }, 10)
-        add(s5, button("Stop recording", false) {
+        add(s6, button("Stop recording", false) {
             val svc = RecordService.instance
             if (svc == null || RecordService.state != "recording") {
                 Toast.makeText(this, "Not recording.", Toast.LENGTH_SHORT).show()
@@ -230,8 +238,7 @@ class MainActivity : Activity() {
                 Toast.makeText(this, "Saving to Movies/Orion...", Toast.LENGTH_LONG).show()
             }
         }, 8)
-
-        add(
+\n        add(
             col,
             text(
                 "Safety: Orion asks before sending, paying, buying or deleting, and never types passwords or codes. " +
@@ -391,6 +398,103 @@ class MainActivity : Activity() {
             }
         }, 900)
         Toast.makeText(this, "Speaking...", Toast.LENGTH_SHORT).show()
+    }
+
+    // ------------------------------------------------------------ persistent tasks
+
+    private fun tasksDialog() {
+        val tasks = TaskStore.all(this)
+        val labels = tasks.map { task ->
+            val due = task.dueAt?.let {
+                SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(it))
+            } ?: "no deadline"
+            "[${task.id}] ${task.status.uppercase()} · ${task.priority} · ${task.title} · $due"
+        }.toTypedArray()
+        val b = AlertDialog.Builder(this).setTitle("Saved tasks (${tasks.size})")
+        if (tasks.isEmpty()) {
+            b.setMessage("No tasks yet. Add one, or ask Orion to create a task in chat.")
+        } else {
+            b.setItems(labels) { _, which -> taskActions(tasks[which]) }
+        }
+        b.setPositiveButton("Add task") { _, _ -> addTaskDialog() }
+        b.setNegativeButton("Close", null)
+        b.show()
+    }
+
+    private fun addTaskDialog() {
+        val titleBox = EditText(this).apply { hint = "Task title (required)"; setSingleLine(true) }
+        val detailsBox = EditText(this).apply {
+            hint = "Details (optional)"
+            minLines = 2
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        val dueBox = EditText(this).apply {
+            hint = "Deadline: yyyy-MM-dd HH:mm (optional)"
+            setSingleLine(true)
+        }
+        val priority = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                arrayOf("normal", "low", "high", "urgent"))
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(titleBox)
+            addView(detailsBox)
+            addView(priority)
+            addView(dueBox)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Create a task")
+            .setMessage("Deadlines use your phone's local time. Notifications are not enabled yet.")
+            .setView(wrap)
+            .setPositiveButton("Save") { _, _ ->
+                val title = titleBox.text.toString().trim()
+                val dueText = dueBox.text.toString().trim()
+                val dueAt = if (dueText.isEmpty()) null else try {
+                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }
+                        .parse(dueText)?.time
+                } catch (_: Exception) { null }
+                if (title.isEmpty()) {
+                    Toast.makeText(this, "Enter a task title.", Toast.LENGTH_SHORT).show()
+                } else if (dueText.isNotEmpty() && dueAt == null) {
+                    Toast.makeText(this, "Use deadline format yyyy-MM-dd HH:mm.", Toast.LENGTH_LONG).show()
+                } else {
+                    val task = TaskStore.add(this, title, detailsBox.text.toString(),
+                        priority.selectedItem.toString(), dueAt)
+                    Toast.makeText(this, if (task == null) "Could not save task." else "Task saved.", Toast.LENGTH_SHORT).show()
+                    tasksDialog()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun taskActions(task: OrionTask) {
+        val actions = arrayOf("Mark in progress", "Mark done", "Reopen task", "Delete task")
+        AlertDialog.Builder(this)
+            .setTitle(task.title)
+            .setMessage("Status: ${task.status}\nPriority: ${task.priority}\n" +
+                (task.details.takeIf { it.isNotBlank() } ?: "No details"))
+            .setItems(actions) { _, which ->
+                when (which) {
+                    0 -> TaskStore.update(this, task.id, status = "in_progress")
+                    1 -> TaskStore.update(this, task.id, status = "done")
+                    2 -> TaskStore.update(this, task.id, status = "open")
+                    3 -> AlertDialog.Builder(this)
+                        .setTitle("Delete this task?")
+                        .setMessage(task.title)
+                        .setPositiveButton("Delete") { _, _ ->
+                            TaskStore.delete(this, task.id)
+                            tasksDialog()
+                        }
+                        .setNegativeButton("Cancel") { _, _ -> tasksDialog() }
+                        .show()
+                }
+                if (which != 3) tasksDialog()
+            }
+            .setPositiveButton("Close", null)
+            .show()
     }
 
     // ------------------------------------------------------------ name and memory
