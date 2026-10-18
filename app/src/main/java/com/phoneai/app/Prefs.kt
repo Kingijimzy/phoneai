@@ -14,13 +14,15 @@ object Prefs {
     fun hands(c: Context): Boolean = sp(c).getBoolean("hands", false)
     fun setHands(c: Context, v: Boolean) = sp(c).edit().putBoolean("hands", v).apply()
 
+    const val DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+
     fun textModel(c: Context): String =
-        sp(c).getString("textModel", "meta/llama-3.3-70b-instruct") ?: "meta/llama-3.3-70b-instruct"
+        sp(c).getString("textModel", DEFAULT_MODEL) ?: DEFAULT_MODEL
 
     fun setTextModel(c: Context, v: String) = sp(c).edit().putString("textModel", v).apply()
 
     fun visionModel(c: Context): String =
-        sp(c).getString("visionModel", "meta/llama-3.2-90b-vision-instruct") ?: "meta/llama-3.2-90b-vision-instruct"
+        sp(c).getString("visionModel", DEFAULT_MODEL) ?: DEFAULT_MODEL
 
     fun setVisionModel(c: Context, v: String) = sp(c).edit().putString("visionModel", v).apply()
 }

@@ -550,7 +550,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun stopAll() {
         handsActive = false
-        agent.stopped = true
+        agent.stop()
         voice.stopSpeaking()
         voice.stopListening()
         listening = false
@@ -571,6 +571,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (running || listening) showStrip(text)
         }
         if (Prefs.voice(this)) voice.speak(text)
+    }
+
+    override fun status(text: String) {
+        main.post {
+            if (running) showStrip(text)
+        }
     }
 
     override fun note(text: String) {

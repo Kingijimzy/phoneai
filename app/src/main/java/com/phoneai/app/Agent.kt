@@ -6,6 +6,7 @@ import org.json.JSONObject
 /** What the agent uses to talk to the person. */
 interface AgentUi {
     fun say(text: String)
+    fun status(text: String)
     fun note(text: String)
     /** Blocks until the person answers yes or no. Called from the worker thread. */
     fun ask(question: String): Boolean
@@ -13,11 +14,16 @@ interface AgentUi {
 
 /** The brain: asks the NVIDIA model what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
-    private val nim = Nim(svc)
+    private val nim = Nim(svc).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val history = JSONArray()
 
     @Volatile
     var stopped = false
+
+    fun stop() {
+        stopped = true
+        nim.cancel()
+    }
 
     companion object {
         const val MAX_STEPS = 40
@@ -79,6 +85,7 @@ Rules:
 
     fun run(command: String) {
         stopped = false
+        nim.resume()
         history.put(msg("user", command))
         trim()
         var steps = 0

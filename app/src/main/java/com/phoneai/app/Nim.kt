@@ -20,12 +20,14 @@ class Nim(private val ctx: Context) {
         "llama-4", "qwen", "mistral-large", "mixtral", "llama-3.1-8b", "gemma", "mistral", "phi"
     )
     private val fallbackText = listOf(
+        "nvidia/nemotron-3.5-super-vl-120b-a12b", "ibm/granite-8b-code-instruct",
         "meta/llama-3.3-70b-instruct", "meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct",
         "nvidia/llama-3.1-nemotron-70b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1",
         "qwen/qwen2.5-72b-instruct", "qwen/qwen2.5-7b-instruct", "mistralai/mistral-7b-instruct-v0.3",
         "mistralai/mixtral-8x22b-instruct-v0.1", "google/gemma-2-9b-it", "microsoft/phi-3-medium-128k-instruct"
     )
     private val fallbackVision = listOf(
+        "nvidia/nemotron-3.5-super-vl-120b-a12b",
         "meta/llama-3.2-90b-vision-instruct", "meta/llama-3.2-11b-vision-instruct",
         "microsoft/phi-3.5-vision-instruct", "nvidia/vila", "meta/llama-4-maverick-17b-128e-instruct",
         "meta/llama-4-scout-17b-16e-instruct"
@@ -33,12 +35,36 @@ class Nim(private val ctx: Context) {
 
     private class Http(val code: Int, val body: String)
 
-    private fun request(method: String, path: String, body: String?, key: String): Http {
+    /** Called with a short progress message, from the worker thread. */
+    @Volatile
+    var onStatus: ((String) -> Unit)? = null
+
+    @Volatile
+    private var cancelled = false
+
+    @Volatile
+    private var active: HttpURLConnection? = null
+
+    fun resume() {
+        cancelled = false
+    }
+
+    /** Aborts the request that is in flight. */
+    fun cancel() {
+        cancelled = true
+        try {
+            active?.disconnect()
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun request(method: String, path: String, body: String?, key: String, readMs: Int = 50000): Http {
         val conn = URL(base + path).openConnection() as HttpURLConnection
+        active = conn
         try {
             conn.requestMethod = method
-            conn.connectTimeout = 20000
-            conn.readTimeout = 90000
+            conn.connectTimeout = 15000
+            conn.readTimeout = readMs
             conn.setRequestProperty("Authorization", "Bearer $key")
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {
@@ -59,7 +85,11 @@ class Nim(private val ctx: Context) {
     fun allModels(): List<String> {
         val key = Prefs.key(ctx)
         if (key.isEmpty()) throw IllegalStateException("No NVIDIA key saved.")
-        val r = request("GET", "/models", null, key)
+        val r = try {
+            request("GET", "/models", null, key, 25000)
+        } catch (e: java.io.IOException) {
+            throw RuntimeException("Cannot reach NVIDIA. Check your internet connection. (${e.javaClass.simpleName})")
+        }
         if (r.code == 401 || r.code == 403) throw RuntimeException("NVIDIA rejected the key (${r.code}). Make a new key and save it again.")
         if (r.code !in 200..299) throw RuntimeException("Could not list models: HTTP ${r.code} ${r.body.take(120)}")
         val arr = JSONObject(r.body).optJSONArray("data") ?: return emptyList()
@@ -107,16 +137,35 @@ class Nim(private val ctx: Context) {
         var refilled = false
         var lastNote = ""
         var attempts = 0
-        while (queue.isNotEmpty() && attempts < 25) {
+        val start = System.currentTimeMillis()
+        while (queue.isNotEmpty() && attempts < 15 && System.currentTimeMillis() - start < 180000) {
+            if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
             attempts++
+            onStatus?.invoke("Asking " + model.substringAfterLast('/') + "...")
             val payload = JSONObject()
                 .put("model", model)
                 .put("messages", messages)
                 .put("temperature", temperature)
                 .put("max_tokens", maxTokens)
-            val r = request("POST", "/chat/completions", payload.toString(), key)
+            val r: Http? = try {
+                request("POST", "/chat/completions", payload.toString(), key)
+            } catch (e: java.net.SocketTimeoutException) {
+                null
+            } catch (e: java.io.IOException) {
+                if (cancelled) throw RuntimeException("Stopped.")
+                throw RuntimeException("Cannot reach NVIDIA. Check your internet connection. (${e.javaClass.simpleName})")
+            }
+            if (r == null) {
+                lastNote = "$model -> too slow (no answer in 50s)"
+                if (!refilled) {
+                    refilled = true
+                    onStatus?.invoke("That model is slow. Looking for another...")
+                    queue.addAll(candidates(vision))
+                }
+                continue
+            }
             if (r.code == 401 || r.code == 403) {
                 throw RuntimeException("NVIDIA rejected the key (${r.code}). Make a new key at build.nvidia.com and save it again.")
             }

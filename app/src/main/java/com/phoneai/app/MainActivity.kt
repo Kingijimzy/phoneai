@@ -172,7 +172,8 @@ class MainActivity : Activity() {
             try {
                 val nim = Nim(this)
                 val all = nim.allModels()
-                val list = if (vision) all.filter { nim.isVision(it) } else all.filter { !nim.isVision(it) }
+                // Show every model. Vision models come first in the vision list.
+                val list = if (vision) all.sortedBy { if (nim.isVision(it)) 0 else 1 } else all
                 runOnUiThread {
                     if (list.isEmpty()) {
                         Toast.makeText(this, "No models found (${all.size} total).", Toast.LENGTH_LONG).show()
