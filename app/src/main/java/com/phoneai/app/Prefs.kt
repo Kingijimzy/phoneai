@@ -132,6 +132,10 @@ object Prefs {
     fun setModel(c: Context, p: Provider, vision: Boolean, m: String) =
         sp(c).edit().putString((if (vision) "vm_" else "tm_") + p.id, m).apply()
 
+    fun avatarStyle(c: Context): String = sp(c).getString("avatar_style", "ORION_ORB") ?: "ORION_ORB"
+    fun setAvatarStyle(c: Context, value: String) =
+        sp(c).edit().putString("avatar_style", value.takeIf { it in setOf("ORION_ORB", "NOVA", "ATLAS", "LUMEN") } ?: "ORION_ORB").apply()
+
     fun autoSwitch(c: Context): Boolean = sp(c).getBoolean("autoswitch", true)
     fun setAutoSwitch(c: Context, v: Boolean) = sp(c).edit().putBoolean("autoswitch", v).apply()
 
