@@ -38,7 +38,7 @@ class MainActivity : Activity() {
     private lateinit var nameBtn: Button
     private lateinit var memBtn: Button
     private lateinit var avatarBtn: Button
-    private lateinit var orbView: OrbView
+    private lateinit var topAvatar: AvatarView
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -111,23 +111,16 @@ class MainActivity : Activity() {
         sv.addView(col)
         setContentView(sv)
 
-        orbView = OrbView(this).apply {
-            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@MainActivity)) }
-                .getOrDefault(OrbView.Style.ORION_ORB)
-        }
-        val orbLp = LinearLayout.LayoutParams(dp(150), dp(150))
+        topAvatar = AvatarView(this)
+        val orbLp = LinearLayout.LayoutParams(dp(190), dp(190))
         orbLp.gravity = Gravity.CENTER_HORIZONTAL
-        col.addView(orbView, orbLp)
+        col.addView(topAvatar, orbLp)
         val title = text("O R I O N   A I", 24f, Theme.TEXT, true)
         title.gravity = Gravity.CENTER
         add(col, title, 4)
         val sub = text("Your personal AI for this phone. Speak, type, and let it act.", 14f, Theme.MUTED)
         sub.gravity = Gravity.CENTER
         add(col, sub, 4)
-
-        val avatarCard = card(col, "Your avatar", "Choose Orion's visual character. The lightweight styles work offline and react to voice/activity states.")
-        avatarBtn = button("", true) { avatarDialog() }
-        add(avatarCard, avatarBtn, 8)
 
         // ---- 1. setup
         val s1 = card(col, "1. Switch it on")
@@ -162,8 +155,8 @@ class MainActivity : Activity() {
         // ---- 2. AI services
         val s2 = card(
             col, "2. AI services",
-            "14 services. Best free setup: Google Gemini (sees the screen) plus Groq or Cerebras (very fast chat). " +
-                "Add several keys and Orion switches automatically if one is busy."
+            "13 online services plus a free local AI. Best free setup: Groq or Cerebras for fast chat, Gemini for seeing the screen. " +
+                "Add several keys and Orion switches automatically when one hits its limit. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
         )
         add(s2, button("Get a free Gemini key (opens website)", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
@@ -204,6 +197,9 @@ class MainActivity : Activity() {
             override fun onStopTrackingTouch(s: SeekBar?) {}
         })
         add(s3, bar, 2)
+        avatarBtn = button("", false) { avatarDialog() }
+        add(s3, avatarBtn, 10)
+        add(s3, button("Choose a voice", false) { voiceDialog() }, 8)
         add(s3, button("Hear Orion's voice", false) { testVoice() }, 8)
 
         // ---- 4. memory
@@ -217,26 +213,12 @@ class MainActivity : Activity() {
         memBtn = button("", true) { memoryDialog() }
         add(s4, memBtn, 8)
 
-        // ---- 5. persistent tasks
+        // ---- 5. recording
         val s5 = card(
-            col, "5. Tasks and reminders",
-            "Tasks stay saved on this phone. Deadlines schedule local notifications; Android battery restrictions can delay delivery."
-        )
-        add(s5, button("Open saved tasks", true) { tasksDialog() }, 10)
-        add(s5, button("Create a task", false) { addTaskDialog() }, 8)
-
-        val s6 = card(
-            col, "6. Action history",
-            "A local record of which tools ran and whether they returned an error. Orion does not save tool arguments or screen text here."
-        )
-        add(s6, button("View action history", false) { actionLogDialog() }, 8)
-
-        // ---- 7. recording
-        val s7 = card(
-            col, "7. Screen recording",
+            col, "5. Screen recording",
             "Say \"record my screen\" to Orion, or test here. Android asks permission each time. Videos are saved in Movies/Orion."
         )
-        add(s7, button("Start a test recording", false) {
+        add(s5, button("Start a test recording", false) {
             if (RecordService.state == "recording") {
                 Toast.makeText(this, "Already recording.", Toast.LENGTH_SHORT).show()
             } else {
@@ -244,7 +226,7 @@ class MainActivity : Activity() {
                 startActivity(Intent(this, RecordRequestActivity::class.java))
             }
         }, 10)
-        add(s7, button("Stop recording", false) {
+        add(s5, button("Stop recording", false) {
             val svc = RecordService.instance
             if (svc == null || RecordService.state != "recording") {
                 Toast.makeText(this, "Not recording.", Toast.LENGTH_SHORT).show()
@@ -281,46 +263,20 @@ class MainActivity : Activity() {
         val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
         sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
         status.text = sb.toString()
-        avatarBtn.text = "Character: " + avatarLabel(Prefs.avatarStyle(this)) + "  (tap to change)"
         chatBtn.text = "Chat AI: " + Prefs.provider(this, false).label + "  (tap to change)"
         visionBtn.text = "Screen-vision AI: " + Prefs.provider(this, true).label + "  (tap to change)"
         val n = Prefs.userName(this)
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
-    }
-
-    // ------------------------------------------------------------ avatar characters
-
-    private fun avatarLabel(id: String): String = when (id) {
-        "NOVA" -> "Nova · friendly face"
-        "ATLAS" -> "Atlas · tactical visor"
-        "LUMEN" -> "Lumen · warm guide"
-        else -> "Orion · energy orb"
-    }
-
-    private fun avatarDialog() {
-        val ids = arrayOf("ORION_ORB", "NOVA", "ATLAS", "LUMEN")
-        val labels = ids.map { avatarLabel(it) }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Choose Orion's character")
-            .setItems(labels) { _, which ->
-                val chosen = ids[which]
-                Prefs.setAvatarStyle(this, chosen)
-                orbView.style = runCatching { OrbView.Style.valueOf(chosen) }
-                    .getOrDefault(OrbView.Style.ORION_ORB)
-                PhoneAiService.instance?.refreshAvatar()
-                refresh()
-                Toast.makeText(this, avatarLabel(chosen) + " selected.", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        topAvatar.style = Prefs.avatar(this)
+        avatarBtn.text = "Character: " + (if (Prefs.avatar(this) == 1) "Nova" else "Orion") + "  (tap to change)"
     }
 
     // ------------------------------------------------------------ keys and providers
 
     /** Pick a service, then paste its key. */
     private fun keyDialog() {
-        val labels = Providers.all.map { it.label + if (Prefs.hasKey(this, it.id)) "  (saved)" else "" }.toTypedArray()
+        val labels = Providers.all.map { it.label + if (Prefs.hasKey(this, it.id)) (if (it.noKey) "  (on)" else "  (saved)") else "" }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Which service is the key for?")
             .setItems(labels) { _, which -> pasteKey(Providers.all[which]) }
@@ -329,6 +285,10 @@ class MainActivity : Activity() {
     }
 
     private fun pasteKey(p: Provider) {
+        if (p.noKey) {
+            localDialog(p)
+            return
+        }
         val box = EditText(this)
         box.hint = p.keyHint
         box.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
@@ -444,134 +404,80 @@ class MainActivity : Activity() {
         Toast.makeText(this, "Speaking...", Toast.LENGTH_SHORT).show()
     }
 
-    // ------------------------------------------------------------ persistent tasks
+    // ------------------------------------------------------------ name and memory
 
-    private fun tasksDialog() {
-        val tasks = TaskStore.all(this)
-        val labels = tasks.map { task ->
-            val due = task.dueAt?.let {
-                SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(it))
-            } ?: "no deadline"
-            "[${task.id}] ${task.status.uppercase()} · ${task.priority} · ${task.title} · $due"
-        }.toTypedArray()
-        val b = AlertDialog.Builder(this).setTitle("Saved tasks (${tasks.size})")
-        if (tasks.isEmpty()) {
-            b.setMessage("No tasks yet. Add one, or ask Orion to create a task in chat.")
-        } else {
-            b.setItems(labels) { _, which -> taskActions(tasks[which]) }
-        }
-        b.setPositiveButton("Add task") { _, _ -> addTaskDialog() }
-        b.setNegativeButton("Close", null)
-        b.show()
-    }
-
-    private fun addTaskDialog() {
-        val titleBox = EditText(this).apply { hint = "Task title (required)"; setSingleLine(true) }
-        val detailsBox = EditText(this).apply {
-            hint = "Details (optional)"
-            minLines = 2
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        }
-        val dueBox = EditText(this).apply {
-            hint = "Deadline: yyyy-MM-dd HH:mm (optional)"
-            setSingleLine(true)
-        }
-        val priority = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                arrayOf("normal", "low", "high", "urgent"))
-        }
-        val wrap = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), 0)
-            addView(titleBox)
-            addView(detailsBox)
-            addView(priority)
-            addView(dueBox)
-        }
+    private fun avatarDialog() {
         AlertDialog.Builder(this)
-            .setTitle("Create a task")
-            .setMessage("Deadlines use your phone's local time and schedule an on-device reminder. Allow Orion notifications in Android settings.")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
-                val title = titleBox.text.toString().trim()
-                val dueText = dueBox.text.toString().trim()
-                val dueAt = if (dueText.isEmpty()) null else try {
-                    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }
-                        .parse(dueText)?.time
-                } catch (_: Exception) { null }
-                if (title.isEmpty()) {
-                    Toast.makeText(this, "Enter a task title.", Toast.LENGTH_SHORT).show()
-                } else if (dueText.isNotEmpty() && dueAt == null) {
-                    Toast.makeText(this, "Use deadline format yyyy-MM-dd HH:mm.", Toast.LENGTH_LONG).show()
-                } else {
-                    val task = TaskStore.add(this, title, detailsBox.text.toString(),
-                        priority.selectedItem.toString(), dueAt)
-                    Toast.makeText(this, if (task == null) "Could not save task." else "Task saved.", Toast.LENGTH_SHORT).show()
-                    tasksDialog()
-                }
+            .setTitle("Pick Orion's look")
+            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)")) { _, which ->
+                Prefs.setAvatar(this, which)
+                refresh()
+                Toast.makeText(this, "Saved. Close and reopen the Orion panel to see it.", Toast.LENGTH_LONG).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun taskActions(task: OrionTask) {
-        val actions = arrayOf("Mark in progress", "Mark done", "Reopen task", "Delete task")
-        AlertDialog.Builder(this)
-            .setTitle(task.title)
-            .setMessage("Status: ${task.status}\nPriority: ${task.priority}\n" +
-                (task.details.takeIf { it.isNotBlank() } ?: "No details"))
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> TaskStore.update(this, task.id, status = "in_progress")
-                    1 -> TaskStore.update(this, task.id, status = "done")
-                    2 -> TaskStore.update(this, task.id, status = "open")
-                    3 -> AlertDialog.Builder(this)
-                        .setTitle("Delete this task?")
-                        .setMessage(task.title)
-                        .setPositiveButton("Delete") { _, _ ->
-                            TaskStore.delete(this, task.id)
-                            tasksDialog()
-                        }
-                        .setNegativeButton("Cancel") { _, _ -> tasksDialog() }
-                        .show()
-                }
-                if (which != 3) tasksDialog()
-            }
-            .setPositiveButton("Close", null)
-            .show()
+    private fun describeVoice(x: android.speech.tts.Voice): String {
+        val q = if (x.quality >= 400) "high quality" else "standard"
+        val net = if (x.isNetworkConnectionRequired) ", online" else ""
+        val place = x.locale.displayCountry.ifEmpty { x.locale.displayLanguage }
+        return place + " - " + q + net + " - " + x.name.split("-").takeLast(2).joinToString("-")
     }
 
-    private fun actionLogDialog() {
-        val events = ActionLogStore.all(this)
-        val formatter = SimpleDateFormat("d MMM HH:mm:ss", Locale.getDefault())
-        val summary = if (events.isEmpty()) {
-            "No agent actions recorded yet."
-        } else {
-            events.take(40).joinToString("\n") { event ->
-                formatter.format(Date(event.at)) + "  ·  " + event.tool + "  ·  " + event.outcome
-            }
-        }
-        val b = AlertDialog.Builder(this)
-            .setTitle("Action history (" + events.size + ")")
-            .setMessage(summary)
-            .setNegativeButton("Close", null)
-        if (events.isNotEmpty()) {
-            b.setPositiveButton("Clear history") { _, _ ->
+    private fun voiceDialog() {
+        val v = Voice(this)
+        Toast.makeText(this, "Loading voices...", Toast.LENGTH_SHORT).show()
+        window.decorView.postDelayed({
+            val list = v.voiceList()
+            if (list.isEmpty()) {
+                Toast.makeText(
+                    this, "No voices found. Install Speech Services by Google from the Play Store.", Toast.LENGTH_LONG
+                ).show()
+                v.shutdown()
+            } else {
+                val labels = ArrayList<String>()
+                labels.add("Automatic (best available)")
+                for (x in list) labels.add(describeVoice(x))
                 AlertDialog.Builder(this)
-                    .setTitle("Clear action history?")
-                    .setMessage("This only clears the local tool-name history.")
-                    .setPositiveButton("Clear") { _, _ ->
-                        ActionLogStore.clear(this)
-                        Toast.makeText(this, "Action history cleared.", Toast.LENGTH_SHORT).show()
+                    .setTitle("Choose Orion's voice")
+                    .setItems(labels.toTypedArray()) { _, which ->
+                        Prefs.setVoiceName(this, if (which == 0) "" else list[which - 1].name)
+                        v.refreshVoice()
+                        v.speak("Hello. This is how I sound.") { runOnUiThread { v.shutdown() } }
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton("Cancel") { _, _ -> v.shutdown() }
+                    .setOnCancelListener { v.shutdown() }
                     .show()
             }
-        }
-        b.show()
+        }, 1000)
     }
 
-    // ------------------------------------------------------------ name and memory
+    private fun localDialog(p: Provider) {
+        val on = Prefs.hasKey(this, p.id)
+        AlertDialog.Builder(this)
+            .setTitle("Local AI on this phone")
+            .setMessage(
+                "Free, unlimited and private. It runs inside Termux, so it is slower and best for plain chat.\n\n" +
+                    "Set it up once in Termux:\n" +
+                    "1. pkg update && pkg install ollama\n" +
+                    "2. ollama serve &\n" +
+                    "3. ollama pull llama3.2:3b   (or llama3.2:1b for faster)\n\n" +
+                    "Keep Termux open in the background, then tap Turn on here.\n\nNow: " + (if (on) "ON" else "off")
+            )
+            .setPositiveButton("Turn on") { _, _ ->
+                Prefs.setKey(this, p.id, "on")
+                Prefs.setProvider(this, false, p.id)
+                refresh()
+                Toast.makeText(this, "Local AI is now the chat AI. Tap Test the AI.", Toast.LENGTH_LONG).show()
+            }
+            .setNeutralButton("Turn off") { _, _ ->
+                Prefs.setKey(this, p.id, "")
+                refresh()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
     private fun nameDialog() {
         val box = EditText(this)

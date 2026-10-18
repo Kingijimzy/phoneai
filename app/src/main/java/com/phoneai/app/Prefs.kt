@@ -12,18 +12,14 @@ class Provider(
     val keyHint: String,
     val info: String,
     val listUrl: String? = null,
-    val anthropicStyle: Boolean = false
+    val anthropicStyle: Boolean = false,
+    val noKey: Boolean = false
 ) {
     val hasVision: Boolean get() = visionModel != null
 }
 
 object Providers {
     val all = listOf(
-        Provider(
-            "gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai",
-            "gemini-flash-latest", "gemini-flash-latest", "AIza...",
-            "FREE. Best for reading the screen. aistudio.google.com"
-        ),
         Provider(
             "groq", "Groq", "https://api.groq.com/openai/v1",
             "llama-3.3-70b-versatile", "meta-llama/llama-4-scout-17b-16e-instruct", "gsk_...",
@@ -35,9 +31,9 @@ object Providers {
             "FREE. Extremely fast, text only. cloud.cerebras.ai"
         ),
         Provider(
-            "nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1",
-            "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvapi-...",
-            "FREE credits. build.nvidia.com"
+            "gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai",
+            "gemini-flash-latest", "gemini-flash-latest", "AIza...",
+            "FREE. Best for reading the screen. aistudio.google.com"
         ),
         Provider(
             "openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
@@ -90,19 +86,24 @@ object Providers {
             "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-...",
             "Paid. console.anthropic.com",
             null, true
+        ),
+        Provider(
+            "local", "Local model (Termux)", "http://127.0.0.1:8080/v1",
+            "local", null, "type: local",
+            "FREE and unlimited, runs on this phone with llama.cpp in Termux. Type the word local as the key. Slower and less smart."
         )
     )
 
-    fun get(id: String?): Provider = all.firstOrNull { it.id == id } ?: all[0]
+    fun find(id: String?): Provider? = all.firstOrNull { it.id == id }
+
+    fun get(id: String?): Provider = find(id) ?: all[0]
 }
 
 object Prefs {
     private fun sp(c: Context) = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
 
     fun key(c: Context, pid: String): String {
-        val v = sp(c).getString("key_$pid", "") ?: ""
-        if (v.isNotEmpty()) return v
-        return if (pid == "nvidia") (sp(c).getString("key", "") ?: "") else ""
+        return sp(c).getString("key_$pid", "") ?: ""
     }
 
     fun setKey(c: Context, pid: String, v: String) = sp(c).edit().putString("key_$pid", v.trim()).apply()
@@ -114,10 +115,8 @@ object Prefs {
     /** Which service answers chat (vision=false) or reads the screen (vision=true). */
     fun provider(c: Context, vision: Boolean): Provider {
         val stored = sp(c).getString(if (vision) "provider_vision" else "provider_text", null)
-        if (stored != null) {
-            val p = Providers.get(stored)
-            if (!vision || p.hasVision) return p
-        }
+        val sp0 = Providers.find(stored)
+        if (sp0 != null && (!vision || sp0.hasVision)) return sp0
         return Providers.all.firstOrNull { hasKey(c, it.id) && (!vision || it.hasVision) } ?: Providers.all[0]
     }
 
@@ -132,26 +131,22 @@ object Prefs {
     fun setModel(c: Context, p: Provider, vision: Boolean, m: String) =
         sp(c).edit().putString((if (vision) "vm_" else "tm_") + p.id, m).apply()
 
-    fun avatarStyle(c: Context): String = sp(c).getString("avatar_style", "ORION_ORB") ?: "ORION_ORB"
-    fun setAvatarStyle(c: Context, value: String) =
-        sp(c).edit().putString("avatar_style", value.takeIf { it in setOf("ORION_ORB", "NOVA", "ATLAS", "LUMEN") } ?: "ORION_ORB").apply()
-
     fun autoSwitch(c: Context): Boolean = sp(c).getBoolean("autoswitch", true)
     fun setAutoSwitch(c: Context, v: Boolean) = sp(c).edit().putBoolean("autoswitch", v).apply()
 
     fun voice(c: Context): Boolean = sp(c).getBoolean("voice", true)
     fun setVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("voice", v).apply()
 
-    fun hands(c: Context): Boolean = sp(c).getBoolean("hands", false)
+    fun hands(c: Context): Boolean = sp(c).getBoolean("hands", true)
     fun setHands(c: Context, v: Boolean) = sp(c).edit().putBoolean("hands", v).apply()
 
     fun wake(c: Context): Boolean = sp(c).getBoolean("wake", false)
     fun setWake(c: Context, v: Boolean) = sp(c).edit().putBoolean("wake", v).apply()
 
-    fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", true)
+    fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", false)
     fun setDeepVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("deep", v).apply()
 
-    fun rate(c: Context): Float = sp(c).getFloat("rate", 1.0f)
+    fun rate(c: Context): Float = sp(c).getFloat("rate", 1.05f)
     fun setRate(c: Context, v: Float) = sp(c).edit().putFloat("rate", v).apply()
 
     fun userName(c: Context): String = sp(c).getString("username", "") ?: ""
@@ -159,4 +154,11 @@ object Prefs {
 
     fun autoMemory(c: Context): Boolean = sp(c).getBoolean("automemory", true)
     fun setAutoMemory(c: Context, v: Boolean) = sp(c).edit().putBoolean("automemory", v).apply()
+
+    fun voiceName(c: Context): String = sp(c).getString("voicename", "") ?: ""
+    fun setVoiceName(c: Context, v: String) = sp(c).edit().putString("voicename", v).apply()
+
+    /** 0 = Orion (robot), 1 = Nova (friendly face) */
+    fun avatar(c: Context): Int = sp(c).getInt("avatar", 0)
+    fun setAvatar(c: Context, v: Int) = sp(c).edit().putInt("avatar", v).apply()
 }

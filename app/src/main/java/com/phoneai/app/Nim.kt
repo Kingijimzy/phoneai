@@ -5,12 +5,19 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentHashMap
 
 /** A failure of one AI service. The next service can still be tried. */
-class AiException(message: String) : RuntimeException(message)
+class AiException(message: String, val rate: Boolean = false) : RuntimeException(message)
 
 /** Talks to the chosen AI service. If it fails, Orion tries the other services you saved keys for. */
 class Nim(private val ctx: Context) {
+    companion object {
+        /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
+        val cooldown = ConcurrentHashMap<String, Long>()
+    }
+
     private val bad = listOf(
         "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
         "whisper", "tts", "asr", "nemoguard", "riva", "fastpitch", "diffusion", "stable",
@@ -26,18 +33,6 @@ class Nim(private val ctx: Context) {
         "llama-4", "qwen", "mistral-large", "mixtral", "llama-3.1-8b", "gemma", "mistral", "phi"
     )
     private val fallbacks: Map<String, Pair<List<String>, List<String>>> = mapOf(
-        "nvidia" to Pair(
-            listOf(
-                "nvidia/nemotron-3.5-super-vl-120b-a12b", "ibm/granite-8b-code-instruct",
-                "meta/llama-3.3-70b-instruct", "meta/llama-3.1-70b-instruct", "meta/llama-3.1-8b-instruct",
-                "nvidia/llama-3.1-nemotron-70b-instruct", "qwen/qwen2.5-7b-instruct",
-                "mistralai/mistral-7b-instruct-v0.3", "google/gemma-2-9b-it"
-            ),
-            listOf(
-                "nvidia/nemotron-3.5-super-vl-120b-a12b", "meta/llama-3.2-90b-vision-instruct",
-                "meta/llama-3.2-11b-vision-instruct", "microsoft/phi-3.5-vision-instruct"
-            )
-        ),
         "gemini" to Pair(
             listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
             listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite")
@@ -76,7 +71,37 @@ class Nim(private val ctx: Context) {
         "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>())
     )
 
-    private class Http(val code: Int, val body: String)
+    private class Http(val code: Int, val body: String, val retryAfter: Int = -1)
+
+    companion object {
+        /** provider id -> time until which it is resting after a rate limit */
+        private val cool = ConcurrentHashMap<String, Long>()
+        private val lastCall = ConcurrentHashMap<String, Long>()
+    }
+
+    private fun pause(ms: Long) {
+        var left = ms
+        while (left > 0 && !cancelled) {
+            val s = minOf(left, 250L)
+            Thread.sleep(s)
+            left -= s
+        }
+    }
+
+    /** Spaces out requests so free tiers (a few per minute) are not hit in a burst. */
+    private fun pace(p: Provider) {
+        val gap = when (p.id) {
+            "gemini" -> 4500L
+            "groq", "cerebras", "mistral" -> 2200L
+            "openrouter" -> 3000L
+            "github" -> 4000L
+            "local" -> 0L
+            else -> 800L
+        }
+        val wait = (lastCall[p.id] ?: 0L) + gap - System.currentTimeMillis()
+        if (wait > 0) pause(wait)
+        lastCall[p.id] = System.currentTimeMillis()
+    }
 
     /** Called with a short progress message, from the worker thread. */
     @Volatile
@@ -101,13 +126,14 @@ class Nim(private val ctx: Context) {
         }
     }
 
-    private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs: Int = 45000): Http {
+    private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
+        val readMs = if (p.id == "local") 240000 else readMs0
         val conn = URL(url).openConnection() as HttpURLConnection
         active = conn
         try {
             conn.requestMethod = method
             conn.connectTimeout = 15000
-            conn.readTimeout = readMs
+            conn.readTimeout = if (p.noKey) 180000 else readMs
             if (p.anthropicStyle) {
                 conn.setRequestProperty("x-api-key", key)
                 conn.setRequestProperty("anthropic-version", "2023-06-01")
@@ -123,7 +149,8 @@ class Nim(private val ctx: Context) {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
-            return Http(code, text)
+            val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
+            return Http(code, text, ra)
         } finally {
             conn.disconnect()
         }
@@ -279,21 +306,40 @@ class Nim(private val ctx: Context) {
             }
         }
         if (order.isEmpty()) {
-            throw IllegalStateException("No API key saved. Open Orion AI and add a key (Gemini is free).")
+            throw IllegalStateException("No AI key saved. Open Orion AI and add a key (Groq or Gemini are free).")
         }
-        val errors = ArrayList<String>()
+        val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
-        for ((idx, p) in order.withIndex()) {
+        var round = 0
+        while (round < 4) {
+            round++
             if (cancelled) throw RuntimeException("Stopped.")
-            if (System.currentTimeMillis() - start > 150000) break
-            try {
-                if (idx > 0) onStatus?.invoke("Switching to ${p.label}...")
-                return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
-            } catch (e: AiException) {
-                errors.add(e.message ?: p.label)
+            val now = System.currentTimeMillis()
+            val ready = order.filter { (cooldown[it.id] ?: 0L) <= now }
+            var allRateLimited = true
+            for ((idx, p) in ready.withIndex()) {
+                if (cancelled) throw RuntimeException("Stopped.")
+                try {
+                    if (idx > 0 || p !== order[0]) onStatus?.invoke("Using ${p.label}...")
+                    return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
+                } catch (e: AiException) {
+                    errors[p.id] = e.message ?: p.label
+                    if (!e.rateLimited) allRateLimited = false
+                }
+            }
+            // Nothing worked. If everything was only busy, wait for the first one to come back.
+            if (!allRateLimited || round >= 4 || System.currentTimeMillis() - start > 170000) break
+            val soonest = order.minOf { cooldown[it.id] ?: 0L }
+            val wait = (soonest - System.currentTimeMillis()).coerceIn(2000L, 40000L)
+            var left = wait
+            while (left > 0) {
+                if (cancelled) throw RuntimeException("Stopped.")
+                onStatus?.invoke("AI services are busy. Waiting ${left / 1000 + 1}s...")
+                Thread.sleep(500)
+                left -= 500
             }
         }
-        throw RuntimeException(errors.joinToString("\n"))
+        throw RuntimeException(errors.values.joinToString("\n").ifEmpty { "All AI services are cooling down. Try again in a minute." })
     }
 
     private fun chatOne(
@@ -307,6 +353,7 @@ class Nim(private val ctx: Context) {
         var refilled = false
         var lastNote = ""
         var attempts = 0
+        var rateRetries = 0
         val maxAttempts = if (hasBackup) 4 else 12
         val start = System.currentTimeMillis()
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < 120000) {
@@ -314,6 +361,8 @@ class Nim(private val ctx: Context) {
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
             attempts++
+            pace(p)
+            if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
             val url: String
             val payload: String
@@ -335,7 +384,11 @@ class Nim(private val ctx: Context) {
                 null
             } catch (e: java.io.IOException) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                throw AiException("${p.label}: cannot connect (${e.javaClass.simpleName}). Check internet.")
+                cooldown[p.id] = System.currentTimeMillis() + (if (p.noKey) 30000L else 8000L)
+                throw AiException(
+                    if (p.noKey) "${p.label}: not running. In Termux run: ollama serve"
+                    else "${p.label}: cannot connect (${e.javaClass.simpleName}). Check internet."
+                )
             }
             if (r == null) {
                 lastNote = "$model -> too slow"
@@ -346,7 +399,21 @@ class Nim(private val ctx: Context) {
                 continue
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
-            if (r.code == 429) throw AiException("${p.label}: free limit reached (429). Wait a minute.")
+            if (r.code == 429) {
+                val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
+                val canWait = (!hasBackup && rateRetries < 2 && wait <= 30) || (hasBackup && rateRetries < 1 && wait <= 10)
+                if (canWait) {
+                    rateRetries++
+                    onStatus?.invoke("${p.label} is busy. Waiting ${wait}s...")
+                    pause(wait * 1000L)
+                    tried.remove(model)
+                    attempts--
+                    queue.add(0, model)
+                    continue
+                }
+                cool[p.id] = System.currentTimeMillis() + maxOf(wait, 30) * 1000L
+                throw AiException("${p.label}: free limit reached (429).", true)
+            }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
                 (r.code == 400 && r.body.isNotEmpty())

@@ -265,40 +265,6 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
-    // ---- persistent tasks
-
-    fun createTask(title: String, details: String, priority: String, dueAt: Long?): String {
-        val task = TaskStore.add(svc, title, details, priority, dueAt)
-            ?: return "error: task title is empty"
-        val due = task.dueAt?.let {
-            SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()).format(Date(it))
-        } ?: "no deadline"
-        return "created task [${task.id}] ${task.title}; priority ${task.priority}; $due"
-    }
-
-    fun listTasks(): String {
-        val tasks = TaskStore.all(svc)
-        if (tasks.isEmpty()) return "no saved tasks"
-        return tasks.take(30).joinToString("\n") { task ->
-            val due = task.dueAt?.let {
-                SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()).format(Date(it))
-            } ?: "no deadline"
-            "[${task.id}] ${task.status} / ${task.priority}: ${task.title} — $due" +
-                if (task.details.isBlank()) "" else " — ${task.details}"
-        }
-    }
-
-    fun updateTask(id: Int, status: String?, priority: String?, title: String?, details: String?,
-                   dueAt: Long?, clearDueAt: Boolean): String =
-        if (TaskStore.update(svc, id, title, details, status, priority, dueAt, clearDueAt)) {
-            "updated task $id"
-        } else {
-            "error: no task with id $id"
-        }
-
-    fun deleteTask(id: Int): String =
-        if (TaskStore.delete(svc, id)) "deleted task $id" else "error: no task with id $id"
-
     // ---- memory
 
     fun remember(category: String?, text: String): String {

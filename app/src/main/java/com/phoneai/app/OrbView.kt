@@ -19,7 +19,6 @@ import kotlin.math.sin
 /** Orion's face: an animated orb that shows idle, listening, thinking, speaking and acting. */
 class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : View(c, a) {
     enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING }
-    enum class Style { ORION_ORB, NOVA, ATLAS, LUMEN }
 
     companion object {
         val CYAN = 0xFF38E1FF.toInt()
@@ -39,11 +38,6 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     @Volatile
     var level: Float = 0f
 
-    /** Selectable lightweight character styles; no network or 3D assets required. */
-    @Volatile
-    var style: Style = Style.ORION_ORB
-        set(v) { field = v; postInvalidateOnAnimation() }
-
     /** Draws a dark disc behind the orb (used for the floating button). */
     var backing: Boolean = false
 
@@ -51,24 +45,15 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val glow = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
-    private val facePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private var smooth = 0f
 
-    private fun accent(): Int {
-        val base = when (style) {
-            Style.ORION_ORB -> CYAN
-            Style.NOVA -> 0xFFFF83C7.toInt()
-            Style.ATLAS -> 0xFF8CAEFF.toInt()
-            Style.LUMEN -> 0xFFFFD166.toInt()
-        }
-        return when (mode) {
-            Mode.IDLE -> base
-            Mode.LISTENING -> OK
-            Mode.THINKING -> VIOLET
-            Mode.SPEAKING -> base
-            Mode.ACTING -> WARN
-        }
+    private fun accent(): Int = when (mode) {
+        Mode.IDLE -> CYAN
+        Mode.LISTENING -> OK
+        Mode.THINKING -> VIOLET
+        Mode.SPEAKING -> CYAN
+        Mode.ACTING -> WARN
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -142,44 +127,6 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP
         )
         canvas.drawCircle(cx, cy, coreR, core)
-
-        // Character details are drawn locally for low-end devices; no remote avatar service is required.
-        when (style) {
-            Style.ORION_ORB -> Unit
-            Style.NOVA -> {
-                facePaint.color = 0xFF10182B.toInt()
-                facePaint.style = Paint.Style.FILL
-                canvas.drawCircle(cx - coreR * 0.30f, cy - coreR * 0.03f, coreR * 0.075f, facePaint)
-                canvas.drawCircle(cx + coreR * 0.30f, cy - coreR * 0.03f, coreR * 0.075f, facePaint)
-                facePaint.color = 0xCC10182B.toInt()
-                facePaint.style = Paint.Style.STROKE
-                facePaint.strokeWidth = coreR * 0.055f
-                rect.set(cx - coreR * 0.22f, cy + coreR * 0.02f, cx + coreR * 0.22f, cy + coreR * 0.30f)
-                canvas.drawArc(rect, 15f, 150f, false, facePaint)
-                facePaint.style = Paint.Style.FILL
-            }
-            Style.ATLAS -> {
-                facePaint.color = 0xE6091425.toInt()
-                facePaint.style = Paint.Style.FILL
-                rect.set(cx - coreR * 0.68f, cy - coreR * 0.20f, cx + coreR * 0.68f, cy + coreR * 0.18f)
-                canvas.drawRoundRect(rect, coreR * 0.12f, coreR * 0.12f, facePaint)
-                facePaint.color = 0xFF8CAEFF.toInt()
-                canvas.drawRoundRect(cx - coreR * 0.48f, cy - coreR * 0.06f, cx - coreR * 0.08f, cy + coreR * 0.01f, coreR * 0.04f, coreR * 0.04f, facePaint)
-                canvas.drawRoundRect(cx + coreR * 0.08f, cy - coreR * 0.06f, cx + coreR * 0.48f, cy + coreR * 0.01f, coreR * 0.04f, coreR * 0.04f, facePaint)
-            }
-            Style.LUMEN -> {
-                facePaint.color = 0xFF3B2B08.toInt()
-                facePaint.style = Paint.Style.FILL
-                for (i in -1..1) {
-                    val x = cx + i * coreR * 0.28f
-                    val y = cy + if (i == 0) coreR * 0.06f else -coreR * 0.08f
-                    canvas.drawCircle(x, y, coreR * if (i == 0) 0.09f else 0.065f, facePaint)
-                }
-                facePaint.color = 0xCC3B2B08.toInt()
-                facePaint.strokeWidth = coreR * 0.055f
-                canvas.drawLine(cx - coreR * 0.18f, cy + coreR * 0.28f, cx + coreR * 0.18f, cy + coreR * 0.28f, facePaint)
-            }
-        }
 
         // speaking waveform across the core
         if (mode == Mode.SPEAKING) {

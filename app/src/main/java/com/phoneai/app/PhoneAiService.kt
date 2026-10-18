@@ -69,13 +69,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
 
-    private var bubble: OrbView? = null
+    private var bubble: AvatarView? = null
     private var panel: LinearLayout? = null
-    private var panelOrb: OrbView? = null
+    private var panelOrb: AvatarView? = null
     private var panelStatus: TextView? = null
     private var micBtnRef: TextView? = null
     private var strip: LinearLayout? = null
-    private var stripOrb: OrbView? = null
+    private var stripOrb: AvatarView? = null
     private var stripText: TextView? = null
     private var confirmView: LinearLayout? = null
     private var logBox: LinearLayout? = null
@@ -106,6 +106,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice.onSpeaking = { s ->
             speaking = s
             refreshMode()
+        }
+        voice.onWord = {
+            for (o in orbs()) o.pulseMouth()
         }
         voice.onLevel = { l ->
             for (o in orbs()) o.level = l
@@ -277,11 +280,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- orb state
 
-    private fun orbs(): List<OrbView> = listOfNotNull(bubble, panelOrb, stripOrb)
+    private fun orbs(): List<AvatarView> = listOfNotNull(bubble, panelOrb, stripOrb)
 
     /** Decides what the avatar should be doing and what the status line says. Main thread. */
-    fun refreshAvatar() = refreshMode()
-
     private fun refreshMode() {
         main.post {
             val m = when {
@@ -290,12 +291,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
                 else -> OrbView.Mode.IDLE
             }
-            val selectedStyle = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this)) }
-                .getOrDefault(OrbView.Style.ORION_ORB)
-            for (o in orbs()) {
-                o.style = selectedStyle
-                o.mode = m
-            }
+            for (o in orbs()) o.mode = m
             micBtnRef?.text = if (listening) "Stop" else "Mic"
             panelStatus?.text = when (m) {
                 OrbView.Mode.IDLE -> if (Prefs.wake(this)) "Say \"Orion\" or tap the mic" else "Ready"
@@ -311,10 +307,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun showBubble() {
         if (bubble != null || running || panel != null) return
-        val b = OrbView(this).apply {
-            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@PhoneAiService)) }
-                .getOrDefault(OrbView.Style.ORION_ORB)
-        }
+        val b = AvatarView(this)
+        b.compact = true
         b.backing = true
         val lp = WindowManager.LayoutParams(dp(64), dp(64), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
@@ -393,11 +387,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        val orb = OrbView(this).apply {
-            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@PhoneAiService)) }
-                .getOrDefault(OrbView.Style.ORION_ORB)
-        }
-        head.addView(orb, LinearLayout.LayoutParams(dp(76), dp(76)))
+        val orb = AvatarView(this)
+        head.addView(orb, LinearLayout.LayoutParams(dp(124), dp(124)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
@@ -503,7 +494,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.addView(row)
 
         val lp = WindowManager.LayoutParams(
-            size.first - dp(24), (size.second * 0.62f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(24), (size.second * 0.74f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
@@ -557,11 +548,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.gravity = Gravity.CENTER_VERTICAL
         row.background = rounded(0xF00E1522.toInt(), dp(22).toFloat(), Theme.CYAN)
         row.setPadding(dp(8), dp(6), dp(10), dp(6))
-        val orb = OrbView(this).apply {
-            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@PhoneAiService)) }
-                .getOrDefault(OrbView.Style.ORION_ORB)
-        }
-        row.addView(orb, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val orb = AvatarView(this)
+        orb.compact = true
+        row.addView(orb, LinearLayout.LayoutParams(dp(52), dp(52)))
         val t = label(text, 14f, Theme.TEXT)
         t.maxLines = 3
         t.setPadding(dp(8), 0, dp(8), 0)
@@ -659,10 +648,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun submit(text: String) {
         val t = text.trim()
         if (t.isEmpty() || running) return
-        if (!Prefs.hasAnyKey(this)) {
-            Toast.makeText(this, "Open the Orion AI app and add an API key first.", Toast.LENGTH_LONG).show()
-            return
-        }
         wakeGen++
         transcript.add(Pair("me", t))
         voice.stopSpeaking()

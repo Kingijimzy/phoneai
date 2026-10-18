@@ -34,13 +34,23 @@ class Voice(private val ctx: Context) {
     @Volatile
     var onLevel: ((Float) -> Unit)? = null
 
+    /** Fires for every spoken word (used to move the avatar's mouth). Runs on the main thread. */
+    @Volatile
+    var onWord: (() -> Unit)? = null
+
     init {
         tts = TextToSpeech(ctx) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) {
                 tts?.language = Locale.getDefault()
+                refreshVoice()
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
+
+                    override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
+                        main.post { onWord?.invoke() }
+                    }
+
                     override fun onDone(utteranceId: String?) {
                         finished(utteranceId)
                     }
@@ -51,6 +61,30 @@ class Voice(private val ctx: Context) {
                     }
                 })
             }
+        }
+    }
+
+    /** Voices of the phone's language that are installed, best first. */
+    fun voiceList(): List<android.speech.tts.Voice> {
+        val lang = Locale.getDefault().language
+        return try {
+            (tts?.voices ?: emptySet<android.speech.tts.Voice>())
+                .filter { it.locale.language == lang && !it.features.contains("notInstalled") }
+                .sortedWith(compareByDescending<android.speech.tts.Voice> { it.quality }.thenBy { it.latency })
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Applies the voice picked in settings, or the best one the phone has. */
+    fun refreshVoice() {
+        val engine = tts ?: return
+        try {
+            val all = voiceList()
+            val wanted = Prefs.voiceName(ctx)
+            val pick = all.firstOrNull { it.name == wanted } ?: all.firstOrNull()
+            if (pick != null) engine.voice = pick
+        } catch (e: Exception) {
         }
     }
 

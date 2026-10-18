@@ -20,6 +20,7 @@ interface AgentUi {
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val nim = Nim(svc).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val tools = Tools(svc)
+    private val local = Local(svc, tools)
     private val history = JSONArray()
 
     @Volatile
@@ -38,7 +39,9 @@ You are Orion, a personal AI assistant living on the user's Android phone, in th
 You can use the phone like a person. Reply with ONLY one JSON object per turn:
 {"say":"what you tell the user","tool":"tool_name","args":{...}}
 When finished (or when you only need to answer a question), reply {"say":"your answer","tool":"done"}.
-After each tool you get RESULT. Take one step at a time.
+After each tool you get RESULT.
+To save time you MAY send several tool calls in one reply: {"say":"...","steps":[{"tool":"open_app","args":{"name":"WhatsApp"}},{"tool":"wait","args":{"seconds":2}}]}. They run in order and stop at the first error. Only batch steps that do not need you to see the screen in between. After read_screen, look or any screen change you depend on, wait for RESULT.
+Be fast: use as few turns as possible, never repeat a tool just to double-check.
 
 Tools:
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
@@ -65,19 +68,14 @@ Tools:
 - record_screen {action}: "start" or "stop" screen recording (saved in Movies/Orion)
 - remember {category, text}: save to long-term memory. category: preference | project | decision | task | conversation | fact
 - update_memory {id, text, category}   forget {id}   recall {query}
-- create_task {title, details, priority, due_at}: save a task permanently on this device. due_at is an optional Unix timestamp in milliseconds.
-- list_tasks {}: show saved tasks and deadlines
-- update_task {id, status, priority, title, details, due_at, clear_due_at}: update an existing task; status: open | in_progress | done | cancelled
-- delete_task {id}: permanently delete a task; ask the user first
 - wait {seconds}
 - ask_user {question}: yes/no question. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, calling, or changing account settings.
 
 Rules:
 - Never type passwords, PINs, card numbers or verification codes. If a login or payment is needed, tell the user to do it.
-- Keep "say" short (under 25 words) when doing tasks. For questions, answer clearly but briefly.
+- Keep "say" under 20 words when doing tasks. Answer questions in at most two short sentences, in a warm natural speaking voice.
 - Prefer read_screen or click_text over guessing coordinates. If a step fails twice, try another approach or explain.
 - MEMORY: when the user tells you a lasting preference, a project, a decision, or leaves work unfinished, call remember (one short fact each) and carry on. Use update_memory or forget to fix or finish old items. Do not save passwords, secrets or one-off trivia. Use what you remember naturally, without announcing that you remember.
-- TASKS: if the user asks you to track work, create a task with create_task and include a due_at timestamp only when the deadline is clear. Use list_tasks to check progress, update_task to change status, and ask_user before delete_task. Tasks are stored locally. A future due_at schedules an on-device notification; Android battery settings may delay delivery.
 """
 
         fun systemPrompt(svc: PhoneAiService): String {
@@ -139,6 +137,22 @@ Rules:
         refreshSystem()
         history.put(msg("user", command))
         compact()
+        // Instant path: common commands need no AI at all.
+        ui.phase("acting")
+        val quick = try {
+            local.tryRun(command)
+        } catch (e: Exception) {
+            null
+        }
+        if (quick != null) {
+            history.put(msg("assistant", JSONObject().put("say", quick).put("tool", "done").toString()))
+            ui.say(quick)
+            return
+        }
+        if (command.trim().split(" ").size > 2 && Prefs.voice(svc)) {
+            val acks = listOf("On it.", "One moment.", "Let me see.", "Right away.")
+            ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
+        }
         var steps = 0
         while (!stopped && steps < MAX_STEPS) {
             steps++
@@ -154,6 +168,28 @@ Rules:
             val step = parseJson(raw)
             val say = step.optString("say")
             if (say.isNotBlank()) ui.say(say)
+            val batch = step.optJSONArray("steps")
+            if (batch != null && batch.length() > 0) {
+                ui.phase("acting")
+                val sb = StringBuilder()
+                for (i in 0 until minOf(batch.length(), 8)) {
+                    if (stopped) break
+                    val one = batch.optJSONObject(i) ?: continue
+                    val bt = one.optString("tool")
+                    if (bt.isBlank() || bt == "done") continue
+                    val br = try {
+                        exec(bt, one.optJSONObject("args") ?: JSONObject())
+                    } catch (e: Exception) {
+                        "error: ${e.message}"
+                    }
+                    ui.note(bt + ": " + br.take(80).replace("\n", " "))
+                    sb.append(bt).append(": ").append(br.take(700)).append("\n")
+                    if (br.startsWith("error")) break
+                }
+                history.put(msg("user", "RESULT: " + sb.toString().take(3500)))
+                compact()
+                continue
+            }
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") return
             val args = step.optJSONObject("args") ?: JSONObject()
@@ -163,7 +199,6 @@ Rules:
             } catch (e: Exception) {
                 "error: ${e.message}"
             }
-            ActionLogStore.record(svc, tool, result)
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
@@ -226,27 +261,6 @@ Rules:
             "record_screen" -> {
                 val act = a.optString("action", "start").lowercase()
                 if (act == "stop") tools.recordStop() else tools.recordStart()
-            }
-            "create_task" -> tools.createTask(
-                a.optString("title"),
-                a.optString("details", ""),
-                a.optString("priority", "normal"),
-                if (a.has("due_at") && !a.isNull("due_at")) a.optLong("due_at") else null
-            )
-            "list_tasks" -> tools.listTasks()
-            "update_task" -> tools.updateTask(
-                a.optInt("id", -1),
-                if (a.has("status")) a.optString("status") else null,
-                if (a.has("priority")) a.optString("priority") else null,
-                if (a.has("title")) a.optString("title") else null,
-                if (a.has("details")) a.optString("details") else null,
-                if (a.has("due_at") && !a.isNull("due_at")) a.optLong("due_at") else null,
-                a.optBoolean("clear_due_at", false)
-            )
-            "delete_task" -> if (ui.ask("Delete saved task ${a.optInt("id", -1)}?")) {
-                tools.deleteTask(a.optInt("id", -1))
-            } else {
-                "user cancelled task deletion"
             }
             "remember" -> tools.remember(a.optString("category", "fact"), a.optString("text"))
             "update_memory" -> tools.updateMemory(
