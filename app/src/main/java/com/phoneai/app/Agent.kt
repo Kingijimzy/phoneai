@@ -8,13 +8,18 @@ interface AgentUi {
     fun say(text: String)
     fun status(text: String)
     fun note(text: String)
+
+    /** "thinking" while the AI decides, "acting" while a tool runs. */
+    fun phase(p: String)
+
     /** Blocks until the person answers yes or no. Called from the worker thread. */
     fun ask(question: String): Boolean
 }
 
-/** The brain: asks the NVIDIA model what to do, runs the tool it picks, repeats. */
+/** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val nim = Nim(svc).also { n -> n.onStatus = { s -> ui.status(s) } }
+    private val tools = Tools(svc)
     private val history = JSONArray()
 
     @Volatile
@@ -28,31 +33,56 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     companion object {
         const val MAX_STEPS = 40
 
-        val SYSTEM = """
-You control an Android phone through tools, like a person using it. Reply with ONLY one JSON object per turn:
-{"say":"short message to the user (optional)","tool":"tool_name","args":{...}}
-When the task is finished, reply {"say":"short summary","tool":"done"}.
+        private const val BASE = """
+You are Orion, a personal AI assistant living on the user's Android phone, in the style of JARVIS: calm, sharp, loyal, a little witty. You hear the user and your replies are SPOKEN aloud, so write plain sentences: no markdown, no lists, no emojis, no asterisks.
+You can use the phone like a person. Reply with ONLY one JSON object per turn:
+{"say":"what you tell the user","tool":"tool_name","args":{...}}
+When finished (or when you only need to answer a question), reply {"say":"your answer","tool":"done"}.
 After each tool you get RESULT. Take one step at a time.
 
 Tools:
-- open_app {name}: open an installed app by its name (e.g. "WhatsApp", "FC Mobile") or by package name
-- read_screen {}: list what is on screen as numbered elements. ALWAYS use this before clicking in normal apps.
+- open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
+- list_apps {}: names of installed apps
+- read_screen {}: numbered list of what is on screen. Use it before clicking in normal apps.
 - click {id}: click element number id from the latest read_screen
-- tap {x,y}   long_press {x,y}   swipe {x1,y1,x2,y2,ms}: raw touch in screen pixels (read_screen shows the screen size)
-- scroll {direction}: direction is "up" or "down"; scrolls the current list
-- type {text}: type into the focused text field (click the field first). It replaces the field text.
-- key {name}: back | home | recents | notifications | quick_settings | screenshot | enter
+- click_text {text}: click the visible element containing this text
+- wait_for {text, seconds}: wait until text appears on screen
+- tap {x,y}  long_press {x,y}  swipe {x1,y1,x2,y2,ms}: raw touch in screen pixels
+- scroll {direction}: "up" or "down"
+- type {text}: type into the focused text field (click the field first; replaces its text)
+- key {name}: back | home | recents | notifications | quick_settings | screenshot | enter | lock | power_menu
 - look {question}: look at a screenshot and describe it (games, images, anything read_screen cannot see)
-- play {goal, steps}: vision loop that taps and swipes by itself until the goal is done. Use it for games and for screens read_screen cannot understand. steps up to 300.
-- open_url {url}
+- play {goal, steps}: vision loop that taps and swipes by itself until the goal is done. For games and unreadable screens. steps up to 300.
+- open_url {url}   web_search {query}: opens Google results
+- fetch_url {url}: read a web page as text without opening it (e.g. https://wttr.in/Lagos?format=3 for weather)
+- settings {page}: wifi | bluetooth | display | sound | battery | apps | location | accessibility | airplane | storage | date | main
+- dial {number}: opens the dialer (does not call)   sms {number, text}: drafts a message (does not send)
+- alarm {hour, minute, label}   timer {seconds, label}
+- volume {action, percent}: action up | down | mute | unmute | set
+- flashlight {on}: true or false
+- copy {text}: copy to clipboard
+- battery {}   time {}   device_info {}
+- record_screen {action}: "start" or "stop" screen recording (saved in Movies/Orion)
+- remember {category, text}: save to long-term memory. category: preference | project | decision | task | conversation | fact
+- update_memory {id, text, category}   forget {id}   recall {query}
 - wait {seconds}
-- ask_user {question}: ask the user yes or no. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, or changing account settings.
+- ask_user {question}: yes/no question. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, calling, or changing account settings.
 
 Rules:
 - Never type passwords, PINs, card numbers or verification codes. If a login or payment is needed, tell the user to do it.
-- Keep "say" under 20 words. Prefer read_screen over guessing coordinates.
-- If a step fails twice, try a different approach or explain the problem.
-""".trimIndent()
+- Keep "say" short (under 25 words) when doing tasks. For questions, answer clearly but briefly.
+- Prefer read_screen or click_text over guessing coordinates. If a step fails twice, try another approach or explain.
+- MEMORY: when the user tells you a lasting preference, a project, a decision, or leaves work unfinished, call remember (one short fact each) and carry on. Use update_memory or forget to fix or finish old items. Do not save passwords, secrets or one-off trivia. Use what you remember naturally, without announcing that you remember.
+"""
+
+        fun systemPrompt(svc: PhoneAiService): String {
+            val name = Prefs.userName(svc)
+            val sb = StringBuilder(BASE.trim())
+            sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
+            sb.append("\nNow: ").append(Tools(svc).time())
+            sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc))
+            return sb.toString()
+        }
     }
 
     init {
@@ -64,11 +94,26 @@ Rules:
 
     fun reset() {
         while (history.length() > 0) history.remove(0)
-        history.put(msg("system", SYSTEM))
+        history.put(msg("system", systemPrompt(svc)))
     }
 
-    private fun trim() {
+    private fun refreshSystem() {
+        if (history.length() > 0) history.put(0, msg("system", systemPrompt(svc)))
+    }
+
+    /** Keeps the conversation small: old screen dumps are replaced and the list is capped. */
+    private fun compact() {
+        val n = history.length()
+        for (i in 1 until n - 4) {
+            val m = history.getJSONObject(i)
+            val c = m.optString("content")
+            if (m.optString("role") == "user" && c.startsWith("RESULT: ") && c.length > 300) {
+                m.put("content", "RESULT: (older output removed)")
+            }
+        }
         while (history.length() > 41) history.remove(1)
+        // never start the dialogue with an assistant turn
+        while (history.length() > 1 && history.getJSONObject(1).optString("role") == "assistant") history.remove(1)
     }
 
     private fun parseJson(raw: String): JSONObject {
@@ -86,15 +131,18 @@ Rules:
     fun run(command: String) {
         stopped = false
         nim.resume()
+        refreshSystem()
         history.put(msg("user", command))
-        trim()
+        compact()
         var steps = 0
         while (!stopped && steps < MAX_STEPS) {
             steps++
+            ui.phase("thinking")
             val raw = try {
                 nim.chat(history, false)
             } catch (e: Exception) {
-                ui.say("AI error: ${e.message}")
+                if (stopped) break
+                ui.say("I could not reach the AI. ${e.message}")
                 return
             }
             history.put(msg("assistant", raw))
@@ -104,13 +152,15 @@ Rules:
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") return
             val args = step.optJSONObject("args") ?: JSONObject()
+            ui.phase("acting")
             val result = try {
                 exec(tool, args)
             } catch (e: Exception) {
                 "error: ${e.message}"
             }
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
-            history.put(msg("user", "RESULT: $result"))
+            history.put(msg("user", "RESULT: " + result.take(3500)))
+            compact()
         }
         if (stopped) ui.say("Stopped.") else ui.say("I reached the step limit. Tell me to continue if needed.")
     }
@@ -130,8 +180,11 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         return when (tool) {
             "open_app" -> svc.openApp(a.optString("name"))
+            "list_apps" -> tools.listApps()
             "read_screen" -> svc.readScreen()
             "click" -> svc.clickId(a.optInt("id", -1))
+            "click_text" -> tools.clickText(a.optString("text"))
+            "wait_for" -> tools.waitFor(a.optString("text"), a.optDouble("seconds", 8.0))
             "tap" -> xy(a, "x", "y") { x, y -> svc.tap(x, y) }
             "long_press" -> xy(a, "x", "y") { x, y -> svc.longPress(x, y) }
             "swipe" -> {
@@ -151,6 +204,31 @@ Rules:
             "look" -> look(a.optString("question", "Describe what is on the screen."))
             "play" -> play(a.optString("goal"), a.optInt("steps", 20))
             "open_url" -> svc.openUrl(a.optString("url"))
+            "web_search" -> tools.webSearch(a.optString("query"))
+            "fetch_url" -> tools.fetchUrl(a.optString("url"))
+            "settings" -> tools.settings(a.optString("page", "main"))
+            "dial" -> tools.dial(a.optString("number"))
+            "sms" -> tools.sms(a.optString("number"), a.optString("text"))
+            "alarm" -> tools.alarm(a.optInt("hour", 7), a.optInt("minute", 0), a.optString("label", "Orion"))
+            "timer" -> tools.timer(a.optInt("seconds", 60), a.optString("label", "Orion"))
+            "volume" -> tools.volume(a.optString("action", "up"), a.optInt("percent", 50))
+            "flashlight" -> tools.flashlight(a.optBoolean("on", true))
+            "copy" -> tools.copy(a.optString("text"))
+            "battery" -> tools.battery()
+            "time" -> tools.time()
+            "device_info" -> tools.deviceInfo()
+            "record_screen" -> {
+                val act = a.optString("action", "start").lowercase()
+                if (act == "stop") tools.recordStop() else tools.recordStart()
+            }
+            "remember" -> tools.remember(a.optString("category", "fact"), a.optString("text"))
+            "update_memory" -> tools.updateMemory(
+                a.optInt("id", -1),
+                if (a.has("category")) a.optString("category") else null,
+                if (a.has("text")) a.optString("text") else null
+            )
+            "forget" -> tools.forget(a.optInt("id", -1))
+            "recall" -> tools.recall(a.optString("query"))
             "wait" -> {
                 val s = a.optDouble("seconds", 2.0).coerceIn(0.5, 10.0)
                 Thread.sleep((s * 1000).toLong())

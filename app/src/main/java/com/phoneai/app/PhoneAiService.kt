@@ -1,8 +1,10 @@
 package com.phoneai.app
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.Path
@@ -26,6 +28,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -52,6 +55,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         private const val OVERLAY = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         private const val NOT_FOCUSABLE = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         private const val NOT_MODAL = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+
+        private val WAKE = Regex("\\b(orion|orian|oryan|orrion|oreon|o ryan|o'ryan)\\b", RegexOption.IGNORE_CASE)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -64,9 +69,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
 
-    private var bubble: TextView? = null
+    private var bubble: OrbView? = null
     private var panel: LinearLayout? = null
+    private var panelOrb: OrbView? = null
+    private var panelStatus: TextView? = null
+    private var micBtnRef: TextView? = null
     private var strip: LinearLayout? = null
+    private var stripOrb: OrbView? = null
     private var stripText: TextView? = null
     private var confirmView: LinearLayout? = null
     private var logBox: LinearLayout? = null
@@ -75,9 +84,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     @Volatile
     private var running = false
+
+    @Volatile
+    private var speaking = false
+
+    @Volatile
+    private var phase = "thinking"
     private var listening = false
     private var handsActive = false
     private var emptyListens = 0
+    private var wakeGen = 0
+    private var wakeErr = false
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -86,8 +103,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         instance = this
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         voice = Voice(this)
+        voice.onSpeaking = { s ->
+            speaking = s
+            refreshMode()
+        }
+        voice.onLevel = { l ->
+            for (o in orbs()) o.level = l
+        }
         agent = Agent(this, this)
         showBubble()
+        startWake()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -96,6 +121,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
+        wakeGen++
         removeAllViews()
         try {
             voice.shutdown()
@@ -115,7 +141,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         bubble = null
         panel = null
+        panelOrb = null
+        panelStatus = null
         strip = null
+        stripOrb = null
         stripText = null
         confirmView = null
     }
@@ -158,12 +187,29 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return t
     }
 
-    private fun makeDraggable(v: View, lp: WindowManager.LayoutParams, onClick: () -> Unit) {
+    private fun chip(text: String, onClick: () -> Unit): TextView {
+        val t = TextView(this)
+        t.text = text
+        t.setTextColor(Theme.CYAN)
+        t.textSize = 12f
+        t.gravity = Gravity.CENTER
+        t.setPadding(dp(12), dp(7), dp(12), dp(7))
+        t.background = rounded(Theme.PANEL2, dp(16).toFloat(), Theme.LINE)
+        t.setOnClickListener { onClick() }
+        return t
+    }
+
+    private fun makeDraggable(v: View, lp: WindowManager.LayoutParams, onClick: () -> Unit, onLong: (() -> Unit)? = null) {
         var sx = 0f
         var sy = 0f
         var ox = 0
         var oy = 0
         var moved = false
+        var longFired = false
+        val longRun = Runnable {
+            longFired = true
+            onLong?.invoke()
+        }
         v.setOnTouchListener { _, e ->
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -172,19 +218,32 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     ox = lp.x
                     oy = lp.y
                     moved = false
+                    longFired = false
+                    if (onLong != null) main.postDelayed(longRun, 650)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (e.rawX - sx).toInt()
                     val dy = (e.rawY - sy).toInt()
-                    if (abs(dx) > 10 || abs(dy) > 10) moved = true
+                    if (abs(dx) > 10 || abs(dy) > 10) {
+                        moved = true
+                        main.removeCallbacks(longRun)
+                    }
                     lp.x = ox + dx
                     lp.y = oy + dy
-                    wm.updateViewLayout(v, lp)
+                    try {
+                        wm.updateViewLayout(v, lp)
+                    } catch (ex: Exception) {
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (!moved) onClick()
+                    main.removeCallbacks(longRun)
+                    if (!moved && !longFired) onClick()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    main.removeCallbacks(longRun)
                     true
                 }
                 else -> false
@@ -216,24 +275,45 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         confirmView?.visibility = vis
     }
 
+    // ---------------------------------------------------------------- orb state
+
+    private fun orbs(): List<OrbView> = listOfNotNull(bubble, panelOrb, stripOrb)
+
+    /** Decides what the avatar should be doing and what the status line says. Main thread. */
+    private fun refreshMode() {
+        main.post {
+            val m = when {
+                speaking -> OrbView.Mode.SPEAKING
+                listening -> OrbView.Mode.LISTENING
+                running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
+                else -> OrbView.Mode.IDLE
+            }
+            for (o in orbs()) o.mode = m
+            micBtnRef?.text = if (listening) "Stop" else "Mic"
+            panelStatus?.text = when (m) {
+                OrbView.Mode.IDLE -> if (Prefs.wake(this)) "Say \"Orion\" or tap the mic" else "Ready"
+                OrbView.Mode.LISTENING -> "Listening..."
+                OrbView.Mode.THINKING -> "Thinking..."
+                OrbView.Mode.SPEAKING -> "Speaking..."
+                OrbView.Mode.ACTING -> "Working on it..."
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- floating button
 
     private fun showBubble() {
         if (bubble != null || running || panel != null) return
-        val b = TextView(this)
-        b.text = "AI"
-        b.setTextColor(0xFF04150D.toInt())
-        b.textSize = 15f
-        b.typeface = Typeface.DEFAULT_BOLD
-        b.gravity = Gravity.CENTER
-        b.background = rounded(0xFF3DDC97.toInt(), dp(26).toFloat())
-        val lp = WindowManager.LayoutParams(dp(52), dp(52), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
+        val b = OrbView(this)
+        b.backing = true
+        val lp = WindowManager.LayoutParams(dp(64), dp(64), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
         lp.x = 0
         lp.y = dp(220)
-        makeDraggable(b, lp) { openPanel() }
+        makeDraggable(b, lp, { openPanel() }, { quickListen() })
         wm.addView(b, lp)
         bubble = b
+        refreshMode()
     }
 
     private fun hideBubble() {
@@ -247,6 +327,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         bubble = null
     }
 
+    private fun quickListen() {
+        handsActive = Prefs.hands(this)
+        emptyListens = 0
+        listenNow()
+    }
+
     // ---------------------------------------------------------------- chat panel
 
     /** Called by the setup screen. */
@@ -258,22 +344,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val box = logBox ?: return
         val t = TextView(this)
         t.text = text
-        t.textSize = if (kind == "note") 12f else 15f
+        t.textSize = if (kind == "note") 11f else 15f
         val lp = LinearLayout.LayoutParams(WRAP, WRAP)
         lp.setMargins(0, dp(4), 0, dp(4))
         when (kind) {
             "me" -> {
-                t.setTextColor(0xFF04150D.toInt())
-                t.background = rounded(0xFF3DDC97.toInt(), dp(16).toFloat())
+                t.setTextColor(Theme.ON_ACCENT)
+                t.background = rounded(Theme.CYAN, dp(16).toFloat())
                 lp.gravity = Gravity.END
             }
             "ai" -> {
-                t.setTextColor(0xFFE9EEF2.toInt())
-                t.background = rounded(0xFF171C22.toInt(), dp(16).toFloat(), 0xFF212932.toInt())
+                t.setTextColor(Theme.TEXT)
+                t.background = rounded(Theme.PANEL2, dp(16).toFloat(), Theme.LINE)
                 lp.gravity = Gravity.START
             }
             else -> {
-                t.setTextColor(0xFF8A96A3.toInt())
+                t.setTextColor(Theme.MUTED)
                 t.typeface = Typeface.MONOSPACE
             }
         }
@@ -284,30 +370,41 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun openPanel() {
         if (panel != null || running) return
+        wakeGen++
         hideBubble()
         hideStrip()
         val size = screenSize()
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = rounded(0xFF12161B.toInt(), dp(20).toFloat(), 0xFF212932.toInt())
-        root.setPadding(dp(12), dp(10), dp(12), dp(10))
+        root.background = rounded(Theme.PANEL, dp(24).toFloat(), Theme.LINE)
+        root.setPadding(dp(14), dp(12), dp(14), dp(12))
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        val title = label("Phone AI", 17f, 0xFFE9EEF2.toInt())
+        val orb = OrbView(this)
+        head.addView(orb, LinearLayout.LayoutParams(dp(76), dp(76)))
+        val titleCol = LinearLayout(this)
+        titleCol.orientation = LinearLayout.VERTICAL
+        titleCol.setPadding(dp(8), 0, 0, 0)
+        val title = label("O R I O N", 16f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
-        head.addView(title, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val fresh = label("New", 14f, 0xFF8A96A3.toInt())
+        titleCol.addView(title)
+        val st = label("Ready", 13f, Theme.CYAN)
+        titleCol.addView(st)
+        head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
+        val fresh = label("New", 14f, Theme.MUTED)
         fresh.setPadding(dp(10), dp(6), dp(10), dp(6))
         fresh.setOnClickListener { newChat() }
         head.addView(fresh)
-        val close = label("Close", 14f, 0xFF8A96A3.toInt())
+        val close = label("Close", 14f, Theme.MUTED)
         close.setPadding(dp(10), dp(6), dp(10), dp(6))
         close.setOnClickListener { closePanel(true) }
         head.addView(close)
         root.addView(head)
+        panelOrb = orb
+        panelStatus = st
 
         val scroll = ScrollView(this)
         val box = LinearLayout(this)
@@ -317,19 +414,43 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         logBox = box
         logScroll = scroll
         if (transcript.isEmpty()) {
-            addLine("ai", "Tell me what to do. Type it, or tap Mic and say it.")
+            val n = Prefs.userName(this)
+            addLine("ai", "Hello" + (if (n.isEmpty()) "" else ", $n") + ". I'm Orion. Type, tap the mic, or hold the orb and speak. Tell me what to do.")
         } else {
             for (item in transcript) addLine(item.first, item.second)
         }
+
+        val chips = LinearLayout(this)
+        chips.orientation = LinearLayout.HORIZONTAL
+        val quick = listOf(
+            "What's on screen" to "Look at my screen and tell me what is on it.",
+            "Battery" to "What is my battery level?",
+            "Record screen" to "Start recording my screen.",
+            "Stop recording" to "Stop the screen recording.",
+            "Flashlight" to "Toggle the flashlight on.",
+            "FC Mobile" to "Open FC Mobile."
+        )
+        for ((chipName, cmd) in quick) {
+            val c = chip(chipName) { submit(cmd) }
+            val clp = LinearLayout.LayoutParams(WRAP, WRAP)
+            clp.setMargins(0, 0, dp(6), 0)
+            chips.addView(c, clp)
+        }
+        val chipScroll = HorizontalScrollView(this)
+        chipScroll.isHorizontalScrollBarEnabled = false
+        chipScroll.addView(chips)
+        val chipLp = LinearLayout.LayoutParams(MATCH, WRAP)
+        chipLp.setMargins(0, dp(6), 0, dp(6))
+        root.addView(chipScroll, chipLp)
 
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         val input = EditText(this)
-        input.hint = "Message..."
-        input.setHintTextColor(0xFF8A96A3.toInt())
-        input.setTextColor(0xFFE9EEF2.toInt())
-        input.background = rounded(0xFF171C22.toInt(), dp(18).toFloat(), 0xFF212932.toInt())
+        input.hint = "Message Orion..."
+        input.setHintTextColor(Theme.MUTED)
+        input.setTextColor(Theme.TEXT)
+        input.background = rounded(Theme.PANEL2, dp(18).toFloat(), Theme.LINE)
         input.setPadding(dp(14), dp(10), dp(14), dp(10))
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         input.imeOptions = EditorInfo.IME_ACTION_SEND
@@ -340,16 +461,25 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             true
         }
         row.addView(input, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val mic = pill("Mic", 0xFF171C22.toInt(), 0xFFE9EEF2.toInt()) {
-            handsActive = Prefs.hands(this)
-            emptyListens = 0
-            closePanel(false)
-            listenNow()
+        lateinit var micBtn: TextView
+        micBtn = pill("Mic", Theme.PANEL2, Theme.CYAN) {
+            if (listening) {
+                voice.stopListening()
+                listening = false
+                micBtn.text = "Mic"
+                refreshMode()
+            } else {
+                handsActive = Prefs.hands(this)
+                emptyListens = 0
+                micBtn.text = "Stop"
+                listenNow()
+            }
         }
         val micLp = LinearLayout.LayoutParams(WRAP, WRAP)
         micLp.setMargins(dp(8), 0, 0, 0)
-        row.addView(mic, micLp)
-        val send = pill("Send", 0xFF3DDC97.toInt(), 0xFF04150D.toInt()) {
+        row.addView(micBtn, micLp)
+        micBtnRef = micBtn
+        val send = pill("Send", Theme.CYAN, Theme.ON_ACCENT) {
             val t = input.text.toString()
             input.setText("")
             submit(t)
@@ -360,13 +490,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.addView(row)
 
         val lp = WindowManager.LayoutParams(
-            size.first - dp(24), (size.second * 0.55f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(24), (size.second * 0.62f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
         lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         wm.addView(root, lp)
         panel = root
+        refreshMode()
     }
 
     private fun closePanel(thenBubble: Boolean) {
@@ -378,9 +509,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         panel = null
+        panelOrb = null
+        panelStatus = null
+        micBtnRef = null
         logBox = null
         logScroll = null
-        if (thenBubble) showBubble()
+        if (thenBubble) {
+            if (listening) {
+                voice.stopListening()
+                listening = false
+            }
+            showBubble()
+            startWake()
+        }
     }
 
     private fun newChat() {
@@ -401,12 +542,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        row.background = rounded(0xF012161B.toInt(), dp(16).toFloat(), 0xFF3DDC97.toInt())
-        row.setPadding(dp(14), dp(10), dp(10), dp(10))
-        val t = label(text, 14f, 0xFFE9EEF2.toInt())
+        row.background = rounded(0xF00E1522.toInt(), dp(22).toFloat(), Theme.CYAN)
+        row.setPadding(dp(8), dp(6), dp(10), dp(6))
+        val orb = OrbView(this)
+        row.addView(orb, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val t = label(text, 14f, Theme.TEXT)
         t.maxLines = 3
+        t.setPadding(dp(8), 0, dp(8), 0)
+        t.setOnClickListener {
+            if (!running && !listening) {
+                hideStrip()
+                hideBubble()
+                openPanel()
+            }
+        }
         row.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val stop = pill("Stop", 0xFFFF6B6B.toInt(), 0xFFFFFFFF.toInt()) { stopAll() }
+        val stop = pill("Stop", Theme.DANGER, 0xFFFFFFFF.toInt()) { stopAll() }
         row.addView(stop)
         val size = screenSize()
         val lp = WindowManager.LayoutParams(
@@ -416,7 +567,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         lp.y = dp(8)
         wm.addView(row, lp)
         strip = row
+        stripOrb = orb
         stripText = t
+        refreshMode()
     }
 
     private fun hideStrip() {
@@ -428,7 +581,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         strip = null
+        stripOrb = null
         stripText = null
+    }
+
+    /** Shows text in the panel's status line if the panel is open, otherwise in the top strip. */
+    private fun showStatusText(text: String) {
+        if (panel != null) {
+            panelStatus?.text = text
+        } else {
+            showStrip(text)
+        }
     }
 
     private fun removeConfirm() {
@@ -452,13 +615,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         pendingConfirm = answer
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
-        box.background = rounded(0xFF191409.toInt(), dp(18).toFloat(), 0xFFFFB84D.toInt())
+        box.background = rounded(0xFF191409.toInt(), dp(20).toFloat(), Theme.WARN)
         box.setPadding(dp(16), dp(14), dp(16), dp(14))
-        box.addView(label(question, 16f, 0xFFE9EEF2.toInt()))
+        box.addView(label(question, 16f, Theme.TEXT))
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
-        val no = pill("No", 0xFF171C22.toInt(), 0xFFE9EEF2.toInt()) { answer(false) }
-        val yes = pill("Yes, do it", 0xFF3DDC97.toInt(), 0xFF04150D.toInt()) { answer(true) }
+        val no = pill("No", Theme.PANEL2, Theme.TEXT) { answer(false) }
+        val yes = pill("Yes, do it", Theme.CYAN, Theme.ON_ACCENT) { answer(true) }
         val noLp = LinearLayout.LayoutParams(0, WRAP, 1f)
         noLp.setMargins(0, dp(12), dp(6), 0)
         val yesLp = LinearLayout.LayoutParams(0, WRAP, 1f)
@@ -481,9 +644,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val t = text.trim()
         if (t.isEmpty() || running) return
         if (!Prefs.hasAnyKey(this)) {
-            Toast.makeText(this, "Open the Phone AI app and add an API key first.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Open the Orion AI app and add an API key first.", Toast.LENGTH_LONG).show()
             return
         }
+        wakeGen++
         transcript.add(Pair("me", t))
         voice.stopSpeaking()
         voice.stopListening()
@@ -491,7 +655,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         closePanel(false)
         hideBubble()
         running = true
-        showStrip("Working...")
+        phase = "thinking"
+        showStrip("Thinking...")
+        refreshMode()
         worker.execute {
             try {
                 agent.run(t)
@@ -504,6 +670,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun finishRun() {
         running = false
+        refreshMode()
         val last = transcript.lastOrNull { it.first == "ai" }?.second ?: "Done."
         showStrip(last)
         if (handsActive && Prefs.hands(this)) {
@@ -511,23 +678,28 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         } else {
             handsActive = false
             showBubble()
+            startWake()
             main.postDelayed({
                 if (!running && !listening) hideStrip()
-            }, 6000)
+            }, 7000)
         }
     }
 
     private fun listenNow() {
         if (running) return
+        wakeGen++
         listening = true
         hideBubble()
-        showStrip("Listening...")
+        if (panel == null) showStrip("Listening...")
         voice.stopSpeaking()
+        refreshMode()
+        var errored = false
         voice.listen({ text ->
             listening = false
+            refreshMode()
             if (text.isNullOrBlank()) {
                 emptyListens++
-                if (handsActive && emptyListens < 3) {
+                if (handsActive && emptyListens < 3 && !errored) {
                     main.postDelayed({ listenNow() }, 500)
                 } else {
                     endHands()
@@ -537,15 +709,25 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 submit(text)
             }
         }, { partial ->
-            stripText?.text = partial
+            showStatusText(partial)
+        }, { err ->
+            errored = true
+            handsActive = false
+            Toast.makeText(this, err, Toast.LENGTH_LONG).show()
+            transcript.add(Pair("note", err))
         })
     }
 
     private fun endHands() {
         handsActive = false
         listening = false
-        hideStrip()
-        showBubble()
+        if (panel == null) {
+            hideStrip()
+            showBubble()
+            startWake()
+        } else {
+            refreshMode()
+        }
     }
 
     private fun stopAll() {
@@ -560,7 +742,57 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         } else {
             hideStrip()
             showBubble()
+            startWake()
         }
+        refreshMode()
+    }
+
+    // ---------------------------------------------------------------- wake word "Orion"
+
+    private fun wakeAllowed(): Boolean =
+        Prefs.wake(this) && !running && !listening && panel == null && confirmView == null &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun startWake() {
+        if (!Prefs.wake(this)) return
+        val my = ++wakeGen
+        main.postDelayed({ wakeTick(my) }, 700)
+    }
+
+    private fun wakeTick(my: Int) {
+        if (my != wakeGen || !wakeAllowed()) return
+        if (voice.isSpeaking()) {
+            main.postDelayed({ wakeTick(my) }, 800)
+            return
+        }
+        wakeErr = false
+        voice.listen({ text ->
+            if (my == wakeGen) {
+                val cmd = if (text.isNullOrBlank()) null else afterWake(text)
+                if (cmd != null) {
+                    wakeGen++
+                    if (cmd.isBlank()) {
+                        handsActive = Prefs.hands(this)
+                        emptyListens = 0
+                        listenNow()
+                    } else {
+                        submit(cmd)
+                    }
+                } else if (!wakeErr) {
+                    main.postDelayed({ wakeTick(my) }, 400)
+                }
+            }
+        }, { _ -> }, { err ->
+            wakeErr = true
+            transcript.add(Pair("note", "Wake word: $err"))
+            main.postDelayed({ wakeTick(my) }, 5000)
+        })
+    }
+
+    /** Returns what was said after "Orion", or null if the wake word was not said. */
+    private fun afterWake(text: String): String? {
+        val m = WAKE.find(text) ?: return null
+        return text.substring(m.range.last + 1).trim().trimStart(',', '.', '!', ':', ' ')
     }
 
     // ---------------------------------------------------------------- AgentUi
@@ -584,6 +816,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             if (running) showStrip(text)
         }
+    }
+
+    override fun phase(p: String) {
+        phase = p
+        refreshMode()
     }
 
     override fun ask(question: String): Boolean {
@@ -663,7 +900,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {
         if (nodes.size >= 80) return
         val text = n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString() ?: ""
-        val lbl = text.trim()
+        val lbl = if (n.isPassword) "(password field)" else text.trim()
         if (n.isVisibleToUser && (lbl.isNotEmpty() || n.isClickable || n.isEditable)) {
             val r = Rect()
             n.getBoundsInScreen(r)
@@ -718,6 +955,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = rootInActiveWindow ?: return "error: cannot read this screen"
         val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
             ?: return "error: no text field found. Click a text field first."
+        if (field.isPassword) return "error: that is a password field. Ask the user to type it themselves."
         val args = Bundle()
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         return if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) "typed" else "error: could not type there"
@@ -793,6 +1031,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             "notifications" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             "quick_settings" -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
             "screenshot" -> performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
+            "lock" -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+            "power_menu" -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
             "enter" -> pressEnter()
             else -> return "error: unknown key $name"
         }

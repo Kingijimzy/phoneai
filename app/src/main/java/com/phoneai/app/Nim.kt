@@ -6,7 +6,10 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Talks to the chosen AI service. If a model is gone or not allowed, it tries others. */
+/** A failure of one AI service. The next service can still be tried. */
+class AiException(message: String) : RuntimeException(message)
+
+/** Talks to the chosen AI service. If it fails, Orion tries the other services you saved keys for. */
 class Nim(private val ctx: Context) {
     private val bad = listOf(
         "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
@@ -16,7 +19,7 @@ class Nim(private val ctx: Context) {
     )
     private val visionKeys = listOf(
         "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal",
-        "llama-4", "gemma-3", "gemini"
+        "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
     )
     private val preferred = listOf(
         "llama-3.3-nemotron", "llama-3.3-70b", "llama-3.1-nemotron", "llama-3.1-70b",
@@ -43,13 +46,34 @@ class Nim(private val ctx: Context) {
             listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b"),
             listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct")
         ),
+        "cerebras" to Pair(
+            listOf("llama-3.3-70b", "llama3.1-8b", "gpt-oss-120b", "qwen-3-32b"),
+            emptyList<String>()
+        ),
         "openrouter" to Pair(
             listOf(
                 "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free",
                 "qwen/qwen-2.5-72b-instruct:free"
             ),
             listOf("google/gemma-3-27b-it:free", "qwen/qwen2.5-vl-72b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free")
-        )
+        ),
+        "mistral" to Pair(
+            listOf("mistral-small-latest", "open-mistral-nemo", "mistral-large-latest"),
+            listOf("mistral-small-latest", "pixtral-12b-2409")
+        ),
+        "github" to Pair(
+            listOf("openai/gpt-4o-mini", "openai/gpt-4.1-mini", "meta/Llama-3.3-70B-Instruct"),
+            listOf("openai/gpt-4o-mini", "openai/gpt-4.1-mini")
+        ),
+        "openai" to Pair(
+            listOf("gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1-nano"),
+            listOf("gpt-4.1-mini", "gpt-4o-mini")
+        ),
+        "anthropic" to Pair(
+            listOf("claude-haiku-5-5", "claude-sonnet-5-5"),
+            listOf("claude-sonnet-5-5", "claude-haiku-5-5")
+        ),
+        "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>())
     )
 
     private class Http(val code: Int, val body: String)
@@ -77,14 +101,19 @@ class Nim(private val ctx: Context) {
         }
     }
 
-    private fun request(p: Provider, method: String, path: String, body: String?, key: String, readMs: Int = 50000): Http {
-        val conn = URL(p.base + path).openConnection() as HttpURLConnection
+    private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs: Int = 45000): Http {
+        val conn = URL(url).openConnection() as HttpURLConnection
         active = conn
         try {
             conn.requestMethod = method
             conn.connectTimeout = 15000
             conn.readTimeout = readMs
-            conn.setRequestProperty("Authorization", "Bearer $key")
+            if (p.anthropicStyle) {
+                conn.setRequestProperty("x-api-key", key)
+                conn.setRequestProperty("anthropic-version", "2023-06-01")
+            } else {
+                conn.setRequestProperty("Authorization", "Bearer $key")
+            }
             conn.setRequestProperty("Accept", "application/json")
             if (body != null) {
                 conn.doOutput = true
@@ -108,16 +137,25 @@ class Nim(private val ctx: Context) {
     fun allModels(p: Provider): List<String> {
         val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
+        val url = p.listUrl ?: (p.base + "/models")
         val r = try {
-            request(p, "GET", "/models", null, key, 25000)
+            request(p, "GET", url, null, key, 25000)
         } catch (e: java.io.IOException) {
             throw RuntimeException("Cannot reach ${p.label}. Check your internet connection. (${e.javaClass.simpleName})")
         }
         if (keyBad(r)) throw RuntimeException("${p.label} rejected the key (${r.code}). Make a new key and save it again.")
         if (r.code !in 200..299) throw RuntimeException("Could not list models: HTTP ${r.code} ${r.body.take(120)}")
-        val arr = JSONObject(r.body).optJSONArray("data") ?: return emptyList()
+        val trimmed = r.body.trim()
+        val arr: JSONArray = if (trimmed.startsWith("[")) {
+            JSONArray(trimmed)
+        } else {
+            JSONObject(trimmed).optJSONArray("data") ?: return emptyList()
+        }
         val ids = ArrayList<String>()
-        for (i in 0 until arr.length()) ids.add(arr.getJSONObject(i).optString("id").removePrefix("models/"))
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            ids.add(o.optString("id").removePrefix("models/"))
+        }
         return ids.filter { it.isNotBlank() }.sorted()
     }
 
@@ -144,6 +182,9 @@ class Nim(private val ctx: Context) {
                 out.addAll(if (vision) free.filter { isVision(it) } else free)
                 out.addAll(if (vision) fb.second else fb.first)
             }
+            "anthropic", "openai", "github", "mistral", "deepseek", "cerebras" -> {
+                out.addAll(if (vision) fb.second else fb.first)
+            }
             else -> {
                 val vis = ok.filter { isVision(it) }
                 if (vision) {
@@ -165,12 +206,100 @@ class Nim(private val ctx: Context) {
         return out.distinct()
     }
 
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 600, temperature: Double = 0.2): String {
-        val p = Prefs.provider(ctx, vision)
-        val key = Prefs.key(ctx, p.id)
-        if (key.isEmpty()) {
-            throw IllegalStateException("No ${p.label} key saved. Open Phone AI > Add or change an API key.")
+    /** Converts OpenAI-style messages to Anthropic's format. */
+    private fun anthropicBody(model: String, messages: JSONArray, tokens: Int, temperature: Double): String {
+        val system = StringBuilder()
+        val out = JSONArray()
+        for (i in 0 until messages.length()) {
+            val m = messages.getJSONObject(i)
+            val role = m.optString("role")
+            val c = m.opt("content")
+            if (role == "system") {
+                if (system.isNotEmpty()) system.append("\n")
+                system.append(c?.toString() ?: "")
+                continue
+            }
+            val content: Any = if (c is JSONArray) {
+                val parts = JSONArray()
+                for (j in 0 until c.length()) {
+                    val part = c.getJSONObject(j)
+                    if (part.optString("type") == "image_url") {
+                        val url = part.getJSONObject("image_url").optString("url")
+                        val data = url.substringAfter("base64,", "")
+                        parts.put(
+                            JSONObject().put("type", "image").put(
+                                "source",
+                                JSONObject().put("type", "base64").put("media_type", "image/jpeg").put("data", data)
+                            )
+                        )
+                    } else {
+                        parts.put(JSONObject().put("type", "text").put("text", part.optString("text")))
+                    }
+                }
+                parts
+            } else {
+                c?.toString() ?: ""
+            }
+            // Anthropic wants strictly alternating roles; merge neighbours with the same role.
+            val last = if (out.length() > 0) out.getJSONObject(out.length() - 1) else null
+            if (last != null && last.optString("role") == role && content is String && last.opt("content") is String) {
+                last.put("content", last.getString("content") + "\n" + content)
+            } else {
+                out.put(JSONObject().put("role", role).put("content", content))
+            }
         }
+        val o = JSONObject().put("model", model).put("max_tokens", tokens).put("messages", out)
+        if (system.isNotEmpty()) o.put("system", system.toString())
+        o.put("temperature", temperature)
+        return o.toString()
+    }
+
+    private fun extract(p: Provider, body: String): String = try {
+        if (p.anthropicStyle) {
+            val arr = JSONObject(body).getJSONArray("content")
+            val sb = StringBuilder()
+            for (i in 0 until arr.length()) sb.append(arr.getJSONObject(i).optString("text", ""))
+            sb.toString()
+        } else {
+            JSONObject(body).getJSONArray("choices").getJSONObject(0)
+                .getJSONObject("message").optString("content", "")
+        }
+    } catch (e: Exception) {
+        ""
+    }
+
+    /** Asks the best chat or vision service; on failure, falls through to the others that have keys. */
+    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 600, temperature: Double = 0.2): String {
+        val first = Prefs.provider(ctx, vision)
+        val order = ArrayList<Provider>()
+        if (Prefs.hasKey(ctx, first.id)) order.add(first)
+        if (Prefs.autoSwitch(ctx) || order.isEmpty()) {
+            for (p in Providers.all) {
+                if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
+            }
+        }
+        if (order.isEmpty()) {
+            throw IllegalStateException("No API key saved. Open Orion AI and add a key (Gemini is free).")
+        }
+        val errors = ArrayList<String>()
+        val start = System.currentTimeMillis()
+        for ((idx, p) in order.withIndex()) {
+            if (cancelled) throw RuntimeException("Stopped.")
+            if (System.currentTimeMillis() - start > 150000) break
+            try {
+                if (idx > 0) onStatus?.invoke("Switching to ${p.label}...")
+                return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
+            } catch (e: AiException) {
+                errors.add(e.message ?: p.label)
+            }
+        }
+        throw RuntimeException(errors.joinToString("\n"))
+    }
+
+    private fun chatOne(
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean
+    ): String {
+        val key = Prefs.key(ctx, p.id)
         // Gemini models "think" first and that uses up the token budget, so leave room.
         val tokens = if (p.id == "gemini") maxOf(maxTokens * 4, 1024) else maxTokens
         val queue = mutableListOf(Prefs.model(ctx, p, vision))
@@ -178,41 +307,47 @@ class Nim(private val ctx: Context) {
         var refilled = false
         var lastNote = ""
         var attempts = 0
+        val maxAttempts = if (hasBackup) 4 else 12
         val start = System.currentTimeMillis()
-        while (queue.isNotEmpty() && attempts < 15 && System.currentTimeMillis() - start < 180000) {
+        while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < 120000) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
             attempts++
             onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
-            val payload = JSONObject()
-                .put("model", model)
-                .put("messages", messages)
-                .put("temperature", temperature)
-                .put("max_tokens", tokens)
+            val url: String
+            val payload: String
+            if (p.anthropicStyle) {
+                url = p.base + "/messages"
+                payload = anthropicBody(model, messages, tokens, temperature)
+            } else {
+                url = p.base + "/chat/completions"
+                payload = JSONObject()
+                    .put("model", model)
+                    .put("messages", messages)
+                    .put("temperature", temperature)
+                    .put("max_tokens", tokens)
+                    .toString()
+            }
             val r: Http? = try {
-                request(p, "POST", "/chat/completions", payload.toString(), key)
+                request(p, "POST", url, payload, key)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                throw RuntimeException("Cannot reach ${p.label}. Check your internet connection. (${e.javaClass.simpleName})")
+                throw AiException("${p.label}: cannot connect (${e.javaClass.simpleName}). Check internet.")
             }
             if (r == null) {
-                lastNote = "$model -> too slow (no answer in 50s)"
+                lastNote = "$model -> too slow"
                 if (!refilled) {
                     refilled = true
-                    onStatus?.invoke("That model is slow. Looking for another...")
                     queue.addAll(candidates(p, vision))
                 }
                 continue
             }
-            if (keyBad(r)) {
-                throw RuntimeException("${p.label} rejected the key (${r.code}). Make a new key and save it again.")
-            }
-            if (r.code == 429) {
-                throw RuntimeException("${p.label} says you hit the free limit (429). Wait a minute, or switch AI in Phone AI.")
-            }
+            if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
+            if (r.code == 429) throw AiException("${p.label}: free limit reached (429). Wait a minute.")
+            if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
@@ -223,15 +358,8 @@ class Nim(private val ctx: Context) {
                 }
                 continue
             }
-            if (r.code !in 200..299) {
-                throw RuntimeException("${p.label} error ${r.code}: ${r.body.take(160)}")
-            }
-            val content = try {
-                JSONObject(r.body).getJSONArray("choices").getJSONObject(0)
-                    .getJSONObject("message").optString("content", "")
-            } catch (e: Exception) {
-                ""
-            }
+            if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
+            val content = extract(p, r.body)
             if (content.isBlank() || content == "null") {
                 lastNote = "$model -> empty reply"
                 if (!refilled) {
@@ -244,6 +372,6 @@ class Nim(private val ctx: Context) {
             return content
         }
         val kind = if (vision) "vision" else "chat"
-        throw RuntimeException("No ${p.label} $kind model worked after $attempts tries. Last: $lastNote")
+        throw AiException("${p.label}: no $kind model worked. Last: $lastNote")
     }
 }
