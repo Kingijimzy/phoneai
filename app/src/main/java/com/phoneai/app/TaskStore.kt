@@ -115,6 +115,7 @@ object TaskStore {
                 if (old >= 0) tasks.removeAt(old) else break
             }
             save(c)
+            TaskReminder.schedule(c, task)
             task.copy()
         }
 
@@ -129,12 +130,16 @@ object TaskStore {
         if (clearDueAt) task.dueAt = null else if (dueAt != null && dueAt > 0L) task.dueAt = dueAt
         task.updatedAt = System.currentTimeMillis()
         save(c)
+        load(c).firstOrNull { it.id == id }?.let { TaskReminder.schedule(c, it) }
         true
     }
 
     fun delete(c: Context, id: Int): Boolean = synchronized(lock) {
         val removed = load(c).removeAll { it.id == id }
-        if (removed) save(c)
+        if (removed) {
+            save(c)
+            TaskReminder.cancel(c, id)
+        }
         removed
     }
 }
