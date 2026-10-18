@@ -220,7 +220,7 @@ class MainActivity : Activity() {
         // ---- 5. persistent tasks
         val s5 = card(
             col, "5. Tasks and reminders",
-            "Tasks stay saved on this phone across app restarts. Deadlines are stored, but notifications are a follow-up feature."
+            "Tasks stay saved on this phone. Deadlines schedule local notifications; Android battery restrictions can delay delivery."
         )
         add(s5, button("Open saved tasks", true) { tasksDialog() }, 10)
         add(s5, button("Create a task", false) { addTaskDialog() }, 8)
@@ -483,7 +483,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Create a task")
-            .setMessage("Deadlines use your phone's local time. Notifications are not enabled yet.")
+            .setMessage("Deadlines use your phone's local time and schedule an on-device reminder. Allow Orion notifications in Android settings.")
             .setView(wrap)
             .setPositiveButton("Save") { _, _ ->
                 val title = titleBox.text.toString().trim()
