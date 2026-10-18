@@ -37,6 +37,8 @@ class MainActivity : Activity() {
     private lateinit var visionBtn: Button
     private lateinit var nameBtn: Button
     private lateinit var memBtn: Button
+    private lateinit var avatarBtn: Button
+    private lateinit var orbView: OrbView
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -109,16 +111,23 @@ class MainActivity : Activity() {
         sv.addView(col)
         setContentView(sv)
 
-        val orb = OrbView(this)
+        orbView = OrbView(this).apply {
+            style = runCatching { OrbView.Style.valueOf(Prefs.avatarStyle(this@MainActivity)) }
+                .getOrDefault(OrbView.Style.ORION_ORB)
+        }
         val orbLp = LinearLayout.LayoutParams(dp(150), dp(150))
         orbLp.gravity = Gravity.CENTER_HORIZONTAL
-        col.addView(orb, orbLp)
+        col.addView(orbView, orbLp)
         val title = text("O R I O N   A I", 24f, Theme.TEXT, true)
         title.gravity = Gravity.CENTER
         add(col, title, 4)
         val sub = text("Your personal AI for this phone. Speak, type, and let it act.", 14f, Theme.MUTED)
         sub.gravity = Gravity.CENTER
         add(col, sub, 4)
+
+        val avatarCard = card(col, "Your avatar", "Choose Orion's visual character. The lightweight styles work offline and react to voice/activity states.")
+        avatarBtn = button("", true) { avatarDialog() }
+        add(avatarCard, avatarBtn, 8)
 
         // ---- 1. setup
         val s1 = card(col, "1. Switch it on")
@@ -266,11 +275,38 @@ class MainActivity : Activity() {
         val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
         sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
         status.text = sb.toString()
+        avatarBtn.text = "Character: " + avatarLabel(Prefs.avatarStyle(this)) + "  (tap to change)"
         chatBtn.text = "Chat AI: " + Prefs.provider(this, false).label + "  (tap to change)"
         visionBtn.text = "Screen-vision AI: " + Prefs.provider(this, true).label + "  (tap to change)"
         val n = Prefs.userName(this)
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
+    }
+
+    // ------------------------------------------------------------ avatar characters
+
+    private fun avatarLabel(id: String): String = when (id) {
+        "NOVA" -> "Nova · friendly face"
+        "ATLAS" -> "Atlas · tactical visor"
+        "LUMEN" -> "Lumen · warm guide"
+        else -> "Orion · energy orb"
+    }
+
+    private fun avatarDialog() {
+        val ids = arrayOf("ORION_ORB", "NOVA", "ATLAS", "LUMEN")
+        val labels = ids.map { avatarLabel(it) }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Choose Orion's character")
+            .setItems(labels) { _, which ->
+                val chosen = ids[which]
+                Prefs.setAvatarStyle(this, chosen)
+                orbView.style = runCatching { OrbView.Style.valueOf(chosen) }
+                    .getOrDefault(OrbView.Style.ORION_ORB)
+                refresh()
+                Toast.makeText(this, avatarLabel(chosen) + " selected.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // ------------------------------------------------------------ keys and providers
