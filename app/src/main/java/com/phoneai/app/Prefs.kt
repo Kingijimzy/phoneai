@@ -88,9 +88,10 @@ object Providers {
             null, true
         ),
         Provider(
-            "local", "Local model (Termux)", "http://127.0.0.1:8080/v1",
-            "local", null, "type: local",
-            "FREE and unlimited, runs on this phone with llama.cpp in Termux. Type the word local as the key. Slower and less smart."
+            "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
+            "llama3.2:3b", null, "",
+            "FREE and unlimited, runs on this phone inside Termux. Slower, text only.",
+            null, false, true
         )
     )
 

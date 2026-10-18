@@ -6,16 +6,18 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentHashMap
 
 /** A failure of one AI service. The next service can still be tried. */
-class AiException(message: String, val rate: Boolean = false) : RuntimeException(message)
+class AiException(message: String, val rateLimited: Boolean = false) : RuntimeException(message)
 
 /** Talks to the chosen AI service. If it fails, Orion tries the other services you saved keys for. */
 class Nim(private val ctx: Context) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
+
+        /** provider id -> time of the last request (used to space requests out) */
+        private val lastCall = ConcurrentHashMap<String, Long>()
     }
 
     private val bad = listOf(
@@ -72,12 +74,6 @@ class Nim(private val ctx: Context) {
     )
 
     private class Http(val code: Int, val body: String, val retryAfter: Int = -1)
-
-    companion object {
-        /** provider id -> time until which it is resting after a rate limit */
-        private val cool = ConcurrentHashMap<String, Long>()
-        private val lastCall = ConcurrentHashMap<String, Long>()
-    }
 
     private fun pause(ms: Long) {
         var left = ms
@@ -411,7 +407,7 @@ class Nim(private val ctx: Context) {
                     queue.add(0, model)
                     continue
                 }
-                cool[p.id] = System.currentTimeMillis() + maxOf(wait, 30) * 1000L
+                cooldown[p.id] = System.currentTimeMillis() + maxOf(wait, 30) * 1000L
                 throw AiException("${p.label}: free limit reached (429).", true)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
