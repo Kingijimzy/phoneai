@@ -113,6 +113,8 @@ class MainActivity : Activity() {
             }
         })
         add(col, button("Test the AI", false) { testAi() }, 8)
+        add(col, button("Choose AI model (chat)", false) { pickModel(false) }, 8)
+        add(col, button("Choose AI model (screen vision)", false) { pickModel(true) }, 8)
 
         add(col, text("4. Voice", 18f, 0xFFE9EEF2.toInt(), true), 24)
         val voiceSw = Switch(this)
@@ -161,6 +163,35 @@ class MainActivity : Activity() {
         val key = if (Prefs.key(this).isNotEmpty()) "saved" else "missing"
         status.text = "Accessibility: $acc\nMicrophone:    $mic\nNVIDIA key:    $key"
         keyBox.hint = if (Prefs.key(this).isNotEmpty()) "Key saved. Paste a new one to replace it." else "nvapi-..."
+    }
+
+    /** Shows every model your key can see; tap one to use it. */
+    private fun pickModel(vision: Boolean) {
+        Toast.makeText(this, "Loading models...", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val nim = Nim(this)
+                val all = nim.allModels()
+                val list = if (vision) all.filter { nim.isVision(it) } else all.filter { !nim.isVision(it) }
+                runOnUiThread {
+                    if (list.isEmpty()) {
+                        Toast.makeText(this, "No models found (${all.size} total).", Toast.LENGTH_LONG).show()
+                    } else {
+                        val items = list.toTypedArray()
+                        android.app.AlertDialog.Builder(this)
+                            .setTitle(if (vision) "Pick a vision model" else "Pick a chat model")
+                            .setItems(items) { _, which ->
+                                if (vision) Prefs.setVisionModel(this, items[which]) else Prefs.setTextModel(this, items[which])
+                                Toast.makeText(this, "Using " + items[which] + ". Now tap Test the AI.", Toast.LENGTH_LONG).show()
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Problem: " + e.message, Toast.LENGTH_LONG).show() }
+            }
+        }.start()
     }
 
     private fun testAi() {
