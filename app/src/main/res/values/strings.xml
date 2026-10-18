@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Phone AI</string>
+    <string name="service_desc">Lets Phone AI see the screen and tap, swipe and type for you when you give it a command. It asks before sending, paying or deleting.</string>
+</resources>
