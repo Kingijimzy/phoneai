@@ -17,6 +17,7 @@ Build a practical Android personal assistant that can talk, understand the curre
 - First persistent task store and agent tools were added in build 8.
 - Native avatar presets (Orion, Nova, Atlas, Lumen) are available; the selected preset is saved on-device.
 - Local task deadline notifications are scheduled from task create/update operations and restored after reboot; Android may delay delivery.
+- A local action history records tool names and returned-error status only; it intentionally omits arguments and screen text.
 
 ## Milestones
 
@@ -46,7 +47,7 @@ Build a practical Android personal assistant that can talk, understand the curre
 ### 4. Safe phone actions
 - Use Android APIs and AccessibilityService only with user-granted permissions.
 - Ask for confirmation before sending messages, deleting files/data, purchases/payments, changing security settings, or other consequential actions.
-- Keep a visible stop/cancel path and a clear record of actions/results.
+- Keep a visible stop/cancel path and a clear record of actions/results. A privacy-conscious tool-name history is now available in settings; richer verification records remain future work.
 - Do not claim an action succeeded until the tool result confirms it.
 
 ### 5. Agent loop
