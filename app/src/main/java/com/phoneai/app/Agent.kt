@@ -65,6 +65,10 @@ Tools:
 - record_screen {action}: "start" or "stop" screen recording (saved in Movies/Orion)
 - remember {category, text}: save to long-term memory. category: preference | project | decision | task | conversation | fact
 - update_memory {id, text, category}   forget {id}   recall {query}
+- create_task {title, details, priority, due_at}: save a task permanently on this device. due_at is an optional Unix timestamp in milliseconds.
+- list_tasks {}: show saved tasks and deadlines
+- update_task {id, status, priority, title, details, due_at, clear_due_at}: update an existing task; status: open | in_progress | done | cancelled
+- delete_task {id}: permanently delete a task; ask the user first
 - wait {seconds}
 - ask_user {question}: yes/no question. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, calling, or changing account settings.
 
@@ -73,6 +77,7 @@ Rules:
 - Keep "say" short (under 25 words) when doing tasks. For questions, answer clearly but briefly.
 - Prefer read_screen or click_text over guessing coordinates. If a step fails twice, try another approach or explain.
 - MEMORY: when the user tells you a lasting preference, a project, a decision, or leaves work unfinished, call remember (one short fact each) and carry on. Use update_memory or forget to fix or finish old items. Do not save passwords, secrets or one-off trivia. Use what you remember naturally, without announcing that you remember.
+- TASKS: if the user asks you to track work, create a task with create_task and include a due_at timestamp only when the deadline is clear. Use list_tasks to check progress, update_task to change status, and ask_user before delete_task. Tasks are stored locally; a saved deadline is not yet a guaranteed notification/alarm.
 """
 
         fun systemPrompt(svc: PhoneAiService): String {
@@ -220,6 +225,27 @@ Rules:
             "record_screen" -> {
                 val act = a.optString("action", "start").lowercase()
                 if (act == "stop") tools.recordStop() else tools.recordStart()
+            }
+            "create_task" -> tools.createTask(
+                a.optString("title"),
+                a.optString("details", ""),
+                a.optString("priority", "normal"),
+                if (a.has("due_at") && !a.isNull("due_at")) a.optLong("due_at") else null
+            )
+            "list_tasks" -> tools.listTasks()
+            "update_task" -> tools.updateTask(
+                a.optInt("id", -1),
+                if (a.has("status")) a.optString("status") else null,
+                if (a.has("priority")) a.optString("priority") else null,
+                if (a.has("title")) a.optString("title") else null,
+                if (a.has("details")) a.optString("details") else null,
+                if (a.has("due_at") && !a.isNull("due_at")) a.optLong("due_at") else null,
+                a.optBoolean("clear_due_at", false)
+            )
+            "delete_task" -> if (ui.ask("Delete saved task ${a.optInt("id", -1)}?")) {
+                tools.deleteTask(a.optInt("id", -1))
+            } else {
+                "user cancelled task deletion"
             }
             "remember" -> tools.remember(a.optString("category", "fact"), a.optString("text"))
             "update_memory" -> tools.updateMemory(
