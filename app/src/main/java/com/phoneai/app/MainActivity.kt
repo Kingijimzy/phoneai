@@ -238,7 +238,8 @@ class MainActivity : Activity() {
                 Toast.makeText(this, "Saving to Movies/Orion...", Toast.LENGTH_LONG).show()
             }
         }, 8)
-\n        add(
+
+        add(
             col,
             text(
                 "Safety: Orion asks before sending, paying, buying or deleting, and never types passwords or codes. " +
