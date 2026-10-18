@@ -163,6 +163,7 @@ Rules:
             } catch (e: Exception) {
                 "error: ${e.message}"
             }
+            ActionLogStore.record(svc, tool, result)
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
