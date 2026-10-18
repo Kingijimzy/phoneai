@@ -225,12 +225,18 @@ class MainActivity : Activity() {
         add(s5, button("Open saved tasks", true) { tasksDialog() }, 10)
         add(s5, button("Create a task", false) { addTaskDialog() }, 8)
 
-        // ---- 6. recording
         val s6 = card(
-            col, "6. Screen recording",
+            col, "6. Action history",
+            "A local record of which tools ran and whether they returned an error. Orion does not save tool arguments or screen text here."
+        )
+        add(s6, button("View action history", false) { actionLogDialog() }, 8)
+
+        // ---- 7. recording
+        val s7 = card(
+            col, "7. Screen recording",
             "Say \"record my screen\" to Orion, or test here. Android asks permission each time. Videos are saved in Movies/Orion."
         )
-        add(s6, button("Start a test recording", false) {
+        add(s7, button("Start a test recording", false) {
             if (RecordService.state == "recording") {
                 Toast.makeText(this, "Already recording.", Toast.LENGTH_SHORT).show()
             } else {
@@ -238,7 +244,7 @@ class MainActivity : Activity() {
                 startActivity(Intent(this, RecordRequestActivity::class.java))
             }
         }, 10)
-        add(s6, button("Stop recording", false) {
+        add(s7, button("Stop recording", false) {
             val svc = RecordService.instance
             if (svc == null || RecordService.state != "recording") {
                 Toast.makeText(this, "Not recording.", Toast.LENGTH_SHORT).show()
@@ -533,6 +539,36 @@ class MainActivity : Activity() {
             }
             .setPositiveButton("Close", null)
             .show()
+    }
+
+    private fun actionLogDialog() {
+        val events = ActionLogStore.all(this)
+        val formatter = SimpleDateFormat("d MMM HH:mm:ss", Locale.getDefault())
+        val summary = if (events.isEmpty()) {
+            "No agent actions recorded yet."
+        } else {
+            events.take(40).joinToString("\n") { event ->
+                formatter.format(Date(event.at)) + "  ·  " + event.tool + "  ·  " + event.outcome
+            }
+        }
+        val b = AlertDialog.Builder(this)
+            .setTitle("Action history (" + events.size + ")")
+            .setMessage(summary)
+            .setNegativeButton("Close", null)
+        if (events.isNotEmpty()) {
+            b.setPositiveButton("Clear history") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Clear action history?")
+                    .setMessage("This only clears the local tool-name history.")
+                    .setPositiveButton("Clear") { _, _ ->
+                        ActionLogStore.clear(this)
+                        Toast.makeText(this, "Action history cleared.", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        b.show()
     }
 
     // ------------------------------------------------------------ name and memory
