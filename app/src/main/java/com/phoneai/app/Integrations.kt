@@ -188,7 +188,7 @@ object IntegrationStatus {
         "YouTube: browser search only; official metadata API not connected",
         "Gmail: not connected (secure OAuth still required)",
         "Market data: not connected in this app build",
-        "Remote MCP servers: " + if (McpConnector.configured(context)) "configured; discovery only" else "none configured",
+        "Remote MCP servers: " + if (McpConnector.configured(context)) "configured; remote tool calls require per-call approval" else "none configured",
         "Phone tools and declarative skills: local; skills remain allowlisted and budget-limited"
     ).joinToString("\n")
 }
