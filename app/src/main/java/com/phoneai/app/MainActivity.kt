@@ -23,6 +23,7 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var content: FrameLayout
     private lateinit var statusLabel: TextView
+    private var homeOrb: OrbView? = null
     private var selectedTab = "Home"
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -177,6 +178,7 @@ class MainActivity : Activity() {
             background = surface(26)
         }
         val avatar = OrbView(this).apply { contentDescription = "Orion animated Jarvis-style energy core" }
+        homeOrb = avatar
         hero.addView(avatar, LinearLayout.LayoutParams(dp(196), dp(196)).apply { gravity = Gravity.CENTER })
         hero.addView(label("ORION IS HERE", 12f, Theme.CYAN, true).apply { gravity = Gravity.CENTER })
         hero.addView(label("Ready when you are.", 14f, Theme.TEXT).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(3)) })
@@ -258,7 +260,9 @@ class MainActivity : Activity() {
 
     private fun refreshStatus() {
         if (!::statusLabel.isInitialized) return
-        val access = if (PhoneAiService.instance != null) "Accessibility agent active" else "Accessibility agent not enabled"
+        val service = PhoneAiService.instance
+        val access = if (service != null) "Accessibility agent active" else "Accessibility agent not enabled"
+        homeOrb?.mode = service?.displayMode() ?: OrbView.Mode.IDLE
         val keys = Providers.all.count { Prefs.hasKey(this, it.id) }
         statusLabel.text = "●  $access   ·   $keys AI provider key(s) configured"
     }
