@@ -32,13 +32,14 @@ object SkillRegistry {
     private val supportedTools = setOf(
         "time", "battery", "device_info", "list_apps", "read_screen",
         "web_search", "fetch_url", "research_web", "open_url", "recall", "remember",
-        "wait", "wait_for", "click_text", "scroll", "open_app"
+        "wait", "wait_for", "click_text", "scroll", "open_app",
+        "task_list", "task_add", "task_update", "task_delete"
     )
 
     // Consequential tools always require approval, regardless of a skill's manifest setting.
     private val consequentialTools = setOf(
         "type", "sms", "dial", "copy", "record_screen", "settings",
-        "forget", "update_memory", "open_url"
+        "forget", "update_memory", "open_url", "task_delete"
     )
 
     private val idPattern = Regex("^[a-z0-9][a-z0-9._-]{1,47}$")
