@@ -168,6 +168,17 @@ class CinematicAvatarActivity : Activity() {
 
     private fun runScene(method: String, value: String) {
         latestState = value.ifBlank { latestState }
+        if (method == "setState") {
+            status.text = when (latestState) {
+                "idle" -> "ORION 3D  ·  READY"
+                "listening" -> "ORION 3D  ·  LISTENING"
+                "thinking" -> "ORION 3D  ·  THINKING"
+                "speaking" -> "ORION 3D  ·  SPEAKING"
+                "acting" -> "ORION 3D  ·  WORKING"
+                "waiting_approval" -> "ORION 3D  ·  AWAITING APPROVAL"
+                else -> "ORION 3D"
+            }
+        }
         if (!pageReady || !::web.isInitialized) return
         val safe = value.replace("\\", "\\\\").replace("'", "\\'")
         web.post {
