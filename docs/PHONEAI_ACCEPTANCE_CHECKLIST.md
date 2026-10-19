@@ -59,3 +59,14 @@ This checklist is the current completion gate for the combined personal-agent bu
 - Human-like profiles provide a consistent conversational style; they do not make the model human or guarantee emotional understanding.
 - The new cinematic 3D stage uses a stylized CC0 superhero GLB in WebView; it is not photorealistic, is network-dependent, and has approximate callback-driven lip sync. The floating avatar remains 2D Canvas. See [Cinematic Avatar Roadmap](CINEMATIC_AVATAR_ROADMAP.md) for remaining realism, offline, and device-validation work.
 - Trading functionality remains analysis/alerts only; no automatic trade execution is included.
+
+
+## Native app shell and chat UI architecture pass (source pushed; device checks pending)
+
+- The launcher is now a dedicated Home / Chat / Tools / Settings shell rather than exposing every configuration control on one long page.
+- Settings were moved into a dedicated `SettingsActivity`; the original provider, voice, memory, skills, browser, recording, device utility, and integration controls are preserved there.
+- Home emphasizes the animated avatar, chat entry, cinematic 3D entry, memory, and skills. Tools groups diagnostics, research/browser access, recording, and agent capabilities.
+- Navigation transitions use a short fade/slide; touch surfaces use restrained scale feedback. The layout remains native Android views to avoid adding a heavy UI framework.
+- Chat styling now uses a quieter assistant reading surface and separate user bubbles, with clearer header hierarchy and a rounded composer inspired by modern AI chat products. This is an inspiration, not a pixel-for-pixel copy of Grok.
+- The current chat still opens as an accessibility overlay so it can operate over other apps. The new launcher shell does not replace the underlying agent or tool execution architecture.
+- Physical device verification remains required for IME resizing, tap targets, scroll behavior, accessibility overlays, and thermal performance.
