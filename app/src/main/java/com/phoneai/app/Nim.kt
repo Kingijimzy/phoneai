@@ -392,7 +392,7 @@ class Nim(private val ctx: Context) {
             round++
             if (cancelled) throw RuntimeException("Stopped.")
             val now = System.currentTimeMillis()
-            val ready = order.take(providerLimit).filter { (cooldown[it.id] ?: 0L) <= now && usedLastMinute(it.id) < budget(it.id) }
+            val ready = order.take(providerLimit).filter { (cooldown[it.id] ?: 0L) <= now }
             var allRateLimited = true
             for ((idx, p) in ready.withIndex()) {
                 if (cancelled) throw RuntimeException("Stopped.")
@@ -416,7 +416,7 @@ class Nim(private val ctx: Context) {
                 left -= 500
             }
         }
-        throw RuntimeException(errors.values.joinToString("\n").ifEmpty { "All AI services are cooling down. Try again in a minute." })
+        throw RuntimeException(if (errors.isNotEmpty()) "Every eligible saved provider was tried: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "All saved providers are in cooldown or no saved key supports this request type. Check Settings → AI providers. The local usage counter is informational; actual limits are decided by each provider.")
     }
 
     private fun chatOne(
@@ -432,7 +432,7 @@ class Nim(private val ctx: Context) {
         var attempts = 0
         var rateRetries = 0
         val maxAttempts = if (Prefs.quotaSaver(ctx)) {
-            if (hasBackup) 2 else 4
+            1
         } else {
             if (hasBackup) 4 else 12
         }
