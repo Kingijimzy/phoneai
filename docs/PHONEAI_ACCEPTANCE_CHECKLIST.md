@@ -54,5 +54,5 @@ This checklist is the current completion gate for the combined personal-agent bu
 - File operations only affect documents the user explicitly selects.
 - Skills are declarative tool allowlists, not arbitrary downloaded code.
 - Human-like profiles provide a consistent conversational style; they do not make the model human or guarantee emotional understanding.
-- Avatar rendering is currently stylized 2D Canvas, not photorealistic 3D. See [Cinematic Avatar Roadmap](CINEMATIC_AVATAR_ROADMAP.md) for the renderer/model/lip-sync work still required.
+- The new cinematic 3D stage uses a stylized CC0 superhero GLB in WebView; it is not photorealistic, is network-dependent, and has approximate callback-driven lip sync. The floating avatar remains 2D Canvas. See [Cinematic Avatar Roadmap](CINEMATIC_AVATAR_ROADMAP.md) for remaining realism, offline, and device-validation work.
 - Trading functionality remains analysis/alerts only; no automatic trade execution is included.
