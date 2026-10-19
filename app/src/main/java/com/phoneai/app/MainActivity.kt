@@ -115,17 +115,17 @@ class MainActivity : Activity() {
         setContentView(sv)
 
         // ---- Home hero: character, live state, and direct actions
-        val hero = card(col, "ORION  /  PERSONAL AI",
-            "One companion for conversation, voice, memory, browser research, and phone tasks.")
+        val hero = card(col, "ORION  /  YOUR PERSONAL AI",
+            "A living AI workspace for conversation, ideas, research, memory, and phone actions you approve.")
         topAvatar = AvatarView(this)
         topAvatar.style = 1
         val orbLp = LinearLayout.LayoutParams(dp(208), dp(208))
         orbLp.gravity = Gravity.CENTER_HORIZONTAL
         hero.addView(topAvatar, 0, orbLp)
-        val title = text("Your AI. Your workflow.", 22f, Theme.TEXT, true)
+        val title = text("I'm Orion. Let's get into it.", 22f, Theme.TEXT, true)
         title.gravity = Gravity.CENTER
         add(hero, title, 2)
-        val sub = text("Talk naturally. Ask it to research, remember, plan, or help operate your phone.", 13f, Theme.MUTED)
+        val sub = text("Think out loud. Explore ideas. Build plans. Ask me to research, remember, or help with your phone.", 13f, Theme.MUTED)
         sub.gravity = Gravity.CENTER
         add(hero, sub, 5)
         val heroActions = LinearLayout(this)
