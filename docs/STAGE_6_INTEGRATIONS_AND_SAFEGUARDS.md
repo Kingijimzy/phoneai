@@ -64,3 +64,7 @@ PhoneAI can save a user-selected MCP Streamable HTTP endpoint and optional beare
 - Telegram has a manual one-shot inbox check for a saved numeric chat ID. It reads up to ten pending updates, stores an update offset, and does not execute incoming text as commands or act on behalf of the sender. Channel usernames remain outbound-only for this feature.
 - Inbox polling is manual, not an always-running background service. This avoids an unattended remote-control channel and avoids promising reliable delivery while Android may stop the app.
 - Device verification is pending. Public Actions API access may be restricted by GitHub; authenticated workflow control is not added here.
+
+## Public crypto market data
+
+PhoneAI can query Bybit public spot tickers for symbols such as BTCUSDT and ETHUSDT without a key. The method is read-only and cannot submit orders. It reports last price and basic 24-hour fields; it is not a signal, does not provide derivatives funding/open interest, and does not replace the Orion trading-analysis stack. FX feeds remain unconnected. API/network availability and symbol support require live verification.
