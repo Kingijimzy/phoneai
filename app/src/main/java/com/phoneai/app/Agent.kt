@@ -524,17 +524,25 @@ Rules:
             val step = parseJson(raw)
             val act = step.optString("action", "done").lowercase()
             ui.note("[$i] $act - ${step.optString("thought")}")
-            fun px(key: String, max: Int): Float {
+            fun px(key: String, max: Int): Float? {
                 val v = step.optDouble(key, Double.NaN)
-                return if (v.isNaN() || v.isInfinite()) 0f else v.coerceIn(0.0, (max - 1).coerceAtLeast(0).toDouble()).toFloat() * shot.scale
+                if (v.isNaN() || v.isInfinite()) return null
+                return v.coerceIn(0.0, (max - 1).coerceAtLeast(0).toDouble()).toFloat() * shot.scale
             }
             when (act) {
                 "done" -> return "vision stopped after $i steps; review the screen before continuing"
-                "tap" -> svc.tap(px("x", shot.w), px("y", shot.h))
-                "swipe" -> svc.swipe(
-                    px("x", shot.w), px("y", shot.h),
-                    px("x2", shot.w), px("y2", shot.h), 400L
-                )
+                "tap" -> {
+                    val x = px("x", shot.w) ?: return "vision stopped: invalid tap coordinates"
+                    val y = px("y", shot.h) ?: return "vision stopped: invalid tap coordinates"
+                    svc.tap(x, y)
+                }
+                "swipe" -> {
+                    val x1 = px("x", shot.w) ?: return "vision stopped: invalid swipe coordinates"
+                    val y1 = px("y", shot.h) ?: return "vision stopped: invalid swipe coordinates"
+                    val x2 = px("x2", shot.w) ?: return "vision stopped: invalid swipe coordinates"
+                    val y2 = px("y2", shot.h) ?: return "vision stopped: invalid swipe coordinates"
+                    svc.swipe(x1, y1, x2, y2, 400L)
+                }
                 "key" -> {
                     val key = step.optString("key", "back").lowercase()
                     if (key !in setOf("back", "home", "enter")) {
