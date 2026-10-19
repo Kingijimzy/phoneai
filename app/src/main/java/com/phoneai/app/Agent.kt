@@ -282,7 +282,7 @@ Rules:
                 "RIPPLE" -> "XRP"
                 else -> rawSymbol
             }
-            val symbol = baseSymbol + if (quoteMatch.groupValues[2].isNotBlank()) "USDT" else "USDT"
+            val symbol = baseSymbol + "USDT"
             val answer = tools.bybitPublicTicker(symbol)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
