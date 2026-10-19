@@ -150,10 +150,25 @@ object MemoryStore {
         true
     }
 
+    /** Rank relevant memories first, rather than returning the first loose substring match. */
     fun search(c: Context, query: String): List<Memory> {
-        val words = query.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }
-        if (words.isEmpty()) return all(c).takeLast(10)
-        return all(c).filter { m -> words.any { m.text.lowercase().contains(it) || m.category.contains(it) } }
+        val normalized = query.trim().lowercase()
+        val words = normalized.split(Regex("[^a-z0-9]+")).filter { it.length > 2 }.distinct()
+        val memories = all(c)
+        if (words.isEmpty()) return memories.sortedByDescending { it.updated }.take(10)
+        return memories.mapNotNull { m ->
+            val body = m.text.lowercase()
+            val category = m.category.lowercase()
+            val matched = words.count { body.contains(it) || category.contains(it) }
+            if (matched == 0) null else {
+                val score = matched * 10 +
+                    (if (body.contains(normalized)) 20 else 0) +
+                    (if (category == normalized) 5 else 0)
+                Triple(m, score, m.updated)
+            }
+        }.sortedWith(compareByDescending<Triple<Memory, Int, Long>> { it.second }
+            .thenByDescending { it.third })
+            .map { it.first }
     }
 
     /** Text added to the AI's instructions so it "remembers". */
