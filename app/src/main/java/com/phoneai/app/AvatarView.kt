@@ -156,7 +156,14 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         }
 
         canvas.restore()
-        postInvalidateOnAnimation()
+        // Cap decorative animation at about 30 fps. This is smoother than a static face but
+        // avoids driving a permanent 60 fps redraw loop on low-memory Android phones.
+        if (isAttachedToWindow) postInvalidateDelayed(33L)
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(null)
+        super.onDetachedFromWindow()
     }
 
     // ------------------------------------------------------------------ Orion: robot head
@@ -263,14 +270,38 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         rect.set(cx - fw * 1.12f, top - s * 0.04f, cx + fw * 1.12f, bottom - s * 0.02f)
         c.drawRoundRect(rect, fw, fw, fill)
 
-        // face
-        rect.set(cx - fw, top + s * 0.03f, cx + fw, bottom)
-        fill.shader = LinearGradient(0f, top, 0f, bottom, 0xFFE9EEFF.toInt(), 0xFFB9C4FF.toInt(), Shader.TileMode.CLAMP)
-        c.drawRoundRect(rect, fw * 0.95f, fw * 0.95f, fill)
+        // Ears sit behind the jaw, with a soft warm inner shadow.
+        fill.shader = LinearGradient(cx - fw, 0f, cx + fw, 0f, 0xFFD5A18E.toInt(), 0xFFB97F70.toInt(), Shader.TileMode.CLAMP)
+        c.drawOval(cx - fw * 1.08f, cy - s * 0.045f, cx - fw * 0.82f, cy + s * 0.105f, fill)
+        c.drawOval(cx + fw * 0.82f, cy - s * 0.045f, cx + fw * 1.08f, cy + s * 0.105f, fill)
         fill.shader = null
 
-        // fringe
-        fill.color = 0xFF2A1F4D.toInt()
+        // Tapered cheek-to-chin silhouette; warm multi-stop shading gives the face volume.
+        path.reset()
+        path.moveTo(cx - fw * 0.91f, top + s * 0.11f)
+        path.quadTo(cx - fw * 0.98f, top + s * 0.01f, cx - fw * 0.58f, top + s * 0.025f)
+        path.quadTo(cx, top - s * 0.005f, cx + fw * 0.58f, top + s * 0.025f)
+        path.quadTo(cx + fw * 0.98f, top + s * 0.01f, cx + fw * 0.91f, top + s * 0.11f)
+        path.lineTo(cx + fw * 0.82f, cy + s * 0.13f)
+        path.quadTo(cx + fw * 0.64f, bottom - s * 0.015f, cx + fw * 0.28f, bottom - s * 0.005f)
+        path.quadTo(cx, bottom + s * 0.015f, cx - fw * 0.28f, bottom - s * 0.005f)
+        path.quadTo(cx - fw * 0.64f, bottom - s * 0.015f, cx - fw * 0.82f, cy + s * 0.13f)
+        path.close()
+        fill.shader = LinearGradient(cx - fw, top, cx + fw * 0.8f, bottom,
+            intArrayOf(0xFFE8BBA7.toInt(), 0xFFF5D5C3.toInt(), 0xFFD99F8D.toInt()),
+            floatArrayOf(0f, 0.48f, 1f), Shader.TileMode.CLAMP)
+        c.drawPath(path, fill)
+        fill.shader = null
+        // Subtle forehead highlight and jaw-side shadows make the face read less flat.
+        fill.shader = RadialGradient(cx - fw * 0.28f, top + s * 0.20f, fw * 1.1f,
+            intArrayOf(0x44FFFFFF, 0x00FFFFFF), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP)
+        c.drawOval(cx - fw * 0.82f, top + s * 0.04f, cx + fw * 0.82f, bottom - s * 0.015f, fill)
+        fill.shader = null
+        fill.color = 0x1F7B3F39
+        c.drawOval(cx - fw * 0.95f, cy - s * 0.015f, cx - fw * 0.57f, cy + s * 0.20f, fill)
+        c.drawOval(cx + fw * 0.57f, cy - s * 0.015f, cx + fw * 0.95f, cy + s * 0.20f, fill)
+
+        // Layered fringe with warm highlights instead of a single flat hair shape.
         path.reset()
         path.moveTo(cx - fw, top + s * 0.17f)
         path.quadTo(cx - fw * 0.9f, top - s * 0.02f, cx, top - s * 0.01f)
@@ -278,7 +309,20 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         path.quadTo(cx + fw * 0.45f, top + s * 0.06f, cx + fw * 0.05f, top + s * 0.13f)
         path.quadTo(cx - fw * 0.4f, top + s * 0.05f, cx - fw, top + s * 0.17f)
         path.close()
+        fill.shader = LinearGradient(cx - fw, top, cx + fw, top + s * 0.18f,
+            intArrayOf(0xFF171326.toInt(), 0xFF46314D.toInt(), 0xFF241A32.toInt()),
+            floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
         c.drawPath(path, fill)
+        fill.shader = null
+        line.color = 0x557E617D
+        line.strokeWidth = s * 0.006f
+        for (i in 0 until 5) {
+            val x = cx - fw * 0.68f + i * fw * 0.32f
+            path.reset()
+            path.moveTo(x, top + s * 0.045f)
+            path.quadTo(x + fw * 0.16f, top + s * 0.065f, x + fw * 0.20f, top + s * 0.14f)
+            c.drawPath(path, line)
+        }
 
         // glowing hair clip shows the state
         fill.color = col
@@ -341,23 +385,30 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         path.quadTo(cx, eyeY + s * 0.15f, cx + s * 0.04f, eyeY + s * 0.12f)
         c.drawPath(path, line)
 
-        // mouth
+        // Natural-toned upper/lower lip shading; mouth aperture follows the speech envelope.
         val my = cy + s * 0.18f
         val mw = s * 0.075f
+        line.color = 0xFF9B5B59.toInt()
+        line.strokeWidth = s * 0.009f
+        path.reset()
+        path.moveTo(cx - mw * 1.08f, my)
+        path.quadTo(cx - mw * 0.48f, my - s * 0.022f, cx, my + s * 0.003f)
+        path.quadTo(cx + mw * 0.48f, my - s * 0.022f, cx + mw * 1.08f, my)
+        c.drawPath(path, line)
         if (mouth < 0.08f) {
-            line.color = 0xFF8A3B64.toInt()
-            line.strokeWidth = s * 0.016f
             path.reset()
-            path.moveTo(cx - mw, my)
-            path.quadTo(cx, my + s * 0.04f, cx + mw, my)
+            path.moveTo(cx - mw, my + s * 0.008f)
+            path.quadTo(cx, my + s * 0.042f, cx + mw, my + s * 0.008f)
             c.drawPath(path, line)
         } else {
-            val mh = s * 0.01f + mouth * s * 0.08f
-            fill.color = 0xFF5A1F44.toInt()
-            rect.set(cx - mw, my - mh * 0.3f, cx + mw, my + mh)
+            val mh = s * 0.008f + mouth * s * 0.065f
+            fill.shader = LinearGradient(0f, my - mh * 0.4f, 0f, my + mh,
+                0xFF5C2637.toInt(), 0xFF2D1722.toInt(), Shader.TileMode.CLAMP)
+            rect.set(cx - mw * (0.75f + mouth * 0.12f), my - mh * 0.25f, cx + mw * (0.75f + mouth * 0.12f), my + mh)
             c.drawOval(rect, fill)
-            fill.color = 0xFFFF8FB1.toInt()
-            rect.set(cx - mw * 0.6f, my + mh * 0.45f, cx + mw * 0.6f, my + mh * 0.95f)
+            fill.shader = null
+            fill.color = 0xFFB76F76.toInt()
+            rect.set(cx - mw * 0.55f, my + mh * 0.52f, cx + mw * 0.55f, my + mh * 0.84f)
             c.drawOval(rect, fill)
         }
 
