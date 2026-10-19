@@ -87,11 +87,17 @@ class Nim(private val ctx: Context) {
             emptyList<String>()
         ),
         "openrouter" to Pair(
+            // Free model IDs change frequently; prefer current published free endpoints, then older backups.
             listOf(
-                "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free",
-                "qwen/qwen-2.5-72b-instruct:free"
+                "nvidia/nemotron-3.5-lightning:free",
+                "nvidia/nemotron-3-ultra-550b-a55b:free",
+                "meta-llama/llama-3.3-70b-instruct:free"
             ),
-            listOf("google/gemma-3-27b-it:free", "qwen/qwen2.5-vl-72b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free")
+            listOf(
+                "nvidia/nemotron-3.5-super-vl:free",
+                "google/gemma-3-27b-it:free",
+                "qwen/qwen2.5-vl-72b-instruct:free"
+            )
         ),
         "mistral" to Pair(
             listOf("mistral-small-latest", "open-mistral-nemo", "mistral-large-latest"),
