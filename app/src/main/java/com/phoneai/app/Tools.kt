@@ -241,12 +241,13 @@ class Tools(private val svc: PhoneAiService) {
                 ?: return "No spot ticker returned for " + clean + ". Check the symbol and market."
             val item = list.optJSONObject(0) ?: return "No spot ticker returned for " + clean + "."
             val last = item.optString("lastPrice", "unknown")
-            val change = item.optString("price24hPcnt", "unknown")
+            val changeRaw = item.optString("price24hPcnt", "")
+            val change = changeRaw.toDoubleOrNull()?.let { String.format(Locale.US, "%.2f%%", it * 100.0) } ?: "unknown"
             val high = item.optString("highPrice24h", "unknown")
             val low = item.optString("lowPrice24h", "unknown")
             val volume = item.optString("volume24h", "unknown")
             "Bybit spot ticker for " + clean + " (public market data, not a trading signal):\\nLast price: " + last +
-                "\\n24h change: " + change + " (fraction; multiply by 100 for percent)" +
+                "\\n24h change: " + change + "" +
                 "\\n24h high: " + high + "\\n24h low: " + low + "\\n24h base volume: " + volume
         } catch (e: Exception) { "Bybit market lookup failed (" + e.javaClass.simpleName + ")." }
     }
