@@ -265,6 +265,28 @@ class MainActivity : Activity() {
             startActivity(Intent(this, DeviceUtilitiesActivity::class.java))
         }, 10)
 
+        // ---- 7. external integrations
+        val s7 = card(
+            col, "7. Integrations & workflows",
+            "Connect a Telegram bot safely, inspect connector status, and see which services are genuinely available. Bot tokens are encrypted with Android Keystore and never sent to the AI model."
+        )
+        add(s7, button("Configure Telegram bot", true) { telegramDialog() }, 8)
+        add(s7, button("Check Telegram bot connection", false) {
+            Toast.makeText(this, "Checking Telegram...", Toast.LENGTH_SHORT).show()
+            Thread {
+                val result = TelegramBridge.status(this)
+                runOnUiThread {
+                    AlertDialog.Builder(this).setTitle("Telegram connection").setMessage(result)
+                        .setPositiveButton("OK", null).show()
+                }
+            }.start()
+        }, 8)
+        add(s7, button("Show integrations and MCP status", false) {
+            AlertDialog.Builder(this).setTitle("Connector status")
+                .setMessage(IntegrationStatus.summary(this))
+                .setPositiveButton("OK", null).show()
+        }, 8)
+
         add(
             col,
             text(
@@ -738,4 +760,36 @@ class MainActivity : Activity() {
         }
         b.show()
     }
+
+    private fun telegramDialog() {
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.VERTICAL
+        wrap.setPadding(dp(20), dp(8), dp(20), 0)
+        val token = EditText(this)
+        token.hint = "BotFather token (stored encrypted)"
+        token.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        token.setSingleLine(true)
+        val chat = EditText(this)
+        chat.hint = "Target chat ID or @channel username"
+        chat.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        chat.setSingleLine(true)
+        wrap.addView(token)
+        wrap.addView(chat)
+        AlertDialog.Builder(this)
+            .setTitle("Telegram bot setup")
+            .setMessage("Create a bot with @BotFather. Add the bot to your chat and obtain the target chat ID. The token is encrypted on this device and is never included in Orion prompts. Leave neither field blank.")
+            .setView(wrap)
+            .setPositiveButton("Save securely") { _, _ ->
+                val result = TelegramBridge.save(this, token.text.toString(), chat.text.toString())
+                AlertDialog.Builder(this).setMessage(result).setPositiveButton("OK", null).show()
+            }
+            .setNeutralButton("Disconnect") { _, _ ->
+                TelegramBridge.clear(this)
+                Toast.makeText(this, "Telegram settings cleared from this device.", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+
 }
