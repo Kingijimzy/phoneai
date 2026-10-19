@@ -392,7 +392,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             mainChatActive = true
             hideBubble()
             listener.onStatus(if (running) "Orion is working…" else "Ready when you are", currentMode())
-            transcript.forEach { listener.onMessage(it.first, it.second) }
+            if (transcript.isEmpty()) {
+                listener.onMessage("ai", "Hi. I’m Orion. What are we working on today?")
+            } else {
+                transcript.forEach { listener.onMessage(it.first, it.second) }
+            }
         }
     }
 
@@ -410,6 +414,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             mainChatActive = mainChatListener != null
             submit(text)
+        }
+    }
+
+    fun resetMainChat() {
+        main.post {
+            if (!running) {
+                agent.reset()
+                transcript.clear()
+                mainChatListener?.onMessage("ai", "New conversation. What are we working on?")
+            }
         }
     }
 
