@@ -385,8 +385,8 @@ class Nim(private val ctx: Context) {
         val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
         val quotaSaver = Prefs.quotaSaver(ctx)
-        val maxRounds = if (quotaSaver) 1 else 4
-        val providerLimit = if (quotaSaver) minOf(order.size, 2) else order.size
+        val maxRounds = 1 // one pass over every saved, eligible provider; avoid blind retries
+        val providerLimit = order.size
         var round = 0
         while (round < maxRounds) {
             round++
@@ -397,7 +397,7 @@ class Nim(private val ctx: Context) {
             for ((idx, p) in ready.withIndex()) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 try {
-                    if (idx > 0 || p !== order[0]) onStatus?.invoke("Using ${p.label}...")
+                    onStatus?.invoke("Trying ${p.label} (${idx + 1}/${ready.size})...")
                     return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
                 } catch (e: AiException) {
                     errors[p.id] = e.message ?: p.label
@@ -464,7 +464,7 @@ class Nim(private val ctx: Context) {
                     .toString()
             }
             val r: Http? = try {
-                request(p, "POST", url, payload, key)
+                request(p, "POST", url, payload, key, readMs0 = 12000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
