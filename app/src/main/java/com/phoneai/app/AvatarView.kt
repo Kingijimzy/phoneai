@@ -60,8 +60,11 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
 
     /** Called for every spoken word; opens the mouth a bit. */
     fun pulseMouth() {
-        mouthTarget = 0.45f + 0.55f * ((SystemClock.uptimeMillis() % 7L) / 6f)
-        lastWord = SystemClock.uptimeMillis()
+        // Vary each syllable-like pulse so speech feels less like a fixed open/close loop.
+        val now = SystemClock.uptimeMillis()
+        mouthTarget = 0.28f + 0.68f * abs(sin(now * 0.017f))
+        lastWord = now
+        postInvalidateOnAnimation()
     }
 
     private fun accent(): Int = when (mode) {
@@ -323,6 +326,20 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
                 c.drawCircle(ex + side * s * 0.02f, eyeY + s * 0.12f, s * 0.045f, fill)
             }
         }
+
+        // Nose bridge and soft nostril shadows add facial depth to Nova's human-style look.
+        fill.color = 0x332A1F4D
+        rect.set(cx - s * 0.018f, eyeY + s * 0.015f, cx + s * 0.018f, eyeY + s * 0.115f)
+        c.drawRoundRect(rect, s * 0.018f, s * 0.018f, fill)
+        fill.color = 0x558A6C8A
+        c.drawOval(cx - s * 0.032f, eyeY + s * 0.09f, cx - s * 0.004f, eyeY + s * 0.115f, fill)
+        c.drawOval(cx + s * 0.004f, eyeY + s * 0.09f, cx + s * 0.032f, eyeY + s * 0.115f, fill)
+        line.color = 0x668A6C8A
+        line.strokeWidth = s * 0.008f
+        path.reset()
+        path.moveTo(cx - s * 0.04f, eyeY + s * 0.12f)
+        path.quadTo(cx, eyeY + s * 0.15f, cx + s * 0.04f, eyeY + s * 0.12f)
+        c.drawPath(path, line)
 
         // mouth
         val my = cy + s * 0.18f
