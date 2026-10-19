@@ -417,6 +417,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    fun listenFromMainChat() {
+        main.post {
+            if (!running && !listening) {
+                mainChatActive = mainChatListener != null
+                handsActive = false
+                emptyListens = 0
+                listenNow()
+            }
+        }
+    }
+
     fun resetMainChat() {
         main.post {
             if (!running) {
@@ -783,7 +794,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Shows text in the panel's status line if the panel is open, otherwise in the top strip. */
     private fun showStatusText(text: String) {
-        if (panel != null) {
+        if (mainChatActive) {
+            mainChatListener?.onStatus(text, OrbView.Mode.LISTENING)
+        } else if (panel != null) {
             panelStatus?.text = text
         } else {
             showStrip(text)
@@ -934,7 +947,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         wakeGen++
         listening = true
         hideBubble()
-        if (panel == null) showStrip("Listening...")
+        if (panel == null && !mainChatActive) showStrip("Listening...")
         voice.stopSpeaking()
         refreshMode()
         var errored = false
