@@ -413,6 +413,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    fun displayMode(): OrbView.Mode = currentMode()
+
     private fun currentMode(): OrbView.Mode = when {
         speaking -> OrbView.Mode.SPEAKING
         confirmView != null -> OrbView.Mode.WAITING_APPROVAL
