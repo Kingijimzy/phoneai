@@ -162,7 +162,6 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
     }
 
     override fun onDetachedFromWindow() {
-        removeCallbacks(null)
         super.onDetachedFromWindow()
     }
 
