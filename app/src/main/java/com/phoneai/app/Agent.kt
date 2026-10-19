@@ -269,6 +269,15 @@ Rules:
             ui.say(answer)
             return
         }
+        // Freshness-dependent questions should use live web results, not a model's stale training data.
+        if (LiveWebSearch.isLiveInfoRequest(command)) {
+            ui.phase("acting")
+            val query = LiveWebSearch.liveQueryFrom(command)
+            val answer = LiveWebSearch.search(query)
+            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+            ui.say(answer)
+            return
+        }
         // Common public crypto spot quotes can be fetched directly, without spending an LLM request.
         val quoteIntent = Regex("(?i)\\b(price|quote|ticker|trading at|current value)\\b").containsMatchIn(command)
         val quoteMatch = Regex("(?i)\\b(BTC|BITCOIN|ETH|ETHEREUM|SOL|SOLANA|XRP|RIPPLE|BNB|DOGE|ADA|AVAX|DOT|LINK|LTC|TRX|TON)(USDT)?\\b").find(command)
