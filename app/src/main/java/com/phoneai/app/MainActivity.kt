@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var avatarBtn: Button
     private lateinit var characterBtn: Button
     private lateinit var routBtn: Button
+    private lateinit var skillBtn: Button
     private lateinit var topAvatar: AvatarView
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -226,6 +227,8 @@ class MainActivity : Activity() {
         )
         routBtn = button("", false) { routinesDialog() }
         add(s4, routBtn, 8)
+        skillBtn = button("", false) { skillsDialog() }
+        add(s4, skillBtn, 8)
 
         // ---- 5. recording
         val s5 = card(
@@ -283,6 +286,7 @@ class MainActivity : Activity() {
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
         routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
+        skillBtn.text = "Skill registry (" + SkillRegistry.list(this).count { it.enabled } + " enabled / " + SkillRegistry.list(this).size + " total)"
         topAvatar.style = Prefs.avatar(this)
         avatarBtn.text = "Avatar look: " + listOf("Orion", "Nova", "Atlas", "Lumen").getOrElse(Prefs.avatar(this)) { "Orion" } + "  (tap to change)"
         characterBtn.text = "Personality: " + CharacterProfile.get(Prefs.characterProfile(this)).label + "  (tap to change)"
@@ -444,6 +448,112 @@ class MainActivity : Activity() {
         }
         b.setNegativeButton("Close") { _, _ -> refresh() }
         b.show()
+    }
+
+    private fun skillsDialog() {
+        val skills = SkillRegistry.list(this)
+        val message = if (skills.isEmpty()) {
+            "Create a small, declarative skill by naming its purpose and allowed existing tools. Skills are disabled until you enable them. They cannot download or execute code."
+        } else {
+            "Choose a skill to enable, disable, or remove. Run an enabled skill by saying: run skill <id>: <task>. Each tool call is checked against its allowlist and budget."
+        }
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Skill registry (" + skills.size + ")")
+            .setMessage(message)
+            .setPositiveButton("Add skill") { _, _ -> addSkillDialog() }
+            .setNegativeButton("Close", null)
+        if (skills.isNotEmpty()) {
+            builder.setItems(skills.map { it.id + "  " + if (it.enabled) "ON" else "OFF" }.toTypedArray()) { _, which ->
+                skillOptions(skills[which])
+            }
+        }
+        builder.show()
+    }
+
+    private fun skillOptions(skill: PhoneAiSkill) {
+        val actions = arrayOf(
+            if (skill.enabled) "Disable skill" else "Enable skill",
+            "Delete skill"
+        )
+        AlertDialog.Builder(this)
+            .setTitle(skill.id + "  v" + skill.version)
+            .setMessage(skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
+                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds")
+            .setItems(actions) { _, which ->
+                if (which == 0) {
+                    val result = SkillRegistry.setEnabled(this, skill.id, !skill.enabled)
+                    Toast.makeText(this, result.reason, Toast.LENGTH_SHORT).show()
+                    refresh()
+                    skillsDialog()
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("Delete skill " + skill.id + "?")
+                        .setMessage("This removes its local definition. It cannot be undone.")
+                        .setPositiveButton("Delete") { _, _ ->
+                            val result = SkillRegistry.remove(this, skill.id)
+                            Toast.makeText(this, result.reason, Toast.LENGTH_SHORT).show()
+                            refresh()
+                            skillsDialog()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun addSkillDialog() {
+        val idBox = EditText(this).apply { hint = "Skill ID, e.g. market_brief"; setSingleLine(true) }
+        val descBox = EditText(this).apply { hint = "What should this skill do?"; minLines = 2 }
+        val toolsBox = EditText(this).apply {
+            hint = "Allowed tools, comma-separated"
+            setText("web_search,fetch_url,recall")
+            minLines = 2
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(idBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(descBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(toolsBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(text("Supported tools: time, battery, device_info, list_apps, read_screen, web_search, fetch_url, research_web, open_url, recall, remember, wait, wait_for, click_text, scroll, open_app", 11f, Theme.MUTED))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Create a declarative skill")
+            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled.")
+            .setView(wrap)
+            .setPositiveButton("Save skill") { _, _ ->
+                val allowed = toolsBox.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+                val candidate = PhoneAiSkill(
+                    id = idBox.text.toString().trim().lowercase(Locale.ROOT),
+                    version = "1.0.0",
+                    description = descBox.text.toString().trim(),
+                    allowedTools = allowed,
+                    maxCalls = 6,
+                    maxDurationMs = 30_000L,
+                    requiresApproval = false,
+                    enabled = false
+                )
+                val result = SkillRegistry.register(this, candidate)
+                Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
+                if (result.allowed) {
+                    refresh()
+                    AlertDialog.Builder(this)
+                        .setTitle("Enable " + candidate.id + "?")
+                        .setMessage("Enable it only if the purpose and tool allowlist look right.")
+                        .setPositiveButton("Enable") { _, _ ->
+                            val enabled = SkillRegistry.setEnabled(this, candidate.id, true)
+                            Toast.makeText(this, enabled.reason, Toast.LENGTH_SHORT).show()
+                            refresh()
+                        }
+                        .setNegativeButton("Keep disabled", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun avatarDialog() {
