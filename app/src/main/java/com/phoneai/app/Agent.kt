@@ -40,7 +40,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return "You are Orion, a warm, quick-witted personal assistant like JARVIS, speaking aloud on the user's phone. " +
             "Answer in at most three short, natural spoken sentences. No markdown, lists or emojis. " +
             "If the user wants something DONE on the phone (open an app, tap, send, search, look at the screen, play a game), reply with exactly the single word ACTION and nothing else. " +
-            "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() + ".\nThings you remember:\n" + mem
+            "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() + ".\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** One small AI call for plain questions and chat. Returns null when the request needs the phone-control agent. */
@@ -82,7 +82,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     companion object {
-        const val MAX_STEPS = 40
+        const val MAX_STEPS = 16
 
         private const val BASE = """
 You are Orion, a personal AI assistant living on the user's Android phone, in the style of JARVIS: calm, sharp, loyal, a little witty. You hear the user and your replies are SPOKEN aloud, so write plain sentences: no markdown, no lists, no emojis, no asterisks.
@@ -133,6 +133,7 @@ Rules:
             val sb = StringBuilder(BASE.trim())
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
+            sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
             sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc))
             return sb.toString()
         }
@@ -239,7 +240,7 @@ Rules:
             if (batch != null && batch.length() > 0) {
                 ui.phase("acting")
                 val sb = StringBuilder()
-                for (i in 0 until minOf(batch.length(), 8)) {
+                for (i in 0 until minOf(batch.length(), 4)) {
                     if (stopped) break
                     val one = batch.optJSONObject(i) ?: continue
                     val bt = one.optString("tool")
