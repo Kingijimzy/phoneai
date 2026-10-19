@@ -92,7 +92,7 @@ object TelegramBridge {
             }
             if (newest > offset) prefs.edit().putLong(UPDATE_OFFSET, newest).commit()
             if (messages.isEmpty()) "No new messages from the saved chat." else
-                "New Telegram messages (read-only; incoming commands are not executed):\\n" + messages.take(10).joinToString("\\n")
+                "New Telegram messages (read-only; incoming commands are not executed):\n" + messages.take(10).joinToString("\n")
         } catch (e: Exception) { "Telegram inbox check failed (" + e.javaClass.simpleName + ")." }
     }
     /** Sends only to the saved target. Caller must obtain explicit user approval before calling. */
