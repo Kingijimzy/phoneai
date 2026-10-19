@@ -30,6 +30,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var activeSkillId: String? = null
     private var activeSkillStartedAt: Long = 0L
     private var activeSkillCalls: Int = 0
+    private val researchCancelled = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val actionWords = Regex(
         "\\b(open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|" +
@@ -81,6 +82,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     fun stop() {
         stopped = true
+        researchCancelled.set(true)
         nim.cancel()
     }
 
@@ -223,6 +225,7 @@ Rules:
             return
         }
         stopped = false
+        researchCancelled.set(false)
         nim.resume()
         refreshSystem()
         history.put(msg("user", command))
@@ -351,7 +354,7 @@ Rules:
     }
 
     private fun researchWeb(rawUrl: String): String {
-        val result = BrowserResearch.fetch(rawUrl, java.util.concurrent.atomic.AtomicBoolean(stopped))
+        val result = BrowserResearch.fetch(rawUrl, researchCancelled)
         val page = result.page ?: return "error: " + (result.error ?: "could not read webpage")
         return "SOURCE: " + page.sourceUrl + "\nTITLE: " + page.title +
             "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
