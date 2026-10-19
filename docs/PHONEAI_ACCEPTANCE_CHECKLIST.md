@@ -7,6 +7,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] Four persistent conversational personality profiles, independent of avatar look.
 - [x] Existing local memory, tasks, routines, voice, and provider selection preserved.
 - [x] Plain chat retains a small context window; phone-agent loop bounded to 16 turns and batched tools to four calls.
+- [x] Default-on API quota saver keeps the selected provider first, limits fallback to at most one backup provider, limits model retries, and counts actual generation requests against local per-minute budgets.
 - [x] Read-only public webpage research with URL/redirect checks, timeouts, response limits, source URL, and untrusted-page instructions.
 - [x] Local declarative skills: disabled by default, allowlisted tools, per-run call/time budgets, and approval gates for consequential supported actions.
 - [x] Network Radar for current transport/capabilities, VPN/metered/captive-portal state, DNS, and MTU.
@@ -22,7 +23,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [ ] Test Network Radar with Wi-Fi/mobile/VPN where available.
 - [ ] Test Game Sentinel session start/end/history and confirm the displayed thermal/battery information matches Android's exposed values.
 - [ ] Test file picker, text preview/read, save, copy, and delete confirmation using disposable test files.
-- [ ] Verify chat API usage over several interactions; the current turn limits are conservative guardrails, not a complete token-cost analytics system.
+- [ ] Verify chat API usage over several interactions with quota saver both on and off; local request counts are guardrails, not provider-side billing/token analytics.
 - [ ] Test low-memory behavior and background service stability on the actual phone.
 - [ ] Confirm no API keys or other secrets are committed to the APK or repository.
 
