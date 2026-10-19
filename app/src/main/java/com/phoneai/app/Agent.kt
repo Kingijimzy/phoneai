@@ -357,11 +357,11 @@ Rules:
         val skillId = activeSkillId
         if (skillId != null) {
             val elapsed = (System.currentTimeMillis() - activeSkillStartedAt).coerceAtLeast(0L)
-            var approved = false
             var decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, false)
             if (!decision.allowed && decision.reason.contains("approval", ignoreCase = true)) {
-                approved = ui.ask("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")
-                if (!approved) return "error: user denied skill action"
+                if (!ui.ask("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
+                    return "error: user denied skill action"
+                }
                 decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, true)
             }
             if (!decision.allowed) return "error: skill blocked: " + decision.reason
