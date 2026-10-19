@@ -55,7 +55,7 @@ The app exposes an integration-status report and keeps remote MCP servers unconf
 
 ## Remote MCP — endpoint setup and read-only discovery added
 
-PhoneAI can save a user-selected MCP Streamable HTTP endpoint and optional bearer token, encrypted with Android Keystore, then perform initialize and tools/list discovery. Endpoints must use HTTPS except loopback HTTP for local development. Tool descriptions are untrusted data. Remote tool execution is intentionally not enabled in this first client; the next increment needs a reviewed tool allowlist and per-call approval UX. Some servers may require different protocol versions, session handling, OAuth, or transport behavior and may not work yet. Never send private screen contents, credentials, or secrets to remote MCP servers.
+PhoneAI can save a user-selected MCP Streamable HTTP endpoint and optional bearer token, encrypted with Android Keystore, then perform initialize and tools/list discovery. Endpoints must use HTTPS except loopback HTTP for local development. Tool descriptions are untrusted data. Remote tool execution is enabled only after the agent displays the advertised catalogue, endpoint host, tool name, and arguments and obtains explicit per-call approval. The client re-queries the server's catalogue before each invocation. This is not a guarantee that a remote tool is safe; use only servers you trust. Some servers may require different protocol versions, session handling, OAuth, or transport behavior and may not work yet. Never send private screen contents, credentials, or secrets to remote MCP servers.
 
 
 ## Stage 6 improvements — public workflow visibility and read-only Telegram inbox
