@@ -37,11 +37,9 @@ class SettingsActivity : Activity() {
     private lateinit var visionBtn: Button
     private lateinit var nameBtn: Button
     private lateinit var memBtn: Button
-    private lateinit var avatarBtn: Button
     private lateinit var characterBtn: Button
     private lateinit var routBtn: Button
     private lateinit var skillBtn: Button
-    private lateinit var topAvatar: AvatarView
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -178,7 +176,7 @@ class SettingsActivity : Activity() {
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
 
         // ---- 3. voice
-        val s3 = card(col, "Voice & character")
+        val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
@@ -203,9 +201,7 @@ class SettingsActivity : Activity() {
             override fun onStopTrackingTouch(s: SeekBar?) {}
         })
         add(s3, bar, 2)
-        avatarBtn = button("", false) { avatarDialog() }
-        add(s3, avatarBtn, 10)
-        characterBtn = button("", false) { characterDialog() }
+        characterBtn = button("Response personality profile", false) { characterDialog() }
         add(s3, characterBtn, 8)
         add(s3, button("Choose a voice", false) { voiceDialog() }, 8)
         add(s3, button("Hear Orion's voice", false) { testVoice() }, 8)
@@ -369,8 +365,6 @@ class SettingsActivity : Activity() {
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
         routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
         skillBtn.text = "Skill Studio · " + SkillRegistry.list(this).count { it.enabled } + " enabled / " + SkillRegistry.list(this).size + " total"
-        topAvatar.style = Prefs.avatar(this)
-        avatarBtn.text = "Avatar look: " + listOf("Orion", "Nova", "Atlas", "Lumen").getOrElse(Prefs.avatar(this)) { "Orion" } + "  (tap to change)"
     }
 
     // ------------------------------------------------------------ keys and providers
@@ -691,8 +685,8 @@ class SettingsActivity : Activity() {
     private fun characterDialog() {
         val profiles = CharacterProfile.all
         AlertDialog.Builder(this)
-            .setTitle("Choose Orion's personality")
-            .setMessage("This changes how Orion talks and responds, not the avatar drawing or AI provider.")
+            .setTitle("Choose Orion's response style")
+            .setMessage("Choose how Orion communicates. This changes response tone and behavior, not the animated energy core or AI provider.")
             .setItems(profiles.map { it.label }.toTypedArray()) { _, which ->
                 Prefs.setCharacterProfile(this, profiles[which].id)
                 refresh()
