@@ -57,13 +57,16 @@ object McpConnector {
         val value = endpoint(c)
         if (value.isBlank()) return "No MCP server configured."
         val host = try { java.net.URI(value).host ?: "unknown" } catch (_: Exception) { "invalid" }
-        return "MCP endpoint configured for " + host + ". Bearer token: " +
-            if (readToken(c).isNullOrBlank()) "not saved" else "encrypted on device" +
+        val auth = if (readToken(c).isNullOrBlank()) "not saved" else "encrypted on device"
+        return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
             ". Initial integration discovers tools only; remote execution is not enabled yet."
     }
 
+    @Volatile private var sessionId: String? = null
+
     fun listTools(c: Context): String {
         if (!configured(c)) return "error: no MCP server configured."
+        sessionId = null
         return try {
             val init = post(c, JSONObject()
                 .put("jsonrpc", "2.0").put("id", 1).put("method", "initialize")
@@ -101,8 +104,10 @@ object McpConnector {
         conn.setRequestProperty("Accept", "application/json, text/event-stream")
         conn.setRequestProperty("User-Agent", "PhoneAI-MCP/1.0")
         readToken(c)?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
+        sessionId?.let { conn.setRequestProperty("Mcp-Session-Id", it) }
         conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         val code = conn.responseCode
+        conn.getHeaderField("Mcp-Session-Id")?.takeIf { it.isNotBlank() }?.let { sessionId = it }
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val raw = stream?.use { input ->
             val out = java.io.ByteArrayOutputStream()
