@@ -9,6 +9,8 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.SystemClock
+import android.os.Build
+import android.os.PowerManager
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.abs
@@ -65,6 +67,17 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         mouthTarget = 0.28f + 0.68f * abs(sin(now * 0.017f))
         lastWord = now
         postInvalidateOnAnimation()
+    }
+
+    /** Adaptive frame pacing for entry-level phones under power or thermal pressure. */
+    private fun nextFrameDelayMs(): Long {
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 33L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val thermal = power.currentThermalStatus
+            if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return 120L
+            if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) return 66L
+        }
+        return if (power.isPowerSaveMode) 66L else 33L
     }
 
     private fun accent(): Int = when (mode) {
@@ -158,7 +171,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         canvas.restore()
         // Cap decorative animation at about 30 fps. This is smoother than a static face but
         // avoids driving a permanent 60 fps redraw loop on low-memory Android phones.
-        if (isAttachedToWindow) postInvalidateDelayed(33L)
+        if (isAttachedToWindow) postInvalidateDelayed(nextFrameDelayMs())
     }
 
     override fun onDetachedFromWindow() {
