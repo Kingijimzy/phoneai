@@ -161,5 +161,12 @@ object Prefs {
 
     /** 0 = Orion (robot), 1 = Nova (friendly face) */
     fun avatar(c: Context): Int = sp(c).getInt("avatar", 0)
-    fun setAvatar(c: Context, v: Int) = sp(c).edit().putInt("avatar", v).apply()
+    fun setAvatar(c: Context, v: Int) = sp(c).edit().putInt("avatar", v.coerceIn(0, 3)).apply()
+
+    /** Persistent conversational character, independent of the avatar drawing. */
+    fun characterProfile(c: Context): String = CharacterProfile.get(sp(c).getString("character_profile", "orion")).id
+    fun setCharacterProfile(c: Context, id: String) {
+        val safe = CharacterProfile.get(id).id
+        sp(c).edit().putString("character_profile", safe).apply()
+    }
 }
