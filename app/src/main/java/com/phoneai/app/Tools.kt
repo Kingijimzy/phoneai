@@ -216,6 +216,8 @@ class Tools(private val svc: PhoneAiService) {
 
     fun mcpListTools(): String = McpConnector.listTools(svc)
 
+    fun mcpCall(name: String, args: JSONObject): String = McpConnector.callTool(svc, name, args)
+
     // ---- phone features
 
     fun settings(page: String): String {
