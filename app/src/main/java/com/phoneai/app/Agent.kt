@@ -115,6 +115,7 @@ Tools:
 - play {goal, steps}: bounded vision loop for games and unreadable screens; at most 40 steps, stops on sensitive or ambiguous screens, never auto-dismisses pop-ups.
 - open_url {url}   web_search {query}: opens Google results
 - weather {location}: fetch current weather and today's forecast from Open-Meteo without an AI API call; location must be a city/region
+- live_news {query}: retrieve recent public-news headlines and URLs from GDELT without an AI API call
 - bybit_public_ticker {symbol}: read the public Bybit spot ticker for a symbol such as BTCUSDT; read-only, no API key, no orders\n- github_public {owner, repo, section}: read public GitHub repository metadata, latest release, open issues, or latest public Actions runs; read-only, no token; section repo|release|issues|runs
 - integration_status {}: show which connectors are actually configured and their current scope
 - mcp_status {}: show configured MCP endpoint and auth state without revealing credentials
@@ -247,6 +248,14 @@ Rules:
             ui.phase("acting")
             val place = WeatherService.requestedPlace(command)
             val answer = if (place.isBlank()) WeatherService.current("") else WeatherService.current(place)
+            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+            ui.say(answer)
+            return
+        }
+        // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
+        if (LiveNews.isNewsRequest(command)) {
+            ui.phase("acting")
+            val answer = LiveNews.search(LiveNews.queryFrom(command))
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -424,6 +433,7 @@ Rules:
             "web_search" -> tools.webSearch(a.optString("query"))
             "fetch_url", "research_web" -> researchWeb(a.optString("url"))
             "weather" -> WeatherService.current(a.optString("location"))
+            "live_news" -> LiveNews.search(a.optString("query"))
             "bybit_public_ticker" -> tools.bybitPublicTicker(a.optString("symbol"))
             "github_public" -> tools.githubPublic(a.optString("owner"), a.optString("repo"), a.optString("section", "repo"))
             "integration_status" -> tools.integrationStatus()
