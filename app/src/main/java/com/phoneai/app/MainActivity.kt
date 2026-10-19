@@ -256,9 +256,26 @@ class MainActivity : Activity() {
             }
         }, 8)
 
-        // ---- 6. local device utilities
+        // ---- 6. browser and automation
+        val browser = card(
+            col, "6. Browser & automation",
+            "Open a website, then ask Orion to research it or navigate visible page elements. Automation uses the Android accessibility service, checks the screen between steps, and stops for sensitive or uncertain actions."
+        )
+        add(browser, button("Open browser", true) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")))
+            } catch (_: Exception) {
+                Toast.makeText(this, "No browser app is available.", Toast.LENGTH_LONG).show()
+            }
+        }, 8)
+        add(browser, text(
+            "Try: “Research this page”, “Find the settings button”, “Scroll down and summarize”, or “Wait until the results load”. For sign-in, payment, posting, sending, purchases, or account changes, Orion must stop and ask you.",
+            12f, Theme.MUTED
+        ), 8)
+
+        // ---- 7. local device utilities
         val s6 = card(
-            col, "6. Device utilities",
+            col, "7. Device utilities",
             "Network Radar, Game Sentinel, and user-selected file handling. These tools run locally on your phone."
         )
         add(s6, button("Open Network Radar, Game Sentinel & Files", true) {
@@ -267,7 +284,7 @@ class MainActivity : Activity() {
 
         // ---- 7. external integrations
         val s7 = card(
-            col, "7. Integrations & workflows",
+            col, "8. Integrations & workflows",
             "Connect a Telegram bot safely, inspect connector status, and see which services are genuinely available. Bot tokens are encrypted with Android Keystore and never sent to the AI model."
         )
         add(s7, button("Configure Telegram bot", true) { telegramDialog() }, 8)
