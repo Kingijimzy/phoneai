@@ -44,8 +44,9 @@ object MemoryStore {
         return out
     }
 
-    private fun save(c: Context) {
-        val list = cache ?: return
+    /** Atomic replacement where supported; return failure instead of silently claiming data was saved. */
+    private fun save(c: Context): Boolean {
+        val list = cache ?: return false
         val arr = JSONArray()
         for (m in list) {
             arr.put(
@@ -53,13 +54,27 @@ object MemoryStore {
                     .put("created", m.created).put("updated", m.updated)
             )
         }
-        try {
-            file(c).writeText(arr.toString())
-        } catch (e: Exception) {
+        val target = file(c)
+        val temp = File(c.filesDir, "orion_memory.json.tmp")
+        return try {
+            temp.writeText(arr.toString())
+            if (temp.renameTo(target)) {
+                true
+            } else {
+                // Fallback for filesystems where rename-over-existing is unsupported.
+                target.writeText(arr.toString())
+                temp.delete()
+                true
+            }
+        } catch (_: Exception) {
+            temp.delete()
+            false
         }
     }
 
-    fun all(c: Context): List<Memory> = synchronized(lock) { load(c).toList() }
+    private fun copyOf(m: Memory) = Memory(m.id, m.category, m.text, m.created, m.updated)
+
+    fun all(c: Context): List<Memory> = synchronized(lock) { load(c).map { copyOf(it) } }
 
     fun add(c: Context, category: String?, text: String): Memory? = synchronized(lock) {
         val t = text.trim().replace("\n", " ").take(300)
@@ -68,40 +83,71 @@ object MemoryStore {
         val now = System.currentTimeMillis()
         val dup = list.firstOrNull { it.text.equals(t, true) }
         if (dup != null) {
+            val oldCategory = dup.category
+            val oldUpdated = dup.updated
             dup.updated = now
             if (category != null) dup.category = cat(category)
-            save(c)
-            return@synchronized dup
+            if (!save(c)) {
+                dup.category = oldCategory
+                dup.updated = oldUpdated
+                return@synchronized null
+            }
+            return@synchronized copyOf(dup)
         }
         val id = (list.maxOfOrNull { it.id } ?: 0) + 1
         val m = Memory(id, cat(category), t, now, now)
         list.add(m)
-        while (list.size > 300) list.removeAt(0)
-        save(c)
-        m
+        val removed = mutableListOf<Memory>()
+        while (list.size > 300) removed.add(list.removeAt(0))
+        if (!save(c)) {
+            list.removeAll { it.id == id }
+            list.addAll(0, removed)
+            return@synchronized null
+        }
+        copyOf(m)
     }
 
     fun update(c: Context, id: Int, category: String?, text: String?): Boolean = synchronized(lock) {
         val m = load(c).firstOrNull { it.id == id } ?: return@synchronized false
+        val oldText = m.text
+        val oldCategory = m.category
+        val oldUpdated = m.updated
         if (text != null) {
             val t = text.trim().replace("\n", " ").take(300)
             if (t.isNotEmpty()) m.text = t
         }
         if (category != null) m.category = cat(category)
         m.updated = System.currentTimeMillis()
-        save(c)
+        if (!save(c)) {
+            m.text = oldText
+            m.category = oldCategory
+            m.updated = oldUpdated
+            return@synchronized false
+        }
         true
     }
 
     fun delete(c: Context, id: Int): Boolean = synchronized(lock) {
-        val ok = load(c).removeAll { it.id == id }
-        if (ok) save(c)
-        ok
+        val list = load(c)
+        val removed = list.filter { it.id == id }
+        if (removed.isEmpty()) return@synchronized false
+        list.removeAll { it.id == id }
+        if (!save(c)) {
+            list.addAll(removed)
+            return@synchronized false
+        }
+        true
     }
 
-    fun clear(c: Context) = synchronized(lock) {
-        load(c).clear()
-        save(c)
+    fun clear(c: Context): Boolean = synchronized(lock) {
+        val list = load(c)
+        val previous = list.map { copyOf(it) }
+        list.clear()
+        if (!save(c)) {
+            list.addAll(previous)
+            return@synchronized false
+        }
+        true
     }
 
     fun search(c: Context, query: String): List<Memory> {
