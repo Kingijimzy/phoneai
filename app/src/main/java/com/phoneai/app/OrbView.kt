@@ -8,6 +8,8 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.SystemClock
+import android.os.Build
+import android.os.PowerManager
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.PI
@@ -47,6 +49,17 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val rect = RectF()
     private var smooth = 0f
+
+    /** Adaptive frame pacing for entry-level phones under power or thermal pressure. */
+    private fun nextFrameDelayMs(): Long {
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 33L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val thermal = power.currentThermalStatus
+            if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return 120L
+            if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) return 66L
+        }
+        return if (power.isPowerSaveMode) 66L else 33L
+    }
 
     private fun accent(): Int = when (mode) {
         Mode.IDLE -> CYAN
@@ -148,7 +161,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         }
         glow.shader = null
         core.shader = null
-        postInvalidateOnAnimation()
+        postInvalidateDelayed(nextFrameDelayMs())
     }
 
     private fun abs01(v: Float): Float = max(v, -v)
