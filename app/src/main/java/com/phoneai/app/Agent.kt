@@ -114,6 +114,7 @@ Tools:
 - look {question}: look at a screenshot and describe it (games, images, anything read_screen cannot see)
 - play {goal, steps}: bounded vision loop for games and unreadable screens; at most 40 steps, stops on sensitive or ambiguous screens, never auto-dismisses pop-ups.
 - open_url {url}   web_search {query}: opens Google results
+- weather {location}: fetch current weather and today's forecast from Open-Meteo without an AI API call; location must be a city/region
 - bybit_public_ticker {symbol}: read the public Bybit spot ticker for a symbol such as BTCUSDT; read-only, no API key, no orders\n- github_public {owner, repo, section}: read public GitHub repository metadata, latest release, open issues, or latest public Actions runs; read-only, no token; section repo|release|issues|runs
 - integration_status {}: show which connectors are actually configured and their current scope
 - mcp_status {}: show configured MCP endpoint and auth state without revealing credentials
@@ -241,6 +242,15 @@ Rules:
         refreshSystem()
         history.put(msg("user", command))
         compact()
+        // Live weather is a deterministic data lookup, not an LLM task. This preserves AI quota.
+        if (WeatherService.isWeatherRequest(command)) {
+            ui.phase("acting")
+            val place = WeatherService.requestedPlace(command)
+            val answer = if (place.isBlank()) WeatherService.current("") else WeatherService.current(place)
+            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+            ui.say(answer)
+            return
+        }
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
@@ -413,6 +423,7 @@ Rules:
             "open_url" -> svc.openUrl(a.optString("url"))
             "web_search" -> tools.webSearch(a.optString("query"))
             "fetch_url", "research_web" -> researchWeb(a.optString("url"))
+            "weather" -> WeatherService.current(a.optString("location"))
             "bybit_public_ticker" -> tools.bybitPublicTicker(a.optString("symbol"))
             "github_public" -> tools.githubPublic(a.optString("owner"), a.optString("repo"), a.optString("section", "repo"))
             "integration_status" -> tools.integrationStatus()
