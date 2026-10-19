@@ -56,3 +56,11 @@ The app exposes an integration-status report and keeps remote MCP servers unconf
 ## Remote MCP — endpoint setup and read-only discovery added
 
 PhoneAI can save a user-selected MCP Streamable HTTP endpoint and optional bearer token, encrypted with Android Keystore, then perform initialize and tools/list discovery. Endpoints must use HTTPS except loopback HTTP for local development. Tool descriptions are untrusted data. Remote tool execution is intentionally not enabled in this first client; the next increment needs a reviewed tool allowlist and per-call approval UX. Some servers may require different protocol versions, session handling, OAuth, or transport behavior and may not work yet. Never send private screen contents, credentials, or secrets to remote MCP servers.
+
+
+## Stage 6 improvements — public workflow visibility and read-only Telegram inbox
+
+- GitHub public lookup includes a `runs` section for the latest five public Actions runs when GitHub permits unauthenticated access.
+- Telegram has a manual one-shot inbox check for a saved numeric chat ID. It reads up to ten pending updates, stores an update offset, and does not execute incoming text as commands or act on behalf of the sender. Channel usernames remain outbound-only for this feature.
+- Inbox polling is manual, not an always-running background service. This avoids an unattended remote-control channel and avoids promising reliable delivery while Android may stop the app.
+- Device verification is pending. Public Actions API access may be restricted by GitHub; authenticated workflow control is not added here.
