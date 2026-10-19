@@ -873,6 +873,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         pendingConfirm?.invoke(false)
         if (running) {
             stripText?.text = "Stopping..."
+            panelStatus?.text = "Stopping..."
         } else {
             hideStrip()
             showBubble()
