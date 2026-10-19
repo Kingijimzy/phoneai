@@ -73,21 +73,28 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
 
-    private var bubble: AvatarView? = null
+    private var bubble: OrbView? = null
     private var panel: LinearLayout? = null
-    private var panelOrb: AvatarView? = null
+    private var panelOrb: OrbView? = null
     private var panelStatus: TextView? = null
     private var stopBtnRef: TextView? = null
     private var activityView: TextView? = null
     private var activityRunnable: Runnable? = null
     private var micBtnRef: TextView? = null
     private var strip: LinearLayout? = null
-    private var stripOrb: AvatarView? = null
+    private var stripOrb: OrbView? = null
     private var stripText: TextView? = null
     private var confirmView: LinearLayout? = null
     private var logBox: LinearLayout? = null
     private var logScroll: ScrollView? = null
     private var pendingConfirm: ((Boolean) -> Unit)? = null
+    @Volatile private var mainChatListener: PhoneAiService.MainChatListener? = null
+    @Volatile private var mainChatActive = false
+
+    interface MainChatListener {
+        fun onMessage(kind: String, text: String)
+        fun onStatus(text: String, mode: OrbView.Mode)
+    }
 
     @Volatile
     private var running = false
@@ -304,7 +311,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- orb state
 
-    private fun orbs(): List<AvatarView> = listOfNotNull(bubble, panelOrb, stripOrb)
+    private fun orbs(): List<OrbView> = listOfNotNull(bubble, panelOrb, stripOrb)
 
     /** Decides what the avatar should be doing and what the status line says. Main thread. */
     private fun refreshMode() {
@@ -317,6 +324,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 else -> OrbView.Mode.IDLE
             }
             for (o in orbs()) o.mode = m
+            mainChatListener?.onStatus(
+                when (m) {
+                    OrbView.Mode.IDLE -> "Ready when you are"
+                    OrbView.Mode.LISTENING -> "Listening…"
+                    OrbView.Mode.THINKING -> "Thinking through it…"
+                    OrbView.Mode.SPEAKING -> "Speaking…"
+                    OrbView.Mode.ACTING -> "Working on your request…"
+                    OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
+                }, m
+            )
             CinematicAvatarActivity.pushState(m.name.lowercase())
             micBtnRef?.text = if (listening) "Stop" else "Mic"
             stopBtnRef?.visibility = if (running) View.VISIBLE else View.GONE
@@ -335,8 +352,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun showBubble() {
         if (bubble != null || running || panel != null) return
-        val b = AvatarView(this)
-        b.compact = true
+        val b = OrbView(this)
         b.backing = true
         val lp = WindowManager.LayoutParams(dp(64), dp(64), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
@@ -394,6 +410,41 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** Called by the setup screen. */
     fun showPanel() {
         main.post { openPanel() }
+    }
+
+    fun attachMainChat(listener: MainChatListener) {
+        main.post {
+            mainChatListener = listener
+            mainChatActive = true
+            hideBubble()
+            listener.onStatus(if (running) "Orion is working…" else "Ready when you are", currentMode())
+            transcript.forEach { listener.onMessage(it.first, it.second) }
+        }
+    }
+
+    fun detachMainChat(listener: MainChatListener) {
+        main.post {
+            if (mainChatListener === listener) {
+                mainChatListener = null
+                mainChatActive = false
+                if (!running && panel == null) showBubble()
+            }
+        }
+    }
+
+    fun sendFromMainChat(text: String) {
+        main.post {
+            mainChatActive = mainChatListener != null
+            submit(text)
+        }
+    }
+
+    private fun currentMode(): OrbView.Mode = when {
+        speaking -> OrbView.Mode.SPEAKING
+        confirmView != null -> OrbView.Mode.WAITING_APPROVAL
+        listening -> OrbView.Mode.LISTENING
+        running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
+        else -> OrbView.Mode.IDLE
     }
 
     private fun addLine(kind: String, text: String) {
@@ -502,8 +553,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = rounded(0xFF111722.toInt(), dp(20).toFloat(), Theme.LINE)
         head.setPadding(dp(8), dp(4), dp(6), dp(4))
-        val orb = AvatarView(this)
-        orb.style = Prefs.avatar(this)
+        val orb = OrbView(this)
         orb.contentDescription = "Orion animated character. Tap to speak."
         orb.isClickable = true
         orb.setOnClickListener {
@@ -571,10 +621,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             "Read screen" to "read my screen",
             "AI status" to "ai status"
         )
-        val cinematicChip = chip("3D Avatar") { openCinematicAvatar() }
-        val cinematicLp = LinearLayout.LayoutParams(WRAP, WRAP)
-        cinematicLp.setMargins(0, 0, dp(6), 0)
-        chips.addView(cinematicChip, cinematicLp)
         val liveChip = chip("Live call") { startLive() }
         val llp = LinearLayout.LayoutParams(WRAP, WRAP)
         llp.setMargins(0, 0, dp(6), 0)
@@ -704,8 +750,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.gravity = Gravity.CENTER_VERTICAL
         row.background = rounded(0xF00E1522.toInt(), dp(22).toFloat(), Theme.CYAN)
         row.setPadding(dp(8), dp(6), dp(10), dp(6))
-        val orb = AvatarView(this)
-        orb.compact = true
+        val orb = OrbView(this)
         row.addView(orb, LinearLayout.LayoutParams(dp(52), dp(52)))
         val t = label(text, 14f, Theme.TEXT)
         t.maxLines = 3
@@ -836,13 +881,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             RegexOption.IGNORE_CASE
         ).containsMatchIn(t)
         if (needsPhoneControl) closePanel(false)
+        if (mainChatActive) mainChatListener?.onMessage("me", t)
         hideBubble()
         running = true
         phase = "thinking"
         if (panel != null) {
             panelStatus?.text = "Thinking..."
             hideStrip()
-        } else {
+        } else if (!mainChatActive) {
             showStrip("Thinking...")
         }
         refreshMode()
@@ -866,18 +912,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             panelStatus?.text = "Ready"
             hideStrip()
             logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
-        } else {
+        } else if (!mainChatActive) {
             showStrip(last)
         }
         if (handsActive) {
             voice.whenIdle { listenNow() }
         } else {
             handsActive = false
-            showBubble()
-            startWake()
-            main.postDelayed({
-                if (!running && !listening) hideStrip()
-            }, 7000)
+            if (!mainChatActive) {
+                showBubble()
+                startWake()
+                main.postDelayed({
+                    if (!running && !listening) hideStrip()
+                }, 7000)
+            }
         }
     }
 
@@ -1016,6 +1064,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 showStrip(text)
             }
         }
+        main.post { mainChatListener?.onMessage("ai", text) }
         if (Prefs.voice(this)) voice.speak(text)
     }
 
@@ -1032,6 +1081,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun note(text: String) {
         transcript.add(Pair("note", text))
         main.post {
+            mainChatListener?.onMessage("note", text)
             if (panel != null) {
                 addLine("note", text)
             } else if (running) {
