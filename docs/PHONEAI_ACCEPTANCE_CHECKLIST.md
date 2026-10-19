@@ -10,6 +10,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] Default-on API quota saver keeps the selected provider first, limits fallback to at most one backup provider, limits model retries, and counts actual generation requests against local per-minute budgets.
 - [x] Read-only public webpage research with URL/redirect checks, timeouts, response limits, source URL, and untrusted-page instructions.
 - [x] Local declarative skills: disabled by default, allowlisted tools, per-run call/time budgets, and approval gates for consequential supported actions.
+- [x] Skill Studio starter templates for public research, guarded browser navigation, device brief, public Bybit spot snapshot, and memory review; generated skills start disabled.
 - [x] Network Radar for current transport/capabilities, VPN/metered/captive-portal state, DNS, and MTU.
 - [x] Game Sentinel for user-started sessions, battery/memory/thermal indicators, and local session history.
 - [x] File operations limited to user-selected Android Storage Access Framework URIs.
@@ -20,7 +21,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [ ] Run GitHub Actions assembleDebug on the latest integrated head after thermal-aware avatar frame pacing changes; confirm the artifact matches the latest commit.
 - [ ] Install the APK on the Redmi phone and test app startup, avatar selection, personality persistence, voice, memory, tasks, reminders, and provider switching.
 - [ ] Test browser research on a public page and verify local/private addresses and unsafe redirects are rejected.
-- [ ] Register a skill, confirm it starts disabled, enable it, run it explicitly, and confirm disallowed tools, call budgets, time budgets, and approval prompts are enforced.
+- [ ] Create a Skill Studio template, confirm it starts disabled, review its allowlist, enable it, run it explicitly, and confirm disallowed tools, call budgets, time budgets, and approval prompts are enforced.
 - [ ] Test Network Radar with Wi-Fi/mobile/VPN where available.
 - [ ] Test Game Sentinel session start/end/history and confirm the displayed thermal/battery information matches Android's exposed values.
 - [ ] Test file picker, text preview/read, save, copy, and delete confirmation using disposable test files.
