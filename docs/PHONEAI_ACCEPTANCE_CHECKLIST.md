@@ -16,6 +16,16 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] File operations limited to user-selected Android Storage Access Framework URIs.
 - [x] GitHub Actions workflow can build a debug APK and retain an artifact.
 
+## Latest chat-first UX work (source changes pushed; build/device verification pending)
+- [x] Keep normal chat requests in the conversation panel instead of moving every request into the floating status strip.
+- [x] Render the user's message immediately before the AI response, so the chat has visible conversational flow.
+- [x] Add long-press copy for user and AI message bubbles.
+- [x] Make the animated character tappable to start voice input.
+- [x] Add conversation starter chips for research, explanations, planning, summaries, writing, and deeper analysis.
+- [x] Refresh Orion's launcher copy and dark visual palette.
+- [ ] Confirm chat bubbles, IME/send behavior, copy action, and tap-to-talk on the physical Android device.
+- [ ] Verify latest branch head compiles; an in-progress Actions run alone is not a pass.
+
 ## Required verification before calling the project complete
 - [ ] Stage 6 public GitHub integration: verify repo metadata, release and issue lookups; invalid input, 404/rate limit, and offline handling. See [Stage 6 integrations and safeguards](STAGE_6_INTEGRATIONS_AND_SAFEGUARDS.md).
 - [ ] Run GitHub Actions assembleDebug on the latest integrated head after thermal-aware avatar frame pacing changes; confirm the artifact matches the latest commit.
