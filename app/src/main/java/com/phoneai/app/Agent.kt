@@ -446,7 +446,7 @@ Rules:
                     svc, title, a.optString("details", ""),
                     a.optString("priority", "normal"), dueAt
                 )
-                if (task == null) "error: task title is required"
+                if (task == null) "error: task was not saved; provide a title and check device storage"
                 else "Created task #${task.id}: ${task.title} [${task.priority}]"
             }
             "task_update" -> {
@@ -461,13 +461,13 @@ Rules:
                     dueAt = dueAt,
                     clearDueAt = a.optBoolean("clearDueAt", false)
                 )
-                if (ok) "Updated task #$id." else "error: task #$id not found"
+                if (ok) "Updated task #$id." else "error: task #$id was not updated; it may not exist or device storage may be unavailable"
             }
             "task_delete" -> {
                 val id = a.optInt("id", -1)
                 if (!ui.ask("Delete task #$id permanently?")) "Task deletion cancelled."
                 else if (TaskStore.delete(svc, id)) "Deleted task #$id."
-                else "error: task #$id not found"
+                else "error: task #$id was not deleted; it may not exist or device storage may be unavailable"
             }
             "wait" -> {
                 val s = a.optDouble("seconds", 2.0).coerceIn(0.5, 10.0)
