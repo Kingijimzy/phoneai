@@ -97,10 +97,6 @@ class Nim(private val ctx: Context) {
             listOf("mistral-small-latest", "open-mistral-nemo", "mistral-large-latest"),
             listOf("mistral-small-latest", "pixtral-12b-2409")
         ),
-        "github" to Pair(
-            listOf("openai/gpt-4o-mini", "openai/gpt-4.1-mini", "meta/Llama-3.3-70B-Instruct"),
-            listOf("openai/gpt-4o-mini", "openai/gpt-4.1-mini")
-        ),
         "openai" to Pair(
             listOf("gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1-nano"),
             listOf("gpt-4.1-mini", "gpt-4o-mini")
@@ -129,7 +125,6 @@ class Nim(private val ctx: Context) {
             "gemini" -> 4500L
             "groq", "cerebras", "mistral" -> 2200L
             "openrouter" -> 3000L
-            "github" -> 4000L
             "local" -> 0L
             else -> 800L
         }
@@ -349,7 +344,7 @@ class Nim(private val ctx: Context) {
             // Keep the user's selected provider first; sort only backups by recent use and speed.
             val primary = order.first()
             val rank = listOf(
-                "groq", "cerebras", "gemini", "mistral", "github", "sambanova", "openrouter",
+                "groq", "cerebras", "gemini", "mistral", "sambanova", "openrouter",
                 "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local"
             )
             val nowMs = System.currentTimeMillis()
