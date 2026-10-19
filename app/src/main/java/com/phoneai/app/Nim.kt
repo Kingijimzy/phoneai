@@ -224,7 +224,9 @@ class Nim(private val ctx: Context) {
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
     private fun candidates(p: Provider, vision: Boolean): List<String> {
-        val ids = try {
+        // In quota-saver mode, never spend an extra network request listing models.
+        // Use the provider's small known fallback list instead.
+        val ids = if (Prefs.quotaSaver(ctx)) emptyList() else try {
             allModels(p)
         } catch (e: Exception) {
             emptyList()
@@ -453,6 +455,11 @@ class Nim(private val ctx: Context) {
             }
             if (r == null) {
                 lastNote = "$model -> too slow"
+                if (Prefs.quotaSaver(ctx)) {
+                    // A timeout is not evidence that the model name is invalid. Avoid burning
+                    // the remaining free quota trying several models after a slow response.
+                    throw AiException(p.label + ": request timed out. Retry later or use the one configured backup.")
+                }
                 if (!refilled) {
                     refilled = true
                     queue.addAll(candidates(p, vision))
@@ -490,6 +497,9 @@ class Nim(private val ctx: Context) {
             val content = extract(p, r.body)
             if (content.isBlank() || content == "null") {
                 lastNote = "$model -> empty reply"
+                if (Prefs.quotaSaver(ctx)) {
+                    throw AiException(p.label + ": returned an empty response. No repeated model retries were made.")
+                }
                 if (!refilled) {
                     refilled = true
                     queue.addAll(candidates(p, vision))
