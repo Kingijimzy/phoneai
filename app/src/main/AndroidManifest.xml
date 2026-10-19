@@ -31,11 +31,6 @@
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
-            android:name=".CinematicAvatarActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <activity
             android:name=".SettingsActivity"
             android:exported="false" />
 
