@@ -1,0 +1,353 @@
+package com.phoneai.app
+
+import android.app.Activity
+import android.graphics.Color
+import android.os.Build
+import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.graphics.Typeface
+import java.io.ByteArrayInputStream
+
+/**
+ * Optional cinematic 3D stage. The Canvas avatar remains the lightweight/offline fallback.
+ * Three.js and the CC0 Quaternius character are fetched from pinned public CDN URLs.
+ */
+class CinematicAvatarActivity : Activity() {
+    companion object {
+        @Volatile private var active: CinematicAvatarActivity? = null
+
+        fun pushState(state: String) {
+            active?.runScene("setState", state)
+        }
+
+        fun pulseMouth() {
+            active?.runScene("pulseMouth", "")
+        }
+    }
+
+    private lateinit var web: WebView
+    private lateinit var status: TextView
+    private var pageReady = false
+    private var latestState = "idle"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        active = this
+        window.statusBarColor = Color.rgb(4, 8, 18)
+        window.navigationBarColor = Color.rgb(4, 8, 18)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            )
+        }
+
+        val root = FrameLayout(this)
+        root.setBackgroundColor(Color.rgb(4, 8, 18))
+        web = WebView(this)
+        web.setBackgroundColor(Color.rgb(4, 8, 18))
+        web.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+            allowFileAccess = false
+            allowContentAccess = false
+            javaScriptCanOpenWindowsAutomatically = false
+            setSupportMultipleWindows(false)
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            if (Build.VERSION.SDK_INT >= 26) safeBrowsingEnabled = true
+        }
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                android.util.Log.d("Orion3D", message.message())
+                return true
+            }
+        }
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = true
+
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val host = request?.url?.host ?: return blockedResponse()
+                return if (host == "cdn.jsdelivr.net" || host == "phoneai.local") null else blockedResponse()
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                pageReady = true
+                status.text = "ORION 3D  ·  INITIALIZING"
+                runScene("setState", latestState)
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: android.webkit.WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    status.text = "3D scene unavailable · check your connection"
+                }
+            }
+        }
+        root.addView(web, FrameLayout.LayoutParams(-1, -1))
+
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(24, 44, 20, 12)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xE6081020.toInt(), 0x00081020)
+            )
+        }
+        val close = TextView(this).apply {
+            text = "‹"
+            textSize = 34f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            contentDescription = "Close 3D avatar"
+            setPadding(0, 0, 18, 4)
+            setOnClickListener { finish() }
+        }
+        top.addView(close, LinearLayout.LayoutParams(48, 52))
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        labels.addView(TextView(this).apply {
+            text = "ORION  /  CINEMATIC CORE"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        })
+        status = TextView(this).apply {
+            text = "LOADING 3D CHARACTER…"
+            textSize = 11f
+            setTextColor(Color.rgb(56, 225, 255))
+        }
+        labels.addView(status)
+        top.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+
+        val bottom = TextView(this).apply {
+            text = "LIVE EXPRESSION  ·  VOICE-SYNCED  ·  CC0 CHARACTER"
+            textSize = 10f
+            letterSpacing = 0.08f
+            gravity = Gravity.CENTER
+            setTextColor(0xFF9CB6D0.toInt())
+            setPadding(12, 14, 12, 28)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
+                intArrayOf(0xE6081020.toInt(), 0x00081020)
+            )
+        }
+        root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        setContentView(root)
+
+        web.loadDataWithBaseURL("https://phoneai.local/", HTML, "text/html", "UTF-8", null)
+    }
+
+    private fun blockedResponse() = WebResourceResponse(
+        "text/plain", "UTF-8", 403, "Blocked by PhoneAI avatar policy",
+        mapOf("Cache-Control" to "no-store"),
+        ByteArrayInputStream(ByteArray(0))
+    )
+
+    private fun runScene(method: String, value: String) {
+        latestState = value.ifBlank { latestState }
+        if (!pageReady || !::web.isInitialized) return
+        val safe = value.replace("\\", "\\\\").replace("'", "\\'")
+        web.post {
+            web.evaluateJavascript("window.Orion3D && window.Orion3D.$method('$safe')", null)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::web.isInitialized) web.onResume()
+    }
+
+    override fun onPause() {
+        if (::web.isInitialized) web.onPause()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (active === this) active = null
+        if (::web.isInitialized) {
+            web.stopLoading()
+            web.loadUrl("about:blank")
+            web.removeAllViews()
+            web.destroy()
+        }
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onDestroy()
+        PhoneAiService.instance?.onCinematicClosed()
+    }
+
+    private val HTML = """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#040812;color:#eaf7ff;font-family:Arial,sans-serif}
+canvas{display:block;width:100%;height:100%}
+#veil{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:radial-gradient(ellipse at 50% 35%,#152a49 0%,#070d1b 48%,#03050c 100%);z-index:2;text-align:center;padding:26px}
+#veil .orb{width:62px;height:62px;border:1px solid #38e1ff;border-radius:50%;box-shadow:0 0 35px #38e1ff66,inset 0 0 24px #7c5cff55;animation:pulse 1.8s ease-in-out infinite}
+#veil strong{letter-spacing:.18em;font-size:12px}
+#veil span{font-size:12px;color:#92adc8;line-height:1.5}
+@keyframes pulse{50%{transform:scale(1.08);box-shadow:0 0 52px #38e1ff88,inset 0 0 30px #7c5cff77}}
+</style>
+</head>
+<body>
+<div id="veil"><div class="orb"></div><strong>ORION CORE</strong><span id="loadtext">Building cinematic scene…</span></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x040812);
+scene.fog = new THREE.FogExp2(0x040812, 0.035);
+const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 80);
+camera.position.set(0, 1.45, 5.4);
+camera.lookAt(0, 1.05, 0);
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false, powerPreference:'low-power'});
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.35));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x9dcfff, 0x11172b, 2.0));
+const key = new THREE.DirectionalLight(0xe5f3ff, 3.1);
+key.position.set(3, 5, 4); key.castShadow = true; scene.add(key);
+const rim = new THREE.PointLight(0x38e1ff, 22, 8); rim.position.set(-2, 2.2, -1.5); scene.add(rim);
+const violet = new THREE.PointLight(0x7755ff, 17, 7); violet.position.set(2, 1.1, -2); scene.add(violet);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({color:0x08182a,metalness:.55,roughness:.36,transparent:true,opacity:.72}));
+floor.rotation.x = -Math.PI/2; floor.position.y = -0.015; floor.receiveShadow = true; scene.add(floor);
+for (let i=0;i<3;i++){
+ const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1+i*.26,.006,6,100),new THREE.MeshBasicMaterial({color:i===1?0x7755ff:0x38e1ff,transparent:true,opacity:.48-i*.1}));
+ ring.rotation.x=Math.PI/2; ring.position.y=.012+i*.002; ring.userData.speed=(i%2?-.12:.18); scene.add(ring);
+}
+const starGeo = new THREE.BufferGeometry();
+const starPos = [];
+for(let i=0;i<180;i++){starPos.push((Math.random()-.5)*9,Math.random()*4.5,(Math.random()-.5)*7-1.5);}
+starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starPos,3));
+const stars = new THREE.Points(starGeo,new THREE.PointsMaterial({color:0x6bcbff,size:.018,transparent:true,opacity:.72}));
+scene.add(stars);
+
+let model=null, head=null, neck=null, jaw=null, mouth=null, eyes=[], state='idle', mouthTarget=.02, blinkUntil=0, nextBlink=performance.now()+2400;
+const clock = new THREE.Clock();
+const loader = new GLTFLoader();
+const modelUrl = 'https://cdn.jsdelivr.net/gh/programasweights/avatar@main/public/assets/character.glb';
+
+function addFaceRig(headBone, scale){
+ const face = new THREE.Group();
+ face.position.set(0, 0.005, 0.065);
+ headBone.add(face);
+ const eyeMat = new THREE.MeshStandardMaterial({color:0x7df4ff,emissive:0x20bde8,emissiveIntensity:2.2,metalness:.15,roughness:.2});
+ for(const x of [-.033,.033]){
+   const eye = new THREE.Mesh(new THREE.SphereGeometry(.012,12,8),eyeMat);
+   eye.position.set(x,.018,0); eye.scale.set(1,1,.42); face.add(eye); eyes.push(eye);
+ }
+ const mouthMat = new THREE.MeshStandardMaterial({color:0x07121d,emissive:0x38e1ff,emissiveIntensity:.55,roughness:.3});
+ mouth = new THREE.Mesh(new THREE.SphereGeometry(1,16,10),mouthMat);
+ mouth.position.set(0,-.025,.003); mouth.scale.set(.031,.004,.006); face.add(mouth);
+}
+function fitCharacter(root){
+ const box = new THREE.Box3().setFromObject(root);
+ const size = box.getSize(new THREE.Vector3());
+ const scale = 2.15 / Math.max(size.y, .1);
+ root.scale.setScalar(scale);
+ const center = box.getCenter(new THREE.Vector3());
+ root.position.x = -center.x * scale;
+ root.position.z = -center.z * scale;
+ root.position.y = -box.min.y * scale;
+}
+loader.load(modelUrl, gltf=>{
+ model = gltf.scene;
+ model.traverse(o=>{
+   if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.metalness=Math.max(o.material.metalness||0,.08);o.material.roughness=Math.min(o.material.roughness||.8,.52);}}
+   if(o.isBone){
+     const n=o.name.toLowerCase();
+     if(!head && n.includes('head')) head=o;
+     if(!neck && n.includes('neck')) neck=o;
+     if(!jaw && (n.includes('jaw')||n.includes('mandible'))) jaw=o;
+   }
+ });
+ fitCharacter(model);
+ scene.add(model);
+ if(head) addFaceRig(head,model.scale.x);
+ document.getElementById('loadtext').textContent='Orion is online.';
+ document.getElementById('veil').style.opacity='0';
+ setTimeout(()=>{document.getElementById('veil').style.display='none';},500);
+},undefined,err=>{
+ console.error('Orion 3D model failed',err);
+ document.getElementById('loadtext').textContent='Could not load the public CC0 model. Check internet and reopen the 3D stage.';
+});
+
+window.Orion3D = {
+ setState: function(next){
+   state = String(next||'idle').toLowerCase();
+   const labels={idle:'ORION 3D · READY',listening:'ORION 3D · LISTENING',thinking:'ORION 3D · THINKING',speaking:'ORION 3D · SPEAKING',acting:'ORION 3D · WORKING',waiting_approval:'ORION 3D · AWAITING APPROVAL'};
+   const el=document.getElementById('loadtext');
+   if(el && document.getElementById('veil').style.display!=='none') el.textContent=labels[state]||'Orion is initializing…';
+   if(state==='speaking') mouthTarget=.28;
+   if(state==='listening') mouthTarget=.025;
+ },
+ pulseMouth: function(){mouthTarget=.18+Math.random()*.7;}
+};
+
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.05);
+ const t=clock.elapsedTime;
+ if(model){
+   model.rotation.y = Math.sin(t*.22)*.13;
+   if(head){
+     const targetTilt = state==='thinking' ? -.12 : state==='listening' ? .07 : state==='waiting_approval' ? .04 : 0;
+     head.rotation.z += (targetTilt + Math.sin(t*.7)*.018 - head.rotation.z)*Math.min(1,dt*2.8);
+     head.rotation.y += (Math.sin(t*.55)*.08 - head.rotation.y)*Math.min(1,dt*1.5);
+   }
+   if(neck) neck.rotation.x += ((state==='speaking'?-.025:state==='listening'?.025:0)-neck.rotation.x)*Math.min(1,dt*2);
+   if(jaw) jaw.rotation.x += ((state==='speaking'?-.22:0)-jaw.rotation.x)*Math.min(1,dt*12);
+   if(mouth){
+     const talking=state==='speaking';
+     if(talking && now%420<45) mouthTarget=.15+Math.random()*.55;
+     mouthTarget += (.02-mouthTarget)*Math.min(1,dt*(talking?1.8:7));
+     mouth.scale.y += ((talking?Math.max(.004,mouthTarget*.018):.004)-mouth.scale.y)*Math.min(1,dt*16);
+   }
+   if(now>nextBlink){blinkUntil=now+135;nextBlink=now+2200+Math.random()*2600;}
+   const blink=now<blinkUntil?.12:1;
+   for(const eye of eyes) eye.scale.y += (blink-eye.scale.y)*Math.min(1,dt*35);
+ }
+ scene.children.forEach(o=>{if(o.userData.speed)o.rotation.z+=o.userData.speed*dt;});
+ stars.rotation.y=t*.012;
+ rim.intensity=state==='listening'?28:state==='speaking'?25:state==='thinking'?18:22;
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+ renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.35));renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body></html>
+""".trimIndent()
