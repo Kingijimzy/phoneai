@@ -247,6 +247,15 @@ class MainActivity : Activity() {
             }
         }, 8)
 
+        // ---- 6. local device utilities
+        val s6 = card(
+            col, "6. Device utilities",
+            "Network Radar, Game Sentinel, and user-selected file handling. These tools run locally on your phone."
+        )
+        add(s6, button("Open Network Radar, Game Sentinel & Files", true) {
+            startActivity(Intent(this, DeviceUtilitiesActivity::class.java))
+        }, 10)
+
         add(
             col,
             text(
