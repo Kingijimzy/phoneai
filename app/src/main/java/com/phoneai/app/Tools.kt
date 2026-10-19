@@ -206,6 +206,50 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    /** Public Bybit spot ticker; read-only, no API key, never places orders. */
+    fun bybitPublicTicker(symbol: String): String {
+        val clean = symbol.trim().uppercase().replace("/", "")
+        if (!Regex("^[A-Z0-9]{5,20}$").matches(clean)) return "error: use a spot symbol such as BTCUSDT or ETHUSDT."
+        return try {
+            val url = URL("https://api.bybit.com/v5/market/tickers?category=spot&symbol=" + URLEncoder.encode(clean, "UTF-8"))
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("User-Agent", "PhoneAI-Public-Market-Reader")
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val raw = stream?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(2048)
+                var total = 0
+                while (total < 20000) {
+                    val n = input.read(buf, 0, minOf(buf.size, 20000 - total))
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    total += n
+                }
+                out.toString(Charsets.UTF_8.name())
+            } ?: ""
+            conn.disconnect()
+            if (code !in 200..299) return "Bybit public API returned HTTP " + code + "."
+            val root = JSONObject(raw)
+            if (root.optInt("retCode", -1) != 0) return "Bybit market lookup failed: " + root.optString("retMsg", "unknown API error")
+            val list = root.optJSONObject("result")?.optJSONArray("list")
+                ?: return "No spot ticker returned for " + clean + ". Check the symbol and market."
+            val item = list.optJSONObject(0) ?: return "No spot ticker returned for " + clean + "."
+            val last = item.optString("lastPrice", "unknown")
+            val change = item.optString("price24hPcnt", "unknown")
+            val high = item.optString("highPrice24h", "unknown")
+            val low = item.optString("lowPrice24h", "unknown")
+            val volume = item.optString("volume24h", "unknown")
+            "Bybit spot ticker for " + clean + " (public market data, not a trading signal):\\nLast price: " + last +
+                "\\n24h change: " + change + " (fraction; multiply by 100 for percent)" +
+                "\\n24h high: " + high + "\\n24h low: " + low + "\\n24h base volume: " + volume
+        } catch (e: Exception) { "Bybit market lookup failed (" + e.javaClass.simpleName + ")." }
+    }
     fun telegramStatus(): String = TelegramBridge.status(svc)
 
     fun telegramSend(message: String): String = TelegramBridge.send(svc, message)
