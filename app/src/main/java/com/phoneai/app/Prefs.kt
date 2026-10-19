@@ -135,6 +135,10 @@ object Prefs {
     fun autoSwitch(c: Context): Boolean = sp(c).getBoolean("autoswitch", true)
     fun setAutoSwitch(c: Context, v: Boolean) = sp(c).edit().putBoolean("autoswitch", v).apply()
 
+    /** Defaults on to avoid burning free-tier quota through repeated provider/model fallbacks. */
+    fun quotaSaver(c: Context): Boolean = sp(c).getBoolean("quota_saver", true)
+    fun setQuotaSaver(c: Context, v: Boolean) = sp(c).edit().putBoolean("quota_saver", v).apply()
+
     fun voice(c: Context): Boolean = sp(c).getBoolean("voice", true)
     fun setVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("voice", v).apply()
 
