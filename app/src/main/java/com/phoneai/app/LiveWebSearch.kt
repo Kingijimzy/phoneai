@@ -19,6 +19,20 @@ object LiveWebSearch {
         return Regex("\\b(search the web|search online|web search|look up online|look this up|find online|search for|research online)\\b").containsMatchIn(s)
     }
 
+    /** Detects freshness-dependent questions even when the user does not say "search the web". */
+    fun isLiveInfoRequest(text: String): Boolean {
+        val s = text.lowercase()
+        if (Regex("\\b(weather|forecast|temperature|bitcoin|btc|ethereum|eth|solana|crypto price|stock price|forex price|exchange rate|time is it|what time|today's date|current time)\\b").containsMatchIn(s)) return false
+        return Regex("\\b(latest|currently|right now|as of today|today's|today|breaking|recently|this week|this month|current events|who is the current|what is happening|what happened today|latest update|new update|current status|is .+ still)\\b").containsMatchIn(s)
+    }
+
+    fun liveQueryFrom(text: String): String = text.trim()
+        .replace(Regex("(?i)\\b(please|tell me|can you|could you|what is|what's|what are|who is|who's|give me|find out|check|right now|currently|as of today|latest|current|today|recently|breaking)\\b"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim(' ', '.', '?', '!', ',')
+        .ifBlank { text.trim() }
+        .take(160)
+
     fun queryFrom(text: String): String = text.trim()
         .replace(Regex("(?i)\\b(search the web for|search online for|web search for|search for|look up online|look this up|find online|research online|please|on the internet|online)\\b"), " ")
         .replace(Regex("\\s+"), " ")
