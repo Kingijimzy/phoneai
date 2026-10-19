@@ -62,3 +62,11 @@ Implemented in the integration branch (build/device verification still required)
 - DuckDuckGo HTML results are parsed from a public search page, not a stable official search API. If the page changes or blocks requests, PhoneAI should show a failure message rather than invent results.
 - Bybit endpoint is public spot market data only. This is not an account connection, derivatives feed, trading signal, or order execution.
 - Free model tiers still impose provider-owned rate limits. PhoneAI can reduce avoidable calls and resume work, but cannot guarantee unlimited inference.
+
+### Provider and quota research notes (reviewed 2026-10-19)
+- GitHub Models was retired on 2026-07-30, so its old inference provider was removed from the selectable provider list. This is separate from the read-only public GitHub repository integration.
+- OpenRouter's free-model catalog changes frequently and still has rate limits; the fallback list is refreshed with currently listed free model IDs, but availability must be verified by live requests.
+- Hugging Face's documented free Inference Providers allowance is currently only $0.10/month for free accounts, subject to change; do not describe it as unlimited free inference.
+- Gemini, Groq, and other providers enforce their own model/project/account-specific request and token quotas. PhoneAI's per-minute caps are local safety throttles, not a claim about each provider's actual limit. When a provider exposes quota headers, PhoneAI now shows those alongside the local throttle.
+- Open-Meteo's no-key free API is for non-commercial use and requires attribution. A commercial or ad-supported PhoneAI release must use a properly licensed weather source or an eligible paid Open-Meteo plan.
+- Free endpoints can have changing availability and data/privacy terms. Do not send passwords, tokens, verification codes, or sensitive screen contents to public/free model endpoints.
