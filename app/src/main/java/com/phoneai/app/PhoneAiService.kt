@@ -355,8 +355,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val t = TextView(this)
         t.text = text
         t.textSize = if (kind == "note") 11f else 15f
+        t.setLineSpacing(dp(2).toFloat(), 1.02f)
+        t.maxWidth = (screenSize().first * 0.82f).toInt()
         val lp = LinearLayout.LayoutParams(WRAP, WRAP)
-        lp.setMargins(0, dp(4), 0, dp(4))
+        lp.setMargins(0, dp(5), 0, dp(5))
         when (kind) {
             "me" -> {
                 t.setTextColor(Theme.ON_ACCENT)
@@ -387,29 +389,32 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = rounded(Theme.PANEL, dp(24).toFloat(), Theme.LINE)
-        root.setPadding(dp(14), dp(12), dp(14), dp(12))
+        root.background = rounded(Theme.BG, dp(26).toFloat(), Theme.LINE)
+        root.setPadding(dp(12), dp(10), dp(12), dp(12))
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
+        head.background = rounded(Theme.PANEL, dp(20).toFloat(), Theme.LINE)
+        head.setPadding(dp(8), dp(4), dp(6), dp(4))
         val orb = AvatarView(this)
-        head.addView(orb, LinearLayout.LayoutParams(dp(124), dp(124)))
+        orb.style = Prefs.avatar(this)
+        head.addView(orb, LinearLayout.LayoutParams(dp(102), dp(102)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label("O R I O N", 16f, Theme.TEXT)
+        val title = label("ORION", 17f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("Ready", 13f, Theme.CYAN)
+        val st = label("PERSONAL AI  ·  Ready", 12f, Theme.CYAN)
         titleCol.addView(st)
         head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val fresh = label("New", 14f, Theme.MUTED)
+        val fresh = label("＋ New", 13f, Theme.MUTED)
         fresh.setPadding(dp(10), dp(6), dp(10), dp(6))
         fresh.setOnClickListener { newChat() }
         head.addView(fresh)
-        val close = label("Close", 14f, Theme.MUTED)
-        close.setPadding(dp(10), dp(6), dp(10), dp(6))
+        val close = label("×", 22f, Theme.MUTED)
+        close.setPadding(dp(12), dp(4), dp(10), dp(4))
         close.setOnClickListener { closePanel(true) }
         head.addView(close)
         root.addView(head)
@@ -463,7 +468,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         val input = EditText(this)
-        input.hint = "Message Orion..."
+        input.hint = "Ask anything or tell Orion what to do…"
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
         input.background = rounded(Theme.PANEL2, dp(18).toFloat(), Theme.LINE)
