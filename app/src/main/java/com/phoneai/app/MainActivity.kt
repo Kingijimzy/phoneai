@@ -282,6 +282,16 @@ class MainActivity : Activity() {
                 }
             }.start()
         }, 8)
+        add(s7, button("Check Telegram inbox (read-only)", false) {
+            Toast.makeText(this, "Checking saved Telegram chat...", Toast.LENGTH_SHORT).show()
+            Thread {
+                val result = TelegramBridge.checkUpdates(this)
+                runOnUiThread {
+                    AlertDialog.Builder(this).setTitle("Telegram inbox").setMessage(result)
+                        .setPositiveButton("OK", null).show()
+                }
+            }.start()
+        }, 8)
         add(s7, button("Check Telegram bot connection", false) {
             Toast.makeText(this, "Checking Telegram...", Toast.LENGTH_SHORT).show()
             Thread {
