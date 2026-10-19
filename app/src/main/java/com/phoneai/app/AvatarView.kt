@@ -69,7 +69,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         OrbView.Mode.LISTENING -> Theme.OK
         OrbView.Mode.THINKING -> Theme.VIOLET
         OrbView.Mode.SPEAKING -> Theme.CYAN
-        OrbView.Mode.ACTING -> Theme.WARN
+        OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL -> Theme.WARN
     }
 
     private fun alpha(color: Int, a: Int): Int = (color and 0x00FFFFFF) or (a.coerceIn(0, 255) shl 24)
@@ -104,6 +104,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         val tilt = when (mode) {
             OrbView.Mode.LISTENING -> sin(t * 1.1f) * 2.5f
             OrbView.Mode.THINKING -> -4f
+            OrbView.Mode.WAITING_APPROVAL -> sin(t * 1.5f) * 1.2f
             else -> 0f
         }
         var gazeX = 0f
@@ -123,6 +124,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             }
             OrbView.Mode.LISTENING -> gazeY = 0.05f
             OrbView.Mode.SPEAKING -> gazeX = sin(t * 0.9f) * 0.25f
+            OrbView.Mode.WAITING_APPROVAL -> gazeY = 0.2f
         }
 
         val cx = w / 2f
@@ -285,6 +287,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             OrbView.Mode.LISTENING -> 0.03f + smoothLevel * 0.02f
             OrbView.Mode.THINKING -> 0.025f
             OrbView.Mode.ACTING -> -0.01f
+            OrbView.Mode.WAITING_APPROVAL -> 0.035f
             else -> 0f
         }
         for (side in intArrayOf(-1, 1)) {
@@ -442,6 +445,13 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
                     fill.color = alpha(Theme.VIOLET, 230)
                     c.drawCircle(cx + (i - 1) * s * 0.07f, headTop - s * 0.14f - k * s * 0.012f, s * 0.022f, fill)
                 }
+            }
+            OrbView.Mode.WAITING_APPROVAL -> {
+                line.color = alpha(Theme.WARN, 230)
+                line.strokeWidth = s * 0.018f
+                rect.set(cx - s * 0.43f, cy - s * 0.43f, cx + s * 0.43f, cy + s * 0.43f)
+                c.drawArc(rect, -70f, 140f, false, line)
+                c.drawArc(rect, 110f, 140f, false, line)
             }
             OrbView.Mode.ACTING -> {
                 val ang = t * 2.4f
