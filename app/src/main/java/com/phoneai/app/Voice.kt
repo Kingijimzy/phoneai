@@ -215,7 +215,23 @@ class Voice(private val ctx: Context) {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-        r.startListening(i)
+        try {
+            r.startListening(i)
+        } catch (e: SecurityException) {
+            if (my == gen) {
+                cleanup()
+                onLevel?.invoke(0f)
+                onProblem?.invoke("Microphone permission is missing. Open Orion AI and allow microphone access.")
+                onText(null)
+            }
+        } catch (e: RuntimeException) {
+            if (my == gen) {
+                cleanup()
+                onLevel?.invoke(0f)
+                onProblem?.invoke("Speech recognition could not start. Check the speech service and try again.")
+                onText(null)
+            }
+        }
     }
 
     private fun cleanup() {
