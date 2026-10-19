@@ -36,7 +36,7 @@ object LiveNews {
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("User-Agent", "PhoneAI/1.0 (recent news lookup)")
-                instanceFollowRedirects = false
+                instanceFollowRedirects = true
             }
             val body: String
             try {
