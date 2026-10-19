@@ -30,3 +30,8 @@ A real cinematic 3D character still requires a legally redistributable rigged GL
 - GitHub Actions build success confirms source compilation and artifact upload only.
 - It does not prove real-browser workflows, remote MCP compatibility, Telegram polling, model-service availability, device permissions, thermal behavior, or 3D rendering.
 - Batch device acceptance should cover memory/tasks, voice, skill template creation and disabled-by-default behavior, one public research task, one low-risk browser navigation task, and stop/approval behavior before any consequential action.
+
+## Companion UI refresh
+- The setup screen now opens on a character-led dashboard with direct chat, character, skills, memory, and browser shortcuts.
+- The floating chat panel has a framed character/status header, clearer bounded message bubbles, and a more conversational input hint.
+- The current character renderer is still 2D Canvas. These UI changes do not turn it into a rigged 3D human; that requires a model asset and renderer integration.
