@@ -38,7 +38,7 @@ No broad storage permission or raw path access is used. UI integration should ex
 
 The workflow now runs `gradle assembleDebug` for pull requests and uploads the APK as an artifact. It does not publish a GitHub release for a pull-request build. A merge to main or manual workflow dispatch retains the existing release behavior.
 
-These modules are not yet wired into the app's main UI or the AI agent tool schema. Integration should be a separate change: provide user-visible screens/buttons, run blocking file/network operations off the main thread, catch errors, and only expose an action to the agent with explicit permission/confirmation where appropriate.
+The modules now have a user-facing `DeviceUtilitiesActivity`, registered in the manifest and linked from the Orion control room in `MainActivity`. Network and file reads/copies/writes run on worker threads. The AI agent tool schema is deliberately unchanged; these utilities are user-operated UI actions, not silently agent-invokable tools. The next step is to review the actual GitHub Actions build and exercise the screen on a device.
 
 ## Acceptance checks for follow-up integration
 
