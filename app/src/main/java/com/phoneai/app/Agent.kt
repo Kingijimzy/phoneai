@@ -122,6 +122,10 @@ Tools:
 - remember {category, text}: save to long-term memory. category: preference | project | decision | task | conversation | fact
 - update_memory {id, text, category}   forget {id}   recall {query}
 - wait {seconds}
+- task_list {}: list current saved tasks and their IDs/statuses
+- task_add {title, details?, priority?, dueAt?}: create a persistent task; priority low|normal|high|urgent; dueAt is optional Unix epoch milliseconds only when known
+- task_update {id, title?, details?, status?, priority?, dueAt?, clearDueAt?}: update an existing task; status open|in_progress|done|cancelled
+- task_delete {id}: permanently delete a task; ALWAYS ask the user for confirmation first
 - ask_user {question}: yes/no question. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, calling, or changing account settings.
 
 Rules:
@@ -418,6 +422,50 @@ Rules:
             )
             "forget" -> tools.forget(a.optInt("id", -1))
             "recall" -> tools.recall(a.optString("query"))
+            "task_list" -> {
+                val tasks = TaskStore.all(svc).take(30)
+                if (tasks.isEmpty()) "No saved tasks yet." else tasks.joinToString("\n") { task ->
+                    val due = task.dueAt?.let {
+                        java.text.SimpleDateFormat("EEE d MMM, HH:mm", java.util.Locale.getDefault())
+                            .format(java.util.Date(it))
+                    } ?: "no due date"
+                    "#${task.id} [${task.status}/${task.priority}] ${task.title}" +
+                        (if (task.details.isBlank()) "" else " — ${task.details.take(100)}") +
+                        " (due: $due)"
+                }
+            }
+            "task_add" -> {
+                val title = a.optString("title").trim()
+                val dueAt = if (a.has("dueAt") && !a.isNull("dueAt")) {
+                    a.optLong("dueAt").takeIf { it > System.currentTimeMillis() }
+                } else null
+                val task = TaskStore.add(
+                    svc, title, a.optString("details", ""),
+                    a.optString("priority", "normal"), dueAt
+                )
+                if (task == null) "error: task title is required"
+                else "Created task #${task.id}: ${task.title} [${task.priority}]"
+            }
+            "task_update" -> {
+                val id = a.optInt("id", -1)
+                val dueAt = if (a.has("dueAt") && !a.isNull("dueAt")) a.optLong("dueAt") else null
+                val ok = TaskStore.update(
+                    svc, id,
+                    title = if (a.has("title")) a.optString("title") else null,
+                    details = if (a.has("details")) a.optString("details") else null,
+                    status = if (a.has("status")) a.optString("status") else null,
+                    priority = if (a.has("priority")) a.optString("priority") else null,
+                    dueAt = dueAt,
+                    clearDueAt = a.optBoolean("clearDueAt", false)
+                )
+                if (ok) "Updated task #$id." else "error: task #$id not found"
+            }
+            "task_delete" -> {
+                val id = a.optInt("id", -1)
+                if (!ui.ask("Delete task #$id permanently?")) "Task deletion cancelled."
+                else if (TaskStore.delete(svc, id)) "Deleted task #$id."
+                else "error: task #$id not found"
+            }
             "wait" -> {
                 val s = a.optDouble("seconds", 2.0).coerceIn(0.5, 10.0)
                 Thread.sleep((s * 1000).toLong())
