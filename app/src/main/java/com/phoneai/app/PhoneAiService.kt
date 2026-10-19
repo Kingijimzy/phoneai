@@ -77,6 +77,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var panel: LinearLayout? = null
     private var panelOrb: AvatarView? = null
     private var panelStatus: TextView? = null
+    private var stopBtnRef: TextView? = null
+    private var activityView: TextView? = null
+    private var activityRunnable: Runnable? = null
     private var micBtnRef: TextView? = null
     private var strip: LinearLayout? = null
     private var stripOrb: AvatarView? = null
@@ -298,6 +301,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
             for (o in orbs()) o.mode = m
             micBtnRef?.text = if (listening) "Stop" else "Mic"
+            stopBtnRef?.visibility = if (running) View.VISIBLE else View.GONE
             panelStatus?.text = when (m) {
                 OrbView.Mode.IDLE -> if (Prefs.wake(this)) "Say \"Orion\" or tap the mic" else "Ready"
                 OrbView.Mode.LISTENING -> "Listening..."
@@ -389,6 +393,39 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
+    private fun showThinkingIndicator() {
+        hideThinkingIndicator()
+        val box = logBox ?: return
+        val indicator = label("Orion is thinking", 13f, Theme.CYAN)
+        indicator.setPadding(dp(12), dp(9), dp(12), dp(9))
+        indicator.background = rounded(Theme.PANEL, dp(15).toFloat(), Theme.LINE)
+        indicator.contentDescription = "Orion is generating a response"
+        box.addView(indicator, LinearLayout.LayoutParams(WRAP, WRAP).apply {
+            setMargins(0, dp(5), 0, dp(5))
+        })
+        activityView = indicator
+        var frame = 0
+        val ticker = object : Runnable {
+            override fun run() {
+                if (activityView !== indicator || panel == null || !running) return
+                frame = (frame + 1) % 4
+                indicator.text = "Orion is thinking" + "·".repeat(frame)
+                logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+                main.postDelayed(this, 420)
+            }
+        }
+        activityRunnable = ticker
+        main.postDelayed(ticker, 420)
+        logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun hideThinkingIndicator() {
+        activityRunnable?.let { main.removeCallbacks(it) }
+        activityRunnable = null
+        activityView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        activityView = null
+    }
+
     private fun openPanel() {
         if (panel != null || running) return
         wakeGen++
@@ -429,6 +466,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val tagline = label("Think with you. Build with you. Act with permission.", 10f, Theme.MUTED)
         titleCol.addView(tagline)
         head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
+        val stop = label("■ Stop", 12f, Theme.WARN)
+        stop.setPadding(dp(8), dp(6), dp(8), dp(6))
+        stop.setOnClickListener { stopAll() }
+        stop.visibility = View.GONE
+        head.addView(stop)
+        stopBtnRef = stop
         val fresh = label("＋ New", 13f, Theme.MUTED)
         fresh.setPadding(dp(10), dp(6), dp(10), dp(6))
         fresh.setOnClickListener { newChat() }
@@ -554,6 +597,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         panel = null
         panelOrb = null
         panelStatus = null
+        stopBtnRef = null
         micBtnRef = null
         logBox = null
         logScroll = null
@@ -570,6 +614,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun newChat() {
         agent.reset()
         transcript.clear()
+        hideThinkingIndicator()
         logBox?.removeAllViews()
         addLine("ai", "New chat. What should I do?")
     }
@@ -729,6 +774,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             showStrip("Thinking...")
         }
         refreshMode()
+        if (panel != null) showThinkingIndicator()
         worker.execute {
             try {
                 agent.run(t)
@@ -887,6 +933,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun say(text: String) {
         transcript.add(Pair("ai", text))
         main.post {
+            hideThinkingIndicator()
             if (panel != null) {
                 addLine("ai", text)
                 panelStatus?.text = if (running) "Working..." else "Ready"
