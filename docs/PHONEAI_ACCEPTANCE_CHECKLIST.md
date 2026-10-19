@@ -3,8 +3,8 @@
 This checklist is the current completion gate for the combined personal-agent build. Passing a GitHub compile is necessary but does not replace testing on the target Redmi Android phone.
 
 ## Implemented in the integrated branch
-- [x] Four animated avatar looks (Orion, Nova, Atlas, Lumen).
-- [x] Four persistent conversational personality profiles, independent of avatar look.
+- [x] Native Jarvis-inspired animated energy core replaces character visuals in the active app UI.
+- [x] Persistent conversational response profiles remain available in Settings.
 - [x] Existing local memory, tasks, routines, voice, and provider selection preserved.
 - [x] Plain chat retains a small context window; phone-agent loop bounded to 16 turns and batched tools to four calls.
 - [x] Default-on API quota saver keeps the selected provider first, limits fallback to at most one backup provider, limits model retries, and counts actual generation requests against local per-minute budgets.
@@ -16,26 +16,26 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] File operations limited to user-selected Android Storage Access Framework URIs.
 - [x] GitHub Actions workflow can build a debug APK and retain an artifact.
 
-## Latest chat-first UX work (source changes pushed; build/device verification pending)
+## Chat-first redesign and stability work (source changes pushed; physical-device verification pending)
 - [x] Keep normal chat requests in the conversation panel instead of moving every request into the floating status strip.
 - [x] Render the user's message immediately before the AI response, so the chat has visible conversational flow.
 - [x] Add long-press copy for user and AI message bubbles.
-- [x] Make the animated character tappable to start voice input.
+- [x] Replace the character in the floating command control with a lightweight mode-reactive energy orb.
 - [x] Add conversation starter chips for research, explanations, planning, summaries, writing, and deeper analysis.
 - [x] Show a live animated thinking indicator in the chat while Orion generates a response.
 - [x] Add an in-chat Stop control while a request is running; clean up the indicator when a run ends.
-- [x] Add a dedicated cinematic 3D avatar stage with a rigged CC0 GLB, cinematic lighting, ambient scene, and a low-power 30 fps render cap.
-- [x] Add a chat shortcut to open the 3D stage and keep the lightweight Canvas avatar as fallback.
-- [x] Synchronize the 3D scene with listening/thinking/speaking/acting/approval state and TTS word/range callbacks.
+- [x] Add a dedicated full-screen chat activity separate from the floating command panel.
+- [x] Sync the energy-core animation to idle/listening/thinking/speaking/acting/approval modes.
+- [x] Remove the 3D character activity from the app manifest and normal UI flow to reduce WebView/CDN startup risk.
 - [x] Refresh Orion's launcher copy and dark visual palette.
 - [x] Ease 2D avatar gaze/head transitions and the orb's pulse/orbit-speed changes.
 - [x] Animate chat bubble entrance, panel opening, button/chip press feedback, and the thinking indicator.
 - [x] Add 3D idle-clip preference when available, state-aware torso/shoulder/hip motion, subtle camera/light drift, and compatible blink/mouth morph-target blending.
-- [ ] Verify the 3D stage loads the GLB from the approved CDN, the character framing/face cues look correct, and failure returns cleanly to the Canvas avatar.
-- [ ] Verify head/eye/mouth movement follows voice states and TTS range callbacks without excessive lag or distracting motion, including whether this GLB exposes compatible facial morph targets.
-- [ ] Check the 3D scene at normal and power-save/thermal conditions on the Redmi; confirm 30 fps cap, heat, memory, and background cleanup.
+- [ ] Reproduce and resolve the reported force-close/internal-error issue on the physical Android device using logcat.
+- [ ] Tap-test every home, chat, tools, and settings action on the Redmi; confirm no activity crashes and no dead-end settings buttons.
+- [ ] Verify full-screen chat send/receive, voice callbacks, activity pause/resume, and return to the floating orb.
 - [ ] Confirm the thinking indicator appears/disappears correctly and Stop cancels a slow request without leaving stale UI on the physical Android device.
-- [ ] Confirm chat bubbles, IME/send behavior, copy action, and tap-to-talk on the physical Android device.
+- [ ] Confirm message rendering, keyboard/send behavior, and copy action on the physical Android device.
 - [ ] Verify latest branch head compiles; an in-progress Actions run alone is not a pass.
 
 ## Required verification before calling the project complete
