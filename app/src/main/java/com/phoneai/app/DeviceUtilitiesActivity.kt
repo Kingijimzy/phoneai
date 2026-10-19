@@ -3,6 +3,9 @@ package com.phoneai.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
@@ -21,6 +24,7 @@ class DeviceUtilitiesActivity : Activity() {
     private var selectedUri: Uri? = null
     private var copySource: Uri? = null
     private var filePreview: String = ""
+    @Volatile private var lastDiagnosticsReport: String = "No diagnostic report yet. Refresh Network Radar or check device health first."
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -75,6 +79,11 @@ class DeviceUtilitiesActivity : Activity() {
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }, 0)
         add(content, button("Back to Orion") { finish() }, 4)
+        add(content, button("Copy latest diagnostic report") {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("PhoneAI diagnostics", lastDiagnosticsReport))
+            toast("Diagnostic report copied.")
+        }, 8)
 
         val network = section("Network Radar", "Local connection diagnostics. No LAN scanning or Wi-Fi password collection.")
         val networkResult = TextView(this).apply { textSize = 14f; setTextColor(Theme.TEXT) }
@@ -94,7 +103,10 @@ class DeviceUtilitiesActivity : Activity() {
                     appendLine("DNS: ${snapshot.dnsServers.joinToString().ifBlank { "not exposed" }}")
                     append("MTU: ${snapshot.mtu ?: "not exposed"}")
                 }
-                runOnUiThread { networkResult.text = report }
+                runOnUiThread {
+                    networkResult.text = report
+                    lastDiagnosticsReport = "PHONEAI NETWORK RADAR\n" + report
+                }
             }.start()
         })
 
@@ -113,7 +125,10 @@ class DeviceUtilitiesActivity : Activity() {
                     appendLine()
                     append(s.recommendation)
                 }
-                runOnUiThread { gameResult.text = report }
+                runOnUiThread {
+                    gameResult.text = report
+                    lastDiagnosticsReport = "PHONEAI GAME SENTINEL\n" + report
+                }
             }.start()
         })
         add(game, button("Start a game session") { startSessionDialog(gameResult) })
