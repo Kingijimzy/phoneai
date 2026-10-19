@@ -123,7 +123,7 @@ object BrowserResearch {
             // Resolve before connecting; reject private, loopback, link-local, and reserved addresses.
             val addresses = InetAddress.getAllByName(host)
             if (addresses.isEmpty() || addresses.any { isNonPublic(it) }) null
-            else URI(scheme, null, host, port, uri.rawPath.ifBlank { "/" }, uri.rawQuery, null).toASCIIString()
+            else URI(scheme, null, host, port, (uri.path ?: "").ifBlank { "/" }, uri.query, null).toASCIIString()
         } catch (_: Exception) {
             null
         }
