@@ -374,7 +374,6 @@ class Nim(private val ctx: Context) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 try {
                     if (idx > 0 || p !== order[0]) onStatus?.invoke("Using ${p.label}...")
-                    noteHit(p.id)
                     return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
                 } catch (e: AiException) {
                     errors[p.id] = e.message ?: p.label
@@ -419,8 +418,12 @@ class Nim(private val ctx: Context) {
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
             attempts++
+            if (usedLastMinute(p.id) >= budget(p.id)) {
+                throw AiException("${p.label}: local request budget reached.", true)
+            }
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
+            noteHit(p.id)
             onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
             val url: String
             val payload: String
