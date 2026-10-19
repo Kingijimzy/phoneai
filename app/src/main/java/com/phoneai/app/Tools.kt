@@ -194,6 +194,12 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    fun telegramStatus(): String = TelegramBridge.status(svc)
+
+    fun telegramSend(message: String): String = TelegramBridge.send(svc, message)
+
+    fun integrationStatus(): String = IntegrationStatus.summary(svc)
+
     // ---- phone features
 
     fun settings(page: String): String {
