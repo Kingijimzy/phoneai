@@ -35,7 +35,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val actionWords = Regex(
         "\\b(open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|" +
             "whatsapp|email|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|" +
-            "post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|click|task|tasks|remind|reminder|todo|to-do|mark as done)\\b"
+            "post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|click|task|tasks|remind|reminder|todo|to-do|mark as done|" +
+            "remember|recall|forget|memory|memories|update memory|save this)\\b"
     )
 
     private fun chatSystem(): String {
