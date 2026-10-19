@@ -163,6 +163,70 @@ class Local(
             ?: (if (exactName != null) MacroStore.find(svc, exactName) else null)
         if (found != null) return replay(found.first, found.second)
 
+        // ---- help
+        if (Regex("^(what can you do|help|help me|what are your commands|commands|what do you do)$").matches(t)) {
+            return "I can open apps, tap and scroll for you, set alarms and timers, call and message, record your screen, do maths and conversions, take notes, navigate, play YouTube, read your screen aloud, and run routines you teach me. Say teach, then a name, to show me a task once."
+        }
+
+        // ---- maths and conversions (instant)
+        Calc.tryConvert(t)?.let { return it }
+        Calc.tryMath(t)?.let { return it }
+
+        // ---- coin, dice, random
+        if (Regex("^(flip|toss) (a )?coin$").matches(t)) return if (Math.random() < 0.5) "Heads." else "Tails."
+        if (Regex("^roll (a |the )?(dice|die)$").matches(t)) return "You rolled a ${(1..6).random()}."
+        val rnd = Regex("^(random number|pick a number)( between| from)? (\\d+) (and|to) (\\d+)$").find(t)
+        if (rnd != null) {
+            val a = rnd.groupValues[3].toInt()
+            val b = rnd.groupValues[5].toInt()
+            return "${(minOf(a, b)..maxOf(a, b)).random()}."
+        }
+
+        // ---- notes
+        val noteM = Regex("^(take a note|add a note|note down|make a note|note)( that| to self)?:? (.+)$").find(t)
+        if (noteM != null) {
+            tools.remember("task", noteM.groupValues[3].trim())
+            return "Noted."
+        }
+        if (Regex("^(read|show|what are)( me)?( all)?( my)? notes$").matches(t) || t == "my notes") {
+            val n = MemoryStore.all(svc).filter { it.category == "task" }.sortedByDescending { it.updated }.take(5)
+            return if (n.isEmpty()) "You have no notes yet." else "Your latest notes: " + n.joinToString(". ") { it.text }
+        }
+
+        // ---- AI usage
+        if (Regex("^(ai status|ai usage|my limits|check limits|api status|how are my keys|are my keys working)$").matches(t)) return Nim.status(svc)
+
+        // ---- read the screen aloud (no AI)
+        if (Regex("^(read|read out)( me)?( my| the| this)? (screen|page)( aloud| out loud| to me)?$").matches(t)) {
+            val r = svc.readScreen()
+            if (failed(r)) return "I can't read this screen. It may be protected."
+            val texts = Regex("\"([^\"]{2,})\"").findAll(r).map { it.groupValues[1] }.filter { !it.startsWith("(") }.toList()
+            return if (texts.isEmpty()) "I can't find any text here." else "Here is what I see: " + texts.take(14).joinToString(". ")
+        }
+
+        // ---- camera, navigation, whatsapp, youtube
+        if (Regex("^(open (the )?camera|take a (photo|picture|selfie)|camera)$").matches(t)) {
+            val r = tools.camera()
+            return if (failed(r)) "I couldn't open the camera." else "Camera is open."
+        }
+        val navM = Regex("^(navigate|take me|directions|drive|route)( me)? to (.+)$").find(t)
+        if (navM != null) {
+            val place = navM.groupValues[3].trim()
+            val r = tools.navigate(place)
+            return if (failed(r)) "I couldn't start navigation." else "Starting directions to $place."
+        }
+        val waM = Regex("^(whatsapp|send whatsapp to|message on whatsapp) (\\+?\\d[\\d ]{6,}) (.+)$").find(t)
+        if (waM != null) {
+            val r = tools.whatsapp(waM.groupValues[2], waM.groupValues[3])
+            return if (failed(r)) r.removePrefix("error: ") else "WhatsApp draft is ready. Press send when you are happy."
+        }
+        val ytM = Regex("^play (.+) on youtube$").find(t) ?: Regex("^(youtube|play (music|a song|the song|song)) (.+)$").find(t)
+        if (ytM != null) {
+            val q = ytM.groupValues.last().trim()
+            val r = tools.youtube(q)
+            return if (failed(r)) "I couldn't open YouTube." else "Searching YouTube for $q."
+        }
+
         // ---- time and battery
         if (Regex("^(what('s| is) )?(the )?(time|date|day)( is it)?( now| today| right now)?$").matches(t) ||
             t == "what time is it" || t == "what day is it" || t == "what's today's date"

@@ -25,6 +25,53 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) }
     )
     private val history = JSONArray()
+    private val chatHist = JSONArray()
+    private val chatCache = HashMap<String, Pair<Long, String>>()
+
+    private val actionWords = Regex(
+        "\\b(open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|" +
+            "whatsapp|email|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|" +
+            "post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|click)\\b"
+    )
+
+    private fun chatSystem(): String {
+        val n = Prefs.userName(svc)
+        val mem = MemoryStore.promptBlock(svc).take(900)
+        return "You are Orion, a warm, quick-witted personal assistant like JARVIS, speaking aloud on the user's phone. " +
+            "Answer in at most three short, natural spoken sentences. No markdown, lists or emojis. " +
+            "If the user wants something DONE on the phone (open an app, tap, send, search, look at the screen, play a game), reply with exactly the single word ACTION and nothing else. " +
+            "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() + ".\nThings you remember:\n" + mem
+    }
+
+    /** One small AI call for plain questions and chat. Returns null when the request needs the phone-control agent. */
+    private fun chatReply(command: String): String? {
+        val key = MacroStore.norm(command)
+        val hit = chatCache[key]
+        if (hit != null && System.currentTimeMillis() - hit.first < 600000L) return hit.second
+        val msgs = JSONArray().put(msg("system", chatSystem()))
+        val from = maxOf(0, chatHist.length() - 6)
+        for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
+        msgs.put(msg("user", command))
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        Thread {
+            try {
+                Thread.sleep(3500)
+            } catch (e: Exception) {
+            }
+            if (!done.get() && !stopped) ui.say("One second, thinking.")
+        }.start()
+        val raw = try {
+            nim.chat(msgs, false, 220, 0.6).trim()
+        } finally {
+            done.set(true)
+        }
+        if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
+        chatHist.put(msg("user", command))
+        chatHist.put(msg("assistant", raw))
+        while (chatHist.length() > 12) chatHist.remove(0)
+        if (command.length < 80) chatCache[key] = Pair(System.currentTimeMillis(), raw)
+        return raw
+    }
 
     @Volatile
     var stopped = false
@@ -153,8 +200,24 @@ Rules:
             return
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
+        // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
+        if (!actionWords.containsMatchIn(command.lowercase())) {
+            ui.phase("thinking")
+            val r = try {
+                chatReply(command)
+            } catch (e: Exception) {
+                if (stopped) return
+                ui.say("I could not reach the AI. ${e.message}")
+                return
+            }
+            if (r != null) {
+                history.put(msg("assistant", JSONObject().put("say", r).put("tool", "done").toString()))
+                ui.say(r)
+                return
+            }
+        }
         if (command.trim().split(" ").size > 2 && Prefs.voice(svc)) {
-            val acks = listOf("On it.", "One moment.", "Let me see.", "Right away.")
+            val acks = listOf("On it.", "One moment.", "Let me see.", "Right away.", "Sure thing.", "Working on it.", "Got it.")
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
         }
         var steps = 0

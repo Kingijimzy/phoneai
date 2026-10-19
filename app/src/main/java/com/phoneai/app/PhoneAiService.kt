@@ -436,8 +436,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             "Record screen" to "Start recording my screen.",
             "Stop recording" to "Stop the screen recording.",
             "Flashlight" to "Toggle the flashlight on.",
-            "FC Mobile" to "Open FC Mobile."
+            "FC Mobile" to "Open FC Mobile.",
+            "AI status" to "ai status",
+            "Read screen" to "read my screen"
         )
+        val liveChip = chip("Live call") { startLive() }
+        val llp = LinearLayout.LayoutParams(WRAP, WRAP)
+        llp.setMargins(0, 0, dp(6), 0)
+        chips.addView(liveChip, llp)
         for ((chipName, cmd) in quick) {
             val c = chip(chipName) { submit(cmd) }
             val clp = LinearLayout.LayoutParams(WRAP, WRAP)
@@ -652,6 +658,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun submit(text: String) {
         val t = text.trim()
         if (t.isEmpty() || running) return
+        if (Regex("^(goodbye|bye|bye bye|end call|end the call|hang up|stop listening|that's all|that is all)[.!]?$").matches(t.lowercase())) {
+            handsActive = false
+            transcript.add(Pair("me", t))
+            transcript.add(Pair("ai", "Talk soon."))
+            voice.stopListening()
+            listening = false
+            if (Prefs.voice(this)) voice.speak("Talk soon.")
+            endHands()
+            return
+        }
         wakeGen++
         transcript.add(Pair("me", t))
         voice.stopSpeaking()
@@ -678,7 +694,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         refreshMode()
         val last = transcript.lastOrNull { it.first == "ai" }?.second ?: "Done."
         showStrip(last)
-        if (handsActive && Prefs.hands(this)) {
+        if (handsActive) {
             voice.whenIdle { listenNow() }
         } else {
             handsActive = false
@@ -688,6 +704,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 if (!running && !listening) hideStrip()
             }, 7000)
         }
+    }
+
+    /** Live call: Orion listens, answers, listens again, until you say goodbye or stay quiet. */
+    private fun startLive() {
+        if (running) return
+        handsActive = true
+        emptyListens = 0
+        closePanel(false)
+        if (Prefs.voice(this)) voice.speak("I'm listening.")
+        voice.whenIdle { listenNow() }
     }
 
     private fun listenNow() {

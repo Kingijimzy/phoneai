@@ -138,6 +138,30 @@ class Tools(private val svc: PhoneAiService) {
         return if (r == "ok") "opened $page settings" else r
     }
 
+    fun camera(): String {
+        val r = launch(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE))
+        return if (r == "ok") "camera opened" else r
+    }
+
+    fun navigate(place: String): String {
+        val r = launch(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(place))))
+        if (r == "ok") return "navigation to $place started"
+        val r2 = launch(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(place))))
+        return if (r2 == "ok") "map opened for $place" else r2
+    }
+
+    fun whatsapp(number: String, text: String): String {
+        val n = number.filter { it.isDigit() }
+        if (n.length < 7) return "error: need a full phone number with country code"
+        val r = launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$n?text=" + Uri.encode(text))))
+        return if (r == "ok") "WhatsApp draft ready (not sent)" else r
+    }
+
+    fun youtube(query: String): String {
+        val r = launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query))))
+        return if (r == "ok") "opened YouTube results for $query" else r
+    }
+
     fun dial(number: String): String {
         val n = number.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
         if (n.isEmpty()) return "error: no phone number"

@@ -18,6 +18,45 @@ class Nim(private val ctx: Context) {
 
         /** provider id -> time of the last request (used to space requests out) */
         private val lastCall = ConcurrentHashMap<String, Long>()
+
+        /** provider id -> times of requests in the last minute (so we slow down BEFORE a limit is hit) */
+        private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
+
+        fun budget(id: String): Int = when (id) {
+            "gemini" -> 9
+            "groq", "cerebras", "mistral" -> 24
+            "openrouter" -> 14
+            "local" -> 1000
+            else -> 18
+        }
+
+        fun usedLastMinute(id: String): Int {
+            val q = hits[id] ?: return 0
+            val cut = System.currentTimeMillis() - 60000L
+            while (true) {
+                val h = q.peekFirst() ?: break
+                if (h < cut) q.pollFirst() else break
+            }
+            return q.size
+        }
+
+        private fun noteHit(id: String) {
+            hits.getOrPut(id) { java.util.concurrent.ConcurrentLinkedDeque() }.addLast(System.currentTimeMillis())
+        }
+
+        /** Plain-words summary of every saved key: requests used this minute and any cool-down. */
+        fun status(c: android.content.Context): String {
+            val sb = StringBuilder()
+            val now = System.currentTimeMillis()
+            for (p in Providers.all) {
+                if (!Prefs.hasKey(c, p.id)) continue
+                val cd = ((cooldown[p.id] ?: 0L) - now) / 1000
+                sb.append(p.label).append(": ").append(usedLastMinute(p.id)).append(" of ").append(budget(p.id)).append(" this minute")
+                if (cd > 0) sb.append(", resting ").append(cd).append(" seconds")
+                sb.append(". ")
+            }
+            return if (sb.isEmpty()) "No AI keys saved yet." else sb.toString().trim()
+        }
     }
 
     private val bad = listOf(
@@ -320,12 +359,13 @@ class Nim(private val ctx: Context) {
             round++
             if (cancelled) throw RuntimeException("Stopped.")
             val now = System.currentTimeMillis()
-            val ready = order.filter { (cooldown[it.id] ?: 0L) <= now }
+            val ready = order.filter { (cooldown[it.id] ?: 0L) <= now && usedLastMinute(it.id) < budget(it.id) }
             var allRateLimited = true
             for ((idx, p) in ready.withIndex()) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 try {
                     if (idx > 0 || p !== order[0]) onStatus?.invoke("Using ${p.label}...")
+                    noteHit(p.id)
                     return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
                 } catch (e: AiException) {
                     errors[p.id] = e.message ?: p.label

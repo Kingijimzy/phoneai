@@ -32,7 +32,7 @@ object Providers {
         ),
         Provider(
             "gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai",
-            "gemini-flash-latest", "gemini-flash-latest", "AIza...",
+            "gemini-flash-lite-latest", "gemini-flash-latest", "AIza...",
             "FREE. Best for reading the screen. aistudio.google.com"
         ),
         Provider(

@@ -108,13 +108,27 @@ class Voice(private val ctx: Context) {
             return
         }
         val engine = tts ?: return
-        engine.setSpeechRate(Prefs.rate(ctx).coerceIn(0.5f, 2.0f))
-        engine.setPitch(if (Prefs.deepVoice(ctx)) 0.8f else 1.0f)
-        val id = "u" + System.nanoTime()
-        if (onDone != null) callbacks[id] = onDone
-        if (pending.getAndIncrement() == 0) main.post { onSpeaking?.invoke(true) }
-        val res = engine.speak(t, TextToSpeech.QUEUE_ADD, null, id)
-        if (res != TextToSpeech.SUCCESS) finished(id)
+        // Speak sentence by sentence, with a little rise for questions and energy for excitement.
+        val parts = t.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+        val baseRate = Prefs.rate(ctx).coerceIn(0.5f, 2.0f)
+        val basePitch = if (Prefs.deepVoice(ctx)) 0.8f else 1.0f
+        for ((idx, part) in parts.withIndex()) {
+            var rate = baseRate
+            var pitch = basePitch
+            if (part.endsWith("?")) pitch += 0.1f
+            if (part.endsWith("!")) {
+                rate *= 1.06f
+                pitch += 0.05f
+            }
+            if (idx > 0 && idx % 2 == 1) pitch -= 0.03f
+            engine.setSpeechRate(rate.coerceIn(0.5f, 2.0f))
+            engine.setPitch(pitch.coerceIn(0.5f, 2.0f))
+            val id = "u" + System.nanoTime()
+            if (onDone != null && idx == parts.size - 1) callbacks[id] = onDone
+            if (pending.getAndIncrement() == 0) main.post { onSpeaking?.invoke(true) }
+            val res = engine.speak(part, TextToSpeech.QUEUE_ADD, null, id)
+            if (res != TextToSpeech.SUCCESS) finished(id)
+        }
     }
 
     fun stopSpeaking() {
