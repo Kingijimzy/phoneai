@@ -123,7 +123,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         voice.onWord = {
             for (o in orbs()) o.pulseMouth()
-            CinematicAvatarActivity.pulseMouth()
         }
         voice.onLevel = { l ->
             for (o in orbs()) o.level = l
@@ -334,7 +333,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
                 }, m
             )
-            CinematicAvatarActivity.pushState(m.name.lowercase())
             micBtnRef?.text = if (listening) "Stop" else "Mic"
             stopBtnRef?.visibility = if (running) View.VISIBLE else View.GONE
             panelStatus?.text = when (m) {
@@ -373,30 +371,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         bubble = null
-    }
-
-    /** Restores the lightweight floating entry point when the 3D stage closes. */
-    fun onCinematicClosed() {
-        main.post {
-            if (panel == null && !running) {
-                showBubble()
-                startWake()
-            }
-        }
-    }
-
-    private fun openCinematicAvatar() {
-        if (listening) {
-            voice.stopListening()
-            listening = false
-        }
-        closePanel(false)
-        try {
-            startActivity(Intent(this, CinematicAvatarActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Exception) {
-            Toast.makeText(this, "Could not open Orion's 3D stage.", Toast.LENGTH_SHORT).show()
-            showBubble()
-        }
     }
 
     private fun quickListen() {
