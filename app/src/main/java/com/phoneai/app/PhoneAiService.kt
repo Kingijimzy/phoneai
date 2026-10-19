@@ -407,14 +407,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         lp.setMargins(0, dp(5), 0, dp(5))
         when (kind) {
             "me" -> {
-                t.setTextColor(Theme.ON_ACCENT)
-                t.background = rounded(Theme.CYAN, dp(16).toFloat())
+                t.setTextColor(Theme.TEXT)
+                t.background = rounded(0xFF202838.toInt(), dp(18).toFloat(), 0xFF344056.toInt())
                 lp.gravity = Gravity.END
+                lp.setMargins(dp(36), dp(7), 0, dp(7))
             }
             "ai" -> {
+                // Grok-inspired reading flow: assistant answers sit directly on the canvas,
+                // while only user turns are enclosed in a distinct bubble.
                 t.setTextColor(Theme.TEXT)
-                t.background = rounded(Theme.PANEL2, dp(16).toFloat(), Theme.LINE)
+                t.background = rounded(Theme.BG, dp(8).toFloat())
                 lp.gravity = Gravity.START
+                lp.setMargins(0, dp(8), dp(20), dp(8))
             }
             else -> {
                 t.setTextColor(Theme.MUTED)
@@ -422,7 +426,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         if (kind != "note") {
-            t.setPadding(dp(12), dp(8), dp(12), dp(8))
+            if (kind == "me") t.setPadding(dp(13), dp(10), dp(13), dp(10))
+            else t.setPadding(dp(3), dp(7), dp(3), dp(7))
             t.contentDescription = if (kind == "me") "Your message. Long press to copy." else "Orion reply. Long press to copy."
             t.setOnLongClickListener {
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -490,11 +495,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.orientation = LinearLayout.VERTICAL
         root.background = rounded(Theme.BG, dp(26).toFloat(), Theme.LINE)
         root.setPadding(dp(12), dp(10), dp(12), dp(12))
+        root.elevation = dp(18).toFloat()
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        head.background = rounded(Theme.PANEL, dp(20).toFloat(), Theme.LINE)
+        head.background = rounded(0xFF111722.toInt(), dp(20).toFloat(), Theme.LINE)
         head.setPadding(dp(8), dp(4), dp(6), dp(4))
         val orb = AvatarView(this)
         orb.style = Prefs.avatar(this)
@@ -511,12 +517,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label("ORION  ·  PERSONAL AI", 15f, Theme.TEXT)
+        val title = label("ORION", 16f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("ORION CORE  ·  READY TO HELP", 12f, Theme.CYAN)
+        val st = label("PERSONAL AI  ·  READY TO HELP", 11f, Theme.CYAN)
         titleCol.addView(st)
-        val tagline = label("Think with you. Build with you. Act with permission.", 10f, Theme.MUTED)
+        val tagline = label("Think with you. Act with permission.", 10f, Theme.MUTED)
         titleCol.addView(tagline)
         head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
         val stop = label("■ Stop", 12f, Theme.WARN)
@@ -593,8 +599,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         input.hint = "Ask anything or tell Orion what to do…"
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
-        input.background = rounded(Theme.PANEL2, dp(18).toFloat(), Theme.LINE)
-        input.setPadding(dp(14), dp(10), dp(14), dp(10))
+        input.background = rounded(0xFF171D29.toInt(), dp(22).toFloat(), 0xFF344056.toInt())
+        input.setPadding(dp(15), dp(12), dp(15), dp(12))
+        input.minHeight = dp(48)
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         input.imeOptions = EditorInfo.IME_ACTION_SEND
         input.setOnEditorActionListener { _, _, _ ->
