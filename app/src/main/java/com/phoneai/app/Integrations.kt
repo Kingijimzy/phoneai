@@ -20,6 +20,7 @@ object TelegramBridge {
     private const val TOKEN = "token_ciphertext"
     private const val IV = "token_iv"
     private const val CHAT = "target_chat"
+    private const val UPDATE_OFFSET = "last_update_offset"
     private const val KEY_ALIAS = "com.phoneai.telegram.bot-token.v1"
     private val tokenPattern = Regex("^[0-9]{5,}:[A-Za-z0-9_-]{20,}$")
     private val chatPattern = Regex("^(?:-?[0-9]{1,25}|@[A-Za-z0-9_]{5,32})$")
@@ -67,6 +68,33 @@ object TelegramBridge {
         }
     }
 
+    /** Reads pending messages from the saved numeric chat only; incoming text is never executed. */
+    fun checkUpdates(context: Context): String {
+        val token = decryptToken(context) ?: return "error: Telegram is not configured."
+        val target = chatId(context)
+        if (!target.matches(Regex("^-?[0-9]{1,25}$"))) return "Incoming checks require a numeric saved chat ID, not a @channel username."
+        return try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val offset = prefs.getLong(UPDATE_OFFSET, 0L)
+            val result = request(token, "getUpdates", mapOf("offset" to offset.toString(), "limit" to "10", "timeout" to "0"))
+            val updates = result.optJSONArray("result") ?: return "Telegram returned no update list."
+            var newest = offset
+            val messages = mutableListOf<String>()
+            for (i in 0 until updates.length()) {
+                val update = updates.optJSONObject(i) ?: continue
+                val updateId = update.optLong("update_id", -1L)
+                if (updateId >= newest) newest = updateId + 1
+                val msg = update.optJSONObject("message") ?: update.optJSONObject("edited_message") ?: continue
+                val chat = msg.optJSONObject("chat") ?: continue
+                if (chat.optString("id") != target) continue
+                val from = msg.optJSONObject("from")?.optString("username", "user") ?: "user"
+                messages.add("@" + from + ": " + msg.optString("text", "[non-text message]").take(400))
+            }
+            if (newest > offset) prefs.edit().putLong(UPDATE_OFFSET, newest).commit()
+            if (messages.isEmpty()) "No new messages from the saved chat." else
+                "New Telegram messages (read-only; incoming commands are not executed):\\n" + messages.take(10).joinToString("\\n")
+        } catch (e: Exception) { "Telegram inbox check failed (" + e.javaClass.simpleName + ")." }
+    }
     /** Sends only to the saved target. Caller must obtain explicit user approval before calling. */
     fun send(context: Context, message: String): String {
         val token = decryptToken(context) ?: return "error: Telegram is not configured."
@@ -84,7 +112,7 @@ object TelegramBridge {
     }
 
     private fun request(token: String, method: String, params: Map<String, String>): JSONObject {
-        if (method !in setOf("getMe", "sendMessage")) throw IllegalArgumentException("Unsupported Telegram method.")
+        if (method !in setOf("getMe", "sendMessage", "getUpdates")) throw IllegalArgumentException("Unsupported Telegram method.")
         val conn = (URL("https://api.telegram.org/bot$token/$method").openConnection() as HttpURLConnection)
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
