@@ -344,22 +344,31 @@ class Nim(private val ctx: Context) {
             throw IllegalStateException("No AI key saved. Open Orion AI and add a key (Groq or Gemini are free).")
         }
         if (order.size > 1) {
-            // Spread requests over every service that has a key: the least recently used (and fastest) goes first.
+            // Keep the user's selected provider first; sort only backups by recent use and speed.
+            val primary = order.first()
             val rank = listOf(
                 "groq", "cerebras", "gemini", "mistral", "github", "sambanova", "openrouter",
                 "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local"
             )
             val nowMs = System.currentTimeMillis()
-            order.sortBy { (lastCall[it.id] ?: 0L).coerceAtLeast(nowMs - 30000L) + rank.indexOf(it.id).coerceAtLeast(0) * 1500L }
+            val backups = order.drop(1).sortedBy {
+                (lastCall[it.id] ?: 0L).coerceAtLeast(nowMs - 30000L) + rank.indexOf(it.id).coerceAtLeast(0) * 1500L
+            }
+            order.clear()
+            order.add(primary)
+            order.addAll(backups)
         }
         val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
+        val quotaSaver = Prefs.quotaSaver(ctx)
+        val maxRounds = if (quotaSaver) 1 else 4
+        val providerLimit = if (quotaSaver) minOf(order.size, 2) else order.size
         var round = 0
-        while (round < 4) {
+        while (round < maxRounds) {
             round++
             if (cancelled) throw RuntimeException("Stopped.")
             val now = System.currentTimeMillis()
-            val ready = order.filter { (cooldown[it.id] ?: 0L) <= now && usedLastMinute(it.id) < budget(it.id) }
+            val ready = order.take(providerLimit).filter { (cooldown[it.id] ?: 0L) <= now && usedLastMinute(it.id) < budget(it.id) }
             var allRateLimited = true
             for ((idx, p) in ready.withIndex()) {
                 if (cancelled) throw RuntimeException("Stopped.")
@@ -373,7 +382,7 @@ class Nim(private val ctx: Context) {
                 }
             }
             // Nothing worked. If everything was only busy, wait for the first one to come back.
-            if (!allRateLimited || round >= 4 || System.currentTimeMillis() - start > 170000) break
+            if (!allRateLimited || round >= maxRounds || System.currentTimeMillis() - start > 170000) break
             val soonest = order.minOf { cooldown[it.id] ?: 0L }
             val wait = (soonest - System.currentTimeMillis()).coerceIn(2000L, 40000L)
             var left = wait
@@ -399,7 +408,11 @@ class Nim(private val ctx: Context) {
         var lastNote = ""
         var attempts = 0
         var rateRetries = 0
-        val maxAttempts = if (hasBackup) 4 else 12
+        val maxAttempts = if (Prefs.quotaSaver(ctx)) {
+            if (hasBackup) 2 else 4
+        } else {
+            if (hasBackup) 4 else 12
+        }
         val start = System.currentTimeMillis()
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < 120000) {
             if (cancelled) throw RuntimeException("Stopped.")
