@@ -36,9 +36,11 @@ object McpConnector {
         if (clean.length > 500 || rawToken.length > 2000) return "MCP settings are too long."
         return try {
             val prefs = c.getSharedPreferences(PREFS, 0)
+            val previousEndpoint = prefs.getString(URL_KEY, "") ?: ""
             val edit = prefs.edit().putString(URL_KEY, clean)
             if (rawToken.isBlank()) {
-                edit.remove(TOKEN_KEY).remove(IV_KEY)
+                // Preserve an existing token only when the endpoint is unchanged.
+                if (clean != previousEndpoint) edit.remove(TOKEN_KEY).remove(IV_KEY)
             } else {
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                 cipher.init(Cipher.ENCRYPT_MODE, secretKey())
