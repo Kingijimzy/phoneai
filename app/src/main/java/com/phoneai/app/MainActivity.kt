@@ -820,6 +820,7 @@ class MainActivity : Activity() {
         wrap.setPadding(dp(20), dp(8), dp(20), 0)
         val endpoint = EditText(this)
         endpoint.hint = "MCP endpoint URL (HTTPS)"
+        endpoint.setText(McpConnector.endpoint(this))
         endpoint.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         endpoint.setSingleLine(true)
         val bearer = EditText(this)
