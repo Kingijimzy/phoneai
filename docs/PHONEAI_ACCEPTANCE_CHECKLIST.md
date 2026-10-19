@@ -22,7 +22,10 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] Add long-press copy for user and AI message bubbles.
 - [x] Make the animated character tappable to start voice input.
 - [x] Add conversation starter chips for research, explanations, planning, summaries, writing, and deeper analysis.
+- [x] Show a live animated thinking indicator in the chat while Orion generates a response.
+- [x] Add an in-chat Stop control while a request is running; clean up the indicator when a run ends.
 - [x] Refresh Orion's launcher copy and dark visual palette.
+- [ ] Confirm the thinking indicator appears/disappears correctly and Stop cancels a slow request without leaving stale UI on the physical Android device.
 - [ ] Confirm chat bubbles, IME/send behavior, copy action, and tap-to-talk on the physical Android device.
 - [ ] Verify latest branch head compiles; an in-progress Actions run alone is not a pass.
 
