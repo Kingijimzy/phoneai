@@ -16,7 +16,7 @@ data class PhoneFileInfo(
 )
 
 data class PhoneFileResult<T>(val value: T? = null, val error: String? = null) {
-    val isSuccess: Boolean get() = value != null
+    val isSuccess: Boolean get() = value != null && error == null
 }
 
 /**
