@@ -40,6 +40,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".BrowserActivity"
+            android:exported="false"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
