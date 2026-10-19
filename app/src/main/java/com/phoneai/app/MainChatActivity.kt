@@ -71,8 +71,14 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Start a new conversation"
             setPadding(dp(10), dp(6), dp(8), dp(6))
             setOnClickListener {
-                messages.removeAllViews()
-                addMessage("ai", "New conversation. What are we working on?")
+                if (lastMode == OrbView.Mode.THINKING || lastMode == OrbView.Mode.ACTING) {
+                    Toast.makeText(this@MainChatActivity, "Let Orion finish or stop the current task first.", Toast.LENGTH_SHORT).show()
+                } else {
+                    messages.removeAllViews()
+                    val service = PhoneAiService.instance
+                    if (service != null) service.resetMainChat()
+                    else addMessage("ai", "New conversation. What are we working on?")
+                }
             }
         }
         header.addView(new)
