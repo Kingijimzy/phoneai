@@ -640,7 +640,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.addView(row)
 
         val lp = WindowManager.LayoutParams(
-            size.first - dp(16), (size.second * 0.86f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), (size.second * 0.91f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
