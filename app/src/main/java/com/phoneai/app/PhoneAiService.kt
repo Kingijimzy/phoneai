@@ -399,11 +399,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.setPadding(dp(8), dp(4), dp(6), dp(4))
         val orb = AvatarView(this)
         orb.style = Prefs.avatar(this)
-        head.addView(orb, LinearLayout.LayoutParams(dp(102), dp(102)))
+        head.addView(orb, LinearLayout.LayoutParams(dp(82), dp(82)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label("ORION", 17f, Theme.TEXT)
+        val title = label("ORION  ·  PERSONAL AI", 15f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
         val st = label("PERSONAL AI  ·  Ready", 12f, Theme.CYAN)
@@ -511,7 +511,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.addView(row)
 
         val lp = WindowManager.LayoutParams(
-            size.first - dp(24), (size.second * 0.74f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), (size.second * 0.86f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
