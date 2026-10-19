@@ -208,5 +208,5 @@ class CinematicAvatarActivity : Activity() {
         super.onDestroy()
         PhoneAiService.instance?.onCinematicClosed()
     }
-
+}
 
