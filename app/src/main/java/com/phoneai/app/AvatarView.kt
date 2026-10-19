@@ -18,7 +18,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Orion's animated character. Two looks: 0 = Orion (robot head), 1 = Nova (friendly face).
+ * Orion's animated character. Looks: 0 = Orion, 1 = Nova, 2 = Atlas, 3 = Lumen.
  * It blinks, looks around, breathes, listens (ears glow with your voice), thinks (eyes drift up,
  * dots float), speaks (mouth moves with every word) and acts (eyes scan, ring orbits).
  */
