@@ -16,6 +16,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.util.Base64
 import android.view.Display
@@ -28,12 +29,15 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import java.io.ByteArrayOutputStream
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -895,11 +899,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (nodes.size < 3) {
             sb.append("(very few elements: this may be a game or image screen. Use look or play.)\n")
         }
-        return sb.toString().take(6000)
+        return sb.toString().take(2800)
     }
 
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {
-        if (nodes.size >= 80) return
+        if (nodes.size >= 45) return
         val text = n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString() ?: ""
         val lbl = if (n.isPassword) "(password field)" else text.trim()
         if (n.isVisibleToUser && (lbl.isNotEmpty() || n.isClickable || n.isEditable)) {
@@ -914,13 +918,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     n.isCheckable -> if (n.isChecked) "checked" else "unchecked"
                     else -> "text"
                 }
-                sb.append("[$id] $kind \"${lbl.take(60)}\" @${r.centerX()},${r.centerY()}\n")
+                sb.append("[$id] $kind \"${lbl.take(40)}\" @${r.centerX()},${r.centerY()}\n")
             }
         }
         for (i in 0 until n.childCount) {
             val c = n.getChild(i)
             if (c != null) walk(c, sb)
         }
+    }
+
+    /** Label and centre of an element from the latest read_screen (used to save routines). */
+    fun nodeInfo(id: Int): Triple<String, Int, Int>? {
+        val n = nodes.getOrNull(id) ?: return null
+        if (n.isPassword) return null
+        val r = Rect()
+        n.getBoundsInScreen(r)
+        val label = (n.text?.toString() ?: n.contentDescription?.toString() ?: "").trim().take(40)
+        return Triple(label, r.centerX(), r.centerY())
     }
 
     fun clickId(id: Int): String {
@@ -1039,6 +1053,291 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         Thread.sleep(500)
         return if (ok) "ok" else "error: that key did not work"
+    }
+
+    // ---------------------------------------------------------------- fast, no-AI: teach mode + screen checks
+
+    private val cbExec = Executors.newSingleThreadExecutor()
+    private val sigExec = Executors.newCachedThreadPool()
+    private val teachExec = Executors.newSingleThreadExecutor()
+
+    /** Full-size screenshot with no AI and no resizing. Null if the screen is protected. */
+    private fun grabBitmap(): Bitmap? {
+        val holder = arrayOfNulls<Bitmap>(1)
+        val latch = CountDownLatch(1)
+        try {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                cbExec,
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                        try {
+                            val hw = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+                            holder[0] = hw?.copy(Bitmap.Config.ARGB_8888, false)
+                            screenshot.hardwareBuffer.close()
+                        } catch (e: Exception) {
+                        }
+                        latch.countDown()
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        latch.countDown()
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            return null
+        }
+        latch.await(3, TimeUnit.SECONDS)
+        return holder[0]
+    }
+
+    /** A tiny "fingerprint" of the area around a point: 6x6 average colours (108 numbers). */
+    private fun signature(bmp: Bitmap, cx: Int, cy: Int): IntArray {
+        val r = 60
+        val x0 = (cx - r).coerceIn(0, bmp.width - 2)
+        val y0 = (cy - r).coerceIn(0, bmp.height - 2)
+        val x1 = (cx + r).coerceIn(x0 + 1, bmp.width - 1)
+        val y1 = (cy + r).coerceIn(y0 + 1, bmp.height - 1)
+        val out = IntArray(6 * 6 * 3)
+        for (gy in 0 until 6) {
+            for (gx in 0 until 6) {
+                var sr = 0
+                var sg = 0
+                var sb = 0
+                var n = 0
+                for (j in 0 until 4) {
+                    for (i in 0 until 4) {
+                        val px = x0 + ((gx * 4 + i) * (x1 - x0)) / 24
+                        val py = y0 + ((gy * 4 + j) * (y1 - y0)) / 24
+                        val c = bmp.getPixel(px.coerceIn(0, bmp.width - 1), py.coerceIn(0, bmp.height - 1))
+                        sr += (c shr 16) and 255
+                        sg += (c shr 8) and 255
+                        sb += c and 255
+                        n++
+                    }
+                }
+                val k = (gy * 6 + gx) * 3
+                out[k] = sr / n
+                out[k + 1] = sg / n
+                out[k + 2] = sb / n
+            }
+        }
+        return out
+    }
+
+    /** Average colour difference (0 = identical, 255 = opposite). */
+    private fun sigDistance(a: IntArray, b: IntArray): Double {
+        if (a.size != b.size) return 255.0
+        var sum = 0L
+        for (i in a.indices) sum += abs(a[i] - b[i])
+        return sum.toDouble() / a.size
+    }
+
+    /** Waits (no AI) until the screen around (x,y) looks like the taught fingerprint. Returns ok, timeout, stopped or unavailable. */
+    fun waitForSig(x: Int, y: Int, sig: IntArray, timeoutMs: Long, stopped: () -> Boolean): String {
+        val end = System.currentTimeMillis() + timeoutMs
+        var fails = 0
+        while (System.currentTimeMillis() < end) {
+            if (stopped()) return "stopped"
+            val bmp = grabBitmap()
+            if (bmp == null) {
+                fails++
+                if (fails >= 3) return "unavailable"
+                Thread.sleep(300)
+                continue
+            }
+            val d = sigDistance(signature(bmp, x, y), sig)
+            bmp.recycle()
+            if (d <= 32.0) return "ok"
+            Thread.sleep(120)
+        }
+        return "timeout"
+    }
+
+    private var teachView: FrameLayout? = null
+    private var teachLp: WindowManager.LayoutParams? = null
+    private var teachName = ""
+    private val teachSteps = JSONArray()
+    private var teachLastEnd = 0L
+    private var tDownX = 0f
+    private var tDownY = 0f
+    private var tDownUp = 0L
+    private var tDownWall = 0L
+    private var tSig: java.util.concurrent.Future<IntArray?>? = null
+
+    fun isTeaching(): Boolean = teachView != null
+
+    /** Starts recording the user's own taps and swipes. */
+    fun startTeach(name: String): String {
+        if (teachView != null) return "error: already teaching"
+        teachName = name
+        synchronized(teachSteps) {
+            while (teachSteps.length() > 0) teachSteps.remove(0)
+        }
+        teachLastEnd = System.currentTimeMillis()
+        main.post {
+            closePanel(true)
+            buildTeachOverlay()
+        }
+        return "ok"
+    }
+
+    private fun buildTeachOverlay() {
+        val root = FrameLayout(this)
+        root.setBackgroundColor(0x12FF5C7A)
+        root.setOnTouchListener { _, e ->
+            onTeachTouch(e)
+            true
+        }
+        val done = TextView(this)
+        done.text = "REC  tap here when finished"
+        done.setTextColor(Theme.TEXT)
+        done.textSize = 14f
+        done.typeface = Typeface.DEFAULT_BOLD
+        done.setPadding(dp(18), dp(10), dp(18), dp(10))
+        done.background = rounded(0xE6C0243F.toInt(), dp(22).toFloat())
+        done.setOnClickListener { stopTeach() }
+        val dlp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        )
+        dlp.topMargin = dp(40)
+        root.addView(done, dlp)
+        val lp = WindowManager.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            OVERLAY,
+            NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+        try {
+            wm.addView(root, lp)
+            teachView = root
+            teachLp = lp
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not start teach mode", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun onTeachTouch(e: MotionEvent) {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                tDownX = e.rawX
+                tDownY = e.rawY
+                tDownUp = SystemClock.uptimeMillis()
+                tDownWall = System.currentTimeMillis()
+                val x = e.rawX.toInt()
+                val y = e.rawY.toInt()
+                tSig = sigExec.submit(java.util.concurrent.Callable<IntArray?> {
+                    val b = grabBitmap()
+                    if (b == null) null else signature(b, x, y).also { b.recycle() }
+                })
+            }
+            MotionEvent.ACTION_UP -> {
+                val x1 = tDownX
+                val y1 = tDownY
+                val x2 = e.rawX
+                val y2 = e.rawY
+                val dur = SystemClock.uptimeMillis() - tDownUp
+                val wall = tDownWall
+                val sigF = tSig
+                teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF) }
+            }
+        }
+    }
+
+    private fun setTeachTouchable(touchable: Boolean) {
+        onMainWait {
+            val v = teachView
+            val lp = teachLp
+            if (v != null && lp != null) {
+                lp.flags = if (touchable) {
+                    lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                } else {
+                    lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                }
+                try {
+                    wm.updateViewLayout(v, lp)
+                } catch (e: Exception) {
+                }
+            }
+        }
+    }
+
+    /** Passes the user's touch through to the game, and writes it down as a step. */
+    private fun teachReplay(
+        x1: Float, y1: Float, x2: Float, y2: Float, dur: Long, wall: Long,
+        sigF: java.util.concurrent.Future<IntArray?>?
+    ) {
+        val sig = try {
+            sigF?.get(2, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            null
+        }
+        val dist = Math.hypot((x2 - x1).toDouble(), (y2 - y1).toDouble())
+        val step = JSONObject()
+        val path = Path()
+        path.moveTo(x1, y1)
+        val ms: Long
+        if (dist < dp(14)) {
+            if (dur >= 600) {
+                ms = 900L
+                step.put("tool", "long_press").put("args", JSONObject().put("x", x1.toInt()).put("y", y1.toInt()))
+            } else {
+                ms = 60L
+                step.put("tool", "tap").put("args", JSONObject().put("x", x1.toInt()).put("y", y1.toInt()))
+            }
+        } else {
+            path.lineTo(x2, y2)
+            ms = dur.coerceIn(80L, 2000L)
+            step.put(
+                "tool", "swipe"
+            ).put(
+                "args",
+                JSONObject().put("x1", x1.toInt()).put("y1", y1.toInt()).put("x2", x2.toInt()).put("y2", y2.toInt()).put("ms", ms)
+            )
+        }
+        setTeachTouchable(false)
+        val r = try {
+            gesture(path, ms)
+        } catch (e: Exception) {
+            "error"
+        }
+        setTeachTouchable(true)
+        if (r == "ok") {
+            step.put("gap", (wall - teachLastEnd).coerceIn(0L, 30000L))
+            if (sig != null) {
+                val arr = JSONArray()
+                for (v in sig) arr.put(v)
+                step.put("sig", arr).put("sx", x1.toInt()).put("sy", y1.toInt())
+            }
+            synchronized(teachSteps) { teachSteps.put(step) }
+        }
+        teachLastEnd = System.currentTimeMillis()
+    }
+
+    private fun stopTeach() {
+        val v = teachView ?: return
+        teachView = null
+        teachLp = null
+        try {
+            wm.removeView(v)
+        } catch (e: Exception) {
+        }
+        teachExec.execute {
+            val copy = JSONArray()
+            synchronized(teachSteps) {
+                for (i in 0 until teachSteps.length()) copy.put(teachSteps.get(i))
+            }
+            val ok = copy.length() > 0 && MacroStore.save(this, teachName, copy)
+            main.post {
+                val msg = if (ok) "Saved \"$teachName\" (${copy.length()} steps). Say: run $teachName" else "Nothing was recorded."
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                showPanel()
+            }
+        }
     }
 
     // ---------------------------------------------------------------- tools: screenshot

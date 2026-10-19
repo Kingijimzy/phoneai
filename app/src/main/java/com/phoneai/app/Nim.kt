@@ -292,7 +292,7 @@ class Nim(private val ctx: Context) {
     }
 
     /** Asks the best chat or vision service; on failure, falls through to the others that have keys. */
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 600, temperature: Double = 0.2): String {
+    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2): String {
         val first = Prefs.provider(ctx, vision)
         val order = ArrayList<Provider>()
         if (Prefs.hasKey(ctx, first.id)) order.add(first)
@@ -303,6 +303,15 @@ class Nim(private val ctx: Context) {
         }
         if (order.isEmpty()) {
             throw IllegalStateException("No AI key saved. Open Orion AI and add a key (Groq or Gemini are free).")
+        }
+        if (order.size > 1) {
+            // Spread requests over every service that has a key: the least recently used (and fastest) goes first.
+            val rank = listOf(
+                "groq", "cerebras", "gemini", "mistral", "github", "sambanova", "openrouter",
+                "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local"
+            )
+            val nowMs = System.currentTimeMillis()
+            order.sortBy { (lastCall[it.id] ?: 0L).coerceAtLeast(nowMs - 30000L) + rank.indexOf(it.id).coerceAtLeast(0) * 1500L }
         }
         val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
@@ -397,7 +406,7 @@ class Nim(private val ctx: Context) {
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
-                val canWait = (!hasBackup && rateRetries < 2 && wait <= 30) || (hasBackup && rateRetries < 1 && wait <= 10)
+                val canWait = !hasBackup && rateRetries < 2 && wait <= 30
                 if (canWait) {
                     rateRetries++
                     onStatus?.invoke("${p.label} is busy. Waiting ${wait}s...")
@@ -407,7 +416,7 @@ class Nim(private val ctx: Context) {
                     queue.add(0, model)
                     continue
                 }
-                cooldown[p.id] = System.currentTimeMillis() + maxOf(wait, 30) * 1000L
+                cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
                 throw AiException("${p.label}: free limit reached (429).", true)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")

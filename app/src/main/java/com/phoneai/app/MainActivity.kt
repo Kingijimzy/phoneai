@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var nameBtn: Button
     private lateinit var memBtn: Button
     private lateinit var avatarBtn: Button
+    private lateinit var routBtn: Button
     private lateinit var topAvatar: AvatarView
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -155,8 +156,7 @@ class MainActivity : Activity() {
         // ---- 2. AI services
         val s2 = card(
             col, "2. AI services",
-            "13 online services plus a free local AI. Best free setup: Groq or Cerebras for fast chat, Gemini for seeing the screen. " +
-                "Add several keys and Orion switches automatically when one hits its limit. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
+            "13 online services plus a free local AI. Add 3 or more free keys (Groq, Cerebras, Mistral, Gemini, OpenRouter): Orion spreads requests across all of them so none runs out, and switches instantly when one is busy. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
         )
         add(s2, button("Get a free Gemini key (opens website)", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
@@ -212,6 +212,17 @@ class MainActivity : Activity() {
         add(s4, nameBtn, 10)
         memBtn = button("", true) { memoryDialog() }
         add(s4, memBtn, 8)
+        add(
+            s4,
+            text(
+                "Routines: after Orion finishes a task, say \"save this as a routine called morning check\". " +
+                    "Later say \"run morning check\" and it repeats the steps with NO AI, so no limits and no waiting.",
+                12f, Theme.MUTED
+            ),
+            12
+        )
+        routBtn = button("", false) { routinesDialog() }
+        add(s4, routBtn, 8)
 
         // ---- 5. recording
         val s5 = card(
@@ -268,6 +279,7 @@ class MainActivity : Activity() {
         val n = Prefs.userName(this)
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
+        routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
         topAvatar.style = Prefs.avatar(this)
         avatarBtn.text = "Character: " + (if (Prefs.avatar(this) == 1) "Nova" else "Orion") + "  (tap to change)"
     }
@@ -405,6 +417,30 @@ class MainActivity : Activity() {
     }
 
     // ------------------------------------------------------------ name and memory
+
+    private fun routinesDialog() {
+        val names = MacroStore.names(this)
+        val b = AlertDialog.Builder(this).setTitle("My routines (" + names.size + ")")
+        if (names.isEmpty()) {
+            b.setMessage("No routines yet. Ask Orion to do a task, then say: save this as a routine called <name>.")
+        } else {
+            b.setItems(names.toTypedArray()) { _, which ->
+                val n = names[which]
+                AlertDialog.Builder(this)
+                    .setTitle("Delete \"" + n + "\"?")
+                    .setMessage("Say \"run " + n + "\" to Orion to play it.")
+                    .setPositiveButton("Delete") { _, _ ->
+                        MacroStore.delete(this, n)
+                        refresh()
+                        routinesDialog()
+                    }
+                    .setNegativeButton("Keep") { _, _ -> routinesDialog() }
+                    .show()
+            }
+        }
+        b.setNegativeButton("Close") { _, _ -> refresh() }
+        b.show()
+    }
 
     private fun avatarDialog() {
         AlertDialog.Builder(this)

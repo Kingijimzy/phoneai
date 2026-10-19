@@ -20,7 +20,10 @@ interface AgentUi {
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val nim = Nim(svc).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val tools = Tools(svc)
-    private val local = Local(svc, tools)
+    private val ranSteps = JSONArray()
+    private val local = Local(
+        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) }
+    )
     private val history = JSONArray()
 
     @Volatile
@@ -114,7 +117,7 @@ Rules:
                 m.put("content", "RESULT: (older output removed)")
             }
         }
-        while (history.length() > 41) history.remove(1)
+        while (history.length() > 13) history.remove(1)
         // never start the dialogue with an assistant turn
         while (history.length() > 1 && history.getJSONObject(1).optString("role") == "assistant") history.remove(1)
     }
@@ -149,6 +152,7 @@ Rules:
             ui.say(quick)
             return
         }
+        while (ranSteps.length() > 0) ranSteps.remove(0)
         if (command.trim().split(" ").size > 2 && Prefs.voice(svc)) {
             val acks = listOf("On it.", "One moment.", "Let me see.", "Right away.")
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
@@ -183,6 +187,7 @@ Rules:
                         "error: ${e.message}"
                     }
                     ui.note(bt + ": " + br.take(80).replace("\n", " "))
+                    record(bt, one.optJSONObject("args") ?: JSONObject(), br)
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
                     if (br.startsWith("error")) break
                 }
@@ -200,10 +205,34 @@ Rules:
                 "error: ${e.message}"
             }
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
+            record(tool, args, result)
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
         }
         if (stopped) ui.say("Stopped.") else ui.say("I reached the step limit. Tell me to continue if needed.")
+    }
+
+    private val recordable = setOf(
+        "open_app", "click_text", "click", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url",
+        "web_search", "settings", "wait", "wait_for", "volume", "flashlight", "record_screen", "dial", "alarm", "timer"
+    )
+
+    /** Remembers what worked, so the user can say "save this as a routine". */
+    private fun record(tool: String, args: JSONObject, result: String) {
+        if (result.startsWith("error") || tool !in recordable || ranSteps.length() >= 40) return
+        var t = tool
+        var a = args
+        if (tool == "click") {
+            val info = svc.nodeInfo(args.optInt("id", -1)) ?: return
+            if (info.first.isNotBlank()) {
+                t = "click_text"
+                a = JSONObject().put("text", info.first)
+            } else {
+                t = "tap"
+                a = JSONObject().put("x", info.second).put("y", info.third)
+            }
+        }
+        ranSteps.put(JSONObject().put("tool", t).put("args", a))
     }
 
     private fun num(a: JSONObject, k: String): Float? {

@@ -112,7 +112,7 @@ object MemoryStore {
 
     /** Text added to the AI's instructions so it "remembers". */
     fun promptBlock(c: Context): String {
-        val items = all(c).sortedBy { it.updated }.takeLast(80)
+        val items = all(c).sortedBy { it.updated }.takeLast(25)
         if (items.isEmpty()) return "(nothing saved yet)"
         return items.joinToString("\n") { "[${it.id}] (${it.category}) ${it.text}" }
     }

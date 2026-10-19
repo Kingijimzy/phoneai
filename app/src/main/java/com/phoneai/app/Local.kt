@@ -1,12 +1,63 @@
 package com.phoneai.app
 
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.URLEncoder
 
 /**
  * Handles common commands WITHOUT any AI: instant, free, no limits.
  * Returns what Orion should say, or null when the AI is needed.
  */
-class Local(private val svc: PhoneAiService, private val tools: Tools) {
+class Local(
+    private val svc: PhoneAiService,
+    private val tools: Tools,
+    private val exec: (String, JSONObject) -> String,
+    private val lastSteps: () -> JSONArray,
+    private val stopped: () -> Boolean,
+    private val note: (String) -> Unit
+) {
+
+    private fun replay(name: String, steps: JSONArray): String {
+        for (i in 0 until steps.length()) {
+            if (stopped()) return "Stopped."
+            val s = steps.getJSONObject(i)
+            val tool = s.optString("tool")
+            val gap = s.optLong("gap", -1L)
+            val sigA = s.optJSONArray("sig")
+            if (sigA != null && s.has("sx") && s.has("sy")) {
+                // taught step: wait until the screen LOOKS right (colour maths, no AI), then act
+                val sig = IntArray(sigA.length()) { sigA.getInt(it) }
+                val limit = (gap * 3).coerceIn(6000L, 30000L)
+                when (svc.waitForSig(s.getInt("sx"), s.getInt("sy"), sig, limit) { stopped() }) {
+                    "timeout" -> return "I stopped at step ${i + 1} of $name because the screen did not look right after ${limit / 1000} seconds."
+                    "stopped" -> return "Stopped."
+                    "unavailable" -> Thread.sleep(gap.coerceIn(200L, 5000L))
+                    else -> Thread.sleep(40L)
+                }
+            } else {
+                Thread.sleep(if (gap >= 0) gap.coerceIn(100L, 5000L) else 600L)
+            }
+            val r = exec(tool, s.optJSONObject("args") ?: JSONObject())
+            note(tool + ": " + r.take(60))
+            if (r.startsWith("error")) return "I stopped at step ${i + 1} of $name. " + r.removePrefix("error: ").take(80)
+        }
+        return "Finished $name."
+    }
+
+    private fun loopRoutine(name: String, steps: JSONArray, times: Int): String {
+        var done = 0
+        for (k in 1..times) {
+            if (stopped()) break
+            note("run $k of $times")
+            val r = replay(name, steps)
+            if (r.startsWith("I stopped") || r == "Stopped.") {
+                return "$r Completed $done of $times runs."
+            }
+            done++
+            Thread.sleep(1200L)
+        }
+        return "Finished $done runs of $name."
+    }
 
     private val fillers = listOf(
         "hey orion", "hi orion", "ok orion", "okay orion", "orion", "please", "can you", "could you",
@@ -67,6 +118,50 @@ class Local(private val svc: PhoneAiService, private val tools: Tools) {
             tools.remember("fact", "The user's name is $n")
             return "Nice to meet you, $n."
         }
+
+
+        // ---- routines (replayed with no AI)
+        val saveM = Regex("^(save|store) (this|that|it|these steps|the last task)( as)? ?(an? )?(routine|macro|shortcut|workflow)? ?(called |named |for )?(.+)$").find(t)
+        if (saveM != null) {
+            val steps = lastSteps()
+            if (steps.length() == 0) return "I have nothing to save yet. Give me a task first, then say save this as a routine."
+            val rn = saveM.groupValues[7].trim()
+            return if (MacroStore.save(svc, rn, steps)) "Saved. Say run $rn any time and I will do it without using AI."
+            else "I couldn't save that."
+        }
+        if (Regex("^(list|show|what are)( all)?( my)? (routines|macros|shortcuts|workflows)$").matches(t)) {
+            val n = MacroStore.names(svc)
+            return if (n.isEmpty()) "You have no saved routines yet." else "Your routines: " + n.joinToString(", ") + "."
+        }
+        val delM = Regex("^(delete|remove|forget) (the )?(routine|macro|shortcut|workflow) (.+)$").find(t)
+        if (delM != null) {
+            return if (MacroStore.delete(svc, delM.groupValues[4])) "Deleted." else "I don't have a routine with that name."
+        }
+        val teachM = Regex("^(teach|learn) (this )?(routine |macro )?(called |named |as )?(.+)$").find(t)
+            ?: Regex("^(start )?record(ing)? (a |the )?(routine|macro) (called |named )?(.+)$").find(t)
+        if (teachM != null) {
+            val nm = teachM.groupValues.last().trim()
+            if (nm.isNotEmpty() && nm != "mode") {
+                val r = svc.startTeach(nm)
+                return if (failed(r)) "I am already recording." else "Teaching mode is on for $nm. Do the task on your phone like normal. When you are finished, tap the red button at the top."
+            }
+        }
+        if (Regex("^(teach|learn)( mode)?$").matches(t)) return "Say teach, then a name. For example: teach fc rewards."
+        val loopM = Regex("^(run|repeat|loop|do|start)( my| the)?( routine| macro)? (.+?) (\\d{1,3}) times?$").find(t)
+        if (loopM != null) {
+            val f = MacroStore.find(svc, loopM.groupValues[4])
+            if (f != null) return loopRoutine(f.first, f.second, loopM.groupValues[5].toInt().coerceIn(1, 200))
+        }
+        val keepM = Regex("^(keep (running|repeating|doing)|loop|repeat) (my |the )?(routine |macro )?(.+)$").find(t)
+        if (keepM != null) {
+            val f = MacroStore.find(svc, keepM.groupValues[5])
+            if (f != null) return loopRoutine(f.first, f.second, 500)
+        }
+        val runM = Regex("^(run|do|play|start|perform|execute|launch|use)( my| the)?( routine| macro| shortcut| workflow)? (.+)$").find(t)
+        val exactName = MacroStore.names(svc).firstOrNull { it == MacroStore.norm(t) }
+        val found = (if (runM != null) MacroStore.find(svc, runM.groupValues[4]) else null)
+            ?: (if (exactName != null) MacroStore.find(svc, exactName) else null)
+        if (found != null) return replay(found.first, found.second)
 
         // ---- time and battery
         if (Regex("^(what('s| is) )?(the )?(time|date|day)( is it)?( now| today| right now)?$").matches(t) ||
