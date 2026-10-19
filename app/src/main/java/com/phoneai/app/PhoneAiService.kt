@@ -375,7 +375,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 t.typeface = Typeface.MONOSPACE
             }
         }
-        if (kind != "note") t.setPadding(dp(12), dp(8), dp(12), dp(8))
+        if (kind != "note") {
+            t.setPadding(dp(12), dp(8), dp(12), dp(8))
+            t.contentDescription = if (kind == "me") "Your message. Long press to copy." else "Orion reply. Long press to copy."
+            t.setOnLongClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion message", text))
+                Toast.makeText(this, "Message copied", Toast.LENGTH_SHORT).show()
+                true
+            }
+        }
         box.addView(t, lp)
         logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
@@ -399,6 +408,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.setPadding(dp(8), dp(4), dp(6), dp(4))
         val orb = AvatarView(this)
         orb.style = Prefs.avatar(this)
+        orb.contentDescription = "Orion animated character. Tap to speak."
+        orb.isClickable = true
+        orb.setOnClickListener {
+            if (!running && !listening) {
+                handsActive = Prefs.hands(this)
+                emptyListens = 0
+                listenNow()
+            }
+        }
         head.addView(orb, LinearLayout.LayoutParams(dp(82), dp(82)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
