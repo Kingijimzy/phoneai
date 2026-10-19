@@ -24,7 +24,8 @@ class DeviceUtilitiesActivity : Activity() {
     private var selectedUri: Uri? = null
     private var copySource: Uri? = null
     private var filePreview: String = ""
-    @Volatile private var lastDiagnosticsReport: String = "No diagnostic report yet. Refresh Network Radar or check device health first."
+    @Volatile private var networkDiagnosticReport: String = ""
+    @Volatile private var gameDiagnosticReport: String = ""
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -81,8 +82,17 @@ class DeviceUtilitiesActivity : Activity() {
         add(content, button("Back to Orion") { finish() }, 4)
         add(content, button("Copy latest diagnostic report") {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("PhoneAI diagnostics", lastDiagnosticsReport))
-            toast("Diagnostic report copied.")
+            val report = buildString {
+                appendLine("PHONEAI DEVICE DIAGNOSTICS")
+                appendLine()
+                appendLine("NETWORK RADAR")
+                appendLine(networkDiagnosticReport.ifBlank { "Not checked yet." })
+                appendLine()
+                appendLine("GAME SENTINEL")
+                append(gameDiagnosticReport.ifBlank { "Device health not checked yet." })
+            }
+            clipboard.setPrimaryClip(ClipData.newPlainText("PhoneAI diagnostics", report))
+            toast("Combined diagnostics copied.")
         }, 8)
 
         val network = section("Network Radar", "Local connection diagnostics. No LAN scanning or Wi-Fi password collection.")
@@ -105,7 +115,7 @@ class DeviceUtilitiesActivity : Activity() {
                 }
                 runOnUiThread {
                     networkResult.text = report
-                    lastDiagnosticsReport = "PHONEAI NETWORK RADAR\n" + report
+                    networkDiagnosticReport = report
                 }
             }.start()
         })
@@ -127,7 +137,7 @@ class DeviceUtilitiesActivity : Activity() {
                 }
                 runOnUiThread {
                     gameResult.text = report
-                    lastDiagnosticsReport = "PHONEAI GAME SENTINEL\n" + report
+                    gameDiagnosticReport = report
                 }
             }.start()
         })
