@@ -37,3 +37,17 @@ Declarative skills may use this tool only when explicitly allowlisted in their m
 ## Limits
 
 This is not GitHub account management: it cannot read private repositories, create issues, push code, change settings, or access private user data. It does not connect Gmail. The existing YouTube action opens search results but does not provide official API-backed video metadata. The app has not yet been tested on the user's phone for this stage.
+
+
+## Telegram Bot API — implementation added; device verification pending
+
+PhoneAI now includes a narrowly scoped Telegram Bot API connection:
+- The user enters a BotFather token and one destination chat ID in the app settings screen. The token is encrypted using an AES-GCM key held by Android Keystore; the AI prompt and action arguments never contain the token.
+- The bot identity can be checked with Telegram's getMe endpoint.
+- telegram_send sends plain text only to the saved destination. The agent must ask for a fresh yes/no confirmation immediately before every send; the model cannot choose another recipient or URL.
+- Network calls use the fixed HTTPS Telegram API host, short timeouts, bounded responses, and no redirects. Disconnect clears the stored token ciphertext and destination.
+- This does not implement incoming Telegram updates, webhook hosting, group polling, inline commands, or a remote phone-control tunnel. Those require a separately secured always-on endpoint or a carefully designed foreground service and must not be implied by this outbound integration.
+
+## MCP and workflow integrations
+
+The app exposes an integration-status report and keeps remote MCP servers unconfigured by default. MCP is a protocol, not a single service: each server requires an explicit endpoint, authentication model, tool allowlist, timeout/call budget, and approval rules. Do not accept arbitrary server URLs or auto-enable every tool returned by a server. Next candidates after verification are a constrained remote-MCP client, official YouTube metadata, a least-privilege Gmail OAuth flow, and public/read-only market data. Telegram messages, email, posts, orders, and other external writes must have per-action approval.
