@@ -63,7 +63,7 @@ object TelegramBridge {
             val bot = obj.optJSONObject("result") ?: return "Telegram API did not return bot details."
             "Telegram connected: @${bot.optString("username", "unknown")} (bot ID ${bot.optString("id", "unknown")}). Saved target: $target. Sending still requires confirmation."
         } catch (e: Exception) {
-            "Telegram check failed: ${e.message ?: "network error"}. Token remains stored encrypted."
+            "Telegram check failed (${e.javaClass.simpleName}). Token remains stored encrypted."
         }
     }
 
@@ -79,7 +79,7 @@ object TelegramBridge {
             val result = request(token, "sendMessage", mapOf("chat_id" to target, "text" to body))
             if (result.optBoolean("ok")) "Telegram message sent to the saved target." else "error: Telegram rejected the message."
         } catch (e: Exception) {
-            "error: Telegram send failed: ${e.message ?: "network error"}"
+            "error: Telegram send failed (${e.javaClass.simpleName})."
         }
     }
 
