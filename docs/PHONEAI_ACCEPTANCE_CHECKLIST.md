@@ -16,7 +16,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] GitHub Actions workflow can build a debug APK and retain an artifact.
 
 ## Required verification before calling the project complete
-- [x] Run GitHub Actions assembleDebug on this integrated branch; the latest head produced the PhoneAI-apk artifact in run #47.
+- [ ] Run GitHub Actions assembleDebug on the latest integrated head after thermal-aware avatar frame pacing changes; confirm the artifact matches the latest commit.
 - [ ] Install the APK on the Redmi phone and test app startup, avatar selection, personality persistence, voice, memory, tasks, reminders, and provider switching.
 - [ ] Test browser research on a public page and verify local/private addresses and unsafe redirects are rejected.
 - [ ] Register a skill, confirm it starts disabled, enable it, run it explicitly, and confirm disallowed tools, call budgets, time budgets, and approval prompts are enforced.
@@ -24,7 +24,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [ ] Test Game Sentinel session start/end/history and confirm the displayed thermal/battery information matches Android's exposed values.
 - [ ] Test file picker, text preview/read, save, copy, and delete confirmation using disposable test files.
 - [ ] Verify chat API usage over several interactions with quota saver both on and off; local request counts are guardrails, not provider-side billing/token analytics.
-- [ ] Test low-memory behavior and background service stability on the actual phone.
+- [ ] Test low-memory behavior, power-save/thermal-aware animation pacing, and background service stability on the actual phone.
 - [ ] Confirm no API keys or other secrets are committed to the APK or repository.
 
 ## Known limits
@@ -33,4 +33,5 @@ This checklist is the current completion gate for the combined personal-agent bu
 - File operations only affect documents the user explicitly selects.
 - Skills are declarative tool allowlists, not arbitrary downloaded code.
 - Human-like profiles provide a consistent conversational style; they do not make the model human or guarantee emotional understanding.
+- Avatar rendering is currently stylized 2D Canvas, not photorealistic 3D. See [Cinematic Avatar Roadmap](CINEMATIC_AVATAR_ROADMAP.md) for the renderer/model/lip-sync work still required.
 - Trading functionality remains analysis/alerts only; no automatic trade execution is included.
