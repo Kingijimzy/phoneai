@@ -1,6 +1,8 @@
 package com.phoneai.app
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -142,6 +144,23 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         composer.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+        val mic = label("Mic", 12f, Theme.CYAN, true).apply {
+            gravity = Gravity.CENTER
+            background = rounded(Theme.PANEL2, 17, Theme.LINE)
+            setPadding(dp(11), dp(12), dp(11), dp(12))
+            contentDescription = "Speak to Orion"
+            setOnClickListener {
+                val service = PhoneAiService.instance
+                if (service == null) {
+                    Toast.makeText(this@MainChatActivity, "Enable Orion in Accessibility settings first.", Toast.LENGTH_LONG).show()
+                } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 43)
+                } else {
+                    service.listenFromMainChat()
+                }
+            }
+        }
+        composer.addView(mic, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
         send = label("↑", 22f, Theme.ON_ACCENT, true).apply {
             gravity = Gravity.CENTER
             background = rounded(Theme.CYAN, 17)
@@ -179,6 +198,13 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         attachedService?.detachMainChat(this)
         attachedService = null
         super.onDestroy()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 43 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            PhoneAiService.instance?.listenFromMainChat()
+        }
     }
 
     private fun sendMessage() {
