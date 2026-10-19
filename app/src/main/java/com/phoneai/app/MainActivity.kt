@@ -169,6 +169,9 @@ class MainActivity : Activity() {
         visionBtn = button("", false) { providerDialog(true) }
         add(s2, visionBtn, 8)
         switchRow(s2, "Auto-switch to another service if one fails", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
+        switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
+            Prefs.setQuotaSaver(this, it)
+        }
         add(s2, button("Test the AI", false) { testAi() }, 10)
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
