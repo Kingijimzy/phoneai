@@ -29,7 +29,7 @@ object LiveNews {
         if (q.isBlank()) return "What topic should I search for in recent news?"
         return try {
             val encoded = URLEncoder.encode(q, "UTF-8")
-            val url = "https://api.gdeltproject.org/api/v2/doc/doc?query=$encoded&mode=ArtList&format=json&sort=DateDesc&maxrecords=5"
+            val url = "https://api.gdeltproject.org/api/v2/doc/doc?query=$encoded&mode=ArtList&format=json&sort=DateDesc&timespan=1week&maxrecords=5"
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = TIMEOUT_MS
