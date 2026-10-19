@@ -462,7 +462,7 @@ class Nim(private val ctx: Context) {
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
-                val canWait = !hasBackup && rateRetries < 2 && wait <= 30
+                val canWait = !Prefs.quotaSaver(ctx) && !hasBackup && rateRetries < 2 && wait <= 30
                 if (canWait) {
                     rateRetries++
                     onStatus?.invoke("${p.label} is busy. Waiting ${wait}s...")
