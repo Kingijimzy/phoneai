@@ -127,7 +127,7 @@ class SettingsActivity : Activity() {
         add(col, button("‹  Back to Orion", false) { finish() }, 4)
         
         // ---- 1. setup
-        val s1 = card(col, "1. Switch it on")
+        val s1 = card(col, "Access & permissions")
         status = text("", 13f, Theme.OK)
         status.typeface = Typeface.MONOSPACE
         add(s1, status, 8)
@@ -158,7 +158,7 @@ class SettingsActivity : Activity() {
 
         // ---- 2. AI services
         val s2 = card(
-            col, "2. AI services",
+            col, "AI providers & models",
             "13 online services plus a free local AI. Add 3 or more free keys (Groq, Cerebras, Mistral, Gemini, OpenRouter): Orion spreads requests across all of them so none runs out, and switches instantly when one is busy. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
         )
         add(s2, button("Get a free Gemini key (opens website)", false) {
@@ -178,7 +178,7 @@ class SettingsActivity : Activity() {
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
 
         // ---- 3. voice
-        val s3 = card(col, "3. Voice")
+        val s3 = card(col, "Voice & character")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
@@ -212,7 +212,7 @@ class SettingsActivity : Activity() {
 
         // ---- 4. memory
         val s4 = card(
-            col, "4. Memory",
+            col, "Memory, routines & skills",
             "Orion remembers your preferences, projects, decisions and unfinished work, even after you close the app. " +
                 "You can view, edit or delete everything."
         )
@@ -236,7 +236,7 @@ class SettingsActivity : Activity() {
 
         // ---- 5. recording
         val s5 = card(
-            col, "5. Screen recording",
+            col, "Screen recording",
             "Say \"record my screen\" to Orion, or test here. Android asks permission each time. Videos are saved in Movies/Orion."
         )
         add(s5, button("Start a test recording", false) {
@@ -259,7 +259,7 @@ class SettingsActivity : Activity() {
 
         // ---- 6. browser and automation
         val browser = card(
-            col, "6. Browser & automation",
+            col, "Browser & automation",
             "Open a website, then ask Orion to research it or navigate visible page elements. Automation uses the Android accessibility service, checks the screen between steps, and stops for sensitive or uncertain actions."
         )
         add(browser, button("Open browser", true) {
@@ -276,7 +276,7 @@ class SettingsActivity : Activity() {
 
         // ---- 7. local device utilities
         val s6 = card(
-            col, "7. Device utilities",
+            col, "Phone diagnostics & files",
             "Network Radar, Game Sentinel, and user-selected file handling. These tools run locally on your phone."
         )
         add(s6, button("Open Network Radar, Game Sentinel & Files", true) {
@@ -285,7 +285,7 @@ class SettingsActivity : Activity() {
 
         // ---- 7. external integrations
         val s7 = card(
-            col, "8. Integrations & workflows",
+            col, "Integrations & workflows",
             "Connect a Telegram bot safely, inspect connector status, and see which services are genuinely available. Bot tokens are encrypted with Android Keystore and never sent to the AI model."
         )
         add(s7, button("Configure Telegram bot", true) { telegramDialog() }, 8)
@@ -342,6 +342,8 @@ class SettingsActivity : Activity() {
             "routines" -> routinesDialog()
             "character" -> characterDialog()
             "voice" -> voiceDialog()
+            "providers" -> providerDialog(false)
+            "integrations" -> telegramDialog()
         }
     }
 
