@@ -1034,7 +1034,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 addLine("ai", text)
                 panelStatus?.text = if (running) "Working..." else "Ready"
                 hideStrip()
-            } else if (running || listening) {
+            } else if ((running || listening) && !mainChatActive) {
                 showStrip(text)
             }
         }
