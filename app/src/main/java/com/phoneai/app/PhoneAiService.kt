@@ -786,6 +786,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     private fun finishRun() {
+        hideThinkingIndicator()
         running = false
         refreshMode()
         val last = transcript.lastOrNull { it.first == "ai" }?.second ?: "Done."
