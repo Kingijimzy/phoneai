@@ -440,12 +440,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val chips = LinearLayout(this)
         chips.orientation = LinearLayout.HORIZONTAL
         val quick = listOf(
-            "Research" to "Research this topic with sources: ",
-            "Explain" to "Explain this clearly with an example: ",
-            "Plan" to "Help me make a practical step-by-step plan for: ",
-            "Summarize" to "Summarize the important points from: ",
-            "Write" to "Help me draft this in a natural style: ",
-            "Think deeper" to "Analyze this from multiple perspectives, including trade-offs: ",
+            "Research" to "Help me research a topic using public sources. Ask me what topic I want to investigate.",
+            "Explain" to "Explain difficult ideas clearly, use a practical example, and check whether I want more depth.",
+            "Plan" to "Help me build a realistic step-by-step plan. Ask what I want to accomplish first.",
+            "Summarize" to "Help me summarize information into the key points, important details, and open questions. Ask what I want summarized.",
+            "Write" to "Help me write something in a natural voice. Ask what I am writing and who it is for.",
+            "Think deeper" to "Think critically with me: explore different perspectives, trade-offs, assumptions, and what could change the conclusion.",
             "What's on screen" to "Look at my screen and tell me what is on it.",
             "Battery" to "What is my battery level?",
             "Read screen" to "read my screen",
