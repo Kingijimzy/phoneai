@@ -292,15 +292,18 @@ class Tools(private val svc: PhoneAiService) {
     // ---- memory
 
     fun remember(category: String?, text: String): String {
-        val m = MemoryStore.add(svc, category, text) ?: return "error: nothing to remember"
+        val m = MemoryStore.add(svc, category, text)
+            ?: return "error: memory was not saved; check that the text is not empty and device storage is available"
         return "remembered [${m.id}] (${m.category})"
     }
 
     fun updateMemory(id: Int, category: String?, text: String?): String =
-        if (MemoryStore.update(svc, id, category, text)) "updated memory $id" else "error: no memory with id $id"
+        if (MemoryStore.update(svc, id, category, text)) "updated memory $id"
+        else "error: memory $id was not updated; it may not exist or device storage may be unavailable"
 
     fun forget(id: Int): String =
-        if (MemoryStore.delete(svc, id)) "forgot memory $id" else "error: no memory with id $id"
+        if (MemoryStore.delete(svc, id)) "forgot memory $id"
+        else "error: memory $id was not deleted; it may not exist or device storage may be unavailable"
 
     fun recall(query: String): String {
         val list = MemoryStore.search(svc, query).take(15)
