@@ -21,6 +21,8 @@ class Nim(private val ctx: Context) {
 
         /** provider id -> times of requests in the last minute (so we slow down BEFORE a limit is hit) */
         private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
+        /** Latest provider-reported quota headers, when that API exposes them. */
+        private val providerQuota = ConcurrentHashMap<String, String>()
 
         fun budget(id: String): Int = when (id) {
             "gemini" -> 9
@@ -51,8 +53,10 @@ class Nim(private val ctx: Context) {
             for (p in Providers.all) {
                 if (!Prefs.hasKey(c, p.id)) continue
                 val cd = ((cooldown[p.id] ?: 0L) - now) / 1000
-                sb.append(p.label).append(": ").append(usedLastMinute(p.id)).append(" of ").append(budget(p.id)).append(" this minute")
-                if (cd > 0) sb.append(", resting ").append(cd).append(" seconds")
+                sb.append(p.label).append(": PhoneAI safety throttle ")
+                    .append(usedLastMinute(p.id)).append("/").append(budget(p.id)).append(" requests in the last minute")
+                providerQuota[p.id]?.let { sb.append("; provider-reported quota: ").append(it) }
+                if (cd > 0) sb.append(", cooling down ").append(cd).append(" seconds")
                 sb.append(". ")
             }
             return if (sb.isEmpty()) "No AI keys saved yet." else sb.toString().trim()
@@ -183,6 +187,23 @@ class Nim(private val ctx: Context) {
                 conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
             val code = conn.responseCode
+            // Capture real provider quota headers when available. Header names vary by provider,
+            // so this is supplemental telemetry; the local throttle remains a conservative guard.
+            val rq = conn.getHeaderField("x-ratelimit-remaining-requests")
+                ?: conn.getHeaderField("X-RateLimit-Remaining-Requests")
+            val lq = conn.getHeaderField("x-ratelimit-limit-requests")
+                ?: conn.getHeaderField("X-RateLimit-Limit-Requests")
+            val rt = conn.getHeaderField("x-ratelimit-remaining-tokens")
+                ?: conn.getHeaderField("X-RateLimit-Remaining-Tokens")
+            val lt = conn.getHeaderField("x-ratelimit-limit-tokens")
+                ?: conn.getHeaderField("X-RateLimit-Limit-Tokens")
+            val reset = conn.getHeaderField("x-ratelimit-reset-requests")
+                ?: conn.getHeaderField("X-RateLimit-Reset-Requests")
+            val quotaParts = mutableListOf<String>()
+            if (!rq.isNullOrBlank() && !lq.isNullOrBlank()) quotaParts.add("$rq/$lq requests remain")
+            if (!rt.isNullOrBlank() && !lt.isNullOrBlank()) quotaParts.add("$rt/$lt tokens remain")
+            if (!reset.isNullOrBlank()) quotaParts.add("request reset $reset")
+            if (quotaParts.isNotEmpty()) providerQuota[p.id] = quotaParts.joinToString(", ")
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
             val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
