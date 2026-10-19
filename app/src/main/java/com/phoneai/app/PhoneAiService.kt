@@ -291,6 +291,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             val m = when {
                 speaking -> OrbView.Mode.SPEAKING
+                confirmView != null -> OrbView.Mode.WAITING_APPROVAL
                 listening -> OrbView.Mode.LISTENING
                 running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
                 else -> OrbView.Mode.IDLE
@@ -303,6 +304,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 OrbView.Mode.THINKING -> "Thinking..."
                 OrbView.Mode.SPEAKING -> "Speaking..."
                 OrbView.Mode.ACTING -> "Working on it..."
+                OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
             }
         }
     }
@@ -625,6 +627,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val answer: (Boolean) -> Unit = { yes ->
             removeConfirm()
             pendingConfirm = null
+            refreshMode()
             cb(yes)
         }
         pendingConfirm = answer
@@ -651,6 +654,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         lp.gravity = Gravity.CENTER
         wm.addView(box, lp)
         confirmView = box
+        refreshMode()
     }
 
     // ---------------------------------------------------------------- running commands
