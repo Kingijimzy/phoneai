@@ -406,8 +406,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val title = label("ORION  ·  PERSONAL AI", 15f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("PERSONAL AI  ·  Ready", 12f, Theme.CYAN)
+        val st = label("ORION CORE  ·  READY TO HELP", 12f, Theme.CYAN)
         titleCol.addView(st)
+        val tagline = label("Think with you. Build with you. Act with permission.", 10f, Theme.MUTED)
+        titleCol.addView(tagline)
         head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
         val fresh = label("＋ New", 13f, Theme.MUTED)
         fresh.setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -438,14 +440,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val chips = LinearLayout(this)
         chips.orientation = LinearLayout.HORIZONTAL
         val quick = listOf(
+            "Research" to "Research this topic with sources: ",
+            "Explain" to "Explain this clearly with an example: ",
+            "Plan" to "Help me make a practical step-by-step plan for: ",
+            "Summarize" to "Summarize the important points from: ",
+            "Write" to "Help me draft this in a natural style: ",
+            "Think deeper" to "Analyze this from multiple perspectives, including trade-offs: ",
             "What's on screen" to "Look at my screen and tell me what is on it.",
             "Battery" to "What is my battery level?",
-            "Record screen" to "Start recording my screen.",
-            "Stop recording" to "Stop the screen recording.",
-            "Flashlight" to "Toggle the flashlight on.",
-            "FC Mobile" to "Open FC Mobile.",
-            "AI status" to "ai status",
-            "Read screen" to "read my screen"
+            "Read screen" to "read my screen",
+            "AI status" to "ai status"
         )
         val liveChip = chip("Live call") { startLive() }
         val llp = LinearLayout.LayoutParams(WRAP, WRAP)
@@ -679,6 +683,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         wakeGen++
         transcript.add(Pair("me", t))
+        // Show the user's message immediately, like a real chat app, rather than
+        // waiting for the model response to make the conversation feel alive.
+        if (panel != null) {
+            addLine("me", t)
+            logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+        }
         voice.stopSpeaking()
         voice.stopListening()
         listening = false
