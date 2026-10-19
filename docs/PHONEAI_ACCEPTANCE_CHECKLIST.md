@@ -24,7 +24,13 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] Add conversation starter chips for research, explanations, planning, summaries, writing, and deeper analysis.
 - [x] Show a live animated thinking indicator in the chat while Orion generates a response.
 - [x] Add an in-chat Stop control while a request is running; clean up the indicator when a run ends.
+- [x] Add a dedicated cinematic 3D avatar stage with a rigged CC0 GLB, cinematic lighting, ambient scene, and a low-power 30 fps render cap.
+- [x] Add a chat shortcut to open the 3D stage and keep the lightweight Canvas avatar as fallback.
+- [x] Synchronize the 3D scene with listening/thinking/speaking/acting/approval state and TTS word/range callbacks.
 - [x] Refresh Orion's launcher copy and dark visual palette.
+- [ ] Verify the 3D stage loads the GLB from the approved CDN, the character framing/face cues look correct, and failure returns cleanly to the Canvas avatar.
+- [ ] Verify head/eye/mouth movement follows voice states and TTS range callbacks without excessive lag or distracting motion.
+- [ ] Check the 3D scene at normal and power-save/thermal conditions on the Redmi; confirm 30 fps cap, heat, memory, and background cleanup.
 - [ ] Confirm the thinking indicator appears/disappears correctly and Stop cancels a slow request without leaving stale UI on the physical Android device.
 - [ ] Confirm chat bubbles, IME/send behavior, copy action, and tap-to-talk on the physical Android device.
 - [ ] Verify latest branch head compiles; an in-progress Actions run alone is not a pass.
