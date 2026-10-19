@@ -194,6 +194,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onStop() {
+        attachedService?.detachMainChat(this)
+        attachedService = null
+        super.onStop()
+    }
+
     override fun onDestroy() {
         attachedService?.detachMainChat(this)
         attachedService = null
