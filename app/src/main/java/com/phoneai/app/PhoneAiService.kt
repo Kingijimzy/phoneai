@@ -386,10 +386,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post { openPanel() }
     }
 
+    fun openMainChat() {
+        main.post {
+            closePanel(false)
+            hideBubble()
+            try {
+                startActivity(Intent(this, MainChatActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Could not open Orion chat. Try opening it from the app home screen.", Toast.LENGTH_LONG).show()
+                showBubble()
+            }
+        }
+    }
+
     fun attachMainChat(listener: MainChatListener) {
         main.post {
             mainChatListener = listener
             mainChatActive = true
+            if (panel != null) closePanel(false)
             hideBubble()
             listener.onStatus(if (running) "Orion is working…" else "Ready when you are", currentMode())
             if (transcript.isEmpty()) {
@@ -564,7 +578,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        head.addView(orb, LinearLayout.LayoutParams(dp(82), dp(82)))
+        head.addView(orb, LinearLayout.LayoutParams(dp(56), dp(56)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
@@ -611,21 +625,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val chips = LinearLayout(this)
         chips.orientation = LinearLayout.HORIZONTAL
         val quick = listOf(
-            "Research" to "Help me research a topic using public sources. Ask me what topic I want to investigate.",
-            "Explain" to "Explain difficult ideas clearly, use a practical example, and check whether I want more depth.",
-            "Plan" to "Help me build a realistic step-by-step plan. Ask what I want to accomplish first.",
-            "Summarize" to "Help me summarize information into the key points, important details, and open questions. Ask what I want summarized.",
-            "Write" to "Help me write something in a natural voice. Ask what I am writing and who it is for.",
-            "Think deeper" to "Think critically with me: explore different perspectives, trade-offs, assumptions, and what could change the conclusion.",
             "What's on screen" to "Look at my screen and tell me what is on it.",
             "Battery" to "What is my battery level?",
             "Read screen" to "read my screen",
-            "AI status" to "ai status"
+            "AI status" to "ai status",
+            "Network status" to "network status"
         )
-        val liveChip = chip("Live call") { startLive() }
+        val liveChip = chip("Voice command") { startLive() }
         val llp = LinearLayout.LayoutParams(WRAP, WRAP)
         llp.setMargins(0, 0, dp(6), 0)
         chips.addView(liveChip, llp)
+        val fullChatChip = chip("Full chat  ↗") { openMainChat() }
+        val fullChatLp = LinearLayout.LayoutParams(WRAP, WRAP)
+        fullChatLp.setMargins(0, 0, dp(6), 0)
+        chips.addView(fullChatChip, fullChatLp)
         for ((chipName, cmd) in quick) {
             val c = chip(chipName) { submit(cmd) }
             val clp = LinearLayout.LayoutParams(WRAP, WRAP)
@@ -643,7 +656,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         val input = EditText(this)
-        input.hint = "Ask anything or tell Orion what to do…"
+        input.hint = "Quick command for your phone…"
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
         input.background = rounded(0xFF171D29.toInt(), dp(22).toFloat(), 0xFF344056.toInt())
@@ -687,7 +700,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.addView(row)
 
         val lp = WindowManager.LayoutParams(
-            size.first - dp(16), (size.second * 0.91f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), (size.second * 0.70f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
