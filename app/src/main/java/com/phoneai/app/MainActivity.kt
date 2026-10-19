@@ -58,11 +58,11 @@ class MainActivity : Activity() {
         val b = Button(this)
         b.text = label
         b.isAllCaps = false
-        b.textSize = 15f
+        b.textSize = 14f
         b.setTextColor(if (primary) Theme.ON_ACCENT else Theme.TEXT)
         val g = GradientDrawable()
         g.setColor(if (primary) Theme.CYAN else Theme.PANEL2)
-        g.cornerRadius = dp(14).toFloat()
+        g.cornerRadius = dp(12).toFloat()
         if (!primary) g.setStroke(dp(1), Theme.LINE)
         b.background = g
         b.setOnClickListener { onClick() }
@@ -84,14 +84,14 @@ class MainActivity : Activity() {
         g.cornerRadius = dp(20).toFloat()
         g.setStroke(dp(1), Theme.LINE)
         c.background = g
-        c.setPadding(dp(16), dp(14), dp(16), dp(16))
+        c.setPadding(dp(14), dp(12), dp(14), dp(13))
         c.addView(text(title, 17f, Theme.CYAN, true))
         if (note != null) {
             val n = text(note, 13f, Theme.MUTED)
             n.setPadding(0, dp(4), 0, 0)
             c.addView(n)
         }
-        add(parent, c, 14)
+        add(parent, c, 10)
         return c
     }
 
@@ -110,7 +110,7 @@ class MainActivity : Activity() {
         sv.setBackgroundColor(Theme.BG)
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(18), dp(40), dp(18), dp(32))
+        col.setPadding(dp(16), dp(24), dp(16), dp(24))
         sv.addView(col)
         setContentView(sv)
 
@@ -512,9 +512,10 @@ class MainActivity : Activity() {
             "Choose a skill to enable, disable, or remove. Run an enabled skill by saying: run skill <id>: <task>. Each tool call is checked against its allowlist and budget."
         }
         val builder = AlertDialog.Builder(this)
-            .setTitle("Skill registry (" + skills.size + ")")
-            .setMessage(message)
-            .setPositiveButton("Add skill") { _, _ -> addSkillDialog() }
+            .setTitle("Skill studio · " + skills.size + " skills")
+            .setMessage(message + "\n\nGenerate a safe starter skill from a reviewed template, then inspect its tools before enabling it.")
+            .setPositiveButton("Create skill") { _, _ -> addSkillDialog() }
+            .setNeutralButton("Skill templates") { _, _ -> skillTemplateDialog() }
             .setNegativeButton("Close", null)
         if (skills.isNotEmpty()) {
             builder.setItems(skills.map { it.id + "  " + if (it.enabled) "ON" else "OFF" }.toTypedArray()) { _, which ->
@@ -522,6 +523,44 @@ class MainActivity : Activity() {
             }
         }
         builder.show()
+    }
+
+    /** Creates reviewed starter skills from existing tools only; every generated skill starts disabled. */
+    private fun skillTemplateDialog() {
+        val templates = listOf(
+            PhoneAiSkill("web_research", "1.0.0", "Research a public topic, read a public page, and report source URLs.",
+                setOf("web_search", "research_web", "fetch_url"), maxCalls = 6, maxDurationMs = 30_000L),
+            PhoneAiSkill("device_brief", "1.0.0", "Summarize time, battery, and basic device information.",
+                setOf("time", "battery", "device_info"), maxCalls = 4, maxDurationMs = 15_000L),
+            PhoneAiSkill("crypto_snapshot", "1.0.0", "Read a public Bybit spot ticker and explain that it is market data, not a trade signal.",
+                setOf("bybit_public_ticker", "time"), maxCalls = 3, maxDurationMs = 15_000L),
+            PhoneAiSkill("memory_review", "1.0.0", "Recall relevant saved context and optionally save a user-approved summary.",
+                setOf("recall", "remember"), maxCalls = 4, maxDurationMs = 20_000L)
+        )
+        val labels = templates.map { it.id + " · " + it.description }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Generate a starter skill")
+            .setItems(labels) { _, which ->
+                val candidate = templates[which]
+                val result = SkillRegistry.register(this, candidate)
+                Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
+                if (result.allowed) {
+                    refresh()
+                    AlertDialog.Builder(this)
+                        .setTitle("Skill created disabled")
+                        .setMessage(candidate.description + "\n\nAllowed tools: " +
+                            candidate.allowedTools.sorted().joinToString(", ") +
+                            "\nBudget: " + candidate.maxCalls + " calls / " +
+                            (candidate.maxDurationMs / 1000L) + " seconds. Review it before enabling.")
+                        .setPositiveButton("Review skill") { _, _ ->
+                            SkillRegistry.list(this).firstOrNull { it.id == candidate.id }?.let { skillOptions(it) }
+                        }
+                        .setNegativeButton("Keep disabled", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun skillOptions(skill: PhoneAiSkill) {
