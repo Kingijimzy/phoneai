@@ -230,7 +230,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         if (kind == "ai") row.addView(label("ORION", 10f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(4)) })
         val body = label(text, 15f, Theme.TEXT).apply {
             setLineSpacing(dp(2).toFloat(), 1.02f)
-            textIsSelectable = true
+            setTextIsSelectable(true)
         }
         row.addView(body)
         val params = LinearLayout.LayoutParams(if (kind == "me") (resources.displayMetrics.widthPixels * .84f).toInt() else -1, -2)
