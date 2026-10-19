@@ -79,7 +79,7 @@ class BrowserActivity : Activity() {
             setHintTextColor(Color.LTGRAY)
             setTextColor(Color.WHITE)
             textSize = 14f
-            singleLine = true
+            setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
             background = rounded(Color.rgb(19, 25, 36))
