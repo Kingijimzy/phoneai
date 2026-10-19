@@ -200,6 +200,10 @@ class Tools(private val svc: PhoneAiService) {
 
     fun integrationStatus(): String = IntegrationStatus.summary(svc)
 
+    fun mcpStatus(): String = McpConnector.status(svc)
+
+    fun mcpListTools(): String = McpConnector.listTools(svc)
+
     // ---- phone features
 
     fun settings(page: String): String {
