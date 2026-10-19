@@ -7,6 +7,7 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 - [x] Native Home / Chat / Tools / Settings navigation.
 - [x] Full-screen `MainChatActivity` for normal conversations, starter prompts, voice input, message history for the active service session, and a dedicated composer.
 - [x] Separate floating `OrbView` command console for quick phone commands while another app is open.
+- [x] New native in-app browser with address/search bar, back/forward/reload, HTTPS/HTTP-only top-level navigation, and a WebView that the accessibility agent can inspect and interact with.
 - [x] Floating command console includes quick screen/battery/network checks, voice command, and a route into full chat.
 - [x] `SettingsActivity` groups access/permissions, AI providers and models, voice/response style, memory/routines/skills, and integrations.
 - [x] The character and network-loaded 3D activity have been removed from the active UI and manifest.
@@ -55,6 +56,8 @@ Implemented in the integration branch (build/device verification still required)
 - [ ] On the Redmi device, verify weather for a named city, news lookup, explicit web search, BTC price, offline/network failure messaging, and no crash.
 - [ ] Measure actual provider requests for a multi-step task and verify primary + at most one configured backup under quota-saver mode.
 - [ ] Verify search/news source links open and remain clearly labelled as external, untrusted content.
+- [ ] Verify `open_url` launches Orion Browser (not the external browser), and that `read_screen`, `click_text`, scrolling, and typing work on ordinary accessible pages.
+- [ ] Verify redirects work for Open-Meteo and GDELT on the device; test city names with country qualifiers and service/network errors.
 
 ### Data-source boundaries
 - Open-Meteo is used for weather forecasts, not a guarantee of ground-station observations or perfect hyperlocal accuracy.
