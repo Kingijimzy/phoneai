@@ -1163,11 +1163,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun openUrl(url: String): String {
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(i)
-        Thread.sleep(1500)
-        return "opened $url"
+        val raw = url.trim()
+        if (raw.isBlank()) return "error: URL is empty"
+        val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+        val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
+        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+            return "error: provide a valid http or https website URL"
+        }
+        val i = Intent(this, BrowserActivity::class.java)
+            .putExtra(BrowserActivity.EXTRA_URL, candidate)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            startActivity(i)
+            "opened in Orion's in-app browser: $candidate"
+        } catch (e: Exception) {
+            "error: could not open in-app browser (" + (e.message ?: "launch failed") + ")"
+        }
     }
 
     // ---------------------------------------------------------------- tools: reading the screen
