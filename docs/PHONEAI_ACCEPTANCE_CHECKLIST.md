@@ -16,7 +16,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] GitHub Actions workflow can build a debug APK and retain an artifact.
 
 ## Required verification before calling the project complete
-- [ ] Run GitHub Actions assembleDebug on this integrated branch and resolve every compile error.
+- [x] Run GitHub Actions assembleDebug on this integrated branch; the latest head produced the PhoneAI-apk artifact in run #47.
 - [ ] Install the APK on the Redmi phone and test app startup, avatar selection, personality persistence, voice, memory, tasks, reminders, and provider switching.
 - [ ] Test browser research on a public page and verify local/private addresses and unsafe redirects are rejected.
 - [ ] Register a skill, confirm it starts disabled, enable it, run it explicitly, and confirm disallowed tools, call budgets, time budgets, and approval prompts are enforced.
