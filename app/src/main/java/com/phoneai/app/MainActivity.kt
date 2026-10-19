@@ -284,7 +284,7 @@ class MainActivity : Activity() {
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
         routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
         topAvatar.style = Prefs.avatar(this)
-        avatarBtn.text = "Character: " + (if (Prefs.avatar(this) == 1) "Nova" else "Orion") + "  (tap to change)"
+        avatarBtn.text = "Avatar look: " + listOf("Orion", "Nova", "Atlas", "Lumen").getOrElse(Prefs.avatar(this)) { "Orion" } + "  (tap to change)"
         characterBtn.text = "Personality: " + CharacterProfile.get(Prefs.characterProfile(this)).label + "  (tap to change)"
     }
 
@@ -449,7 +449,7 @@ class MainActivity : Activity() {
     private fun avatarDialog() {
         AlertDialog.Builder(this)
             .setTitle("Pick Orion's look")
-            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)")) { _, which ->
+            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)", "Atlas (tactical visor)", "Lumen (luminous guide)")) { _, which ->
                 Prefs.setAvatar(this, which)
                 refresh()
                 Toast.makeText(this, "Saved. Close and reopen the Orion panel to see it.", Toast.LENGTH_LONG).show()
