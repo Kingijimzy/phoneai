@@ -21,7 +21,7 @@ object LiveNews {
             .replace(Regex("(?i)\\b(what'?s|what is|give me|show me|find|search for|tell me|latest|recent|breaking|news|headlines|updates|today|now|about|on|please|current)\\b"), " ")
             .replace(Regex("\\s+"), " ")
             .trim(' ', '.', '?', '!', ',')
-        return cleaned.take(120).ifBlank { "world news" }
+        return cleaned.replace(Regex("(?i)^(in|for|from)\\s+"), "").take(120).ifBlank { "world news" }
     }
 
     fun search(query: String): String {
