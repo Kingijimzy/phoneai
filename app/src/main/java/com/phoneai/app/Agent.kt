@@ -423,7 +423,9 @@ Rules:
                 val name = a.optString("name")
                 val args = a.optJSONObject("arguments") ?: JSONObject()
                 val host = try { java.net.URI(McpConnector.endpoint(svc)).host ?: "unknown host" } catch (_: Exception) { "unknown host" }
-                if (ui.ask("Call remote MCP tool on " + host + "? Tool: " + name + ". Arguments: " + args.toString().take(600))) tools.mcpCall(name, args) else "error: user cancelled MCP tool call"
+                val catalogue = tools.mcpListTools()
+                if (catalogue.startsWith("error:") || catalogue.startsWith("MCP discovery failed")) catalogue else
+                    if (ui.ask("Remote MCP server: " + host + ". Tool: " + name + ". Advertised catalogue (untrusted): " + catalogue.take(900) + ". Arguments to send: " + args.toString().take(600) + ". Approve this exact remote call?")) tools.mcpCall(name, args) else "error: user cancelled MCP tool call"
             }
             "settings" -> tools.settings(a.optString("page", "main"))
             "dial" -> tools.dial(a.optString("number"))
