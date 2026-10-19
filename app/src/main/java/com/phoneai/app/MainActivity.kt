@@ -114,16 +114,48 @@ class MainActivity : Activity() {
         sv.addView(col)
         setContentView(sv)
 
+        // ---- Home hero: character, live state, and direct actions
+        val hero = card(col, "ORION  /  PERSONAL AI",
+            "One companion for conversation, voice, memory, browser research, and phone tasks.")
         topAvatar = AvatarView(this)
-        val orbLp = LinearLayout.LayoutParams(dp(190), dp(190))
+        topAvatar.style = 1
+        val orbLp = LinearLayout.LayoutParams(dp(208), dp(208))
         orbLp.gravity = Gravity.CENTER_HORIZONTAL
-        col.addView(topAvatar, orbLp)
-        val title = text("O R I O N   A I", 24f, Theme.TEXT, true)
+        hero.addView(topAvatar, 0, orbLp)
+        val title = text("Your AI. Your workflow.", 22f, Theme.TEXT, true)
         title.gravity = Gravity.CENTER
-        add(col, title, 4)
-        val sub = text("Your personal AI for this phone. Speak, type, and let it act.", 14f, Theme.MUTED)
+        add(hero, title, 2)
+        val sub = text("Talk naturally. Ask it to research, remember, plan, or help operate your phone.", 13f, Theme.MUTED)
         sub.gravity = Gravity.CENTER
-        add(col, sub, 4)
+        add(hero, sub, 5)
+        val heroActions = LinearLayout(this)
+        heroActions.orientation = LinearLayout.HORIZONTAL
+        heroActions.gravity = Gravity.CENTER
+        heroActions.addView(button("Open chat", true) {
+            val service = PhoneAiService.instance
+            if (service == null) {
+                Toast.makeText(this, "Enable Orion in Accessibility first.", Toast.LENGTH_LONG).show()
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            } else {
+                service.showPanel()
+                moveTaskToBack(true)
+            }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(0, dp(8), dp(4), 0) })
+        heroActions.addView(button("Character", false) { characterDialog() },
+            LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(dp(4), dp(8), 0, 0) })
+        add(hero, heroActions, 2)
+        val shortcuts = LinearLayout(this)
+        shortcuts.orientation = LinearLayout.HORIZONTAL
+        shortcuts.gravity = Gravity.CENTER
+        shortcuts.addView(button("Skills", false) { skillsDialog() },
+            LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(0, dp(8), dp(4), 0) })
+        shortcuts.addView(button("Memory", false) { memoryDialog() },
+            LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(dp(4), dp(8), dp(4), 0) })
+        shortcuts.addView(button("Browser", false) {
+            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))) }
+            catch (_: Exception) { Toast.makeText(this, "No browser app is available.", Toast.LENGTH_LONG).show() }
+        }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { setMargins(dp(4), dp(8), 0, 0) })
+        add(hero, shortcuts, 0)
 
         // ---- 1. setup
         val s1 = card(col, "1. Switch it on")
@@ -358,7 +390,7 @@ class MainActivity : Activity() {
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
         routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
-        skillBtn.text = "Skill registry (" + SkillRegistry.list(this).count { it.enabled } + " enabled / " + SkillRegistry.list(this).size + " total)"
+        skillBtn.text = "Skill Studio · " + SkillRegistry.list(this).count { it.enabled } + " enabled / " + SkillRegistry.list(this).size + " total"
         topAvatar.style = Prefs.avatar(this)
         avatarBtn.text = "Avatar look: " + listOf("Orion", "Nova", "Atlas", "Lumen").getOrElse(Prefs.avatar(this)) { "Orion" } + "  (tap to change)"
     }
