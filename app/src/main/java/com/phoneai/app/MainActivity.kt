@@ -215,9 +215,9 @@ class MainActivity : Activity() {
         gap(agent, action("Memory & routines", "Manage long-term notes and saved task flows") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
         }, 8)
-        gap(agent, action("Open browser", "Launch your browser; ask Orion to research visible pages") {
-            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))) }
-            catch (_: Exception) { Toast.makeText(this, "No browser app is available.", Toast.LENGTH_LONG).show() }
+        gap(agent, action("Open Orion Browser", "Search the web inside Orion; the screen agent can interact with accessible page elements", true) {
+            startActivity(Intent(this, BrowserActivity::class.java)
+                .putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"))
         }, 8)
         gap(agent, action("Screen recording", "Start an Android-approved screen recording") {
             startActivity(Intent(this, RecordRequestActivity::class.java))
