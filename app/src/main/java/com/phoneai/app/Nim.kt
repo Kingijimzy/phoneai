@@ -442,9 +442,6 @@ class Nim(private val ctx: Context) {
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
             attempts++
-            if (usedLastMinute(p.id) >= budget(p.id)) {
-                throw AiException("${p.label}: local request budget reached.", true)
-            }
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
             noteHit(p.id)
