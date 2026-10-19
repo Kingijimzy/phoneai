@@ -23,7 +23,7 @@ PhoneAI currently draws its four character looks with Android Canvas. Nova has l
 ## Stage 1 implementation (source pushed; build/device verification pending)
 
 - Added `CinematicAvatarActivity`, a dedicated full-screen WebGL/Three.js scene with a rigged 3D character, cinematic cyan/violet rim lighting, floor rings, ambient particles, slow idle motion, and a 30 fps draw cap for lower-power phones.
-- The model is the Quaternius Universal Base Characters superhero male GLB bundled by the public `programasweights/avatar` project. The source project's asset notes identify the model as CC0 1.0; the scene loads it from jsDelivr at runtime instead of committing a binary into this repository.
+- The model is the Quaternius Universal Base Characters superhero male GLB bundled by the public `programasweights/avatar` project. The source project's asset notes identify the model as CC0 1.0; the scene loads it from jsDelivr at a pinned upstream revision instead of committing a binary into this repository.
 - The activity follows Orion's live listening/thinking/speaking/acting/approval states. Android TTS range callbacks pulse the scene mouth cue; the scene animates a jaw bone when the rig exposes one, and uses a small cyan facial overlay as a fallback for rigs without facial bones.
 - Added a `3D Avatar` entry in the chat shortcut row. The existing Canvas avatar remains the compact/offline fallback.
 - WebView JavaScript is limited to the local scene; top-level navigation is blocked, file/content access is disabled, and network requests are limited to the pinned jsDelivr host.
