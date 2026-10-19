@@ -51,6 +51,13 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     private var smooth = 0f
     private var smoothPulse = 0.5f
     private var smoothSpeed = 20f
+    private var wordPulse = 0f
+
+    /** Speech engine callback: briefly brighten and expand the core on spoken words. */
+    fun pulseMouth() {
+        wordPulse = 1f
+        postInvalidateOnAnimation()
+    }
 
     /** Adaptive frame pacing for entry-level phones under power or thermal pressure. */
     private fun nextFrameDelayMs(): Long {
@@ -83,7 +90,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         val target = if (mode == Mode.LISTENING) level else 0f
         smooth += (target - smooth) * 0.25f
 
-        val targetPulse: Float = when (mode) {
+        var targetPulse: Float = when (mode) {
             Mode.IDLE -> 0.5f + 0.5f * sin(t * 1.6f)
             Mode.LISTENING -> 0.3f + smooth * 0.7f
             Mode.THINKING -> 0.5f + 0.5f * sin(t * 4f)
@@ -91,6 +98,8 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             Mode.ACTING -> 0.5f + 0.5f * sin(t * 6f)
             Mode.WAITING_APPROVAL -> 0.5f + 0.5f * sin(t * 2f)
         }
+        if (mode == Mode.SPEAKING) targetPulse = max(targetPulse, 0.62f + 0.38f * wordPulse)
+        wordPulse *= 0.72f
         smoothPulse += (targetPulse - smoothPulse) * 0.20f
         val pulse = smoothPulse
 
