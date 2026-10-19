@@ -135,7 +135,6 @@ class MainActivity : Activity() {
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             } else {
                 service.showPanel()
-                moveTaskToBack(true)
             }
             return
         }
