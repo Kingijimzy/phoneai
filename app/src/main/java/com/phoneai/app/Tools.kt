@@ -180,9 +180,9 @@ class Tools(private val svc: PhoneAiService) {
                         val run = arr.optJSONObject(index) ?: return@mapNotNull null
                         run.optString("name", "Workflow") + " — " + run.optString("status", "unknown") + "/" +
                             run.optString("conclusion", "pending") + " — " + run.optString("head_branch", "unknown branch") +
-                            "\\n" + run.optString("html_url", "")
+                            "\n" + run.optString("html_url", "")
                     }
-                    "Latest public GitHub Actions runs for $owner/$repository (read-only):\\n" + lines.joinToString("\\n\\n")
+                    "Latest public GitHub Actions runs for $owner/$repository (read-only):\n" + lines.joinToString("\n\n")
                 }
                 "release" -> {
                     val obj = JSONObject(raw)
