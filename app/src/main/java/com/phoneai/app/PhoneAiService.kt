@@ -859,21 +859,35 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun say(text: String) {
         transcript.add(Pair("ai", text))
         main.post {
-            if (running || listening) showStrip(text)
+            if (panel != null) {
+                addLine("ai", text)
+                panelStatus?.text = if (running) "Working..." else "Ready"
+                hideStrip()
+            } else if (running || listening) {
+                showStrip(text)
+            }
         }
         if (Prefs.voice(this)) voice.speak(text)
     }
 
     override fun status(text: String) {
         main.post {
-            if (running) showStrip(text)
+            if (panel != null) {
+                panelStatus?.text = text
+            } else if (running) {
+                showStrip(text)
+            }
         }
     }
 
     override fun note(text: String) {
         transcript.add(Pair("note", text))
         main.post {
-            if (running) showStrip(text)
+            if (panel != null) {
+                addLine("note", text)
+            } else if (running) {
+                showStrip(text)
+            }
         }
     }
 
