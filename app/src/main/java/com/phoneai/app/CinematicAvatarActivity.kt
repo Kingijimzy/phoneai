@@ -215,6 +215,9 @@ canvas{display:block;width:100%;height:100%}
 </head>
 <body>
 <div id="veil"><div class="orb"></div><strong>ORION CORE</strong><span id="loadtext">Building cinematic scene…</span></div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
+</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
@@ -255,6 +258,7 @@ scene.add(stars);
 
 let model=null, head=null, neck=null, jaw=null, mouth=null, eyes=[], state='idle', mouthTarget=.02, blinkUntil=0, nextBlink=performance.now()+2400;
 const clock = new THREE.Clock();
+let lastDraw = 0;
 const loader = new GLTFLoader();
 const modelUrl = 'https://cdn.jsdelivr.net/gh/programasweights/avatar@main/public/assets/character.glb';
 
@@ -317,6 +321,8 @@ window.Orion3D = {
 
 function animate(now){
  requestAnimationFrame(animate);
+ if (now - lastDraw < 30) return;
+ lastDraw = now;
  const dt=Math.min(clock.getDelta(),.05);
  const t=clock.elapsedTime;
  if(model){
@@ -326,7 +332,7 @@ function animate(now){
      head.rotation.z += (targetTilt + Math.sin(t*.7)*.018 - head.rotation.z)*Math.min(1,dt*2.8);
      head.rotation.y += (Math.sin(t*.55)*.08 - head.rotation.y)*Math.min(1,dt*1.5);
    }
-   if(neck) neck.rotation.x += ((state==='speaking'?-.025:state==='listening'?.025:0)-neck.rotation.x)*Math.min(1,dt*2);
+   if(neck) neck.rotation.x += ((state === 'speaking' ? -0.025 : state === 'listening' ? 0.025 : 0)-neck.rotation.x)*Math.min(1,dt*2);
    if(jaw) jaw.rotation.x += ((state==='speaking'?-.22:0)-jaw.rotation.x)*Math.min(1,dt*12);
    if(mouth){
      const talking=state==='speaking';
@@ -335,7 +341,7 @@ function animate(now){
      mouth.scale.y += ((talking?Math.max(.004,mouthTarget*.018):.004)-mouth.scale.y)*Math.min(1,dt*16);
    }
    if(now>nextBlink){blinkUntil=now+135;nextBlink=now+2200+Math.random()*2600;}
-   const blink=now<blinkUntil?.12:1;
+   const blink = now < blinkUntil ? 0.12 : 1;
    for(const eye of eyes) eye.scale.y += (blink-eye.scale.y)*Math.min(1,dt*35);
  }
  scene.children.forEach(o=>{if(o.userData.speed)o.rotation.z+=o.userData.speed*dt;});
