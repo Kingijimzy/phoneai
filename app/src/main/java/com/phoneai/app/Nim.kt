@@ -53,8 +53,8 @@ class Nim(private val ctx: Context) {
             for (p in Providers.all) {
                 if (!Prefs.hasKey(c, p.id)) continue
                 val cd = ((cooldown[p.id] ?: 0L) - now) / 1000
-                sb.append(p.label).append(": PhoneAI safety throttle ")
-                    .append(usedLastMinute(p.id)).append("/").append(budget(p.id)).append(" requests in the last minute")
+                sb.append(p.label).append(": local usage counter ")
+                    .append(usedLastMinute(p.id)).append("/").append(budget(p.id)).append(" requests in the last minute (not the provider's actual quota)")
                 providerQuota[p.id]?.let { sb.append("; provider-reported quota: ").append(it) }
                 if (cd > 0) sb.append(", cooling down ").append(cd).append(" seconds")
                 sb.append(". ")
