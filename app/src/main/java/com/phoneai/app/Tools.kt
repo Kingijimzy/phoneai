@@ -21,6 +21,8 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** The extra abilities the agent can use besides touching the screen. All run on the worker thread. */
 class Tools(private val svc: PhoneAiService) {
@@ -113,6 +115,82 @@ class Tools(private val svc: PhoneAiService) {
             if (code !in 200..299) "error: HTTP $code ${t.take(200)}" else t.take(3500).ifEmpty { "(empty page)" }
         } catch (e: Exception) {
             "error: ${e.message}"
+        }
+    }
+
+    /**
+     * Read-only public GitHub lookup. Calls a fixed api.github.com endpoint; never accepts
+     * arbitrary URLs, never sends a token, and never performs write operations.
+     * section: repo | release | issues
+     */
+    fun githubPublic(owner: String, repository: String, section: String): String {
+        val safePart = Regex("^[A-Za-z0-9_.-]{1,100}$")
+        if (!safePart.matches(owner) || !safePart.matches(repository) ||
+            owner == "." || owner == ".." || repository == "." || repository == "..") {
+            return "error: provide a public GitHub owner and repository name"
+        }
+        val endpoint = when (section.lowercase().trim()) {
+            "repo" -> "repos/$owner/$repository"
+            "release" -> "repos/$owner/$repository/releases/latest"
+            "issues" -> "repos/$owner/$repository/issues?state=open&per_page=10"
+            else -> return "error: section must be repo, release, or issues"
+        }
+        return try {
+            val conn = (URL("https://api.github.com/$endpoint").openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            conn.setRequestProperty("User-Agent", "PhoneAI-ReadOnly-Integration")
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val raw = stream?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(4096)
+                var total = 0
+                while (total < 80_000) {
+                    val n = input.read(buffer, 0, minOf(buffer.size, 80_000 - total))
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                    total += n
+                }
+                out.toString(Charsets.UTF_8.name())
+            } ?: ""
+            conn.disconnect()
+            if (code !in 200..299) {
+                val detail = try { JSONObject(raw).optString("message", "HTTP $code") } catch (_: Exception) { "HTTP $code" }
+                return "GitHub returned $code: ${detail.take(180)}. The repository may be private, missing, or rate-limited."
+            }
+            when (section.lowercase().trim()) {
+                "repo" -> {
+                    val obj = JSONObject(raw)
+                    "Public GitHub repository: ${obj.optString("full_name", "$owner/$repository")}\n" +
+                        "Description: ${obj.optString("description", "No description provided")}\n" +
+                        "Default branch: ${obj.optString("default_branch", "unknown")}\n" +
+                        "Stars: ${obj.optInt("stargazers_count")} | Forks: ${obj.optInt("forks_count")} | Open issues: ${obj.optInt("open_issues_count")}\n" +
+                        "Updated: ${obj.optString("updated_at", "unknown")}\nURL: ${obj.optString("html_url", "https://github.com/$owner/$repository")}"
+                }
+                "release" -> {
+                    val obj = JSONObject(raw)
+                    "Latest published release for $owner/$repository: ${obj.optString("name", obj.optString("tag_name", "unnamed"))}\n" +
+                        "Tag: ${obj.optString("tag_name", "unknown")}\nPublished: ${obj.optString("published_at", "unknown")}\n" +
+                        "URL: ${obj.optString("html_url", "https://github.com/$owner/$repository/releases")}"
+                }
+                else -> {
+                    val arr = JSONArray(raw)
+                    val issues = (0 until arr.length()).mapNotNull { i ->
+                        val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                        if (obj.has("pull_request")) return@mapNotNull null
+                        "#${obj.optInt("number")} ${obj.optString("title", "(untitled)")} — ${obj.optString("html_url", "")}"
+                    }
+                    if (issues.isEmpty()) "No open issues found for $owner/$repository (or the API returned none)." else
+                        "Open issues for $owner/$repository (up to 10):\n" + issues.joinToString("\n").take(2500)
+                }
+            }
+        } catch (e: Exception) {
+            "error: GitHub lookup failed: ${e.message ?: "network error"}"
         }
     }
 
