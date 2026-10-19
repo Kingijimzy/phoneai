@@ -271,6 +271,17 @@ class MainActivity : Activity() {
             "Connect a Telegram bot safely, inspect connector status, and see which services are genuinely available. Bot tokens are encrypted with Android Keystore and never sent to the AI model."
         )
         add(s7, button("Configure Telegram bot", true) { telegramDialog() }, 8)
+        add(s7, button("Configure remote MCP server", true) { mcpDialog() }, 8)
+        add(s7, button("Discover MCP tools", false) {
+            Toast.makeText(this, "Contacting MCP server...", Toast.LENGTH_SHORT).show()
+            Thread {
+                val result = McpConnector.listTools(this)
+                runOnUiThread {
+                    AlertDialog.Builder(this).setTitle("MCP tools").setMessage(result)
+                        .setPositiveButton("OK", null).show()
+                }
+            }.start()
+        }, 8)
         add(s7, button("Check Telegram bot connection", false) {
             Toast.makeText(this, "Checking Telegram...", Toast.LENGTH_SHORT).show()
             Thread {
@@ -789,6 +800,36 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+
+
+    private fun mcpDialog() {
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.VERTICAL
+        wrap.setPadding(dp(20), dp(8), dp(20), 0)
+        val endpoint = EditText(this)
+        endpoint.hint = "MCP endpoint URL (HTTPS)"
+        endpoint.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        endpoint.setSingleLine(true)
+        val bearer = EditText(this)
+        bearer.hint = "Optional bearer token (encrypted)"
+        bearer.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        bearer.setSingleLine(true)
+        wrap.addView(endpoint)
+        wrap.addView(bearer)
+        AlertDialog.Builder(this).setTitle("Remote MCP setup")
+            .setMessage("Use only an MCP server you trust. This first version only discovers tools; it does not execute remote tools. Use HTTPS; HTTP is allowed only for localhost. Credentials are encrypted with Android Keystore.")
+            .setView(wrap)
+            .setPositiveButton("Save server") { _, _ ->
+                val result = McpConnector.save(this, endpoint.text.toString(), bearer.text.toString())
+                AlertDialog.Builder(this).setMessage(result).setPositiveButton("OK", null).show()
+            }
+            .setNeutralButton("Disconnect") { _, _ ->
+                McpConnector.clear(this)
+                Toast.makeText(this, "MCP server settings cleared.", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Cancel", null).show()
     }
 
 
