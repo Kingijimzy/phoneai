@@ -226,7 +226,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            local.tryRun(command)
+            if (activeSkillId == null) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
