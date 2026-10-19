@@ -36,11 +36,21 @@ object WeatherService {
         val clean = place.trim().take(100)
         if (clean.isBlank()) return "Which city or town should I check? I can fetch live weather without using an AI API call."
         return try {
-            val encoded = URLEncoder.encode(clean, "UTF-8")
-            val geo = getJson("https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=1&language=en&format=json")
+            // Geocoding expects the place name, not always a combined "city, country" string.
+            // Search the city first, then use any supplied region/country to disambiguate.
+            val placeParts = clean.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val nameQuery = placeParts.first()
+            val encoded = URLEncoder.encode(nameQuery, "UTF-8")
+            val geo = getJson("https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=10&language=en&format=json")
             val results = geo.optJSONArray("results")
             if (results == null || results.length() == 0) return "I couldn't find \"$clean\". Try a city and country, such as \"Benin City, Nigeria\"."
-            val location = results.getJSONObject(0)
+            val requestedQualifiers = placeParts.drop(1)
+            val location = if (requestedQualifiers.isEmpty()) results.getJSONObject(0) else {
+                (0 until results.length()).map { results.getJSONObject(it) }.firstOrNull { candidate ->
+                    val metadata = (candidate.optString("admin1", "") + " " + candidate.optString("country", "")).lowercase(Locale.ROOT)
+                    requestedQualifiers.all { metadata.contains(it.lowercase(Locale.ROOT)) }
+                } ?: results.getJSONObject(0)
+            }
             val lat = location.optDouble("latitude", Double.NaN)
             val lon = location.optDouble("longitude", Double.NaN)
             if (lat.isNaN() || lon.isNaN()) return "The weather service returned incomplete coordinates for $clean."
