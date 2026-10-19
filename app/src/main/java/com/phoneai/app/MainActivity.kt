@@ -129,13 +129,7 @@ class MainActivity : Activity() {
     private fun showTab(tab: String, animate: Boolean = true) {
         if (tab == "Chat") {
             selectedTab = "Chat"
-            val service = PhoneAiService.instance
-            if (service == null) {
-                Toast.makeText(this, "Enable Orion in Accessibility settings first.", Toast.LENGTH_LONG).show()
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            } else {
-                service.showPanel()
-            }
+            startActivity(Intent(this, MainChatActivity::class.java))
             return
         }
         selectedTab = tab
@@ -182,7 +176,7 @@ class MainActivity : Activity() {
             setPadding(dp(12), dp(12), dp(12), dp(15))
             background = surface(26)
         }
-        val avatar = AvatarView(this).apply { style = 1; contentDescription = "Orion animated avatar" }
+        val avatar = OrbView(this).apply { contentDescription = "Orion animated Jarvis-style energy core" }
         hero.addView(avatar, LinearLayout.LayoutParams(dp(196), dp(196)).apply { gravity = Gravity.CENTER })
         hero.addView(label("ORION IS HERE", 12f, Theme.CYAN, true).apply { gravity = Gravity.CENTER })
         hero.addView(label("Ready when you are.", 14f, Theme.TEXT).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(3)) })
@@ -192,9 +186,6 @@ class MainActivity : Activity() {
         })
         gap(page, hero, 19)
         gap(page, action("Start a conversation", "Chat, ask, brainstorm, or give Orion a task", true) { showTab("Chat") }, 12)
-        gap(page, action("Enter cinematic 3D", "Meet Orion in the live 3D scene") {
-            startActivity(Intent(this, CinematicAvatarActivity::class.java))
-        })
         val quick = section(page, "Quick access", "Your most-used areas, one tap away")
         gap(quick, action("Memory & routines", "Review what Orion remembers and saved workflows") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
@@ -254,8 +245,8 @@ class MainActivity : Activity() {
         gap(page, action("Permissions & diagnostics", "Accessibility, microphone, network and device tools") {
             startActivity(Intent(this, SettingsActivity::class.java))
         })
-        gap(page, action("Cinematic 3D character", "Open the animated 3D stage") {
-            startActivity(Intent(this, CinematicAvatarActivity::class.java))
+        gap(page, action("Open full-screen chat", "A separate conversation from the floating command orb") {
+            startActivity(Intent(this, MainChatActivity::class.java))
         })
         gap(page, action("Open Android accessibility settings", "Required for on-screen phone control") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
