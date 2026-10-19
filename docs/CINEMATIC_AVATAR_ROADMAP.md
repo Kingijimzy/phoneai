@@ -11,14 +11,14 @@ PhoneAI currently draws its four character looks with Android Canvas. Nova has l
 - The policy is local, uses Android's exposed PowerManager status, adds no permission or network request, and leaves the interaction states intact.
 - This reduces avoidable rendering work on entry-level devices such as 4 GB RAM phones while retaining motion.
 
-## Route to genuine cinematic 3D
+## Next route: more realistic expressions and offline reliability
 
-1. **Choose a redistributable character asset.** Prefer a rigged GLB/glTF or VRM human model with documented license and redistribution rights. Do not ship a model scraped from a website or with unclear commercial/redistribution terms.
-2. **Add a 3D renderer behind a feature boundary.** Evaluate Android Filament or a compatible glTF renderer in a separate branch; keep the current Canvas avatar as a fallback for unsupported devices or renderer failures. Confirm current Android/Gradle compatibility before pinning dependencies.
-3. **Prepare a mobile-ready model.** Use a modest polygon budget, compressed textures, one or two material variants, and a small set of facial blendshapes (blink, jaw open, smile, brow). Test memory and GPU load on low-end hardware.
-4. **Drive expressions from app state.** Map idle/listening/thinking/speaking/acting/waiting-for-approval to explicit animation parameters. Preserve the visible approval state and do not imply an action succeeded before the service reports it.
-5. **Improve lip sync in two steps.** First use the speech engine's available utterance callbacks and a smoothed amplitude envelope. For real phoneme-level sync, add viseme/phoneme timing or audio analysis; the current word-pulse mouth movement is only an approximation.
-6. **Add a safe fallback and performance gate.** Keep Canvas mode selectable, lower frame rate under thermal pressure, avoid rendering when detached/invisible, and measure frame pacing, memory, and battery during a combined test.
+1. **Upgrade the model.** The current CC0 model is a stylized superhero. The next visual milestone is a clothed, higher-detail character with documented redistribution rights and a facial rig or blendshapes; do not bundle a nude base mesh as Orion's default appearance.
+2. **Keep the renderer isolated.** The first 3D stage uses Three.js in a restricted Android WebView and keeps Canvas for the floating button and fallback. Evaluate native Filament only if device testing shows the WebView renderer is too heavy or unstable.
+3. **Make the model available offline.** The current GLB is fetched from a pinned public CDN revision. Bundle a reviewed, compressed asset only after confirming size, license, and APK impact.
+4. **Improve expression mapping.** Current cues include idle head motion, state-based head/neck movement, blinking, and a synthetic mouth cue; a better facial rig should support blink, brow, smile, jaw, and eye gaze through real bones or morph targets.
+5. **Improve lip sync.** Current motion follows Android TTS range callbacks and a smoothed mouth cue, not true phoneme/viseme timing. Add viseme timing only when a reliable, low-cost signal is available; never imply exact lip sync from word callbacks alone.
+6. **Measure before optimizing.** Verify load time, frame pacing, memory, temperature, battery behavior, screen rotation, pause/resume, and fallback on the Redmi device. Keep the scene capped near 30 fps and stop rendering when the activity is not visible.
 
 ## Stage 1 implementation (source pushed; build/device verification pending)
 
@@ -37,15 +37,17 @@ PhoneAI currently draws its four character looks with Android Canvas. Nova has l
 
 ## Not yet implemented / verified
 
-- No GLB/VRM human model is bundled.
-- No Filament or other 3D renderer is integrated.
-- No true 3D lighting, head rotation, skeletal facial rig, or phoneme-level lip sync exists yet.
-- The adaptive frame pacing compiles only after the next Actions run; actual thermal response and animation quality still require device verification.
+- No photorealistic human model or advanced facial blendshape rig is bundled; the current CC0 superhero is stylized.
+- The GLB and Three.js modules are fetched at runtime; the 3D stage is not yet available offline.
+- Speech animation is callback-driven and approximate, not phoneme-perfect.
+- GitHub Actions compilation and physical-device rendering/voice/thermal behavior must be verified before calling this stage complete.
 
-## Stage 5 follow-on checklist
+## 3D acceptance checklist
 
-- [ ] Check for compile errors in the new thermal/power-aware frame pacing.
-- [ ] Compare animation at normal, battery-saver, and warm-device conditions on the Redmi phone.
-- [ ] Confirm animation remains responsive after navigating away and returning.
-- [ ] Measure whether the avatar meaningfully reduces heating/battery use; do not claim savings without measurement.
-- [ ] Select and license a mobile-ready 3D character before implementing the renderer.
+- [ ] Confirm the latest GitHub Actions run builds the current branch head and uploads the APK artifact.
+- [ ] Confirm the model URL loads in Android WebView on mobile data and Wi-Fi; check that the import map and GLTF loader work.
+- [ ] Check face placement and model framing; ensure the facial overlay does not float away from the head when it turns.
+- [ ] Confirm listening/thinking/speaking/acting/approval states update while the stage is open.
+- [ ] Confirm Android TTS range callbacks produce visible but restrained mouth movement.
+- [ ] Confirm closing the stage releases WebView resources and restores the lightweight floating avatar.
+- [ ] Check power-save, warm-device, and normal operation on the Redmi; record measured behavior rather than assuming performance.
