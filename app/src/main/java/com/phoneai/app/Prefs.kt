@@ -45,12 +45,7 @@ object Providers {
             "mistral-small-latest", "mistral-small-latest", "your Mistral key",
             "FREE tier. console.mistral.ai"
         ),
-        Provider(
-            "github", "GitHub Models", "https://models.github.ai/inference",
-            "openai/gpt-4o-mini", "openai/gpt-4o-mini", "github_pat_...",
-            "FREE with a GitHub token (models access). github.com/marketplace/models",
-            "https://models.github.ai/catalog/models"
-        ),
+        // GitHub Models was retired on 2026-07-30; do not expose a dead endpoint as a free provider.
         Provider(
             "sambanova", "SambaNova", "https://api.sambanova.ai/v1",
             "Meta-Llama-3.3-70B-Instruct", "Llama-3.2-11B-Vision-Instruct", "your SambaNova key",
