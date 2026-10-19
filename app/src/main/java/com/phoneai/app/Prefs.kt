@@ -37,8 +37,8 @@ object Providers {
         ),
         Provider(
             "openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
-            "meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free", "sk-or-...",
-            "FREE models. Many models, one key. openrouter.ai"
+            "nvidia/nemotron-3.5-lightning:free", "nvidia/nemotron-3.5-super-vl:free", "sk-or-...",
+            "Free model endpoints; request limits and privacy terms vary. Avoid sending secrets. openrouter.ai"
         ),
         Provider(
             "mistral", "Mistral", "https://api.mistral.ai/v1",
@@ -64,7 +64,7 @@ object Providers {
         Provider(
             "huggingface", "Hugging Face", "https://router.huggingface.co/v1",
             "meta-llama/Llama-3.3-70B-Instruct", "Qwen/Qwen2.5-VL-72B-Instruct", "hf_...",
-            "Free monthly credits. huggingface.co/settings/tokens"
+            "Very small free inference credit (currently $0.10/month; subject to change). huggingface.co/settings/tokens"
         ),
         Provider(
             "deepseek", "DeepSeek", "https://api.deepseek.com",
