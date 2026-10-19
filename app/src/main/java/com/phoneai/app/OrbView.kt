@@ -18,7 +18,7 @@ import kotlin.math.sin
 
 /** Orion's face: an animated orb that shows idle, listening, thinking, speaking and acting. */
 class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : View(c, a) {
-    enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING }
+    enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING, WAITING_APPROVAL }
 
     companion object {
         val CYAN = 0xFF38E1FF.toInt()
@@ -53,7 +53,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         Mode.LISTENING -> OK
         Mode.THINKING -> VIOLET
         Mode.SPEAKING -> CYAN
-        Mode.ACTING -> WARN
+        Mode.ACTING, Mode.WAITING_APPROVAL -> WARN
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -74,6 +74,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             Mode.THINKING -> 0.5f + 0.5f * sin(t * 4f)
             Mode.SPEAKING -> 0.5f + 0.5f * sin(t * 9f) * (0.6f + 0.4f * sin(t * 3.3f))
             Mode.ACTING -> 0.5f + 0.5f * sin(t * 6f)
+            Mode.WAITING_APPROVAL -> 0.5f + 0.5f * sin(t * 2f)
         }
 
         if (backing) {
@@ -89,7 +90,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         canvas.drawCircle(cx, cy, r, glow)
 
         // ripples while listening or speaking
-        if (mode == Mode.LISTENING || mode == Mode.SPEAKING) {
+        if (mode == Mode.LISTENING || mode == Mode.SPEAKING || mode == Mode.WAITING_APPROVAL) {
             for (i in 0 until 3) {
                 val phase = ((t * 0.7f) + i / 3f) % 1f
                 ring.strokeWidth = r * 0.025f
@@ -102,6 +103,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         val speed = when (mode) {
             Mode.THINKING -> 220f
             Mode.ACTING -> 140f
+            Mode.WAITING_APPROVAL -> 45f
             Mode.IDLE -> 20f
             else -> 60f
         }
@@ -112,9 +114,9 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             rect.set(cx - rad, cy - rad, cx + rad, cy + rad)
             val dir = if (i % 2 == 0) 1f else -1f
             val start = (t * speed * dir + i * 120f) % 360f
-            val sweep = if (mode == Mode.THINKING) 90f else 55f
+            val sweep = if (mode == Mode.THINKING) 90f else if (mode == Mode.WAITING_APPROVAL) 35f else 55f
             ring.color = if (i == 1) VIOLET else col
-            ring.alpha = if (mode == Mode.IDLE) 110 else 220
+            ring.alpha = if (mode == Mode.IDLE) 110 else if (mode == Mode.WAITING_APPROVAL) 255 else 220
             canvas.drawArc(rect, start, sweep, false, ring)
             canvas.drawArc(rect, start + 180f, sweep * 0.6f, false, ring)
         }
