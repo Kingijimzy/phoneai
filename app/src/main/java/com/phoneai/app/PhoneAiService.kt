@@ -682,11 +682,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice.stopSpeaking()
         voice.stopListening()
         listening = false
-        closePanel(false)
+
+        // Keep ordinary conversation inside the chat surface. Hide it only when Orion
+        // needs to see or operate another app, otherwise the user sees a disappearing strip
+        // instead of a continuous chatbot conversation.
+        val needsPhoneControl = Regex(
+            "\\b(open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|whatsapp|email|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this)\\b",
+            RegexOption.IGNORE_CASE
+        ).containsMatchIn(t)
+        if (needsPhoneControl) closePanel(false)
         hideBubble()
         running = true
         phase = "thinking"
-        showStrip("Thinking...")
+        if (panel != null) {
+            panelStatus?.text = "Thinking..."
+            hideStrip()
+        } else {
+            showStrip("Thinking...")
+        }
         refreshMode()
         worker.execute {
             try {
@@ -702,7 +715,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         running = false
         refreshMode()
         val last = transcript.lastOrNull { it.first == "ai" }?.second ?: "Done."
-        showStrip(last)
+        if (panel != null) {
+            panelStatus?.text = "Ready"
+            hideStrip()
+            logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+        } else {
+            showStrip(last)
+        }
         if (handsActive) {
             voice.whenIdle { listenNow() }
         } else {
