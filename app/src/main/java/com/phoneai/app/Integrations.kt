@@ -187,7 +187,7 @@ object IntegrationStatus {
         "Telegram Bot API: " + if (TelegramBridge.isConfigured(context)) "configured locally; verify token to check connectivity" else "not configured",
         "YouTube: browser search only; official metadata API not connected",
         "Gmail: not connected (secure OAuth still required)",
-        "Market data: not connected in this app build",
+        "Crypto market data: public Bybit spot ticker (read-only; no API key); FX feeds not connected",
         "Remote MCP servers: " + if (McpConnector.configured(context)) "configured; remote tool calls require per-call approval" else "none configured",
         "Phone tools and declarative skills: local; skills remain allowlisted and budget-limited"
     ).joinToString("\n")
