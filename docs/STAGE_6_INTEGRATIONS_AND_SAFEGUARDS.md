@@ -51,3 +51,8 @@ PhoneAI now includes a narrowly scoped Telegram Bot API connection:
 ## MCP and workflow integrations
 
 The app exposes an integration-status report and keeps remote MCP servers unconfigured by default. MCP is a protocol, not a single service: each server requires an explicit endpoint, authentication model, tool allowlist, timeout/call budget, and approval rules. Do not accept arbitrary server URLs or auto-enable every tool returned by a server. Next candidates after verification are a constrained remote-MCP client, official YouTube metadata, a least-privilege Gmail OAuth flow, and public/read-only market data. Telegram messages, email, posts, orders, and other external writes must have per-action approval.
+
+
+## Remote MCP — endpoint setup and read-only discovery added
+
+PhoneAI can save a user-selected MCP Streamable HTTP endpoint and optional bearer token, encrypted with Android Keystore, then perform initialize and tools/list discovery. Endpoints must use HTTPS except loopback HTTP for local development. Tool descriptions are untrusted data. Remote tool execution is intentionally not enabled in this first client; the next increment needs a reviewed tool allowlist and per-call approval UX. Some servers may require different protocol versions, session handling, OAuth, or transport behavior and may not work yet. Never send private screen contents, credentials, or secrets to remote MCP servers.
