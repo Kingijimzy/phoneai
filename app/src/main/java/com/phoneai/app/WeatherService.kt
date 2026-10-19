@@ -21,7 +21,7 @@ object WeatherService {
     /** Only uses a place explicitly supplied by the user; never guesses precise location. */
     fun requestedPlace(text: String): String {
         val patterns = listOf(
-            Regex("(?i)\\b(?:weather|forecast)\\s+(?:in|for|at)\\s+(.+?)(?:\\s+(?:today|tonight|tomorrow|now|please)\\b|[?.!,]|$)"),
+            Regex("(?i)\\b(?:weather|forecast)\\s+(?:in|for|at)\\s+(.+?)(?:\\s+(?:right now|at the moment|currently|today|tonight|tomorrow|now|this weekend|please)\\b|[?.!,]|$)"),
             Regex("(?i)\\b(?:in|for|at)\\s+([A-Z][A-Za-z .'-]{1,60})(?:\\s+(?:today|tonight|tomorrow|now|please)\\b|[?.!,]|$)")
         )
         for (pattern in patterns) {
