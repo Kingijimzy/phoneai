@@ -41,3 +41,24 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 ## Known limitation
 
 The force-close report is not yet reproduced on the physical phone in this workflow. Do not label the app fully stable until the device checks above pass. If the new build still closes, capture the crash stack from Android logcat so the exact exception can be fixed instead of guessing.
+
+## Live-data and free-quota integration pass
+
+Implemented in the integration branch (build/device verification still required):
+- [x] Open-Meteo geocoding + current weather/today forecast; no key and no LLM call.
+- [x] GDELT public news lookup for recent headlines; no key and no LLM call.
+- [x] Direct DuckDuckGo HTML search for explicit web-search requests; no key and no LLM call. This public HTML interface can change or rate-limit requests, so failures must be reported honestly.
+- [x] Direct Bybit public spot ticker for common crypto price questions; no key and no LLM call.
+- [x] Quota-saver mode avoids extra model-list API requests, does not fan out across several model candidates after a timeout, and does not retry empty model responses.
+- [x] Agent instructions prefer direct-data/local tools and batch up to four independent low-risk tool calls to reduce model turns.
+- [ ] Build the latest branch head with GitHub Actions and inspect Gradle output.
+- [ ] On the Redmi device, verify weather for a named city, news lookup, explicit web search, BTC price, offline/network failure messaging, and no crash.
+- [ ] Measure actual provider requests for a multi-step task and verify primary + at most one configured backup under quota-saver mode.
+- [ ] Verify search/news source links open and remain clearly labelled as external, untrusted content.
+
+### Data-source boundaries
+- Open-Meteo is used for weather forecasts, not a guarantee of ground-station observations or perfect hyperlocal accuracy.
+- GDELT is a public news index; coverage, freshness, ranking, and regional relevance can vary.
+- DuckDuckGo HTML results are parsed from a public search page, not a stable official search API. If the page changes or blocks requests, PhoneAI should show a failure message rather than invent results.
+- Bybit endpoint is public spot market data only. This is not an account connection, derivatives feed, trading signal, or order execution.
+- Free model tiers still impose provider-owned rate limits. PhoneAI can reduce avoidable calls and resume work, but cannot guarantee unlimited inference.
