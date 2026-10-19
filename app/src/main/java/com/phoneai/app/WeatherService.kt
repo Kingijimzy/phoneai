@@ -97,7 +97,7 @@ object WeatherService {
             readTimeout = TIMEOUT_MS
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "PhoneAI/1.0 (Android weather lookup)")
-            instanceFollowRedirects = false
+            instanceFollowRedirects = true
         }
         try {
             val code = connection.responseCode
