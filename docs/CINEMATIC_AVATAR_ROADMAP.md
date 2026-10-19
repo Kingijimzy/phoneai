@@ -51,3 +51,14 @@ PhoneAI currently draws its four character looks with Android Canvas. Nova has l
 - [ ] Confirm Android TTS range callbacks produce visible but restrained mouth movement.
 - [ ] Confirm closing the stage releases WebView resources and restores the lightweight floating avatar.
 - [ ] Check power-save, warm-device, and normal operation on the Redmi; record measured behavior rather than assuming performance.
+
+
+## Animation polish pass (source changes pushed; physical-device verification pending)
+
+- The 3D scene now uses a supplied idle/standing/breathing clip when the GLB has one, while retaining procedural motion when it does not.
+- Added eased camera/light movement, subtle torso/shoulder/hip motion, speaking nods, and state-aware body poses.
+- The renderer blends compatible blink/mouth morph targets if the model exposes the matching names; this remains approximate callback-driven lip movement, not phoneme-level visemes.
+- The 2D avatar eases head tilt and gaze between states; the core orb eases pulse and orbit-speed changes.
+- Chat bubbles enter with a short fade/slide, the composer panel eases into place, and buttons/chips have restrained press feedback. The thinking indicator now pulses instead of only changing punctuation.
+- Render pacing remains capped near 30 fps for the 3D stage, with the Android Canvas avatars still using power/thermal-aware pacing.
+- Device acceptance is still required to confirm real-world smoothness, model rig compatibility, memory use, and thermal behavior.

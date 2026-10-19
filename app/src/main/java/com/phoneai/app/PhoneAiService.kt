@@ -194,6 +194,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         t.gravity = Gravity.CENTER
         t.setPadding(dp(16), dp(10), dp(16), dp(10))
         t.background = rounded(bg, dp(14).toFloat())
+        t.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(75L).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(125L).start()
+            }
+            false
+        }
         t.setOnClickListener { onClick() }
         return t
     }
@@ -206,6 +214,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         t.gravity = Gravity.CENTER
         t.setPadding(dp(12), dp(7), dp(12), dp(7))
         t.background = rounded(Theme.PANEL2, dp(16).toFloat(), Theme.LINE)
+        t.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(75L).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(125L).start()
+            }
+            false
+        }
         t.setOnClickListener { onClick() }
         return t
     }
@@ -415,7 +431,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 true
             }
         }
+        t.alpha = 0f
+        t.translationY = dp(if (kind == "me") 8 else 10).toFloat()
         box.addView(t, lp)
+        t.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(210L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
         logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
     }
 
@@ -436,6 +460,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 if (activityView !== indicator || panel == null || !running) return
                 frame = (frame + 1) % 4
                 indicator.text = "Orion is thinking" + "·".repeat(frame)
+                val pulse = if (frame % 2 == 0) 1f else 0.76f
+                val scale = if (frame % 2 == 0) 1f else 0.985f
+                indicator.animate().alpha(pulse).scaleX(scale).scaleY(scale).setDuration(340L).start()
                 logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
                 main.postDelayed(this, 420)
             }
@@ -611,8 +638,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
         lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        root.alpha = 0f
+        root.translationY = dp(24).toFloat()
         wm.addView(root, lp)
         panel = root
+        root.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(230L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
         refreshMode()
     }
 

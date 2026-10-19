@@ -59,6 +59,9 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
     private var blinkUntil = 0L
     private var nextBlink = 0L
     private var smoothLevel = 0f
+    private var smoothTilt = 0f
+    private var smoothGazeX = 0f
+    private var smoothGazeY = 0f
 
     /** Called for every spoken word; opens the mouth a bit. */
     fun pulseMouth() {
@@ -117,7 +120,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         if (mode == OrbView.Mode.SPEAKING && now - lastWord <= 450) mouthTarget *= 0.88f
 
         val bob = sin(t * 1.4f) * s * 0.012f
-        val tilt = when (mode) {
+        val targetTilt = when (mode) {
             OrbView.Mode.LISTENING -> sin(t * 1.1f) * 2.5f
             OrbView.Mode.THINKING -> -4f
             OrbView.Mode.WAITING_APPROVAL -> sin(t * 1.5f) * 1.2f
@@ -142,6 +145,13 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             OrbView.Mode.SPEAKING -> gazeX = sin(t * 0.9f) * 0.25f
             OrbView.Mode.WAITING_APPROVAL -> gazeY = 0.2f
         }
+        // Ease expression/gaze changes so state changes feel intentional instead of snapping.
+        smoothTilt += (targetTilt - smoothTilt) * 0.18f
+        smoothGazeX += (gazeX - smoothGazeX) * 0.16f
+        smoothGazeY += (gazeY - smoothGazeY) * 0.16f
+        val tilt = smoothTilt
+        gazeX = smoothGazeX
+        gazeY = smoothGazeY
 
         val cx = w / 2f
         val cy = h / 2f + bob

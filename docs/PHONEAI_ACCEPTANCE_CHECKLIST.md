@@ -28,8 +28,11 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] Add a chat shortcut to open the 3D stage and keep the lightweight Canvas avatar as fallback.
 - [x] Synchronize the 3D scene with listening/thinking/speaking/acting/approval state and TTS word/range callbacks.
 - [x] Refresh Orion's launcher copy and dark visual palette.
+- [x] Ease 2D avatar gaze/head transitions and the orb's pulse/orbit-speed changes.
+- [x] Animate chat bubble entrance, panel opening, button/chip press feedback, and the thinking indicator.
+- [x] Add 3D idle-clip preference when available, state-aware torso/shoulder/hip motion, subtle camera/light drift, and compatible blink/mouth morph-target blending.
 - [ ] Verify the 3D stage loads the GLB from the approved CDN, the character framing/face cues look correct, and failure returns cleanly to the Canvas avatar.
-- [ ] Verify head/eye/mouth movement follows voice states and TTS range callbacks without excessive lag or distracting motion.
+- [ ] Verify head/eye/mouth movement follows voice states and TTS range callbacks without excessive lag or distracting motion, including whether this GLB exposes compatible facial morph targets.
 - [ ] Check the 3D scene at normal and power-save/thermal conditions on the Redmi; confirm 30 fps cap, heat, memory, and background cleanup.
 - [ ] Confirm the thinking indicator appears/disappears correctly and Stop cancels a slow request without leaving stale UI on the physical Android device.
 - [ ] Confirm chat bubbles, IME/send behavior, copy action, and tap-to-talk on the physical Android device.

@@ -56,7 +56,10 @@ starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starPos,3));
 const stars = new THREE.Points(starGeo,new THREE.PointsMaterial({color:0x6bcbff,size:.018,transparent:true,opacity:.72}));
 scene.add(stars);
 
-let model=null, head=null, neck=null, jaw=null, mouth=null, eyes=[], state='idle', mouthTarget=.02, blinkUntil=0, nextBlink=performance.now()+2400;
+let model=null, head=null, neck=null, jaw=null, spine=null, chest=null, hips=null;
+let leftShoulder=null, rightShoulder=null, mouth=null, eyes=[], faceMorphs=[];
+let mixer=null, idleAction=null, baseModelY=0, state='idle', mouthTarget=.02, blinkUntil=0, nextBlink=performance.now()+2400;
+let rimEnergy=22, violetEnergy=17;
 const clock = new THREE.Clock();
 let lastDraw = 0;
 const loader = new GLTFLoader();
@@ -88,16 +91,39 @@ function fitCharacter(root){
 loader.load(modelUrl, gltf=>{
  model = gltf.scene;
  model.traverse(o=>{
-   if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.metalness=Math.max(o.material.metalness||0,.08);o.material.roughness=Math.min(o.material.roughness||.8,.52);}}
+   if(o.isMesh){
+     o.castShadow=true;
+     o.receiveShadow=true;
+     if(o.material){o.material.metalness=Math.max(o.material.metalness||0,.08);o.material.roughness=Math.min(o.material.roughness||.8,.52);}
+     if(o.morphTargetDictionary && o.morphTargetInfluences){
+       for(const [name,index] of Object.entries(o.morphTargetDictionary)){
+         const n=name.toLowerCase();
+         if(/blink|eye.?close|mouth.?open|jaw.?open/.test(n)) faceMorphs.push({mesh:o,index,name:n});
+       }
+     }
+   }
    if(o.isBone){
      const n=o.name.toLowerCase();
      if(!head && n.includes('head')) head=o;
      if(!neck && n.includes('neck')) neck=o;
      if(!jaw && (n.includes('jaw')||n.includes('mandible'))) jaw=o;
+     if(!spine && /spine|spine1|spine_01/.test(n)) spine=o;
+     if(!chest && /chest|upperchest|upper_chest/.test(n)) chest=o;
+     if(!hips && /hips|pelvis/.test(n)) hips=o;
+     if(!leftShoulder && (n.includes('leftshoulder')||n.includes('shoulder_l'))) leftShoulder=o;
+     if(!rightShoulder && (n.includes('rightshoulder')||n.includes('shoulder_r'))) rightShoulder=o;
    }
  });
  fitCharacter(model);
+ baseModelY=model.position.y;
  scene.add(model);
+ // Prefer a true idle/standing clip if the asset provides one; procedural motion remains
+ // the fallback when the model has no useful built-in idle animation.
+ if(gltf.animations && gltf.animations.length){
+   mixer=new THREE.AnimationMixer(model);
+   const idleClip=gltf.animations.find(clip=>/idle|stand|breath|relax/i.test(clip.name));
+   if(idleClip){idleAction=mixer.clipAction(idleClip);idleAction.setLoop(THREE.LoopRepeat,Infinity);idleAction.play();}
+ }
  if(head) addFaceRig(head,model.scale.x);
  document.getElementById('loadtext').textContent='Orion is online.';
  document.getElementById('veil').style.opacity='0';
@@ -125,12 +151,29 @@ function animate(now){
  lastDraw = now;
  const dt=Math.min(clock.getDelta(),.05);
  const t=clock.elapsedTime;
+ if(mixer) mixer.update(dt);
+ // Gentle camera and lighting drift adds depth without a distracting orbit.
+ camera.position.x += (Math.sin(t*.18)*.045-camera.position.x)*Math.min(1,dt*.8);
+ camera.position.y += (1.45+Math.sin(t*.31)*.012-camera.position.y)*Math.min(1,dt*.7);
+ camera.lookAt(0,1.05+Math.sin(t*.24)*.012,0);
+ rim.position.x=-2+Math.sin(t*.42)*.22;
+ violet.position.x=2+Math.cos(t*.34)*.18;
  if(model){
-   model.rotation.y = Math.sin(t*.22)*.13;
+   const listenLean=state==='listening'?.018:0;
+   model.position.y=baseModelY+Math.sin(t*1.25)*.012+(state==='speaking'?Math.sin(t*7.2)*.006:0);
+   model.rotation.y += ((Math.sin(t*.22)*.09+(state==='listening'?.025:0))-model.rotation.y)*Math.min(1,dt*1.8);
+   model.rotation.x += ((state==='listening'?-listenLean:state==='thinking'?.008:0)-model.rotation.x)*Math.min(1,dt*1.8);
+   if(spine) spine.rotation.x += ((state==='speaking'?Math.sin(t*4.1)*.012:state==='listening'?.012:0)-spine.rotation.x)*Math.min(1,dt*2.6);
+   if(chest) chest.rotation.z += ((Math.sin(t*.72)*.012+(state==='acting'?.012:0))-chest.rotation.z)*Math.min(1,dt*2.2);
+   if(hips) hips.rotation.z += (Math.sin(t*.48)*.006-hips.rotation.z)*Math.min(1,dt*1.5);
+   if(leftShoulder) leftShoulder.rotation.x += ((state==='acting'?.025:0)-leftShoulder.rotation.x)*Math.min(1,dt*2.2);
+   if(rightShoulder) rightShoulder.rotation.x += ((state==='acting'?-.025:0)-rightShoulder.rotation.x)*Math.min(1,dt*2.2);
    if(head){
      const targetTilt = state==='thinking' ? -.12 : state==='listening' ? .07 : state==='waiting_approval' ? .04 : 0;
+     const nod = state==='speaking' ? Math.sin(t*3.4)*.018 : state==='listening' ? Math.sin(t*1.8)*.012 : 0;
      head.rotation.z += (targetTilt + Math.sin(t*.7)*.018 - head.rotation.z)*Math.min(1,dt*2.8);
-     head.rotation.y += (Math.sin(t*.55)*.08 - head.rotation.y)*Math.min(1,dt*1.5);
+     head.rotation.x += (nod-head.rotation.x)*Math.min(1,dt*2.4);
+     head.rotation.y += ((Math.sin(t*.55)*.08+(state==='listening'?.018:0))-head.rotation.y)*Math.min(1,dt*1.5);
    }
    if(neck) neck.rotation.x += ((state === 'speaking' ? -0.025 : state === 'listening' ? 0.025 : 0)-neck.rotation.x)*Math.min(1,dt*2);
    if(jaw) jaw.rotation.x += ((state==='speaking'?-.22:0)-jaw.rotation.x)*Math.min(1,dt*12);
@@ -141,12 +184,25 @@ function animate(now){
      mouth.scale.y += ((talking?Math.max(.004,mouthTarget*.018):.004)-mouth.scale.y)*Math.min(1,dt*16);
    }
    if(now>nextBlink){blinkUntil=now+135;nextBlink=now+2200+Math.random()*2600;}
-   const blink = now < blinkUntil ? 0.12 : 1;
+   const blinkClosed = now < blinkUntil;
+   const blink = blinkClosed ? 0.12 : 1;
    for(const eye of eyes) eye.scale.y += (blink-eye.scale.y)*Math.min(1,dt*35);
+   for(const morph of faceMorphs){
+     const isBlink=/blink|eye.?close/.test(morph.name);
+     const isMouth=/mouth.?open|jaw.?open/.test(morph.name);
+     const target=isBlink?(blinkClosed?1:0):(isMouth&&state==='speaking'?Math.min(1,Math.max(.08,mouthTarget)):0);
+     const influences=morph.mesh.morphTargetInfluences;
+     if(influences) influences[morph.index]+=(target-influences[morph.index])*Math.min(1,dt*12);
+   }
  }
  scene.children.forEach(o=>{if(o.userData.speed)o.rotation.z+=o.userData.speed*dt;});
  stars.rotation.y=t*.012;
- rim.intensity=state==='listening'?28:state==='speaking'?25:state==='thinking'?18:22;
+ const rimTarget=state==='listening'?28:state==='speaking'?25:state==='thinking'?18:state==='acting'?24:22;
+ const violetTarget=state==='thinking'?22:state==='waiting_approval'?14:17;
+ rimEnergy+=(rimTarget-rimEnergy)*Math.min(1,dt*2.6);
+ violetEnergy+=(violetTarget-violetEnergy)*Math.min(1,dt*2.2);
+ rim.intensity=rimEnergy;
+ violet.intensity=violetEnergy;
  renderer.render(scene,camera);
 }
 requestAnimationFrame(animate);

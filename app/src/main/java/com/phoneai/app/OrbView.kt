@@ -49,6 +49,8 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val rect = RectF()
     private var smooth = 0f
+    private var smoothPulse = 0.5f
+    private var smoothSpeed = 20f
 
     /** Adaptive frame pacing for entry-level phones under power or thermal pressure. */
     private fun nextFrameDelayMs(): Long {
@@ -81,7 +83,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         val target = if (mode == Mode.LISTENING) level else 0f
         smooth += (target - smooth) * 0.25f
 
-        val pulse: Float = when (mode) {
+        val targetPulse: Float = when (mode) {
             Mode.IDLE -> 0.5f + 0.5f * sin(t * 1.6f)
             Mode.LISTENING -> 0.3f + smooth * 0.7f
             Mode.THINKING -> 0.5f + 0.5f * sin(t * 4f)
@@ -89,6 +91,8 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             Mode.ACTING -> 0.5f + 0.5f * sin(t * 6f)
             Mode.WAITING_APPROVAL -> 0.5f + 0.5f * sin(t * 2f)
         }
+        smoothPulse += (targetPulse - smoothPulse) * 0.20f
+        val pulse = smoothPulse
 
         if (backing) {
             core.shader = null
@@ -113,13 +117,15 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         }
 
         // rotating arcs
-        val speed = when (mode) {
+        val targetSpeed = when (mode) {
             Mode.THINKING -> 220f
             Mode.ACTING -> 140f
             Mode.WAITING_APPROVAL -> 45f
             Mode.IDLE -> 20f
             else -> 60f
         }
+        smoothSpeed += (targetSpeed - smoothSpeed) * 0.16f
+        val speed = smoothSpeed
         ring.strokeWidth = r * 0.05f
         ring.strokeCap = Paint.Cap.ROUND
         for (i in 0 until 3) {
