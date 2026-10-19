@@ -121,7 +121,7 @@ class Tools(private val svc: PhoneAiService) {
     /**
      * Read-only public GitHub lookup. Calls a fixed api.github.com endpoint; never accepts
      * arbitrary URLs, never sends a token, and never performs write operations.
-     * section: repo | release | issues
+     * section: repo | release | issues | runs
      */
     fun githubPublic(owner: String, repository: String, section: String): String {
         val safePart = Regex("^[A-Za-z0-9_.-]{1,100}$")
@@ -133,7 +133,8 @@ class Tools(private val svc: PhoneAiService) {
             "repo" -> "repos/$owner/$repository"
             "release" -> "repos/$owner/$repository/releases/latest"
             "issues" -> "repos/$owner/$repository/issues?state=open&per_page=10"
-            else -> return "error: section must be repo, release, or issues"
+            "runs" -> "repos/$owner/$repository/actions/runs?per_page=5"
+            else -> return "error: section must be repo, release, issues, or runs"
         }
         return try {
             val conn = (URL("https://api.github.com/$endpoint").openConnection() as HttpURLConnection)
@@ -171,6 +172,17 @@ class Tools(private val svc: PhoneAiService) {
                         "Default branch: ${obj.optString("default_branch", "unknown")}\n" +
                         "Stars: ${obj.optInt("stargazers_count")} | Forks: ${obj.optInt("forks_count")} | Open issues: ${obj.optInt("open_issues_count")}\n" +
                         "Updated: ${obj.optString("updated_at", "unknown")}\nURL: ${obj.optString("html_url", "https://github.com/$owner/$repository")}"
+                }
+                "runs" -> {
+                    val arr = JSONObject(raw).optJSONArray("workflow_runs") ?: JSONArray()
+                    if (arr.length() == 0) return "No public GitHub Actions runs were returned. Actions may be disabled or require authentication."
+                    val lines = (0 until minOf(arr.length(), 5)).mapNotNull { index ->
+                        val run = arr.optJSONObject(index) ?: return@mapNotNull null
+                        run.optString("name", "Workflow") + " — " + run.optString("status", "unknown") + "/" +
+                            run.optString("conclusion", "pending") + " — " + run.optString("head_branch", "unknown branch") +
+                            "\\n" + run.optString("html_url", "")
+                    }
+                    "Latest public GitHub Actions runs for $owner/$repository (read-only):\\n" + lines.joinToString("\\n\\n")
                 }
                 "release" -> {
                     val obj = JSONObject(raw)
