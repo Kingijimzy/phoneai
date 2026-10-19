@@ -530,6 +530,9 @@ class MainActivity : Activity() {
         val templates = listOf(
             PhoneAiSkill("web_research", "1.0.0", "Research a public topic, read a public page, and report source URLs.",
                 setOf("web_search", "research_web", "fetch_url"), maxCalls = 6, maxDurationMs = 30_000L),
+            PhoneAiSkill("browser_operator", "1.0.0", "Navigate public websites with visible screen checks, wait for page elements, and stop before sign-in, payment, posting, or account changes.",
+                setOf("open_app", "open_url", "web_search", "read_screen", "click_text", "scroll", "wait_for", "research_web"),
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true),
             PhoneAiSkill("device_brief", "1.0.0", "Summarize time, battery, and basic device information.",
                 setOf("time", "battery", "device_info"), maxCalls = 4, maxDurationMs = 15_000L),
             PhoneAiSkill("crypto_snapshot", "1.0.0", "Read a public Bybit spot ticker and explain that it is market data, not a trade signal.",
