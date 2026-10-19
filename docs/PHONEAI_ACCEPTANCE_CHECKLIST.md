@@ -16,6 +16,7 @@ This checklist is the current completion gate for the combined personal-agent bu
 - [x] GitHub Actions workflow can build a debug APK and retain an artifact.
 
 ## Required verification before calling the project complete
+- [ ] Stage 6 public GitHub integration: verify repo metadata, release and issue lookups; invalid input, 404/rate limit, and offline handling. See [Stage 6 integrations and safeguards](STAGE_6_INTEGRATIONS_AND_SAFEGUARDS.md).
 - [ ] Run GitHub Actions assembleDebug on the latest integrated head after thermal-aware avatar frame pacing changes; confirm the artifact matches the latest commit.
 - [ ] Install the APK on the Redmi phone and test app startup, avatar selection, personality persistence, voice, memory, tasks, reminders, and provider switching.
 - [ ] Test browser research on a public page and verify local/private addresses and unsafe redirects are rejected.
