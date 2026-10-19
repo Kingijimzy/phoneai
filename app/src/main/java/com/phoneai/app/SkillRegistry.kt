@@ -31,7 +31,7 @@ object SkillRegistry {
     // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
     private val supportedTools = setOf(
         "time", "battery", "device_info", "list_apps", "read_screen",
-        "web_search", "fetch_url", "research_web", "open_url", "recall", "remember",
+        "web_search", "fetch_url", "research_web", "github_public", "open_url", "recall", "remember",
         "wait", "wait_for", "click_text", "scroll", "open_app",
         "task_list", "task_add", "task_update", "task_delete"
     )
