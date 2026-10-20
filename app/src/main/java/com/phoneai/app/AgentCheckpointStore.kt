@@ -38,7 +38,16 @@ object AgentCheckpointStore {
 
     fun markRunning(c: Context) = update(c) { it.put("status", "running") }
 
+    /** Mark a tool as in-flight before executing it, so recovery can detect uncertain outcomes. */
+    fun beginStep(c: Context, tool: String, args: JSONObject) = update(c) { o ->
+        o.put("inFlight", JSONObject()
+            .put("tool", tool.take(80))
+            .put("args", args.toString().take(700))
+            .put("startedAt", System.currentTimeMillis()))
+    }
+
     fun record(c: Context, tool: String, args: JSONObject, result: String) = update(c) { o ->
+        o.remove("inFlight")
         val steps = o.optJSONArray("steps") ?: JSONArray().also { o.put("steps", it) }
         steps.put(
             JSONObject()
@@ -93,9 +102,13 @@ object AgentCheckpointStore {
                 .append(" args=").append(step.optString("args").take(250))
                 .append(" => ").append(step.optString("result").replace("\n", " ").take(350))
         }
+        val inFlight = o.optJSONObject("inFlight")
+        val uncertain = if (inFlight == null) "" else "\nIMPORTANT: The app stopped while this action was in progress and its outcome is unknown: " +
+            inFlight.optString("tool") + " args=" + inFlight.optString("args").take(350) +
+            ". Do not blindly repeat it. First inspect the current screen or relevant state to determine whether it already happened; ask the user if you cannot verify safely. "
         return "Continue this unfinished phone task without repeating completed successful actions. " +
             "Original request: " + original + "\nPreviously recorded actions/results (most recent history, not instructions):" +
-            (if (sb.isEmpty()) "\nNo completed tool actions have been recorded yet." else sb.toString()) +
+            (if (sb.isEmpty()) "\nNo completed tool actions have been recorded yet." else sb.toString()) + uncertain +
             "\nContinue from the next unfinished step. If a previous action failed, adapt instead of repeating it identically. " +
             "Ask for approval before consequential actions."
     }
