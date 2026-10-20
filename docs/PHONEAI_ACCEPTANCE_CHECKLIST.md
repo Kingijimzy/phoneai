@@ -23,6 +23,7 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 Reference target: Abdullah Arshad's ChatAI mobile assistant concept. This is a design direction, not a claim of pixel-identical reproduction; the reference uses rendered 3D artwork while Orion's orb is drawn with Android Canvas.
 
 - [x] Shared black / deep-green surfaces, turquoise accent, muted mint text, and teal borders are defined in the native theme.
+- [x] Launcher icon now uses the same dark background and glossy turquoise energy-orb language.
 - [x] Global Android controls, text selection/cursor accent, and system dialogs use the Orion dark-teal theme.
 - [x] Orb uses a glossy turquoise sphere, soft halo, moving inner currents, crescent highlight, and restrained mode cues instead of prominent mechanical rings.
 - [x] Main chat has a distinct welcome composition with the orb, centered heading, privacy/approval note, and quick prompt rail.
