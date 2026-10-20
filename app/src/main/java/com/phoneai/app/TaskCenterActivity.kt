@@ -41,7 +41,7 @@ class TaskCenterActivity : Activity() {
     private fun button(caption: String, primary: Boolean = false, click: () -> Unit) =
         Button(this).apply {
             text = caption; isAllCaps = false; textSize = 12f
-            setTextColor(if (primary) 0xFF0A1916.toInt() else Theme.TEXT)
+            setTextColor(if (primary) Theme.PANEL else Theme.TEXT)
             background = GradientDrawable().apply {
                 setColor(if (primary) Theme.CYAN else 0xFF10211E.toInt())
                 cornerRadius = dp(12).toFloat()
@@ -91,7 +91,7 @@ class TaskCenterActivity : Activity() {
 
         val note = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(11), dp(13), dp(11))
-            background = panel(0xFF0A1916.toInt())
+            background = panel(Theme.PANEL)
         }
         note.addView(label("AGENT STATUS", 10f, Theme.CYAN, true))
         note.addView(label("This board tracks tasks; it does not silently execute queued work. Phone-control actions still run in chat, with approvals.", 12f, Theme.MUTED).apply { setPadding(0, dp(5), 0, 0) })
