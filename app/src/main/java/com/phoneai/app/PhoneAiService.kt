@@ -1384,6 +1384,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return if (ok.get()) "ok" else "error: gesture was cancelled"
     }
 
+    /** Replays a recorded multi-point gesture without an AI call. */
+    fun performRecordedPath(points: JSONArray, durationMs: Long): String {
+        if (points.length() < 2) return "error: recorded gesture has too few points"
+        val path = Path()
+        for (i in 0 until points.length()) {
+            val p = points.optJSONObject(i) ?: continue
+            val x = p.optDouble("x", Double.NaN).toFloat()
+            val y = p.optDouble("y", Double.NaN).toFloat()
+            if (!x.isFinite() || !y.isFinite()) continue
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        return gesture(path, durationMs.coerceIn(80L, 8000L))
+    }
+
     fun tap(x: Float, y: Float): String {
         val size = screenSize()
         if (x < 0 || y < 0 || x > size.first || y > size.second) {
@@ -1551,6 +1565,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var tDownUp = 0L
     private var tDownWall = 0L
     private var tSig: java.util.concurrent.Future<IntArray?>? = null
+    private val teachPathPoints = ArrayList<Pair<Float, Float>>()
 
     fun isTeaching(): Boolean = teachView != null
 
@@ -1614,12 +1629,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 tDownY = e.rawY
                 tDownUp = SystemClock.uptimeMillis()
                 tDownWall = System.currentTimeMillis()
+                teachPathPoints.clear()
+                teachPathPoints.add(Pair(e.rawX, e.rawY))
                 val x = e.rawX.toInt()
                 val y = e.rawY.toInt()
                 tSig = sigExec.submit(java.util.concurrent.Callable<IntArray?> {
                     val b = grabBitmap()
                     if (b == null) null else signature(b, x, y).also { b.recycle() }
                 })
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val last = teachPathPoints.lastOrNull()
+                if (last == null || Math.hypot((e.rawX - last.first).toDouble(), (e.rawY - last.second).toDouble()) >= dp(5)) {
+                    teachPathPoints.add(Pair(e.rawX, e.rawY))
+                }
             }
             MotionEvent.ACTION_UP -> {
                 val x1 = tDownX
@@ -1629,7 +1652,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val dur = SystemClock.uptimeMillis() - tDownUp
                 val wall = tDownWall
                 val sigF = tSig
-                teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF) }
+                val points = ArrayList(teachPathPoints)
+                if (points.isEmpty() || points.last() != Pair(x2, y2)) points.add(Pair(x2, y2))
+                teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF, points) }
             }
         }
     }
@@ -1655,7 +1680,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** Passes the user's touch through to the game, and writes it down as a step. */
     private fun teachReplay(
         x1: Float, y1: Float, x2: Float, y2: Float, dur: Long, wall: Long,
-        sigF: java.util.concurrent.Future<IntArray?>?
+        sigF: java.util.concurrent.Future<IntArray?>?,
+        points: List<Pair<Float, Float>>
     ) {
         val sig = try {
             sigF?.get(2, TimeUnit.SECONDS)
@@ -1676,13 +1702,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 step.put("tool", "tap").put("args", JSONObject().put("x", x1.toInt()).put("y", y1.toInt()))
             }
         } else {
-            path.lineTo(x2, y2)
-            ms = dur.coerceIn(80L, 2000L)
-            step.put(
-                "tool", "swipe"
-            ).put(
-                "args",
-                JSONObject().put("x1", x1.toInt()).put("y1", y1.toInt()).put("x2", x2.toInt()).put("y2", y2.toInt()).put("ms", ms)
+            points.forEach { point -> path.lineTo(point.first, point.second) }
+            ms = dur.coerceIn(80L, 8000L)
+            val pointArray = JSONArray()
+            points.forEach { point ->
+                pointArray.put(JSONObject().put("x", point.first.toInt()).put("y", point.second.toInt()))
+            }
+            step.put("tool", "swipe_path").put(
+                "args", JSONObject().put("points", pointArray).put("ms", ms)
             )
         }
         setTeachTouchable(false)
