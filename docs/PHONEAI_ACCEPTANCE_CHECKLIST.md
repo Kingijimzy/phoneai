@@ -163,3 +163,15 @@ Implemented in the integration branch (build/device verification still required)
 - [ ] Run repeated screenshot/read-screen checks and confirm no progressive memory growth, freezes, or force-close.
 - [ ] Test rapid navigation, repeated send/stop, provider timeout/offline, microphone denial, and accessibility-service disable/re-enable.
 - [ ] If a force-close persists, capture Android logcat crash stack and fix the actual exception; cloud compilation alone does not establish device stability.
+\n
+## Orion UI consistency pass — shared design language
+
+- [x] Add `OrionIconView`, a lightweight native vector-style line-icon component with no added dependency or remote asset requirement.
+- [x] Replace Home/Chat/Tools/Settings navigation glyphs with consistent icons and active cyan tint.
+- [x] Give Home and Tools feature cards mapped icons, aligned subtitles, and subtle touch feedback.
+- [x] Add matching icons to chat prompt chips, microphone control, Settings section headers, Task Centre, Browser, and Device Utilities.
+- [x] Add staggered, restrained entrance motion to Settings sections, task cards, and device utility sections; retain reduced redraw behavior from Priority 6.
+- [x] Reuse the shared `Theme` color tokens so the main app, chat, settings, tasks, browser and utilities stay visually aligned.
+- [ ] Confirm current branch head builds and inspect any Kotlin/Gradle failures.
+- [ ] On the Redmi A3 Pro, check icons and labels at system font sizes and width settings; verify touch targets, contrast, keyboard resize, and no clipped content.
+- [ ] Confirm every feature card opens its existing real screen/flow; do not count visual presence as feature verification.
