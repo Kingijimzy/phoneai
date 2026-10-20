@@ -69,6 +69,11 @@ class TaskCenterActivity : Activity() {
         setContentView(root)
 
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        top.addView(OrionIconView(this).apply {
+            icon = "tasks"
+            tint = Theme.CYAN
+            contentDescription = "Task centre"
+        }, LinearLayout.LayoutParams(dp(30), dp(30)).apply { rightMargin = dp(10) })
         val title = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         title.addView(label("TASK CENTRE", 11f, Theme.CYAN, true))
         title.addView(label("Your work, in one place.", 24f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
@@ -141,13 +146,23 @@ class TaskCenterActivity : Activity() {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(dp(20), dp(28), dp(20), dp(28)); background = panel()
             }
+            empty.addView(OrionIconView(this).apply {
+                icon = "tasks"; tint = Theme.MUTED; contentDescription = null; alpha = 0.8f
+            }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { gravity = Gravity.CENTER })
             empty.addView(label(if (filter == "all") "Nothing here yet" else "No " + filter + " tasks",
-                17f, Theme.TEXT, true).apply { gravity = Gravity.CENTER })
+                17f, Theme.TEXT, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
             empty.addView(label("Create a task to start building your task history.", 12f, Theme.MUTED).apply {
                 gravity = Gravity.CENTER; setPadding(0, dp(6), 0, 0)
             })
             add(listHost, empty, 8)
-        } else visible.forEach { add(listHost, taskCard(it), 10) }
+        } else visible.forEachIndexed { index, task ->
+            val card = taskCard(task)
+            card.alpha = 0f
+            card.translationY = dp(7).toFloat()
+            add(listHost, card, 10)
+            card.animate().alpha(1f).translationY(0f).setStartDelay((index.coerceAtMost(6) * 28L))
+                .setDuration(210).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        }
 
         val checkpoint = AgentCheckpointStore.pending(this)
         if (checkpoint != null) {
