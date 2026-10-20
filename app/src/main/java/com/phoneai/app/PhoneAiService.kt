@@ -494,7 +494,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                         " Check internet access and the vision provider/model in Settings → AI providers."
                 }
                 main.post {
-                    mainChatListener?.onMessage("ai", "The image was attached, but analysis failed. Details: " + reason + "." + guidance)
+                    val visionProvider = Prefs.provider(this, true)
+                    val visionModel = Prefs.model(this, visionProvider, true)
+                    mainChatListener?.onMessage(
+                        "ai",
+                        "Image analysis failed. Selected vision model: ${visionProvider.label} / $visionModel. Details: $reason.$guidance Check Settings → AI providers → Vision model; this error does not mean the image itself is unreadable."
+                    )
                     mainChatListener?.onStatus("Image analysis failed · see details", OrbView.Mode.IDLE)
                 }
             } finally {
