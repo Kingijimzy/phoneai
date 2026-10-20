@@ -370,8 +370,10 @@ Rules:
                     val one = batch.optJSONObject(i) ?: continue
                     val bt = one.optString("tool")
                     if (bt.isBlank() || bt == "done") continue
+                    val batchArgs = one.optJSONObject("args") ?: JSONObject()
+                    AgentCheckpointStore.beginStep(svc, bt, batchArgs)
                     val br = try {
-                        exec(bt, one.optJSONObject("args") ?: JSONObject())
+                        exec(bt, batchArgs)
                     } catch (e: Exception) {
                         "error: ${e.message}"
                     }
@@ -392,6 +394,7 @@ Rules:
             }
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
+            AgentCheckpointStore.beginStep(svc, tool, args)
             val result = try {
                 exec(tool, args)
             } catch (e: Exception) {
