@@ -171,6 +171,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
+    fun replayScreenSize(): Pair<Int, Int> = screenSize()
+
     private fun screenSize(): Pair<Int, Int> {
         val b = wm.maximumWindowMetrics.bounds
         return Pair(b.width(), b.height())
@@ -1704,7 +1706,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             null
         }
         val dist = Math.hypot((x2 - x1).toDouble(), (y2 - y1).toDouble())
-        val step = JSONObject()
+        val size = screenSize()
+        val step = JSONObject().put("screenW", size.first).put("screenH", size.second)
         val path = Path()
         path.moveTo(x1, y1)
         val ms: Long
