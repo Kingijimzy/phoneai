@@ -150,6 +150,21 @@ object MemoryStore {
         true
     }
 
+    /** Restore a deleted memory with its original id; refuses to overwrite or duplicate data. */
+    fun restore(c: Context, id: Int, category: String, text: String, created: Long, updated: Long): Boolean = synchronized(lock) {
+        val clean = text.trim().replace("\n", " ").take(300)
+        if (id < 1 || clean.isEmpty()) return@synchronized false
+        val list = load(c)
+        if (list.any { it.id == id || it.text.equals(clean, true) }) return@synchronized false
+        val memory = Memory(id, cat(category), clean, created, updated)
+        list.add(memory)
+        if (!save(c)) {
+            list.remove(memory)
+            return@synchronized false
+        }
+        true
+    }
+
     /** Rank relevant memories first, rather than returning the first loose substring match. */
     fun search(c: Context, query: String): List<Memory> {
         val normalized = query.trim().lowercase()
