@@ -41,6 +41,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         cornerRadius = dp(radius).toFloat()
         if (stroke != 0) setStroke(dp(1), stroke)
     }
+    private fun animateIn(view: View, delay: Long = 0L) {
+        view.alpha = 0f
+        view.translationY = dp(8).toFloat()
+        view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(260)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,7 +60,10 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(Theme.PANEL, 22, Theme.LINE)
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF142334.toInt(), Theme.PANEL, 0xFF17152B.toInt())).apply {
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), Theme.LINE)
+            }
             setPadding(dp(12), dp(7), dp(12), dp(7))
         }
         orb = OrbView(this).apply { contentDescription = "Orion Jarvis-style animated core" }
@@ -85,6 +94,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         }
         header.addView(new)
         root.addView(header)
+        animateIn(header, 30)
 
         val intro = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -95,6 +105,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(0, dp(4), 0, 0)
         })
         root.addView(intro)
+        animateIn(intro, 90)
 
         scroll = ScrollView(this).apply {
             isFillViewport = false
@@ -116,6 +127,11 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             val chip = label(name, 12f, Theme.CYAN, true).apply {
                 setPadding(dp(13), dp(9), dp(13), dp(9))
                 background = rounded(Theme.PANEL2, 18, Theme.LINE)
+                setOnTouchListener { v, e ->
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.96f).scaleY(.96f).setDuration(70).start()
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
+                    false
+                }
                 setOnClickListener { input.setText(prompt); input.setSelection(input.text.length); input.requestFocus() }
             }
             chips.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
