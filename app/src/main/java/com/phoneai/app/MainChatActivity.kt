@@ -78,8 +78,15 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             elevation = dp(4).toFloat()
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }
-        orb = OrbView(this).apply { contentDescription = "Orion Jarvis-style animated core" }
-        header.addView(orb, LinearLayout.LayoutParams(dp(62), dp(62)))
+        val mark = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = rounded(0xFF0B241E.toInt(), 18, 0xFF167C66.toInt())
+            contentDescription = "Orion AI"
+        }
+        mark.addView(OrionIconView(this).apply {
+            icon = "spark"; tint = Theme.CYAN; contentDescription = null
+        }, LinearLayout.LayoutParams(dp(28), dp(28)))
+        header.addView(mark, LinearLayout.LayoutParams(dp(46), dp(46)))
         val titleCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), 0, 0, 0)
@@ -97,6 +104,16 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         titleCol.addView(status)
         titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
+        val live = label("◉ LIVE", 10f, Theme.CYAN, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            background = rounded(0xFF082D26.toInt(), 14, 0xFF167C66.toInt())
+            contentDescription = "Open live voice conversation"
+            setOnClickListener {
+                startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java))
+            }
+        }
+        header.addView(live, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
         stop = label("■", 13f, 0xFF15EAD3.toInt(), true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
@@ -141,13 +158,6 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
             elevation = dp(2).toFloat()
         }
-        val welcomeOrb = OrbView(this).apply {
-            contentDescription = "Orion's animated liquid-glass energy core"
-        }
-        intro.addView(welcomeOrb, LinearLayout.LayoutParams(dp(92), dp(92)).apply {
-            gravity = Gravity.CENTER
-            bottomMargin = dp(4)
-        })
         intro.addView(label("YOUR AI. YOUR FLOW.", 10f, Theme.CYAN, true).apply {
             letterSpacing = .13f
             gravity = Gravity.CENTER
@@ -567,8 +577,6 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             status.setTextColor(accent)
             status.background = rounded(fill, 12, border)
             status.contentDescription = "Orion state: " + short
-            orb.contentDescription = "Orion animated core. " + short
-            orb.mode = mode
             if (changed) {
                 status.animate().cancel()
                 status.alpha = .72f
