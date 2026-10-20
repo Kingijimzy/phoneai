@@ -268,7 +268,20 @@ class MainActivity : Activity() {
             background = gradientSurface(27, intArrayOf(0xFF0B3029.toInt(), 0xFF071B18.toInt(), 0xFF0B211D.toInt()))
             elevation = dp(3).toFloat()
         }
-        val avatar = OrbView(this).apply { contentDescription = "Orion animated Jarvis-style energy core" }
+        val avatar = OrbView(this).apply {
+            contentDescription = "Orion animated energy core. Tap to open chat."
+            isClickable = true
+            isFocusable = true
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                    v.animate().scaleX(.97f).scaleY(.97f).setDuration(90).start()
+                } else if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
+                }
+                false
+            }
+            setOnClickListener { showTab("Chat") }
+        }
         homeOrb = avatar
         hero.addView(avatar, LinearLayout.LayoutParams(dp(204), dp(204)).apply { gravity = Gravity.CENTER })
         hero.addView(label("ORION IS HERE", 12f, Theme.CYAN, true).apply { gravity = Gravity.CENTER })
