@@ -56,16 +56,16 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
             setPadding(dp(14), dp(10), dp(14), dp(9))
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF142B3A.toInt(), 0xFF141A2A.toInt(), 0xFF211A38.toInt())).apply {
+                intArrayOf(0xFF0C3028.toInt(), 0xFF0A1916.toInt(), 0xFF0B241E.toInt())).apply {
                 cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), 0xFF345064.toInt())
+                setStroke(dp(1), 0xFF016856.toInt())
             }
             elevation = dp(4).toFloat()
             setPadding(dp(12), dp(8), dp(12), dp(8))
@@ -83,16 +83,16 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         })
         status = label("●  READY WHEN YOU ARE", 11f, Theme.CYAN, true).apply {
             setPadding(dp(9), dp(6), dp(9), dp(6))
-            background = rounded(0xFF10252D.toInt(), 12, 0xFF245260.toInt())
+            background = rounded(0xFF082D26.toInt(), 12, 0xFF018D6D.toInt())
             contentDescription = "Orion state: ready"
         }
         titleCol.addView(status)
         titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        stop = label("■", 13f, 0xFFFFB4A8.toInt(), true).apply {
+        stop = label("■", 13f, 0xFF15EAD3.toInt(), true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
-            background = rounded(0xFF39232B.toInt(), 14, 0xFF6C3945.toInt())
+            background = rounded(0xFF0B241E.toInt(), 14, 0xFF018D6D.toInt())
             setPadding(dp(11), dp(10), dp(11), dp(10))
             visibility = View.GONE
             setOnClickListener {
@@ -126,9 +126,9 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(17), dp(15), dp(17), dp(15))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF142432.toInt(), 0xFF15182A.toInt(), 0xFF211832.toInt())).apply {
+                intArrayOf(0xFF0C3028.toInt(), 0xFF0A1916.toInt(), 0xFF0B241E.toInt())).apply {
                 cornerRadius = dp(22).toFloat()
-                setStroke(dp(1), 0xFF304658.toInt())
+                setStroke(dp(1), 0xFF2C504E.toInt())
             }
             elevation = dp(2).toFloat()
         }
@@ -201,9 +201,9 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF171D2B.toInt(), 0xFF121724.toInt())).apply {
+                intArrayOf(0xFF10211E.toInt(), 0xFF0A1413.toInt())).apply {
                 cornerRadius = dp(25).toFloat()
-                setStroke(dp(1), 0xFF354457.toInt())
+                setStroke(dp(1), 0xFF2C504E.toInt())
             }
             elevation = dp(5).toFloat()
             setPadding(dp(8), dp(6), dp(7), dp(6))
@@ -318,13 +318,13 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12), dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12))
             background = when {
-                isNote -> rounded(0xFF10232D.toInt(), 15, 0xFF2B5C6B.toInt())
+                isNote -> rounded(0xFF082D26.toInt(), 15, 0xFF018D6D.toInt())
                 kind == "me" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(0xFF243449.toInt(), 0xFF20263A.toInt())).apply {
+                    intArrayOf(0xFF0E4035.toInt(), 0xFF0C3028.toInt())).apply {
                     cornerRadius = dp(21).toFloat()
-                    setStroke(dp(1), 0xFF3A536C.toInt())
+                    setStroke(dp(1), 0xFF016856.toInt())
                 }
-                else -> rounded(0xFF151B29.toInt(), 19, 0xFF2B3548.toInt())
+                else -> rounded(0xFF0A1916.toInt(), 19, 0xFF21443D.toInt())
             }
             elevation = if (isNote) 0f else dp(1).toFloat()
         }
@@ -358,8 +358,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             lastMode = mode
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
                 OrbView.Mode.IDLE -> Triple("READY", Theme.CYAN, Pair(0xFF10252D.toInt(), 0xFF245260.toInt()))
-                OrbView.Mode.LISTENING -> Triple("LISTENING · SPEAK NOW", Theme.OK, Pair(0xFF102A22.toInt(), 0xFF28664F.toInt()))
-                OrbView.Mode.THINKING -> Triple("THINKING · WORKING IT OUT", Theme.VIOLET, Pair(0xFF201A35.toInt(), 0xFF51417E.toInt()))
+                OrbView.Mode.LISTENING -> Triple("LISTENING · SPEAK NOW", Theme.OK, Pair(0xFF063B30.toInt(), 0xFF018D6D.toInt()))
+                OrbView.Mode.THINKING -> Triple("THINKING · WORKING IT OUT", Theme.VIOLET, Pair(0xFF0C3028.toInt(), 0xFF016856.toInt()))
                 OrbView.Mode.SPEAKING -> Triple("SPEAKING · ORION IS REPLYING", Theme.CYAN, Pair(0xFF10252D.toInt(), 0xFF245260.toInt()))
                 OrbView.Mode.ACTING -> Triple("ACTING · CARRYING OUT TASK", Theme.WARN, Pair(0xFF302515.toInt(), 0xFF705328.toInt()))
                 OrbView.Mode.WAITING_APPROVAL -> Triple("APPROVAL NEEDED · YOU DECIDE", Theme.WARN, Pair(0xFF302515.toInt(), 0xFF8B672B.toInt()))
