@@ -85,7 +85,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(11), dp(10), dp(11), dp(10))
             visibility = View.GONE
             setOnClickListener {
-                PhoneAiService.instance?.stopAll()
+                PhoneAiService.instance?.stopCurrentTask()
                 text = "…"
                 isEnabled = false
                 Toast.makeText(this@MainChatActivity, "Asked Orion to stop.", Toast.LENGTH_SHORT).show()
