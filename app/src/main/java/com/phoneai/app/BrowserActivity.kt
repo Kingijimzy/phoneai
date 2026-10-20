@@ -188,6 +188,10 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             background = null
             setPadding(dp(3), dp(4), dp(5), dp(4))
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            imeOptions = EditorInfo.IME_ACTION_SEND
+            setOnEditorActionListener { _, actionId, _ ->
+                if (actionId == EditorInfo.IME_ACTION_SEND) { runBrowserAgent(); true } else false
+            }
         }
         commandRow.addView(agentPrompt, LinearLayout.LayoutParams(0, -2, 1f))
         agentRun = pill("Run ↗") { runBrowserAgent() }.apply {
@@ -340,8 +344,6 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             if (::agentResult.isInitialized) {
                 agentResult.text = (if (kind == "me") "YOU: " else if (kind == "note") "PROGRESS: " else "ORION: ") + message
-                agentRun.isEnabled = true
-                agentRun.alpha = 1f
             }
         }
     }
