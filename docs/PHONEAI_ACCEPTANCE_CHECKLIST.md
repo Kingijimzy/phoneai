@@ -41,6 +41,17 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 - [ ] Confirm accessibility/microphone denial produces a useful message rather than an activity crash.
 - [ ] Confirm GitHub Actions builds the latest branch head and uploads a debug APK artifact.
 
+## Safe undo roadmap feature
+
+- [x] Added a bounded, app-private undo journal for supported saved-memory changes.
+- [x] “Remember” records the prior snapshot when updating an existing matching memory; a new memory can be removed by undo.
+- [x] “Update memory” stores before/after snapshots; undo only applies when the current memory still matches the recorded after-state.
+- [x] “Forget memory” can be reversed by restoring the deleted memory with its original ID, only if that ID and text have not been reused.
+- [x] Added `undo_last` and `undo_status` agent tools; instructions explicitly limit undo to saved-memory changes.
+- [ ] Device-test add → undo, update → undo, forget → undo, app restart persistence, and stale-state conflict protection.
+- [ ] Verify undo history remains usable after malformed/corrupt local journal data and storage write failures.
+- [ ] Expand undo only to additional actions that have safe, well-defined inverse operations; never promise reversal of sent messages or other irreversible actions.
+
 ## Existing safety and service limits
 
 - Public webpage research is read-only and uses URL/redirect checks, timeouts, response limits, source URLs, and untrusted-page handling.
