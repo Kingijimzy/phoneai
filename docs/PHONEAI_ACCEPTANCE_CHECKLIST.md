@@ -17,6 +17,10 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 
 ## Stability and behavior checks
 
+- [x] Agent tasks checkpoint their original request and bounded tool results in a local file so a step cap, network failure, or user stop can preserve progress.
+- [x] The agent accepts “continue” / “resume” and passes the recorded results back into planning, with explicit instructions not to repeat successful actions.
+- [ ] Verify checkpoint recovery after force-stopping the app, resuming after an AI provider failure, and ensuring completed actions are not repeated. This needs device testing.
+
 - [ ] Resolve the user's reported force-close/internal-error issue with a physical-device reproduction and logcat evidence.
 - [ ] Tap every Home, Chat, Tools, and Settings entry on the Redmi; verify each destination opens and returns without a crash.
 - [ ] Verify full-screen chat can send a typed prompt and receive an answer without showing the floating panel over it.
