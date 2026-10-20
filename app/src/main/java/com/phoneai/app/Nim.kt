@@ -399,9 +399,10 @@ class Nim(private val ctx: Context) {
                 try {
                     onStatus?.invoke("Trying ${p.label} (${idx + 1}/${ready.size})...")
                     return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
-                } catch (e: AiException) {
+                } catch (e: Exception) {
+                    if (cancelled) throw RuntimeException("Stopped.")
                     errors[p.id] = e.message ?: p.label
-                    if (!e.rateLimited) allRateLimited = false
+                    if (e !is AiException || !e.rateLimited) allRateLimited = false
                 }
             }
             // Nothing worked. If everything was only busy, wait for the first one to come back.
@@ -431,8 +432,10 @@ class Nim(private val ctx: Context) {
         var lastNote = ""
         var attempts = 0
         var rateRetries = 0
+        // In quota-saver mode, allow one alternate model only after an invalid/retired model response.
+        // Timeouts, empty replies, and 429s exit immediately, so this does not create retry fan-out.
         val maxAttempts = if (Prefs.quotaSaver(ctx)) {
-            1
+            2
         } else {
             if (hasBackup) 4 else 12
         }
