@@ -72,6 +72,12 @@ object AgentCheckpointStore {
 
     fun pause(c: Context): Boolean = update(c) { it.put("status", "paused") }
 
+    fun complete(c: Context): Boolean = update(c) {
+        it.put("status", "completed")
+        it.remove("inFlight")
+        it.remove("recoveryNotice")
+    }
+
     fun recoveryRequired(c: Context, reason: String): Boolean = update(c) {
         it.put("status", "recovery_required")
         it.put("recoveryNotice", reason.take(500))
