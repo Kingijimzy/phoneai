@@ -297,7 +297,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             lastMode = mode
             status.text = "ORION  ·  " + text.uppercase()
             orb.mode = mode
-            val busy = mode != OrbView.Mode.IDLE
+            val busy = mode != OrbView.Mode.IDLE || PhoneAiService.instance?.isTaskRunning() == true
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
             stop.text = "■"
