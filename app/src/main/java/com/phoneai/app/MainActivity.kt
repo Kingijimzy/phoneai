@@ -46,7 +46,7 @@ class MainActivity : Activity() {
     private fun gradientSurface(radius: Int, colors: IntArray): GradientDrawable =
         GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
             cornerRadius = dp(radius).toFloat()
-            setStroke(dp(1), 0xFF2B5367.toInt())
+            setStroke(dp(1), 0xFF018D6D.toInt())
         }
 
     private fun animateEntrance(view: View, delay: Long = 0L) {
@@ -64,7 +64,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(15), dp(13), dp(15), dp(13))
-            background = surface(17, if (primary) 0xFF172D38.toInt() else Theme.PANEL)
+            background = surface(17, if (primary) 0xFF10211E.toInt() else Theme.PANEL)
             isClickable = true
             isFocusable = true
         }
@@ -198,7 +198,7 @@ class MainActivity : Activity() {
             isFillViewport = true
             clipToPadding = false
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
         }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -250,7 +250,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(14), dp(14), dp(17))
-            background = gradientSurface(27, intArrayOf(0xFF14283A.toInt(), 0xFF101523.toInt(), 0xFF17152C.toInt()))
+            background = gradientSurface(27, intArrayOf(0xFF0B3029.toInt(), 0xFF071B18.toInt(), 0xFF0B211D.toInt()))
             elevation = dp(3).toFloat()
         }
         val avatar = OrbView(this).apply { contentDescription = "Orion animated Jarvis-style energy core" }
@@ -280,7 +280,7 @@ class MainActivity : Activity() {
         val statusCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = surface(17, 0xFF0E1721.toInt())
+            background = surface(17, 0xFF0B1A17.toInt())
         }
         statusCard.addView(label("SYSTEM STATUS", 10f, Theme.CYAN, true))
         statusLabel = label("", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) }
@@ -291,9 +291,9 @@ class MainActivity : Activity() {
     }
 
     private fun roundedPill(): GradientDrawable = GradientDrawable().apply {
-        setColor(0xFF102A25.toInt())
+        setColor(0xFF063B30.toInt())
         cornerRadius = dp(30).toFloat()
-        setStroke(dp(1), 0xFF245044.toInt())
+        setStroke(dp(1), 0xFF016856.toInt())
     }
 
     private fun buildTools(page: LinearLayout) {
