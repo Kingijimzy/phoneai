@@ -117,6 +117,13 @@ class OrionIconView @JvmOverloads constructor(
             "plus", "new" -> {
                 canvas.drawLine(12f, 4f, 12f, 20f, paint); canvas.drawLine(4f, 12f, 20f, 12f, paint)
             }
+            "image", "photo", "attach" -> {
+                canvas.drawRoundRect(2.5f, 3.5f, 21.5f, 20.5f, 3f, 3f, paint)
+                canvas.drawCircle(8f, 8.5f, 1.7f, paint)
+                path.moveTo(4f, 17f); path.lineTo(9f, 12f); path.lineTo(12f, 15f)
+                path.lineTo(16f, 10f); path.lineTo(20f, 15f)
+                canvas.drawPath(path, paint)
+            }
             "send" -> {
                 path.moveTo(3f, 11f); path.lineTo(21f, 3f); path.lineTo(15f, 21f)
                 path.lineTo(11f, 13f); path.close(); path.moveTo(11f, 13f); path.lineTo(21f, 3f)
