@@ -64,6 +64,11 @@ class BrowserActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+        heading.addView(OrionIconView(this).apply {
+            icon = "browser"
+            tint = Theme.CYAN
+            contentDescription = "Orion Browser"
+        }, LinearLayout.LayoutParams(dp(23), dp(23)).apply { rightMargin = dp(8) })
         title = TextView(this).apply {
             text = "ORION BROWSER"
             textSize = 13f
