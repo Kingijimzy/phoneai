@@ -23,6 +23,10 @@ class Nim(private val ctx: Context) {
         private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
         /** Latest provider-reported quota headers, when that API exposes them. */
         private val providerQuota = ConcurrentHashMap<String, String>()
+        /** Last confirmed provider/model per mode; response text is never stored here. */
+        private val lastSuccess = ConcurrentHashMap<String, String>()
+        /** Most recent failure per provider, kept only in memory for diagnostics. */
+        private val lastFailure = ConcurrentHashMap<String, String>()
 
         fun budget(id: String): Int = when (id) {
             "gemini" -> 9
@@ -59,7 +63,17 @@ class Nim(private val ctx: Context) {
                 if (cd > 0) sb.append(", cooling down ").append(cd).append(" seconds")
                 sb.append(". ")
             }
-            return if (sb.isEmpty()) "No AI keys saved yet." else sb.toString().trim()
+            sb.append("\\nSelected chat provider: ").append(Prefs.provider(c, false).label)
+            sb.append("\\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
+            lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
+            lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
+            if (lastFailure.isNotEmpty()) {
+                sb.append("\\nRecent provider errors:")
+                for (p in Providers.all) lastFailure[p.id]?.let {
+                    sb.append("\\n• ").append(p.label).append(": ").append(it.take(180))
+                }
+            }
+            return if (sb.toString().isBlank()) "No AI keys saved yet." else sb.toString().trim()
         }
     }
 
@@ -401,10 +415,15 @@ class Nim(private val ctx: Context) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 try {
                     onStatus?.invoke("Trying ${p.label} (${idx + 1}/${ready.size})...")
-                    return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
+                    val answer = chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
+                    val mode = if (vision) "vision" else "chat"
+                    lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
+                    lastFailure.remove(p.id)
+                    return answer
                 } catch (e: Exception) {
                     if (cancelled) throw RuntimeException("Stopped.")
                     errors[p.id] = e.message ?: p.label
+                    lastFailure[p.id] = (e.message ?: "Unknown provider error").take(220)
                     if (e !is AiException || !e.rateLimited) allRateLimited = false
                 }
             }
