@@ -147,7 +147,7 @@ class MainActivity : Activity() {
         }
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(66)))
+        root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(66)).apply { leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(7) })
         setContentView(root)
         showTab(intent.getStringExtra("tab") ?: "Home", animate = false)
     }
@@ -158,24 +158,36 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(6), dp(5), dp(6), dp(6))
             background = GradientDrawable().apply {
-                setColor(Theme.PANEL)
+                setColor(0xF50A1413.toInt())
+                cornerRadius = dp(24).toFloat()
                 setStroke(dp(1), Theme.LINE)
             }
+            elevation = dp(8).toFloat()
         }
         listOf("Home", "Chat", "Tools", "Settings").forEach { tab ->
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(3), dp(7), dp(3), dp(5))
+                setPadding(dp(3), dp(5), dp(3), dp(4))
                 isClickable = true
                 isFocusable = true
+                background = if (selectedTab == tab) GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(0xFF10372E.toInt(), 0xFF0A211C.toInt())).apply {
+                    cornerRadius = dp(17).toFloat()
+                    setStroke(dp(1), 0xFF167C66.toInt())
+                } else GradientDrawable().apply {
+                    setColor(0x00000000)
+                    cornerRadius = dp(17).toFloat()
+                }
             }
             val glyph = OrionIconView(this).apply {
                 icon = when (tab) { "Home" -> "home"; "Chat" -> "chat"; "Tools" -> "tools"; else -> "settings" }
                 tint = if (selectedTab == tab) Theme.CYAN else Theme.MUTED
                 contentDescription = tab + " tab"
             }
-            cell.addView(glyph, LinearLayout.LayoutParams(dp(22), dp(22)))
+            cell.addView(glyph, LinearLayout.LayoutParams(dp(22), dp(22)).apply {
+                topMargin = dp(1)
+            })
             cell.addView(label(tab, 10f, if (selectedTab == tab) Theme.CYAN else Theme.MUTED, selectedTab == tab).apply {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(3), 0, 0)
@@ -222,7 +234,9 @@ class MainActivity : Activity() {
         val root = content.parent as? LinearLayout ?: return
         if (root.childCount > 1) {
             root.removeViewAt(1)
-            root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(66)))
+            root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(66)).apply {
+                leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(7)
+            })
         }
     }
 
