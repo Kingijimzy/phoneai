@@ -138,21 +138,32 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val chipsScroll = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf(
-            "Research" to "Help me research a topic. Ask what topic I want to investigate.",
-            "Plan" to "Help me create a practical step-by-step plan. Ask what I want to achieve.",
-            "Explain" to "Explain a difficult idea with a practical example.",
-            "Phone command" to "Help me with my phone. Ask what action I want to perform."
-        ).forEach { (name, prompt) ->
-            val chip = label(name, 12f, Theme.CYAN, true).apply {
-                setPadding(dp(13), dp(9), dp(13), dp(9))
+            Triple("Research", "browser", "Help me research a topic. Ask what topic I want to investigate."),
+            Triple("Plan", "tasks", "Help me create a practical step-by-step plan. Ask what I want to achieve."),
+            Triple("Explain", "spark", "Explain a difficult idea with a practical example."),
+            Triple("Phone command", "shield", "Help me with my phone. Ask what action I want to perform.")
+        ).forEach { (name, iconName, prompt) ->
+            val chip = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(11), dp(8), dp(13), dp(8))
                 background = rounded(Theme.PANEL2, 18, Theme.LINE)
-                setOnTouchListener { v, e ->
-                    if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.96f).scaleY(.96f).setDuration(70).start()
-                    if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
-                    false
-                }
-                setOnClickListener { input.setText(prompt); input.setSelection(input.text.length); input.requestFocus() }
+                isClickable = true
+                isFocusable = true
+                contentDescription = "$name prompt"
             }
+            chip.addView(OrionIconView(this).apply {
+                icon = iconName
+                tint = Theme.CYAN
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(17), dp(17)).apply { rightMargin = dp(6) })
+            chip.addView(label(name, 12f, Theme.CYAN, true))
+            chip.setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.96f).scaleY(.96f).setDuration(70).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
+                false
+            }
+            chip.setOnClickListener { input.setText(prompt); input.setSelection(input.text.length); input.requestFocus() }
             chips.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
         }
         chipsScroll.addView(chips)
@@ -179,11 +190,18 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         composer.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
-        val mic = label("Mic", 12f, Theme.CYAN, true).apply {
+        val mic = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             background = rounded(Theme.PANEL2, 17, Theme.LINE)
             setPadding(dp(11), dp(12), dp(11), dp(12))
+            isClickable = true
+            isFocusable = true
             contentDescription = "Speak to Orion"
+            addView(OrionIconView(this@MainChatActivity).apply {
+                icon = "mic"; tint = Theme.CYAN; contentDescription = null
+            }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { rightMargin = dp(5) })
+            addView(label("Mic", 12f, Theme.CYAN, true))
             setOnClickListener {
                 val service = PhoneAiService.instance
                 if (service == null) {
