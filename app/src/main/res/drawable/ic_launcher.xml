@@ -8,14 +8,23 @@
         android:fillColor="#02080A"
         android:pathData="M0,0h108v108h-108z" />
     <path
+        android:fillColor="#0D00FCB6"
+        android:pathData="M7,54a47,47 0,1 0,94 0a47,47 0,1 0,-94 0" />
+    <path
         android:fillColor="#2200FCB6"
         android:pathData="M14,54a40,40 0,1 0,80 0a40,40 0,1 0,-80 0" />
+    <path
+        android:fillColor="#1A15EAD3"
+        android:pathData="M18,54a36,36 0,1 0,72 0a36,36 0,1 0,-72 0" />
     <path
         android:fillColor="#016856"
         android:pathData="M23,54a31,31 0,1 0,62 0a31,31 0,1 0,-62 0" />
     <path
         android:fillColor="#0BB0A1"
         android:pathData="M28,54a26,26 0,1 0,52 0a26,26 0,1 0,-52 0" />
+    <path
+        android:fillColor="#5572FFE7"
+        android:pathData="M26,56 C37,30 64,29 83,51 C65,39 46,43 30,66 C26,64 25,60 26,56 Z" />
     <path
         android:fillColor="#00FCB6"
         android:fillAlpha="0.74"
