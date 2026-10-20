@@ -358,7 +358,8 @@ class Nim(private val ctx: Context) {
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2): String {
         val first = Prefs.provider(ctx, vision)
         val order = ArrayList<Provider>()
-        if (Prefs.hasKey(ctx, first.id)) order.add(first)
+        // The local Ollama provider intentionally has no API key; allow it when explicitly selected.
+        if (Prefs.hasKey(ctx, first.id) || first.noKey) order.add(first)
         if (Prefs.autoSwitch(ctx) || order.isEmpty()) {
             for (p in Providers.all) {
                 if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
