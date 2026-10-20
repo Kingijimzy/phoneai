@@ -162,6 +162,14 @@ class TaskCenterActivity : Activity() {
             })
             card.addView(label("Checkpoint saved " + time(checkpoint.optLong("updatedAt")) +
                 ". Open chat and say “continue” to resume.", 12f, Theme.MUTED))
+            val uncertain = checkpoint.optJSONObject("inFlight")
+            val recoveryNotice = checkpoint.optString("recoveryNotice")
+            if (uncertain != null || recoveryNotice.isNotBlank()) {
+                val warning = if (recoveryNotice.isNotBlank()) recoveryNotice
+                    else "Last action outcome is uncertain: " + uncertain!!.optString("tool") +
+                        ". Inspect the phone before retrying; Orion must not repeat it blindly."
+                add(card, label("RECOVERY CHECK REQUIRED\n" + warning.take(450), 12f, 0xFFFFCF70.toInt(), true), 8)
+            }
             add(card, button("Open chat to resume", true) {
                 startActivity(Intent(this, MainChatActivity::class.java))
             }, 10)
