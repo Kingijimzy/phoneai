@@ -78,7 +78,7 @@ class SettingsActivity : Activity() {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable()
-        g.setColor(0xFF0A1916.toInt())
+        g.setColor(Theme.PANEL)
         g.cornerRadius = dp(20).toFloat()
         g.setStroke(dp(1), 0xFF2C504E.toInt())
         c.background = g
