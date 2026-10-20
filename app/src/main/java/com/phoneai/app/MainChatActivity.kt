@@ -339,9 +339,11 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private fun addMessage(kind: String, text: String) {
         if (kind == "me") {
             listOf(welcomePanel, promptRail).forEach { view ->
-                if (view?.visibility == View.VISIBLE) {
-                    view.animate().alpha(0f).translationY(-dp(6).toFloat()).setDuration(160)
-                        .withEndAction { view.visibility = View.GONE }.start()
+                view?.let { panel ->
+                    if (panel.visibility == View.VISIBLE) {
+                        panel.animate().alpha(0f).translationY(-dp(6).toFloat()).setDuration(160)
+                            .withEndAction { panel.visibility = View.GONE }.start()
+                    }
                 }
             }
         }
