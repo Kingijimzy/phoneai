@@ -31,6 +31,10 @@
         android:theme="@style/Theme.Orion">
 
         <activity
+            android:name=".TeachModeActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".TaskCenterActivity"
             android:exported="false" />
 
