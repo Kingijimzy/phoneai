@@ -19,6 +19,8 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 
 - [x] Agent tasks checkpoint their original request and bounded tool results in a local file so a step cap, network failure, or user stop can preserve progress.
 - [x] The agent accepts “continue” / “resume” and passes the recorded results back into planning, with explicit instructions not to repeat successful actions.
+- [x] Before executing a tool, the agent checkpoints the in-flight action; if the app dies mid-action, resume explicitly treats the outcome as uncertain and inspects state before repeating it.
+- [ ] Device-test force-stop during a harmless navigation action and confirm resume inspects current screen before continuing.
 - [ ] Verify checkpoint recovery after force-stopping the app, resuming after an AI provider failure, and ensuring completed actions are not repeated. This needs device testing.
 
 - [ ] Resolve the user's reported force-close/internal-error issue with a physical-device reproduction and logcat evidence.
