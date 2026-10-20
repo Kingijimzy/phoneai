@@ -455,14 +455,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     ?: throw IllegalArgumentException("I couldn't open that image.")
                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalArgumentException("That image format couldn't be read.")
                 var sample = 1
-                while (bounds.outWidth / sample > 1200 || bounds.outHeight / sample > 1200) sample *= 2
+                while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
                 val options = BitmapFactory.Options().apply { inSampleSize = sample }
                 val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
                     ?: throw IllegalArgumentException("I couldn't decode that image.")
                 val bytes = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 82, bytes)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
                 bitmap.recycle()
                 if (bytes.size() == 0) throw IllegalArgumentException("The image converted to an empty file. Try another image.")
+                if (bytes.size() > 5 * 1024 * 1024) throw IllegalArgumentException("This image is still too large after compression. Choose a smaller image or screenshot.")
                 val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
                 val content = JSONArray()
                     .put(JSONObject().put("type", "text").put("text", question))
