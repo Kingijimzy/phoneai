@@ -358,7 +358,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     cornerRadius = dp(21).toFloat()
                     setStroke(dp(1), 0xFF016856.toInt())
                 }
-                else -> rounded(0xFF0A1916.toInt(), 19, 0xFF21443D.toInt())
+                else -> rounded(0xFF0A1916.toInt(), 19, 0xFF2C504E.toInt())
             }
             elevation = if (isNote) 0f else dp(1).toFloat()
         }
