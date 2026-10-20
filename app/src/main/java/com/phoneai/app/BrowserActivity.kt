@@ -2,6 +2,8 @@ package com.phoneai.app
 
 import android.app.Activity
 import android.content.Intent
+import android.app.DownloadManager
+import android.os.Environment
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -15,6 +17,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.CookieManager
+import android.webkit.URLUtil
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -190,6 +194,27 @@ class BrowserActivity : Activity() {
             }
             override fun onReceivedTitle(view: WebView?, pageTitle: String?) {
                 if (!pageTitle.isNullOrBlank()) title.text = pageTitle.take(42)
+            }
+        }
+        web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            try {
+                val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                val request = DownloadManager.Request(Uri.parse(url)).apply {
+                    setMimeType(mimeType)
+                    setTitle(fileName)
+                    setDescription("Downloading from Orion Browser")
+                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    addRequestHeader("User-Agent", userAgent)
+                    CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+                        addRequestHeader("Cookie", it)
+                    }
+                }
+                val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                manager.enqueue(request)
+                Toast.makeText(this, "Download started: $fileName", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(this, "This download could not be started.", Toast.LENGTH_LONG).show()
             }
         }
         root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
