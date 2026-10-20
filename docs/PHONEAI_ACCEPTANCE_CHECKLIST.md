@@ -13,6 +13,7 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 - [x] The character and network-loaded 3D activity have been removed from the active UI and manifest.
 - [x] Native energy core responds to idle/listening/thinking/speaking/acting/waiting-for-approval modes with different colours, arcs, glow, waveform, and speech pulses.
 - [x] Full-screen chat shows an in-context Stop control while Orion is busy; it calls the existing service stop path and animates its state feedback.
+- [x] Agent notes are rendered as compact, subdued Live Activity cards instead of being silently dropped from the full-screen chat.
 - [x] Home and chat use lightweight gradient surfaces, staggered entrances, message transitions, and touch-scale feedback without adding a heavy animation dependency.
 - [x] Existing memory, tasks, routines, provider selection, public research, local skills, GitHub/Telegram/MCP helpers, Bybit public spot lookup, Network Radar, Game Sentinel, and SAF-limited file tools remain in the branch.
 - [x] Actions with meaningful consequences remain permission-gated; no automatic trade execution was added.
@@ -34,6 +35,7 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 - [ ] Verify AI provider setup, voice settings, memory editing, routines, skills, Telegram/MCP configuration, and device utilities each open without a crash.
 - [ ] Verify keyboard resizing, scrolling, message selection/copy, and button feedback.
 - [ ] Verify the chat Stop control cancels an active harmless task, stops voice playback, and returns the status/orb to idle without leaving the UI stuck.
+- [ ] Verify live activity cards appear during phone tasks, remain readable on the Redmi screen, and do not overwhelm the conversation.
 - [ ] Verify the orb changes colours and motion for all agent states without excessive heat or battery use.
 - [ ] Verify stopping a task clears indicators and does not leave the UI stuck in a running state.
 - [ ] Confirm accessibility/microphone denial produces a useful message rather than an activity crash.
