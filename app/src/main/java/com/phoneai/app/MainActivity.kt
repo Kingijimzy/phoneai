@@ -158,7 +158,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(6), dp(5), dp(6), dp(6))
             background = GradientDrawable().apply {
-                setColor(0xFF0D111A.toInt())
+                setColor(Theme.PANEL)
                 setStroke(dp(1), Theme.LINE)
             }
         }
