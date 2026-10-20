@@ -43,6 +43,22 @@ class MainActivity : Activity() {
             setStroke(dp(1), Theme.LINE)
         }
 
+    private fun gradientSurface(radius: Int, colors: IntArray): GradientDrawable =
+        GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), 0xFF2B5367.toInt())
+        }
+
+    private fun animateEntrance(view: View, delay: Long = 0L) {
+        view.alpha = 0f
+        view.translationY = dp(12).toFloat()
+        view.scaleX = .985f
+        view.scaleY = .985f
+        view.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+            .setStartDelay(delay).setDuration(360)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    }
+
     private fun action(title: String, subtitle: String? = null, primary: Boolean = false, onClick: () -> Unit): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -166,20 +182,35 @@ class MainActivity : Activity() {
     }
 
     private fun buildHome(page: LinearLayout) {
-        page.addView(label("ORION  /  PERSONAL AI", 11f, Theme.CYAN, true))
-        page.addView(label("A little more human.\nA lot more capable.", 29f, Theme.TEXT, true).apply {
-            setPadding(0, dp(9), 0, dp(5))
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        brandRow.addView(label("ORION", 12f, Theme.CYAN, true))
+        brandRow.addView(label("  /  PERSONAL AI", 10f, Theme.MUTED, true))
+        val livePill = label("  ●  READY  ", 10f, Theme.OK, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(9), dp(6), dp(9), dp(6))
+            background = roundedPill()
+        }
+        brandRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        brandRow.addView(livePill)
+        page.addView(brandRow)
+        page.addView(label("Your AI.\nYour world.\nOne command away.", 30f, Theme.TEXT, true).apply {
+            setPadding(0, dp(13), 0, dp(7))
+            setLineSpacing(dp(1).toFloat(), 1f)
         })
-        page.addView(label("Your thinking partner for ideas, research, memory, and phone tasks.", 13f, Theme.MUTED))
+        page.addView(label("Think, research, remember, and work across your phone — with you in control.", 13f, Theme.MUTED))
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(12), dp(12), dp(15))
-            background = surface(26)
+            setPadding(dp(14), dp(14), dp(14), dp(17))
+            background = gradientSurface(27, intArrayOf(0xFF14283A.toInt(), 0xFF101523.toInt(), 0xFF17152C.toInt()))
+            elevation = dp(3).toFloat()
         }
         val avatar = OrbView(this).apply { contentDescription = "Orion animated Jarvis-style energy core" }
         homeOrb = avatar
-        hero.addView(avatar, LinearLayout.LayoutParams(dp(196), dp(196)).apply { gravity = Gravity.CENTER })
+        hero.addView(avatar, LinearLayout.LayoutParams(dp(204), dp(204)).apply { gravity = Gravity.CENTER })
         hero.addView(label("ORION IS HERE", 12f, Theme.CYAN, true).apply { gravity = Gravity.CENTER })
         hero.addView(label("Ready when you are.", 14f, Theme.TEXT).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(3)) })
         hero.addView(label("A calm, responsive assistant — with your permission at every important step.", 12f, Theme.MUTED).apply {
@@ -187,17 +218,34 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(3), dp(8), dp(7))
         })
         gap(page, hero, 19)
-        gap(page, action("Start a conversation", "Chat, ask, brainstorm, or give Orion a task", true) { showTab("Chat") }, 12)
-        val quick = section(page, "Quick access", "Your most-used areas, one tap away")
+        animateEntrance(hero, 80)
+        val command = action("✦   Start a conversation", "Chat naturally or give Orion a multi-step task", true) { showTab("Chat") }
+        gap(page, command, 12)
+        animateEntrance(command, 150)
+        val quick = section(page, "Your workspace", "Jump back into the parts of Orion you use most")
         gap(quick, action("Memory & routines", "Review what Orion remembers and saved workflows") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
         }, 8)
         gap(quick, action("Skills studio", "Enable, review, and manage agent skills") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
         }, 8)
-        statusLabel = label("", 12f, Theme.MUTED)
-        gap(page, statusLabel, 17)
+        val statusCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = surface(17, 0xFF0E1721.toInt())
+        }
+        statusCard.addView(label("SYSTEM STATUS", 10f, Theme.CYAN, true))
+        statusLabel = label("", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) }
+        statusCard.addView(statusLabel)
+        gap(page, statusCard, 17)
         refreshStatus()
+        animateEntrance(statusCard, 230)
+    }
+
+    private fun roundedPill(): GradientDrawable = GradientDrawable().apply {
+        setColor(0xFF102A25.toInt())
+        cornerRadius = dp(30).toFloat()
+        setStroke(dp(1), 0xFF245044.toInt())
     }
 
     private fun buildTools(page: LinearLayout) {
