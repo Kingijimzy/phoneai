@@ -233,7 +233,10 @@ Rules:
                 return
             }
             command = instruction
-            AgentCheckpointStore.markRunning(svc)
+            if (!AgentCheckpointStore.markRunning(svc)) {
+                ui.say("I found the saved task, but could not safely update its recovery checkpoint. I have not resumed actions. Check storage and try again.")
+                return
+            }
         }
         val skillMatch = Regex("(?is)^run skill\\s+([a-z0-9._-]{2,48})\\s*:\\s*(.+)$").matchEntire(command.trim())
         if (skillMatch != null && activeSkillId == null) {
@@ -348,7 +351,10 @@ Rules:
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
         }
         // Only agent/tool tasks reach this point. Save a checkpoint so process death or the step cap does not erase progress.
-        if (!resumeRequest) AgentCheckpointStore.begin(svc, command)
+        if (!resumeRequest && !AgentCheckpointStore.begin(svc, command)) {
+            ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
+            return
+        }
         var steps = 0
         while (!stopped && steps < MAX_STEPS) {
             steps++
@@ -375,7 +381,11 @@ Rules:
                     val bt = one.optString("tool")
                     if (bt.isBlank() || bt == "done") continue
                     val batchArgs = one.optJSONObject("args") ?: JSONObject()
-                    AgentCheckpointStore.beginStep(svc, bt, batchArgs)
+                    if (!AgentCheckpointStore.beginStep(svc, bt, batchArgs)) {
+                        AgentCheckpointStore.pause(svc)
+                        ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
+                        return
+                    }
                     val br = try {
                         exec(bt, batchArgs)
                     } catch (e: Exception) {
@@ -383,7 +393,11 @@ Rules:
                     }
                     ui.note(bt + ": " + br.take(80).replace("\n", " "))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
-                    AgentCheckpointStore.record(svc, bt, one.optJSONObject("args") ?: JSONObject(), br)
+                    if (!AgentCheckpointStore.record(svc, bt, batchArgs, br)) {
+                        AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
+                        ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
+                        return
+                    }
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
                     if (br.startsWith("error")) break
                 }
@@ -393,12 +407,18 @@ Rules:
             }
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") {
-                AgentCheckpointStore.clear(svc)
+                if (!AgentCheckpointStore.complete(svc)) {
+                    ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
+                }
                 return
             }
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
-            AgentCheckpointStore.beginStep(svc, tool, args)
+            if (!AgentCheckpointStore.beginStep(svc, tool, args)) {
+                AgentCheckpointStore.pause(svc)
+                ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
+                return
+            }
             val result = try {
                 exec(tool, args)
             } catch (e: Exception) {
@@ -406,7 +426,11 @@ Rules:
             }
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             record(tool, args, result)
-            AgentCheckpointStore.record(svc, tool, args, result)
+            if (!AgentCheckpointStore.record(svc, tool, args, result)) {
+                AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
+                ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
+                return
+            }
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
         }
