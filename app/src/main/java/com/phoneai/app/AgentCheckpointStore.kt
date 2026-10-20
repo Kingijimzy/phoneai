@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -95,28 +96,19 @@ object AgentCheckpointStore {
         save(c, o)
     }
 
-    /** Write a synced temp file and replace the checkpoint only after the new JSON is on disk. */
+    /** Android AtomicFile keeps the last valid checkpoint if a write or rename fails. */
     private fun save(c: Context, o: JSONObject): Boolean {
-        val target = file(c)
-        val temp = File(c.filesDir, "orion_agent_checkpoint.json.tmp")
+        val atomic = AtomicFile(file(c))
+        var stream: FileOutputStream? = null
         return try {
-            FileOutputStream(temp, false).use { stream ->
-                stream.write(o.toString().toByteArray(Charsets.UTF_8))
-                stream.flush()
-                stream.fd.sync()
-            }
-            if (target.exists() && !target.delete()) {
-                temp.delete()
-                return false
-            }
-            if (!temp.renameTo(target)) {
-                // Do not write directly over the target: a failed copy must not corrupt the last checkpoint.
-                temp.delete()
-                return false
-            }
+            stream = atomic.startWrite()
+            stream.write(o.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
             true
         } catch (_: Exception) {
-            try { temp.delete() } catch (_: Exception) {}
+            if (stream != null) {
+                try { atomic.failWrite(stream) } catch (_: Exception) {}
+            }
             false
         }
     }
