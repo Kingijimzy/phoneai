@@ -156,7 +156,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         })
         val introFooter = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER
             setPadding(0, dp(11), 0, 0)
         }
         introFooter.addView(OrionIconView(this).apply {
