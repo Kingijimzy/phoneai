@@ -45,6 +45,8 @@ The force-close report is not yet reproduced on the physical phone in this workf
 
 ## Live-data and free-quota integration pass
 
+Latest reliability pass: chat and agent system prompts explicitly prohibit claiming live access unless a live tool succeeded in the current turn. Public web-search responses include a retrieval timestamp, and failures remain visible instead of being replaced with guessed results. This is source-level behavior; network/device verification is still required.
+
 Implemented in the integration branch (build/device verification still required):
 - [x] Open-Meteo geocoding + current weather/today forecast; no key and no LLM call.
 - [x] GDELT public news lookup for recent headlines; no key and no LLM call.
