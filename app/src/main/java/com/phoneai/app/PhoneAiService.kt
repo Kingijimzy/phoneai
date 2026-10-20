@@ -1000,6 +1000,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** True until the worker has actually left its current run. */
+    fun isTaskRunning(): Boolean = running
+
     /** Public entry point for the full-screen chat Stop control. */
     fun stopCurrentTask() {
         stopAll()
