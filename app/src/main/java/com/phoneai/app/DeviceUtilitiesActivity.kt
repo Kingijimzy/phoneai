@@ -40,6 +40,17 @@ class DeviceUtilitiesActivity : Activity() {
         return Button(this).apply {
             text = label
             isAllCaps = false
+            textSize = 13f
+            setTextColor(Theme.TEXT)
+            background = GradientDrawable().apply {
+                setColor(Theme.PANEL2)
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), Theme.LINE)
+            }
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            minHeight = dp(44)
+            stateListAnimator = null
+            elevation = dp(1).toFloat()
             setOnClickListener { action() }
         }
     }
