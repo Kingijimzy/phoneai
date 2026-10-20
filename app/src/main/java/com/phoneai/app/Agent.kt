@@ -258,7 +258,7 @@ Rules:
         history.put(msg("user", command))
         compact()
         // Live weather is a deterministic data lookup, not an LLM task. This preserves AI quota.
-        if (WeatherService.isWeatherRequest(command)) {
+        if (!resumeRequest && WeatherService.isWeatherRequest(command)) {
             ui.phase("acting")
             val place = WeatherService.requestedPlace(command)
             val answer = if (place.isBlank()) WeatherService.current("") else WeatherService.current(place)
@@ -267,7 +267,7 @@ Rules:
             return
         }
         // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
-        if (LiveNews.isNewsRequest(command)) {
+        if (!resumeRequest && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
             val answer = LiveNews.search(LiveNews.queryFrom(command))
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -275,7 +275,7 @@ Rules:
             return
         }
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (LiveWebSearch.isSearchRequest(command)) {
+        if (!resumeRequest && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = LiveWebSearch.search(LiveWebSearch.queryFrom(command))
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -283,7 +283,7 @@ Rules:
             return
         }
         // Freshness-dependent questions should use live web results, not a model's stale training data.
-        if (LiveWebSearch.isLiveInfoRequest(command)) {
+        if (!resumeRequest && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val answer = LiveWebSearch.search(query)
@@ -294,7 +294,7 @@ Rules:
         // Common public crypto spot quotes can be fetched directly, without spending an LLM request.
         val quoteIntent = Regex("(?i)\\b(price|quote|ticker|trading at|current value)\\b").containsMatchIn(command)
         val quoteMatch = Regex("(?i)\\b(BTC|BITCOIN|ETH|ETHEREUM|SOL|SOLANA|XRP|RIPPLE|BNB|DOGE|ADA|AVAX|DOT|LINK|LTC|TRX|TON)(USDT)?\\b").find(command)
-        if (quoteIntent && quoteMatch != null) {
+        if (!resumeRequest && quoteIntent && quoteMatch != null) {
             ui.phase("acting")
             val rawSymbol = quoteMatch.groupValues[1].uppercase()
             val baseSymbol = when (rawSymbol) {
@@ -313,7 +313,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (activeSkillId == null) local.tryRun(command) else null
+            if (!resumeRequest && activeSkillId == null) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
@@ -324,7 +324,7 @@ Rules:
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
         // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
-        if (activeSkillId == null && !actionWords.containsMatchIn(command.lowercase())) {
+        if (!resumeRequest && activeSkillId == null && !actionWords.containsMatchIn(command.lowercase())) {
             ui.phase("thinking")
             val r = try {
                 chatReply(command)
