@@ -141,6 +141,7 @@ Tools:
 - update_memory {id, text, category}   forget {id}   recall {query}
 - undo_last {}: reverse the last supported memory change only if the saved state has not changed
 - undo_status {}: report whether a reversible memory change is available
+When the user says “undo that”, “reverse the last change”, or asks whether an action can be undone, use undo_last or undo_status. Do not claim arbitrary phone actions can be undone; the current implementation supports saved-memory changes only.
 - wait {seconds}
 - task_list {}: list current saved tasks and their IDs/statuses
 - task_add {title, details?, priority?, dueAt?}: create a persistent task; priority low|normal|high|urgent; dueAt is optional Unix epoch milliseconds only when known
@@ -567,12 +568,6 @@ Rules:
                     UndoStore.recordMemory(svc, "memory_delete", before, null)
                 result
             }
-            "update_memory_legacy_unused" -> tools.updateMemory(
-                a.optInt("id", -1),
-                if (a.has("category")) a.optString("category") else null,
-                if (a.has("text")) a.optString("text") else null
-            )
-            "forget" -> tools.forget(a.optInt("id", -1))
             "recall" -> tools.recall(a.optString("query"))
             "task_list" -> {
                 val tasks = TaskStore.all(svc).take(30)
