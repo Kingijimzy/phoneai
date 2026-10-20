@@ -36,7 +36,7 @@ class BrowserActivity : Activity() {
     private fun pill(text: String, action: () -> Unit) = TextView(this).apply {
         this.text = text
         textSize = 13f
-        setTextColor(Color.rgb(95, 225, 245))
+        setTextColor(Theme.CYAN)
         typeface = Typeface.DEFAULT_BOLD
         gravity = Gravity.CENTER
         setPadding(dp(11), dp(10), dp(11), dp(10))
@@ -48,7 +48,7 @@ class BrowserActivity : Activity() {
     private fun rounded(fill: Int) = GradientDrawable().apply {
         setColor(fill)
         cornerRadius = dp(15).toFloat()
-        setStroke(dp(1), Color.rgb(45, 57, 73))
+        setStroke(dp(1), Theme.LINE)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +73,7 @@ class BrowserActivity : Activity() {
         title = TextView(this).apply {
             text = "ORION BROWSER"
             textSize = 13f
-            setTextColor(Color.rgb(95, 225, 245))
+            setTextColor(Theme.CYAN)
             typeface = Typeface.DEFAULT_BOLD
         }
         heading.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
@@ -88,7 +88,7 @@ class BrowserActivity : Activity() {
             setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
-            background = rounded(Color.rgb(19, 25, 36))
+            background = rounded(Theme.PANEL2)
             setPadding(dp(12), dp(4), dp(12), dp(4))
             setOnEditorActionListener { _, actionId, event ->
                 if (actionId == EditorInfo.IME_ACTION_GO ||
@@ -102,6 +102,8 @@ class BrowserActivity : Activity() {
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             progress = 0
+            progressTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Theme.LINE)
         }
         root.addView(progress, LinearLayout.LayoutParams(-1, dp(3)))
 
