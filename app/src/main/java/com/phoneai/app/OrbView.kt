@@ -107,16 +107,26 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             canvas.drawCircle(cx, cy, min(w, h) * 0.49f, paint)
         }
 
-        // Soft atmospheric halo, rather than the previous mechanical triple-ring look.
+        // Soft atmospheric halo breathes with the core; extra bloom is concentrated around
+        // the sphere instead of filling the whole screen with a flat neon disc.
         val haloRadius = min(w, h) * 0.49f
         paint.shader = RadialGradient(cx, cy, haloRadius,
-            intArrayOf((col and 0x00FFFFFF) or 0x55000000, (col and 0x00FFFFFF) or 0x1A000000, 0x0000FCB6),
-            floatArrayOf(0.35f, 0.68f, 1f), Shader.TileMode.CLAMP)
+            intArrayOf((col and 0x00FFFFFF) or ((38 + 30 * breathe).toInt() shl 24),
+                (col and 0x00FFFFFF) or 0x1A000000, 0x0000FCB6),
+            floatArrayOf(0.24f, 0.70f, 1f), Shader.TileMode.CLAMP)
         canvas.drawCircle(cx, cy, haloRadius, paint)
         paint.shader = null
 
-        // The reference's centerpiece is a single glossy, translucent turquoise sphere.
         val sphereR = r * (0.92f + 0.025f * breathe)
+        val bloomR = sphereR * (1.10f + 0.055f * breathe)
+        paint.shader = RadialGradient(cx, cy, bloomR,
+            intArrayOf((col and 0x00FFFFFF) or ((45 + 28 * breathe).toInt() shl 24),
+                (col and 0x00FFFFFF) or 0x1A000000, 0x0000FCB6),
+            floatArrayOf(0.48f, 0.76f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawCircle(cx, cy, bloomR, paint)
+        paint.shader = null
+
+        // The reference's centerpiece is a single glossy, translucent turquoise sphere.
         spherePath.reset()
         spherePath.addCircle(cx, cy, sphereR, Path.Direction.CW)
         paint.shader = RadialGradient(
@@ -143,16 +153,21 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         fluid.strokeWidth = max(1.1f, sphereR * 0.045f)
         fluid.color = 0xA6C8FFF7.toInt()
         val shift = sin(t * 0.7f) * sphereR * 0.10f
+        val drift = cos(t * 0.48f) * sphereR * 0.075f
         val current1 = Path().apply {
             moveTo(cx - sphereR * 1.05f, cy - sphereR * 0.10f + shift)
-            cubicTo(cx - sphereR * 0.46f, cy - sphereR * 0.70f, cx + sphereR * 0.12f, cy - sphereR * 0.76f, cx + sphereR * 1.03f, cy - sphereR * 0.08f - shift)
+            cubicTo(cx - sphereR * 0.46f + drift, cy - sphereR * 0.70f,
+                cx + sphereR * 0.12f - drift, cy - sphereR * 0.76f + shift * 0.25f,
+                cx + sphereR * 1.03f, cy - sphereR * 0.08f - shift)
         }
         canvas.drawPath(current1, fluid)
         fluid.strokeWidth = max(0.8f, sphereR * 0.022f)
         fluid.color = 0x887BFFF0.toInt()
         val current2 = Path().apply {
             moveTo(cx - sphereR * 0.95f, cy + sphereR * 0.35f - shift)
-            cubicTo(cx - sphereR * 0.25f, cy + sphereR * 0.02f, cx + sphereR * 0.25f, cy + sphereR * 0.83f, cx + sphereR * 1.02f, cy + sphereR * 0.25f + shift)
+            cubicTo(cx - sphereR * 0.25f - drift, cy + sphereR * 0.02f + shift * 0.3f,
+                cx + sphereR * 0.25f + drift, cy + sphereR * 0.83f,
+                cx + sphereR * 1.02f, cy + sphereR * 0.25f + shift)
         }
         canvas.drawPath(current2, fluid)
 
