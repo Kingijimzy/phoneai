@@ -223,6 +223,9 @@ class MainActivity : Activity() {
         gap(page, command, 12)
         animateEntrance(command, 150)
         val quick = section(page, "Your workspace", "Jump back into the parts of Orion you use most")
+        gap(quick, action("Task centre", "Queued work, running status, pauses, and completed tasks", true) {
+            startActivity(Intent(this, TaskCenterActivity::class.java))
+        }, 8)
         gap(quick, action("Memory & routines", "Review what Orion remembers and saved workflows") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
         }, 8)
@@ -257,6 +260,9 @@ class MainActivity : Activity() {
             startActivity(Intent(this, DeviceUtilitiesActivity::class.java))
         }, 8)
         val agent = section(page, "Agent workspace", "Capabilities that help Orion research and work")
+        gap(agent, action("Task centre", "Manage task status and resume saved agent sessions", true) {
+            startActivity(Intent(this, TaskCenterActivity::class.java))
+        }, 8)
         gap(agent, action("Skills studio", "Manage enabled skills and their permissions") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
         }, 8)
