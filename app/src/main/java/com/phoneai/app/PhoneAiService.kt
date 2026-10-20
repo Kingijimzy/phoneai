@@ -471,10 +471,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
                 }
             } catch (e: Exception) {
-                val reason = (e.message ?: "unknown error").take(180)
+                val reason = (e.message ?: "unknown error").take(220)
+                val guidance = when {
+                    reason.contains("No AI key", true) || reason.contains("key saved", true) ->
+                        " Open Settings → AI providers and save a key for a vision-capable provider."
+                    reason.contains("vision model", true) || reason.contains("no vision", true) ||
+                        reason.contains("supports this request type", true) ->
+                        " The selected model may be text-only. In Settings → AI providers, choose a provider and model that explicitly supports image input."
+                    reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) ->
+                        " The provider may be out of free quota or credit. Try the configured vision backup or wait for the limit to reset."
+                    reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) ||
+                        reason.contains("unsupported", true) ->
+                        " The provider may have rejected this image format or model. Try a smaller JPG/PNG image and verify that the selected model supports vision."
+                    else ->
+                        " Check internet access and the vision provider/model in Settings → AI providers."
+                }
                 main.post {
-                    mainChatListener?.onMessage("ai", "I couldn't analyse that image: " + reason + ". Check that a vision-capable provider and model are configured in Settings.")
-                    mainChatListener?.onStatus("Ready", OrbView.Mode.IDLE)
+                    mainChatListener?.onMessage("ai", "The image was attached, but analysis failed. Details: " + reason + "." + guidance)
+                    mainChatListener?.onStatus("Image analysis failed · see details", OrbView.Mode.IDLE)
                 }
             }
         }, "Orion-image-analysis").start()
