@@ -177,6 +177,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         scroll = ScrollView(this).apply {
             isFillViewport = false
             clipToPadding = false
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
             setPadding(0, dp(4), 0, dp(8))
         }
         messages = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -510,12 +512,30 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
             elevation = if (isNote) 0f else dp(1).toFloat()
         }
-        if (isNote) row.addView(label("LIVE ACTIVITY", 9f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(3)) })
-        else if (kind == "ai") row.addView(label("ORION", 10f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(4)) })
+        if (isNote) {
+            row.addView(label("LIVE ACTIVITY", 9f, Theme.CYAN, true).apply {
+                letterSpacing = .09f
+                setPadding(0, 0, 0, dp(3))
+            })
+        } else if (kind == "ai") {
+            val identity = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, dp(4))
+            }
+            identity.addView(OrionIconView(this).apply {
+                icon = "spark"
+                tint = Theme.CYAN
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(13), dp(13)).apply { rightMargin = dp(6) })
+            identity.addView(label("ORION", 10f, Theme.CYAN, true).apply { letterSpacing = .12f })
+            row.addView(identity)
+        }
         val body = label(text, if (isNote) 12f else 15f, if (isNote) Theme.MUTED else Theme.TEXT).apply {
-            setLineSpacing(dp(2).toFloat(), 1.02f)
+            setLineSpacing(dp(3).toFloat(), 1.035f)
             setTextIsSelectable(true)
             if (isNote) maxLines = 4
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
         row.addView(body)
         val params = LinearLayout.LayoutParams(
