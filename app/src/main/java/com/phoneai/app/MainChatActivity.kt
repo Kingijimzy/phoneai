@@ -357,12 +357,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             val changed = lastMode != mode
             lastMode = mode
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
-                OrbView.Mode.IDLE -> Triple("READY", Theme.CYAN, Pair(0xFF10252D.toInt(), 0xFF245260.toInt()))
+                OrbView.Mode.IDLE -> Triple("READY", Theme.CYAN, Pair(0xFF063B30.toInt(), 0xFF018D6D.toInt()))
                 OrbView.Mode.LISTENING -> Triple("LISTENING · SPEAK NOW", Theme.OK, Pair(0xFF063B30.toInt(), 0xFF018D6D.toInt()))
                 OrbView.Mode.THINKING -> Triple("THINKING · WORKING IT OUT", Theme.VIOLET, Pair(0xFF0C3028.toInt(), 0xFF016856.toInt()))
-                OrbView.Mode.SPEAKING -> Triple("SPEAKING · ORION IS REPLYING", Theme.CYAN, Pair(0xFF10252D.toInt(), 0xFF245260.toInt()))
-                OrbView.Mode.ACTING -> Triple("ACTING · CARRYING OUT TASK", Theme.WARN, Pair(0xFF302515.toInt(), 0xFF705328.toInt()))
-                OrbView.Mode.WAITING_APPROVAL -> Triple("APPROVAL NEEDED · YOU DECIDE", Theme.WARN, Pair(0xFF302515.toInt(), 0xFF8B672B.toInt()))
+                OrbView.Mode.SPEAKING -> Triple("SPEAKING · ORION IS REPLYING", Theme.CYAN, Pair(0xFF063B30.toInt(), 0xFF018D6D.toInt()))
+                OrbView.Mode.ACTING -> Triple("ACTING · CARRYING OUT TASK", Theme.WARN, Pair(0xFF29251A.toInt(), 0xFF74642F.toInt()))
+                OrbView.Mode.WAITING_APPROVAL -> Triple("APPROVAL NEEDED · YOU DECIDE", Theme.WARN, Pair(0xFF29251A.toInt(), 0xFF9B812F.toInt()))
             }
             val short = state.first
             val accent = state.second
