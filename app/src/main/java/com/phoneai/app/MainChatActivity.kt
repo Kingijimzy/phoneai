@@ -201,7 +201,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             Triple("Research", "browser", "Help me research a topic. Ask what topic I want to investigate."),
             Triple("Plan", "tasks", "Help me create a practical step-by-step plan. Ask what I want to achieve."),
             Triple("Explain", "spark", "Explain a difficult idea with a practical example."),
-            Triple("Phone command", "shield", "Help me with my phone. Ask what action I want to perform.")
+            Triple("Phone command", "shield", "Help me with my phone. Ask what action I want to perform."),
+            Triple("Teach", "record", "teach ")
         ).forEach { (name, iconName, prompt) ->
             val chip = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
