@@ -110,7 +110,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         // Soft atmospheric halo, rather than the previous mechanical triple-ring look.
         val haloRadius = min(w, h) * 0.49f
         paint.shader = RadialGradient(cx, cy, haloRadius,
-            intArrayOf((col and 0x00FFFFFF) or 0x5533FFDC, (col and 0x00FFFFFF) or 0x1A00FCB6, 0x0000FCB6),
+            intArrayOf((col and 0x00FFFFFF) or 0x55000000, (col and 0x00FFFFFF) or 0x1A000000, 0x0000FCB6),
             floatArrayOf(0.35f, 0.68f, 1f), Shader.TileMode.CLAMP)
         canvas.drawCircle(cx, cy, haloRadius, paint)
         paint.shader = null
