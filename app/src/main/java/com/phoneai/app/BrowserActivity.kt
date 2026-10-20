@@ -31,7 +31,7 @@ import java.net.URLEncoder
  * Lightweight in-app browser. The accessibility agent can inspect and interact with
  * its visible WebView just like other accessible apps. Web content is always untrusted.
  */
-class BrowserActivity : Activity() {
+class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var web: WebView
     private lateinit var address: EditText
     private lateinit var progress: ProgressBar
@@ -40,6 +40,10 @@ class BrowserActivity : Activity() {
     private lateinit var forwardButton: TextView
     private lateinit var reloadButton: TextView
     private lateinit var stopButton: TextView
+    private lateinit var agentPrompt: EditText
+    private lateinit var agentResult: TextView
+    private lateinit var agentRun: TextView
+    private var agentAttached = false
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun pill(text: String, action: () -> Unit) = TextView(this).apply {
@@ -154,6 +158,56 @@ class BrowserActivity : Activity() {
         })
         root.addView(controls)
 
+        val agentPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF0D2822.toInt(), 0xFF0A1715.toInt())).apply {
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), 0xFF167C66.toInt())
+            }
+        }
+        agentPanel.addView(TextView(this).apply {
+            text = "ASK ORION TO ACT ON THIS PAGE"
+            textSize = 9f
+            letterSpacing = .1f
+            setTextColor(Theme.CYAN)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        val commandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        agentPrompt = EditText(this).apply {
+            hint = "e.g. find the signup form and fill these fields…"
+            setHintTextColor(0xFF82928E.toInt())
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            minHeight = dp(42)
+            maxLines = 3
+            background = null
+            setPadding(dp(3), dp(4), dp(5), dp(4))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        commandRow.addView(agentPrompt, LinearLayout.LayoutParams(0, -2, 1f))
+        agentRun = pill("Run ↗") { runBrowserAgent() }.apply {
+            background = rounded(0xFF0B4B3B.toInt())
+            contentDescription = "Ask Orion to perform the entered browser task"
+        }
+        commandRow.addView(agentRun)
+        agentPanel.addView(commandRow)
+        agentResult = TextView(this).apply {
+            text = "Orion can inspect the current page and attempt actions through Android accessibility."
+            textSize = 10f
+            setTextColor(Theme.MUTED)
+            maxLines = 3
+        }
+        agentPanel.addView(agentResult)
+        root.addView(agentPanel, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(6)
+            bottomMargin = dp(6)
+        })
+
         web = WebView(this)
         web.settings.apply {
             javaScriptEnabled = true
@@ -259,7 +313,52 @@ class BrowserActivity : Activity() {
         if (::web.isInitialized && web.canGoBack()) web.goBack() else super.onBackPressed()
     }
 
+    private fun runBrowserAgent() {
+        val command = agentPrompt.text.toString().trim()
+        if (command.isBlank()) {
+            agentPrompt.error = "Tell Orion what to do on this page"
+            return
+        }
+        val service = PhoneAiService.instance
+        if (service == null) {
+            agentResult.text = "Enable Orion in Accessibility settings first, then try again."
+            startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            return
+        }
+        agentPrompt.clearFocus()
+        agentRun.isEnabled = false
+        agentRun.alpha = 0.65f
+        agentResult.text = "Orion is working on the current page…"
+        if (!agentAttached) {
+            service.attachMainChat(this)
+            agentAttached = true
+        }
+        service.sendFromMainChat("On the current page open in Orion Browser, do this task: $command. Keep the browser page open while you work. Read the page first, use visible controls, and report what actually succeeded. Ask me before submitting forms, sending messages, purchases, deleting data, or other consequential actions.")
+    }
+
+    override fun onMessage(kind: String, message: String) {
+        runOnUiThread {
+            if (::agentResult.isInitialized) {
+                agentResult.text = (if (kind == "me") "YOU: " else if (kind == "note") "PROGRESS: " else "ORION: ") + message
+                agentRun.isEnabled = true
+                agentRun.alpha = 1f
+            }
+        }
+    }
+
+    override fun onStatus(value: String, mode: OrbView.Mode) {
+        runOnUiThread {
+            if (::agentResult.isInitialized) {
+                agentResult.text = value
+                agentRun.isEnabled = mode != OrbView.Mode.THINKING && mode != OrbView.Mode.ACTING
+                agentRun.alpha = if (agentRun.isEnabled) 1f else 0.65f
+            }
+        }
+    }
+
     override fun onDestroy() {
+        if (agentAttached) PhoneAiService.instance?.detachMainChat(this)
+        agentAttached = false
         if (::web.isInitialized) {
             web.stopLoading()
             web.webChromeClient = null
@@ -268,6 +367,8 @@ class BrowserActivity : Activity() {
         }
         super.onDestroy()
     }
+
+
 
     companion object {
         const val EXTRA_URL = "com.phoneai.app.browser.URL"
