@@ -258,21 +258,29 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     private fun addMessage(kind: String, text: String) {
-        if (kind == "note") return
+        val isNote = kind == "note"
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(13), dp(10), dp(13), dp(10))
-            background = if (kind == "me") rounded(0xFF202838.toInt(), 19, 0xFF344056.toInt()) else rounded(Theme.PANEL, 18, Theme.LINE)
+            setPadding(dp(if (isNote) 11 else 13), dp(if (isNote) 8 else 10), dp(if (isNote) 11 else 13), dp(if (isNote) 8 else 10))
+            background = when {
+                isNote -> rounded(0xFF0E1B27.toInt(), 14, 0xFF244657.toInt())
+                kind == "me" -> rounded(0xFF202838.toInt(), 19, 0xFF344056.toInt())
+                else -> rounded(Theme.PANEL, 18, Theme.LINE)
+            }
         }
-        if (kind == "ai") row.addView(label("ORION", 10f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(4)) })
-        val body = label(text, 15f, Theme.TEXT).apply {
+        if (isNote) row.addView(label("LIVE ACTIVITY", 9f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(3)) })
+        else if (kind == "ai") row.addView(label("ORION", 10f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(4)) })
+        val body = label(text, if (isNote) 12f else 15f, if (isNote) Theme.MUTED else Theme.TEXT).apply {
             setLineSpacing(dp(2).toFloat(), 1.02f)
             setTextIsSelectable(true)
+            if (isNote) maxLines = 4
         }
         row.addView(body)
-        val params = LinearLayout.LayoutParams(if (kind == "me") (resources.displayMetrics.widthPixels * .84f).toInt() else -1, -2)
+        val params = LinearLayout.LayoutParams(
+            if (isNote) -1 else if (kind == "me") (resources.displayMetrics.widthPixels * .84f).toInt() else -1, -2
+        )
         params.gravity = if (kind == "me") Gravity.END else Gravity.START
-        params.setMargins(if (kind == "me") dp(36) else 0, dp(5), if (kind == "me") 0 else dp(18), dp(5))
+        params.setMargins(if (kind == "me") dp(36) else 0, dp(if (isNote) 2 else 5), if (kind == "me") 0 else dp(if (isNote) 0 else 18), dp(if (isNote) 3 else 5))
         messages.addView(row, params)
         row.alpha = 0f
         row.translationY = dp(8).toFloat()
