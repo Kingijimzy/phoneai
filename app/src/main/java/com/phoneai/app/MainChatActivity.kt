@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Typeface
+import android.net.Uri
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
@@ -14,6 +15,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -27,6 +29,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var input: EditText
     private lateinit var send: TextView
     private lateinit var stop: TextView
+    private var selectedImageUri: Uri? = null
+    private var imagePreviewPanel: LinearLayout? = null
     private var attachedService: PhoneAiService? = null
     private var lastMode = OrbView.Mode.IDLE
     private var welcomePanel: View? = null
@@ -212,6 +216,18 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(chipsScroll, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6); bottomMargin = dp(8) })
         promptRail = chipsScroll
 
+        val previewPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = View.GONE
+            setPadding(dp(9), dp(7), dp(9), dp(7))
+            background = rounded(0xFF0A1916.toInt(), 16, 0xFF2C504E.toInt())
+        }
+        imagePreviewPanel = previewPanel
+        root.addView(previewPanel, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(5)
+        })
+
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -238,6 +254,32 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         composer.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+        val attach = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = rounded(0xFF0A1916.toInt(), 21, 0xFF2C504E.toInt())
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Attach an image for Orion to analyse"
+            addView(OrionIconView(this@MainChatActivity).apply {
+                icon = "image"
+                tint = Theme.CYAN
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(20), dp(20)))
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.92f).scaleY(.92f).setDuration(75).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(140).start()
+                false
+            }
+            setOnClickListener {
+                val picker = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "image/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44)
+            }
+        }
+        composer.addView(attach, LinearLayout.LayoutParams(dp(42), dp(44)).apply { rightMargin = dp(6) })
         val mic = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -328,9 +370,76 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 44 && resultCode == RESULT_OK) {
+            val uri = data?.data
+            if (uri != null) {
+                selectedImageUri = uri
+                refreshImagePreview(uri)
+            }
+        }
+    }
+
+    private fun refreshImagePreview(uri: Uri?) {
+        val panel = imagePreviewPanel ?: return
+        panel.removeAllViews()
+        if (uri == null) {
+            panel.visibility = View.GONE
+            return
+        }
+        val thumbnail = ImageView(this).apply {
+            setImageURI(uri)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = rounded(0xFF10211E.toInt(), 10, 0xFF2C504E.toInt())
+            clipToOutline = true
+            contentDescription = "Selected image preview"
+        }
+        panel.addView(thumbnail, LinearLayout.LayoutParams(dp(54), dp(54)))
+        val info = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), 0, dp(8), 0)
+            addView(label("IMAGE ATTACHED", 10f, Theme.CYAN, true))
+            addView(label("Orion will inspect this image", 12f, Theme.MUTED))
+        }
+        panel.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+        val remove = label("×", 23f, Theme.MUTED, true).apply {
+            gravity = Gravity.CENTER
+            contentDescription = "Remove attached image"
+            setPadding(dp(10), dp(2), dp(5), dp(2))
+            setOnClickListener {
+                selectedImageUri = null
+                refreshImagePreview(null)
+            }
+        }
+        panel.addView(remove, LinearLayout.LayoutParams(dp(38), dp(48)))
+        panel.visibility = View.VISIBLE
+    }
+
+    private fun addImageBubble(uri: Uri) {
+        val image = ImageView(this).apply {
+            setImageURI(uri)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            adjustViewBounds = true
+            maxHeight = dp(230)
+            background = rounded(0xFF0A1916.toInt(), 16, 0xFF016856.toInt())
+            clipToOutline = true
+            contentDescription = "Image sent to Orion"
+        }
+        val params = LinearLayout.LayoutParams(dp(220), dp(220)).apply {
+            gravity = Gravity.END
+            setMargins(dp(38), dp(0), 0, dp(7))
+        }
+        messages.addView(image, params)
+        image.alpha = 0f
+        image.animate().alpha(1f).setDuration(180).start()
+        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
     private fun sendMessage() {
         val value = input.text.toString().trim()
-        if (value.isEmpty()) return
+        val imageUri = selectedImageUri
+        if (value.isEmpty() && imageUri == null) return
         val service = PhoneAiService.instance
         if (service == null) {
             Toast.makeText(this, "Enable Orion in Accessibility settings first.", Toast.LENGTH_LONG).show()
@@ -338,7 +447,16 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             return
         }
         input.setText("")
-        service.sendFromMainChat(value)
+        if (imageUri != null) {
+            val question = value.ifBlank { "Describe this image and explain anything important I should notice." }
+            addMessage("me", question)
+            addImageBubble(imageUri)
+            selectedImageUri = null
+            refreshImagePreview(null)
+            service.analyzeImageFromMainChat(imageUri, question)
+        } else {
+            service.sendFromMainChat(value)
+        }
     }
 
     private fun restoreWelcome() {
