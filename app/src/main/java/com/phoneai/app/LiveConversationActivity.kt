@@ -16,10 +16,10 @@ import android.widget.Toast
 
 /**
  * Dedicated hands-free conversation surface. Uses the same service/transcript as main chat,
- * with a lightweight native orb so it remains usable on entry-level Android devices.
+ * with a lightweight native waveform so it remains usable on entry-level Android devices.
  */
 class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
-    private lateinit var orb: OrbView
+    private lateinit var wave: VoiceWaveView
     private lateinit var stateLabel: TextView
     private lateinit var transcript: LinearLayout
     private lateinit var micButton: TextView
@@ -83,12 +83,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(8), dp(12), dp(16))
         }
-        orb = OrbView(this).apply {
-            contentDescription = "Animated Orion energy core; changes with listening, thinking, and speaking states"
+        wave = VoiceWaveView(this).apply {
+            contentDescription = "Animated audio waveform that responds to Orion's current state"
         }
-        hero.addView(orb, LinearLayout.LayoutParams(dp(220), dp(220)).apply {
+        hero.addView(wave, LinearLayout.LayoutParams(-1, dp(170)).apply {
             gravity = Gravity.CENTER
-            bottomMargin = dp(2)
+            bottomMargin = dp(8)
         })
         hero.addView(text("PRESENT. RESPONSIVE. YOURS.", 10f, Theme.CYAN, true).apply {
             gravity = Gravity.CENTER
@@ -239,7 +239,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     override fun onStatus(value: String, mode: OrbView.Mode) {
         runOnUiThread {
             lastMode = mode
-            orb.mode = mode
+            wave.mode = mode
             stateLabel.text = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
