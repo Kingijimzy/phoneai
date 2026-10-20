@@ -73,7 +73,10 @@ class Nim(private val ctx: Context) {
                     sb.append("\\n• ").append(p.label).append(": ").append(it.take(180))
                 }
             }
-            return if (sb.toString().isBlank()) "No AI keys saved yet." else sb.toString().trim()
+            val hasKeys = Providers.all.any { Prefs.hasKey(c, it.id) }
+            return if (!hasKeys && lastSuccess.isEmpty() && lastFailure.isEmpty()) {
+                "No AI keys saved yet. Add a provider key in Settings."
+            } else sb.toString().trim()
         }
     }
 
