@@ -840,11 +840,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         box.orientation = LinearLayout.VERTICAL
         box.background = rounded(0xFF191409.toInt(), dp(20).toFloat(), Theme.WARN)
         box.setPadding(dp(16), dp(14), dp(16), dp(14))
-        box.addView(label(question, 16f, Theme.TEXT))
+        box.addView(label("APPROVAL REQUIRED", 11f, Theme.WARN).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.08f
+        })
+        box.addView(label(question, 16f, Theme.TEXT).apply {
+            setPadding(0, dp(7), 0, 0)
+        })
+        box.addView(label("Orion will wait here. Nothing in this step continues until you choose.", 12f, Theme.MUTED).apply {
+            setPadding(0, dp(6), 0, 0)
+        })
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
-        val no = pill("No", Theme.PANEL2, Theme.TEXT) { answer(false) }
-        val yes = pill("Yes, do it", Theme.CYAN, Theme.ON_ACCENT) { answer(true) }
+        val no = pill("Cancel action", Theme.PANEL2, Theme.TEXT) { answer(false) }
+        val yes = pill("Approve & continue", Theme.CYAN, Theme.ON_ACCENT) { answer(true) }
         val noLp = LinearLayout.LayoutParams(0, WRAP, 1f)
         noLp.setMargins(0, dp(12), dp(6), 0)
         val yesLp = LinearLayout.LayoutParams(0, WRAP, 1f)
