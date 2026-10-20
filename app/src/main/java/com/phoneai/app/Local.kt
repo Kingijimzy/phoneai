@@ -18,17 +18,22 @@ class Local(
 ) {
 
     private fun replay(name: String, steps: JSONArray): String {
+        val targetSize = svc.replayScreenSize()
         for (i in 0 until steps.length()) {
             if (stopped()) return "Stopped."
             val s = steps.getJSONObject(i)
             val tool = s.optString("tool")
             val gap = s.optLong("gap", -1L)
+            val sourceW = s.optInt("screenW", targetSize.first).coerceAtLeast(1)
+            val sourceH = s.optInt("screenH", targetSize.second).coerceAtLeast(1)
+            fun scaleX(value: Double) = (value * targetSize.first / sourceW).toInt().coerceIn(0, targetSize.first)
+            fun scaleY(value: Double) = (value * targetSize.second / sourceH).toInt().coerceIn(0, targetSize.second)
             val sigA = s.optJSONArray("sig")
             if (sigA != null && s.has("sx") && s.has("sy")) {
-                // taught step: wait until the screen LOOKS right (colour maths, no AI), then act
+                // Wait for the recorded pre-action screen cue, scaled to this device's current resolution.
                 val sig = IntArray(sigA.length()) { sigA.getInt(it) }
                 val limit = (gap * 3).coerceIn(6000L, 30000L)
-                when (svc.waitForSig(s.getInt("sx"), s.getInt("sy"), sig, limit) { stopped() }) {
+                when (svc.waitForSig(scaleX(s.getDouble("sx")), scaleY(s.getDouble("sy")), sig, limit) { stopped() }) {
                     "timeout" -> return "I stopped at step ${i + 1} of $name because the screen did not look right after ${limit / 1000} seconds."
                     "stopped" -> return "Stopped."
                     "unavailable" -> Thread.sleep(gap.coerceIn(200L, 5000L))
@@ -37,14 +42,34 @@ class Local(
             } else {
                 Thread.sleep(if (gap >= 0) gap.coerceIn(100L, 5000L) else 600L)
             }
-            val args = s.optJSONObject("args") ?: JSONObject()
-            val r = if (tool == "swipe_path") {
-                svc.performRecordedPath(args.optJSONArray("points") ?: JSONArray(), args.optLong("ms", 500L))
-            } else {
-                exec(tool, args)
+
+            // Scale all stored coordinates to the current display so routines survive resolution changes.
+            val args = JSONObject((s.optJSONObject("args") ?: JSONObject()).toString())
+            when (tool) {
+                "tap", "long_press" -> {
+                    if (args.has("x")) args.put("x", scaleX(args.getDouble("x")))
+                    if (args.has("y")) args.put("y", scaleY(args.getDouble("y")))
+                }
+                "swipe" -> {
+                    listOf("x1", "x2").forEach { key -> if (args.has(key)) args.put(key, scaleX(args.getDouble(key))) }
+                    listOf("y1", "y2").forEach { key -> if (args.has(key)) args.put(key, scaleY(args.getDouble(key))) }
+                }
+                "swipe_path" -> {
+                    val oldPoints = args.optJSONArray("points")
+                    if (oldPoints != null) {
+                        val scaledPoints = JSONArray()
+                        for (j in 0 until oldPoints.length()) {
+                            val point = oldPoints.optJSONObject(j) ?: continue
+                            scaledPoints.put(JSONObject().put("x", scaleX(point.optDouble("x")))
+                                .put("y", scaleY(point.optDouble("y"))))
+                        }
+                        args.put("points", scaledPoints)
+                    }
+                }
             }
-            note(tool + ": " + r.take(60))
-            if (r.startsWith("error")) return "I stopped at step ${i + 1} of $name. " + r.removePrefix("error: ").take(80)
+            val result = exec(tool, args)
+            note("step ${i + 1}/${steps.length()}: $tool · ${result.take(44)}")
+            if (result.startsWith("error")) return "I stopped at step ${i + 1} of $name. " + result.removePrefix("error: ").take(100)
         }
         return "Finished $name."
     }
