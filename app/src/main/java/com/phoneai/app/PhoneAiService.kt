@@ -1369,7 +1369,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- fast, no-AI: teach mode + screen checks
 
     private val cbExec = Executors.newSingleThreadExecutor()
-    private val sigExec = Executors.newCachedThreadPool()
+    private val sigExec = Executors.newFixedThreadPool(2)
     private val teachExec = Executors.newSingleThreadExecutor()
 
     /** Full-size screenshot with no AI and no resizing. Null if the screen is protected. */
@@ -1682,14 +1682,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 latch.await(6, TimeUnit.SECONDS)
                 val bmp = holder[0]
                 if (bmp != null) {
-                    val width = 540
+                    val width = minOf(540, bmp.width)
                     val scale = bmp.width / width.toFloat()
                     val height = (bmp.height / scale).toInt()
                     val small = Bitmap.createScaledBitmap(bmp, width, height, true)
-                    val out = ByteArrayOutputStream()
-                    small.compress(Bitmap.CompressFormat.JPEG, 60, out)
-                    val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-                    return Shot(b64, scale, width, height)
+                    try {
+                        val out = ByteArrayOutputStream()
+                        small.compress(Bitmap.CompressFormat.JPEG, 60, out)
+                        val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+                        return Shot(b64, scale, width, height)
+                    } finally {
+                        if (small !== bmp && !small.isRecycled) small.recycle()
+                        if (!bmp.isRecycled) bmp.recycle()
+                    }
                 }
                 Thread.sleep(1100)
             }
