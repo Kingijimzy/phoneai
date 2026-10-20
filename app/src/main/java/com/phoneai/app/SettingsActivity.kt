@@ -171,6 +171,7 @@ class SettingsActivity : Activity() {
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
+        add(s2, button("AI health, provider status & quota", false) { showAiHealth() }, 10)
         add(s2, button("Test the AI", false) { testAi() }, 10)
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
@@ -459,6 +460,27 @@ class SettingsActivity : Activity() {
                 runOnUiThread { Toast.makeText(this, "Problem: " + e.message, Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    private fun showAiHealth() {
+        val message = Nim.status(this)
+        val view = TextView(this).apply {
+            text = message
+            textSize = 13f
+            setTextColor(Theme.TEXT)
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(view)
+            isFillViewport = true
+        }
+        AlertDialog.Builder(this)
+            .setTitle("AI health & quota")
+            .setView(scroll)
+            .setPositiveButton("Refresh") { _, _ -> showAiHealth() }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun testAi() {
