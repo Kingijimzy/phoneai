@@ -339,6 +339,9 @@ class MainActivity : Activity() {
         gap(agent, action("Task centre", "Manage task status and resume saved agent sessions", true) {
             startActivity(Intent(this, TaskCenterActivity::class.java))
         }, 8)
+        gap(agent, action("Teach Mode · Routine recorder", "Record complex taps, swipes and waits once; replay locally without AI", true) {
+            startActivity(Intent(this, TeachModeActivity::class.java))
+        }, 8)
         gap(agent, action("Skills studio", "Manage enabled skills and their permissions") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
         }, 8)
