@@ -67,7 +67,28 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return 120L
             if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) return 66L
         }
-        return if (power.isPowerSaveMode) 66L else 33L
+        return if (power.isPowerSaveMode) 80L else 50L
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        postInvalidateOnAnimation()
+    }
+
+    override fun onDetachedFromWindow() {
+        // Stop queued animation work when the orb leaves its window.
+        animate().cancel()
+        super.onDetachedFromWindow()
+    }
+
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility == VISIBLE) postInvalidateOnAnimation()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == VISIBLE) postInvalidateOnAnimation()
     }
 
     private fun accent(): Int = when (mode) {
@@ -176,7 +197,10 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         }
         glow.shader = null
         core.shader = null
-        postInvalidateDelayed(nextFrameDelayMs())
+        // A hidden/detached orb should not keep scheduling frames in the background.
+        if (isShown && windowVisibility == VISIBLE) {
+            postInvalidateDelayed(nextFrameDelayMs())
+        }
     }
 
     private fun abs01(v: Float): Float = max(v, -v)
