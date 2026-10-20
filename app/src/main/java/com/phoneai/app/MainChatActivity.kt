@@ -26,6 +26,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var status: TextView
     private lateinit var input: EditText
     private lateinit var send: TextView
+    private lateinit var stop: TextView
     private var attachedService: PhoneAiService? = null
     private var lastMode = OrbView.Mode.IDLE
 
@@ -77,6 +78,20 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         titleCol.addView(status)
         titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
+        stop = label("■", 13f, 0xFFFFB4A8.toInt(), true).apply {
+            gravity = Gravity.CENTER
+            contentDescription = "Stop current Orion task"
+            background = rounded(0xFF39232B.toInt(), 14, 0xFF6C3945.toInt())
+            setPadding(dp(11), dp(10), dp(11), dp(10))
+            visibility = View.GONE
+            setOnClickListener {
+                PhoneAiService.instance?.stopAll()
+                text = "…"
+                isEnabled = false
+                Toast.makeText(this@MainChatActivity, "Asked Orion to stop.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        header.addView(stop, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
         val new = label("＋", 24f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Start a new conversation"
@@ -274,7 +289,17 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             lastMode = mode
             status.text = "ORION  ·  " + text.uppercase()
             orb.mode = mode
-            send.alpha = if (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING) .55f else 1f
+            val busy = mode != OrbView.Mode.IDLE
+            stop.visibility = if (busy) View.VISIBLE else View.GONE
+            stop.isEnabled = busy
+            stop.text = "■"
+            if (busy) {
+                stop.animate().cancel()
+                stop.scaleX = .94f
+                stop.scaleY = .94f
+                stop.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
+            }
+            send.alpha = if (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING) .72f else 1f
         }
     }
 }
