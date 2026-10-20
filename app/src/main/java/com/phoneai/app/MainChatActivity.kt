@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Typeface
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -381,6 +383,20 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         }
     }
 
+    private fun decodeThumbnail(uri: Uri, maxPixels: Int): Bitmap? {
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            var sample = 1
+            while (bounds.outWidth / sample > maxPixels || bounds.outHeight / sample > maxPixels) sample *= 2
+            val options = BitmapFactory.Options().apply { inSampleSize = sample }
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun refreshImagePreview(uri: Uri?) {
         val panel = imagePreviewPanel ?: return
         panel.removeAllViews()
@@ -389,7 +405,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             return
         }
         val thumbnail = ImageView(this).apply {
-            setImageURI(uri)
+            setImageBitmap(decodeThumbnail(uri, dp(72)))
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = rounded(0xFF10211E.toInt(), 10, 0xFF2C504E.toInt())
             clipToOutline = true
@@ -418,7 +434,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
     private fun addImageBubble(uri: Uri) {
         val image = ImageView(this).apply {
-            setImageURI(uri)
+            setImageBitmap(decodeThumbnail(uri, dp(280)))
             scaleType = ImageView.ScaleType.CENTER_CROP
             adjustViewBounds = true
             maxHeight = dp(230)
