@@ -63,14 +63,14 @@ class Nim(private val ctx: Context) {
                 if (cd > 0) sb.append(", cooling down ").append(cd).append(" seconds")
                 sb.append(". ")
             }
-            sb.append("\\nSelected chat provider: ").append(Prefs.provider(c, false).label)
-            sb.append("\\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
-            lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
-            lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
+            sb.append("\nSelected chat provider: ").append(Prefs.provider(c, false).label)
+            sb.append("\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
+            lastSuccess["chat"]?.let { sb.append("\nLast successful chat: ").append(it) }
+            lastSuccess["vision"]?.let { sb.append("\nLast successful screen-vision: ").append(it) }
             if (lastFailure.isNotEmpty()) {
-                sb.append("\\nRecent provider errors:")
+                sb.append("\nRecent provider errors:")
                 for (p in Providers.all) lastFailure[p.id]?.let {
-                    sb.append("\\n• ").append(p.label).append(": ").append(it.take(180))
+                    sb.append("\n• ").append(p.label).append(": ").append(it.take(180))
                 }
             }
             val hasKeys = Providers.all.any { Prefs.hasKey(c, it.id) }
