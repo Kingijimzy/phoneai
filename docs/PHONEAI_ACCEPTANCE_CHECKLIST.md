@@ -137,3 +137,15 @@ Implemented in the integration branch (build/device verification still required)
 - [ ] Test invalid key, 429/rate limit, timeout/offline, no key, and provider without vision support; confirm messages identify the next practical step and do not expose API keys.
 - [ ] Verify quota counters are labelled as local estimates, and provider quota is shown only when the API returns relevant headers.
 - [ ] Verify provider choice and auto-switch behavior separately for chat and screen vision after app restart.
+
+
+## Priority 5 — Clear, fluid assistant activity states
+
+- [x] Main chat state badge uses distinct, high-contrast colors and plain-language labels for ready, listening, thinking, speaking, acting, and approval-required states.
+- [x] State changes animate subtly without adding a new continuously-running animation loop to the main chat UI.
+- [x] Accessibility descriptions announce the current assistant state for the main status badge and animated core.
+- [x] Approval overlay explicitly says approval is required, explains that the action waits for the user's choice, and labels both cancel and approve actions clearly.
+- [ ] Build the latest branch head and inspect Gradle output.
+- [ ] On Redmi A3 Pro, verify each state changes at the correct time during speech recognition, model latency, text-to-speech, tool execution, and approval prompts.
+- [ ] Verify state transitions after Stop, provider error, denied approval, returning from another app, and accessibility service restart.
+- [ ] Check small-screen layout, text wrapping, contrast, touch targets, and frame pacing on the 4 GB RAM device.
