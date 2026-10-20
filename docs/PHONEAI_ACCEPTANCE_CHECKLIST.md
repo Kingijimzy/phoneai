@@ -149,3 +149,17 @@ Implemented in the integration branch (build/device verification still required)
 - [ ] On Redmi A3 Pro, verify each state changes at the correct time during speech recognition, model latency, text-to-speech, tool execution, and approval prompts.
 - [ ] Verify state transitions after Stop, provider error, denied approval, returning from another app, and accessibility service restart.
 - [ ] Check small-screen layout, text wrapping, contrast, touch targets, and frame pacing on the 4 GB RAM device.
+
+
+## Priority 6 — Low-memory Android performance and crash resistance
+
+- [x] Bound the screen-fingerprint worker pool instead of allowing an unbounded cached pool to create more threads during repeated requests.
+- [x] Release temporary screenshot and resized bitmap buffers after encoding; cap screenshot resize width at 540 pixels or the source width when smaller.
+- [x] Reduce the orb's default redraw rate and stop scheduling animation frames when its view is hidden or detached; request a fresh frame when it becomes visible again.
+- [x] Keep adaptive slower frame pacing under power-save and thermal pressure.
+- [ ] Build the latest branch head and inspect Gradle output.
+- [ ] Install the latest debug APK on the Redmi A3 Pro and open Home, Chat, Tools, Settings, Task Centre, and the floating command panel repeatedly.
+- [ ] Run a 10-minute idle test with the orb visible, then hide/show it and confirm it resumes without a stuck animation; compare battery/heat qualitatively.
+- [ ] Run repeated screenshot/read-screen checks and confirm no progressive memory growth, freezes, or force-close.
+- [ ] Test rapid navigation, repeated send/stop, provider timeout/offline, microphone denial, and accessibility-service disable/re-enable.
+- [ ] If a force-close persists, capture Android logcat crash stack and fix the actual exception; cloud compilation alone does not establish device stability.
