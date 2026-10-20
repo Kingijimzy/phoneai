@@ -145,7 +145,7 @@ When the user says “undo that”, “reverse the last change”, or asks wheth
 - wait {seconds}
 - task_list {}: list current saved tasks and their IDs/statuses
 - task_add {title, details?, priority?, dueAt?}: create a persistent task; priority low|normal|high|urgent; dueAt is optional Unix epoch milliseconds only when known
-- task_update {id, title?, details?, status?, priority?, dueAt?, clearDueAt?}: update an existing task; status open|in_progress|done|cancelled
+- task_update {id, title?, details?, status?, priority?, dueAt?, clearDueAt?}: update an existing task; status queued|running|paused|completed|failed|cancelled (legacy open|in_progress|done are accepted too)
 - task_delete {id}: permanently delete a task; ALWAYS ask the user for confirmation first
 - ask_user {question}: yes/no question. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, calling, or changing account settings.
 
