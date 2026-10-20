@@ -58,8 +58,15 @@ class TaskCenterActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG) }
-        val scroll = ScrollView(this).apply { isFillViewport = true }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(0x00000000)
+        }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(24), dp(18), dp(28))
