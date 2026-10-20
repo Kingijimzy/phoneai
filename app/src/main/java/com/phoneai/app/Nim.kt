@@ -385,7 +385,9 @@ class Nim(private val ctx: Context) {
         val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
         val quotaSaver = Prefs.quotaSaver(ctx)
-        val maxRounds = 1 // one pass over every saved, eligible provider; avoid blind retries
+        // One bounded cooldown wait is allowed only if every eligible provider returns 429.
+        // Timeouts, empty responses, invalid models, and ordinary errors never trigger a blind second round.
+        val maxRounds = 2
         val providerLimit = order.size
         var round = 0
         while (round < maxRounds) {
