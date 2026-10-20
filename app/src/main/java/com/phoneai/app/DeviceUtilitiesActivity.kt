@@ -47,7 +47,12 @@ class DeviceUtilitiesActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(14))
-            setBackgroundColor(Theme.PANEL)
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF151C2A.toInt(), 0xFF111722.toInt())).apply {
+                cornerRadius = dp(19).toFloat()
+                setStroke(dp(1), 0xFF2E3D51.toInt())
+            }
+            elevation = dp(2).toFloat()
         }
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -80,7 +85,10 @@ class DeviceUtilitiesActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG) }
+        val scroll = ScrollView(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+        }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(24), dp(16), dp(24))
