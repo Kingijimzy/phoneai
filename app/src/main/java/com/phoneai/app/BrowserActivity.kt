@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -31,6 +32,10 @@ class BrowserActivity : Activity() {
     private lateinit var address: EditText
     private lateinit var progress: ProgressBar
     private lateinit var title: TextView
+    private lateinit var backButton: TextView
+    private lateinit var forwardButton: TextView
+    private lateinit var reloadButton: TextView
+    private lateinit var stopButton: TextView
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun pill(text: String, action: () -> Unit) = TextView(this).apply {
@@ -111,10 +116,38 @@ class BrowserActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        controls.addView(pill("‹ Back") { if (web.canGoBack()) web.goBack() })
-        controls.addView(pill("Forward ›") { if (web.canGoForward()) web.goForward() })
-        controls.addView(pill("↻ Reload") { web.reload() })
-        controls.addView(pill("⌂ Search") { navigate("https://duckduckgo.com/") })
+        backButton = pill("‹") { if (web.canGoBack()) web.goBack() }.apply {
+            contentDescription = "Go back"
+            minWidth = dp(42)
+        }
+        forwardButton = pill("›") { if (web.canGoForward()) web.goForward() }.apply {
+            contentDescription = "Go forward"
+            minWidth = dp(42)
+        }
+        reloadButton = pill("↻") { web.reload() }.apply {
+            contentDescription = "Reload page"
+            minWidth = dp(42)
+        }
+        stopButton = pill("■") { web.stopLoading(); updateControls() }.apply {
+            contentDescription = "Stop loading"
+            minWidth = dp(42)
+        }
+        controls.addView(backButton)
+        controls.addView(forwardButton)
+        controls.addView(reloadButton)
+        controls.addView(stopButton)
+        controls.addView(pill("⌂ Home") { navigate("https://duckduckgo.com/") })
+        controls.addView(pill("↗ Share") {
+            val current = web.url ?: return@pill
+            try {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, current)
+                }, "Share page"))
+            } catch (_: Exception) {
+                Toast.makeText(this, "Unable to share this page.", Toast.LENGTH_SHORT).show()
+            }
+        })
         root.addView(controls)
 
         web = WebView(this)
@@ -136,21 +169,24 @@ class BrowserActivity : Activity() {
             }
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 if (!url.isNullOrBlank()) address.setText(url)
-                title.text = "ORION BROWSER · LOADING"
+                title.text = "LOADING PAGE"
                 progress.visibility = View.VISIBLE
                 progress.progress = 5
+                updateControls()
             }
             override fun onPageFinished(view: WebView?, url: String?) {
                 if (!url.isNullOrBlank()) address.setText(url)
-                title.text = "ORION BROWSER · READY"
+                title.text = "ORION BROWSER"
                 progress.progress = 100
                 progress.visibility = View.GONE
+                updateControls()
             }
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 progress.progress = newProgress
                 progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
+                updateControls()
             }
             override fun onReceivedTitle(view: WebView?, pageTitle: String?) {
                 if (!pageTitle.isNullOrBlank()) title.text = pageTitle.take(42)
@@ -160,6 +196,18 @@ class BrowserActivity : Activity() {
         setContentView(root)
         val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { "https://duckduckgo.com/" }
         navigate(initial)
+        updateControls()
+    }
+
+    private fun updateControls() {
+        if (!::web.isInitialized || !::backButton.isInitialized) return
+        backButton.isEnabled = web.canGoBack()
+        forwardButton.isEnabled = web.canGoForward()
+        reloadButton.isEnabled = web.url != null
+        stopButton.isEnabled = web.progress in 1..99
+        listOf(backButton, forwardButton, reloadButton, stopButton).forEach { button ->
+            button.alpha = if (button.isEnabled) 1f else 0.38f
+        }
     }
 
     private fun navigate(input: String) {
@@ -179,6 +227,7 @@ class BrowserActivity : Activity() {
         }
         address.setText(candidate)
         web.loadUrl(candidate)
+        updateControls()
     }
 
     override fun onBackPressed() {
