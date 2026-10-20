@@ -109,3 +109,18 @@ Implemented in the integration branch (build/device verification still required)
 - [ ] Build the latest branch head and inspect Gradle output.
 - [ ] On Redmi A3 Pro, test task creation/editing, every status transition, filter counts, deletion confirmation, reminders, restart persistence, and agent checkpoint resume.
 - [ ] Verify legacy tasks migrate to the new status labels without losing titles, details, priorities, or due dates.
+
+
+## Priority 3 — Safer recovery after app closure or uncertain action results
+
+- [x] Checkpoint writes now use Android AtomicFile and report success/failure instead of silently ignoring storage errors.
+- [x] An agent tool action must have its in-flight marker saved before execution; if that write fails, the action does not start.
+- [x] A tool result is durably recorded before the agent proceeds to another step. If recording fails after an action returns, the agent stops and tells the user to verify the outcome before retrying.
+- [x] Checkpoint completion is persisted as a completed status instead of silently deleting the file; the Task Centre only shows resumable statuses.
+- [x] Recovery instructions explicitly treat an in-flight action as uncertain and require screen/state inspection before any retry; ask the user when verification is not safe.
+- [x] Recovery-required status and a bounded warning are retained locally when a tool result cannot be saved.
+- [ ] Build the latest branch head and inspect Gradle output.
+- [ ] On the Redmi A3 Pro, force-stop during harmless navigation and confirm that the next resume inspects current state before taking another action.
+- [ ] Simulate unavailable storage or a checkpoint-write failure and verify the agent refuses to start a new action without a durable in-flight marker.
+- [ ] Verify action results that cannot be saved stop the task, retain an uncertain in-flight marker, and never get reported as confirmed success.
+- [ ] Test provider failure, Stop, step-limit pause, app restart, corrupted checkpoint JSON, and recovery after a completed task; confirm no successful action is repeated.
