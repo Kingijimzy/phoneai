@@ -315,6 +315,9 @@ class MainActivity : Activity() {
         page.addView(label("TOOLS", 11f, Theme.CYAN, true))
         page.addView(label("A workspace for getting things done.", 25f, Theme.TEXT, true).apply { setPadding(0, dp(8), 0, dp(5)) })
         page.addView(label("Tools are separated from chat so the conversation stays focused.", 13f, Theme.MUTED))
+        gap(page, action("Ask Orion to do it", "Describe your goal; Orion can choose the right available tools", true) {
+            startActivity(Intent(this, MainChatActivity::class.java))
+        }, 15)
         val device = section(page, "Phone & diagnostics", "Local utilities for your device")
         gap(device, action("Network Radar · Game Sentinel", "Connectivity, thermal, memory, and gaming-session diagnostics", true) {
             startActivity(Intent(this, DeviceUtilitiesActivity::class.java))
@@ -346,6 +349,9 @@ class MainActivity : Activity() {
         page.addView(label("SETTINGS", 11f, Theme.CYAN, true))
         page.addView(label("Make Orion yours.", 26f, Theme.TEXT, true).apply { setPadding(0, dp(8), 0, dp(5)) })
         page.addView(label("Organized controls, with sensitive settings kept out of the chat.", 13f, Theme.MUTED))
+        gap(page, action("Ask Orion", "Return to the central AI agent without losing your settings", true) {
+            startActivity(Intent(this, MainChatActivity::class.java))
+        }, 15)
         gap(page, action("AI providers & models", "API keys, model selection, vision, quota saving") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "providers"))
         }, 15)
