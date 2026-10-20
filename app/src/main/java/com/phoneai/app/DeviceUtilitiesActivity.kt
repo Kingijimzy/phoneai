@@ -49,11 +49,26 @@ class DeviceUtilitiesActivity : Activity() {
             setPadding(dp(14), dp(12), dp(14), dp(14))
             setBackgroundColor(Theme.PANEL)
         }
-        add(card, TextView(this).apply {
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        heading.addView(OrionIconView(this).apply {
+            icon = if (title.contains("game", true)) "spark" else "network"
+            tint = Theme.CYAN
+            contentDescription = null
+        }, LinearLayout.LayoutParams(dp(23), dp(23)).apply { rightMargin = dp(9) })
+        heading.addView(TextView(this).apply {
             text = title
             textSize = 18f
             setTextColor(Theme.CYAN)
-        }, 0)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        })
+        add(card, heading, 0)
+        card.alpha = 0f
+        card.translationY = dp(6).toFloat()
+        card.animate().alpha(1f).translationY(0f).setStartDelay((content.childCount.coerceAtMost(6) * 30L))
+            .setDuration(220).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         add(card, TextView(this).apply {
             text = note
             textSize = 13f
