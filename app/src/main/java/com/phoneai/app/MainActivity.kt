@@ -197,7 +197,8 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            setBackgroundColor(Theme.BG)
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
         }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -263,7 +264,7 @@ class MainActivity : Activity() {
         })
         gap(page, hero, 19)
         animateEntrance(hero, 80)
-        val command = action("✦   Start a conversation", "Chat naturally or give Orion a multi-step task", true) { showTab("Chat") }
+        val command = action("Start a conversation", "Chat naturally or give Orion a multi-step task", true) { showTab("Chat") }
         gap(page, command, 12)
         animateEntrance(command, 150)
         val quick = section(page, "Your workspace", "Jump back into the parts of Orion you use most")
