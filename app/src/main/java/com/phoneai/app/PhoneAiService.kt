@@ -432,13 +432,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    @Volatile private var imageAnalysisRunning = false
+    private val imageAnalysisLock = Any()
+
     /** Sends a user-selected image to the configured vision provider without treating its URI as model-readable text. */
     fun analyzeImageFromMainChat(uri: Uri, question: String) {
-        main.post {
-            if (running) {
-                mainChatListener?.onMessage("ai", "I’m finishing another task. Stop it or wait for it to finish before sending an image.")
-                return@post
+        synchronized(imageAnalysisLock) {
+            if (running || imageAnalysisRunning) {
+                main.post { mainChatListener?.onMessage("ai", "Orion is already working on another task. Wait for it to finish before analysing another image.") }
+                return
             }
+            imageAnalysisRunning = true
+        }
+        main.post {
             mainChatActive = mainChatListener != null
             mainChatListener?.onStatus("Analysing your image", OrbView.Mode.THINKING)
         }
@@ -454,8 +460,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
                     ?: throw IllegalArgumentException("I couldn't decode that image.")
                 val bytes = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 78, bytes)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 82, bytes)
                 bitmap.recycle()
+                if (bytes.size() == 0) throw IllegalArgumentException("The image converted to an empty file. Try another image.")
                 val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
                 val content = JSONArray()
                     .put(JSONObject().put("type", "text").put("text", question))
@@ -471,7 +478,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
                 }
             } catch (e: Exception) {
-                val reason = (e.message ?: "unknown error").take(220)
+                val reason = (e.message ?: "unknown error").take(320)
                 val guidance = when {
                     reason.contains("No AI key", true) || reason.contains("key saved", true) ->
                         " Open Settings → AI providers and save a key for a vision-capable provider."
@@ -490,6 +497,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     mainChatListener?.onMessage("ai", "The image was attached, but analysis failed. Details: " + reason + "." + guidance)
                     mainChatListener?.onStatus("Image analysis failed · see details", OrbView.Mode.IDLE)
                 }
+            } finally {
+                synchronized(imageAnalysisLock) { imageAnalysisRunning = false }
             }
         }, "Orion-image-analysis").start()
     }
@@ -1720,7 +1729,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         setTeachTouchable(true)
         if (r == "ok") {
-            step.put("gap", (wall - teachLastEnd).coerceIn(0L, 30000L))
+            step.put("gap", (wall - teachLastEnd).coerceIn(0L, 120000L))
             if (sig != null) {
                 val arr = JSONArray()
                 for (v in sig) arr.put(v)
