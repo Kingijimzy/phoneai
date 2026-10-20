@@ -180,7 +180,7 @@ class BrowserActivity : Activity() {
             }
             override fun onPageFinished(view: WebView?, url: String?) {
                 if (!url.isNullOrBlank()) address.setText(url)
-                title.text = "ORION BROWSER"
+                if (title.text.toString() == "LOADING PAGE") title.text = "ORION BROWSER"
                 progress.progress = 100
                 progress.visibility = View.GONE
                 updateControls()
