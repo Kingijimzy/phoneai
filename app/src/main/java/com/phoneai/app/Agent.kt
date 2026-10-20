@@ -219,7 +219,18 @@ Rules:
         return JSONObject().put("say", raw.trim())
     }
 
-    fun run(command: String) {
+    fun run(inputCommand: String) {
+        var command = inputCommand.trim()
+        val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
+        if (resumeRequest) {
+            val instruction = AgentCheckpointStore.resumeInstruction(svc)
+            if (instruction == null) {
+                ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
+                return
+            }
+            command = instruction
+            AgentCheckpointStore.markRunning(svc)
+        }
         val skillMatch = Regex("(?is)^run skill\\s+([a-z0-9._-]{2,48})\\s*:\\s*(.+)$").matchEntire(command.trim())
         if (skillMatch != null && activeSkillId == null) {
             val requestedId = skillMatch.groupValues[1]
@@ -332,6 +343,8 @@ Rules:
             val acks = listOf("On it.", "One moment.", "Let me see.", "Right away.", "Sure thing.", "Working on it.", "Got it.")
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
         }
+        // Only agent/tool tasks reach this point. Save a checkpoint so process death or the step cap does not erase progress.
+        if (!resumeRequest) AgentCheckpointStore.begin(svc, command)
         var steps = 0
         while (!stopped && steps < MAX_STEPS) {
             steps++
@@ -340,7 +353,8 @@ Rules:
                 nim.chat(history, false)
             } catch (e: Exception) {
                 if (stopped) break
-                ui.say("I could not reach the AI. ${e.message}")
+                AgentCheckpointStore.pause(svc)
+                ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
                 return
             }
             history.put(msg("assistant", raw))
@@ -363,6 +377,7 @@ Rules:
                     }
                     ui.note(bt + ": " + br.take(80).replace("\n", " "))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
+                    AgentCheckpointStore.record(svc, bt, one.optJSONObject("args") ?: JSONObject(), br)
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
                     if (br.startsWith("error")) break
                 }
@@ -371,7 +386,10 @@ Rules:
                 continue
             }
             val tool = step.optString("tool")
-            if (tool.isBlank() || tool == "done") return
+            if (tool.isBlank() || tool == "done") {
+                AgentCheckpointStore.clear(svc)
+                return
+            }
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
             val result = try {
@@ -381,10 +399,13 @@ Rules:
             }
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             record(tool, args, result)
+            AgentCheckpointStore.record(svc, tool, args, result)
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
         }
-        if (stopped) ui.say("Stopped.") else ui.say("I reached the step limit. Tell me to continue if needed.")
+        AgentCheckpointStore.pause(svc)
+        if (stopped) ui.say("Stopped. I saved the task progress locally; say \"continue\" when you want me to resume.")
+        else ui.say("I paused at the step limit and saved the task progress locally. Say \"continue\" to resume from the recorded results.")
     }
 
     private val recordable = setOf(
