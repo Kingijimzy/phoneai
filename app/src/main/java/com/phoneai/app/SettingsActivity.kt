@@ -78,9 +78,9 @@ class SettingsActivity : Activity() {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable()
-        g.setColor(Theme.PANEL)
+        g.setColor(0xFF141A28.toInt())
         g.cornerRadius = dp(20).toFloat()
-        g.setStroke(dp(1), Theme.LINE)
+        g.setStroke(dp(1), 0xFF304052.toInt())
         c.background = g
         c.setPadding(dp(14), dp(12), dp(14), dp(13))
         val heading = LinearLayout(this).apply {
@@ -134,8 +134,10 @@ class SettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val sv = ScrollView(this)
-        sv.setBackgroundColor(Theme.BG)
+        val sv = ScrollView(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+        }
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
         col.setPadding(dp(16), dp(24), dp(16), dp(24))
