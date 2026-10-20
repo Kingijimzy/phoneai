@@ -132,13 +132,23 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
             elevation = dp(2).toFloat()
         }
+        val welcomeOrb = OrbView(this).apply {
+            contentDescription = "Orion's animated liquid-glass energy core"
+        }
+        intro.addView(welcomeOrb, LinearLayout.LayoutParams(dp(92), dp(92)).apply {
+            gravity = Gravity.CENTER
+            bottomMargin = dp(4)
+        })
         intro.addView(label("YOUR AI. YOUR FLOW.", 10f, Theme.CYAN, true).apply {
             letterSpacing = .13f
+            gravity = Gravity.CENTER
         })
         intro.addView(label("What’s on your mind?", 24f, Theme.TEXT, true).apply {
+            gravity = Gravity.CENTER
             setPadding(0, dp(5), 0, dp(2))
         })
         intro.addView(label("Think, create, research, or get things done — all with Orion.", 13f, Theme.MUTED).apply {
+            gravity = Gravity.CENTER
             setLineSpacing(dp(2).toFloat(), 1f)
         })
         val introFooter = LinearLayout(this).apply {
