@@ -39,6 +39,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".LiveConversationActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".MainChatActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
