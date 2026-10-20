@@ -68,9 +68,29 @@ class MainActivity : Activity() {
             isClickable = true
             isFocusable = true
         }
-        row.addView(label(title, 15f, if (primary) Theme.CYAN else Theme.TEXT, true))
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val glyph = OrionIconView(this).apply {
+            icon = iconFor(title)
+            tint = if (primary) Theme.CYAN else Theme.MUTED
+            contentDescription = null
+        }
+        heading.addView(glyph, LinearLayout.LayoutParams(dp(23), dp(23)).apply { rightMargin = dp(10) })
+        heading.addView(label(title, 15f, if (primary) Theme.CYAN else Theme.TEXT, true),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(OrionIconView(this).apply {
+            icon = "arrow"
+            tint = Theme.MUTED
+            alpha = 0.7f
+            contentDescription = null
+        }, LinearLayout.LayoutParams(dp(18), dp(18)))
+        row.addView(heading)
         if (subtitle != null) {
-            row.addView(label(subtitle, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+            row.addView(label(subtitle, 12f, Theme.MUTED).apply {
+                setPadding(dp(33), dp(4), dp(2), 0)
+            })
         }
         row.setOnTouchListener { v, e ->
             when (e.actionMasked) {
@@ -82,6 +102,23 @@ class MainActivity : Activity() {
         }
         row.setOnClickListener { onClick() }
         return row
+    }
+
+    private fun iconFor(title: String): String {
+        val t = title.lowercase()
+        return when {
+            "chat" in t || "conversation" in t -> "chat"
+            "task" in t || "routine" in t -> "tasks"
+            "memory" in t -> "memory"
+            "skill" in t -> "skills"
+            "browser" in t || "research" in t -> "browser"
+            "network" in t || "game" in t || "diagnostic" in t -> "network"
+            "screen" in t || "permission" in t || "privacy" in t -> "shield"
+            "voice" in t || "character" in t -> "voice"
+            "provider" in t || "service" in t || "integration" in t -> "spark"
+            "accessibility" in t -> "settings"
+            else -> "spark"
+        }
     }
 
     private fun section(parent: LinearLayout, heading: String, note: String? = null): LinearLayout {
@@ -133,9 +170,16 @@ class MainActivity : Activity() {
                 isClickable = true
                 isFocusable = true
             }
-            val glyph = when (tab) { "Home" -> "⌂"; "Chat" -> "◉"; "Tools" -> "✳"; else -> "⚙" }
-            cell.addView(label(glyph, 19f, if (selectedTab == tab) Theme.CYAN else Theme.MUTED, true).apply { gravity = Gravity.CENTER })
-            cell.addView(label(tab, 10f, if (selectedTab == tab) Theme.CYAN else Theme.MUTED, selectedTab == tab).apply { gravity = Gravity.CENTER })
+            val glyph = OrionIconView(this).apply {
+                icon = when (tab) { "Home" -> "home"; "Chat" -> "chat"; "Tools" -> "tools"; else -> "settings" }
+                tint = if (selectedTab == tab) Theme.CYAN else Theme.MUTED
+                contentDescription = tab + " tab"
+            }
+            cell.addView(glyph, LinearLayout.LayoutParams(dp(22), dp(22)))
+            cell.addView(label(tab, 10f, if (selectedTab == tab) Theme.CYAN else Theme.MUTED, selectedTab == tab).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, dp(3), 0, 0)
+            })
             cell.layoutParams = LinearLayout.LayoutParams(0, -1, 1f)
             cell.setOnClickListener { showTab(tab) }
             bar.addView(cell)
