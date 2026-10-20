@@ -559,15 +559,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = rounded(Theme.BG, dp(26).toFloat(), Theme.LINE)
+        root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF0A0E17.toInt(), 0xFF111A2A.toInt(), 0xFF17132A.toInt())).apply {
+            cornerRadius = dp(26).toFloat()
+            setStroke(dp(1), 0xFF35485E.toInt())
+        }
         root.setPadding(dp(12), dp(10), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        head.background = rounded(0xFF111722.toInt(), dp(20).toFloat(), Theme.LINE)
-        head.setPadding(dp(8), dp(4), dp(6), dp(4))
+        head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(0xFF142B3A.toInt(), 0xFF141A2A.toInt(), 0xFF211A38.toInt())).apply {
+            cornerRadius = dp(20).toFloat()
+            setStroke(dp(1), 0xFF345064.toInt())
+        }
+        head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
         orb.contentDescription = "Orion animated character. Tap to speak."
         orb.isClickable = true
@@ -659,7 +667,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         input.hint = "Quick command for your phone…"
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
-        input.background = rounded(0xFF171D29.toInt(), dp(22).toFloat(), 0xFF344056.toInt())
+        input.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(0xFF171D2B.toInt(), 0xFF121724.toInt())).apply {
+            cornerRadius = dp(22).toFloat()
+            setStroke(dp(1), 0xFF354457.toInt())
+        }
         input.setPadding(dp(15), dp(12), dp(15), dp(12))
         input.minHeight = dp(48)
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
