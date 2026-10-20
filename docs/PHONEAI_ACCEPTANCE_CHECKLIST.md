@@ -18,6 +18,23 @@ This checklist distinguishes source changes from device-verified behavior. A suc
 - [x] Existing memory, tasks, routines, provider selection, public research, local skills, GitHub/Telegram/MCP helpers, Bybit public spot lookup, Network Radar, Game Sentinel, and SAF-limited file tools remain in the branch.
 - [x] Actions with meaningful consequences remain permission-gated; no automatic trade execution was added.
 
+## ChatAI teal-black visual pass
+
+Reference target: Abdullah Arshad's ChatAI mobile assistant concept. This is a design direction, not a claim of pixel-identical reproduction; the reference uses rendered 3D artwork while Orion's orb is drawn with Android Canvas.
+
+- [x] Shared black / deep-green surfaces, turquoise accent, muted mint text, and teal borders are defined in the native theme.
+- [x] Global Android controls, text selection/cursor accent, and system dialogs use the Orion dark-teal theme.
+- [x] Orb uses a glossy turquoise sphere, soft halo, moving inner currents, crescent highlight, and restrained mode cues instead of prominent mechanical rings.
+- [x] Main chat has a distinct welcome composition with the orb, centered heading, privacy/approval note, and quick prompt rail.
+- [x] Welcome panel and starter prompts collapse after the first user message so the conversation gets the screen space.
+- [x] Main navigation uses a rounded floating-style bar with a teal selected state.
+- [x] Browser and device utility controls have been moved away from blue/default Android button styling.
+- [x] Floating command chat retains a compact, separate layout and permission/approval cues.
+- [ ] Compare every screen against the reference on-device: orb silhouette/reflections, font sizes, spacing, button dimensions, scrolling, keyboard state, and transitions.
+- [ ] Capture screenshots of Home, empty Chat, active Chat, floating command panel, Tools, Settings, Task Centre, Browser, and Device Utilities on the Redmi; refine any visible mismatches.
+- [ ] Verify animation frame rate, thermal impact, and touch responsiveness on the Redmi A3 Pro.
+- [ ] Pixel-level matching remains unverified until the reference screenshot and built-app screenshots are compared side by side.
+
 ## Stability and behavior checks
 
 - [x] Agent tasks checkpoint their original request and bounded tool results in a local file so a step cap, network failure, or user stop can preserve progress.
