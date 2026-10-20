@@ -1575,6 +1575,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var teachView: FrameLayout? = null
     private var teachLp: WindowManager.LayoutParams? = null
     private var teachName = ""
+    private var teachCounter: TextView? = null
     private val teachSteps = JSONArray()
     private var teachLastEnd = 0L
     private var tDownX = 0f
@@ -1609,7 +1610,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             true
         }
         val done = TextView(this)
-        done.text = "REC  tap here when finished"
+        teachCounter = done
+        done.text = "● REC  ·  0 STEPS  ·  TAP TO SAVE"
         done.setTextColor(Theme.TEXT)
         done.textSize = 14f
         done.typeface = Typeface.DEFAULT_BOLD
@@ -1744,7 +1746,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 for (v in sig) arr.put(v)
                 step.put("sig", arr).put("sx", x1.toInt()).put("sy", y1.toInt())
             }
-            synchronized(teachSteps) { teachSteps.put(step) }
+            val count = synchronized(teachSteps) { teachSteps.put(step); teachSteps.length() }
+            main.post { teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE" }
         }
         teachLastEnd = System.currentTimeMillis()
     }
@@ -1753,6 +1756,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val v = teachView ?: return
         teachView = null
         teachLp = null
+        teachCounter = null
         try {
             wm.removeView(v)
         } catch (e: Exception) {
