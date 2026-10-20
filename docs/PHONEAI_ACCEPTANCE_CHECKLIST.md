@@ -97,3 +97,15 @@ Implemented in the integration branch (build/device verification still required)
 - Gemini, Groq, and other providers enforce their own model/project/account-specific request and token quotas. PhoneAI's per-minute caps are local safety throttles, not a claim about each provider's actual limit. When a provider exposes quota headers, PhoneAI now shows those alongside the local throttle.
 - Open-Meteo's no-key free API is for non-commercial use and requires attribution. A commercial or ad-supported PhoneAI release must use a properly licensed weather source or an eligible paid Open-Meteo plan.
 - Free endpoints can have changing availability and data/privacy terms. Do not send passwords, tokens, verification codes, or sensitive screen contents to public/free model endpoints.
+
+
+## Priority 2 — Task centre
+
+- [x] Added a native task centre linked from Home and Tools.
+- [x] Persistent task statuses: queued, running, paused, completed, failed, and cancelled; old open/in_progress/done records are normalized safely.
+- [x] Overview counts, status filters, priority display, due/updated times, create/edit, pause/resume, complete/fail, cancel, and confirmed permanent deletion.
+- [x] Shows the saved agent checkpoint and links back to chat to resume unfinished work.
+- [x] Task board states clearly that it tracks status and does not silently execute queued work in the background.
+- [ ] Build the latest branch head and inspect Gradle output.
+- [ ] On Redmi A3 Pro, test task creation/editing, every status transition, filter counts, deletion confirmation, reminders, restart persistence, and agent checkpoint resume.
+- [ ] Verify legacy tasks migrate to the new status labels without losing titles, details, priorities, or due dates.
