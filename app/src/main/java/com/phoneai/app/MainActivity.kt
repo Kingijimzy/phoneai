@@ -201,7 +201,8 @@ class MainActivity : Activity() {
 
     private fun showTab(tab: String, animate: Boolean = true) {
         if (tab == "Chat") {
-            selectedTab = "Chat"
+            // Chat is a separate full-screen activity; preserve the current home/tools/settings
+            // selection so returning from chat does not leave the shell in a mismatched tab state.
             startActivity(Intent(this, MainChatActivity::class.java))
             return
         }
