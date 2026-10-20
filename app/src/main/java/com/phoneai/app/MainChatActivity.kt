@@ -287,7 +287,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 false
             }
             setOnClickListener {
-                val picker = Intent(Intent.ACTION_GET_CONTENT).apply {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     type = "image/*"
                     addCategory(Intent.CATEGORY_OPENABLE)
                 }
@@ -383,6 +383,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         if (requestCode == 44 && resultCode == RESULT_OK) {
             val uri = data?.data
             if (uri != null) {
+                try {
+                    val granted = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    if (granted != 0) contentResolver.takePersistableUriPermission(uri, granted)
+                } catch (_: Exception) {
+                    // Some photo providers grant only temporary access; the current selection can still be used.
+                }
                 selectedImageUri = uri
                 refreshImagePreview(uri)
             }
