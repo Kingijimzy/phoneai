@@ -301,14 +301,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 false
             }
             setOnClickListener {
-                val service = PhoneAiService.instance
-                if (service == null) {
-                    Toast.makeText(this@MainChatActivity, "Enable Orion in Accessibility settings first.", Toast.LENGTH_LONG).show()
-                } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 43)
-                } else {
-                    service.listenFromMainChat()
-                }
+                startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java))
             }
         }
         composer.addView(mic, LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(7) })
