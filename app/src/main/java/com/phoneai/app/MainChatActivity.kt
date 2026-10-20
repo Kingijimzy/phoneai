@@ -74,7 +74,11 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(10), 0, 0, 0)
         }
         titleCol.addView(label("ORION", 17f, Theme.TEXT, true))
-        status = label("PERSONAL AI  ·  READY", 11f, Theme.CYAN, true)
+        status = label("●  READY WHEN YOU ARE", 11f, Theme.CYAN, true).apply {
+            setPadding(dp(9), dp(6), dp(9), dp(6))
+            background = rounded(0xFF10252D.toInt(), 12, 0xFF245260.toInt())
+            contentDescription = "Orion state: ready"
+        }
         titleCol.addView(status)
         titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
@@ -294,9 +298,30 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onStatus(text: String, mode: OrbView.Mode) {
         runOnUiThread {
+            val changed = lastMode != mode
             lastMode = mode
-            status.text = "ORION  ·  " + text.uppercase()
+            val (short, accent, fill, border) = when (mode) {
+                OrbView.Mode.IDLE -> listOf("READY", Theme.CYAN, 0xFF10252D.toInt(), 0xFF245260.toInt())
+                OrbView.Mode.LISTENING -> listOf("LISTENING · SPEAK NOW", Theme.OK, 0xFF102A22.toInt(), 0xFF28664F.toInt())
+                OrbView.Mode.THINKING -> listOf("THINKING · WORKING IT OUT", Theme.VIOLET, 0xFF201A35.toInt(), 0xFF51417E.toInt())
+                OrbView.Mode.SPEAKING -> listOf("SPEAKING · ORION IS REPLYING", Theme.CYAN, 0xFF10252D.toInt(), 0xFF245260.toInt())
+                OrbView.Mode.ACTING -> listOf("ACTING · CARRYING OUT TASK", Theme.WARN, 0xFF302515.toInt(), 0xFF705328.toInt())
+                OrbView.Mode.WAITING_APPROVAL -> listOf("APPROVAL NEEDED · YOU DECIDE", Theme.WARN, 0xFF302515.toInt(), 0xFF8B672B.toInt())
+            }
+            status.text = "●  " + short
+            status.setTextColor(accent)
+            status.background = rounded(fill, 12, border)
+            status.contentDescription = "Orion state: " + short
+            orb.contentDescription = "Orion animated core. " + short
             orb.mode = mode
+            if (changed) {
+                status.animate().cancel()
+                status.alpha = .72f
+                status.scaleX = .98f
+                status.scaleY = .98f
+                status.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(190)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+            }
             val busy = mode != OrbView.Mode.IDLE || PhoneAiService.instance?.isTaskRunning() == true
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
