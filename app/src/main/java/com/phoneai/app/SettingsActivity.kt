@@ -83,14 +83,44 @@ class SettingsActivity : Activity() {
         g.setStroke(dp(1), Theme.LINE)
         c.background = g
         c.setPadding(dp(14), dp(12), dp(14), dp(13))
-        c.addView(text(title, 17f, Theme.CYAN, true))
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        heading.addView(OrionIconView(this).apply {
+            icon = settingsIcon(title)
+            tint = Theme.CYAN
+            contentDescription = null
+        }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { rightMargin = dp(9) })
+        heading.addView(text(title, 17f, Theme.CYAN, true))
+        c.addView(heading)
         if (note != null) {
             val n = text(note, 13f, Theme.MUTED)
-            n.setPadding(0, dp(4), 0, 0)
+            n.setPadding(dp(31), dp(4), 0, 0)
             c.addView(n)
         }
+        val delay = (parent.childCount.coerceAtMost(8) * 35L)
+        c.alpha = 0f
+        c.translationY = dp(7).toFloat()
         add(parent, c, 10)
+        c.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(230)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         return c
+    }
+
+    private fun settingsIcon(title: String): String {
+        val t = title.lowercase()
+        return when {
+            "access" in t || "permission" in t || "privacy" in t -> "shield"
+            "provider" in t || "model" in t || "ai health" in t -> "spark"
+            "voice" in t || "character" in t -> "voice"
+            "memory" in t || "routine" in t -> "memory"
+            "skill" in t -> "skills"
+            "integrat" in t || "telegram" in t || "mcp" in t -> "network"
+            "record" in t || "screen" in t -> "browser"
+            "undo" in t || "history" in t -> "clock"
+            else -> "settings"
+        }
     }
 
     private fun switchRow(col: LinearLayout, label: String, on: Boolean, onChange: (Boolean) -> Unit) {
