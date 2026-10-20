@@ -41,9 +41,9 @@ class TaskCenterActivity : Activity() {
     private fun button(caption: String, primary: Boolean = false, click: () -> Unit) =
         Button(this).apply {
             text = caption; isAllCaps = false; textSize = 12f
-            setTextColor(if (primary) 0xFF071018.toInt() else Theme.TEXT)
+            setTextColor(if (primary) 0xFF0A1916.toInt() else Theme.TEXT)
             background = GradientDrawable().apply {
-                setColor(if (primary) Theme.CYAN else 0xFF18212E.toInt())
+                setColor(if (primary) Theme.CYAN else 0xFF10211E.toInt())
                 cornerRadius = dp(12).toFloat()
                 if (!primary) setStroke(dp(1), Theme.LINE)
             }
@@ -61,7 +61,7 @@ class TaskCenterActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -91,7 +91,7 @@ class TaskCenterActivity : Activity() {
 
         val note = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(11), dp(13), dp(11))
-            background = panel(0xFF101B27.toInt())
+            background = panel(0xFF0A1916.toInt())
         }
         note.addView(label("AGENT STATUS", 10f, Theme.CYAN, true))
         note.addView(label("This board tracks tasks; it does not silently execute queued work. Phone-control actions still run in chat, with approvals.", 12f, Theme.MUTED).apply { setPadding(0, dp(5), 0, 0) })
@@ -175,7 +175,7 @@ class TaskCenterActivity : Activity() {
         if (checkpoint != null) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = panel(0xFF142333.toInt())
+                background = panel(0xFF0C3028.toInt())
             }
             card.addView(label("SAVED AGENT SESSION · " + checkpoint.optString("status").uppercase(Locale.getDefault()),
                 10f, Theme.CYAN, true))
