@@ -61,7 +61,8 @@ object LiveWebSearch {
                 connection.disconnect()
             }
             val anchors = anchorPattern.matcher(html)
-            val out = StringBuilder("Web search results for \"$q\" (verify sources before relying on them):")
+            val retrievedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date())
+            val out = StringBuilder("Web search results for \"$q\" (retrieved $retrievedAt; verify sources before relying on them):")
             var count = 0
             while (anchors.find() && count < 5) {
                 val tag = anchors.group()
