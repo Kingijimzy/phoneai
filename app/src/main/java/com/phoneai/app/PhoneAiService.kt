@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -429,6 +430,54 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             mainChatActive = mainChatListener != null
             submit(text)
         }
+    }
+
+    /** Sends a user-selected image to the configured vision provider without treating its URI as model-readable text. */
+    fun analyzeImageFromMainChat(uri: Uri, question: String) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "I’m finishing another task. Stop it or wait for it to finish before sending an image.")
+                return@post
+            }
+            mainChatActive = mainChatListener != null
+            mainChatListener?.onStatus("Analysing your image", OrbView.Mode.THINKING)
+        }
+        Thread({
+            try {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                    ?: throw IllegalArgumentException("I couldn't open that image.")
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalArgumentException("That image format couldn't be read.")
+                var sample = 1
+                while (bounds.outWidth / sample > 1200 || bounds.outHeight / sample > 1200) sample *= 2
+                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+                    ?: throw IllegalArgumentException("I couldn't decode that image.")
+                val bytes = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 78, bytes)
+                bitmap.recycle()
+                val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                val content = JSONArray()
+                    .put(JSONObject().put("type", "text").put("text", question))
+                    .put(JSONObject().put("type", "image_url").put("image_url",
+                        JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
+                val messages = JSONArray()
+                    .put(JSONObject().put("role", "system").put("content",
+                        "You are Orion, a helpful visual assistant. Describe only what is visible, distinguish observation from inference, and ask for clarification if the image is unclear. Never claim to identify details that cannot be seen."))
+                    .put(JSONObject().put("role", "user").put("content", content))
+                val reply = Nim(this).chat(messages, true, 420, 0.2).trim()
+                main.post {
+                    mainChatListener?.onMessage("ai", if (reply.isBlank()) "I couldn't get a useful answer from that image. Please try again." else reply)
+                    mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
+                }
+            } catch (e: Exception) {
+                val reason = (e.message ?: "unknown error").take(180)
+                main.post {
+                    mainChatListener?.onMessage("ai", "I couldn't analyse that image: " + reason + ". Check that a vision-capable provider and model are configured in Settings.")
+                    mainChatListener?.onStatus("Ready", OrbView.Mode.IDLE)
+                }
+            }
+        }, "Orion-image-analysis").start()
     }
 
     fun listenFromMainChat() {
