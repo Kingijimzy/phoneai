@@ -31,6 +31,10 @@
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
+            android:name=".TaskCenterActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".SettingsActivity"
             android:exported="false" />
 
