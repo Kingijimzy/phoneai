@@ -29,6 +29,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var stop: TextView
     private var attachedService: PhoneAiService? = null
     private var lastMode = OrbView.Mode.IDLE
+    private var welcomePanel: View? = null
+    private var promptRail: View? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -112,6 +114,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     Toast.makeText(this@MainChatActivity, "Let Orion finish or stop the current task first.", Toast.LENGTH_SHORT).show()
                 } else {
                     messages.removeAllViews()
+                    restoreWelcome()
                     val service = PhoneAiService.instance
                     if (service != null) service.resetMainChat()
                     else addMessage("ai", "New conversation. What are we working on?")
@@ -162,6 +165,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         introFooter.addView(label("Private by design · actions need your approval", 10f, Theme.MUTED))
         intro.addView(introFooter)
         root.addView(intro)
+        welcomePanel = intro
         animateIn(intro, 90)
 
         scroll = ScrollView(this).apply {
@@ -206,6 +210,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         }
         chipsScroll.addView(chips)
         root.addView(chipsScroll, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6); bottomMargin = dp(8) })
+        promptRail = chipsScroll
 
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -322,7 +327,24 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         service.sendFromMainChat(value)
     }
 
+    private fun restoreWelcome() {
+        listOf(welcomePanel, promptRail).forEach { view ->
+            view?.animate()?.cancel()
+            view?.visibility = View.VISIBLE
+            view?.alpha = 1f
+            view?.translationY = 0f
+        }
+    }
+
     private fun addMessage(kind: String, text: String) {
+        if (kind == "me") {
+            listOf(welcomePanel, promptRail).forEach { view ->
+                if (view?.visibility == View.VISIBLE) {
+                    view.animate().alpha(0f).translationY(-dp(6).toFloat()).setDuration(160)
+                        .withEndAction { view.visibility = View.GONE }.start()
+                }
+            }
+        }
         val isNote = kind == "note"
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
