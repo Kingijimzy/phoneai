@@ -241,15 +241,19 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val mic = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = rounded(Theme.PANEL2, 17, Theme.LINE)
-            setPadding(dp(11), dp(12), dp(11), dp(12))
+            background = rounded(0xFF0A1916.toInt(), 22, 0xFF2C504E.toInt())
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
             isClickable = true
             isFocusable = true
             contentDescription = "Speak to Orion"
             addView(OrionIconView(this@MainChatActivity).apply {
                 icon = "mic"; tint = Theme.CYAN; contentDescription = null
-            }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { rightMargin = dp(5) })
-            addView(label("Mic", 12f, Theme.CYAN, true))
+            }, LinearLayout.LayoutParams(dp(20), dp(20)))
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.92f).scaleY(.92f).setDuration(75).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+                false
+            }
             setOnClickListener {
                 val service = PhoneAiService.instance
                 if (service == null) {
@@ -261,15 +265,25 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 }
             }
         }
-        composer.addView(mic, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
-        send = label("↑", 22f, Theme.ON_ACCENT, true).apply {
+        composer.addView(mic, LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(7) })
+        send = label("↑", 23f, 0xFF02110D.toInt(), true).apply {
             gravity = Gravity.CENTER
-            background = rounded(Theme.CYAN, 17)
-            setPadding(dp(15), dp(8), dp(15), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFFB9FFF0.toInt(), 0xFF00FCB6.toInt(), 0xFF0BB0A1.toInt())).apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dp(1), 0xFF72FFE7.toInt())
+            }
+            elevation = dp(5).toFloat()
+            layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
             contentDescription = "Send message"
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.90f).scaleY(.90f).translationY(dp(1).toFloat()).setDuration(70).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(145).start()
+                false
+            }
             setOnClickListener { sendMessage() }
         }
-        composer.addView(send)
+        composer.addView(send, LinearLayout.LayoutParams(dp(46), dp(46)))
         root.addView(composer)
         root.addView(label("Orion only performs sensitive actions after asking you.", 10f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
