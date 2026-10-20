@@ -53,11 +53,12 @@ class BrowserActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(9, 13, 21)
-        window.navigationBarColor = Color.rgb(9, 13, 21)
+        window.statusBarColor = Theme.BG
+        window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(9, 13, 21))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
             setPadding(dp(10), dp(8), dp(10), dp(6))
         }
         val heading = LinearLayout(this).apply {
