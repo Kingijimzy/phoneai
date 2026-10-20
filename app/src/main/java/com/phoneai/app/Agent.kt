@@ -440,7 +440,7 @@ Rules:
     }
 
     private val recordable = setOf(
-        "open_app", "click_text", "click", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url",
+        "open_app", "click_text", "click", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url",
         "web_search", "settings", "wait", "wait_for", "volume", "flashlight", "record_screen", "dial", "alarm", "timer"
     )
 
@@ -513,6 +513,14 @@ Rules:
                     "error: swipe needs x1,y1,x2,y2"
                 } else {
                     svc.swipe(x1, y1, x2, y2, a.optLong("ms", 300L))
+                }
+            }
+            "swipe_path" -> {
+                val points = a.optJSONArray("points")
+                if (points == null || points.length() < 2) {
+                    "error: recorded swipe needs at least two points"
+                } else {
+                    svc.performRecordedPath(points, a.optLong("ms", 300L))
                 }
             }
             "scroll" -> svc.scroll(a.optString("direction", "down"))
