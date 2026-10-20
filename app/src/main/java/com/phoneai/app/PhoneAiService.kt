@@ -560,7 +560,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF02080A.toInt(), 0xFF0A1916.toInt(), 0xFF0B241E.toInt())).apply {
+            intArrayOf(0xFF02080A.toInt(), Theme.PANEL, 0xFF0B211D.toInt())).apply {
             cornerRadius = dp(26).toFloat()
             setStroke(dp(1), 0xFF2C504E.toInt())
         }
@@ -571,7 +571,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF0C3028.toInt(), 0xFF0A1916.toInt(), 0xFF0B241E.toInt())).apply {
+            intArrayOf(0xFF0C3028.toInt(), Theme.PANEL, 0xFF0B211D.toInt())).apply {
             cornerRadius = dp(20).toFloat()
             setStroke(dp(1), 0xFF016856.toInt())
         }
@@ -774,7 +774,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        row.background = rounded(0xF00E1522.toInt(), dp(22).toFloat(), Theme.CYAN)
+        row.background = rounded(0xF002080A.toInt(), dp(22).toFloat(), Theme.CYAN)
         row.setPadding(dp(8), dp(6), dp(10), dp(6))
         val orb = OrbView(this)
         row.addView(orb, LinearLayout.LayoutParams(dp(52), dp(52)))
