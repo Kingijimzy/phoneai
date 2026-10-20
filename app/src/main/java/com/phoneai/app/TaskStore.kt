@@ -52,8 +52,15 @@ object TaskStore {
         return tasks
     }
 
-    private fun validStatus(value: String) =
-        if (value.lowercase() in setOf("open", "in_progress", "done", "cancelled")) value.lowercase() else "open"
+    private fun validStatus(value: String): String = when (value.trim().lowercase()) {
+        "open", "queued" -> "queued"
+        "in_progress", "running" -> "running"
+        "done", "completed" -> "completed"
+        "paused" -> "paused"
+        "failed" -> "failed"
+        "cancelled", "canceled" -> "cancelled"
+        else -> "queued"
+    }
 
     private fun validPriority(value: String) =
         if (value.lowercase() in setOf("low", "normal", "high", "urgent")) value.lowercase() else "normal"
@@ -95,8 +102,9 @@ object TaskStore {
     private fun copyOf(t: OrionTask) = t.copy()
 
     fun all(c: Context): List<OrionTask> = synchronized(lock) {
-        load(c).sortedWith(compareBy<OrionTask> { it.status == "done" || it.status == "cancelled" }
-            .thenBy { it.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.priority == "urgent" })
+        load(c).sortedWith(compareBy<OrionTask> { it.status in setOf("completed", "done", "failed", "cancelled") }
+            .thenByDescending { it.priority == "urgent" }
+            .thenBy { it.dueAt ?: Long.MAX_VALUE })
             .map { copyOf(it) }
     }
 
@@ -110,7 +118,7 @@ object TaskStore {
                 (tasks.maxOfOrNull { it.id } ?: 0) + 1,
                 cleanTitle,
                 details.trim().take(500),
-                "open",
+                "queued",
                 validPriority(priority),
                 dueAt?.takeIf { it > 0L },
                 now,
@@ -119,7 +127,7 @@ object TaskStore {
             tasks.add(task)
             val removed = mutableListOf<OrionTask>()
             while (tasks.size > 500) {
-                val old = tasks.indexOfFirst { it.status == "done" || it.status == "cancelled" }
+                val old = tasks.indexOfFirst { it.status in setOf("completed", "done", "failed", "cancelled") }
                 if (old >= 0) removed.add(tasks.removeAt(old)) else break
             }
             if (!save(c)) {
