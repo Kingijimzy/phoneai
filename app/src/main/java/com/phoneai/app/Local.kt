@@ -37,7 +37,12 @@ class Local(
             } else {
                 Thread.sleep(if (gap >= 0) gap.coerceIn(100L, 5000L) else 600L)
             }
-            val r = exec(tool, s.optJSONObject("args") ?: JSONObject())
+            val args = s.optJSONObject("args") ?: JSONObject()
+            val r = if (tool == "swipe_path") {
+                svc.performRecordedPath(args.optJSONArray("points") ?: JSONArray(), args.optLong("ms", 500L))
+            } else {
+                exec(tool, args)
+            }
             note(tool + ": " + r.take(60))
             if (r.startsWith("error")) return "I stopped at step ${i + 1} of $name. " + r.removePrefix("error: ").take(80)
         }
