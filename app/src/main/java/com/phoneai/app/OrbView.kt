@@ -108,10 +108,11 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         }
 
         // Soft atmospheric halo, rather than the previous mechanical triple-ring look.
-        paint.shader = RadialGradient(cx, cy, r * 1.45f,
+        val haloRadius = min(w, h) * 0.49f
+        paint.shader = RadialGradient(cx, cy, haloRadius,
             intArrayOf((col and 0x00FFFFFF) or 0x5533FFDC, (col and 0x00FFFFFF) or 0x1A00FCB6, 0x0000FCB6),
             floatArrayOf(0.35f, 0.68f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, cy, r * 1.45f, paint)
+        canvas.drawCircle(cx, cy, haloRadius, paint)
         paint.shader = null
 
         // The reference's centerpiece is a single glossy, translucent turquoise sphere.
