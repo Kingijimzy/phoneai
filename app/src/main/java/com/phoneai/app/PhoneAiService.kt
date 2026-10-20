@@ -474,7 +474,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         when (kind) {
             "me" -> {
                 t.setTextColor(Theme.TEXT)
-                t.background = rounded(0xFF202838.toInt(), dp(18).toFloat(), 0xFF344056.toInt())
+                t.background = rounded(0xFF0E4035.toInt(), dp(18).toFloat(), 0xFF016856.toInt())
                 lp.gravity = Gravity.END
                 lp.setMargins(dp(36), dp(7), 0, dp(7))
             }
@@ -560,9 +560,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF0A0E17.toInt(), 0xFF111A2A.toInt(), 0xFF17132A.toInt())).apply {
+            intArrayOf(0xFF02080A.toInt(), 0xFF0A1916.toInt(), 0xFF0B241E.toInt())).apply {
             cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0xFF35485E.toInt())
+            setStroke(dp(1), 0xFF2C504E.toInt())
         }
         root.setPadding(dp(12), dp(10), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
@@ -571,9 +571,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF142B3A.toInt(), 0xFF141A2A.toInt(), 0xFF211A38.toInt())).apply {
+            intArrayOf(0xFF0C3028.toInt(), 0xFF0A1916.toInt(), 0xFF0B241E.toInt())).apply {
             cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0xFF345064.toInt())
+            setStroke(dp(1), 0xFF016856.toInt())
         }
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
@@ -668,9 +668,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
         input.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF171D2B.toInt(), 0xFF121724.toInt())).apply {
+            intArrayOf(0xFF10211E.toInt(), 0xFF0A1413.toInt())).apply {
             cornerRadius = dp(22).toFloat()
-            setStroke(dp(1), 0xFF354457.toInt())
+            setStroke(dp(1), 0xFF2C504E.toInt())
         }
         input.setPadding(dp(15), dp(12), dp(15), dp(12))
         input.minHeight = dp(48)
