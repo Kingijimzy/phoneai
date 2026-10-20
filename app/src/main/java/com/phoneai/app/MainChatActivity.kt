@@ -55,17 +55,20 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Theme.BG)
-            setPadding(dp(14), dp(12), dp(14), dp(10))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080B13.toInt(), 0xFF0B1220.toInt(), 0xFF100D1D.toInt()))
+            setPadding(dp(14), dp(10), dp(14), dp(9))
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF142334.toInt(), Theme.PANEL, 0xFF17152B.toInt())).apply {
-                cornerRadius = dp(22).toFloat()
-                setStroke(dp(1), Theme.LINE)
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF142B3A.toInt(), 0xFF141A2A.toInt(), 0xFF211A38.toInt())).apply {
+                cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), 0xFF345064.toInt())
             }
-            setPadding(dp(12), dp(7), dp(12), dp(7))
+            elevation = dp(4).toFloat()
+            setPadding(dp(12), dp(8), dp(12), dp(8))
         }
         orb = OrbView(this).apply { contentDescription = "Orion Jarvis-style animated core" }
         header.addView(orb, LinearLayout.LayoutParams(dp(62), dp(62)))
@@ -73,7 +76,11 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), 0, 0, 0)
         }
-        titleCol.addView(label("ORION", 17f, Theme.TEXT, true))
+        titleCol.addView(label("ORION", 18f, Theme.TEXT, true))
+        titleCol.addView(label("PERSONAL AI COMPANION", 9f, Theme.MUTED, true).apply {
+            letterSpacing = .08f
+            setPadding(0, dp(1), 0, dp(3))
+        })
         status = label("●  READY WHEN YOU ARE", 11f, Theme.CYAN, true).apply {
             setPadding(dp(9), dp(6), dp(9), dp(6))
             background = rounded(0xFF10252D.toInt(), 12, 0xFF245260.toInt())
@@ -117,12 +124,33 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
         val intro = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(4), dp(15), dp(4), dp(4))
+            setPadding(dp(17), dp(15), dp(17), dp(15))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF142432.toInt(), 0xFF15182A.toInt(), 0xFF211832.toInt())).apply {
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), 0xFF304658.toInt())
+            }
+            elevation = dp(2).toFloat()
         }
-        intro.addView(label("What’s on your mind?", 23f, Theme.TEXT, true))
-        intro.addView(label("Ask a question, think through a decision, or give Orion a task.", 13f, Theme.MUTED).apply {
-            setPadding(0, dp(4), 0, 0)
+        intro.addView(label("YOUR AI. YOUR FLOW.", 10f, Theme.CYAN, true).apply {
+            letterSpacing = .13f
         })
+        intro.addView(label("What’s on your mind?", 24f, Theme.TEXT, true).apply {
+            setPadding(0, dp(5), 0, dp(2))
+        })
+        intro.addView(label("Think, create, research, or get things done — all with Orion.", 13f, Theme.MUTED).apply {
+            setLineSpacing(dp(2).toFloat(), 1f)
+        })
+        val introFooter = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(11), 0, 0)
+        }
+        introFooter.addView(OrionIconView(this).apply {
+            icon = "shield"; tint = Theme.OK; contentDescription = null
+        }, LinearLayout.LayoutParams(dp(15), dp(15)).apply { rightMargin = dp(6) })
+        introFooter.addView(label("Private by design · actions need your approval", 10f, Theme.MUTED))
+        intro.addView(introFooter)
         root.addView(intro)
         animateIn(intro, 90)
 
@@ -172,7 +200,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(Theme.PANEL, 24, Theme.LINE)
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF171D2B.toInt(), 0xFF121724.toInt())).apply {
+                cornerRadius = dp(25).toFloat()
+                setStroke(dp(1), 0xFF354457.toInt())
+            }
+            elevation = dp(5).toFloat()
             setPadding(dp(8), dp(6), dp(7), dp(6))
         }
         input = EditText(this).apply {
@@ -283,12 +316,17 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val isNote = kind == "note"
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(if (isNote) 11 else 13), dp(if (isNote) 8 else 10), dp(if (isNote) 11 else 13), dp(if (isNote) 8 else 10))
+            setPadding(dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12), dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12))
             background = when {
-                isNote -> rounded(0xFF0E1B27.toInt(), 14, 0xFF244657.toInt())
-                kind == "me" -> rounded(0xFF202838.toInt(), 19, 0xFF344056.toInt())
-                else -> rounded(Theme.PANEL, 18, Theme.LINE)
+                isNote -> rounded(0xFF10232D.toInt(), 15, 0xFF2B5C6B.toInt())
+                kind == "me" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(0xFF243449.toInt(), 0xFF20263A.toInt())).apply {
+                    cornerRadius = dp(21).toFloat()
+                    setStroke(dp(1), 0xFF3A536C.toInt())
+                }
+                else -> rounded(0xFF151B29.toInt(), 19, 0xFF2B3548.toInt())
             }
+            elevation = if (isNote) 0f else dp(1).toFloat()
         }
         if (isNote) row.addView(label("LIVE ACTIVITY", 9f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(3)) })
         else if (kind == "ai") row.addView(label("ORION", 10f, Theme.CYAN, true).apply { setPadding(0, 0, 0, dp(4)) })
