@@ -1000,6 +1000,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Public entry point for the full-screen chat Stop control. */
+    fun stopCurrentTask() {
+        stopAll()
+    }
+
     private fun stopAll() {
         handsActive = false
         agent.stop()
