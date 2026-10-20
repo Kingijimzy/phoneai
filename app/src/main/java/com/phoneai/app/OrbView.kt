@@ -23,10 +23,10 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING, WAITING_APPROVAL }
 
     companion object {
-        val CYAN = 0xFF38E1FF.toInt()
-        val VIOLET = 0xFF7C5CFF.toInt()
-        val OK = 0xFF3DDC97.toInt()
-        val WARN = 0xFFFFB84D.toInt()
+        val CYAN = 0xFF00FCB6.toInt()
+        val VIOLET = 0xFF016856.toInt()
+        val OK = 0xFF0BB0A1.toInt()
+        val WARN = 0xFF15EAD3.toInt()
     }
 
     @Volatile
