@@ -26,7 +26,6 @@ import android.widget.Toast
 class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var messages: LinearLayout
     private lateinit var scroll: ScrollView
-    private lateinit var orb: OrbView
     private lateinit var status: TextView
     private lateinit var input: EditText
     private lateinit var send: TextView
