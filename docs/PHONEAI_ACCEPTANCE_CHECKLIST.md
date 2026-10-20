@@ -124,3 +124,16 @@ Implemented in the integration branch (build/device verification still required)
 - [ ] Simulate unavailable storage or a checkpoint-write failure and verify the agent refuses to start a new action without a durable in-flight marker.
 - [ ] Verify action results that cannot be saved stop the task, retain an uncertain in-flight marker, and never get reported as confirmed success.
 - [ ] Test provider failure, Stop, step-limit pause, app restart, corrupted checkpoint JSON, and recovery after a completed task; confirm no successful action is repeated.
+
+
+## Priority 4 — Provider switching, quota visibility, and actionable errors
+
+- [x] AI health panel in Settings shows the selected chat and screen-vision providers, local request counters, available provider quota headers, and cooldown time when known.
+- [x] After a successful request, show the provider and model that actually answered, including when automatic fallback was used.
+- [x] Keep recent provider failure summaries in memory for diagnostics without saving prompts, response text, or API keys.
+- [x] Report provider-specific errors such as rejected keys, rate limits, exhausted credits, timeouts, and connection failures instead of a generic failure.
+- [ ] Build the latest branch head and inspect Gradle output.
+- [ ] With two valid test providers, force the primary to fail and verify fallback succeeds and the health panel names the provider that actually answered.
+- [ ] Test invalid key, 429/rate limit, timeout/offline, no key, and provider without vision support; confirm messages identify the next practical step and do not expose API keys.
+- [ ] Verify quota counters are labelled as local estimates, and provider quota is shown only when the API returns relevant headers.
+- [ ] Verify provider choice and auto-switch behavior separately for chat and screen vision after app restart.
