@@ -36,7 +36,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         "\\b(open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|" +
             "whatsapp|email|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|" +
             "post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|click|task|tasks|remind|reminder|todo|to-do|mark as done|" +
-            "remember|recall|forget|memory|memories|update memory|save this)\\b"
+            "remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b"
     )
 
     private fun chatSystem(): String {
@@ -139,6 +139,8 @@ Tools:
 - record_screen {action}: "start" or "stop" screen recording (saved in Movies/Orion)
 - remember {category, text}: save to long-term memory. category: preference | project | decision | task | conversation | fact
 - update_memory {id, text, category}   forget {id}   recall {query}
+- undo_last {}: reverse the last supported memory change only if the saved state has not changed
+- undo_status {}: report whether a reversible memory change is available
 - wait {seconds}
 - task_list {}: list current saved tasks and their IDs/statuses
 - task_add {title, details?, priority?, dueAt?}: create a persistent task; priority low|normal|high|urgent; dueAt is optional Unix epoch milliseconds only when known
@@ -530,8 +532,42 @@ Rules:
                 val act = a.optString("action", "start").lowercase()
                 if (act == "stop") tools.recordStop() else tools.recordStart()
             }
-            "remember" -> tools.remember(a.optString("category", "fact"), a.optString("text"))
-            "update_memory" -> tools.updateMemory(
+            "undo_status" -> UndoStore.status(svc)
+            "undo_last" -> UndoStore.undoLast(svc)
+            "remember" -> {
+                val text = a.optString("text")
+                val category = a.optString("category", "fact")
+                val before = MemoryStore.all(svc).firstOrNull { it.text.equals(text.trim().replace("\\n", " "), true) }
+                val result = tools.remember(category, text)
+                if (!result.startsWith("error:", true)) {
+                    val id = Regex("\\[(\\d+)\\]").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    val after = id?.let { target -> MemoryStore.all(svc).firstOrNull { it.id == target } }
+                    if (after != null) UndoStore.recordMemory(svc, if (before == null) "memory_add" else "memory_update", before, after)
+                }
+                result
+            }
+            "update_memory" -> {
+                val id = a.optInt("id", -1)
+                val before = MemoryStore.all(svc).firstOrNull { it.id == id }
+                val result = tools.updateMemory(
+                    id,
+                    if (a.has("category")) a.optString("category") else null,
+                    if (a.has("text")) a.optString("text") else null
+                )
+                val after = MemoryStore.all(svc).firstOrNull { it.id == id }
+                if (!result.startsWith("error:", true) && before != null && after != null)
+                    UndoStore.recordMemory(svc, "memory_update", before, after)
+                result
+            }
+            "forget" -> {
+                val id = a.optInt("id", -1)
+                val before = MemoryStore.all(svc).firstOrNull { it.id == id }
+                val result = tools.forget(id)
+                if (!result.startsWith("error:", true) && before != null)
+                    UndoStore.recordMemory(svc, "memory_delete", before, null)
+                result
+            }
+            "update_memory_legacy_unused" -> tools.updateMemory(
                 a.optInt("id", -1),
                 if (a.has("category")) a.optString("category") else null,
                 if (a.has("text")) a.optString("text") else null
