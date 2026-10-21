@@ -23,8 +23,13 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         text = s; textSize = size; setTextColor(color)
         if (bold) typeface = Typeface.DEFAULT_BOLD
     }
-    private fun shape(fill: Int, stroke: Int = Theme.LINE) = GradientDrawable().apply {
-        setColor(fill); cornerRadius = dp(14).toFloat(); setStroke(dp(1), stroke)
+    /** Subtle top-lit glass surface shared by Teach Mode controls. */
+    private fun shape(fill: Int, stroke: Int = Theme.LINE) = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(fill, 0xE80D1416.toInt())
+    ).apply {
+        cornerRadius = dp(14).toFloat()
+        setStroke(dp(1), if (stroke == Theme.LINE) 0x553D6963 else stroke)
     }
     private fun button(s: String, action: () -> Unit) = label(s, 13f, Theme.CYAN, true).apply {
         gravity = Gravity.CENTER; setPadding(dp(13), dp(12), dp(13), dp(12))
