@@ -42,8 +42,8 @@ object Providers {
         ),
         Provider(
             "nvidia", "NVIDIA API Catalog", "https://integrate.api.nvidia.com/v1",
-            "deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1-flash", "nvapi-...",
-            "NVIDIA-hosted models through an OpenAI-compatible API. Key and model access depend on your NVIDIA account. build.nvidia.com"
+            "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvapi-...",
+            "NVIDIA Nemotron 3.5 Super VL: text chat and image/video understanding. Confirm endpoint access in your NVIDIA account. build.nvidia.com"
         ),
         Provider(
             "mistral", "Mistral", "https://api.mistral.ai/v1",
