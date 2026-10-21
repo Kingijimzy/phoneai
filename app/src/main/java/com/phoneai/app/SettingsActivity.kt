@@ -657,18 +657,53 @@ class SettingsActivity : Activity() {
                     "video-generation", "pose-estimation", "classifier"
                 )
                 val eligible = all.filter { id -> chatOnly.none { id.lowercase().contains(it) } }
-                val list = if (vision) eligible.sortedBy { if (nim.isVision(it)) 0 else 1 } else eligible
+                val nvidiaPreferred = listOf(
+                    "deepseek-v4.1-flash", "nemotron-3.5-lightning", "nemotron-3.5-super-vl",
+                    "llama-3.3-70b", "llama-4", "qwen"
+                )
+                val list = when {
+                    p.id == "nvidia" -> eligible.sortedWith(
+                        compareBy<String> { id ->
+                            if (vision && nim.isVision(id)) -1
+                            else nvidiaPreferred.indexOfFirst { id.lowercase().contains(it) }
+                                .let { if (it < 0) 999 else it }
+                        }.thenBy { it.lowercase() }
+                    )
+                    vision -> eligible.sortedBy { if (nim.isVision(it)) 0 else 1 }
+                    else -> eligible
+                }
                 runOnUiThread {
                     if (list.isEmpty()) {
-                        Toast.makeText(this, "No models found.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "No chat-capable models were returned by ${p.label}.", Toast.LENGTH_LONG).show()
                     } else {
                         showChoiceDialog(
                             p.label + (if (vision) " vision model" else " chat model"),
-                            "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}.",
+                            if (p.id == "nvidia")
+                                "Task-specific catalogue entries are hidden. NVIDIA model IDs are checked against your key before Orion saves them; this uses one small API request per model you select."
+                            else "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}.",
                             list,
                             { which ->
-                                Prefs.setModel(this, p, vision, list[which])
-                                Toast.makeText(this, "Using " + list[which] + ". Now tap Test the AI.", Toast.LENGTH_LONG).show()
+                                val selected = list[which]
+                                if (p.id != "nvidia") {
+                                    Prefs.setModel(this, p, vision, selected)
+                                    Toast.makeText(this, "Using $selected. Now tap Test the AI.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(this, "Checking $selected with NVIDIA...", Toast.LENGTH_SHORT).show()
+                                    Thread {
+                                        val problem = nim.testModel(p, selected, vision)
+                                        runOnUiThread {
+                                            if (problem.isBlank()) {
+                                                Prefs.setModel(this, p, vision, selected)
+                                                Toast.makeText(this, "Verified and saved: $selected", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                showInfoDialog(
+                                                    "NVIDIA model not verified",
+                                                    "$selected could not pass a real chat test. Your current model setting was left unchanged.\\n\\n$problem"
+                                                )
+                                            }
+                                        }
+                                    }.start()
+                                }
                             }
                         )
                     }
