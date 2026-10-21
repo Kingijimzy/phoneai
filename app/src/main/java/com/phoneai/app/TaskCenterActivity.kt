@@ -73,18 +73,27 @@ class TaskCenterActivity : Activity() {
             setTextColor(color)
             if (bold) typeface = Typeface.DEFAULT_BOLD
         }
-    private fun panel(fill: Int = Theme.PANEL) = GradientDrawable().apply {
-        setColor(fill); cornerRadius = dp(18).toFloat(); setStroke(dp(1), Theme.LINE)
+    private fun panel(fill: Int = Theme.PANEL) = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(fill, 0xE80D1416.toInt())
+    ).apply {
+        cornerRadius = dp(18).toFloat()
+        setStroke(dp(1), 0x443D6963)
     }
     private fun button(caption: String, primary: Boolean = false, click: () -> Unit) =
         Button(this).apply {
             text = caption; isAllCaps = false; textSize = 12f
             setTextColor(if (primary) Theme.PANEL else Theme.TEXT)
-            background = GradientDrawable().apply {
-                setColor(if (primary) Theme.CYAN else 0xFF151E21.toInt())
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                if (primary) intArrayOf(0xFF28DDB0.toInt(), 0xFF00B98B.toInt())
+                else intArrayOf(0xE61B292B.toInt(), 0xD10D1518.toInt())
+            ).apply {
                 cornerRadius = dp(12).toFloat()
-                if (!primary) setStroke(dp(1), Theme.LINE)
+                setStroke(dp(1), if (primary) 0xFF39E7B9.toInt() else 0x553D6963)
             }
+            elevation = 0f
+            stateListAnimator = null
             setPadding(dp(8), dp(2), dp(8), dp(2))
             setOnClickListener { click() }
         }
