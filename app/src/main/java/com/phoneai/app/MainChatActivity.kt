@@ -62,7 +62,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     /** Lightweight glass treatment: translucent-looking layered charcoal, a cool top sheen and a fine reflective edge. */
     private fun glass(radius: Int, stroke: Int = 0x553D6963) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(0xE61B292B.toInt(), 0xD10D1518.toInt(), 0xE6091012.toInt())
+        intArrayOf(0xF0192527.toInt(), 0xEA10191B.toInt(), 0xF0070D0F.toInt())
     ).apply {
         cornerRadius = dp(radius).toFloat()
         setStroke(dp(1), stroke)
@@ -515,7 +515,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = glass(23, 0x77466B68)
+            background = glass(24, 0x66516E6B)
             elevation = dp(3).toFloat()
             setPadding(dp(7), dp(5), dp(6), dp(5))
         }
@@ -591,7 +591,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(7), dp(6), dp(7), dp(5))
-            background = glass(22, 0x553D6963)
+            background = glass(23, 0x444C6462)
             elevation = dp(2).toFloat()
         }
         fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
@@ -619,7 +619,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val liveDock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true; isFocusable = true; contentDescription = "Start full-screen live voice call with Orion"; setPadding(dp(4), 0, dp(4), 0) }
         val liveButton = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFB1FFE9.toInt(), 0xFF00D8A6.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFFD5FFF4.toInt()) }
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFB5F5E5.toInt(), 0xFF66DCC0.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFFE0FFF6.toInt()) }
             elevation = dp(1).toFloat()
             addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
         }
