@@ -32,10 +32,9 @@ class TaskCenterActivity : Activity() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
+            background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(20).toFloat(); setStroke(dp(1), Theme.LINE) }
         }
-        body.addView(label("ORION  /  TASK CENTRE", 10f, Theme.CYAN, true))
+        body.addView(label("TASKS", 10f, Theme.MUTED, true))
         body.addView(label(titleText, 21f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
         body.addView(label(subtitle, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(10)) })
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -45,8 +44,8 @@ class TaskCenterActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable().apply {
-                    setColor(0xFF11191A.toInt()); cornerRadius = dp(14).toFloat()
-                    setStroke(dp(1), 0xFF203D37.toInt())
+                    setColor(Theme.PANEL); cornerRadius = dp(13).toFloat()
+                    setStroke(dp(1), Theme.LINE)
                 }
                 isClickable = true; isFocusable = true; contentDescription = option
             }
