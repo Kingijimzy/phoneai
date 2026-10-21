@@ -588,7 +588,6 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onPause() {
         livePulse?.cancel()
-        livePulse = null
         super.onPause()
     }
 
