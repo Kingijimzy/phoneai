@@ -104,11 +104,18 @@ class SettingsActivity : Activity() {
         b.isAllCaps = false
         b.textSize = 14f
         b.setTextColor(if (primary) Theme.ON_ACCENT else Theme.TEXT)
-        val g = GradientDrawable()
-        g.setColor(if (primary) Theme.CYAN else Theme.PANEL2)
+        val g = if (primary) {
+            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF28DDB0.toInt(), 0xFF00B98B.toInt()))
+        } else {
+            GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xE61B292B.toInt(), 0xD10D1518.toInt()))
+        }
         g.cornerRadius = dp(12).toFloat()
-        if (!primary) g.setStroke(dp(1), Theme.LINE)
+        g.setStroke(dp(1), if (primary) 0xFF39E7B9.toInt() else 0x553D6963)
         b.background = g
+        b.elevation = 0f
+        b.stateListAnimator = null
         b.setOnClickListener { onClick() }
         return b
     }
@@ -123,10 +130,10 @@ class SettingsActivity : Activity() {
     private fun card(parent: LinearLayout, title: String, note: String? = null): LinearLayout {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
-        val g = GradientDrawable()
-        g.setColor(Theme.PANEL)
+        val g = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(0xE6172224.toInt(), 0xE6091012.toInt()))
         g.cornerRadius = dp(20).toFloat()
-        g.setStroke(dp(1), Theme.LINE)
+        g.setStroke(dp(1), 0x443D6963)
         c.background = g
         c.setPadding(dp(14), dp(12), dp(14), dp(13))
         val heading = LinearLayout(this).apply {
