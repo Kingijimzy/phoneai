@@ -140,8 +140,10 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Orion state: ready"
         }
         titleCol.addView(status)
-        val personality = label("", 10f, Theme.CYAN, true).apply {
+        val personality = label("", 9f, Theme.CYAN, true).apply {
             setPadding(0, dp(5), 0, dp(1))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
             isClickable = true
             isFocusable = true
             contentDescription = "Change Orion personality"
