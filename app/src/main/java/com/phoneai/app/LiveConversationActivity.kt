@@ -26,6 +26,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var micButton: LinearLayout
     private lateinit var micIcon: OrionIconView
     private lateinit var helperLabel: TextView
+    private lateinit var liveBadgeLabel: TextView
     private var attachedService: PhoneAiService? = null
     private var listeningRequested = false
     private var lastMode = OrbView.Mode.IDLE
@@ -87,7 +88,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             addView(View(this@LiveConversationActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Theme.OK) }
             }, LinearLayout.LayoutParams(dp(6), dp(6)).apply { rightMargin = dp(6) })
-            addView(text("LIVE", 10f, Theme.OK, true))
+            liveBadgeLabel = text("READY", 9f, Theme.MUTED, true)
+            addView(liveBadgeLabel)
         }
         header.addView(liveBadge)
         root.addView(header)
@@ -354,6 +356,15 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     override fun onStatus(value: String, mode: OrbView.Mode) {
         runOnUiThread {
             lastMode = mode
+            liveBadgeLabel.text = when (mode) {
+                OrbView.Mode.IDLE -> "READY"
+                OrbView.Mode.LISTENING -> "LISTENING"
+                OrbView.Mode.THINKING -> "THINKING"
+                OrbView.Mode.SPEAKING -> "SPEAKING"
+                OrbView.Mode.ACTING -> "WORKING"
+                OrbView.Mode.WAITING_APPROVAL -> "REVIEW"
+            }
+            liveBadgeLabel.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else Theme.OK)
             wave.mode = mode
             core.mode = mode
             stateLabel.text = when (mode) {
