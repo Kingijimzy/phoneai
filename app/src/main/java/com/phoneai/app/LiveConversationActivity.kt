@@ -159,8 +159,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         transcriptScroll.addView(transcript)
-        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 64 else 92)).apply {
-            topMargin = dp(5)
+        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 76 else 108)).apply {
+            topMargin = dp(6)
         })
         root.addView(transcriptCard, LinearLayout.LayoutParams(-1, -2).apply {
             bottomMargin = dp(14)
@@ -262,10 +262,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         controls.addView(textItem, LinearLayout.LayoutParams(dp(82), -2))
         root.addView(controls)
-        root.addView(text("ANDROID SPEECH ENGINE  ·  CHANGE VOICE IN SETTINGS", 8f, 0xFF71817F.toInt(), true).apply {
+        root.addView(text("VOICE SESSION  ·  TAP THE MIC TO PAUSE", 8f, 0xFF71817F.toInt(), true).apply {
             gravity = Gravity.CENTER
-            letterSpacing = .025f
-            setPadding(dp(4), dp(10), dp(4), dp(1))
+            letterSpacing = .07f
+            setPadding(dp(4), dp(8), dp(4), dp(1))
         })
         setContentView(root)
     }
@@ -350,7 +350,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             }
             row.addView(text(if (kind == "me") "YOU" else "ORION", 8f,
                 if (kind == "me") Theme.CYAN else Theme.MUTED, true))
-            row.addView(text(message, 12f, Theme.TEXT).apply { maxLines = 3 })
+            row.addView(text(message, 12f, Theme.TEXT).apply {
+                maxWidth = (resources.displayMetrics.widthPixels - dp(100)).coerceAtLeast(dp(180))
+                maxLines = 4
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setLineSpacing(dp(1).toFloat(), 1f)
+            })
             transcript.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = dp(5)
             })
