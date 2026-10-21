@@ -512,8 +512,8 @@ class SettingsActivity : Activity() {
             val iconName = when (provider.id) {
                 "gemini", "openai", "nvidia", "openrouter" -> "spark"
                 "local" -> "tools"
-                "anthropic", "deepseek" -> "brain"
-                "groq", "cerebras", "mistral", "sambanova" -> "zap"
+                "anthropic", "deepseek" -> "memory"
+                "groq", "cerebras", "mistral", "sambanova" -> "network"
                 "together", "fireworks", "huggingface" -> "network"
                 else -> "settings"
             }
