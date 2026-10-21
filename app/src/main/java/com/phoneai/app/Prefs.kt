@@ -41,6 +41,11 @@ object Providers {
             "Free model endpoints; request limits and privacy terms vary. Avoid sending secrets. openrouter.ai"
         ),
         Provider(
+            "nvidia", "NVIDIA API Catalog", "https://integrate.api.nvidia.com/v1",
+            "meta/llama-3.3-70b-instruct", "nvidia/nemotron-nano-12b-v2-vl", "nvapi-...",
+            "NVIDIA-hosted models through an OpenAI-compatible API. Key and model access depend on your NVIDIA account. build.nvidia.com"
+        ),
+        Provider(
             "mistral", "Mistral", "https://api.mistral.ai/v1",
             "mistral-small-latest", "mistral-small-latest", "your Mistral key",
             "FREE tier. console.mistral.ai"
