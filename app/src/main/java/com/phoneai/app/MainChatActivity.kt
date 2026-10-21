@@ -26,7 +26,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.platform.setContent
 
 /** Full-screen conversation. The floating orb keeps its separate, compact command panel. */
 class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
