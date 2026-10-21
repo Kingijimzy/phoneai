@@ -136,16 +136,17 @@ class Nim(private val ctx: Context) {
         ),
         "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>()),
         "nvidia" to Pair(
-            // Current NVIDIA catalog includes DeepSeek V4.1 Flash; older IDs are kept only as fallbacks.
+            // Keep the currently published multimodal Nemotron first; use other text models only as fallbacks.
             listOf(
+                "nvidia/nemotron-3.5-super-vl-120b-a12b",
                 "deepseek-ai/deepseek-v4.1-flash",
                 "nvidia/nemotron-3.5-lightning-30b-a3b",
-                "nvidia/nemotron-3-nano-30b-a3b",
-                "openai/gpt-oss-20b",
-                "nvidia/llama-3.1-nemotron-70b-instruct",
+                "nvidia/nemotron-3-super-120b-a12b",
                 "meta/llama-3.3-70b-instruct"
             ),
             listOf(
+                "nvidia/nemotron-3.5-super-vl-120b-a12b",
+                "deepseek-ai/deepseek-v4.1-flash",
                 "nvidia/nemotron-nano-12b-v2-vl",
                 "meta/llama-3.2-11b-vision-instruct"
             )
