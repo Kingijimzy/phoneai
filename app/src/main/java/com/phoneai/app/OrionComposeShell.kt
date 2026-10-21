@@ -50,8 +50,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -149,7 +147,7 @@ private fun HomePage(
             ) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(Mint))
                 Spacer(Modifier.width(7.dp))
-                Text("READY", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text(status.uppercase().take(12), color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
             }
         }
 
@@ -207,17 +205,10 @@ private fun HomePage(
             }
         }
 
-        Button(
-            onClick = onOpenChat,
-            modifier = Modifier.fillMaxWidth().height(58.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)
-        ) {
-            Icon(Icons.Rounded.ChatBubbleOutline, null, Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("Start a conversation", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("QUICK ACCESS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
             Spacer(Modifier.weight(1f))
-            Text("↗", fontSize = 20.sp)
+            Text("Private by default", color = Muted, fontSize = 10.sp)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
