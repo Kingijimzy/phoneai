@@ -222,6 +222,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         })
 
         web = WebView(this)
+        BrowserAutomation.attach(web)
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -381,6 +382,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (agentAttached) PhoneAiService.instance?.detachMainChat(this)
         agentAttached = false
         if (::web.isInitialized) {
+            BrowserAutomation.detach(web)
             web.stopLoading()
             web.webChromeClient = null
             web.webViewClient = WebViewClient()
