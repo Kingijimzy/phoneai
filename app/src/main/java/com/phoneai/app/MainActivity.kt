@@ -261,7 +261,7 @@ class MainActivity : Activity() {
         brandRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         brandRow.addView(livePill)
         page.addView(brandRow)
-        page.addView(label("Your AI.\nYour world.\nOne command away.", 30f, Theme.TEXT, true).apply {
+        page.addView(label("Your personal AI\nco-pilot.", 29f, Theme.TEXT, true).apply {
             setPadding(0, dp(13), 0, dp(7))
             setLineSpacing(dp(1).toFloat(), 1f)
         })
@@ -288,7 +288,8 @@ class MainActivity : Activity() {
             setOnClickListener { showTab("Chat") }
         }
         homeOrb = avatar
-        hero.addView(avatar, LinearLayout.LayoutParams(dp(204), dp(204)).apply { gravity = Gravity.CENTER })
+        val heroOrbSize = if (resources.configuration.screenHeightDp < 700) 154 else 176
+        hero.addView(avatar, LinearLayout.LayoutParams(dp(heroOrbSize), dp(heroOrbSize)).apply { gravity = Gravity.CENTER })
         hero.addView(label("ORION IS HERE", 12f, Theme.CYAN, true).apply { gravity = Gravity.CENTER })
         hero.addView(label("Ready when you are.", 14f, Theme.TEXT).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(3)) })
         hero.addView(label("A calm, responsive assistant — with your permission at every important step.", 12f, Theme.MUTED).apply {
