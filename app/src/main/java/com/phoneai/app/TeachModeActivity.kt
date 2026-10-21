@@ -58,7 +58,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
             background = shape(Theme.PANEL); setPadding(dp(14), dp(6), dp(14), dp(6))
         }
         root.addView(nameInput, LinearLayout.LayoutParams(-1, dp(50)))
-        root.addView(button("●  START RECORDING") {
+        root.addView(button("START RECORDING") {
             val name = nameInput.text.toString().trim()
             if (name.isBlank()) { nameInput.error = "Name this routine first"; return@button }
             val service = PhoneAiService.instance
@@ -72,7 +72,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         status = label("Test routines carefully before replaying actions that submit forms or spend money.", 12f, Theme.MUTED)
         status.setPadding(dp(2), dp(12), dp(2), dp(8)); root.addView(status)
-        stopReplayButton = button("■  STOP CURRENT TASK") {
+        stopReplayButton = button("STOP CURRENT TASK") {
             val service = PhoneAiService.instance
             if (service?.isTaskRunning() == true) {
                 service.stopCurrentTask()
