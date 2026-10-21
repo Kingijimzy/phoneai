@@ -47,7 +47,7 @@ class SettingsActivity : Activity() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
         }
         outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
@@ -58,7 +58,7 @@ class SettingsActivity : Activity() {
             val pieces = label.split(" · ", limit = 2)
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
-                background = GradientDrawable().apply { setColor(0xFF0A1715.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF203D37.toInt()) }
+                background = GradientDrawable().apply { setColor(0xFF11191A.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF203D37.toInt()) }
                 isClickable = true; isFocusable = true; contentDescription = label
             }
             row.addView(text(pieces[0], 14f, Theme.TEXT, true))
@@ -77,7 +77,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun showInfoDialog(title: String, message: String, positive: String = "GOT IT", onPositive: () -> Unit = {}) {
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt())) }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt())) }
         body.addView(text("ORION  /  INFORMATION", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
         body.addView(text(title, 20f, Theme.TEXT, true))
         val detail = text(message, 13f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)); setTextIsSelectable(true) }
@@ -126,7 +126,7 @@ class SettingsActivity : Activity() {
         val g = GradientDrawable()
         g.setColor(Theme.PANEL)
         g.cornerRadius = dp(20).toFloat()
-        g.setStroke(dp(1), 0xFF2C504E.toInt())
+        g.setStroke(dp(1), 0xFF2B3A3D.toInt())
         c.background = g
         c.setPadding(dp(14), dp(12), dp(14), dp(13))
         val heading = LinearLayout(this).apply {
@@ -182,7 +182,7 @@ class SettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         val sv = ScrollView(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
+                intArrayOf(0xFF080C0E.toInt(), 0xFF071311.toInt(), 0xFF11191A.toInt()))
         }
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
@@ -464,7 +464,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(10), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
         }
         outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.CYAN, true).apply {
             letterSpacing = .12f
@@ -484,9 +484,9 @@ class SettingsActivity : Activity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(11), dp(11), dp(11))
                 background = GradientDrawable().apply {
-                    setColor(if (saved) 0xFF10342B.toInt() else 0xFF0A1715.toInt())
+                    setColor(if (saved) 0xFF10342B.toInt() else 0xFF11191A.toInt())
                     cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), if (saved) 0xFF167C66.toInt() else 0xFF203D37.toInt())
+                    setStroke(dp(1), if (saved) 0xFF426F67.toInt() else 0xFF203D37.toInt())
                 }
                 isClickable = true
                 isFocusable = true
@@ -495,7 +495,7 @@ class SettingsActivity : Activity() {
             val icon = text(if (provider.noKey) "⌂" else "✦", 19f, Theme.CYAN, true).apply {
                 gravity = Gravity.CENTER
                 background = GradientDrawable().apply {
-                    setColor(0xFF0A4A3A.toInt()); cornerRadius = dp(11).toFloat()
+                    setColor(0xFF254A43.toInt()); cornerRadius = dp(11).toFloat()
                 }
             }
             card.addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
@@ -552,7 +552,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt()))
+                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt()))
             addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.CYAN, true).apply {
                 letterSpacing = .1f; setPadding(0, 0, 0, dp(7))
             })
@@ -863,7 +863,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(10), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
         }
         outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.CYAN, true).apply {
             letterSpacing = .12f; setPadding(0, 0, 0, dp(7))
@@ -880,7 +880,7 @@ class SettingsActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(10), dp(10), dp(10))
                 background = GradientDrawable().apply {
-                    setColor(if (selected) 0xFF10392F.toInt() else 0xFF0A1715.toInt())
+                    setColor(if (selected) 0xFF203A34.toInt() else 0xFF11191A.toInt())
                     cornerRadius = dp(15).toFloat()
                     setStroke(dp(1), if (selected) Theme.CYAN else 0xFF203D37.toInt())
                 }
@@ -890,7 +890,7 @@ class SettingsActivity : Activity() {
             card.addView(text(glyphs[profile.id] ?: "◈", 19f, Theme.CYAN, true).apply {
                 gravity = Gravity.CENTER
                 background = GradientDrawable().apply {
-                    setColor(0xFF0A4A3A.toInt()); cornerRadius = dp(11).toFloat()
+                    setColor(0xFF254A43.toInt()); cornerRadius = dp(11).toFloat()
                 }
             }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
             val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1062,7 +1062,7 @@ class SettingsActivity : Activity() {
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt()))
             addView(text("ORION  /  MEMORY", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(8)) })
             addView(text(if (m == null) "Add a memory" else "Edit memory", 20f, Theme.TEXT, true))
             addView(box, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
