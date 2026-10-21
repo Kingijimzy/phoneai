@@ -22,8 +22,8 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.setContent
 
 /**
- * Orion home shell. Chat remains the primary surface; tools and configuration live in dedicated areas.
- * Built with native views to keep the experience lightweight on entry-level Android devices.
+ * Orion app entry point. The home and primary navigation now render in Jetpack Compose;
+ * existing activities continue to own the agent, browser, settings, and device integrations.
  */
 class MainActivity : Activity() {
     private lateinit var content: FrameLayout
