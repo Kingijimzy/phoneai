@@ -286,13 +286,18 @@ class Nim(private val ctx: Context) {
      */
     fun testModel(p: Provider, model: String, vision: Boolean): String {
         if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
+        val probePrefs = ctx.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
+        val probeKey = "nvidia_probe_${if (vision) "vision" else "chat"}_${model.hashCode()}"
+        val probeTime = probePrefs.getLong("${probeKey}_at", 0L)
+        if (probePrefs.getBoolean("${probeKey}_ok", false) &&
+            System.currentTimeMillis() - probeTime < 30 * 60 * 1000L) return ""
         val userContent: Any = if (vision) {
             // A tiny known image makes the vision picker test the image path too, not only text chat.
             JSONArray()
                 .put(JSONObject().put("type", "text").put("text", "Describe the image in one word."))
                 .put(JSONObject().put("type", "image_url").put("image_url",
                     JSONObject().put("url",
-                        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC")))
+                        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=")))
         } else {
             "Reply OK."
         }
@@ -327,6 +332,11 @@ class Nim(private val ctx: Context) {
         if (answer.isBlank() || answer == "null") {
             return "The endpoint returned HTTP ${response.code}, but no readable chat text. Choose another model."
         }
+        // Remember successful probes briefly so reopening the picker does not spend quota again.
+        probePrefs.edit()
+            .putBoolean("${probeKey}_ok", true)
+            .putLong("${probeKey}_at", System.currentTimeMillis())
+            .apply()
         return ""
     }
 
