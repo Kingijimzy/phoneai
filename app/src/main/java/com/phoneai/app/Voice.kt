@@ -99,6 +99,36 @@ class Voice(private val ctx: Context) {
     private fun clean(s: String): String =
         s.replace(Regex("[*_`#>]+"), "").replace(Regex("https?://\\S+"), "link").trim()
 
+    /** Split long replies on sentence boundaries, preserving conversational flow. */
+    private fun splitForSpeech(text: String, limit: Int = 2800): List<String> {
+        val sentences = text.replace(Regex("\\s+"), " ")
+            .split(Regex("(?<=[.!?])\\s+"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        val out = ArrayList<String>()
+        var current = StringBuilder()
+        for (sentence in sentences) {
+            if (current.isNotEmpty() && current.length + sentence.length + 1 > limit) {
+                out.add(current.toString())
+                current = StringBuilder()
+            }
+            if (sentence.length > limit) {
+                var start = 0
+                while (start < sentence.length) {
+                    val end = minOf(start + limit, sentence.length)
+                    val piece = sentence.substring(start, end).trim()
+                    if (piece.isNotEmpty()) out.add(piece)
+                    start = end
+                }
+            } else {
+                if (current.isNotEmpty()) current.append(' ')
+                current.append(sentence)
+            }
+        }
+        if (current.isNotEmpty()) out.add(current.toString())
+        return out
+    }
+
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
@@ -108,23 +138,18 @@ class Voice(private val ctx: Context) {
             return
         }
         val engine = tts ?: return
-        // Speak sentence by sentence, with a little rise for questions and energy for excitement.
-        val parts = t.split(Regex("(?<=[.!?])\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
-        val baseRate = Prefs.rate(ctx).coerceIn(0.5f, 2.0f)
-        val basePitch = if (Prefs.deepVoice(ctx)) 0.8f else 1.0f
-        for ((idx, part) in parts.withIndex()) {
-            var rate = baseRate
-            var pitch = basePitch
-            if (part.endsWith("?")) pitch += 0.1f
-            if (part.endsWith("!")) {
-                rate *= 1.06f
-                pitch += 0.05f
-            }
-            if (idx > 0 && idx % 2 == 1) pitch -= 0.03f
-            engine.setSpeechRate(rate.coerceIn(0.5f, 2.0f))
-            engine.setPitch(pitch.coerceIn(0.5f, 2.0f))
+        // Keep a stable rate and pitch across each response. Changing pitch sentence by
+        // sentence sounds synthetic; chunk only when needed to respect Android TTS limits.
+        val chunks = splitForSpeech(t)
+        if (chunks.isEmpty()) {
+            onDone?.invoke()
+            return
+        }
+        engine.setSpeechRate(Prefs.rate(ctx).coerceIn(0.75f, 1.25f))
+        engine.setPitch(if (Prefs.deepVoice(ctx)) 0.92f else 1.0f)
+        for ((idx, part) in chunks.withIndex()) {
             val id = "u" + System.nanoTime()
-            if (onDone != null && idx == parts.size - 1) callbacks[id] = onDone
+            if (onDone != null && idx == chunks.lastIndex) callbacks[id] = onDone
             if (pending.getAndIncrement() == 0) main.post { onSpeaking?.invoke(true) }
             val res = engine.speak(part, TextToSpeech.QUEUE_ADD, null, id)
             if (res != TextToSpeech.SUCCESS) finished(id)
