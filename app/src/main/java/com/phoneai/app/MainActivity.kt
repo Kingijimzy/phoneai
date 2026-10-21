@@ -301,6 +301,24 @@ class MainActivity : Activity() {
         val command = action("Start a conversation", "Chat naturally or give Orion a multi-step task", true) { showTab("Chat") }
         gap(page, command, 12)
         animateEntrance(command, 150)
+
+        // Two fast entry points make Orion feel like an assistant you can invoke, not
+        // just a dashboard. Keep these as compact cards that fit narrow Android widths.
+        val quickLaunch = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val live = action("Live voice", "Talk hands-free", true) {
+            startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java))
+        }
+        val browser = action("Orion Browser", "Search and open pages") {
+            startActivity(Intent(this@MainActivity, BrowserActivity::class.java)
+                .putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"))
+        }
+        quickLaunch.addView(live, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(6) })
+        quickLaunch.addView(browser, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
+        gap(page, quickLaunch, 8)
+
         val quick = section(page, "Your workspace", "Jump back into the parts of Orion you use most")
         gap(quick, action("Task centre", "Queued work, running status, pauses, and completed tasks", true) {
             startActivity(Intent(this, TaskCenterActivity::class.java))
