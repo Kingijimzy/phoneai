@@ -522,6 +522,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    fun stopVoiceInput() {
+        main.post {
+            if (!listening) return@post
+            handsActive = false
+            emptyListens = 0
+            voice.stopListening()
+            listening = false
+            refreshMode()
+            if (panel == null) {
+                hideStrip()
+                showBubble()
+                startWake()
+            }
+        }
+    }
+
+
     fun resetMainChat() {
         main.post {
             if (!running) {
