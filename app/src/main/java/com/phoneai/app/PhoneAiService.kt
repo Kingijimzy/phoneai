@@ -1149,8 +1149,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             refreshMode()
             if (text.isNullOrBlank()) {
                 emptyListens++
-                if (handsActive && emptyListens < 3 && !errored) {
-                    main.postDelayed({ listenNow() }, 500)
+                // A silence timeout is not the end of a live call. Re-arm recognition until
+                // the user ends the call or the speech service reports a real error.
+                if (handsActive && !errored) {
+                    if (emptyListens % 3 == 0) {
+                        showStatusText("Still listening — speak whenever you're ready.")
+                    }
+                    main.postDelayed({ if (handsActive && !running) listenNow() }, 300)
                 } else {
                     endHands()
                 }
