@@ -607,15 +607,15 @@ class SettingsActivity : Activity() {
                     if (list.isEmpty()) {
                         Toast.makeText(this, "No models found.", Toast.LENGTH_LONG).show()
                     } else {
-                        val items = list.toTypedArray()
-                        AlertDialog.Builder(this)
-                            .setTitle(p.label + (if (vision) " vision model" else " chat model"))
-                            .setItems(items) { _, which ->
-                                Prefs.setModel(this, p, vision, items[which])
-                                Toast.makeText(this, "Using " + items[which] + ". Now tap Test the AI.", Toast.LENGTH_LONG).show()
+                        showChoiceDialog(
+                            p.label + (if (vision) " vision model" else " chat model"),
+                            "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}.",
+                            list,
+                            { which ->
+                                Prefs.setModel(this, p, vision, list[which])
+                                Toast.makeText(this, "Using " + list[which] + ". Now tap Test the AI.", Toast.LENGTH_LONG).show()
                             }
-                            .setNegativeButton("Cancel", null)
-                            .show()
+                        )
                     }
                 }
             } catch (e: Exception) {
