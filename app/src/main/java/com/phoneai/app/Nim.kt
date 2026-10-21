@@ -550,13 +550,12 @@ class Nim(private val ctx: Context) {
         var rateRetries = 0
         // In quota-saver mode, allow one alternate model only after an invalid/retired model response.
         // Timeouts, empty replies, and 429s exit immediately, so this does not create retry fan-out.
-        val maxAttempts = if (Prefs.quotaSaver(ctx)) {
-            2
-        } else {
-            if (hasBackup) 4 else 12
-        }
+        // Prefer a quick, bounded recovery over silently cycling through a long catalogue.
+        // A retired/overloaded model gets one alternate attempt; another saved provider can
+        // then take over instead of making the user wait through many model IDs.
+        val maxAttempts = if (Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (p.id == "nvidia") 240000L else 120000L
+        val totalTimeoutMs = if (p.id == "nvidia") 65000L else 45000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -590,7 +589,7 @@ class Nim(private val ctx: Context) {
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 120000 else 30000)
+                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 60000 else 30000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
