@@ -431,10 +431,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
-    fun sendFromMainChat(text: String) {
+    fun sendFromMainChat(text: String, conversationOnly: Boolean = false) {
         main.post {
             mainChatActive = mainChatListener != null
-            submit(text)
+            submit(text, conversationOnly)
         }
     }
 
@@ -1023,7 +1023,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- running commands
 
-    private fun submit(text: String) {
+    private fun submit(text: String, conversationOnly: Boolean = false) {
         val t = text.trim()
         if (t.isEmpty()) return
         if (running) {
@@ -1067,6 +1067,28 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     else agent.runLiveConversation(t)
                 } catch (e: Exception) {
                     say("I couldn't reach the AI just now. Please try again.")
+                }
+                main.post { finishRun() }
+            }
+            return
+        }
+
+        if (conversationOnly) {
+            wakeGen++
+            transcript.add(Pair("me", t))
+            mainChatListener?.onMessage("me", t)
+            voice.stopSpeaking()
+            voice.stopListening()
+            listening = false
+            hideBubble()
+            running = true
+            phase = "thinking"
+            refreshMode()
+            worker.execute {
+                try {
+                    agent.runConversation(t)
+                } catch (e: Exception) {
+                    say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
                 }
                 main.post { finishRun() }
             }
