@@ -165,19 +165,19 @@ private fun HomePage(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
+                        .background(Color(0xFF1A302D)).border(1.dp, Color(0xFF315B51), RoundedCornerShape(13.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Rounded.GraphicEq, null, tint = Mint, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(11.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("ORION IS READY", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .4.sp)
+                    Text("Your AI workspace", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .2.sp)
                     Text("Talk, think, or ask for help.", color = Muted, fontSize = 12.sp)
                 }
-                Box(
-                    Modifier.clip(CircleShape).background(Color(0xFF1C302D))
-                        .border(1.dp, Color(0xFF315B51), CircleShape).padding(horizontal = 10.dp, vertical = 7.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(Modifier.size(6.dp).clip(CircleShape).background(Mint))
-                        Text(status.uppercase().take(18), color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
-                    }
-                }
+                Text("PRIVATE", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             }
             VoiceWaveform(Modifier.fillMaxWidth().height(66.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
