@@ -43,9 +43,10 @@ class TaskCenterActivity : Activity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(13), dp(12), dp(13), dp(12))
-                background = GradientDrawable().apply {
-                    setColor(Theme.PANEL); cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), Theme.LINE)
+                background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(0xE61A2426.toInt(), 0xE80D1416.toInt())).apply {
+                    cornerRadius = dp(13).toFloat()
+                    setStroke(dp(1), 0x443D6963)
                 }
                 isClickable = true; isFocusable = true; contentDescription = option
             }
