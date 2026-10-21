@@ -514,7 +514,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                         reason.contains("supports this request type", true) ->
                         " The selected model may be text-only. In Settings → AI providers, choose a provider and model that explicitly supports image input."
                     reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) ->
-                        " The provider may be out of free quota or credit. Try the configured vision backup or wait for the limit to reset."
+                        " The provider may be out of free quota or credit. Orion now tries other saved vision-capable providers automatically; if none is available, wait for the limit to reset or configure a vision backup."
+                    reason.contains("503", true) || reason.contains("temporarily busy", true) ||
+                        reason.contains("service unavailable", true) ->
+                        " This is usually a temporary provider outage, not an unreadable image. Orion now tries other saved vision-capable providers automatically; if none is configured, try again shortly."
                     reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) ||
                         reason.contains("unsupported", true) ->
                         " The provider may have rejected this image format or model. Try a smaller JPG/PNG image and verify that the selected model supports vision."
