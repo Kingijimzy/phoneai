@@ -22,6 +22,11 @@ import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.platform.setContent
 
 /** Full-screen conversation. The floating orb keeps its separate, compact command panel. */
 class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
@@ -46,6 +51,11 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private var welcomePanel: View? = null
     private var promptRail: View? = null
     private var livePulse: android.animation.AnimatorSet? = null
+    private val composeLines = mutableStateListOf<OrionChatLine>()
+    private val composeStatus = mutableStateOf("READY")
+    private val composeCommandMode = mutableStateOf(false)
+    private val composeSelectedImage = mutableStateOf<Uri?>(null)
+    private var composeChatActive = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
