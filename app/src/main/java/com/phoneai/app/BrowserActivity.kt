@@ -70,8 +70,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080C0E.toInt(), 0xFF071311.toInt(), 0xFF11191A.toInt()))
+            setBackgroundColor(Theme.BG)
             setPadding(dp(10), dp(8), dp(10), dp(6))
         }
         val heading = LinearLayout(this).apply {
