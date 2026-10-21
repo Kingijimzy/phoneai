@@ -286,10 +286,21 @@ class Nim(private val ctx: Context) {
      */
     fun testModel(p: Provider, model: String, vision: Boolean): String {
         if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
+        val userContent: Any = if (vision) {
+            // A tiny known image makes the vision picker test the image path too, not only text chat.
+            JSONArray()
+                .put(JSONObject().put("type", "text").put("text", "Describe the image in one word."))
+                .put(JSONObject().put("type", "image_url").put("image_url",
+                    JSONObject().put("url",
+                        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC")))
+        } else {
+            "Reply OK."
+        }
         val messages = JSONArray()
             .put(JSONObject().put("role", "system").put("content",
-                "You are checking whether this chat endpoint works. Reply with only OK."))
-            .put(JSONObject().put("role", "user").put("content", "Reply OK."))
+                if (vision) "You are checking whether image understanding works. Reply briefly."
+                else "You are checking whether this chat endpoint works. Reply with only OK."))
+            .put(JSONObject().put("role", "user").put("content", userContent))
         val body = JSONObject()
             .put("model", model)
             .put("messages", messages)
