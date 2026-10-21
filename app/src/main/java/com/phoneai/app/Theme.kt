@@ -1,17 +1,17 @@
 package com.phoneai.app
 
-/** Shared Orion design tokens: restrained charcoal surfaces, quiet borders, and a soft mint accent. */
+/** Minimal Orion tokens based on the reference palette: near-black, deep teal, restrained mint. */
 object Theme {
-    val BG = 0xFF080C0E.toInt()
-    val PANEL = 0xFF101719.toInt()
-    val PANEL2 = 0xFF151E21.toInt()
-    val LINE = 0xFF28383B.toInt()
+    val BG = 0xFF02080A.toInt()
+    val PANEL = 0xFF0A1113.toInt()
+    val PANEL2 = 0xFF11191A.toInt()
+    val LINE = 0xFF2C504E.toInt()
     val TEXT = 0xFFF0F5F5.toInt()
-    val MUTED = 0xFF9BA9AD.toInt()
-    val CYAN = 0xFF8DE0D1.toInt()
-    val VIOLET = 0xFF6FBEB4.toInt()
+    val MUTED = 0xFFA6B2B7.toInt()
+    val CYAN = 0xFF00FCB6.toInt()
+    val VIOLET = 0xFF2C504E.toInt()
     val DANGER = 0xFFE98291.toInt()
     val WARN = 0xFFE7BD7B.toInt()
-    val OK = 0xFF75C6B7.toInt()
-    val ON_ACCENT = 0xFF081311.toInt()
+    val OK = 0xFF00FCB6.toInt()
+    val ON_ACCENT = 0xFF02080A.toInt()
 }
