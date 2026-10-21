@@ -37,6 +37,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private var lastMode = OrbView.Mode.IDLE
     private var welcomePanel: View? = null
     private var promptRail: View? = null
+    private var livePulse: android.animation.AnimatorSet? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -538,6 +539,20 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
         }
         liveDock.addView(liveButton, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val pulseX = android.animation.ObjectAnimator.ofFloat(liveButton, View.SCALE_X, 1f, 1.045f, 1f).apply {
+            duration = 1900L
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            repeatMode = android.animation.ValueAnimator.RESTART
+        }
+        val pulseY = android.animation.ObjectAnimator.ofFloat(liveButton, View.SCALE_Y, 1f, 1.045f, 1f).apply {
+            duration = 1900L
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            repeatMode = android.animation.ValueAnimator.RESTART
+        }
+        livePulse = android.animation.AnimatorSet().apply {
+            playTogether(pulseX, pulseY)
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+        }
         liveDock.addView(label("LIVE", 9f, Theme.CYAN, true).apply { gravity = Gravity.CENTER; letterSpacing = .12f; setPadding(0, dp(2), 0, 0) })
         liveDock.setOnTouchListener { v, e ->
             if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.94f).scaleY(.94f).setDuration(70).start()
@@ -556,6 +571,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onResume() {
         super.onResume()
+        if (livePulse?.isStarted != true) livePulse?.start()
         val service = PhoneAiService.instance
         if (service == null) {
             status.text = "ACCESSIBILITY SETUP NEEDED"
@@ -568,6 +584,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             messages.removeAllViews()
             service.attachMainChat(this)
         }
+    }
+
+    override fun onPause() {
+        livePulse?.cancel()
+        livePulse = null
+        super.onPause()
     }
 
     override fun onStop() {
