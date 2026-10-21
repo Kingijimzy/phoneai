@@ -695,9 +695,14 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     cornerRadius = dp(21).toFloat()
                     setStroke(dp(1), 0xFF016856.toInt())
                 }
+                kind == "ai" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(0xFF0D211D.toInt(), 0xFF091613.toInt())).apply {
+                    cornerRadius = dp(20).toFloat()
+                    setStroke(dp(1), 0xFF244B41.toInt())
+                }
                 else -> rounded(0xFF0A1916.toInt(), 19, 0xFF2C504E.toInt())
             }
-            elevation = if (isNote) 0f else dp(1).toFloat()
+            elevation = if (isNote) 0f else dp(2).toFloat()
         }
         if (isNote) {
             row.addView(label("LIVE ACTIVITY", 9f, Theme.CYAN, true).apply {
@@ -725,11 +730,22 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
         row.addView(body)
-        val params = LinearLayout.LayoutParams(
-            if (isNote) -1 else if (kind == "me") (resources.displayMetrics.widthPixels * .84f).toInt() else -1, -2
-        )
+        // Keep both sides visually distinct and leave a little breathing room at the
+        // screen edge. Assistant replies no longer become full-width slabs on phones.
+        val screenWidth = resources.displayMetrics.widthPixels
+        val bubbleWidth = when {
+            isNote -> -1
+            kind == "me" -> (screenWidth * .82f).toInt()
+            else -> (screenWidth * .91f).toInt()
+        }
+        val params = LinearLayout.LayoutParams(bubbleWidth, -2)
         params.gravity = if (kind == "me") Gravity.END else Gravity.START
-        params.setMargins(if (kind == "me") dp(36) else 0, dp(if (isNote) 2 else 5), if (kind == "me") 0 else dp(if (isNote) 0 else 18), dp(if (isNote) 3 else 5))
+        params.setMargins(
+            if (kind == "me") dp(30) else 0,
+            dp(if (isNote) 2 else 5),
+            if (kind == "me") 0 else dp(if (isNote) 0 else 14),
+            dp(if (isNote) 3 else 7)
+        )
         messages.addView(row, params)
         row.alpha = 0f
         row.translationY = dp(8).toFloat()
