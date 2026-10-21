@@ -696,7 +696,7 @@ class SettingsActivity : Activity() {
                         showChoiceDialog(
                             p.label + (if (vision) " vision model" else " chat model"),
                             if (p.id == "nvidia") {
-                                "All plausible chat-capable models returned by NVIDIA are listed. Choose one to test it with your saved key before Orion saves it."
+                                "All plausible chat-capable models returned by NVIDIA are listed. The quick test checks text-chat access; vision support should also be tested with an actual image."
                             } else {
                                 "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}."
                             },
@@ -713,7 +713,7 @@ class SettingsActivity : Activity() {
                                         runOnUiThread {
                                             if (problem.isBlank()) {
                                                 Prefs.setModel(this, p, vision, selected)
-                                                Toast.makeText(this, "Verified and saved: $selected", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(this, if (vision) "Chat endpoint saved: $selected. Test it with an image." else "Verified and saved: $selected", Toast.LENGTH_LONG).show()
                                             } else {
                                                 AlertDialog.Builder(this)
                                                     .setTitle("Model test did not confirm access")
@@ -724,7 +724,7 @@ class SettingsActivity : Activity() {
                                                     }
                                                     .setPositiveButton("USE ANYWAY") { _, _ ->
                                                         Prefs.setModel(this, p, vision, selected)
-                                                        Toast.makeText(this, "Selected $selected. Test it in chat now.", Toast.LENGTH_LONG).show()
+                                                        Toast.makeText(this, if (vision) "Selected $selected. Test it with an image." else "Selected $selected. Test it in chat now.", Toast.LENGTH_LONG).show()
                                                     }
                                                     .show()
                                             }
