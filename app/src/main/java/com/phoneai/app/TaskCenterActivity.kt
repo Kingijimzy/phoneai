@@ -292,7 +292,7 @@ class TaskCenterActivity : Activity() {
 
     private fun addTask() {
         val title = EditText(this).apply { hint = "What needs to get done?"; isSingleLine = true }
-        val details = EditText(this).apply { hint = "Notes or next step (optional) }
+        val details = EditText(this).apply { hint = "Notes or next step (optional)" }
         var selectedPriority = "normal"
         lateinit var priorityButton: Button
         priorityButton = button("PRIORITY  ·  NORMAL") {
