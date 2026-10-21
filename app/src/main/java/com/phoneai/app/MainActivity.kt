@@ -15,6 +15,10 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 
 /**
  * Orion home shell. Chat remains the primary surface; tools and configuration live in dedicated areas.
@@ -25,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var statusLabel: TextView
     private var homeOrb: OrbView? = null
     private var selectedTab = "Home"
+    private var composeStatus: MutableState<String>? = null
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -146,15 +151,27 @@ class MainActivity : Activity() {
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         window.decorView.systemUiVisibility = 0
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Theme.BG)
+        val statusState = mutableStateOf(buildStatusText())
+        composeStatus = statusState
+        val composeRoot = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                OrionComposeShell(
+                    status = statusState.value,
+                    onOpenChat = { startActivity(Intent(this@MainActivity, MainChatActivity::class.java)) },
+                    onOpenVoice = { startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java)) },
+                    onOpenBrowser = { startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")) },
+                    onOpenTasks = { startActivity(Intent(this@MainActivity, TaskCenterActivity::class.java)) },
+                    onOpenSettings = { section ->
+                        val intent = Intent(this@MainActivity, SettingsActivity::class.java)
+                        if (section != null) intent.putExtra("open_section", section)
+                        startActivity(intent)
+                    },
+                    onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) }
+                )
+            }
         }
-        content = FrameLayout(this)
-        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(66)).apply { leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(7) })
-        setContentView(root)
-        showTab(intent.getStringExtra("tab") ?: "Home", animate = false)
+        setContentView(composeRoot)
     }
 
     private fun bottomNav(): View {
@@ -440,13 +457,18 @@ class MainActivity : Activity() {
         })
     }
 
-    private fun refreshStatus() {
-        if (!::statusLabel.isInitialized) return
+    private fun buildStatusText(): String {
         val service = PhoneAiService.instance
         val access = if (service != null) "Accessibility agent active" else "Accessibility agent not enabled"
-        homeOrb?.mode = service?.displayMode() ?: OrbView.Mode.IDLE
         val keys = Providers.all.count { Prefs.hasKey(this, it.id) }
-        statusLabel.text = "●  $access   ·   $keys AI provider key(s) configured"
+        return "$access  ·  $keys AI provider key(s) configured"
+    }
+
+    private fun refreshStatus() {
+        composeStatus?.value = buildStatusText()
+        val service = PhoneAiService.instance
+        homeOrb?.mode = service?.displayMode() ?: OrbView.Mode.IDLE
+        if (::statusLabel.isInitialized) statusLabel.text = "●  " + buildStatusText()
     }
 
     override fun onResume() {
