@@ -299,26 +299,18 @@ class Nim(private val ctx: Context) {
                 .putLong("${probeKey}_at", System.currentTimeMillis()).apply()
             return message
         }
-        val userContent: Any = if (vision) {
-            // A tiny known image makes the vision picker test the image path too, not only text chat.
-            JSONArray()
-                .put(JSONObject().put("type", "text").put("text", "Describe the image in one word."))
-                .put(JSONObject().put("type", "image_url").put("image_url",
-                    JSONObject().put("url",
-                        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=")))
-        } else {
-            "Reply OK."
-        }
+        // Test chat availability with text for both pickers. A 1x1 synthetic image is
+        // rejected by some vision endpoints and falsely hides otherwise usable models.
+        val userContent = "Reply OK."
         val messages = JSONArray()
             .put(JSONObject().put("role", "system").put("content",
-                if (vision) "You are checking whether image understanding works. Reply briefly."
-                else "You are checking whether this chat endpoint works. Reply with only OK."))
+                "You are checking whether this chat endpoint works. Reply with only OK."))
             .put(JSONObject().put("role", "user").put("content", userContent))
         val body = JSONObject()
             .put("model", model)
             .put("messages", messages)
             .put("temperature", 0)
-            .put("max_tokens", 128)
+            .put("max_tokens", 1024)
         if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
             body.put("chat_template_kwargs", JSONObject().put("thinking", false))
         } else if (p.id == "nvidia" && model.lowercase().contains("nemotron-3.5-super-vl")) {
@@ -328,7 +320,7 @@ class Nim(private val ctx: Context) {
         }
         val response = try {
             request(p, "POST", p.base + "/chat/completions", body.toString(),
-                Prefs.key(ctx, p.id), readMs0 = 25000)
+                Prefs.key(ctx, p.id), readMs0 = 60000)
         } catch (e: Exception) {
             return rememberFailure("Connection test failed (${e.javaClass.simpleName}). Check internet and model access.")
         }
