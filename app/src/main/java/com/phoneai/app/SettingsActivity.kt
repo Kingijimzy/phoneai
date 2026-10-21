@@ -47,7 +47,7 @@ class SettingsActivity : Activity() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(20).toFloat(); setStroke(dp(1), Theme.LINE) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x553D6963) }
         }
         outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
