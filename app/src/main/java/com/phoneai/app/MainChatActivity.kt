@@ -484,7 +484,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         talkModeChip.contentDescription = "Talk mode. Conversational answers without phone actions or automatic web search."
         talkModeChip.setOnClickListener { commandMode = false; refreshModeSelector() }
         modeRow.addView(talkModeChip, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
-        val commandParts = makeModeChip("Jarvis commands", "spark")
+        val commandParts = makeModeChip("Command", "spark")
         commandModeChip = commandParts.first
         commandModeIcon = commandParts.second
         commandModeText = commandParts.third
