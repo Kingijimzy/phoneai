@@ -63,6 +63,9 @@ object BrowserAutomation {
 
     fun type(target: String, value: String): String {
         if (value.isEmpty()) return "error: text to enter is empty"
+        if (Regex("(?i)password|passcode|pin|one.time|otp|verification|security.code|credit.card|card.number|cvv|cvc").containsMatchIn(target)) {
+            return "error: sensitive fields are not filled by Orion; enter that information yourself"
+        }
         val qt = org.json.JSONObject.quote(target)
         val qv = org.json.JSONObject.quote(value)
         return evaluate("""
