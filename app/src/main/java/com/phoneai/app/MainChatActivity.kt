@@ -328,6 +328,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 if (lastMode == OrbView.Mode.THINKING || lastMode == OrbView.Mode.ACTING) {
                     Toast.makeText(this@MainChatActivity, "Let Orion finish or stop the current task first.", Toast.LENGTH_SHORT).show()
                 } else {
+                    commandMode = false
+                    refreshModeSelector()
                     messages.removeAllViews()
                     restoreWelcome()
                     val service = PhoneAiService.instance
@@ -395,7 +397,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             Triple("Research", "browser", "Help me research a topic. Ask what topic I want to investigate."),
             Triple("Plan", "tasks", "Help me create a practical step-by-step plan. Ask what I want to achieve."),
             Triple("Explain", "spark", "Explain a difficult idea with a practical example."),
-            Triple("Phone command", "shield", "Help me with my phone. Ask what action I want to perform."),
+            Triple("Phone command", "shield", "Help me open an app or perform a phone action. Ask which app or action I want."),
             Triple("Browser", "browser", ""),
             Triple("Teach mode", "record", ""),
             Triple("Tasks", "tasks", "")
