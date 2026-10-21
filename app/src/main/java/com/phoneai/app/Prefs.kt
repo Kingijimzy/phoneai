@@ -171,7 +171,7 @@ object Prefs {
     fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", false)
     fun setDeepVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("deep", v).apply()
 
-    fun rate(c: Context): Float = sp(c).getFloat("rate", 1.05f)
+    fun rate(c: Context): Float = sp(c).getFloat("rate", 0.98f)
     fun setRate(c: Context, v: Float) = sp(c).edit().putFloat("rate", v).apply()
 
     fun userName(c: Context): String = sp(c).getString("username", "") ?: ""
