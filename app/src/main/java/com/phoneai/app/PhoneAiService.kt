@@ -1129,8 +1129,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         handsActive = true
         emptyListens = 0
         closePanel(false)
-        if (Prefs.voice(this)) voice.speak("I'm listening.")
-        voice.whenIdle { if (handsActive && !running) listenNow() }
+        // A spoken greeting adds a full TTS cycle before the microphone opens and is a
+        // common cause of users thinking the live call has timed out. Start listening now.
+        voice.stopSpeaking()
+        listenNow()
     }
 
     private fun listenNow() {
