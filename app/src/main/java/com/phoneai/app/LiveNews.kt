@@ -7,7 +7,7 @@ import java.net.URLEncoder
 
 /** Recent public-news lookup via GDELT's open DOC API; no model call or API key required. */
 object LiveNews {
-    private const val TIMEOUT_MS = 8_000
+    private const val TIMEOUT_MS = 15_000
 
     fun isNewsRequest(text: String): Boolean {
         val s = text.lowercase()
@@ -64,7 +64,20 @@ object LiveNews {
             out.append("\n\nSource: GDELT public news index. Open the links to verify details.")
             out.toString()
         } catch (e: Exception) {
-            "I couldn't retrieve recent news right now (" + (e.message?.take(100) ?: "network error") + "). This lookup does not use AI quota; try again when the service is reachable."
+            // GDELT occasionally stalls. Fall back to the app's separate public web-search
+            // path instead of treating one news-index timeout as a total failure.
+            val fallbackQuery = if (q.contains("crypto", true) || q.contains("bitcoin", true)) {
+                "crypto news today latest"
+            } else {
+                "$q latest news today"
+            }
+            val fallback = try { LiveWebSearch.search(fallbackQuery) } catch (_: Exception) { "" }
+            if (fallback.startsWith("Web search results for")) {
+                "The dedicated news index timed out, so these are fallback web-search results instead. Check article dates and sources.\n\n" + fallback
+            } else {
+                "I couldn't retrieve recent news from either source right now (news index: " +
+                    (e.message?.take(70) ?: "network error") + "; web-search fallback unavailable). This lookup does not use AI quota. Please retry or open browser search."
+            }
         }
     }
 }
