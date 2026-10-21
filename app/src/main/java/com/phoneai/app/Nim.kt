@@ -279,6 +279,46 @@ class Nim(private val ctx: Context) {
         return ids.filter { it.isNotBlank() }.sorted()
     }
 
+    /**
+     * One bounded, no-fallback live probe used before saving a selected NVIDIA model.
+     * A model appearing in /models is not proof that its chat endpoint is enabled for this key.
+     * Returns an empty string only when a real chat completion returns usable text.
+     */
+    fun testModel(p: Provider, model: String, vision: Boolean): String {
+        if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content",
+                "You are checking whether this chat endpoint works. Reply with only OK."))
+            .put(JSONObject().put("role", "user").put("content", "Reply OK."))
+        val body = JSONObject()
+            .put("model", model)
+            .put("messages", messages)
+            .put("temperature", 0)
+            .put("max_tokens", 128)
+        if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
+            body.put("chat_template_kwargs", JSONObject().put("thinking", false))
+        } else if (p.id == "nvidia" && model.lowercase().contains("nemotron-3.5-super-vl")) {
+            body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+        } else if (p.id == "nvidia" && model.lowercase().contains("nemotron-3.5-lightning")) {
+            body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+        }
+        val response = try {
+            request(p, "POST", p.base + "/chat/completions", body.toString(),
+                Prefs.key(ctx, p.id), readMs0 = 25000)
+        } catch (e: Exception) {
+            return "Connection test failed (${e.javaClass.simpleName}). Check internet and model access."
+        }
+        if (response.code !in 200..299) {
+            val detail = response.body.replace("\\s+".toRegex(), " ").take(120)
+            return "Model test failed: HTTP ${response.code}" + if (detail.isBlank()) "." else " — $detail"
+        }
+        val answer = extract(p, response.body)
+        if (answer.isBlank() || answer == "null") {
+            return "The endpoint returned HTTP ${response.code}, but no readable chat text. Choose another model."
+        }
+        return ""
+    }
+
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
     private fun candidates(p: Provider, vision: Boolean): List<String> {
