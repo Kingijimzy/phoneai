@@ -674,22 +674,59 @@ class SettingsActivity : Activity() {
     }
 
     private fun testAi() {
-        Toast.makeText(this, "Testing...", Toast.LENGTH_SHORT).show()
+        val progressText = text(
+            "Preparing a real request to the selected chat provider…",
+            14f, Theme.TEXT
+        ).apply { setPadding(dp(18), dp(14), dp(18), dp(14)) }
+        var activeNim: Nim? = null
+        val progress = AlertDialog.Builder(this)
+            .setTitle("Testing Orion AI")
+            .setView(progressText)
+            .setNegativeButton("Cancel") { _, _ -> activeNim?.cancel() }
+            .create()
+        progress.setCancelable(false)
+        progress.show()
+
         Thread {
             val sb = StringBuilder()
             for (vision in listOf(false, true)) {
+                if (isFinishing) break
                 val p = Prefs.provider(this, vision)
-                val name = if (vision) "Screen vision" else "Chat"
+                val name = if (vision) "Vision route (text probe only)" else "Chat route"
+                val nim = Nim(this)
+                activeNim = nim
+                nim.onStatus = { stage ->
+                    runOnUiThread {
+                        if (progress.isShowing) progressText.text = "$name\n$stage\n\nThis test waits for the provider response. It can take a while if a model is cold or busy."
+                    }
+                }
+                runOnUiThread {
+                    if (progress.isShowing) progressText.text =
+                        "$name\nSelected provider: ${p.label}\nSelected model: ${Prefs.model(this, p, vision)}\nSending a real test request…"
+                }
                 try {
-                    val m = JSONArray().put(JSONObject().put("role", "user").put("content", "Reply with the single word: ok"))
-                    val r = Nim(this).chat(m, vision, 10, 0.0)
-                    sb.append("$name: works.\n  Model: ${Prefs.model(this, p, vision)}\n  Said: ${r.take(30)}\n\n")
+                    val m = JSONArray().put(
+                        JSONObject().put("role", "user").put(
+                            "content", "Reply with exactly this one word: OK"
+                        )
+                    )
+                    val answer = nim.chat(m, vision, 16, 0.0).trim()
+                    val actual = if (vision) "vision route" else "chat route"
+                    sb.append("$name: RESPONSE RECEIVED.\n")
+                    sb.append("Selected: ${p.label} / ${Prefs.model(this, p, vision)}\n")
+                    sb.append("Returned text: ${answer.take(160).ifBlank { "(empty response)" }}\n")
+                    sb.append("Note: Orion may have switched to a saved backup provider; check AI health for the provider that actually succeeded.\n\n")
                 } catch (e: Exception) {
-                    sb.append("$name: FAILED.\n  ${e.message}\n\n")
+                    sb.append("$name: FAILED.\n")
+                    sb.append("Selected: ${p.label} / ${Prefs.model(this, p, vision)}\n")
+                    sb.append("Reason: ${e.message ?: e.javaClass.simpleName}\n\n")
+                } finally {
+                    nim.onStatus = null
                 }
             }
             runOnUiThread {
-                showInfoDialog("AI test result", sb.toString().trim())
+                if (progress.isShowing) progress.dismiss()
+                showInfoDialog("AI connection test", sb.toString().trim().ifBlank { "Test cancelled before a result was returned." })
                 refresh()
             }
         }.start()
