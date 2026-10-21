@@ -198,6 +198,25 @@ class SettingsActivity : Activity() {
         add(col, sw, 10)
     }
 
+    /** Compact horizontal shortcuts keep the long control room easy to navigate on phones. */
+    private fun quickJump(label: String, target: View, scroll: ScrollView): TextView {
+        return text(label, 10f, Theme.TEXT, true).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = .06f
+            setPadding(dp(14), dp(11), dp(14), dp(11))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xF01B292A.toInt(), 0xF00D1416.toInt())
+            ).apply {
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), 0x66416B63)
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { scroll.post { scroll.smoothScrollTo(0, (target.top - dp(16)).coerceAtLeast(0)) } }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sv = ScrollView(this).apply {
@@ -428,6 +447,34 @@ class SettingsActivity : Activity() {
             ),
             20
         )
+
+        val shortcuts = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        listOf(
+            "AI" to s2,
+            "VOICE" to s3,
+            "MEMORY" to s4,
+            "BROWSER" to browser,
+            "TOOLS" to s6,
+            "INTEGRATIONS" to s7
+        ).forEach { (label, target) ->
+            shortcuts.addView(quickJump(label, target, sv),
+                LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
+        }
+        val shortcutScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            setPadding(0, dp(2), 0, dp(3))
+            addView(shortcuts, ViewGroup.LayoutParams(-2, -2))
+        }
+        col.addView(shortcutScroll, 2, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(10)
+            bottomMargin = dp(2)
+        })
+
         when (intent.getStringExtra("open_section")) {
             "memory" -> memoryDialog()
             "skills" -> skillsDialog()
