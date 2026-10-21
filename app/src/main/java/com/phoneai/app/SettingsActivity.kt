@@ -484,7 +484,6 @@ class SettingsActivity : Activity() {
         val height = (resources.displayMetrics.heightPixels - dp(240)).coerceAtLeast(dp(260)).coerceAtMost(dp(500))
         outer.addView(scroll, LinearLayout.LayoutParams(-1, height))
         val dialog = AlertDialog.Builder(this).setView(outer).setNegativeButton("CLOSE", null).create()
-        personalityDialog = dialog
         dialog.setOnShowListener {
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
             dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
