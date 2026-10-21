@@ -28,6 +28,45 @@ class TaskCenterActivity : Activity() {
     private lateinit var summary: TextView
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun showChoiceSheet(titleText: String, subtitle: String, options: List<String>, onChoose: (Int) -> Unit) {
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+        }
+        body.addView(label("ORION  /  TASK CENTRE", 10f, Theme.CYAN, true))
+        body.addView(label(titleText, 21f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
+        body.addView(label(subtitle, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(10)) })
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var dialogRef: AlertDialog? = null
+        options.forEachIndexed { index, option ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(13), dp(12), dp(13), dp(12))
+                background = GradientDrawable().apply {
+                    setColor(0xFF0A1715.toInt()); cornerRadius = dp(14).toFloat()
+                    setStroke(dp(1), 0xFF203D37.toInt())
+                }
+                isClickable = true; isFocusable = true; contentDescription = option
+            }
+            row.addView(label(option, 14f, Theme.TEXT, true))
+            row.setOnClickListener { dialogRef?.dismiss(); onChoose(index) }
+            rows.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        }
+        val scroll = ScrollView(this).apply { addView(rows, -1, -2) }
+        body.addView(scroll, LinearLayout.LayoutParams(-1,
+            (resources.displayMetrics.heightPixels - dp(300)).coerceAtLeast(dp(180)).coerceAtMost(dp(450))))
+        val dialog = AlertDialog.Builder(this).setView(body).setNegativeButton("CLOSE", null).create()
+        dialogRef = dialog
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+    }
     private fun label(value: String, size: Float, color: Int, bold: Boolean = false) =
         TextView(this).apply {
             text = value
@@ -232,13 +271,15 @@ class TaskCenterActivity : Activity() {
     }
 
     private fun taskMenu(task: OrionTask) {
-        AlertDialog.Builder(this).setTitle("Task #" + task.id)
-            .setItems(arrayOf("Edit title/details", "Change priority", "Cancel task", "Delete permanently")) { _, which ->
+        showChoiceSheet("Task #${task.id}", task.title,
+            listOf("Edit title/details", "Change priority", "Cancel task", "Delete permanently"),
+            { which ->
                 when (which) {
                     0 -> editTask(task)
-                    1 -> AlertDialog.Builder(this).setTitle("Priority").setItems(arrayOf("low", "normal", "high", "urgent")) { _, p ->
-                        if (TaskStore.update(this, task.id, priority = arrayOf("low", "normal", "high", "urgent")[p])) refresh() else errorToast()
-                    }.show()
+                    1 -> showChoiceSheet("Task priority", "Choose urgency for this task.",
+                        listOf("low", "normal", "high", "urgent")) { p ->
+                        if (TaskStore.update(this, task.id, priority = listOf("low", "normal", "high", "urgent")[p])) refresh() else errorToast()
+                    }
                     2 -> confirm(task, "cancelled", "Cancel this task?")
                     3 -> AlertDialog.Builder(this).setTitle("Delete task?")
                         .setMessage("Task #" + task.id + " will be permanently removed from this phone.")
@@ -246,7 +287,7 @@ class TaskCenterActivity : Activity() {
                             if (TaskStore.delete(this, task.id)) refresh() else errorToast()
                         }.show()
                 }
-            }.show()
+            })
     }
 
     private fun addTask() {
