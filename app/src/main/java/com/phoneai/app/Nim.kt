@@ -487,10 +487,11 @@ class Nim(private val ctx: Context) {
         val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
         val quotaSaver = Prefs.quotaSaver(ctx)
-        // One bounded cooldown wait is allowed only if every eligible provider returns 429.
-        // Timeouts, empty responses, invalid models, and ordinary errors never trigger a blind second round.
-        val maxRounds = 2
-        val providerLimit = order.size
+        // Keep a failed request from serially waiting on every saved key. Try the selected
+        // provider and up to three fast-ranked backups, then report the real failure promptly.
+        // When all candidates are rate-limited, return the status instead of sleeping and retrying.
+        val maxRounds = 1
+        val providerLimit = minOf(order.size, 4)
         var round = 0
         while (round < maxRounds) {
             round++
@@ -515,7 +516,7 @@ class Nim(private val ctx: Context) {
                 }
             }
             // Nothing worked. If everything was only busy, wait for the first one to come back.
-            if (!allRateLimited || round >= maxRounds || System.currentTimeMillis() - start > 170000) break
+            if (!allRateLimited || round >= maxRounds || System.currentTimeMillis() - start > 60000) break
             val soonest = order.minOf { cooldown[it.id] ?: 0L }
             val wait = (soonest - System.currentTimeMillis()).coerceIn(2000L, 40000L)
             var left = wait
@@ -526,7 +527,7 @@ class Nim(private val ctx: Context) {
                 left -= 500
             }
         }
-        throw RuntimeException(if (errors.isNotEmpty()) "Every eligible saved provider was tried: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "All saved providers are in cooldown or no saved key supports this request type. Check Settings → AI providers. The local usage counter is informational; actual limits are decided by each provider.")
+        throw RuntimeException(if (errors.isNotEmpty()) "Every provider in the fast fallback set was tried: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "All saved providers are in cooldown or no saved key supports this request type. Check Settings → AI providers. The local usage counter is informational; actual limits are decided by each provider.")
     }
 
     private fun chatOne(
@@ -555,7 +556,7 @@ class Nim(private val ctx: Context) {
         // then take over instead of making the user wait through many model IDs.
         val maxAttempts = if (Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (p.id == "nvidia") 65000L else 45000L
+        val totalTimeoutMs = if (p.id == "nvidia") 50000L else 40000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -589,7 +590,7 @@ class Nim(private val ctx: Context) {
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 60000 else 30000)
+                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 45000 else 30000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
