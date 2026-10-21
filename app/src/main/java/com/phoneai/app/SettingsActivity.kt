@@ -402,14 +402,95 @@ class SettingsActivity : Activity() {
 
     // ------------------------------------------------------------ keys and providers
 
-    /** Pick a service, then paste its key. */
+    /** Pick a service using the same dark, card-based selector language as Orion's main UI. */
     private fun keyDialog() {
-        val labels = Providers.all.map { it.label + if (Prefs.hasKey(this, it.id)) (if (it.noKey) "  (on)" else "  (saved)") else "" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Which service is the key for?")
-            .setItems(labels) { _, which -> pasteKey(Providers.all[which]) }
-            .setNegativeButton("Cancel", null)
-            .show()
+        providerPickerDialog(
+            title = "Add an AI provider",
+            subtitle = "Choose a service. Saved keys stay on this phone.",
+            providers = Providers.all,
+            showKeyState = true
+        ) { pasteKey(it) }
+    }
+
+    private fun providerPickerDialog(
+        title: String,
+        subtitle: String,
+        providers: List<Provider>,
+        showKeyState: Boolean,
+        onPick: (Provider) -> Unit
+    ) {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(10), dp(18), dp(12))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+        }
+        outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.CYAN, true).apply {
+            letterSpacing = .12f
+            setPadding(0, 0, 0, dp(7))
+        })
+        outer.addView(text(title, 22f, Theme.TEXT, true))
+        outer.addView(text(subtitle, 12f, Theme.MUTED).apply {
+            setPadding(0, dp(4), 0, dp(12))
+        })
+        val cards = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        providers.forEach { provider ->
+            val saved = Prefs.hasKey(this, provider.id)
+            val selected = Prefs.provider(this, false).id == provider.id ||
+                Prefs.provider(this, true).id == provider.id
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(11), dp(11), dp(11))
+                background = GradientDrawable().apply {
+                    setColor(if (saved) 0xFF10342B.toInt() else 0xFF0A1715.toInt())
+                    cornerRadius = dp(15).toFloat()
+                    setStroke(dp(1), if (saved) 0xFF167C66.toInt() else 0xFF203D37.toInt())
+                }
+                isClickable = true
+                isFocusable = true
+                contentDescription = provider.label
+            }
+            val icon = text(if (provider.noKey) "⌂" else "✦", 19f, Theme.CYAN, true).apply {
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    setColor(0xFF0A4A3A.toInt()); cornerRadius = dp(11).toFloat()
+                }
+            }
+            card.addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
+            val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            details.addView(text(provider.label, 14f, Theme.TEXT, true))
+            val state = when {
+                provider.noKey && saved -> "LOCAL SERVICE · ENABLED"
+                provider.noKey -> "LOCAL SERVICE · SET UP"
+                saved -> "API KEY SAVED ON THIS PHONE"
+                else -> "API KEY NOT ADDED"
+            }
+            details.addView(text(state, 10f, if (saved) Theme.CYAN else Theme.MUTED, true).apply {
+                setPadding(0, dp(4), 0, 0)
+            })
+            card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            if (selected) card.addView(text("✓", 17f, Theme.CYAN, true).apply {
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(26), dp(30)))
+            card.setOnClickListener { onPick(provider) }
+            cards.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(cards, -1, -2)
+        }
+        val height = (resources.displayMetrics.heightPixels - dp(240)).coerceAtLeast(dp(260)).coerceAtMost(dp(500))
+        outer.addView(scroll, LinearLayout.LayoutParams(-1, height))
+        val dialog = AlertDialog.Builder(this).setView(outer).setNegativeButton("CLOSE", null).create()
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
     private fun pasteKey(p: Provider) {
@@ -448,20 +529,23 @@ class SettingsActivity : Activity() {
     }
 
     private fun providerDialog(vision: Boolean) {
-        val list = Providers.all.filter { !vision || it.hasVision }
-        val labels = list.map { it.label + if (Prefs.hasKey(this, it.id)) "" else "  (no key yet)" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle(if (vision) "Which AI reads the screen?" else "Which AI answers chat?")
-            .setItems(labels) { _, which ->
-                val p = list[which]
-                Prefs.setProvider(this, vision, p.id)
-                if (!Prefs.hasKey(this, p.id)) {
-                    Toast.makeText(this, "Add a " + p.label + " key first.", Toast.LENGTH_LONG).show()
-                }
-                refresh()
+        val providers = Providers.all.filter { !vision || it.hasVision }
+        providerPickerDialog(
+            title = if (vision) "Screen-vision AI" else "Chat AI provider",
+            subtitle = if (vision)
+                "Choose a provider that supports image understanding."
+            else "Choose which service answers Orion's messages.",
+            providers = providers,
+            showKeyState = true
+        ) { provider ->
+            Prefs.setProvider(this, vision, provider.id)
+            if (!Prefs.hasKey(this, provider.id)) {
+                Toast.makeText(this, "Add a " + provider.label + " key first.", Toast.LENGTH_LONG).show()
+                if (!provider.noKey) pasteKey(provider)
+                else localDialog(provider)
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            refresh()
+        }
     }
 
     /** Shows every model the chosen service offers; tap one to use it. */
