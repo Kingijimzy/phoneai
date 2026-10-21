@@ -158,20 +158,53 @@ private fun HomePage(
             Text("Think it through. Say it out loud. Let Orion handle the steps.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
         }
 
-        // Interactive liquid-wave centerpiece: touch and drag change the flow.
-        Box(
-            Modifier.fillMaxWidth().height(268.dp).clip(RoundedCornerShape(30.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF132422), Color(0xFF0B1214), Color(0xFF090E10))))
-                .border(1.dp, Color(0xFF2A4542), RoundedCornerShape(30.dp)),
-            contentAlignment = Alignment.Center
+        // Compact voice waveform replaces the oversized orb: a calmer, assistant-first workspace.
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF14201F), Color(0xFF0D1315))))
+                .border(1.dp, Color(0xFF2B403D), RoundedCornerShape(26.dp))
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            LiquidWaveCore(Modifier.size(218.dp))
-            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 17.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("ORION CORE", color = Copy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
-                Spacer(Modifier.height(4.dp))
-                Text("Touch the wave to interact", color = Muted, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("ORION IS READY", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .4.sp)
+                    Text("Talk, think, or ask for help.", color = Muted, fontSize = 12.sp)
+                }
+                Box(
+                    Modifier.clip(CircleShape).background(Color(0xFF1C302D))
+                        .border(1.dp, Color(0xFF315B51), CircleShape).padding(horizontal = 10.dp, vertical = 7.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(Mint))
+                        Text(status.uppercase().take(18), color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+                    }
+                }
             }
-            Icon(Icons.Rounded.AutoAwesome, null, Modifier.align(Alignment.TopEnd).padding(19.dp).size(17.dp), tint = Mint.copy(alpha = .8f))
+            VoiceWaveform(Modifier.fillMaxWidth().height(66.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Box(
+                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Mint)
+                        .clickable(onClick = onOpenVoice).padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Icon(Icons.Rounded.Mic, null, tint = Ink, modifier = Modifier.size(17.dp))
+                        Text("Start voice", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Box(
+                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Color(0xFF192322))
+                        .border(1.dp, Hairline, RoundedCornerShape(13.dp))
+                        .clickable(onClick = onOpenChat).padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Copy, modifier = Modifier.size(17.dp))
+                        Text("Text chat", color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
         }
 
         Button(
@@ -337,6 +370,36 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
                 Spacer(Modifier.height(3.dp))
                 Text(label, color = if (active) Mint else Muted, fontSize = 10.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
             }
+        }
+    }
+}
+
+@Composable
+private fun VoiceWaveform(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "voice-waveform")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (PI * 2).toFloat(),
+        animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        label = "voice-wave-phase"
+    )
+    Canvas(modifier) {
+        val count = 43
+        val gap = size.width / (count * 1.7f)
+        val barWidth = gap * .7f
+        val centerY = size.height / 2f
+        for (i in 0 until count) {
+            val x = i * gap + gap * .5f
+            val envelope = sin((i.toFloat() / (count - 1) * PI).toFloat()).toFloat()
+            val wave = (sin(phase + i * .47f) * .5f + .5f)
+            val h = (8f + envelope * (12f + wave * 27f)).coerceAtMost(size.height * .92f)
+            drawLine(
+                color = if (i in 19..23) Mint else Mint.copy(alpha = .35f + envelope * .55f),
+                start = Offset(x, centerY - h / 2f),
+                end = Offset(x, centerY + h / 2f),
+                strokeWidth = barWidth,
+                cap = StrokeCap.Round
+            )
         }
     }
 }
