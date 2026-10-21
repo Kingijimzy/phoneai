@@ -38,10 +38,13 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setTextColor(color)
             if (bold) typeface = Typeface.DEFAULT_BOLD
         }
-    private fun panel(fill: Int, radius: Int, stroke: Int = Theme.LINE) = GradientDrawable().apply {
-        setColor(fill)
+    /** Shared liquid-glass surface: a quiet top reflection over deep charcoal, never a neon glow. */
+    private fun panel(fill: Int, radius: Int, stroke: Int = Theme.LINE) = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(fill, 0xE80D1416.toInt())
+    ).apply {
         cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), stroke)
+        setStroke(dp(1), if (stroke == Theme.LINE) 0x663D6963 else stroke)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
