@@ -98,7 +98,6 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
                 touchEnergy = 1f
                 waveOffset += .35f
                 parent?.requestDisallowInterceptTouchEvent(true)
-                performClick()
                 postInvalidateOnAnimation()
                 return true
             }
@@ -114,7 +113,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             }
             android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
-                performClick()
+                if (event.actionMasked == android.view.MotionEvent.ACTION_UP) performClick()
                 return true
             }
         }
