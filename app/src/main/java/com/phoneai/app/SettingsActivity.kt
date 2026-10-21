@@ -42,6 +42,52 @@ class SettingsActivity : Activity() {
     private lateinit var skillBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    /** Orion-styled choice sheet replacing stock Android list dialogs. */
+    private fun showChoiceDialog(title: String, subtitle: String, items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit = {}) {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+        }
+        outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
+        outer.addView(text(title, 21f, Theme.TEXT, true))
+        if (subtitle.isNotBlank()) outer.addView(text(subtitle, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(12)) })
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var sheet: AlertDialog? = null
+        items.forEachIndexed { index, label ->
+            val pieces = label.split(" · ", limit = 2)
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
+                background = GradientDrawable().apply { setColor(0xFF0A1715.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF203D37.toInt()) }
+                isClickable = true; isFocusable = true; contentDescription = label
+            }
+            row.addView(text(pieces[0], 14f, Theme.TEXT, true))
+            if (pieces.size > 1) row.addView(text(pieces[1], 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+            row.setOnClickListener { sheet?.dismiss(); onPick(index) }
+            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        }
+        val scroll = ScrollView(this).apply { overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS; addView(list, -1, -2) }
+        val height = (resources.displayMetrics.heightPixels - dp(270)).coerceAtLeast(dp(180)).coerceAtMost(dp(470))
+        outer.addView(scroll, LinearLayout.LayoutParams(-1, height))
+        val dialog = AlertDialog.Builder(this).setView(outer).setNegativeButton("CLOSE") { _, _ -> onClose() }.create()
+        sheet = dialog
+        dialog.setOnShowListener { dialog.window?.setBackgroundDrawableResource(android.R.color.transparent); dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2) }
+        dialog.show(); dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+    }
+
+    private fun showInfoDialog(title: String, message: String, positive: String = "GOT IT", onPositive: () -> Unit = {}) {
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt())) }
+        body.addView(text("ORION  /  INFORMATION", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
+        body.addView(text(title, 20f, Theme.TEXT, true))
+        val detail = text(message, 13f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)); setTextIsSelectable(true) }
+        val scroll = ScrollView(this).apply { addView(detail); isFillViewport = true }
+        body.addView(scroll, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels - dp(360)).coerceAtLeast(dp(100)).coerceAtMost(dp(360))))
+        val dialog = AlertDialog.Builder(this).setView(body).setPositiveButton(positive) { _, _ -> onPositive() }.setNegativeButton("CLOSE", null).create()
+        dialog.setOnShowListener { dialog.window?.setBackgroundDrawableResource(android.R.color.transparent); dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2) }
+        dialog.show(); dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+    }
 
     private fun text(s: String, size: Float, color: Int, bold: Boolean = false): TextView {
         val t = TextView(this)
