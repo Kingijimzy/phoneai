@@ -99,8 +99,7 @@ class TaskCenterActivity : Activity() {
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080C0E.toInt(), 0xFF071311.toInt(), 0xFF11191A.toInt()))
+            setBackgroundColor(Theme.BG)
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
