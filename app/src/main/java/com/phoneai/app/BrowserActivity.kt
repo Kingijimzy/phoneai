@@ -156,7 +156,16 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                 Toast.makeText(this, "Unable to share this page.", Toast.LENGTH_SHORT).show()
             }
         })
-        root.addView(controls)
+        // Keep browser actions reachable on narrow phones instead of compressing
+        // six controls into one row and making the labels/tap targets collide.
+        val controlsScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            setPadding(0, dp(1), 0, dp(1))
+        }
+        controlsScroll.addView(controls, android.widget.HorizontalScrollView.LayoutParams(-2, -2))
+        root.addView(controlsScroll, LinearLayout.LayoutParams(-1, -2))
 
         val agentPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
