@@ -32,6 +32,7 @@ class Nim(private val ctx: Context) {
             "gemini" -> 9
             "groq", "cerebras", "mistral" -> 24
             "openrouter" -> 14
+            "nvidia" -> 18
             "local" -> 1000
             else -> 18
         }
@@ -87,7 +88,7 @@ class Nim(private val ctx: Context) {
         "image", "imagen", "veo", "live", "transcribe", "translate", "audio", "moderation", "orpheus"
     )
     private val visionKeys = listOf(
-        "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal",
+        "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "nemotron-nano-12b-v2-vl",
         "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
     )
     private val preferred = listOf(
@@ -132,7 +133,11 @@ class Nim(private val ctx: Context) {
             listOf("claude-haiku-5-5", "claude-sonnet-5-5"),
             listOf("claude-sonnet-5-5", "claude-haiku-5-5")
         ),
-        "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>())
+        "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>()),
+        "nvidia" to Pair(
+            listOf("meta/llama-3.3-70b-instruct", "openai/gpt-oss-20b", "nvidia/llama-3.1-nemotron-70b-instruct"),
+            listOf("nvidia/nemotron-nano-12b-v2-vl", "meta/llama-3.2-11b-vision-instruct")
+        )
     )
 
     private class Http(val code: Int, val body: String, val retryAfter: Int = -1)
@@ -152,6 +157,7 @@ class Nim(private val ctx: Context) {
             "gemini" -> 4500L
             "groq", "cerebras", "mistral" -> 2200L
             "openrouter" -> 3000L
+            "nvidia" -> 2500L
             "local" -> 0L
             else -> 800L
         }
@@ -391,7 +397,7 @@ class Nim(private val ctx: Context) {
             // Keep the user's selected provider first; sort only backups by recent use and speed.
             val primary = order.first()
             val rank = listOf(
-                "groq", "cerebras", "gemini", "mistral", "sambanova", "openrouter",
+                "groq", "cerebras", "gemini", "mistral", "sambanova", "openrouter", "nvidia",
                 "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local"
             )
             val nowMs = System.currentTimeMillis()
