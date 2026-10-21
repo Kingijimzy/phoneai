@@ -625,24 +625,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun showAiHealth() {
-        val message = Nim.status(this)
-        val view = TextView(this).apply {
-            text = message
-            textSize = 13f
-            setTextColor(Theme.TEXT)
-            setPadding(dp(18), dp(12), dp(18), dp(12))
-            setTextIsSelectable(true)
-        }
-        val scroll = ScrollView(this).apply {
-            addView(view)
-            isFillViewport = true
-        }
-        AlertDialog.Builder(this)
-            .setTitle("AI health & quota")
-            .setView(scroll)
-            .setPositiveButton("Refresh") { _, _ -> showAiHealth() }
-            .setNegativeButton("Close", null)
-            .show()
+        showInfoDialog("AI health & quota", Nim.status(this), "REFRESH") { showAiHealth() }
     }
 
     private fun testAi() {
@@ -661,11 +644,7 @@ class SettingsActivity : Activity() {
                 }
             }
             runOnUiThread {
-                AlertDialog.Builder(this)
-                    .setTitle("Test result")
-                    .setMessage(sb.toString().trim())
-                    .setPositiveButton("OK", null)
-                    .show()
+                showInfoDialog("AI test result", sb.toString().trim())
                 refresh()
             }
         }.start()
