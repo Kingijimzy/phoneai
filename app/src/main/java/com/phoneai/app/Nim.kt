@@ -494,7 +494,7 @@ class Nim(private val ctx: Context) {
         // provider and up to three fast-ranked backups, then report the real failure promptly.
         // When all candidates are rate-limited, return the status instead of sleeping and retrying.
         val maxRounds = 1
-        val providerLimit = minOf(order.size, 4)
+        val providerLimit = minOf(order.size, if (vision) 4 else 3)
         var round = 0
         while (round < maxRounds) {
             round++
@@ -559,7 +559,7 @@ class Nim(private val ctx: Context) {
         // then take over instead of making the user wait through many model IDs.
         val maxAttempts = if (Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (p.id == "nvidia") 50000L else 40000L
+        val totalTimeoutMs = if (p.id == "nvidia") 40000L else 27000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -593,7 +593,7 @@ class Nim(private val ctx: Context) {
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 45000 else 30000)
+                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
