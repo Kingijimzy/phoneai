@@ -441,6 +441,14 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             maxLines = 5
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             imeOptions = EditorInfo.IME_ACTION_SEND
+            // When the keyboard opens, let the conversation take the available height.
+            // Restore the welcome rail with the New Chat control.
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    welcomePanel?.visibility = View.GONE
+                    promptRail?.visibility = View.GONE
+                }
+            }
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) { sendMessage(); true } else false
             }
@@ -765,13 +773,17 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         // Keep both sides visually distinct and leave a little breathing room at the
         // screen edge. Assistant replies no longer become full-width slabs on phones.
         val screenWidth = resources.displayMetrics.widthPixels
+        // Widths include safe horizontal gutters. The previous 96%-screen assistant
+        // bubble plus its right margin could exceed the parent on narrow phones.
+        val usableWidth = (screenWidth - dp(28)).coerceAtLeast(dp(220))
         val bubbleWidth = when {
             isNote -> -1
-            kind == "me" -> (screenWidth * .82f).toInt()
-            kind == "ai" -> (screenWidth * .96f).toInt()
-            else -> (screenWidth * .91f).toInt()
+            kind == "me" -> (usableWidth * .78f).toInt()
+            kind == "ai" -> (usableWidth * .94f).toInt()
+            else -> (usableWidth * .90f).toInt()
         }
         val params = LinearLayout.LayoutParams(bubbleWidth, -2)
+        params.width = if (isNote) ViewGroup.LayoutParams.MATCH_PARENT else bubbleWidth.coerceAtMost(usableWidth)
         params.gravity = if (kind == "me") Gravity.END else Gravity.START
         params.setMargins(
             if (kind == "me") dp(30) else 0,
