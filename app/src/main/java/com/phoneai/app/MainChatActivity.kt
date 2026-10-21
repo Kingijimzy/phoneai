@@ -70,9 +70,9 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private fun refreshPersonalityLabel(view: TextView) {
         val profile = CharacterProfile.get(Prefs.characterProfile(this))
         view.text = "◈  ${profile.label.substringBefore(" — ").uppercase()}  ▾"
-        view.background = rounded(0xFF172723.toInt(), 12, 0xFF426F67.toInt())
+        view.background = glass(12, 0x443D6963)
         view.setPadding(dp(8), dp(5), dp(8), dp(5))
-        view.setTextColor(0xFF67F5D1.toInt())
+        view.setTextColor(Theme.MUTED)
     }
 
     private fun showPersonalityPicker() {
@@ -90,8 +90,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val dialogRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply { setStroke(dp(1), 0x553D6963); cornerRadius = dp(22).toFloat() }
         }
         val eyebrow = label("ORION PERSONALITY SYSTEM", 10f, 0xFF48DDBB.toInt(), true).apply {
             letterSpacing = .13f
@@ -107,7 +107,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         })
         val currentLabel = label("", 10f, 0xFF65F4D0.toInt(), true).apply {
             setPadding(dp(9), dp(6), dp(9), dp(6))
-            background = rounded(0xFF0B3027.toInt(), 10, 0xFF426F67.toInt())
+            background = glass(10, 0x443D6963)
         }
         currentLabel.text = "ACTIVE MODE  ·  ${CharacterProfile.get(Prefs.characterProfile(this)).label.substringBefore(" — ").uppercase()}"
         dialogRoot.addView(currentLabel, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(10) })
@@ -124,18 +124,18 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             profiles.forEach { profile ->
                 val selected = profile.id == selectedId
                 rowViews[profile.id]?.apply {
-                    background = rounded(if (selected) 0xFF203A34.toInt() else 0xFF11191A.toInt(),
-                        16, if (selected) 0xFF20CFA7.toInt() else 0xFF203D37.toInt())
+                    background = rounded(if (selected) 0xFF20292B.toInt() else 0xFF111719.toInt(),
+                        16, if (selected) 0xFF52716D.toInt() else 0xFF293638.toInt())
                     alpha = if (selected) 1f else .94f
                 }
                 iconViews[profile.id]?.apply {
-                    background = rounded(if (selected) 0xFF254A43.toInt() else 0xFF122722.toInt(), 12,
-                        if (selected) 0xFF20CFA7.toInt() else 0xFF29443D.toInt())
-                    setTextColor(if (selected) 0xFF75FFDB.toInt() else 0xFF9AB8B0.toInt())
+                    background = rounded(if (selected) 0xFF273536.toInt() else 0xFF171F21.toInt(), 12,
+                        if (selected) 0xFF52716D.toInt() else 0xFF293638.toInt())
+                    setTextColor(if (selected) Theme.CYAN else Theme.MUTED)
                 }
                 checkViews[profile.id]?.apply {
                     text = if (selected) "✓" else ""
-                    background = if (selected) rounded(0xFF356E61.toInt(), 20, 0xFF8DE0D1.toInt()) else null
+                    background = if (selected) rounded(0xFF00FCB6.toInt(), 20) else null
                     setTextColor(0xFFE9FFF9.toInt())
                 }
                 nameViews[profile.id]?.setTextColor(if (selected) 0xFFE8FFF8.toInt() else 0xFFD0E1DC.toInt())
