@@ -500,10 +500,17 @@ class SettingsActivity : Activity() {
             setPadding(0, dp(4), 0, dp(12))
         })
         val cards = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val routeIsVision = title == "Screen-vision AI"
+        val routeIsChat = title == "Chat AI provider"
+        var pickerDialog: AlertDialog? = null
         providers.forEach { provider ->
             val saved = Prefs.hasKey(this, provider.id)
-            val selected = Prefs.provider(this, false).id == provider.id ||
-                Prefs.provider(this, true).id == provider.id
+            val selected = when {
+                routeIsVision -> Prefs.provider(this, true).id == provider.id
+                routeIsChat -> Prefs.provider(this, false).id == provider.id
+                else -> Prefs.provider(this, false).id == provider.id ||
+                    Prefs.provider(this, true).id == provider.id
+            }
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -540,10 +547,10 @@ class SettingsActivity : Activity() {
             val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             details.addView(text(provider.label, 14f, Theme.TEXT, true))
             val state = when {
-                provider.noKey && saved -> "LOCAL SERVICE · ENABLED"
-                provider.noKey -> "LOCAL SERVICE · SET UP"
-                saved -> "API KEY SAVED ON THIS PHONE"
-                else -> "API KEY NOT ADDED"
+                provider.noKey && saved -> "LOCAL SERVICE · AVAILABLE"
+                provider.noKey -> "LOCAL SERVICE · NEEDS SETUP"
+                saved -> "KEY SAVED · CONNECTION NOT VERIFIED"
+                else -> "KEY NOT ADDED"
             }
             details.addView(text(state, 10f, if (saved) Theme.CYAN else Theme.MUTED, true).apply {
                 setPadding(0, dp(4), 0, 0)
@@ -552,8 +559,11 @@ class SettingsActivity : Activity() {
             if (selected) card.addView(text("✓", 17f, Theme.CYAN, true).apply {
                 gravity = Gravity.CENTER
             }, LinearLayout.LayoutParams(dp(26), dp(30)))
-            card.setOnClickListener { onPick(provider) }
-            cards.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+            card.setOnClickListener {
+                pickerDialog?.dismiss()
+                onPick(provider)
+            }
+            cards.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = false
@@ -563,6 +573,7 @@ class SettingsActivity : Activity() {
         val height = (resources.displayMetrics.heightPixels - dp(240)).coerceAtLeast(dp(260)).coerceAtMost(dp(500))
         outer.addView(scroll, LinearLayout.LayoutParams(-1, height))
         val dialog = AlertDialog.Builder(this).setView(outer).setNegativeButton("CLOSE", null).create()
+        pickerDialog = dialog
         dialog.setOnShowListener {
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
             dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
@@ -1007,8 +1018,10 @@ class SettingsActivity : Activity() {
             "tech" to "Technical specialist for code, Android and debugging.",
             "muse" to "Imaginative concepts and creative options."
         )
-        val glyphs = mapOf("orion" to "◈", "nova" to "✳", "atlas" to "➤", "lumen" to "✧",
-            "cipher" to "⌘", "tech" to "⌬", "muse" to "✦")
+        val icons = mapOf(
+            "orion" to "spark", "nova" to "voice", "atlas" to "tools",
+            "lumen" to "memory", "cipher" to "shield", "tech" to "settings", "muse" to "network"
+        )
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(10), dp(18), dp(12))
@@ -1037,11 +1050,15 @@ class SettingsActivity : Activity() {
                 isClickable = true; isFocusable = true
                 contentDescription = profile.label + ", " + descriptions[profile.id].orEmpty()
             }
-            card.addView(text(glyphs[profile.id] ?: "◈", 19f, Theme.CYAN, true).apply {
-                gravity = Gravity.CENTER
+            card.addView(OrionIconView(this).apply {
+                icon = icons[profile.id] ?: "spark"
+                tint = if (selected) Theme.CYAN else Theme.MUTED
                 background = GradientDrawable().apply {
-                    setColor(0xFF254A43.toInt()); cornerRadius = dp(11).toFloat()
+                    setColor(if (selected) 0xFF254A43.toInt() else 0xFF172122.toInt())
+                    cornerRadius = dp(11).toFloat()
+                    setStroke(dp(1), if (selected) Theme.CYAN else 0x443D6963)
                 }
+                contentDescription = profile.label
             }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
             val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             details.addView(text(profile.label.substringBefore(" — "), 14f, Theme.TEXT, true))
