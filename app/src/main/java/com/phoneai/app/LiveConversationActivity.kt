@@ -358,6 +358,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onAudioLevel(level: Float) {
+        runOnUiThread { wave.audioLevel = level }
+    }
+
     override fun onStatus(value: String, mode: OrbView.Mode) {
         runOnUiThread {
             lastMode = mode
