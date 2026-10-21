@@ -139,6 +139,7 @@ class Nim(private val ctx: Context) {
             // Current NVIDIA catalog includes DeepSeek V4.1 Flash; older IDs are kept only as fallbacks.
             listOf(
                 "deepseek-ai/deepseek-v4.1-flash",
+                "nvidia/nemotron-3.5-lightning-30b-a3b",
                 "nvidia/nemotron-3-nano-30b-a3b",
                 "openai/gpt-oss-20b",
                 "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -485,7 +486,8 @@ class Nim(private val ctx: Context) {
             if (hasBackup) 4 else 12
         }
         val start = System.currentTimeMillis()
-        while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < 120000) {
+        val totalTimeoutMs = if (p.id == "nvidia") 240000L else 120000L
+        while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
@@ -509,8 +511,8 @@ class Nim(private val ctx: Context) {
                     .toString()
             }
             val r: Http? = try {
-                // Large hosted models can take longer than 12 seconds before returning a first token.
-                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 60000 else 30000)
+                // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
+                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 120000 else 30000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
@@ -522,17 +524,28 @@ class Nim(private val ctx: Context) {
                 )
             }
             if (r == null) {
-                lastNote = "$model -> too slow"
-                if (Prefs.quotaSaver(ctx)) {
-                    // A timeout is not evidence that the model name is invalid. Avoid burning
-                    // the remaining free quota trying several models after a slow response.
-                    throw AiException(p.label + ": request timed out. Retry later or use the one configured backup.")
-                }
-                if (!refilled) {
+                lastNote = "$model -> no response before timeout"
+                // NVIDIA may accept a request but fail to return a first response in time.
+                // Try one alternate catalog model, even in quota-saver mode, then report a
+                // useful timeout diagnostic rather than silently abandoning the provider.
+                if (p.id == "nvidia" && !refilled) {
+                    refilled = true
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    if (backups.isNotEmpty()) {
+                        queue.addAll(0, backups)
+                        onStatus?.invoke("NVIDIA response timed out; trying one alternate model...")
+                        continue
+                    }
+                } else if (!Prefs.quotaSaver(ctx) && !refilled) {
                     refilled = true
                     queue.addAll(candidates(p, vision))
+                    continue
                 }
-                continue
+                throw AiException(
+                    if (p.id == "nvidia")
+                        "NVIDIA timed out waiting for $model. The request was sent, but no response arrived in time. Check NVIDIA model access/status and try again."
+                    else "${p.label}: request timed out. Retry later or use the one configured backup."
+                )
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
