@@ -65,14 +65,16 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private fun showPersonalityPicker() {
         val profiles = CharacterProfile.all
         val current = Prefs.characterProfile(this)
-        val descriptions = listOf(
-            "Calm, sharp, quietly witty — the cinematic co-pilot.",
-            "Warm, attentive, encouraging, and curious.",
-            "Direct, decisive, concise, and action-oriented.",
-            "Patient, thoughtful, and clear at explaining hard ideas."
+        val descriptions = mapOf(
+            "orion" to "Calm, sharp, quietly witty - your cinematic co-pilot.",
+            "nova" to "Warm, attentive, encouraging, and curious.",
+            "atlas" to "Direct, decisive, concise, and action-oriented.",
+            "lumen" to "Patient, thoughtful, and clear at explaining hard ideas.",
+            "cipher" to "Evidence-first analysis, trade-offs, and clear reasoning.",
+            "muse" to "Imaginative ideas, original concepts, and creative options."
         )
-        val choices = profiles.mapIndexed { index, profile ->
-            (if (profile.id == current) "✓  " else "    ") + profile.label + "\\n      " + descriptions[index]
+        val choices = profiles.map { profile ->
+            (if (profile.id == current) "✓  " else "    ") + profile.label + "\n      " + descriptions[profile.id].orEmpty()
         }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Choose Orion's personality")
