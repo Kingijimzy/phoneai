@@ -1,6 +1,7 @@
 package com.phoneai.app
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
+
 import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -24,7 +25,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
  * Orion app entry point. The home and primary navigation now render in Jetpack Compose;
  * existing activities continue to own the agent, browser, settings, and device integrations.
  */
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     private lateinit var content: FrameLayout
     private lateinit var statusLabel: TextView
     private var homeOrb: OrbView? = null
