@@ -687,11 +687,12 @@ class SettingsActivity : Activity() {
 
     private fun routinesDialog() {
         val names = MacroStore.names(this)
-        val b = AlertDialog.Builder(this).setTitle("My routines (" + names.size + ")")
         if (names.isEmpty()) {
-            b.setMessage("No routines yet. Ask Orion to do a task, then say: save this as a routine called <name>.")
-        } else {
-            b.setItems(names.toTypedArray()) { _, which ->
+            showInfoDialog("No routines yet", "Ask Orion to complete a task, then say: save this as a routine called <name>. Saved routines can replay steps without asking the AI each time.")
+            return
+        }
+        showChoiceDialog("My routines (${names.size})", "Choose a routine to remove. To run it, tell Orion: run <name>.", names,
+            { which ->
                 val n = names[which]
                 AlertDialog.Builder(this)
                     .setTitle("Delete \"" + n + "\"?")
@@ -703,31 +704,9 @@ class SettingsActivity : Activity() {
                     }
                     .setNegativeButton("Keep") { _, _ -> routinesDialog() }
                     .show()
-            }
-        }
-        b.setNegativeButton("Close") { _, _ -> refresh() }
-        b.show()
-    }
-
-    private fun skillsDialog() {
-        val skills = SkillRegistry.list(this)
-        val message = if (skills.isEmpty()) {
-            "Create a small, declarative skill by naming its purpose and allowed existing tools. Skills are disabled until you enable them. They cannot download or execute code."
-        } else {
-            "Choose a skill to enable, disable, or remove. Run an enabled skill by saying: run skill <id>: <task>. Each tool call is checked against its allowlist and budget."
-        }
-        val builder = AlertDialog.Builder(this)
-            .setTitle("Skill studio · " + skills.size + " skills")
-            .setMessage(message + "\n\nGenerate a safe starter skill from a reviewed template, then inspect its tools before enabling it.")
-            .setPositiveButton("Create skill") { _, _ -> addSkillDialog() }
-            .setNeutralButton("Skill templates") { _, _ -> skillTemplateDialog() }
-            .setNegativeButton("Close", null)
-        if (skills.isNotEmpty()) {
-            builder.setItems(skills.map { it.id + "  " + if (it.enabled) "ON" else "OFF" }.toTypedArray()) { _, which ->
-                skillOptions(skills[which])
-            }
-        }
-        builder.show()
+            },
+            { refresh() }
+        )
     }
 
     /** Creates reviewed starter skills from existing tools only; every generated skill starts disabled. */
