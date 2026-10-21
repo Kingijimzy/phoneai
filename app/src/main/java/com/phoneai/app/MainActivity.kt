@@ -46,7 +46,7 @@ class MainActivity : Activity() {
     private fun gradientSurface(radius: Int, colors: IntArray): GradientDrawable =
         GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
             cornerRadius = dp(radius).toFloat()
-            setStroke(dp(1), 0xFF018D6D.toInt())
+            setStroke(dp(1), 0xFF3D625B.toInt())
         }
 
     private fun animateEntrance(view: View, delay: Long = 0L) {
@@ -64,7 +64,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(15), dp(13), dp(15), dp(13))
-            background = surface(17, if (primary) 0xFF10211E.toInt() else Theme.PANEL)
+            background = surface(17, if (primary) 0xFF111C1D.toInt() else 0xFF0B1214.toInt())
             isClickable = true
             isFocusable = true
         }
@@ -177,9 +177,9 @@ class MainActivity : Activity() {
                 isClickable = true
                 isFocusable = true
                 background = if (selectedTab == tab) GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(0xFF10372E.toInt(), 0xFF0A211C.toInt())).apply {
+                    intArrayOf(0xFF20322F.toInt(), 0xFF111B1C.toInt())).apply {
                     cornerRadius = dp(17).toFloat()
-                    setStroke(dp(1), 0xFF167C66.toInt())
+                    setStroke(dp(1), 0xFF456A61.toInt())
                 } else GradientDrawable().apply {
                     setColor(0x00000000)
                     cornerRadius = dp(17).toFloat()
@@ -216,7 +216,7 @@ class MainActivity : Activity() {
             isFillViewport = true
             clipToPadding = false
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
+                intArrayOf(0xFF05090B.toInt(), 0xFF080F11.toInt(), 0xFF0A1213.toInt()))
         }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
