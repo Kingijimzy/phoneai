@@ -144,7 +144,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             contentDescription = "End live conversation"
             background = panel(0xFF101B19.toInt(), 22, 0xFF2C504E.toInt())
-            setOnClickListener { finish() }
+            setOnClickListener {
+                PhoneAiService.instance?.endLiveConversation()
+                listeningRequested = false
+                finish()
+            }
         }
         controls.addView(end, LinearLayout.LayoutParams(dp(58), dp(58)).apply { rightMargin = dp(18) })
         micButton = text("●", 24f, 0xFF02110D.toInt(), true).apply {
@@ -172,6 +176,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Return to text chat"
             background = panel(0xFF101B19.toInt(), 22, 0xFF2C504E.toInt())
             setOnClickListener {
+                PhoneAiService.instance?.endLiveConversation()
+                listeningRequested = false
                 startActivity(Intent(this@LiveConversationActivity, MainChatActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
                 finish()
@@ -251,6 +257,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     override fun onDestroy() {
+        if (isFinishing) PhoneAiService.instance?.endLiveConversation()
         attachedService?.detachMainChat(this)
         attachedService = null
         super.onDestroy()
