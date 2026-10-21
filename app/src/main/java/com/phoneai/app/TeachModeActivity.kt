@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -131,13 +132,34 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
                 } else if (service.isTaskRunning()) {
                     status.text = "Orion is already running another task. Stop it or wait for it to finish first."
                 } else {
-                    status.text = "Replaying $name locally — no AI calls. Keep the target app in the foreground."
-                    service.sendFromMainChat("run $name")
+                    AlertDialog.Builder(this@TeachModeActivity)
+                        .setTitle("Replay $name?")
+                        .setMessage("This routine contains $count recorded steps and replays locally without AI calls. Keep the target app open and make sure the screen is in the expected starting state. Recorded taps may submit forms or change data.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Replay routine") { _, _ ->
+                            val currentService = PhoneAiService.instance
+                            if (currentService == null) {
+                                status.text = "Orion Accessibility is no longer connected."
+                            } else if (currentService.isTaskRunning()) {
+                                status.text = "Another task started. Stop it or wait before replaying."
+                            } else {
+                                status.text = "Replaying $name locally — no AI calls."
+                                currentService.sendFromMainChat("run $name")
+                            }
+                        }.show()
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f))
             actions.addView(button("Delete") {
-                if (MacroStore.delete(this@TeachModeActivity, name)) { status.text = "Deleted $name"; refresh() }
-                else status.text = "Could not delete this routine."
+                AlertDialog.Builder(this@TeachModeActivity)
+                    .setTitle("Delete routine?")
+                    .setMessage("Delete '$name' and its $count recorded steps from this phone? This cannot be undone.")
+                    .setNegativeButton("Keep routine", null)
+                    .setPositiveButton("Delete") { _, _ ->
+                        if (MacroStore.delete(this@TeachModeActivity, name)) {
+                            status.text = "Deleted $name"
+                            refresh()
+                        } else status.text = "Could not delete this routine."
+                    }.show()
             }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
             card.addView(actions); list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
         }
