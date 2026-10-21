@@ -129,7 +129,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(0, dp(if (compact) 4 else 8), 0, dp(4))
         }
         hero.addView(stateLabel)
-        helperLabel = text("Tap the microphone and speak naturally.", if (compact) 12f else 13f, Theme.MUTED).apply {
+        helperLabel = text("Tap the mic to talk. Say “Orion, open…” before a phone command.", if (compact) 12f else 13f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
             maxLines = 2
             setLineSpacing(dp(2).toFloat(), 1f)
@@ -392,8 +392,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.WAITING_APPROVAL -> "Your approval needed"
             }
             helperLabel.text = when (mode) {
-                OrbView.Mode.IDLE -> "Tap the microphone to continue the conversation."
-                OrbView.Mode.LISTENING -> "Go ahead — I’m listening to you."
+                OrbView.Mode.IDLE -> "Tap the mic to talk. Say “Orion, open…” before a phone command."
+                OrbView.Mode.LISTENING -> "Speak naturally. Say “Orion” first for phone actions."
                 OrbView.Mode.THINKING -> "Connecting your words to the right response."
                 OrbView.Mode.SPEAKING -> "I'll listen again after this reply. Tap the mic to interrupt."
                 OrbView.Mode.ACTING -> "Orion is carrying out the requested task."
