@@ -855,15 +855,13 @@ class SettingsActivity : Activity() {
     }
 
     private fun avatarDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Pick Orion's look")
-            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)", "Atlas (tactical visor)", "Lumen (luminous guide)")) { _, which ->
+        showChoiceDialog("Pick Orion's look", "Choose the visual identity shown in the assistant panel.",
+            listOf("Orion · Robot head", "Nova · Friendly face", "Atlas · Tactical visor", "Lumen · Luminous guide"),
+            { which ->
                 Prefs.setAvatar(this, which)
                 refresh()
                 Toast.makeText(this, "Saved. Close and reopen the Orion panel to see it.", Toast.LENGTH_LONG).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+            })
     }
 
     private fun characterDialog() {
@@ -970,18 +968,15 @@ class SettingsActivity : Activity() {
                 v.shutdown()
             } else {
                 val labels = ArrayList<String>()
-                labels.add("Automatic (best available)")
+                labels.add("Automatic · Best available")
                 for (x in list) labels.add(describeVoice(x))
-                AlertDialog.Builder(this)
-                    .setTitle("Choose Orion's voice")
-                    .setItems(labels.toTypedArray()) { _, which ->
+                showChoiceDialog("Choose Orion's voice", "Select the speech voice used for spoken replies.", labels,
+                    { which ->
                         Prefs.setVoiceName(this, if (which == 0) "" else list[which - 1].name)
                         v.refreshVoice()
                         v.speak("Hello. This is how I sound.") { runOnUiThread { v.shutdown() } }
-                    }
-                    .setNegativeButton("Cancel") { _, _ -> v.shutdown() }
-                    .setOnCancelListener { v.shutdown() }
-                    .show()
+                    },
+                    { v.shutdown() })
             }
         }, 1000)
     }
