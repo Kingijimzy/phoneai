@@ -685,10 +685,21 @@ class SettingsActivity : Activity() {
                 runOnUiThread {
                     if (list.isEmpty()) {
                         showInfoDialog(
-                            if (p.id == "nvidia") "No NVIDIA models passed the live test" else "No models found",
-                            if (p.id == "nvidia")
-                                "All plausible chat-capable models returned by NVIDIA are listed, not just three probes. Choose one to test it with your saved key before Orion saves it."
-                            else "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}.",
+                            "No models found",
+                            if (p.id == "nvidia") {
+                                "NVIDIA returned no plausible chat models for this mode. Your current model setting has not changed. Try Chat model instead of Vision model, or refresh the API key."
+                            } else {
+                                "No models were returned by ${p.label}."
+                            }
+                        )
+                    } else {
+                        showChoiceDialog(
+                            p.label + (if (vision) " vision model" else " chat model"),
+                            if (p.id == "nvidia") {
+                                "All plausible chat-capable models returned by NVIDIA are listed. Choose one to test it with your saved key before Orion saves it."
+                            } else {
+                                "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}."
+                            },
                             list,
                             { which ->
                                 val selected = list[which]
@@ -706,14 +717,14 @@ class SettingsActivity : Activity() {
                                             } else {
                                                 showInfoDialog(
                                                     "Model test failed",
-                                                    "$selected was not saved, so your current model stays selected.\\n\\n$problem"
+                                                    "$selected was not saved, so your current model stays selected.\n\n$problem"
                                                 )
                                             }
                                         }
                                     }.start()
                                 }
                             }
-                        )                        )
+                        )
                     }
                 }
             } catch (e: Exception) {
