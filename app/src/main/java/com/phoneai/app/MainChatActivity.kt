@@ -227,31 +227,28 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(0xEE121A1D.toInt(), 22, Theme.LINE)
-            elevation = dp(4).toFloat()
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setPadding(dp(2), dp(3), dp(2), dp(5))
         }
         val mark = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = rounded(0xFF141F1D.toInt(), 18, 0xFF426F67.toInt())
+            background = null
             contentDescription = "Orion AI"
         }
         mark.addView(OrionIconView(this).apply {
             icon = "spark"; tint = Theme.CYAN; contentDescription = null
-        }, LinearLayout.LayoutParams(dp(28), dp(28)))
-        header.addView(mark, LinearLayout.LayoutParams(dp(46), dp(46)))
+        }, LinearLayout.LayoutParams(dp(23), dp(23)))
+        header.addView(mark, LinearLayout.LayoutParams(dp(30), dp(34)))
         val titleCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), 0, 0, 0)
         }
-        titleCol.addView(label("ORION", 18f, Theme.TEXT, true))
-        titleCol.addView(label("TACTICAL AI  /  SYSTEMS ONLINE", 9f, Theme.MUTED, true).apply {
-            letterSpacing = .06f
-            setPadding(0, dp(1), 0, dp(3))
+        titleCol.addView(label("Orion", 19f, Theme.TEXT, true))
+        titleCol.addView(label("AI ASSISTANT", 9f, Theme.MUTED, true).apply {
+            letterSpacing = .08f
+            setPadding(0, dp(1), 0, dp(2))
         })
-        status = label("●  READY WHEN YOU ARE", 11f, Theme.CYAN, true).apply {
-            setPadding(dp(9), dp(6), dp(9), dp(6))
-            background = rounded(0xFF182925.toInt(), 12, 0xFF4B897C.toInt())
+        status = label("Ready", 11f, Theme.MUTED, false).apply {
+            setPadding(0, dp(3), 0, dp(1))
             contentDescription = "Orion state: ready"
         }
         titleCol.addView(status)
@@ -308,9 +305,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
         val intro = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(17), dp(15), dp(17), dp(15))
-            background = rounded(0xEE11191C.toInt(), 22, Theme.LINE)
-            elevation = dp(1).toFloat()
+            setPadding(dp(3), dp(3), dp(3), dp(8))
+            background = null
         }
         // The reference uses a single expressive animated centerpiece; keep it compact
         // so the conversation and composer remain the focus on a 720px-wide phone.
@@ -318,19 +314,19 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Animated Orion energy core"
             isFocusable = false
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(142), dp(118)).apply {
+        }, LinearLayout.LayoutParams(dp(104), dp(84)).apply {
             gravity = Gravity.CENTER
             bottomMargin = dp(1)
         })
-        intro.addView(label("ORION CORE  /  ONLINE", 10f, Theme.CYAN, true).apply {
-            letterSpacing = .15f
+        intro.addView(label("ORION", 10f, Theme.MUTED, true).apply {
+            letterSpacing = .18f
             gravity = Gravity.CENTER
         })
-        intro.addView(label("At your command.", 24f, Theme.TEXT, true).apply {
+        intro.addView(label("What can I help with?", 23f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(5), 0, dp(2))
         })
-        intro.addView(label("Voice, vision, browser control and phone automation — one command interface.", 13f, Theme.MUTED).apply {
+        intro.addView(label("Ask anything, share an image, or tell me what you need done.", 13f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
             setLineSpacing(dp(2).toFloat(), 1f)
         })
@@ -339,10 +335,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             setPadding(0, dp(11), 0, 0)
         }
-        introFooter.addView(OrionIconView(this).apply {
-            icon = "shield"; tint = Theme.OK; contentDescription = null
-        }, LinearLayout.LayoutParams(dp(15), dp(15)).apply { rightMargin = dp(6) })
-        introFooter.addView(label("Private by design · actions need your approval", 10f, Theme.MUTED))
+        introFooter.addView(label("Voice · Vision · Phone actions", 10f, Theme.MUTED))
         intro.addView(introFooter)
         root.addView(intro)
         welcomePanel = intro
@@ -374,17 +367,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(8), dp(13), dp(8))
-                background = rounded(Theme.PANEL2, 18, Theme.LINE)
+                background = rounded(0xFF0D1214.toInt(), 16, 0xFF263034.toInt())
                 isClickable = true
                 isFocusable = true
                 contentDescription = "$name prompt"
             }
-            chip.addView(OrionIconView(this).apply {
-                icon = iconName
-                tint = Theme.CYAN
-                contentDescription = null
-            }, LinearLayout.LayoutParams(dp(17), dp(17)).apply { rightMargin = dp(6) })
-            chip.addView(label(name, 12f, Theme.CYAN, true))
+            chip.addView(label(name, 12f, Theme.TEXT, false))
             chip.setOnTouchListener { v, e ->
                 if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.96f).scaleY(.96f).setDuration(70).start()
                 if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
@@ -423,9 +411,9 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(0xF0151E21.toInt(), 24, Theme.LINE)
-            elevation = dp(2).toFloat()
-            setPadding(dp(8), dp(6), dp(7), dp(6))
+            background = rounded(0xFF111719.toInt(), 23, 0xFF344044.toInt())
+            elevation = 0f
+            setPadding(dp(7), dp(5), dp(6), dp(5))
         }
         input = EditText(this).apply {
             hint = "Message Orion…"
@@ -445,7 +433,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val attach = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = rounded(0xFF111A19.toInt(), 21, 0xFF2B3A3D.toInt())
+            background = rounded(0xFF171E21.toInt(), 20, 0xFF303A3E.toInt())
             isClickable = true
             isFocusable = true
             contentDescription = "Attach an image for Orion to analyse"
@@ -468,10 +456,10 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         composer.addView(attach, LinearLayout.LayoutParams(dp(42), dp(44)).apply { rightMargin = dp(6) })
-        send = label("↑", 23f, 0xFF02110D.toInt(), true).apply {
+        send = label("↑", 23f, 0xFF06110F.toInt(), true).apply {
             gravity = Gravity.CENTER
-            background = rounded(0xFF8DE0D1.toInt(), 23, 0xFFB4EEE5.toInt())
-            elevation = dp(2).toFloat()
+            background = rounded(0xFF8DE0D1.toInt(), 23)
+            elevation = 0f
             layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
             contentDescription = "Send message"
             setOnTouchListener { v, e ->
@@ -491,8 +479,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(7), dp(6), dp(7), dp(5))
-            background = rounded(0xEE11191C.toInt(), 23, Theme.LINE)
-            elevation = dp(3).toFloat()
+            background = null
+            elevation = 0f
         }
         fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
             val item = LinearLayout(this).apply {
@@ -502,7 +490,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 isFocusable = true
                 contentDescription = title
                 setPadding(dp(3), dp(3), dp(3), dp(2))
-                background = if (selected) rounded(0xFF203A34.toInt(), 15, 0xFF1B8066.toInt()) else null
+                background = if (selected) rounded(0xFF172124.toInt(), 14, Theme.LINE) else null
             }
             item.addView(OrionIconView(this).apply { icon = iconName; tint = if (selected) Theme.CYAN else Theme.MUTED; contentDescription = null }, LinearLayout.LayoutParams(dp(21), dp(21)))
             item.addView(label(title, 9f, if (selected) Theme.CYAN else Theme.MUTED, selected).apply { gravity = Gravity.CENTER; setPadding(0, dp(3), 0, 0) })
@@ -519,8 +507,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val liveDock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true; isFocusable = true; contentDescription = "Start full-screen live voice call with Orion"; setPadding(dp(4), 0, dp(4), 0) }
         val liveButton = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF8DE0D1.toInt()); setStroke(dp(1), 0xFFB4EEE5.toInt()) }
-            elevation = dp(3).toFloat()
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF8DE0D1.toInt()) }
+            elevation = dp(1).toFloat()
             addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
         }
         liveDock.addView(liveButton, LinearLayout.LayoutParams(dp(48), dp(48)))
@@ -538,7 +526,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             playTogether(pulseX, pulseY)
             interpolator = android.view.animation.AccelerateDecelerateInterpolator()
         }
-        liveDock.addView(label("LIVE", 9f, Theme.CYAN, true).apply { gravity = Gravity.CENTER; letterSpacing = .12f; setPadding(0, dp(2), 0, 0) })
+        liveDock.addView(label("Live", 10f, Theme.MUTED, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(2), 0, 0) })
         liveDock.setOnTouchListener { v, e ->
             if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.94f).scaleY(.94f).setDuration(70).start()
             if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
@@ -548,7 +536,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         dock.addView(liveDock, LinearLayout.LayoutParams(0, dp(61), 1.15f))
         dock.addView(dockItem("Teach", "record") { startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
         dock.addView(dockItem("Tasks", "tasks") { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
-        root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(2) })
+        root.addView(View(this).apply { setBackgroundColor(0xFF20282B.toInt()) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(7) })
+        root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         setContentView(root)
         addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
