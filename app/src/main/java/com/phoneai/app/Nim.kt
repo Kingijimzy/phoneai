@@ -471,8 +471,15 @@ class Nim(private val ctx: Context) {
         p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean
     ): String {
         val key = Prefs.key(ctx, p.id)
-        // Gemini models "think" first and that uses up the token budget, so leave room.
-        val tokens = if (p.id == "gemini") maxOf(maxTokens * 4, 1024) else maxTokens
+        // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
+        // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
+        // budget reasoning and return choices[0].message.content="" (finish_reason=length).
+        // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
+        val tokens = when (p.id) {
+            "gemini" -> maxOf(maxTokens * 4, 1024)
+            "nvidia" -> maxOf(maxTokens, 1024)
+            else -> maxTokens
+        }
         val queue = mutableListOf(Prefs.model(ctx, p, vision))
         val tried = HashSet<String>()
         var refilled = false
@@ -504,12 +511,18 @@ class Nim(private val ctx: Context) {
                 payload = anthropicBody(model, messages, tokens, temperature)
             } else {
                 url = p.base + "/chat/completions"
-                payload = JSONObject()
+                val requestBody = JSONObject()
                     .put("model", model)
                     .put("messages", messages)
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
-                    .toString()
+                if (p.id == "nvidia") {
+                    // NVIDIA documents this field for Nemotron 3.5 Super VL.
+                    // Direct-answer mode avoids empty final content caused by reasoning
+                    // consuming the entire small output budget.
+                    requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+                }
+                payload = requestBody.toString()
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
