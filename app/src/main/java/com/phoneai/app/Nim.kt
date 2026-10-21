@@ -518,8 +518,11 @@ class Nim(private val ctx: Context) {
                     .put("max_tokens", tokens)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     // This template flag is documented for Nemotron 3.5 Super VL only.
-                    // Do not send it to unrelated NVIDIA catalog models, which may reject it.
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+                } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
+                    // NVIDIA's DeepSeek V4 model examples use this flag to disable thinking.
+                    // Keep this separate from Nemotron's enable_thinking option.
+                    requestBody.put("chat_template_kwargs", JSONObject().put("thinking", false))
                 }
                 payload = requestBody.toString()
             }
