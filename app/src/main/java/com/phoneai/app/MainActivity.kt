@@ -247,99 +247,121 @@ class MainActivity : Activity() {
     }
 
     private fun buildHome(page: LinearLayout) {
+        // Editorial home: near-black canvas, restrained mint, clearer hierarchy and fewer noisy cards.
         val brandRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        brandRow.addView(label("ORION", 12f, Theme.CYAN, true))
-        brandRow.addView(label("  /  PERSONAL AI", 10f, Theme.MUTED, true))
-        val livePill = label("  ●  READY  ", 10f, Theme.OK, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(9), dp(6), dp(9), dp(6))
-            background = roundedPill()
+        val brandMark = FrameLayout(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF21453E.toInt(), 0xFF101B1D.toInt())).apply {
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), 0xFF426B63.toInt())
+            }
+            addView(OrionIconView(this@MainActivity).apply {
+                icon = "spark"; tint = Theme.CYAN; contentDescription = null
+            }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
         }
+        brandRow.addView(brandMark, LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(10) })
+        val brandText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brandText.addView(label("ORION", 14f, Theme.TEXT, true).apply { letterSpacing = .12f })
+        brandText.addView(label("PERSONAL INTELLIGENCE", 9f, Theme.MUTED, true).apply { letterSpacing = .08f; setPadding(0, dp(2), 0, 0) })
+        brandRow.addView(brandText)
         brandRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        val livePill = label("●  READY", 9f, Theme.OK, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            background = GradientDrawable().apply {
+                setColor(0xFF101D1B.toInt()); cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), 0xFF294C45.toInt())
+            }
+        }
         brandRow.addView(livePill)
         page.addView(brandRow)
-        page.addView(label("Your personal AI\nco-pilot.", 29f, Theme.TEXT, true).apply {
-            setPadding(0, dp(13), 0, dp(7))
+        page.addView(label("A little more\ncapable. Every day.", 30f, Theme.TEXT, true).apply {
+            setPadding(0, dp(24), 0, dp(8))
             setLineSpacing(dp(1).toFloat(), 1f)
+            letterSpacing = -.035f
         })
-        page.addView(label("Think, research, remember, and work across your phone — with you in control.", 13f, Theme.MUTED))
+        page.addView(label("Your assistant for thinking clearly, getting things done, and staying in control.", 13f, Theme.MUTED).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(0, 0, dp(8), 0)
+        })
+
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(14), dp(14), dp(14), dp(17))
-            background = gradientSurface(27, intArrayOf(0xFF0B3029.toInt(), 0xFF071B18.toInt(), 0xFF0B211D.toInt()))
-            elevation = dp(3).toFloat()
+            setPadding(dp(18), dp(16), dp(18), dp(17))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF111A1C.toInt(), 0xFF080F11.toInt(), 0xFF0B1515.toInt())).apply {
+                cornerRadius = dp(27).toFloat()
+                setStroke(dp(1), 0xFF293D3D.toInt())
+            }
+            elevation = dp(2).toFloat()
         }
         val avatar = OrbView(this).apply {
             contentDescription = "Orion animated energy core. Tap to open chat."
             isClickable = true
             isFocusable = true
             setOnTouchListener { v, e ->
-                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
-                    v.animate().scaleX(.97f).scaleY(.97f).setDuration(90).start()
-                } else if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
-                    v.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
-                }
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.97f).scaleY(.97f).setDuration(90).start()
+                else if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
                 false
             }
             setOnClickListener { showTab("Chat") }
         }
         homeOrb = avatar
-        val heroOrbSize = if (resources.configuration.screenHeightDp < 700) 154 else 176
-        hero.addView(avatar, LinearLayout.LayoutParams(dp(heroOrbSize), dp(heroOrbSize)).apply { gravity = Gravity.CENTER })
-        hero.addView(label("ORION IS HERE", 12f, Theme.CYAN, true).apply { gravity = Gravity.CENTER })
-        hero.addView(label("Ready when you are.", 14f, Theme.TEXT).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(3)) })
-        hero.addView(label("A calm, responsive assistant — with your permission at every important step.", 12f, Theme.MUTED).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(3), dp(8), dp(7))
+        val heroOrbSize = if (resources.configuration.screenHeightDp < 700) 132 else 150
+        hero.addView(avatar, LinearLayout.LayoutParams(dp(heroOrbSize), dp(heroOrbSize)).apply { gravity = Gravity.CENTER; bottomMargin = dp(5) })
+        hero.addView(label("ORION  /  ONLINE", 10f, Theme.CYAN, true).apply { gravity = Gravity.CENTER; letterSpacing = .13f })
+        hero.addView(label("Ready when you are.", 18f, Theme.TEXT, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, dp(4)) })
+        hero.addView(label("Talk naturally, explore an idea, or ask for help with a task.", 12f, Theme.MUTED).apply {
+            gravity = Gravity.CENTER; setLineSpacing(dp(2).toFloat(), 1f)
         })
-        gap(page, hero, 19)
-        animateEntrance(hero, 80)
-        val command = action("Start a conversation", "Chat naturally or give Orion a multi-step task", true) { showTab("Chat") }
-        gap(page, command, 12)
-        animateEntrance(command, 150)
+        gap(page, hero, 20)
+        animateEntrance(hero, 70)
 
-        // Two fast entry points make Orion feel like an assistant you can invoke, not
-        // just a dashboard. Keep these as compact cards that fit narrow Android widths.
-        val quickLaunch = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val live = action("Live voice", "Talk hands-free", true) {
+        val chatAction = action("Start a conversation", "A quiet space to think, ask, and create", true) { showTab("Chat") }
+        gap(page, chatAction, 12)
+        animateEntrance(chatAction, 130)
+
+        val quickHeader = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(23), 0, dp(4)) }
+        quickHeader.addView(label("QUICK ACCESS", 10f, Theme.CYAN, true).apply { letterSpacing = .13f })
+        quickHeader.addView(label("Pick up where you need to be.", 17f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
+        page.addView(quickHeader)
+        val quickLaunch = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val live = action("Live voice", "Speak with Orion") {
             startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java))
         }
-        val browser = action("Orion Browser", "Search and open pages") {
-            startActivity(Intent(this@MainActivity, BrowserActivity::class.java)
-                .putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"))
+        val browser = action("Orion Browser", "Search and browse") {
+            startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"))
         }
-        quickLaunch.addView(live, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(6) })
-        quickLaunch.addView(browser, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
+        quickLaunch.addView(live, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        quickLaunch.addView(browser, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
         gap(page, quickLaunch, 8)
 
-        val quick = section(page, "Your workspace", "Jump back into the parts of Orion you use most")
-        gap(quick, action("Task centre", "Queued work, running status, pauses, and completed tasks", true) {
+        val workspace = section(page, "Your workspace", "Tools and memory, organized in one place")
+        gap(workspace, action("Task centre", "Running tasks, saved sessions, and progress", true) {
             startActivity(Intent(this, TaskCenterActivity::class.java))
         }, 8)
-        gap(quick, action("Memory & routines", "Review what Orion remembers and saved workflows") {
+        gap(workspace, action("Memory & routines", "Saved notes and repeatable workflows") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
         }, 8)
-        gap(quick, action("Skills studio", "Enable, review, and manage agent skills") {
+        gap(workspace, action("Skills studio", "Manage Orion's available capabilities") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
         }, 8)
+
         val statusCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = surface(17, 0xFF0B1A17.toInt())
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+            background = surface(18, 0xFF0B1214.toInt())
         }
-        statusCard.addView(label("SYSTEM STATUS", 10f, Theme.CYAN, true))
-        statusLabel = label("", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) }
+        statusCard.addView(label("SYSTEM STATUS", 10f, Theme.CYAN, true).apply { letterSpacing = .12f })
+        statusLabel = label("", 12f, Theme.MUTED).apply { setPadding(0, dp(7), 0, 0); setLineSpacing(dp(2).toFloat(), 1f) }
         statusCard.addView(statusLabel)
-        gap(page, statusCard, 17)
+        gap(page, statusCard, 18)
         refreshStatus()
-        animateEntrance(statusCard, 230)
+        animateEntrance(statusCard, 200)
     }
 
     private fun roundedPill(): GradientDrawable = GradientDrawable().apply {
