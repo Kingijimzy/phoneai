@@ -262,7 +262,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         controls.addView(textItem, LinearLayout.LayoutParams(dp(82), -2))
         root.addView(controls)
-        root.addView(text("VOICE IS PROCESSED THROUGH YOUR SELECTED ANDROID SPEECH SERVICE", 8f, 0xFF71817F.toInt(), true).apply {
+        root.addView(text("ANDROID SPEECH ENGINE  ·  CHANGE VOICE IN SETTINGS", 8f, 0xFF71817F.toInt(), true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .025f
             setPadding(dp(4), dp(10), dp(4), dp(1))
@@ -390,7 +390,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.IDLE -> "Tap the microphone to continue the conversation."
                 OrbView.Mode.LISTENING -> "Go ahead — I’m listening to you."
                 OrbView.Mode.THINKING -> "Connecting your words to the right response."
-                OrbView.Mode.SPEAKING -> "You can listen, then tap the mic when ready."
+                OrbView.Mode.SPEAKING -> "I'll listen again after this reply. Tap the mic to interrupt."
                 OrbView.Mode.ACTING -> "Orion is carrying out the requested task."
                 OrbView.Mode.WAITING_APPROVAL -> "Please review the action request before proceeding."
             }
