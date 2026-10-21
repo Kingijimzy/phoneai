@@ -88,6 +88,11 @@ object Providers {
             null, true
         ),
         Provider(
+            "xai", "xAI Grok", "https://api.x.ai/v1",
+            "grok-4-fast", "grok-4-fast", "xai-...",
+            "Paid (small free credits sometimes). console.x.ai"
+        ),
+        Provider(
             "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
             "llama3.2:3b", null, "",
             "FREE and unlimited, runs on this phone inside Termux. Slower, text only.",
@@ -159,7 +164,35 @@ object Prefs {
     fun voiceName(c: Context): String = sp(c).getString("voicename", "") ?: ""
     fun setVoiceName(c: Context, v: String) = sp(c).edit().putString("voicename", v).apply()
 
-    /** 0 = Orion (robot), 1 = Nova (friendly face) */
+    // ---- trading
+    fun bybitKey(c: Context): String = sp(c).getString("bybit_key", "") ?: ""
+    fun bybitSecret(c: Context): String = sp(c).getString("bybit_secret", "") ?: ""
+    fun setBybit(c: Context, k: String, s: String) = sp(c).edit().putString("bybit_key", k.trim()).putString("bybit_secret", s.trim()).apply()
+
+    /** Practice money by default. Real money must be switched on on purpose. */
+    fun bybitTestnet(c: Context): Boolean = sp(c).getBoolean("bybit_test", true)
+    fun setBybitTestnet(c: Context, v: Boolean) = sp(c).edit().putBoolean("bybit_test", v).apply()
+
+    fun maxOrderUsd(c: Context): Float = sp(c).getFloat("max_order", 100f)
+    fun setMaxOrderUsd(c: Context, v: Float) = sp(c).edit().putFloat("max_order", v).apply()
+
+    fun maxRiskPct(c: Context): Float = sp(c).getFloat("max_risk", 2f)
+    fun setMaxRiskPct(c: Context, v: Float) = sp(c).edit().putFloat("max_risk", v).apply()
+
+    fun watchlist(c: Context): String = sp(c).getString("watchlist", "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT") ?: ""
+    fun setWatchlist(c: Context, v: String) = sp(c).edit().putString("watchlist", v).apply()
+
+    fun watchOn(c: Context): Boolean = sp(c).getBoolean("watch_on", false)
+    fun setWatchOn(c: Context, v: Boolean) = sp(c).edit().putBoolean("watch_on", v).apply()
+
+    fun watchMinutes(c: Context): Int = sp(c).getInt("watch_min", 10)
+    fun setWatchMinutes(c: Context, v: Int) = sp(c).edit().putInt("watch_min", v.coerceIn(5, 120)).apply()
+
+    /** JSON list of price alerts: [{"symbol":"BTCUSDT","dir":"above","price":70000}] */
+    fun alerts(c: Context): String = sp(c).getString("alerts", "[]") ?: "[]"
+    fun setAlerts(c: Context, v: String) = sp(c).edit().putString("alerts", v).apply()
+
+    /** 0 = Orion (robot), 1 = Nova (friendly face), 2 = Ava (human woman), 3 = Kai (human man) */
     fun avatar(c: Context): Int = sp(c).getInt("avatar", 0)
     fun setAvatar(c: Context, v: Int) = sp(c).edit().putInt("avatar", v).apply()
 }

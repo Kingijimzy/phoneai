@@ -131,6 +131,7 @@ class Tools(private val svc: PhoneAiService) {
             "airplane" -> Settings.ACTION_AIRPLANE_MODE_SETTINGS
             "storage" -> Settings.ACTION_INTERNAL_STORAGE_SETTINGS
             "date" -> Settings.ACTION_DATE_SETTINGS
+            "optimization" -> Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
             "data" -> Settings.ACTION_DATA_ROAMING_SETTINGS
             else -> Settings.ACTION_SETTINGS
         }

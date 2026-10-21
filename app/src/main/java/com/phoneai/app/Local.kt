@@ -14,7 +14,9 @@ class Local(
     private val exec: (String, JSONObject) -> String,
     private val lastSteps: () -> JSONArray,
     private val stopped: () -> Boolean,
-    private val note: (String) -> Unit
+    private val note: (String) -> Unit,
+    private val confirm: (String) -> Boolean,
+    private val ai: (String, String) -> String
 ) {
 
     private fun replay(name: String, steps: JSONArray): String {
@@ -58,6 +60,17 @@ class Local(
         }
         return "Finished $done runs of $name."
     }
+
+    private val SKILL_TOOLS = setOf(
+        "open_app", "click_text", "wait", "type", "key", "open_url", "scroll", "swipe", "tap", "settings", "volume", "flashlight", "web_search"
+    )
+
+    private val SKILL_PROMPT =
+        "Turn the user's request into a replayable phone routine. Reply with ONLY a JSON array of at most 12 steps. " +
+            "Each step is {\"tool\":\"name\",\"args\":{...}}. Allowed tools: open_app{name}, click_text{text}, wait{seconds}, type{text}, " +
+            "key{name: back|home|recents|notifications|quick_settings|enter}, open_url{url}, scroll{direction: up|down}, swipe{x1,y1,x2,y2,ms}, " +
+            "tap{x,y}, settings{page}, volume{action,percent}, flashlight{on}, web_search{query}. " +
+            "Never include passwords, payments or sending messages. Add a wait of 1 to 2 seconds after opening an app or page."
 
     private val fillers = listOf(
         "hey orion", "hi orion", "ok orion", "okay orion", "orion", "please", "can you", "could you",
@@ -162,6 +175,70 @@ class Local(
         val found = (if (runM != null) MacroStore.find(svc, runM.groupValues[4]) else null)
             ?: (if (exactName != null) MacroStore.find(svc, exactName) else null)
         if (found != null) return replay(found.first, found.second)
+
+        // ---- trading (Bybit): balance, prices, analysis, scanning, alerts, orders with confirmation
+        Trading.handle(svc, t, confirm, ai)?.let { return it }
+
+        // ---- network radar
+        if (Regex("^(network|internet|connection)( status| speed| radar| check| test)$").matches(t) ||
+            Regex("^(am i online|network radar|check (my )?(network|internet|connection)|speed test|is my internet working)$").matches(t)
+        ) return Radar.report(svc)
+
+        // ---- battery: let Orion keep working in the background
+        if (Regex("^(battery optimi[sz]ation|unrestricted battery|keep (orion|you) (alive|running))$").matches(t)) {
+            tools.settings("optimization")
+            return "Opened the battery page. Find Orion and choose Don't optimise or Unrestricted."
+        }
+
+        // ---- Orion browser
+        if (Regex("^(open|launch|start) (the )?(orion )?browser$").matches(t)) {
+            svc.openBrowser("https://www.google.com")
+            return "Browser is open."
+        }
+        val urlM = Regex("^(browse|visit|go to|open) ((https?://)?[a-z0-9\\-]+(\\.[a-z0-9\\-]+)+(/\\S*)?)$").find(t)
+        if (urlM != null) {
+            svc.openBrowser(urlM.groupValues[2])
+            return "Opening " + urlM.groupValues[2] + "."
+        }
+        val bsM = Regex("^(search|google|look up) (.+) (in|on) (the )?(orion )?browser$").find(t)
+        if (bsM != null) {
+            svc.openBrowser("https://www.google.com/search?q=" + URLEncoder.encode(bsM.groupValues[2], "UTF-8"))
+            return "Searching for " + bsM.groupValues[2] + "."
+        }
+        if (Regex("^(read|summari[sz]e|what does) (this |the |that )?(web ?page|page|article|website)( say)?$").matches(t)) {
+            val txt = svc.browserText()
+            if (failed(txt)) return "Open the Orion browser first, then ask me to read the page."
+            if (txt.length < 40) return "The page has hardly any text."
+            return try {
+                ai("Summarise this web page in at most four short spoken sentences. No markdown.", txt.take(6000))
+            } catch (e: Exception) {
+                txt.take(400)
+            }
+        }
+
+        // ---- AI-made skills: describe it, Orion builds the routine
+        val skM = Regex("^(learn|create|make|build|teach yourself) (a |the )?(new )?skill (called |named |for )?(.+?)( that | to |: |by )(.+)$").find(t)
+        if (skM != null) {
+            val nm = skM.groupValues[5].trim()
+            val steps = try {
+                val raw = ai(SKILL_PROMPT, skM.groupValues[7].trim())
+                val a = raw.indexOf('[')
+                val b = raw.lastIndexOf(']')
+                val arr = JSONArray(raw.substring(a, b + 1))
+                val ok = JSONArray()
+                for (i in 0 until minOf(arr.length(), 12)) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    if (o.optString("tool") in SKILL_TOOLS) ok.put(o)
+                }
+                ok
+            } catch (e: Exception) {
+                null
+            }
+            if (steps == null || steps.length() == 0) return "I could not turn that into steps. Try describing it more simply, or say teach and show me."
+            val names = (0 until steps.length()).joinToString(", ") { steps.getJSONObject(it).optString("tool") }
+            if (!confirm("Save the skill " + nm + " with " + steps.length() + " steps? " + names)) return "Okay, I did not save it."
+            return if (MacroStore.save(svc, nm, steps)) "Skill saved. Say run $nm any time." else "I couldn't save that skill."
+        }
 
         // ---- help
         if (Regex("^(what can you do|help|help me|what are your commands|commands|what do you do)$").matches(t)) {

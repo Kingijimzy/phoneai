@@ -22,7 +22,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val tools = Tools(svc)
     private val ranSteps = JSONArray()
     private val local = Local(
-        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) }
+        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
+        { q -> ui.ask(q) }, { ins, data -> aiOneShot(ins, data) }
     )
     private val history = JSONArray()
     private val chatHist = JSONArray()
@@ -33,6 +34,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "whatsapp|email|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|" +
             "post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|click)\\b"
     )
+
+    /** One small AI call with its own instruction. Used by trading analysis, page summaries and skill building. */
+    private fun aiOneShot(instruction: String, data: String): String {
+        val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
+        return nim.chat(msgs, false, 450, 0.3).trim()
+    }
 
     private fun chatSystem(): String {
         val n = Prefs.userName(svc)
@@ -200,6 +207,21 @@ Rules:
             return
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
+        // Chart on screen: read it with vision and teach Orion what it sees
+        val lc = command.lowercase()
+        if (Regex("\\bchart\\b").containsMatchIn(lc) && Regex("analy|study|read|look|see|opportunit|trade|setup|learn").containsMatchIn(lc)) {
+            ui.phase("thinking")
+            val r = try {
+                look(
+                    "This is a trading chart. Name the symbol and timeframe if visible, then the trend, the key support and resistance levels, " +
+                        "any trade setup with entry, stop and target, and the main risk. Four short spoken sentences, no markdown."
+                )
+            } catch (e: Exception) {
+                "I could not read the chart. ${e.message}"
+            }
+            ui.say(r)
+            return
+        }
         // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
         if (!actionWords.containsMatchIn(command.lowercase())) {
             ui.phase("thinking")
@@ -259,7 +281,12 @@ Rules:
                 continue
             }
             val tool = step.optString("tool")
-            if (tool.isBlank() || tool == "done") return
+            if (tool.isBlank() || tool == "done") {
+                if (ranSteps.length() >= 3 && !stopped) {
+                    ui.say("That worked. Say save this as a routine, then a name, and I will do it instantly next time.")
+                }
+                return
+            }
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
             val result = try {

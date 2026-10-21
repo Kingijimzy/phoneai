@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var avatarBtn: Button
     private lateinit var routBtn: Button
     private lateinit var topAvatar: AvatarView
+    private lateinit var tradeModeBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
@@ -247,6 +248,40 @@ class MainActivity : Activity() {
             }
         }, 8)
 
+        // ---- 6. trading
+        val s6 = card(
+            col, "6. Trading (Bybit)",
+            "Orion reads your account, finds setups, and places orders only after you confirm. Create the key on Bybit with Read and Trade permissions ONLY, never Withdraw. Practice mode is on until you switch it."
+        )
+        add(s6, button("Save my Bybit key", true) { bybitDialog() }, 10)
+        tradeModeBtn = button("", false) { toggleTradeMode() }
+        add(s6, tradeModeBtn, 8)
+        switchRow(s6, "Market watch (works with the screen off)", Prefs.watchOn(this)) { on ->
+            if (on) {
+                if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7)
+                WatchService.start(this)
+            } else {
+                WatchService.stop(this)
+            }
+        }
+        add(s6, button("Let Orion run in the background (battery)", false) {
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Open Settings > Battery and set Orion to Unrestricted.", Toast.LENGTH_LONG).show()
+            }
+        }, 8)
+        add(
+            s6,
+            text(
+                "Try saying: balance, price of btc, analyse eth, scan the market, buy 50 usdt of eth stop 3200 target 3600, alert me when btc is above 70000, how are my setups doing, trading lesson never chase a pump.",
+                12f, Theme.MUTED
+            ),
+            10
+        )
+
         add(
             col,
             text(
@@ -280,8 +315,9 @@ class MainActivity : Activity() {
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
         routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
+        tradeModeBtn.text = "Trading mode: " + (if (Prefs.bybitTestnet(this)) "PRACTICE" else "REAL MONEY") + "  (tap to change)"
         topAvatar.style = Prefs.avatar(this)
-        avatarBtn.text = "Character: " + (if (Prefs.avatar(this) == 1) "Nova" else "Orion") + "  (tap to change)"
+        avatarBtn.text = "Character: " + listOf("Orion", "Nova", "Ava", "Kai").getOrElse(Prefs.avatar(this)) { "Orion" } + "  (tap to change)"
     }
 
     // ------------------------------------------------------------ keys and providers
@@ -442,10 +478,53 @@ class MainActivity : Activity() {
         b.show()
     }
 
+    private fun bybitDialog() {
+        val k = EditText(this)
+        k.hint = "Bybit API key"
+        k.setSingleLine(true)
+        k.setText(Prefs.bybitKey(this))
+        val sec = EditText(this)
+        sec.hint = "Bybit API secret"
+        sec.setSingleLine(true)
+        sec.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.VERTICAL
+        wrap.setPadding(dp(20), dp(8), dp(20), 0)
+        wrap.addView(k, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        wrap.addView(sec, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        AlertDialog.Builder(this)
+            .setTitle("Bybit API (Read + Trade only)")
+            .setMessage("Never enable Withdraw. Practice keys come from testnet.bybit.com, real keys from bybit.com.")
+            .setView(wrap)
+            .setPositiveButton("Save") { _, _ ->
+                Prefs.setBybit(this, k.text.toString(), sec.text.toString())
+                Toast.makeText(this, "Saved.", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun toggleTradeMode() {
+        if (Prefs.bybitTestnet(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Switch to REAL money?")
+                .setMessage("Orders will use your real Bybit balance. Orion still asks before every order, and your max order and max risk limits still apply.")
+                .setPositiveButton("Use real money") { _, _ ->
+                    Prefs.setBybitTestnet(this, false)
+                    refresh()
+                }
+                .setNegativeButton("Stay in practice", null)
+                .show()
+        } else {
+            Prefs.setBybitTestnet(this, true)
+            refresh()
+        }
+    }
+
     private fun avatarDialog() {
         AlertDialog.Builder(this)
             .setTitle("Pick Orion's look")
-            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)")) { _, which ->
+            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)", "Ava (human woman)", "Kai (human man)")) { _, which ->
                 Prefs.setAvatar(this, which)
                 refresh()
                 Toast.makeText(this, "Saved. Close and reopen the Orion panel to see it.", Toast.LENGTH_LONG).show()

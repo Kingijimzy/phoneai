@@ -913,6 +913,36 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return "opened $url"
     }
 
+    // ---------------------------------------------------------------- Orion browser
+
+    fun openBrowser(url: String): String {
+        return try {
+            val i = Intent(this, BrowserActivity::class.java)
+            i.putExtra("url", url)
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(i)
+            Thread.sleep(1200)
+            "ok"
+        } catch (e: Exception) {
+            "error: ${e.message}"
+        }
+    }
+
+    fun browserText(): String {
+        val b = BrowserActivity.current ?: return "error: the Orion browser is not open"
+        val holder = arrayOfNulls<String>(1)
+        val latch = CountDownLatch(1)
+        main.post {
+            b.pageText { txt ->
+                holder[0] = txt
+                latch.countDown()
+            }
+        }
+        latch.await(5, TimeUnit.SECONDS)
+        val t = holder[0] ?: return "error: could not read the page"
+        return t.replace(Regex("\\s+"), " ").trim()
+    }
+
     // ---------------------------------------------------------------- tools: reading the screen
 
     fun readScreen(): String {
