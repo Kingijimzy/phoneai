@@ -1,0 +1,288 @@
+package com.phoneai.app
+
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Waves
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+data class OrionChatLine(
+    val id: Long,
+    val kind: String,
+    val text: String,
+    val imageUri: Uri? = null
+)
+
+@Composable
+fun OrionComposeChatScreen(
+    lines: List<OrionChatLine>,
+    status: String,
+    commandMode: Boolean,
+    selectedImage: Uri?,
+    onBack: () -> Unit,
+    onModeChange: (Boolean) -> Unit,
+    onSend: (String) -> Unit,
+    onPickImage: () -> Unit,
+    onRemoveImage: () -> Unit,
+    onVoice: () -> Unit,
+    onBrowser: () -> Unit,
+    onTasks: () -> Unit,
+    onStop: () -> Unit
+) {
+    var draft by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    LaunchedEffect(lines.size) {
+        if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
+    }
+    Column(Modifier.fillMaxSize().background(Ink).imePadding()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(Panel).border(1.dp, Hairline, CircleShape)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Rounded.ArrowBack, null, tint = Copy, modifier = Modifier.size(19.dp)) }
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("ORION", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.2.sp)
+                Text("PERSONAL INTELLIGENCE", color = Muted, fontSize = 9.sp, letterSpacing = 1.3.sp)
+            }
+            Row(
+                Modifier.clip(CircleShape).background(Color(0xFF12231F)).border(1.dp, Color(0xFF315B51), CircleShape)
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(5.dp).clip(CircleShape).background(if (status.contains("listen", true) || status.contains("speak", true)) Mint else Muted))
+                Spacer(Modifier.width(6.dp))
+                Text(status.uppercase().take(14), color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().padding(start = 17.dp, end = 17.dp, bottom = 10.dp)
+                .clip(RoundedCornerShape(16.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            ModePill("Talk", !commandMode, Modifier.weight(1f)) { onModeChange(false) }
+            ModePill("Command", commandMode, Modifier.weight(1f)) { onModeChange(true) }
+        }
+
+        if (lines.isEmpty()) {
+            Column(
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    Modifier.size(76.dp).clip(RoundedCornerShape(26.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFF1C4039), Color(0xFF142122))))
+                        .border(1.dp, Color(0xFF37685D), RoundedCornerShape(26.dp)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Rounded.Waves, null, tint = Mint, modifier = Modifier.size(35.dp)) }
+                Spacer(Modifier.height(20.dp))
+                Text("Let's think it through.", color = Copy, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (commandMode) "Tell Orion what you want done. It will ask before sensitive actions." else "Ask anything. Talk naturally—no automatic web search or phone actions.",
+                    color = Muted, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(lines, key = { _, item -> item.id }) { _, item ->
+                    ChatBubble(item)
+                }
+            }
+        }
+
+        AnimatedVisibility(selectedImage != null) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 5.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(PanelRaised).border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.AddPhotoAlternate, null, tint = Mint, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("IMAGE ATTACHED", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("Ready for Orion to analyse", color = Muted, fontSize = 11.sp)
+                }
+                Text("Remove", color = Muted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onRemoveImage).padding(5.dp))
+            }
+        }
+
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp)).background(Panel)
+                    .border(1.dp, Color(0xFF36524E), RoundedCornerShape(25.dp)).padding(start = 15.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
+                    if (draft.isEmpty()) Text(if (commandMode) "Tell Orion what to do…" else "Message Orion…", color = Muted, fontSize = 14.sp)
+                    BasicTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(color = Copy, fontSize = 14.sp, lineHeight = 20.sp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = {
+                            if (draft.isNotBlank() || selectedImage != null) {
+                                onSend(draft.trim()); draft = ""
+                            }
+                        }),
+                        maxLines = 5
+                    )
+                }
+                ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
+                Spacer(Modifier.width(5.dp))
+                ComposerButton(Icons.Rounded.Send, "Send message", {
+                    if (draft.isNotBlank() || selectedImage != null) {
+                        onSend(draft.trim()); draft = ""
+                    }
+                }, secondary = false)
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 7.dp, start = 5.dp, end = 5.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Sensitive actions require confirmation.", color = Muted, fontSize = 10.sp)
+                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Muted,
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(5.dp))
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, bottom = 7.dp, top = 2.dp)
+                .clip(RoundedCornerShape(21.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(21.dp)).padding(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            DockAction("Chat", Icons.Rounded.Send, true, Modifier.weight(1f)) {}
+            DockAction("Browser", Icons.Rounded.Public, false, Modifier.weight(1f), onBrowser)
+            DockAction("Live", Icons.Rounded.GraphicEq, false, Modifier.weight(1.1f), onVoice)
+            DockAction("Tasks", Icons.Rounded.Tune, false, Modifier.weight(1f), onTasks)
+        }
+    }
+}
+
+@Composable
+private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Color(0xFF21433B) else Color.Transparent)
+            .clickable(onClick = onClick).padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = if (selected) Mint else Muted, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun ChatBubble(item: OrionChatLine) {
+    val mine = item.kind == "me"
+    val note = item.kind == "note"
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = if (mine) Alignment.End else Alignment.Start
+    ) {
+        if (!mine && !note) {
+            Text("ORION", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 5.dp, bottom = 3.dp))
+        }
+        Column(
+            Modifier.fillMaxWidth(if (note) 1f else if (mine) .82f else .94f)
+                .clip(RoundedCornerShape(if (mine) 20.dp else 16.dp))
+                .background(when {
+                    note -> Color(0xFF111A1C)
+                    mine -> Color(0xFF1C2C2B)
+                    else -> Panel
+                })
+                .border(1.dp, if (mine) Color(0xFF34524C) else Hairline, RoundedCornerShape(if (mine) 20.dp else 16.dp))
+                .padding(horizontal = 14.dp, vertical = 11.dp)
+        ) {
+            if (note) Text("LIVE ACTIVITY", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text(item.text, color = if (note) Muted else Copy, fontSize = 14.sp, lineHeight = 21.sp)
+            if (item.imageUri != null) {
+                Spacer(Modifier.height(7.dp))
+                Text("Attached image", color = Mint, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, secondary: Boolean) {
+    Box(
+        Modifier.size(43.dp).clip(CircleShape)
+            .background(if (secondary) Color(0xFF1A2B2B) else Mint)
+            .border(1.dp, if (secondary) Hairline else Color(0xFFB6F9E9), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, contentDescription = description, tint = if (secondary) Mint else Ink, modifier = Modifier.size(19.dp)) }
+}
+
+@Composable
+private fun DockAction(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(if (selected) Color(0xFF1B3430) else Color.Transparent)
+            .clickable(onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Icon(icon, null, tint = if (selected) Mint else Muted, modifier = Modifier.size(19.dp))
+        Text(title, color = if (selected) Mint else Muted, fontSize = 9.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+    }
+}
