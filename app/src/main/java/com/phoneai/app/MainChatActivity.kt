@@ -131,7 +131,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 iconViews[profile.id]?.apply {
                     background = rounded(if (selected) 0xFF273536.toInt() else 0xFF171F21.toInt(), 12,
                         if (selected) 0xFF52716D.toInt() else 0xFF293638.toInt())
-                    setTextColor(if (selected) Theme.CYAN else Theme.MUTED)
+                    tint = if (selected) Theme.CYAN else Theme.MUTED
                 }
                 checkViews[profile.id]?.apply {
                     text = if (selected) "✓" else ""
