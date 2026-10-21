@@ -263,6 +263,9 @@ Rules:
 
     fun reset() {
         while (history.length() > 0) history.remove(0)
+        while (chatHist.length() > 0) chatHist.remove(0)
+        while (liveHistory.length() > 0) liveHistory.remove(0)
+        chatCache.clear()
         history.put(msg("system", systemPrompt(svc)))
     }
 
