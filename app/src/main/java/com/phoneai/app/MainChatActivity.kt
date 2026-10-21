@@ -59,40 +59,148 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
     private fun refreshPersonalityLabel(view: TextView) {
         val profile = CharacterProfile.get(Prefs.characterProfile(this))
-        view.text = "◈  ${profile.label.uppercase()}  ▾"
+        view.text = "◈  ${profile.label.substringBefore(" — ").uppercase()}  ▾"
+        view.background = rounded(0xFF09271F.toInt(), 12, 0xFF167C66.toInt())
+        view.setPadding(dp(8), dp(5), dp(8), dp(5))
+        view.setTextColor(0xFF67F5D1.toInt())
     }
 
     private fun showPersonalityPicker() {
         val profiles = CharacterProfile.all
-        val current = Prefs.characterProfile(this)
         val descriptions = mapOf(
-            "orion" to "Calm, sharp, quietly witty - your cinematic co-pilot.",
-            "nova" to "Warm, attentive, encouraging, and curious.",
-            "atlas" to "Direct, decisive, concise, and action-oriented.",
-            "lumen" to "Patient, thoughtful, and clear at explaining hard ideas.",
-            "cipher" to "Evidence-first analysis, trade-offs, and clear reasoning.",
-            "muse" to "Imaginative ideas, original concepts, and creative options."
+            "orion" to "Calm, sharp and quietly witty. A composed everyday co-pilot.",
+            "nova" to "Warm, attentive and encouraging. A thoughtful companion.",
+            "atlas" to "Direct, decisive and practical. Focuses on getting things done.",
+            "lumen" to "Patient and clear. Makes difficult ideas easier to understand.",
+            "cipher" to "Evidence-first analysis, alternatives, uncertainty and trade-offs.",
+            "muse" to "Imaginative concepts, unexpected connections and creative options."
         )
-        val choices = profiles.map { profile ->
-            (if (profile.id == current) "✓  " else "    ") + profile.label + "\n      " + descriptions[profile.id].orEmpty()
-        }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Choose Orion's personality")
-            .setMessage("Change how Orion thinks through and communicates a reply. Your choice is saved on this phone.")
-            .setItems(choices) { _, which ->
-                Prefs.setCharacterProfile(this, profiles[which].id)
-                val currentView = findViewById<TextView>(android.R.id.text1)
-                // Refresh the visible profile label without restarting the conversation.
+        val glyphs = mapOf("orion" to "◈", "nova" to "✳", "atlas" to "➤", "lumen" to "✧", "cipher" to "⌘", "muse" to "✦")
+        val dialogRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(12))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+        }
+        val eyebrow = label("ORION PERSONALITY SYSTEM", 10f, 0xFF48DDBB.toInt(), true).apply {
+            letterSpacing = .13f
+            setPadding(0, dp(4), 0, dp(7))
+        }
+        dialogRoot.addView(eyebrow)
+        dialogRoot.addView(label("Choose your mode", 23f, 0xFFF0FFFA.toInt(), true).apply {
+            setPadding(0, 0, 0, dp(4))
+        })
+        dialogRoot.addView(label("Same Orion. Different way of thinking and communicating.", 12f, 0xFF9AB8B0.toInt()).apply {
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setPadding(0, 0, 0, dp(12))
+        })
+        val currentLabel = label("", 10f, 0xFF65F4D0.toInt(), true).apply {
+            setPadding(dp(9), dp(6), dp(9), dp(6))
+            background = rounded(0xFF0B3027.toInt(), 10, 0xFF167C66.toInt())
+        }
+        currentLabel.text = "ACTIVE MODE  ·  ${CharacterProfile.get(Prefs.characterProfile(this)).label.substringBefore(" — ").uppercase()}"
+        dialogRoot.addView(currentLabel, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(10) })
+
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rowViews = mutableMapOf<String, LinearLayout>()
+        val iconViews = mutableMapOf<String, TextView>()
+        val checkViews = mutableMapOf<String, TextView>()
+        val nameViews = mutableMapOf<String, TextView>()
+        val descViews = mutableMapOf<String, TextView>()
+        var dialog: AlertDialog? = null
+
+        fun paintSelection(selectedId: String) {
+            profiles.forEach { profile ->
+                val selected = profile.id == selectedId
+                rowViews[profile.id]?.apply {
+                    background = rounded(if (selected) 0xFF10392F.toInt() else 0xFF0A1715.toInt(),
+                        16, if (selected) 0xFF20CFA7.toInt() else 0xFF203D37.toInt())
+                    alpha = if (selected) 1f else .94f
+                }
+                iconViews[profile.id]?.apply {
+                    background = rounded(if (selected) 0xFF0A4A3A.toInt() else 0xFF122722.toInt(), 12,
+                        if (selected) 0xFF20CFA7.toInt() else 0xFF29443D.toInt())
+                    setTextColor(if (selected) 0xFF75FFDB.toInt() else 0xFF9AB8B0.toInt())
+                }
+                checkViews[profile.id]?.apply {
+                    text = if (selected) "✓" else ""
+                    background = if (selected) rounded(0xFF08785C.toInt(), 20, 0xFF20EAC2.toInt()) else null
+                    setTextColor(0xFFE9FFF9.toInt())
+                }
+                nameViews[profile.id]?.setTextColor(if (selected) 0xFFE8FFF8.toInt() else 0xFFD0E1DC.toInt())
+                descViews[profile.id]?.setTextColor(if (selected) 0xFFB5E8D9.toInt() else 0xFF88A59C.toInt())
+            }
+        }
+
+        profiles.forEach { profile ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(10), dp(9), dp(10))
+                isClickable = true
+                isFocusable = true
+                contentDescription = "${profile.label}, ${descriptions[profile.id]}"
+            }
+            val icon = label(glyphs[profile.id] ?: "◈", 20f, 0xFF9AB8B0.toInt(), true).apply {
+                gravity = Gravity.CENTER
+            }
+            row.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(11) })
+            val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val name = label(profile.label.substringBefore(" — "), 14f, 0xFFD0E1DC.toInt(), true)
+            val desc = label(descriptions[profile.id].orEmpty(), 11f, 0xFF88A59C.toInt()).apply {
+                setLineSpacing(dp(1).toFloat(), 1f)
+                setPadding(0, dp(3), dp(2), 0)
+            }
+            textCol.addView(name)
+            textCol.addView(desc)
+            row.addView(textCol, LinearLayout.LayoutParams(0, -2, 1f))
+            val check = label("", 14f, 0xFFE9FFF9.toInt(), true).apply {
+                gravity = Gravity.CENTER
+            }
+            row.addView(check, LinearLayout.LayoutParams(dp(28), dp(28)).apply { leftMargin = dp(5) })
+            rowViews[profile.id] = row
+            iconViews[profile.id] = icon
+            checkViews[profile.id] = check
+            nameViews[profile.id] = name
+            descViews[profile.id] = desc
+            row.setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.985f).scaleY(.985f).setDuration(65).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                false
+            }
+            row.setOnClickListener {
+                Prefs.setCharacterProfile(this, profile.id)
+                paintSelection(profile.id)
+                currentLabel.text = "ACTIVE MODE  ·  ${profile.label.substringBefore(" — ").uppercase()}"
                 val root = window.decorView
                 fun update(view: View) {
                     if (view is TextView && view.contentDescription == "Change Orion personality") refreshPersonalityLabel(view)
                     if (view is ViewGroup) for (i in 0 until view.childCount) update(view.getChildAt(i))
                 }
                 update(root)
-                Toast.makeText(this, "Personality set to ${profiles[which].label.substringBefore(" — ")}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Personality set to ${profile.label.substringBefore(" — ")}", Toast.LENGTH_SHORT).show()
+                dialog?.dismiss()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        }
+        dialogRoot.addView(list)
+        dialogRoot.addView(label("PERSONALITY IS SAVED ON THIS PHONE", 9f, 0xFF64877D.toInt(), true).apply {
+            letterSpacing = .08f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(7), 0, dp(2))
+        })
+        paintSelection(Prefs.characterProfile(this))
+        dialog = AlertDialog.Builder(this)
+            .setView(dialogRoot)
+            .setNegativeButton("CLOSE", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
