@@ -192,7 +192,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             clipToPadding = false
             setPadding(0, 0, 0, dp(2))
         }
-        listScroll.addView(list, android.widget.ScrollView.LayoutParams(-1, -2))
+        listScroll.addView(list, -1, -2)
         val availableHeight = (resources.displayMetrics.heightPixels - dp(250)).coerceAtLeast(dp(250))
         dialogRoot.addView(listScroll, LinearLayout.LayoutParams(-1, availableHeight.coerceAtMost(dp(480))))
         dialogRoot.addView(label("PERSONALITY IS SAVED ON THIS PHONE", 9f, 0xFF64877D.toInt(), true).apply {
