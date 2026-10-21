@@ -247,7 +247,7 @@ private fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    context.contentResolver.openInputStream(uri)?.use { it.decodeBounds(bounds) }
+                    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                     val options = BitmapFactory.Options().apply {
                         inSampleSize = when {
                             bounds.outWidth > 2400 || bounds.outHeight > 2400 -> 4
