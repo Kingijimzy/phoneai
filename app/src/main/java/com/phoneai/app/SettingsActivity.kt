@@ -247,9 +247,12 @@ class SettingsActivity : Activity() {
             col, "AI providers & models",
             "13 online services plus a free local AI. Add 3 or more free keys (Groq, Cerebras, Mistral, Gemini, OpenRouter): Orion spreads requests across all of them so none runs out, and switches instantly when one is busy. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
         )
-        add(s2, button("Get a free Gemini key (opens website)", false) {
+        add(s2, button("Get a free Gemini key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
         }, 10)
+        add(s2, button("Get an NVIDIA API key", false) {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://build.nvidia.com/settings")))
+        }, 8)
         add(s2, button("Add or change an API key", true) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
         add(s2, chatBtn, 8)
@@ -473,8 +476,11 @@ class SettingsActivity : Activity() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(10), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply {
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), 0x553D6963)
+            }
         }
         outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.CYAN, true).apply {
             letterSpacing = .12f
@@ -493,20 +499,33 @@ class SettingsActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(11), dp(11), dp(11))
-                background = GradientDrawable().apply {
-                    setColor(if (saved) 0xFF10342B.toInt() else 0xFF11191A.toInt())
+                background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(if (saved || selected) 0xFF20292B.toInt() else 0xE61A2224.toInt(),
+                        if (saved || selected) 0xFF151D1F.toInt() else 0xE80D1416.toInt())).apply {
                     cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), if (saved) 0xFF426F67.toInt() else 0xFF203D37.toInt())
+                    setStroke(dp(1), if (selected) 0xFF52716D.toInt() else 0x443D6963)
                 }
                 isClickable = true
                 isFocusable = true
                 contentDescription = provider.label
             }
-            val icon = text(if (provider.noKey) "⌂" else "✦", 19f, Theme.CYAN, true).apply {
-                gravity = Gravity.CENTER
+            val iconName = when (provider.id) {
+                "gemini", "openai", "nvidia", "openrouter" -> "spark"
+                "local" -> "tools"
+                "anthropic", "deepseek" -> "brain"
+                "groq", "cerebras", "mistral", "sambanova" -> "zap"
+                "together", "fireworks", "huggingface" -> "network"
+                else -> "settings"
+            }
+            val icon = OrionIconView(this).apply {
+                icon = iconName
+                tint = if (saved || selected) Theme.CYAN else Theme.MUTED
                 background = GradientDrawable().apply {
-                    setColor(0xFF254A43.toInt()); cornerRadius = dp(11).toFloat()
+                    setColor(if (saved || selected) 0xFF273536.toInt() else 0xFF171F21.toInt())
+                    cornerRadius = dp(11).toFloat()
+                    setStroke(dp(1), if (selected) 0xFF52716D.toInt() else 0x443D6963)
                 }
+                contentDescription = null
             }
             card.addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
             val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -561,8 +580,11 @@ class SettingsActivity : Activity() {
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply {
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), 0x553D6963)
+            }
             addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.CYAN, true).apply {
                 letterSpacing = .1f; setPadding(0, 0, 0, dp(7))
             })
