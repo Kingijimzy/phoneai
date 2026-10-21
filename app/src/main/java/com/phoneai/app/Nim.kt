@@ -516,10 +516,9 @@ class Nim(private val ctx: Context) {
                     .put("messages", messages)
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
-                if (p.id == "nvidia") {
-                    // NVIDIA documents this field for Nemotron 3.5 Super VL.
-                    // Direct-answer mode avoids empty final content caused by reasoning
-                    // consuming the entire small output budget.
+                if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
+                    // This template flag is documented for Nemotron 3.5 Super VL only.
+                    // Do not send it to unrelated NVIDIA catalog models, which may reject it.
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 }
                 payload = requestBody.toString()
@@ -611,14 +610,19 @@ class Nim(private val ctx: Context) {
             val content = extract(p, r.body)
             if (content.isBlank() || content == "null") {
                 lastNote = "$model -> empty reply"
-                if (Prefs.quotaSaver(ctx)) {
-                    throw AiException(p.label + ": returned an empty response. No repeated model retries were made.")
-                }
+                // A selected catalog model can return HTTP 200 but no usable text.
+                // Allow one bounded alternate-model attempt even in quota-saver mode;
+                // never loop through the entire catalog or retry the same model.
                 if (!refilled) {
                     refilled = true
-                    queue.addAll(candidates(p, vision))
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    queue.addAll(0, backups)
+                    if (backups.isNotEmpty()) {
+                        onStatus?.invoke("${p.label} returned empty content; trying one alternate model...")
+                        continue
+                    }
                 }
-                continue
+                throw AiException(p.label + ": model returned an empty response. Try another model or check that model's NVIDIA API access.")
             }
             Prefs.setModel(ctx, p, vision, model)
             return content
