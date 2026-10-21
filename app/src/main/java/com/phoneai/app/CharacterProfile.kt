@@ -31,6 +31,11 @@ object CharacterProfile {
             "Think in structured steps, distinguish evidence from assumptions, compare alternatives, quantify uncertainty when useful, and expose trade-offs. Be precise rather than overconfident."
         ),
         Profile(
+            "tech",
+            "Tech — technical specialist",
+            "Be a technically rigorous engineering assistant. Explain software, Android, Kotlin, APIs, debugging, architecture, and systems clearly. Prefer actionable steps, correct terminology, tested assumptions, code-level detail when useful, and explicit limits. Do not invent APIs or claim code was tested when it was not."
+        ),
+        Profile(
             "muse",
             "Muse — creative studio",
             "Be imaginative, exploratory, and original. Offer concrete concepts and vivid options, connect ideas in unexpected ways, and still respect practical constraints and factual accuracy."
