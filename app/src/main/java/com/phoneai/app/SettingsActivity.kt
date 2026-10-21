@@ -539,34 +539,52 @@ class SettingsActivity : Activity() {
             localDialog(p)
             return
         }
-        val box = EditText(this)
-        box.hint = p.keyHint
-        box.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        box.setSingleLine(true)
-        val pad = dp(20)
-        val wrap = LinearLayout(this)
-        wrap.setPadding(pad, dp(8), pad, 0)
-        wrap.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        AlertDialog.Builder(this)
-            .setTitle(p.label + " key")
-            .setMessage(p.info + "\n\nLong-press the box and tap Paste.")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
+        val box = EditText(this).apply {
+            hint = p.keyHint
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setSingleLine(true)
+            setTextColor(Theme.TEXT)
+            setHintTextColor(Theme.MUTED)
+            background = rounded(Theme.PANEL2, 12, Theme.LINE)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt()))
+            addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.CYAN, true).apply {
+                letterSpacing = .1f; setPadding(0, 0, 0, dp(7))
+            })
+            addView(text(p.label + " API key", 20f, Theme.TEXT, true))
+            addView(text(p.info + "\n\nPaste the key below. It is saved in app preferences and is not displayed back in plain text.", 12f, Theme.MUTED)
+                .apply { setPadding(0, dp(5), 0, dp(10)) })
+            addView(box)
+        }
+        val dialog = AlertDialog.Builder(this).setView(wrap)
+            .setPositiveButton("SAVE KEY", null).setNegativeButton("CANCEL", null).create()
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val k = box.text.toString().trim()
                 if (k.isEmpty()) {
-                    Toast.makeText(this, "Nothing pasted.", Toast.LENGTH_SHORT).show()
-                } else {
-                    val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
-                    val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
-                    Prefs.setKey(this, p.id, k)
-                    if (chatNeeds) Prefs.setProvider(this, false, p.id)
-                    if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
-                    Toast.makeText(this, p.label + " key saved.", Toast.LENGTH_SHORT).show()
-                    refresh()
+                    box.error = "Paste an API key first"
+                    return@setOnClickListener
                 }
+                val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
+                val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
+                Prefs.setKey(this, p.id, k)
+                if (chatNeeds) Prefs.setProvider(this, false, p.id)
+                if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
+                dialog.dismiss()
+                Toast.makeText(this, p.label + " key saved.", Toast.LENGTH_SHORT).show()
+                refresh()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
     private fun providerDialog(vision: Boolean) {
