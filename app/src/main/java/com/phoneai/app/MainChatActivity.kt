@@ -718,20 +718,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12), dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12))
             background = when {
-                isNote -> rounded(0xFF182925.toInt(), 15, 0xFF4B897C.toInt())
-                kind == "me" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(0xFF0E4035.toInt(), 0xFF1A2B28.toInt())).apply {
-                    cornerRadius = dp(21).toFloat()
-                    setStroke(dp(1), Theme.LINE)
-                }
-                kind == "ai" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(0xFF0D211D.toInt(), 0xFF091613.toInt())).apply {
-                    cornerRadius = dp(20).toFloat()
-                    setStroke(dp(1), 0xFF244B41.toInt())
-                }
-                else -> rounded(0xFF111A19.toInt(), 19, 0xFF2B3A3D.toInt())
+                isNote -> rounded(Theme.PANEL, 13, Theme.LINE)
+                kind == "me" -> rounded(0xFF20272A.toInt(), 19, 0xFF303A3E.toInt())
+                kind == "ai" -> null
+                else -> rounded(Theme.PANEL, 16, Theme.LINE)
             }
-            elevation = if (isNote) 0f else dp(2).toFloat()
+            elevation = 0f
         }
         if (isNote) {
             row.addView(label("LIVE ACTIVITY", 9f, Theme.CYAN, true).apply {
@@ -744,12 +736,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, 0, 0, dp(4))
             }
-            identity.addView(OrionIconView(this).apply {
-                icon = "spark"
-                tint = Theme.CYAN
-                contentDescription = null
-            }, LinearLayout.LayoutParams(dp(13), dp(13)).apply { rightMargin = dp(6) })
-            identity.addView(label("ORION", 10f, Theme.CYAN, true).apply { letterSpacing = .12f })
+            identity.addView(label("Orion", 11f, Theme.MUTED, true))
             row.addView(identity)
         }
         val body = label(text, if (isNote) 12f else 15f, if (isNote) Theme.MUTED else Theme.TEXT).apply {
@@ -765,6 +752,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val bubbleWidth = when {
             isNote -> -1
             kind == "me" -> (screenWidth * .82f).toInt()
+            kind == "ai" -> (screenWidth * .96f).toInt()
             else -> (screenWidth * .91f).toInt()
         }
         val params = LinearLayout.LayoutParams(bubbleWidth, -2)
@@ -791,20 +779,21 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             val changed = lastMode != mode
             lastMode = mode
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
-                OrbView.Mode.IDLE -> Triple("READY", Theme.CYAN, Pair(0xFF063B30.toInt(), 0xFF4B897C.toInt()))
-                OrbView.Mode.LISTENING -> Triple("LISTENING · SPEAK NOW", Theme.OK, Pair(0xFF063B30.toInt(), 0xFF4B897C.toInt()))
-                OrbView.Mode.THINKING -> Triple("THINKING · WORKING IT OUT", Theme.VIOLET, Pair(Theme.PANEL2, Theme.LINE))
-                OrbView.Mode.SPEAKING -> Triple("SPEAKING · ORION IS REPLYING", Theme.CYAN, Pair(0xFF063B30.toInt(), 0xFF4B897C.toInt()))
-                OrbView.Mode.ACTING -> Triple("ACTING · CARRYING OUT TASK", Theme.WARN, Pair(0xFF29251A.toInt(), 0xFF74642F.toInt()))
-                OrbView.Mode.WAITING_APPROVAL -> Triple("APPROVAL NEEDED · YOU DECIDE", Theme.WARN, Pair(0xFF29251A.toInt(), 0xFF9B812F.toInt()))
+                OrbView.Mode.IDLE -> Triple("READY", Theme.MUTED, Pair(Theme.BG, Theme.LINE))
+                OrbView.Mode.LISTENING -> Triple("LISTENING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
+                OrbView.Mode.THINKING -> Triple("THINKING", Theme.MUTED, Pair(Theme.BG, Theme.LINE))
+                OrbView.Mode.SPEAKING -> Triple("SPEAKING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
+                OrbView.Mode.ACTING -> Triple("WORKING", Theme.WARN, Pair(Theme.BG, Theme.LINE))
+                OrbView.Mode.WAITING_APPROVAL -> Triple("NEEDS APPROVAL", Theme.WARN, Pair(Theme.BG, Theme.LINE))
             }
             val short = state.first
             val accent = state.second
             val fill = state.third.first
             val border = state.third.second
-            status.text = "●  " + short
-            status.setTextColor(accent)
-            status.background = rounded(fill, 12, border)
+            status.text = short.lowercase().replaceFirstChar { it.uppercase() }
+            status.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else accent)
+            status.background = null
+            status.setPadding(0, dp(3), 0, dp(1))
             status.contentDescription = "Orion state: " + short
             if (changed) {
                 status.animate().cancel()
