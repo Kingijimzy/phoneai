@@ -28,7 +28,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
     }
     private fun button(s: String, action: () -> Unit) = label(s, 13f, Theme.CYAN, true).apply {
         gravity = Gravity.CENTER; setPadding(dp(13), dp(12), dp(13), dp(12))
-        background = shape(0xFF0D2822.toInt(), 0xFF167C66.toInt())
+        background = shape(0xFF172622.toInt(), 0xFF426F67.toInt())
         isClickable = true; isFocusable = true; setOnClickListener { action() }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,7 +119,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         names.forEach { name ->
             val count = MacroStore.find(this, name)?.second?.length() ?: 0
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12)); background = shape(0xFF0A1513.toInt())
+                orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12)); background = shape(0xFF11191A.toInt())
             }
             card.addView(label(name, 15f, Theme.TEXT, true))
             card.addView(label("$count recorded steps · offline replay", 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(10)) })
