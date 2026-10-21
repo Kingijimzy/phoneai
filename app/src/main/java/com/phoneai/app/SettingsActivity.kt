@@ -484,6 +484,7 @@ class SettingsActivity : Activity() {
         val height = (resources.displayMetrics.heightPixels - dp(240)).coerceAtLeast(dp(260)).coerceAtMost(dp(500))
         outer.addView(scroll, LinearLayout.LayoutParams(-1, height))
         val dialog = AlertDialog.Builder(this).setView(outer).setNegativeButton("CLOSE", null).create()
+        personalityDialog = dialog
         dialog.setOnShowListener {
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
             dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
@@ -822,16 +823,87 @@ class SettingsActivity : Activity() {
 
     private fun characterDialog() {
         val profiles = CharacterProfile.all
-        AlertDialog.Builder(this)
-            .setTitle("Choose Orion's response style")
-            .setMessage("Choose how Orion communicates. This changes response tone and behavior, not the animated energy core or AI provider.")
-            .setItems(profiles.map { it.label }.toTypedArray()) { _, which ->
-                Prefs.setCharacterProfile(this, profiles[which].id)
+        val current = Prefs.characterProfile(this)
+        val descriptions = mapOf(
+            "orion" to "Calm, sharp and quietly witty. Your everyday co-pilot.",
+            "nova" to "Warm, attentive and encouraging.",
+            "atlas" to "Direct, decisive and focused on action.",
+            "lumen" to "Patient explanations without judgment.",
+            "cipher" to "Evidence, alternatives and clear uncertainty.",
+            "tech" to "Technical specialist for code, Android and debugging.",
+            "muse" to "Imaginative concepts and creative options."
+        )
+        val glyphs = mapOf("orion" to "◈", "nova" to "✳", "atlas" to "➤", "lumen" to "✧",
+            "cipher" to "⌘", "tech" to "⌬", "muse" to "✦")
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(10), dp(18), dp(12))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+        }
+        outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.CYAN, true).apply {
+            letterSpacing = .12f; setPadding(0, 0, 0, dp(7))
+        })
+        outer.addView(text("Choose your personality", 22f, Theme.TEXT, true))
+        outer.addView(text("Changes how Orion communicates, not the AI provider.", 12f, Theme.MUTED).apply {
+            setPadding(0, dp(4), 0, dp(12))
+        })
+        val cards = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var personalityDialog: AlertDialog? = null
+        profiles.forEach { profile ->
+            val selected = profile.id == current
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(11), dp(10), dp(10), dp(10))
+                background = GradientDrawable().apply {
+                    setColor(if (selected) 0xFF10392F.toInt() else 0xFF0A1715.toInt())
+                    cornerRadius = dp(15).toFloat()
+                    setStroke(dp(1), if (selected) Theme.CYAN else 0xFF203D37.toInt())
+                }
+                isClickable = true; isFocusable = true
+                contentDescription = profile.label + ", " + descriptions[profile.id].orEmpty()
+            }
+            card.addView(text(glyphs[profile.id] ?: "◈", 19f, Theme.CYAN, true).apply {
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    setColor(0xFF0A4A3A.toInt()); cornerRadius = dp(11).toFloat()
+                }
+            }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
+            val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            details.addView(text(profile.label.substringBefore(" — "), 14f, Theme.TEXT, true))
+            details.addView(text(descriptions[profile.id].orEmpty(), 11f, Theme.MUTED).apply {
+                setPadding(0, dp(3), 0, 0)
+            })
+            card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            if (selected) card.addView(text("✓", 16f, Theme.CYAN, true).apply {
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(24), dp(28)))
+            card.setOnClickListener {
+                Prefs.setCharacterProfile(this, profile.id)
                 refresh()
                 Toast.makeText(this, "Personality saved. New replies will use it.", Toast.LENGTH_SHORT).show()
+                personalityDialog?.dismiss()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            cards.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(cards, -1, -2)
+        }
+        val height = (resources.displayMetrics.heightPixels - dp(240)).coerceAtLeast(dp(260)).coerceAtMost(dp(500))
+        outer.addView(scroll, LinearLayout.LayoutParams(-1, height))
+        outer.addView(text("PERSONALITY SAVED ON THIS PHONE", 9f, Theme.MUTED, true).apply {
+            gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(2))
+        })
+        val dialog = AlertDialog.Builder(this).setView(outer).setNegativeButton("CLOSE", null).create()
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
     private fun describeVoice(x: android.speech.tts.Voice): String {
