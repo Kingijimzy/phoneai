@@ -679,39 +679,41 @@ class SettingsActivity : Activity() {
                     vision -> eligible.sortedBy { if (nim.isVision(it)) 0 else 1 }
                     else -> eligible
                 }
-                // NVIDIA's /models catalogue is not a capability guarantee. Probe only the
-                // three best chat candidates, one request each, so the picker lists models that
-                // actually returned a completion for this saved key without sweeping the catalogue.
-                val list = if (p.id == "nvidia") {
-                    val candidates = ordered.filter { !vision || nim.isVision(it) }.take(3)
-                    runOnUiThread {
-                        Toast.makeText(this, "Testing up to ${candidates.size} NVIDIA models...", Toast.LENGTH_SHORT).show()
-                    }
-                    candidates.filter { id ->
-                        nim.testModel(p, id, vision).isBlank()
-                    }
-                } else ordered
+                // Show the complete plausible chat catalogue. Do not hide working models just
+                // because they were not among a small fixed set of probe requests.
+                val list = if (p.id == "nvidia" && vision) ordered.filter { nim.isVision(it) } else ordered
                 runOnUiThread {
                     if (list.isEmpty()) {
                         showInfoDialog(
                             if (p.id == "nvidia") "No NVIDIA models passed the live test" else "No models found",
                             if (p.id == "nvidia")
-                                "No candidate returned usable chat text in the quick test. Your saved model has not been changed. Check NVIDIA API access and retry later; this test is intentionally limited to three candidates to avoid wasting quota."
-                            else "No chat-capable models were returned by ${p.label}."
-                        )
-                    } else {
-                        showChoiceDialog(
-                            p.label + (if (vision) " vision model" else " chat model"),
-                            if (p.id == "nvidia")
-                                "Live-tested against your saved key. Only models that returned usable output are shown. The quick check uses up to three API requests."
+                                "All plausible chat-capable models returned by NVIDIA are listed, not just three probes. Choose one to test it with your saved key before Orion saves it."
                             else "Choose the model Orion should use for ${if (vision) "image understanding" else "conversation"}.",
                             list,
                             { which ->
                                 val selected = list[which]
-                                Prefs.setModel(this, p, vision, selected)
-                                Toast.makeText(this, "Verified and saved: $selected", Toast.LENGTH_LONG).show()
+                                if (p.id != "nvidia") {
+                                    Prefs.setModel(this, p, vision, selected)
+                                    Toast.makeText(this, "Using $selected. Now tap Test the AI.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(this, "Testing $selected...", Toast.LENGTH_SHORT).show()
+                                    Thread {
+                                        val problem = nim.testModel(p, selected, vision)
+                                        runOnUiThread {
+                                            if (problem.isBlank()) {
+                                                Prefs.setModel(this, p, vision, selected)
+                                                Toast.makeText(this, "Verified and saved: $selected", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                showInfoDialog(
+                                                    "Model test failed",
+                                                    "$selected was not saved, so your current model stays selected.\\n\\n$problem"
+                                                )
+                                            }
+                                        }
+                                    }.start()
+                                }
                             }
-                        )
+                        )                        )
                     }
                 }
             } catch (e: Exception) {
