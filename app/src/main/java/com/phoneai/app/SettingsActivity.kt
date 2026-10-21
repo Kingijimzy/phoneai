@@ -370,8 +370,7 @@ class SettingsActivity : Activity() {
             Thread {
                 val result = McpConnector.listTools(this)
                 runOnUiThread {
-                    AlertDialog.Builder(this).setTitle("MCP tools").setMessage(result)
-                        .setPositiveButton("OK", null).show()
+                    showInfoDialog("MCP tools", result)
                 }
             }.start()
         }, 8)
@@ -380,8 +379,7 @@ class SettingsActivity : Activity() {
             Thread {
                 val result = TelegramBridge.checkUpdates(this)
                 runOnUiThread {
-                    AlertDialog.Builder(this).setTitle("Telegram inbox").setMessage(result)
-                        .setPositiveButton("OK", null).show()
+                    showInfoDialog("Telegram inbox", result)
                 }
             }.start()
         }, 8)
@@ -390,15 +388,12 @@ class SettingsActivity : Activity() {
             Thread {
                 val result = TelegramBridge.status(this)
                 runOnUiThread {
-                    AlertDialog.Builder(this).setTitle("Telegram connection").setMessage(result)
-                        .setPositiveButton("OK", null).show()
+                    showInfoDialog("Telegram connection", result)
                 }
             }.start()
         }, 8)
         add(s7, button("Show integrations and MCP status", false) {
-            AlertDialog.Builder(this).setTitle("Connector status")
-                .setMessage(IntegrationStatus.summary(this))
-                .setPositiveButton("OK", null).show()
+            showInfoDialog("Connector status", IntegrationStatus.summary(this))
         }, 8)
 
         add(
@@ -1099,7 +1094,7 @@ class SettingsActivity : Activity() {
             .setView(wrap)
             .setPositiveButton("Save securely") { _, _ ->
                 val result = TelegramBridge.save(this, token.text.toString(), chat.text.toString())
-                AlertDialog.Builder(this).setMessage(result).setPositiveButton("OK", null).show()
+                showInfoDialog("Telegram setup", result)
             }
             .setNeutralButton("Disconnect") { _, _ ->
                 TelegramBridge.clear(this)
@@ -1131,7 +1126,7 @@ class SettingsActivity : Activity() {
             .setView(wrap)
             .setPositiveButton("Save server") { _, _ ->
                 val result = McpConnector.save(this, endpoint.text.toString(), bearer.text.toString())
-                AlertDialog.Builder(this).setMessage(result).setPositiveButton("OK", null).show()
+                showInfoDialog("MCP setup", result)
             }
             .setNeutralButton("Disconnect") { _, _ ->
                 McpConnector.clear(this)
