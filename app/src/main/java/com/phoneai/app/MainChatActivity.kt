@@ -677,7 +677,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     onBack = { finish() },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { }, onRemoveImage = { }, onVoice = { }, onBrowser = { }, onTasks = { }, onStop = { }
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java)) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onStop = { if (::stop.isInitialized) stop.performClick() }
                 )
             }
         }
@@ -738,6 +738,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     // Some photo providers grant only temporary access; the current selection can still be used.
                 }
                 selectedImageUri = uri
+                composeSelectedImage.value = uri
                 refreshImagePreview(uri)
             }
         }
@@ -793,6 +794,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     private fun addImageBubble(uri: Uri) {
+        if (composeChatActive) { composeLines.add(OrionChatLine(System.nanoTime(), "me", "", uri)); return }
         val image = ImageView(this).apply {
             setImageBitmap(decodeThumbnail(uri, dp(280)))
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -845,6 +847,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     private fun addMessage(kind: String, text: String) {
+        if (composeChatActive) { composeLines.add(OrionChatLine(System.nanoTime(), kind, text)); return }
         if (kind == "me") {
             listOf(welcomePanel, promptRail).forEach { view ->
                 view?.let { panel ->
@@ -937,6 +940,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             val fill = state.third.first
             val border = state.third.second
             status.text = short.lowercase().replaceFirstChar { it.uppercase() }
+            composeStatus.value = short
             status.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else accent)
             status.background = null
             status.setPadding(0, dp(3), 0, dp(1))
