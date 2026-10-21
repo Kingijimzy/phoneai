@@ -1759,6 +1759,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val sigF = tSig
                 val points = ArrayList(teachPathPoints)
                 if (points.isEmpty() || points.last() != Pair(x2, y2)) points.add(Pair(x2, y2))
+                // Lock the recorder immediately after touch-up. Previously the overlay stayed
+                // touchable until the worker reached teachReplay, so a quick next tap could
+                // overwrite the shared coordinates/path and silently drop a step.
+                setTeachTouchable(false)
                 teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF, points) }
             }
         }
@@ -1818,13 +1822,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 "args", JSONObject().put("points", pointArray).put("ms", ms)
             )
         }
-        setTeachTouchable(false)
         val r = try {
             gesture(path, ms)
         } catch (e: Exception) {
-            "error"
+            "error: ${e.javaClass.simpleName}"
+        } finally {
+            // Always unlock recording, even if the synthetic touch fails.
+            setTeachTouchable(true)
         }
-        setTeachTouchable(true)
         if (r == "ok") {
             step.put("gap", (wall - teachLastEnd).coerceIn(0L, 120000L))
             if (sig != null) {
@@ -1834,6 +1839,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
             val count = synchronized(teachSteps) { teachSteps.put(step); teachSteps.length() }
             main.post { teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE" }
+        } else {
+            main.post {
+                Toast.makeText(this, "A recorded touch could not be replayed, so that step was not saved. Please repeat it.", Toast.LENGTH_LONG).show()
+            }
         }
         teachLastEnd = System.currentTimeMillis()
     }
