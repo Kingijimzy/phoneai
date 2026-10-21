@@ -715,10 +715,18 @@ class SettingsActivity : Activity() {
                                                 Prefs.setModel(this, p, vision, selected)
                                                 Toast.makeText(this, "Verified and saved: $selected", Toast.LENGTH_LONG).show()
                                             } else {
-                                                showInfoDialog(
-                                                    "Model test failed",
-                                                    "$selected was not saved, so your current model stays selected.\n\n$problem"
-                                                )
+                                                AlertDialog.Builder(this)
+                                                    .setTitle("Model test did not confirm access")
+                                                    .setMessage("$selected did not pass the quick test. This can be a temporary endpoint issue or a model-specific response format. Your current model is still selected.")
+                                                    .setNegativeButton("KEEP CURRENT", null)
+                                                    .setNeutralButton("VIEW ERROR") { _, _ ->
+                                                        showInfoDialog("NVIDIA model test", "$selected\\n\\n$problem")
+                                                    }
+                                                    .setPositiveButton("USE ANYWAY") { _, _ ->
+                                                        Prefs.setModel(this, p, vision, selected)
+                                                        Toast.makeText(this, "Selected $selected. Test it in chat now.", Toast.LENGTH_LONG).show()
+                                                    }
+                                                    .show()
                                             }
                                         }
                                     }.start()
