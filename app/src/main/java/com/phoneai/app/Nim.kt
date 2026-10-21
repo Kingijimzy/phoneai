@@ -92,6 +92,7 @@ class Nim(private val ctx: Context) {
         "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
     )
     private val preferred = listOf(
+        "deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1-flash",
         "llama-3.3-nemotron", "llama-3.3-70b", "llama-3.1-nemotron", "llama-3.1-70b",
         "llama-4", "qwen", "mistral-large", "mixtral", "llama-3.1-8b", "gemma", "mistral", "phi"
     )
@@ -135,9 +136,9 @@ class Nim(private val ctx: Context) {
         ),
         "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>()),
         "nvidia" to Pair(
-            // NVIDIA retires catalog endpoints periodically. Prefer currently published Nemotron/GPT-OSS IDs;
-            // model-list discovery is used when quota-saver mode is off.
+            // Current NVIDIA catalog includes DeepSeek V4.1 Flash; older IDs are kept only as fallbacks.
             listOf(
+                "deepseek-ai/deepseek-v4.1-flash",
                 "nvidia/nemotron-3-nano-30b-a3b",
                 "openai/gpt-oss-20b",
                 "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -508,7 +509,8 @@ class Nim(private val ctx: Context) {
                     .toString()
             }
             val r: Http? = try {
-                request(p, "POST", url, payload, key, readMs0 = 12000)
+                // Large hosted models can take longer than 12 seconds before returning a first token.
+                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 60000 else 30000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
