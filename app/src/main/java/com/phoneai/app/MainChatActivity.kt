@@ -55,6 +55,11 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private val composeCommandMode = mutableStateOf(false)
     private val composeSelectedImage = mutableStateOf<Uri?>(null)
     private var composeChatActive = false
+    private val composeLines = mutableStateListOf<OrionChatLine>()
+    private val composeStatus = mutableStateOf("READY")
+    private val composeCommandMode = mutableStateOf(false)
+    private val composeSelectedImage = mutableStateOf<Uri?>(null)
+    private var composeChatActive = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -660,7 +665,23 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(View(this).apply { setBackground(GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x002C504E, 0x884B8279.toInt(), 0x002C504E))) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(7) })
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
-        setContentView(root)
+        composeChatActive = true
+        val composeRoot = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                OrionComposeChatScreen(
+                    lines = composeLines,
+                    status = composeStatus.value,
+                    commandMode = composeCommandMode.value,
+                    selectedImage = composeSelectedImage.value,
+                    onBack = { finish() },
+                    onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
+                    onSend = { message -> input.setText(message); sendMessage() },
+                    onPickImage = { }, onRemoveImage = { }, onVoice = { }, onBrowser = { }, onTasks = { }, onStop = { }
+                )
+            }
+        }
+        setContentView(composeRoot)
         addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
     }
 
