@@ -267,7 +267,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         titleCol.addView(personality)
         refreshPersonalityLabel(personality)
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        stop = label("■", 13f, 0xFF15EAD3.toInt(), true).apply {
+        stop = label("■", 13f, Theme.CYAN, true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
             background = rounded(0xFF141F1D.toInt(), 14, 0xFF4B897C.toInt())
@@ -667,7 +667,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             scaleType = ImageView.ScaleType.CENTER_CROP
             adjustViewBounds = true
             maxHeight = dp(230)
-            background = rounded(0xFF111A19.toInt(), 16, 0xFF016856.toInt())
+            background = rounded(Theme.PANEL, 16, Theme.LINE)
             clipToOutline = true
             contentDescription = "Image sent to Orion"
         }
@@ -733,7 +733,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 kind == "me" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
                     intArrayOf(0xFF0E4035.toInt(), 0xFF1A2B28.toInt())).apply {
                     cornerRadius = dp(21).toFloat()
-                    setStroke(dp(1), 0xFF016856.toInt())
+                    setStroke(dp(1), Theme.LINE)
                 }
                 kind == "ai" -> GradientDrawable(GradientDrawable.Orientation.TL_BR,
                     intArrayOf(0xFF0D211D.toInt(), 0xFF091613.toInt())).apply {
@@ -804,7 +804,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
                 OrbView.Mode.IDLE -> Triple("READY", Theme.CYAN, Pair(0xFF063B30.toInt(), 0xFF4B897C.toInt()))
                 OrbView.Mode.LISTENING -> Triple("LISTENING · SPEAK NOW", Theme.OK, Pair(0xFF063B30.toInt(), 0xFF4B897C.toInt()))
-                OrbView.Mode.THINKING -> Triple("THINKING · WORKING IT OUT", Theme.VIOLET, Pair(0xFF1A2B28.toInt(), 0xFF016856.toInt()))
+                OrbView.Mode.THINKING -> Triple("THINKING · WORKING IT OUT", Theme.VIOLET, Pair(Theme.PANEL2, Theme.LINE))
                 OrbView.Mode.SPEAKING -> Triple("SPEAKING · ORION IS REPLYING", Theme.CYAN, Pair(0xFF063B30.toInt(), 0xFF4B897C.toInt()))
                 OrbView.Mode.ACTING -> Triple("ACTING · CARRYING OUT TASK", Theme.WARN, Pair(0xFF29251A.toInt(), 0xFF74642F.toInt()))
                 OrbView.Mode.WAITING_APPROVAL -> Triple("APPROVAL NEEDED · YOU DECIDE", Theme.WARN, Pair(0xFF29251A.toInt(), 0xFF9B812F.toInt()))
