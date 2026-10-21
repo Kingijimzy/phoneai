@@ -11,6 +11,9 @@ import kotlin.math.sin
 class VoiceWaveView(context: Context) : View(context) {
     var mode: OrbView.Mode = OrbView.Mode.IDLE
         set(value) { field = value; invalidate() }
+    /** Real microphone level from Android speech recognition (0..1). */
+    var audioLevel: Float = 0f
+        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var frame = 0
     private val cyan = 0xFF00FCB6.toInt()
@@ -32,7 +35,8 @@ class VoiceWaveView(context: Context) : View(context) {
             else -> 0.08
         }
         val energy = when (mode) {
-            OrbView.Mode.LISTENING, OrbView.Mode.SPEAKING -> 1.0
+            OrbView.Mode.LISTENING -> if (audioLevel > 0.02f) 0.24 + audioLevel * 0.76 else 0.42
+            OrbView.Mode.SPEAKING -> 1.0
             OrbView.Mode.THINKING, OrbView.Mode.ACTING -> 0.62
             else -> 0.32
         }
