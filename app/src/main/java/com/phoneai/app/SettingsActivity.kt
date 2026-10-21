@@ -107,6 +107,10 @@ class SettingsActivity : Activity() {
         b.text = label
         b.isAllCaps = false
         b.textSize = 14f
+        b.maxLines = 2
+        b.ellipsize = android.text.TextUtils.TruncateAt.END
+        b.minWidth = 0
+        b.setPadding(dp(8), dp(8), dp(8), dp(8))
         b.setTextColor(if (primary) Theme.ON_ACCENT else Theme.TEXT)
         val g = if (primary) {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -149,10 +153,15 @@ class SettingsActivity : Activity() {
             tint = Theme.MUTED
             contentDescription = null
         }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { rightMargin = dp(9) })
-        heading.addView(text(title, 16f, Theme.TEXT, true))
+        heading.addView(text(title, 16f, Theme.TEXT, true).apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         c.addView(heading)
         if (note != null) {
-            val n = text(note, 13f, Theme.MUTED)
+            val n = text(note, 13f, Theme.MUTED).apply {
+                setLineSpacing(dp(2).toFloat(), 1f)
+            }
             n.setPadding(dp(31), dp(4), 0, 0)
             c.addView(n)
         }
