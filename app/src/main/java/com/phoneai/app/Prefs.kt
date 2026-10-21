@@ -127,14 +127,25 @@ object Prefs {
     fun model(c: Context, p: Provider, vision: Boolean): String {
         val def = if (vision) (p.visionModel ?: p.textModel) else p.textModel
         val saved = sp(c).getString((if (vision) "vm_" else "tm_") + p.id, null)
-        // Migrate NVIDIA selections known to have been retired from the public catalog.
-        // Without this, an existing preference would override the corrected default forever.
-        if (p.id == "nvidia" && saved in setOf(
+        // Migrate stale NVIDIA preferences. Model pickers can persist embedding,
+        // retrieval, or vision-only catalog entries as chat models; those cannot answer chat.
+        // Always restore the intended DeepSeek chat default for those incompatible selections.
+        if (p.id == "nvidia" && saved != null) {
+            val id = saved.lowercase()
+            val retired = saved in setOf(
                 "meta/llama-3.3-70b-instruct",
                 "nvidia/nemotron-3-nano-30b-a3b",
                 "openai/gpt-oss-20b",
                 "nvidia/llama-3.1-nemotron-70b-instruct"
-            )) return def
+            )
+            val incompatibleChat = !vision && listOf(
+                "embed", "retriever", "rerank", "vlm", "vision", "-vl", "llava", "paligemma"
+            ).any { id.contains(it) }
+            if (retired || incompatibleChat) {
+                sp(c).edit().putString((if (vision) "vm_" else "tm_") + p.id, def).apply()
+                return def
+            }
+        }
         return saved ?: def
     }
 
