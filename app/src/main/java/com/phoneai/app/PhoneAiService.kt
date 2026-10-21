@@ -538,6 +538,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    fun endLiveConversation() {
+        main.post {
+            handsActive = false
+            emptyListens = 0
+            if (listening) voice.stopListening()
+            listening = false
+            voice.stopSpeaking()
+            refreshMode()
+            if (panel == null) {
+                hideStrip()
+                showBubble()
+                startWake()
+            }
+        }
+    }
+
 
     fun resetMainChat() {
         main.post {
