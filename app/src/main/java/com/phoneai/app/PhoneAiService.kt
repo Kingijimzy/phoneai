@@ -1043,6 +1043,31 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             endHands()
             return
         }
+        // In a user-started live call, recognised speech is always a conversation turn.
+        // Do not route everyday words through the command detector; the user can switch
+        // to the separate chat command workflow when they want phone actions.
+        if (handsActive) {
+            wakeGen++
+            transcript.add(Pair("me", t))
+            mainChatListener?.onMessage("me", t)
+            voice.stopSpeaking()
+            voice.stopListening()
+            listening = false
+            hideBubble()
+            running = true
+            phase = "thinking"
+            refreshMode()
+            worker.execute {
+                try {
+                    agent.runLiveConversation(t)
+                } catch (e: Exception) {
+                    say("I couldn't reach the AI just now. Please try again.")
+                }
+                main.post { finishRun() }
+            }
+            return
+        }
+
         wakeGen++
         transcript.add(Pair("me", t))
         // Show the user's message immediately, like a real chat app, rather than
