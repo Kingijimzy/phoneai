@@ -43,8 +43,11 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(14), dp(18), dp(16)); setBackgroundColor(Theme.BG)
         }
         val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        head.addView(label("‹", 32f, Theme.TEXT).apply { gravity = Gravity.CENTER; setOnClickListener { finish() } },
-            LinearLayout.LayoutParams(dp(44), dp(46)))
+        head.addView(OrionIconView(this).apply {
+            icon = "arrow"; tint = Theme.TEXT; contentDescription = "Back"
+            isClickable = true; isFocusable = true
+            setOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(dp(44), dp(46)))
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(label("Teach Mode", 22f, Theme.TEXT, true))
         titles.addView(label("Record once. Replay locally.", 12f, Theme.MUTED))
