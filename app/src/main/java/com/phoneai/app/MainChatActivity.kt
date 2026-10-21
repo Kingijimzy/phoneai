@@ -153,12 +153,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 isFocusable = true
                 contentDescription = "${profile.label}, ${descriptions[profile.id]}"
             }
-            val icon = OrionIconView(this).apply {
-                icon = iconNames[profile.id] ?: "spark"
+            val iconView = OrionIconView(this).apply {
+                this.icon = iconNames[profile.id] ?: "spark"
                 tint = 0xFF9AB8B0.toInt()
                 contentDescription = null
             }
-            row.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(11) })
+            row.addView(iconView, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(11) })
             val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val name = label(profile.label.substringBefore(" — "), 14f, 0xFFD0E1DC.toInt(), true)
             val desc = label(descriptions[profile.id].orEmpty(), 11f, 0xFF88A59C.toInt()).apply {
@@ -177,7 +177,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
             row.addView(check, LinearLayout.LayoutParams(dp(28), dp(28)).apply { leftMargin = dp(5) })
             rowViews[profile.id] = row
-            iconViews[profile.id] = icon
+            iconViews[profile.id] = iconView
             checkViews[profile.id] = check
             nameViews[profile.id] = name
             descViews[profile.id] = desc
