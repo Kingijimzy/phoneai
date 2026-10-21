@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,12 +49,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val ChatInk = Color(0xFF070B0D)
 private val ChatPanel = Color(0xFF101719)
@@ -116,8 +126,9 @@ fun OrionComposeChatScreen(
             }
         }
 
+        Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = 0.55f)))
         Row(
-            Modifier.fillMaxWidth().padding(start = 17.dp, end = 17.dp, bottom = 10.dp)
+            Modifier.fillMaxWidth().padding(start = 17.dp, end = 17.dp, bottom = 10.dp, top = 10.dp)
                 .clip(RoundedCornerShape(16.dp)).background(ChatPanel).border(1.dp, ChatHairline, RoundedCornerShape(16.dp)).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -163,7 +174,7 @@ fun OrionComposeChatScreen(
                     .clip(RoundedCornerShape(14.dp)).background(ChatPanelRaised).border(1.dp, ChatHairline, RoundedCornerShape(14.dp)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Rounded.AddPhotoAlternate, null, tint = ChatMint, modifier = Modifier.size(22.dp))
+                selectedImage?.let { ImageThumbnail(it, Modifier.size(width = 54.dp, height = 54.dp)) }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("IMAGE ATTACHED", color = ChatMint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -227,6 +238,43 @@ fun OrionComposeChatScreen(
     }
 }
 
+
+@Composable
+private fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val bitmap by produceState<Bitmap?>(initialValue = null, uri) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    context.contentResolver.openInputStream(uri)?.use { it.decodeBounds(bounds) }
+                    val options = BitmapFactory.Options().apply {
+                        inSampleSize = when {
+                            bounds.outWidth > 2400 || bounds.outHeight > 2400 -> 4
+                            bounds.outWidth > 1200 || bounds.outHeight > 1200 -> 2
+                            else -> 1
+                        }
+                    }
+                    BitmapFactory.decodeStream(input, null, options)
+                }
+            } catch (_: Exception) { null }
+        }
+    }
+    Box(
+        modifier.clip(RoundedCornerShape(12.dp)).background(ChatPanelRaised)
+            .border(1.dp, ChatHairline, RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(bitmap!!.asImageBitmap(), contentDescription = "Selected image preview",
+                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else {
+            Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = "Image preview unavailable",
+                tint = ChatMuted, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
 @Composable
 private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
@@ -264,8 +312,8 @@ private fun ChatBubble(item: OrionChatLine) {
             if (note) Text("LIVE ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
             Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 21.sp)
             if (item.imageUri != null) {
-                Spacer(Modifier.height(7.dp))
-                Text("Attached image", color = ChatMint, fontSize = 11.sp)
+                Spacer(Modifier.height(9.dp))
+                ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
             }
         }
     }
