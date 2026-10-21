@@ -49,8 +49,8 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     private fun pill(text: String, action: () -> Unit) = TextView(this).apply {
         this.text = text
         textSize = 13f
-        setTextColor(Theme.CYAN)
-        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(Theme.TEXT)
+        typeface = Typeface.DEFAULT
         gravity = Gravity.CENTER
         setPadding(dp(11), dp(10), dp(11), dp(10))
         isClickable = true
@@ -169,10 +169,8 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         val agentPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8))
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF172622.toInt(), 0xFF11191A.toInt())).apply {
-                cornerRadius = dp(16).toFloat()
-                setStroke(dp(1), 0xFF426F67.toInt())
+            background = GradientDrawable().apply {
+                setColor(Theme.PANEL); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.LINE)
             }
         }
         agentPanel.addView(TextView(this).apply {
@@ -203,7 +201,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         }
         commandRow.addView(agentPrompt, LinearLayout.LayoutParams(0, -2, 1f))
         agentRun = pill("Run ↗") { runBrowserAgent() }.apply {
-            background = rounded(0xFF254A43.toInt())
+            background = rounded(Theme.PANEL2)
             contentDescription = "Ask Orion to perform the entered browser task"
         }
         commandRow.addView(agentRun)
