@@ -1073,7 +1073,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             showStrip(last)
         }
         if (handsActive) {
-            voice.whenIdle { listenNow() }
+            voice.whenIdle { if (handsActive && !running) listenNow() }
         } else {
             handsActive = false
             if (!mainChatActive) {
@@ -1107,7 +1107,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         emptyListens = 0
         closePanel(false)
         if (Prefs.voice(this)) voice.speak("I'm listening.")
-        voice.whenIdle { listenNow() }
+        voice.whenIdle { if (handsActive && !running) listenNow() }
     }
 
     private fun listenNow() {
