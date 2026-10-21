@@ -545,7 +545,7 @@ class SettingsActivity : Activity() {
             setSingleLine(true)
             setTextColor(Theme.TEXT)
             setHintTextColor(Theme.MUTED)
-            background = rounded(Theme.PANEL2, 12, Theme.LINE)
+            background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE) }
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         val wrap = LinearLayout(this).apply {
