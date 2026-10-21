@@ -135,8 +135,18 @@ class Nim(private val ctx: Context) {
         ),
         "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>()),
         "nvidia" to Pair(
-            listOf("meta/llama-3.3-70b-instruct", "openai/gpt-oss-20b", "nvidia/llama-3.1-nemotron-70b-instruct"),
-            listOf("nvidia/nemotron-nano-12b-v2-vl", "meta/llama-3.2-11b-vision-instruct")
+            // NVIDIA retires catalog endpoints periodically. Prefer currently published Nemotron/GPT-OSS IDs;
+            // model-list discovery is used when quota-saver mode is off.
+            listOf(
+                "nvidia/nemotron-3-nano-30b-a3b",
+                "openai/gpt-oss-20b",
+                "nvidia/llama-3.1-nemotron-70b-instruct",
+                "meta/llama-3.3-70b-instruct"
+            ),
+            listOf(
+                "nvidia/nemotron-nano-12b-v2-vl",
+                "meta/llama-3.2-11b-vision-instruct"
+            )
         )
     )
 
@@ -542,9 +552,13 @@ class Nim(private val ctx: Context) {
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
+                // Retired catalog models must never be persisted as the provider's active choice.
+                // Put distinct known fallbacks immediately after the failed model so quota-saver mode
+                // still makes a real recovery attempt instead of failing on a single stale default.
                 if (!refilled) {
                     refilled = true
-                    queue.addAll(candidates(p, vision))
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    queue.addAll(0, backups)
                 }
                 continue
             }
