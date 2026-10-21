@@ -967,7 +967,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun submit(text: String) {
         val t = text.trim()
-        if (t.isEmpty() || running) return
+        if (t.isEmpty()) return
+        if (running) {
+            main.post {
+                mainChatListener?.onMessage("ai", "I'm already working on another task. Let that finish, then send this request again.")
+                mainChatListener?.onStatus("Another task is still running", currentMode())
+            }
+            return
+        }
         if (Regex("^(goodbye|bye|bye bye|end call|end the call|hang up|stop listening|that's all|that is all)[.!]?$").matches(t.lowercase())) {
             handsActive = false
             transcript.add(Pair("me", t))
