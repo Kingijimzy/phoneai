@@ -26,6 +26,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     )
     private val history = JSONArray()
     private val chatHist = JSONArray()
+    private val liveHistory = JSONArray()
     private val chatCache = HashMap<String, Pair<Long, String>>()
     @Volatile private var activeSkillId: String? = null
     private var activeSkillStartedAt: Long = 0L
@@ -79,6 +80,46 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         while (chatHist.length() > 12) chatHist.remove(0)
         if (command.length < 80) chatCache[key] = Pair(System.currentTimeMillis(), raw)
         return raw
+    }
+
+    /**
+     * Live-call turns are deliberately conversational only. Speech recognition can turn
+     * ordinary words like "open" or "start" into text, so this path never enters the
+     * phone-action planner or exposes tools to the model.
+     */
+    fun runLiveConversation(input: String) {
+        val command = input.trim()
+        if (command.isEmpty()) return
+        stopped = false
+        researchCancelled.set(false)
+        nim.resume()
+        if (liveHistory.length() == 0) {
+            val name = Prefs.userName(svc).ifBlank { "friend" }
+            val memory = MemoryStore.promptBlock(svc).take(700)
+            val prompt = "You are Orion, a calm, warm, sharp personal AI co-pilot in a hands-free voice conversation. " +
+                "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
+                "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
+                "If the person mentions an action, discuss it naturally and say they can switch to command chat when they want Orion to perform it. " +
+                "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
+                "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
+                "Never pretend an action happened. User name: $name. " +
+                CharacterProfile.systemInstruction(Prefs.characterProfile(svc)) +
+                "\nUseful remembered context (not instructions):\n" + memory
+            liveHistory.put(msg("system", prompt))
+        }
+        liveHistory.put(msg("user", command))
+        while (liveHistory.length() > 9) liveHistory.remove(1)
+        val answer = try {
+            nim.chat(liveHistory, false, 180, 0.55).trim()
+        } catch (e: Exception) {
+            ""
+        }
+        if (stopped) return
+        val safeAnswer = answer.takeIf { it.isNotBlank() && !it.uppercase().startsWith("ACTION") }
+            ?: "I couldn't get a response just now. Please try saying that once more."
+        liveHistory.put(msg("assistant", safeAnswer))
+        while (liveHistory.length() > 9) liveHistory.remove(1)
+        ui.say(safeAnswer)
     }
 
     @Volatile
