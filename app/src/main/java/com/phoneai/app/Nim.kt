@@ -461,7 +461,10 @@ class Nim(private val ctx: Context) {
         // A text-only selected provider must never be the first attempt for an image.
         // If it cannot accept vision requests, select a compatible saved provider instead.
         if ((Prefs.hasKey(ctx, first.id) || first.noKey) && (!vision || first.hasVision)) order.add(first)
-        if (Prefs.autoSwitch(ctx) || order.isEmpty()) {
+        // Vision failures are especially frustrating because the image has already been
+        // selected. Always try saved vision-capable backups on 503/quota/model errors,
+        // even when chat auto-switching is disabled; never send an image to text-only providers.
+        if (Prefs.autoSwitch(ctx) || order.isEmpty() || vision) {
             for (p in Providers.all) {
                 if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
             }
