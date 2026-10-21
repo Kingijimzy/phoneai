@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -15,6 +16,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -437,6 +439,35 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var imageAnalysisRunning = false
     private val imageAnalysisLock = Any()
 
+    /** Decode gallery images across Android-supported formats (including HEIC/AVIF where supported), then fall back to BitmapFactory. */
+    private fun decodeVisionBitmap(uri: Uri): Bitmap {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                val source = ImageDecoder.createSource(contentResolver, uri)
+                return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    val width = info.size.width.coerceAtLeast(1)
+                    val height = info.size.height.coerceAtLeast(1)
+                    val scale = minOf(1.0, 1024.0 / maxOf(width, height))
+                    decoder.setTargetSize((width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1))
+                }
+            } catch (_: Exception) {
+                // Some content providers expose formats ImageDecoder cannot read; try the classic decoder.
+            }
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            ?: throw IllegalArgumentException("The selected image could not be opened. Choose a photo saved on the device, or take a screenshot.")
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IllegalArgumentException("Android could not decode this image format. Try exporting it as JPG or PNG.")
+        }
+        var sample = 1
+        while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: throw IllegalArgumentException("Android couldn't decode the selected image. Try a JPG or PNG copy.")
+    }
+
     /** Sends a user-selected image to the configured vision provider without treating its URI as model-readable text. */
     fun analyzeImageFromMainChat(uri: Uri, question: String) {
         synchronized(imageAnalysisLock) {
@@ -452,15 +483,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         Thread({
             try {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-                    ?: throw IllegalArgumentException("I couldn't open that image.")
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalArgumentException("That image format couldn't be read.")
-                var sample = 1
-                while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
-                val options = BitmapFactory.Options().apply { inSampleSize = sample }
-                val bitmap = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-                    ?: throw IllegalArgumentException("I couldn't decode that image.")
+                val bitmap = decodeVisionBitmap(uri)
                 val bytes = ByteArrayOutputStream()
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
                 bitmap.recycle()
