@@ -664,9 +664,16 @@ class SettingsActivity : Activity() {
                 val ordered = when {
                     p.id == "nvidia" -> eligible.sortedWith(
                         compareBy<String> { id ->
-                            if (vision && nim.isVision(id)) -1
-                            else nvidiaPreferred.indexOfFirst { id.lowercase().contains(it) }
-                                .let { if (it < 0) 999 else it }
+                            if (vision) {
+                                when {
+                                    id.lowercase().contains("nemotron-3.5-super-vl") -> 0
+                                    nim.isVision(id) -> 1
+                                    else -> 999
+                                }
+                            } else {
+                                nvidiaPreferred.indexOfFirst { id.lowercase().contains(it) }
+                                    .let { if (it < 0) 999 else it }
+                            }
                         }.thenBy { it.lowercase() }
                     )
                     vision -> eligible.sortedBy { if (nim.isVision(it)) 0 else 1 }
