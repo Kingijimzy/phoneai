@@ -1026,6 +1026,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- running commands
 
+    private fun isConversationStarter(text: String): Boolean {
+        val normalized = text.lowercase()
+            .replace(Regex("[^a-z0-9' ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return Regex("^(hey|hi|hello|good morning|good evening|let'?s talk|can we talk|i want to talk|talk to me|are you there|how are you|can i ask you something|i (also )?(have|got) a question)(\\b|$)")
+            .containsMatchIn(normalized)
+    }
+
     private fun submit(text: String, conversationOnly: Boolean = false) {
         val t = text.trim()
         if (t.isEmpty()) return
@@ -1076,7 +1085,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             return
         }
 
-        if (conversationOnly) {
+        if (conversationOnly || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t))) {
             wakeGen++
             transcript.add(Pair("me", t))
             mainChatListener?.onMessage("me", t)
