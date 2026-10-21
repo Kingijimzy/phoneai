@@ -20,6 +20,7 @@ import android.widget.Toast
  */
 class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var wave: VoiceWaveView
+    private lateinit var core: OrbView
     private lateinit var stateLabel: TextView
     private lateinit var transcript: LinearLayout
     private lateinit var micButton: TextView
@@ -46,7 +47,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
-        window.decorView.systemUiVisibility = 0
+        applyImmersiveMode()
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -81,18 +82,27 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(8), dp(12), dp(16))
+            setPadding(dp(10), dp(2), dp(10), dp(8))
         }
+        core = OrbView(this).apply {
+            backing = true
+            contentDescription = "Orion live animated reactor core"
+            mode = OrbView.Mode.IDLE
+        }
+        hero.addView(core, LinearLayout.LayoutParams(dp(210), dp(210)).apply {
+            gravity = Gravity.CENTER
+            bottomMargin = dp(1)
+        })
         wave = VoiceWaveView(this).apply {
             contentDescription = "Animated audio waveform that responds to Orion's current state"
         }
-        hero.addView(wave, LinearLayout.LayoutParams(-1, dp(170)).apply {
+        hero.addView(wave, LinearLayout.LayoutParams(-1, dp(66)).apply {
             gravity = Gravity.CENTER
-            bottomMargin = dp(8)
+            bottomMargin = dp(7)
         })
-        hero.addView(text("PRESENT. RESPONSIVE. YOURS.", 10f, Theme.CYAN, true).apply {
+        hero.addView(text("ORION  /  LIVE CORE", 10f, Theme.CYAN, true).apply {
             gravity = Gravity.CENTER
-            letterSpacing = .12f
+            letterSpacing = .16f
         })
         stateLabel = text("Ready when you are", 23f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
@@ -161,11 +171,31 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         controls.addView(textChat, LinearLayout.LayoutParams(dp(58), dp(58)).apply { leftMargin = dp(18) })
         root.addView(controls)
-        root.addView(text("Voice recognition depends on Android speech services and microphone permission.", 10f, Theme.MUTED).apply {
+        root.addView(text("VOICE ACCESS USES ANDROID SPEECH SERVICES", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
-            setPadding(dp(4), dp(10), dp(4), 0)
+            letterSpacing = .05f
+            setPadding(dp(4), dp(9), dp(4), dp(1))
         })
         setContentView(root)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun applyImmersiveMode() {
+        window.statusBarColor = Theme.BG
+        window.navigationBarColor = Theme.BG
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            )
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveMode()
     }
 
     private fun startVoiceInput() {
@@ -240,6 +270,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             lastMode = mode
             wave.mode = mode
+            core.mode = mode
             stateLabel.text = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
