@@ -1057,9 +1057,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             running = true
             phase = "thinking"
             refreshMode()
+            // Natural speech stays conversational. Phone actions in a live call need
+            // the explicit wake phrase ("Orion, open ...") so a passing word never triggers
+            // an accidental tap, message, or other action.
+            val explicitCommand = afterWake(t)?.takeIf { it.isNotBlank() }
             worker.execute {
                 try {
-                    agent.runLiveConversation(t)
+                    if (explicitCommand != null) agent.run(explicitCommand)
+                    else agent.runLiveConversation(t)
                 } catch (e: Exception) {
                     say("I couldn't reach the AI just now. Please try again.")
                 }
