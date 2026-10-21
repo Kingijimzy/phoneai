@@ -33,6 +33,13 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var stop: TextView
     private var selectedImageUri: Uri? = null
     private var imagePreviewPanel: LinearLayout? = null
+    private var commandMode = false
+    private lateinit var talkModeChip: LinearLayout
+    private lateinit var commandModeChip: LinearLayout
+    private lateinit var talkModeIcon: OrionIconView
+    private lateinit var commandModeIcon: OrionIconView
+    private lateinit var talkModeText: TextView
+    private lateinit var commandModeText: TextView
     private var attachedService: PhoneAiService? = null
     private var lastMode = OrbView.Mode.IDLE
     private var welcomePanel: View? = null
@@ -65,6 +72,20 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         view.translationY = dp(8).toFloat()
         view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(260)
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    }
+
+    private fun refreshModeSelector() {
+        if (!::talkModeChip.isInitialized || !::commandModeChip.isInitialized) return
+        val talkSelected = !commandMode
+        talkModeChip.background = rounded(if (talkSelected) 0xFF18312D.toInt() else 0xFF101719.toInt(),
+            16, if (talkSelected) 0xFF3D8978.toInt() else 0xFF293638.toInt())
+        commandModeChip.background = rounded(if (commandMode) 0xFF18312D.toInt() else 0xFF101719.toInt(),
+            16, if (commandMode) 0xFF3D8978.toInt() else 0xFF293638.toInt())
+        talkModeIcon.tint = if (talkSelected) Theme.CYAN else Theme.MUTED
+        commandModeIcon.tint = if (commandMode) Theme.CYAN else Theme.MUTED
+        talkModeText.setTextColor(if (talkSelected) Theme.CYAN else Theme.MUTED)
+        commandModeText.setTextColor(if (commandMode) Theme.CYAN else Theme.MUTED)
+        input.hint = if (commandMode) "Tell Orion what to do…" else "Talk to Orion…"
     }
 
     private fun refreshPersonalityLabel(view: TextView) {
@@ -424,6 +445,53 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             topMargin = dp(5)
         })
 
+        // Clear intent selector: Talk is tool-free by default; Command is the deliberate
+        // Jarvis action mode. This prevents ordinary conversation from accidentally searching
+        // the web or triggering device actions.
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(2), dp(7), dp(2), dp(5))
+        }
+        modeRow.addView(label("MODE", 9f, Theme.MUTED, true).apply {
+            letterSpacing = .12f
+            setPadding(0, 0, dp(8), 0)
+        })
+        fun makeModeChip(title: String, iconName: String): Triple<LinearLayout, OrionIconView, TextView> {
+            val chip = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(dp(11), dp(8), dp(11), dp(8))
+                isClickable = true
+                isFocusable = true
+            }
+            val glyph = OrionIconView(this).apply {
+                icon = iconName
+                tint = Theme.MUTED
+                contentDescription = null
+            }
+            chip.addView(glyph, LinearLayout.LayoutParams(dp(17), dp(17)).apply { rightMargin = dp(6) })
+            val caption = label(title, 11f, Theme.MUTED, true).apply { maxLines = 1 }
+            chip.addView(caption)
+            return Triple(chip, glyph, caption)
+        }
+        val talkParts = makeModeChip("Talk", "chat")
+        talkModeChip = talkParts.first
+        talkModeIcon = talkParts.second
+        talkModeText = talkParts.third
+        talkModeChip.contentDescription = "Talk mode. Conversational answers without phone actions or automatic web search."
+        talkModeChip.setOnClickListener { commandMode = false; refreshModeSelector() }
+        modeRow.addView(talkModeChip, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        val commandParts = makeModeChip("Jarvis commands", "spark")
+        commandModeChip = commandParts.first
+        commandModeIcon = commandParts.second
+        commandModeText = commandParts.third
+        commandModeChip.contentDescription = "Command mode. Ask Orion to use phone tools or search when requested."
+        commandModeChip.setOnClickListener { commandMode = true; refreshModeSelector() }
+        modeRow.addView(commandModeChip, LinearLayout.LayoutParams(0, -2, 1.25f))
+        root.addView(modeRow)
+        refreshModeSelector()
+
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -713,7 +781,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             refreshImagePreview(null)
             service.analyzeImageFromMainChat(imageUri, question)
         } else {
-            service.sendFromMainChat(value)
+            service.sendFromMainChat(value, conversationOnly = !commandMode)
         }
     }
 
