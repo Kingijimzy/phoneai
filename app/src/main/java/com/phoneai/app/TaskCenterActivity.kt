@@ -33,7 +33,7 @@ class TaskCenterActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt(), 0xFF06100F.toInt()))
+                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
         }
         body.addView(label("ORION  /  TASK CENTRE", 10f, Theme.CYAN, true))
         body.addView(label(titleText, 21f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
@@ -45,7 +45,7 @@ class TaskCenterActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable().apply {
-                    setColor(0xFF0A1715.toInt()); cornerRadius = dp(14).toFloat()
+                    setColor(0xFF11191A.toInt()); cornerRadius = dp(14).toFloat()
                     setStroke(dp(1), 0xFF203D37.toInt())
                 }
                 isClickable = true; isFocusable = true; contentDescription = option
@@ -82,7 +82,7 @@ class TaskCenterActivity : Activity() {
             text = caption; isAllCaps = false; textSize = 12f
             setTextColor(if (primary) Theme.PANEL else Theme.TEXT)
             background = GradientDrawable().apply {
-                setColor(if (primary) Theme.CYAN else 0xFF10211E.toInt())
+                setColor(if (primary) Theme.CYAN else 0xFF151E21.toInt())
                 cornerRadius = dp(12).toFloat()
                 if (!primary) setStroke(dp(1), Theme.LINE)
             }
@@ -100,7 +100,7 @@ class TaskCenterActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
+                intArrayOf(0xFF080C0E.toInt(), 0xFF071311.toInt(), 0xFF11191A.toInt()))
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -214,7 +214,7 @@ class TaskCenterActivity : Activity() {
         if (checkpoint != null) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = panel(0xFF0C3028.toInt())
+                background = panel(0xFF1A2B28.toInt())
             }
             card.addView(label("SAVED AGENT SESSION · " + checkpoint.optString("status").uppercase(Locale.getDefault()),
                 10f, Theme.CYAN, true))
@@ -310,7 +310,7 @@ class TaskCenterActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt()))
             addView(label("ORION  /  TASK CENTRE", 10f, Theme.CYAN, true))
             addView(label("Create a task", 20f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, dp(8)) })
             addView(title)
