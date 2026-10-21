@@ -83,6 +83,41 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     /**
+     * Explicit talk mode: answer as a conversational assistant without invoking phone tools,
+     * web shortcuts, or the multi-step action planner. Web research is available in Command
+     * mode when the user actually asks for it.
+     */
+    fun runConversation(input: String) {
+        val command = input.trim()
+        if (command.isEmpty()) return
+        stopped = false
+        researchCancelled.set(false)
+        nim.resume()
+        val safeSystem = chatSystem().replace(
+            "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
+            "TALK MODE: This is conversation only. Do not call tools, search the web, or operate the phone in this mode. Respond directly to greetings, conversation starters, and ordinary questions. If the user wants Orion to perform a phone action or research the web, briefly tell them to switch to Command mode."
+        )
+        val messages = JSONArray().put(msg("system", safeSystem))
+        val from = maxOf(0, chatHist.length() - 8)
+        for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
+        messages.put(msg("user", command))
+        val answer = try {
+            nim.chat(messages, false, 420, 0.55).trim()
+        } catch (e: Exception) {
+            if (stopped) return
+            ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
+            return
+        }
+        if (stopped) return
+        val safeAnswer = answer.takeIf { it.isNotBlank() && !it.equals("ACTION", true) }
+            ?: "I'm here. What would you like to talk about?"
+        chatHist.put(msg("user", command))
+        chatHist.put(msg("assistant", safeAnswer))
+        while (chatHist.length() > 12) chatHist.remove(0)
+        ui.say(safeAnswer)
+    }
+
+    /**
      * Live-call turns are deliberately conversational only. Speech recognition can turn
      * ordinary words like "open" or "start" into text, so this path never enters the
      * phone-action planner or exposes tools to the model.
