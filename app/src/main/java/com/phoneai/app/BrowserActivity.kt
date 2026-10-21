@@ -164,7 +164,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
             setPadding(0, dp(1), 0, dp(1))
         }
-        controlsScroll.addView(controls, android.widget.HorizontalScrollView.LayoutParams(-2, -2))
+        controlsScroll.addView(controls, -2, -2)
         root.addView(controlsScroll, LinearLayout.LayoutParams(-1, -2))
 
         val agentPanel = LinearLayout(this).apply {
