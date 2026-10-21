@@ -47,7 +47,7 @@ class SettingsActivity : Activity() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x553D6963) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2426.toInt(), 0xF0070D0F.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x554B6564) }
         }
         outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
@@ -59,7 +59,7 @@ class SettingsActivity : Activity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0xE61A2426.toInt(), 0xE80D1416.toInt())).apply {
+                    intArrayOf(0xEA172124.toInt(), 0xEA0B1113.toInt())).apply {
                     cornerRadius = dp(14).toFloat()
                     setStroke(dp(1), 0x443D6963)
                 }
@@ -114,13 +114,13 @@ class SettingsActivity : Activity() {
         b.setTextColor(if (primary) Theme.ON_ACCENT else Theme.TEXT)
         val g = if (primary) {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF28DDB0.toInt(), 0xFF00B98B.toInt()))
+                intArrayOf(0xFFB0F1E2.toInt(), 0xFF65D9BE.toInt()))
         } else {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xE61B292B.toInt(), 0xD10D1518.toInt()))
+                intArrayOf(0xF0192527.toInt(), 0xF0070D0F.toInt()))
         }
         g.cornerRadius = dp(12).toFloat()
-        g.setStroke(dp(1), if (primary) 0xFF39E7B9.toInt() else 0x553D6963)
+        g.setStroke(dp(1), if (primary) 0xFFBDEFE3.toInt() else 0x553D6963)
         b.background = g
         b.elevation = 0f
         b.stateListAnimator = null
@@ -139,7 +139,7 @@ class SettingsActivity : Activity() {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xE6172224.toInt(), 0xE6091012.toInt()))
+            intArrayOf(0xEA172124.toInt(), 0xEA090F11.toInt()))
         g.cornerRadius = dp(20).toFloat()
         g.setStroke(dp(1), 0x443D6963)
         c.background = g
