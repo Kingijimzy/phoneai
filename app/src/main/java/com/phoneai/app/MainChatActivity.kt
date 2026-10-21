@@ -115,7 +115,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val rowViews = mutableMapOf<String, LinearLayout>()
         val iconViews = mutableMapOf<String, OrionIconView>()
-        val checkViews = mutableMapOf<String, TextView>()
+        val checkViews = mutableMapOf<String, OrionIconView>()
         val nameViews = mutableMapOf<String, TextView>()
         val descViews = mutableMapOf<String, TextView>()
         var dialog: AlertDialog? = null
@@ -134,9 +134,10 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     tint = if (selected) Theme.CYAN else Theme.MUTED
                 }
                 checkViews[profile.id]?.apply {
-                    text = if (selected) "✓" else ""
-                    background = if (selected) rounded(0xFF00FCB6.toInt(), 20) else null
-                    setTextColor(0xFFE9FFF9.toInt())
+                    icon = if (selected) "check" else "spark"
+                    alpha = if (selected) 1f else 0f
+                    tint = 0xFF9CE9D7.toInt()
+                    background = if (selected) rounded(0xFF20312F.toInt(), 20, 0xFF3C625B.toInt()) else null
                 }
                 nameViews[profile.id]?.setTextColor(if (selected) 0xFFE8FFF8.toInt() else 0xFFD0E1DC.toInt())
                 descViews[profile.id]?.setTextColor(if (selected) 0xFFB5E8D9.toInt() else 0xFF88A59C.toInt())
@@ -167,8 +168,12 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             textCol.addView(name)
             textCol.addView(desc)
             row.addView(textCol, LinearLayout.LayoutParams(0, -2, 1f))
-            val check = label("", 14f, 0xFFE9FFF9.toInt(), true).apply {
-                gravity = Gravity.CENTER
+            val check = OrionIconView(this).apply {
+                icon = "check"
+                tint = 0xFF9CE9D7.toInt()
+                alpha = 0f
+                background = null
+                contentDescription = "Selected personality"
             }
             row.addView(check, LinearLayout.LayoutParams(dp(28), dp(28)).apply { leftMargin = dp(5) })
             rowViews[profile.id] = row
