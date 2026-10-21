@@ -498,6 +498,58 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(1))
         })
+        val dock = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(7), dp(6), dp(7), dp(5))
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF0D211D.toInt(), 0xFF07110F.toInt())).apply {
+                cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), 0xFF244B41.toInt())
+            }
+            elevation = dp(8).toFloat()
+        }
+        fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                isClickable = true
+                isFocusable = true
+                contentDescription = title
+                setPadding(dp(3), dp(3), dp(3), dp(2))
+                background = if (selected) rounded(0xFF12372E.toInt(), 15, 0xFF1B8066.toInt()) else null
+            }
+            item.addView(OrionIconView(this).apply { icon = iconName; tint = if (selected) Theme.CYAN else Theme.MUTED; contentDescription = null }, LinearLayout.LayoutParams(dp(21), dp(21)))
+            item.addView(label(title, 9f, if (selected) Theme.CYAN else Theme.MUTED, selected).apply { gravity = Gravity.CENTER; setPadding(0, dp(3), 0, 0) })
+            item.setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.94f).scaleY(.94f).setDuration(70).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+                false
+            }
+            item.setOnClickListener { action() }
+            return item
+        }
+        dock.addView(dockItem("Chat", "chat", true) { scroll.post { scroll.fullScroll(View.FOCUS_DOWN) } }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        dock.addView(dockItem("Browser", "browser") { startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        val liveDock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true; isFocusable = true; contentDescription = "Start full-screen live voice call with Orion"; setPadding(dp(4), 0, dp(4), 0) }
+        val liveButton = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFB9FFF0.toInt(), 0xFF00FCB6.toInt(), 0xFF0BB0A1.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFF72FFE7.toInt()) }
+            elevation = dp(7).toFloat()
+            addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
+        }
+        liveDock.addView(liveButton, LinearLayout.LayoutParams(dp(48), dp(48)))
+        liveDock.addView(label("LIVE", 9f, Theme.CYAN, true).apply { gravity = Gravity.CENTER; letterSpacing = .12f; setPadding(0, dp(2), 0, 0) })
+        liveDock.setOnTouchListener { v, e ->
+            if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.94f).scaleY(.94f).setDuration(70).start()
+            if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+            false
+        }
+        liveDock.setOnClickListener { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }
+        dock.addView(liveDock, LinearLayout.LayoutParams(0, dp(61), 1.15f))
+        dock.addView(dockItem("Teach", "record") { startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        dock.addView(dockItem("Tasks", "tasks") { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(2) })
+        animateIn(dock, 120)
         setContentView(root)
         addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
     }
