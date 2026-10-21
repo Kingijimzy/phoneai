@@ -58,10 +58,13 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         setOnClickListener { action() }
     }
 
-    private fun rounded(fill: Int) = GradientDrawable().apply {
-        setColor(fill)
+    /** Browser controls use the same restrained reflective charcoal as the chat composer. */
+    private fun rounded(fill: Int) = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(fill, 0xE80D1416.toInt())
+    ).apply {
         cornerRadius = dp(15).toFloat()
-        setStroke(dp(1), Theme.LINE)
+        setStroke(dp(1), 0x553D6963)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
