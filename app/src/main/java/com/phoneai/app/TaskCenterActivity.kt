@@ -32,7 +32,7 @@ class TaskCenterActivity : Activity() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(20).toFloat(); setStroke(dp(1), Theme.LINE) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x553D6963) }
         }
         body.addView(label("TASKS", 10f, Theme.MUTED, true))
         body.addView(label(titleText, 21f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
