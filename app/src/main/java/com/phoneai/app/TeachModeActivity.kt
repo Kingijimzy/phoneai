@@ -12,10 +12,11 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
-class TeachModeActivity : Activity() {
+class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var nameInput: EditText
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
+    private lateinit var stopReplayButton: TextView
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
         text = s; textSize = size; setTextColor(color)
@@ -64,13 +65,49 @@ class TeachModeActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         status = label("Test routines carefully before replaying actions that submit forms or spend money.", 12f, Theme.MUTED)
-        status.setPadding(dp(2), dp(12), dp(2), dp(12)); root.addView(status)
+        status.setPadding(dp(2), dp(12), dp(2), dp(8)); root.addView(status)
+        stopReplayButton = button("■  STOP CURRENT TASK") {
+            val service = PhoneAiService.instance
+            if (service?.isTaskRunning() == true) {
+                service.stopCurrentTask()
+                status.text = "Stop requested. Orion will stop at the next safe point."
+            } else {
+                status.text = "No routine is currently running."
+            }
+        }.apply { isEnabled = false; alpha = 0.42f }
+        root.addView(stopReplayButton, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         root.addView(label("YOUR ROUTINES", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, dp(8), 0, dp(8)) })
         val scroll = ScrollView(this).apply { isFillViewport = false; isVerticalScrollBarEnabled = false }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; scroll.addView(list)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f)); setContentView(root); refresh()
     }
-    override fun onResume() { super.onResume(); if (::list.isInitialized) refresh() }
+    override fun onResume() {
+        super.onResume()
+        if (::list.isInitialized) refresh()
+        PhoneAiService.instance?.attachMainChat(this)
+    }
+
+    override fun onPause() {
+        PhoneAiService.instance?.detachMainChat(this)
+        super.onPause()
+    }
+
+    override fun onMessage(kind: String, message: String) {
+        runOnUiThread {
+            if (::status.isInitialized && (kind == "note" || kind == "ai")) status.text = message
+        }
+    }
+
+    override fun onStatus(value: String, mode: OrbView.Mode) {
+        runOnUiThread {
+            if (::status.isInitialized && (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING)) status.text = value
+            if (::stopReplayButton.isInitialized) {
+                val active = mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING
+                stopReplayButton.isEnabled = active
+                stopReplayButton.alpha = if (active) 1f else 0.42f
+            }
+        }
+    }
     private fun refresh() {
         list.removeAllViews()
         val names = MacroStore.names(this)
@@ -91,8 +128,10 @@ class TeachModeActivity : Activity() {
                 if (service == null) {
                     Toast.makeText(this@TeachModeActivity, "Enable Orion Accessibility first.", Toast.LENGTH_LONG).show()
                     startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                } else if (service.isTaskRunning()) {
+                    status.text = "Orion is already running another task. Stop it or wait for it to finish first."
                 } else {
-                    status.text = "Replaying $name locally. Keep the target app in the foreground."
+                    status.text = "Replaying $name locally — no AI calls. Keep the target app in the foreground."
                     service.sendFromMainChat("run $name")
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f))
