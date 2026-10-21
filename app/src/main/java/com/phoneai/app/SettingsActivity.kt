@@ -647,7 +647,17 @@ class SettingsActivity : Activity() {
             try {
                 val nim = Nim(this)
                 val all = nim.allModels(p)
-                val list = if (vision) all.sortedBy { if (nim.isVision(it)) 0 else 1 } else all
+                // NVIDIA's catalogue includes embeddings, rerankers, OCR, speech and other
+                // task-specific endpoints that are not chat-completion models. Do not present
+                // those as selectable chat models; many return 404/400 or empty content.
+                val chatOnly = listOf(
+                    "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
+                    "tts", "asr", "translat", "moderation", "content-safety", "nemoguard",
+                    "parse", "clip", "segment", "detect", "diffusion", "image-generation",
+                    "video-generation", "pose-estimation", "classifier"
+                )
+                val eligible = all.filter { id -> chatOnly.none { id.lowercase().contains(it) } }
+                val list = if (vision) eligible.sortedBy { if (nim.isVision(it)) 0 else 1 } else eligible
                 runOnUiThread {
                     if (list.isEmpty()) {
                         Toast.makeText(this, "No models found.", Toast.LENGTH_LONG).show()
