@@ -85,7 +85,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         commandModeIcon.tint = if (commandMode) Theme.CYAN else Theme.MUTED
         talkModeText.setTextColor(if (talkSelected) Theme.CYAN else Theme.MUTED)
         commandModeText.setTextColor(if (commandMode) Theme.CYAN else Theme.MUTED)
-        input.hint = if (commandMode) "Tell Orion what to do…" else "Talk to Orion…"
+        if (::input.isInitialized) input.hint = if (commandMode) "Tell Orion what to do…" else "Talk to Orion…"
     }
 
     private fun refreshPersonalityLabel(view: TextView) {
