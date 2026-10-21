@@ -286,10 +286,15 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         header.addView(stop, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
-        val new = label("＋", 24f, Theme.MUTED, true).apply {
+        val new = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "Start a new conversation"
-            setPadding(dp(10), dp(6), dp(8), dp(6))
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(9), dp(8), dp(9), dp(8))
+            addView(OrionIconView(this@MainChatActivity).apply {
+                icon = "plus"; tint = Theme.MUTED; contentDescription = null
+            }, LinearLayout.LayoutParams(dp(22), dp(22)))
             setOnClickListener {
                 if (lastMode == OrbView.Mode.THINKING || lastMode == OrbView.Mode.ACTING) {
                     Toast.makeText(this@MainChatActivity, "Let Orion finish or stop the current task first.", Toast.LENGTH_SHORT).show()
