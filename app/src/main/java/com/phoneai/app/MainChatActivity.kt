@@ -55,11 +55,6 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private val composeCommandMode = mutableStateOf(false)
     private val composeSelectedImage = mutableStateOf<Uri?>(null)
     private var composeChatActive = false
-    private val composeLines = mutableStateListOf<OrionChatLine>()
-    private val composeStatus = mutableStateOf("READY")
-    private val composeCommandMode = mutableStateOf(false)
-    private val composeSelectedImage = mutableStateOf<Uri?>(null)
-    private var composeChatActive = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
