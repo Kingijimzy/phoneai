@@ -152,8 +152,10 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 isFocusable = true
                 contentDescription = "${profile.label}, ${descriptions[profile.id]}"
             }
-            val icon = label(glyphs[profile.id] ?: "◈", 20f, 0xFF9AB8B0.toInt(), true).apply {
-                gravity = Gravity.CENTER
+            val icon = OrionIconView(this).apply {
+                icon = iconNames[profile.id] ?: "spark"
+                tint = 0xFF9AB8B0.toInt()
+                contentDescription = null
             }
             row.addView(icon, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(11) })
             val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
