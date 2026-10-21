@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.graphics.Typeface
@@ -56,6 +57,42 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
+    private fun refreshPersonalityLabel(view: TextView) {
+        val profile = CharacterProfile.get(Prefs.characterProfile(this))
+        view.text = "◈  ${profile.label.uppercase()}  ▾"
+    }
+
+    private fun showPersonalityPicker() {
+        val profiles = CharacterProfile.all
+        val current = Prefs.characterProfile(this)
+        val descriptions = listOf(
+            "Calm, sharp, quietly witty — the cinematic co-pilot.",
+            "Warm, attentive, encouraging, and curious.",
+            "Direct, decisive, concise, and action-oriented.",
+            "Patient, thoughtful, and clear at explaining hard ideas."
+        )
+        val choices = profiles.mapIndexed { index, profile ->
+            (if (profile.id == current) "✓  " else "    ") + profile.label + "\\n      " + descriptions[index]
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Choose Orion's personality")
+            .setMessage("Change how Orion thinks through and communicates a reply. Your choice is saved on this phone.")
+            .setItems(choices) { _, which ->
+                Prefs.setCharacterProfile(this, profiles[which].id)
+                val currentView = findViewById<TextView>(android.R.id.text1)
+                // Refresh the visible profile label without restarting the conversation.
+                val root = window.decorView
+                fun update(view: View) {
+                    if (view is TextView && view.contentDescription == "Change Orion personality") refreshPersonalityLabel(view)
+                    if (view is ViewGroup) for (i in 0 until view.childCount) update(view.getChildAt(i))
+                }
+                update(root)
+                Toast.makeText(this, "Personality set to ${profiles[which].label.substringBefore(" — ")}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
@@ -101,7 +138,15 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Orion state: ready"
         }
         titleCol.addView(status)
-        titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
+        val personality = label("", 10f, Theme.CYAN, true).apply {
+            setPadding(0, dp(5), 0, dp(1))
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Change Orion personality"
+            setOnClickListener { showPersonalityPicker() }
+        }
+        titleCol.addView(personality)
+        refreshPersonalityLabel(personality)
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
         val live = label("● LIVE", 10f, 0xFFE7FFFA.toInt(), true).apply {
             gravity = Gravity.CENTER
