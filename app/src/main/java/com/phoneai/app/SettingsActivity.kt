@@ -181,8 +181,7 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sv = ScrollView(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080C0E.toInt(), 0xFF071311.toInt(), 0xFF11191A.toInt()))
+            setBackgroundColor(Theme.BG)
         }
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
