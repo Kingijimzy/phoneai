@@ -376,7 +376,10 @@ class Nim(private val ctx: Context) {
         val first = Prefs.provider(ctx, vision)
         val order = ArrayList<Provider>()
         // The local Ollama provider intentionally has no API key; allow it when explicitly selected.
-        // A text-only selected provider must never be the first attempt for an image.\n        // If it cannot accept vision requests, select a compatible saved provider instead.\n        if ((Prefs.hasKey(ctx, first.id) || first.noKey) && (!vision || first.hasVision)) order.add(first)\n        if (Prefs.autoSwitch(ctx) || order.isEmpty()) {
+        // A text-only selected provider must never be the first attempt for an image.
+        // If it cannot accept vision requests, select a compatible saved provider instead.
+        if ((Prefs.hasKey(ctx, first.id) || first.noKey) && (!vision || first.hasVision)) order.add(first)
+        if (Prefs.autoSwitch(ctx) || order.isEmpty()) {
             for (p in Providers.all) {
                 if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
             }
