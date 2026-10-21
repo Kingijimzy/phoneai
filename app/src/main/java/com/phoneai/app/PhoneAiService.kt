@@ -913,6 +913,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return "opened $url"
     }
 
+    /** Lets other screens (like Teach Mode) send a command as if it was typed in the chat. */
+    fun sendFromMainChat(text: String) {
+        main.post { submit(text) }
+    }
+
     // ---------------------------------------------------------------- Orion browser
 
     fun openBrowser(url: String): String {
