@@ -27,6 +27,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var micIcon: OrionIconView
     private lateinit var helperLabel: TextView
     private lateinit var liveBadgeLabel: TextView
+    private lateinit var micCaption: TextView
     private var attachedService: PhoneAiService? = null
     private var listeningRequested = false
     private var lastMode = OrbView.Mode.IDLE
@@ -122,13 +123,16 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             letterSpacing = .18f
         })
-        stateLabel = text("Ready when you are", if (compact) 20f else 23f, Theme.TEXT, true).apply {
+        stateLabel = text("Ready when you are", if (compact) 21f else 24f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
+            letterSpacing = -.025f
             setPadding(0, dp(if (compact) 4 else 8), 0, dp(4))
         }
         hero.addView(stateLabel)
         helperLabel = text("Tap the microphone and speak naturally.", if (compact) 12f else 13f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
+            maxLines = 2
+            setLineSpacing(dp(2).toFloat(), 1f)
         }
         hero.addView(helperLabel)
         root.addView(hero, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -172,7 +176,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             background = panel(0xEE151E21.toInt(), 22, Theme.LINE)
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
-                icon = "close"; tint = Theme.MUTED; contentDescription = null
+                icon = "phone-off"; tint = Theme.MUTED; contentDescription = null
             }, LinearLayout.LayoutParams(dp(23), dp(23)))
             setOnClickListener {
                 PhoneAiService.instance?.endLiveConversation()
@@ -223,11 +227,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 62 else 68), dp(if (compact) 62 else 68)))
-        micItem.addView(text("MICROPHONE", 8f, Theme.TEXT, true).apply {
+        micCaption = text("MICROPHONE", 8f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .04f
             setPadding(0, dp(5), 0, 0)
-        })
+        }
+        micItem.addView(micCaption)
         controls.addView(micItem, LinearLayout.LayoutParams(dp(94), -2))
         val textChat = LinearLayout(this).apply {
             gravity = Gravity.CENTER
@@ -365,6 +370,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.WAITING_APPROVAL -> "REVIEW"
             }
             liveBadgeLabel.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else Theme.OK)
+            micCaption.text = if (mode == OrbView.Mode.LISTENING) "STOP LISTENING" else "MICROPHONE"
+            micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING) Theme.OK else Theme.TEXT)
             wave.mode = mode
             core.mode = mode
             stateLabel.text = when (mode) {
