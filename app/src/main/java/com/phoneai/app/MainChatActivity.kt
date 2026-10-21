@@ -73,9 +73,10 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             "atlas" to "Direct, decisive and practical. Focuses on getting things done.",
             "lumen" to "Patient and clear. Makes difficult ideas easier to understand.",
             "cipher" to "Evidence-first analysis, alternatives, uncertainty and trade-offs.",
-            "muse" to "Imaginative concepts, unexpected connections and creative options."
+            "muse" to "Imaginative concepts, unexpected connections and creative options.",
+            "tech" to "Technical specialist for software, Android, debugging, architecture and APIs."
         )
-        val glyphs = mapOf("orion" to "◈", "nova" to "✳", "atlas" to "➤", "lumen" to "✧", "cipher" to "⌘", "muse" to "✦")
+        val glyphs = mapOf("orion" to "◈", "nova" to "✳", "atlas" to "➤", "lumen" to "✧", "cipher" to "⌘", "muse" to "✦", "tech" to "⌬")
         val dialogRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(12))
@@ -183,7 +184,17 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
         }
-        dialogRoot.addView(list)
+        // Keep the complete selector reachable on small screens: the cards must scroll
+        // inside a bounded viewport rather than being clipped by the dialog window.
+        val listScroll = android.widget.ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            clipToPadding = false
+            setPadding(0, 0, 0, dp(2))
+        }
+        listScroll.addView(list, android.widget.ScrollView.LayoutParams(-1, -2))
+        val availableHeight = (resources.displayMetrics.heightPixels - dp(250)).coerceAtLeast(dp(250))
+        dialogRoot.addView(listScroll, LinearLayout.LayoutParams(-1, availableHeight.coerceAtMost(dp(480))))
         dialogRoot.addView(label("PERSONALITY IS SAVED ON THIS PHONE", 9f, 0xFF64877D.toInt(), true).apply {
             letterSpacing = .08f
             gravity = Gravity.CENTER
