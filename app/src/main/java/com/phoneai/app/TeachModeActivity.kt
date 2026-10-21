@@ -28,7 +28,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
     }
     private fun button(s: String, action: () -> Unit) = label(s, 13f, Theme.CYAN, true).apply {
         gravity = Gravity.CENTER; setPadding(dp(13), dp(12), dp(13), dp(12))
-        background = shape(0xFF172622.toInt(), 0xFF426F67.toInt())
+        background = shape(Theme.PANEL2, Theme.LINE)
         isClickable = true; isFocusable = true; setOnClickListener { action() }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,7 +50,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         nameInput = EditText(this).apply {
             hint = "Routine name, e.g. FC daily rewards"; setHintTextColor(0xFF80918D.toInt())
             setTextColor(Theme.TEXT); textSize = 14f; setSingleLine(true)
-            background = shape(0xFF0C1715.toInt()); setPadding(dp(14), dp(6), dp(14), dp(6))
+            background = shape(Theme.PANEL); setPadding(dp(14), dp(6), dp(14), dp(6))
         }
         root.addView(nameInput, LinearLayout.LayoutParams(-1, dp(50)))
         root.addView(button("●  START RECORDING") {
@@ -119,7 +119,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         names.forEach { name ->
             val count = MacroStore.find(this, name)?.second?.length() ?: 0
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12)); background = shape(0xFF11191A.toInt())
+                orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12)); background = shape(Theme.PANEL)
             }
             card.addView(label(name, 15f, Theme.TEXT, true))
             card.addView(label("$count recorded steps · offline replay", 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(10)) })
