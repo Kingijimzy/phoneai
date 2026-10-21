@@ -53,8 +53,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
+            setBackgroundColor(Theme.BG)
         }
 
         val header = LinearLayout(this).apply {
@@ -81,7 +80,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(9), dp(7), dp(10), dp(7))
-            background = panel(0xFF08251E.toInt(), 15, 0xFF167C66.toInt())
+            background = panel(0xEE121A1D.toInt(), 15, Theme.LINE)
             addView(View(this@LiveConversationActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Theme.OK) }
             }, LinearLayout.LayoutParams(dp(6), dp(6)).apply { rightMargin = dp(6) })
@@ -132,7 +131,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(8))
-            background = panel(0xB50A1916.toInt(), 20, 0xFF203D38.toInt())
+            background = panel(0xE811191C.toInt(), 20, Theme.LINE)
         }
         transcriptCard.addView(text("RECENT CONVERSATION", 9f, Theme.MUTED, true).apply {
             letterSpacing = .12f
@@ -157,7 +156,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val end = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "End live conversation"
-            background = panel(0xFF101B19.toInt(), 22, 0xFF2C504E.toInt())
+            background = panel(0xEE151E21.toInt(), 22, Theme.LINE)
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "close"; tint = Theme.MUTED; contentDescription = null
@@ -172,15 +171,15 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         micButton = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "Start voice input"
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFFB9FFF0.toInt(), 0xFF00FCB6.toInt(), 0xFF0BB0A1.toInt())).apply {
+            background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setStroke(dp(1), 0xFF72FFE7.toInt())
+                setColor(Theme.CYAN)
+                setStroke(dp(1), 0xFFB4EEE5.toInt())
             }
             elevation = dp(7).toFloat()
             isClickable = true; isFocusable = true
             micIcon = OrionIconView(this@LiveConversationActivity).apply {
-                icon = "mic"; tint = 0xFF02110D.toInt(); contentDescription = null
+                icon = "mic"; tint = Theme.ON_ACCENT; contentDescription = null
             }
             addView(micIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
             setOnClickListener {
@@ -200,7 +199,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val textChat = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "Return to text chat"
-            background = panel(0xFF101B19.toInt(), 22, 0xFF2C504E.toInt())
+            background = panel(0xEE151E21.toInt(), 22, Theme.LINE)
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "chat"; tint = Theme.CYAN; contentDescription = null
@@ -298,8 +297,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(9), dp(6), dp(9), dp(6))
-                background = panel(if (kind == "me") 0xFF10372E.toInt() else 0xFF101C19.toInt(), 12,
-                    if (kind == "me") 0xFF167C66.toInt() else 0xFF203D38.toInt())
+                background = panel(if (kind == "me") 0xFF203A34.toInt() else 0xFF11191C.toInt(), 12,
+                    if (kind == "me") 0xFF426F67.toInt() else Theme.LINE)
             }
             row.addView(text(if (kind == "me") "YOU" else "ORION", 8f,
                 if (kind == "me") Theme.CYAN else Theme.MUTED, true))
