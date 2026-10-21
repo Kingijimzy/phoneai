@@ -279,9 +279,10 @@ class Nim(private val ctx: Context) {
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
     private fun candidates(p: Provider, vision: Boolean): List<String> {
-        // In quota-saver mode, never spend an extra network request listing models.
-        // Use the provider's small known fallback list instead.
-        val ids = if (Prefs.quotaSaver(ctx)) emptyList() else try {
+        // Normally quota-saver mode avoids the extra /models request. NVIDIA's catalog
+        // retires model IDs frequently (410 Gone), so discover IDs currently exposed to this
+        // key after a model failure even in quota-saver mode rather than retrying retired IDs.
+        val ids = if (Prefs.quotaSaver(ctx) && p.id != "nvidia") emptyList() else try {
             allModels(p)
         } catch (e: Exception) {
             emptyList()
