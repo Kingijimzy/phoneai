@@ -1070,6 +1070,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Starts the continuous, user-initiated live conversation used by the full-screen voice UI. */
+    fun startLiveConversation() {
+        main.post { startLive() }
+    }
+
     /** Live call: Orion listens, answers, listens again, until you say goodbye or stay quiet. */
     private fun startLive() {
         if (running) return
