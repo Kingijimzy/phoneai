@@ -1093,7 +1093,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Live call: Orion listens, answers, listens again, until you say goodbye or stay quiet. */
     private fun startLive() {
-        if (running) return
+        if (running) {
+            showStatusText("Orion is already working. Wait or stop the current task before starting live voice.")
+            return
+        }
+        if (listening) {
+            handsActive = true
+            emptyListens = 0
+            showStatusText("Live voice is active. Go ahead when ready.")
+            return
+        }
         handsActive = true
         emptyListens = 0
         closePanel(false)
