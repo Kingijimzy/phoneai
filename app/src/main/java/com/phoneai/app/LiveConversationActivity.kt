@@ -218,7 +218,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             return
         }
         listeningRequested = true
-        service.listenFromMainChat()
+        service.startLiveConversation()
         helperLabel.text = "Speak naturally. Orion will respond here."
         micButton.text = "Ⅱ"
         micButton.contentDescription = "Voice input requested"
