@@ -1020,33 +1020,33 @@ class SettingsActivity : Activity() {
 
     private fun memoryDialog() {
         val items = MemoryStore.all(this).sortedByDescending { it.updated }
-        val b = AlertDialog.Builder(this).setTitle("Orion's memory (" + items.size + ")")
         if (items.isEmpty()) {
-            b.setMessage(
-                "Nothing saved yet. Tell Orion things like \"remember I prefer short answers\" " +
-                    "or \"we are working on my trading agent\", or tap Add."
-            )
-        } else {
-            val labels = items.map { "(" + it.category + ") " + it.text + "  " + when2(it.updated) }.toTypedArray()
-            b.setItems(labels) { _, which -> editMemory(items[which]) }
+            showChoiceDialog("Orion's memory (0)", "Nothing saved yet. Tell Orion things like “remember I prefer short answers”, or add a note here.",
+                listOf("Add a memory · Save a preference, fact, or project note"),
+                { editMemory(null) },
+                { refresh() })
+            return
         }
-        b.setPositiveButton("Add") { _, _ -> editMemory(null) }
-        b.setNegativeButton("Close") { _, _ -> refresh() }
-        if (items.isNotEmpty()) {
-            b.setNeutralButton("Clear all") { _, _ ->
-                AlertDialog.Builder(this)
-                    .setTitle("Delete ALL memories?")
-                    .setMessage("Orion will forget everything it saved. This cannot be undone.")
-                    .setPositiveButton("Delete all") { _, _ ->
-                        MemoryStore.clear(this)
-                        refresh()
-                        memoryDialog()
-                    }
-                    .setNegativeButton("Cancel") { _, _ -> memoryDialog() }
-                    .show()
-            }
-        }
-        b.show()
+        showChoiceDialog("Orion's memory (${items.size})", "Select a memory to edit. Entries are stored locally on this phone.",
+            items.map { "(" + it.category + ") · " + it.text + "  ·  " + when2(it.updated) } +
+                listOf("Add memory · Save a new note", "Clear all memories · Permanently delete saved entries"),
+            { which ->
+                when {
+                    which < items.size -> editMemory(items[which])
+                    which == items.size -> editMemory(null)
+                    else -> AlertDialog.Builder(this)
+                        .setTitle("Delete all memories?")
+                        .setMessage("Orion will forget everything it saved. This cannot be undone.")
+                        .setPositiveButton("Delete all") { _, _ ->
+                            MemoryStore.clear(this)
+                            refresh()
+                            memoryDialog()
+                        }
+                        .setNegativeButton("Cancel") { _, _ -> memoryDialog() }
+                        .show()
+                }
+            },
+            { refresh() })
     }
 
     private fun editMemory(m: Memory?) {
