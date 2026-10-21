@@ -143,8 +143,8 @@ class TaskCenterActivity : Activity() {
         add(page, summaryCard, 13)
 
         val filters = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        listOf("all" to "◉  All", "queued" to "◷  Queued", "running" to "↻  Running", "paused" to "Ⅱ  Paused",
-            "completed" to "✓  Completed", "failed" to "!  Failed").forEach { pair ->
+        listOf("all" to "All", "queued" to "Queued", "running" to "Running", "paused" to "Paused",
+            "completed" to "Completed", "failed" to "Failed").forEach { pair ->
             filters.addView(button(pair.second, pair.first == filter) {
                 filter = pair.first; refresh()
             }, LinearLayout.LayoutParams(-2, dp(42)).apply { rightMargin = dp(6) })
@@ -170,9 +170,9 @@ class TaskCenterActivity : Activity() {
         val completed = tasks.count { it.status == "completed" || it.status == "done" }
         val failed = tasks.count { it.status == "failed" }
         val cancelled = tasks.count { it.status == "cancelled" }
-        summary.text = "◉ " + queued + " queued    ↻ " + running + " running    Ⅱ " + paused +
-            "\n✓ " + completed + " completed    ! " + failed + " failed" +
-            if (cancelled > 0) "    × " + cancelled + " cancelled" else ""
+        summary.text = queued.toString() + " queued    ·    " + running + " running    ·    " + paused + " paused" +
+            "\n" + completed + " completed    ·    " + failed + " failed" +
+            if (cancelled > 0) "    ·    " + cancelled + " cancelled" else ""
 
         listHost.removeAllViews()
         val visible = tasks.filter { t ->
