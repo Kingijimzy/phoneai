@@ -764,12 +764,11 @@ class SettingsActivity : Activity() {
     }
 
     private fun skillOptions(skill: PhoneAiSkill) {
-        val actions = arrayOf(if (skill.enabled) "Disable skill" else "Enable skill", "Delete skill")
-        AlertDialog.Builder(this)
-            .setTitle(skill.id + "  v" + skill.version)
-            .setMessage(skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
-                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds")
-            .setItems(actions) { _, which ->
+        showChoiceDialog(skill.id + " · v" + skill.version,
+            skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
+                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds",
+            listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Delete skill · Remove its local definition"),
+            { which ->
                 if (which == 0) {
                     val result = SkillRegistry.setEnabled(this, skill.id, !skill.enabled)
                     Toast.makeText(this, result.reason, Toast.LENGTH_SHORT).show()
@@ -788,9 +787,7 @@ class SettingsActivity : Activity() {
                         .setNegativeButton("Cancel", null)
                         .show()
                 }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+            })
     }
 
     private fun addSkillDialog() {
