@@ -2,10 +2,10 @@
 <resources>
     <style name="Theme.Orion" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:alertDialogTheme">@style/Theme.Orion.Dialog</item>
-        <item name="android:colorAccent">#8DE0D1</item>
+        <item name="android:colorAccent">#00FCB6</item>
         <item name="android:colorControlActivated">#8DE0D1</item>
-        <item name="android:colorControlHighlight">#228DE0D1</item>
-        <item name="android:windowBackground">#080C0E</item>
+        <item name="android:colorControlHighlight">#2200FCB6</item>
+        <item name="android:windowBackground">#02080A</item>
         <item name="android:statusBarColor">#080C0E</item>
         <item name="android:navigationBarColor">#080C0E</item>
         <item name="android:windowLightStatusBar">false</item>
