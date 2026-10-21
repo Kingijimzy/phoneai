@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Memory
@@ -300,7 +301,7 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
             Text(title, color = Copy, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
         }
-        Text("›", color = Muted, fontSize = 27.sp)
+        Icon(Icons.Rounded.ChevronRight, contentDescription = "Open $title", tint = Muted, modifier = Modifier.size(21.dp))
     }
 }
 
