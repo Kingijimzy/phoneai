@@ -126,7 +126,16 @@ object Prefs {
 
     fun model(c: Context, p: Provider, vision: Boolean): String {
         val def = if (vision) (p.visionModel ?: p.textModel) else p.textModel
-        return sp(c).getString((if (vision) "vm_" else "tm_") + p.id, null) ?: def
+        val saved = sp(c).getString((if (vision) "vm_" else "tm_") + p.id, null)
+        // Migrate NVIDIA selections known to have been retired from the public catalog.
+        // Without this, an existing preference would override the corrected default forever.
+        if (p.id == "nvidia" && saved in setOf(
+                "meta/llama-3.3-70b-instruct",
+                "nvidia/nemotron-3-nano-30b-a3b",
+                "openai/gpt-oss-20b",
+                "nvidia/llama-3.1-nemotron-70b-instruct"
+            )) return def
+        return saved ?: def
     }
 
     fun setModel(c: Context, p: Provider, vision: Boolean, m: String) =
