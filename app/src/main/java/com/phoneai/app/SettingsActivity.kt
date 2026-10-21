@@ -1029,38 +1029,54 @@ class SettingsActivity : Activity() {
     }
 
     private fun editMemory(m: Memory?) {
-        val box = EditText(this)
-        box.hint = "What should Orion remember?"
-        box.setText(m?.text ?: "")
-        box.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        box.minLines = 2
-        val spin = Spinner(this)
-        spin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, MemoryStore.CATEGORIES)
-        spin.setSelection(MemoryStore.CATEGORIES.indexOf(m?.category ?: "fact").coerceAtLeast(0))
-        val wrap = LinearLayout(this)
-        wrap.orientation = LinearLayout.VERTICAL
-        wrap.setPadding(dp(20), dp(8), dp(20), 0)
-        wrap.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        wrap.addView(spin, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val b = AlertDialog.Builder(this)
-            .setTitle(if (m == null) "Add a memory" else "Edit memory")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
-                val cat = MemoryStore.CATEGORIES[spin.selectedItemPosition]
+        val box = EditText(this).apply {
+            hint = "What should Orion remember?"
+            setText(m?.text ?: "")
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 3
+            setTextColor(Theme.TEXT)
+        }
+        var selectedCategory = MemoryStore.CATEGORIES.indexOf(m?.category ?: "fact").coerceAtLeast(0)
+        lateinit var categoryButton: Button
+        categoryButton = button("CATEGORY  ·  " + MemoryStore.CATEGORIES[selectedCategory].uppercase(Locale.ROOT), false) {
+            showChoiceDialog("Memory category", "Choose how Orion should classify this note.",
+                MemoryStore.CATEGORIES.map { it + " ·  Organize saved context" },
+                { which ->
+                    selectedCategory = which
+                    categoryButton.text = "CATEGORY  ·  " + MemoryStore.CATEGORIES[selectedCategory].uppercase(Locale.ROOT)
+                })
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt()))
+            addView(text("ORION  /  MEMORY", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(8)) })
+            addView(text(if (m == null) "Add a memory" else "Edit memory", 20f, Theme.TEXT, true))
+            addView(box, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            addView(categoryButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        }
+        val dialog = AlertDialog.Builder(this).setView(wrap)
+            .setPositiveButton("SAVE MEMORY") { _, _ ->
+                val cat = MemoryStore.CATEGORIES[selectedCategory]
                 val t = box.text.toString()
                 if (m == null) MemoryStore.add(this, cat, t) else MemoryStore.update(this, m.id, cat, t)
                 refresh()
                 memoryDialog()
             }
-            .setNegativeButton("Cancel") { _, _ -> memoryDialog() }
-        if (m != null) {
-            b.setNeutralButton("Delete") { _, _ ->
-                MemoryStore.delete(this, m.id)
-                refresh()
-                memoryDialog()
-            }
+            .setNegativeButton("CANCEL") { _, _ -> memoryDialog() }
+            .create()
+        if (m != null) dialog.setButton(AlertDialog.BUTTON_NEUTRAL, "DELETE") { _, _ ->
+            MemoryStore.delete(this, m.id)
+            refresh()
+            memoryDialog()
         }
-        b.show()
+        dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
     private fun telegramDialog() {
