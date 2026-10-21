@@ -90,35 +90,35 @@ fun OrionComposeChatScreen(
     LaunchedEffect(lines.size) {
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
-    Column(Modifier.fillMaxSize().background(Ink).imePadding()) {
+    Column(Modifier.fillMaxSize().background(ChatInk).imePadding()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Panel).border(1.dp, Hairline, CircleShape)
+                Modifier.size(40.dp).clip(CircleShape).background(ChatPanel).border(1.dp, ChatHairline, CircleShape)
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.ArrowBack, null, tint = Copy, modifier = Modifier.size(19.dp)) }
+            ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(19.dp)) }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("ORION", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.2.sp)
-                Text("PERSONAL INTELLIGENCE", color = Muted, fontSize = 9.sp, letterSpacing = 1.3.sp)
+                Text("ORION", color = ChatCopy, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.2.sp)
+                Text("PERSONAL INTELLIGENCE", color = ChatMuted, fontSize = 9.sp, letterSpacing = 1.3.sp)
             }
             Row(
                 Modifier.clip(CircleShape).background(Color(0xFF12231F)).border(1.dp, Color(0xFF315B51), CircleShape)
                     .padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.size(5.dp).clip(CircleShape).background(if (status.contains("listen", true) || status.contains("speak", true)) Mint else Muted))
+                Box(Modifier.size(5.dp).clip(CircleShape).background(if (status.contains("listen", true) || status.contains("speak", true)) ChatMint else ChatMuted))
                 Spacer(Modifier.width(6.dp))
-                Text(status.uppercase().take(14), color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+                Text(status.uppercase().take(14), color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
             }
         }
 
         Row(
             Modifier.fillMaxWidth().padding(start = 17.dp, end = 17.dp, bottom = 10.dp)
-                .clip(RoundedCornerShape(16.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(4.dp),
+                .clip(RoundedCornerShape(16.dp)).background(ChatPanel).border(1.dp, ChatHairline, RoundedCornerShape(16.dp)).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             ModePill("Talk", !commandMode, Modifier.weight(1f)) { onModeChange(false) }
@@ -136,13 +136,13 @@ fun OrionComposeChatScreen(
                         .background(Brush.linearGradient(listOf(Color(0xFF1C4039), Color(0xFF142122))))
                         .border(1.dp, Color(0xFF37685D), RoundedCornerShape(26.dp)),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Rounded.Waves, null, tint = Mint, modifier = Modifier.size(35.dp)) }
+                ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(35.dp)) }
                 Spacer(Modifier.height(20.dp))
-                Text("Let's think it through.", color = Copy, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Text("Let's think it through.", color = ChatCopy, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     if (commandMode) "Tell Orion what you want done. It will ask before sensitive actions." else "Ask anything. Talk naturally—no automatic web search or phone actions.",
-                    color = Muted, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center
+                    color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center
                 )
             }
         } else {
@@ -160,32 +160,32 @@ fun OrionComposeChatScreen(
         AnimatedVisibility(selectedImage != null) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 5.dp)
-                    .clip(RoundedCornerShape(14.dp)).background(PanelRaised).border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(12.dp),
+                    .clip(RoundedCornerShape(14.dp)).background(ChatPanelRaised).border(1.dp, ChatHairline, RoundedCornerShape(14.dp)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Rounded.AddPhotoAlternate, null, tint = Mint, modifier = Modifier.size(22.dp))
+                Icon(Icons.Rounded.AddPhotoAlternate, null, tint = ChatMint, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("IMAGE ATTACHED", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Text("Ready for Orion to analyse", color = Muted, fontSize = 11.sp)
+                    Text("IMAGE ATTACHED", color = ChatMint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text("Ready for Orion to analyse", color = ChatMuted, fontSize = 11.sp)
                 }
-                Text("Remove", color = Muted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onRemoveImage).padding(5.dp))
+                Text("Remove", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onRemoveImage).padding(5.dp))
             }
         }
 
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp)).background(Panel)
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp)).background(ChatPanel)
                     .border(1.dp, Color(0xFF36524E), RoundedCornerShape(25.dp)).padding(start = 15.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
                 Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
-                    if (draft.isEmpty()) Text(if (commandMode) "Tell Orion what to do…" else "Message Orion…", color = Muted, fontSize = 14.sp)
+                    if (draft.isEmpty()) Text(if (commandMode) "Tell Orion what to do…" else "Message Orion…", color = ChatMuted, fontSize = 14.sp)
                     BasicTextField(
                         value = draft,
                         onValueChange = { draft = it },
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = TextStyle(color = Copy, fontSize = 14.sp, lineHeight = 20.sp),
+                        textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 20.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
                             if (draft.isNotBlank() || selectedImage != null) {
@@ -208,15 +208,15 @@ fun OrionComposeChatScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Sensitive actions require confirmation.", color = Muted, fontSize = 10.sp)
-                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Muted,
+                Text("Sensitive actions require confirmation.", color = ChatMuted, fontSize = 10.sp)
+                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else ChatMuted,
                     fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(5.dp))
             }
         }
 
         Row(
             Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, bottom = 7.dp, top = 2.dp)
-                .clip(RoundedCornerShape(21.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(21.dp)).padding(5.dp),
+                .clip(RoundedCornerShape(21.dp)).background(ChatPanel).border(1.dp, ChatHairline, RoundedCornerShape(21.dp)).padding(5.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             DockAction("Chat", Icons.Rounded.Send, true, Modifier.weight(1f)) {}
@@ -235,7 +235,7 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
             .clickable(onClick = onClick).padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = if (selected) Mint else Muted, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+        Text(label, color = if (selected) ChatMint else ChatMuted, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
     }
 }
 
@@ -248,7 +248,7 @@ private fun ChatBubble(item: OrionChatLine) {
         horizontalAlignment = if (mine) Alignment.End else Alignment.Start
     ) {
         if (!mine && !note) {
-            Text("ORION", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 5.dp, bottom = 3.dp))
+            Text("ORION", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 5.dp, bottom = 3.dp))
         }
         Column(
             Modifier.fillMaxWidth(if (note) 1f else if (mine) .82f else .94f)
@@ -256,16 +256,16 @@ private fun ChatBubble(item: OrionChatLine) {
                 .background(when {
                     note -> Color(0xFF111A1C)
                     mine -> Color(0xFF1C2C2B)
-                    else -> Panel
+                    else -> ChatPanel
                 })
-                .border(1.dp, if (mine) Color(0xFF34524C) else Hairline, RoundedCornerShape(if (mine) 20.dp else 16.dp))
+                .border(1.dp, if (mine) Color(0xFF34524C) else ChatHairline, RoundedCornerShape(if (mine) 20.dp else 16.dp))
                 .padding(horizontal = 14.dp, vertical = 11.dp)
         ) {
-            if (note) Text("LIVE ACTIVITY", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-            Text(item.text, color = if (note) Muted else Copy, fontSize = 14.sp, lineHeight = 21.sp)
+            if (note) Text("LIVE ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 21.sp)
             if (item.imageUri != null) {
                 Spacer(Modifier.height(7.dp))
-                Text("Attached image", color = Mint, fontSize = 11.sp)
+                Text("Attached image", color = ChatMint, fontSize = 11.sp)
             }
         }
     }
@@ -275,11 +275,11 @@ private fun ChatBubble(item: OrionChatLine) {
 private fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, secondary: Boolean) {
     Box(
         Modifier.size(43.dp).clip(CircleShape)
-            .background(if (secondary) Color(0xFF1A2B2B) else Mint)
-            .border(1.dp, if (secondary) Hairline else Color(0xFFB6F9E9), CircleShape)
+            .background(if (secondary) Color(0xFF1A2B2B) else ChatMint)
+            .border(1.dp, if (secondary) ChatHairline else Color(0xFFB6F9E9), CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
-    ) { Icon(icon, contentDescription = description, tint = if (secondary) Mint else Ink, modifier = Modifier.size(19.dp)) }
+    ) { Icon(icon, contentDescription = description, tint = if (secondary) ChatMint else ChatInk, modifier = Modifier.size(19.dp)) }
 }
 
 @Composable
@@ -290,7 +290,7 @@ private fun DockAction(title: String, icon: androidx.compose.ui.graphics.vector.
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Icon(icon, null, tint = if (selected) Mint else Muted, modifier = Modifier.size(19.dp))
-        Text(title, color = if (selected) Mint else Muted, fontSize = 9.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+        Icon(icon, null, tint = if (selected) ChatMint else ChatMuted, modifier = Modifier.size(19.dp))
+        Text(title, color = if (selected) ChatMint else ChatMuted, fontSize = 9.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
     }
 }
