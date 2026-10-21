@@ -131,65 +131,53 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         canvas.drawCircle(coreX, coreY, bloomR, paint)
         paint.shader = null
 
-        // The reference's centerpiece is a single glossy, translucent turquoise sphere.
-        spherePath.reset()
-        spherePath.addCircle(coreX, coreY, sphereR, Path.Direction.CW)
-        paint.shader = RadialGradient(
-            coreX - sphereR * 0.30f, coreY - sphereR * 0.40f, sphereR * 1.65f,
-            intArrayOf(0xFFF1FFFC.toInt(), 0xFF72FFE7.toInt(), 0xFF0AD9C0.toInt(), 0xFF006D68.toInt(), 0xFF03191C.toInt()),
-            floatArrayOf(0f, 0.18f, 0.48f, 0.79f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawCircle(coreX, coreY, sphereR, paint)
+        // Orion's own energy-core language: a dark reactor lens, layered arcs and a
+        // bright vertical plasma filament. Deliberately not a glossy spherical orb.
+        val coreR = r * (0.70f + 0.035f * breathe)
+        paint.shader = RadialGradient(coreX, coreY, coreR * 1.5f,
+            intArrayOf(0xFF103B36.toInt(), 0xFF071B1D.toInt(), 0xFF02090B.toInt()),
+            floatArrayOf(0f, 0.68f, 1f), Shader.TileMode.CLAMP)
+        canvas.drawCircle(coreX, coreY, coreR, paint)
         paint.shader = null
+        ring.strokeWidth = max(1.5f, r * 0.025f)
+        ring.color = (col and 0x00FFFFFF) or 0xB9000000.toInt()
+        canvas.drawCircle(coreX, coreY, coreR * 0.92f, ring)
+        ring.strokeWidth = max(1.1f, r * 0.012f)
+        ring.color = (col and 0x00FFFFFF) or 0x8A000000.toInt()
+        rect.set(coreX - coreR * 1.14f, coreY - coreR * 0.54f,
+            coreX + coreR * 1.14f, coreY + coreR * 0.54f)
+        canvas.drawArc(rect, 196f + t * 18f, 220f, false, ring)
+        rect.set(coreX - coreR * 1.08f, coreY - coreR * 0.72f,
+            coreX + coreR * 1.08f, coreY + coreR * 0.72f)
+        ring.color = (col and 0x00FFFFFF) or 0x65000000.toInt()
+        canvas.drawArc(rect, 18f - t * 13f, 145f, false, ring)
 
-        val save = canvas.save()
-        canvas.clipPath(spherePath)
-
-        // Broad curved reflections give the sphere a liquid-glass / 3D refractive feel.
-        paint.style = Paint.Style.FILL
-        paint.shader = RadialGradient(
-            coreX - sphereR * 0.34f, coreY - sphereR * 0.55f, sphereR * 0.82f,
-            intArrayOf(0xD9FFFFFF.toInt(), 0x66BFFFF6, 0x00FFFFFF),
-            floatArrayOf(0f, 0.38f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawOval(coreX - sphereR * 0.72f, coreY - sphereR * 0.88f,
-            coreX + sphereR * 0.32f, coreY - sphereR * 0.22f, paint)
-        paint.shader = null
-
-        // Moving inner currents: restrained ribbons, not sci-fi orbit rings.
-        fluid.strokeWidth = max(1.1f, sphereR * 0.045f)
-        fluid.color = 0xA6C8FFF7.toInt()
-        val shift = sin(t * 0.92f) * sphereR * (0.11f + 0.025f * breathe)
-        val drift = cos(t * 0.67f) * sphereR * 0.09f
-        val ripple = sin(t * 1.27f + 0.7f) * sphereR * 0.055f
-        val current1 = Path().apply {
-            moveTo(coreX - sphereR * 1.05f, coreY - sphereR * 0.10f + shift)
-            cubicTo(coreX - sphereR * 0.46f + drift, coreY - sphereR * 0.70f + ripple,
-                coreX + sphereR * 0.12f - drift, coreY - sphereR * 0.76f + shift * 0.25f,
-                coreX + sphereR * 1.03f, coreY - sphereR * 0.08f - shift)
+        // Central plasma filament with a hot white core.
+        val filament = Path().apply {
+            moveTo(coreX - coreR * 0.28f, coreY + coreR * 0.67f)
+            cubicTo(coreX + sin(t * 1.5f) * coreR * 0.52f, coreY + coreR * 0.18f,
+                coreX - cos(t * 1.2f) * coreR * 0.46f, coreY - coreR * 0.16f,
+                coreX + sin(t * 0.8f) * coreR * 0.22f, coreY - coreR * 0.69f)
         }
-        canvas.drawPath(current1, fluid)
-        fluid.strokeWidth = max(0.8f, sphereR * 0.022f)
-        fluid.color = 0x887BFFF0.toInt()
-        val current2 = Path().apply {
-            moveTo(coreX - sphereR * 0.95f, coreY + sphereR * 0.35f - shift)
-            cubicTo(coreX - sphereR * 0.25f - drift, coreY + sphereR * 0.02f + shift * 0.3f,
-                coreX + sphereR * 0.25f + drift, coreY + sphereR * 0.83f + ripple,
-                coreX + sphereR * 1.02f, coreY + sphereR * 0.25f + shift)
+        fluid.strokeWidth = max(3f, coreR * (0.10f + 0.025f * breathe))
+        fluid.color = (col and 0x00FFFFFF) or 0x74000000.toInt()
+        canvas.drawPath(filament, fluid)
+        fluid.strokeWidth = max(1.2f, coreR * 0.025f)
+        fluid.color = 0xFFF1FFFC.toInt()
+        canvas.drawPath(filament, fluid)
+
+        // Four energy nodes travel on the inner track; no decorative floating bubbles.
+        for (i in 0 until 4) {
+            val a = t * (if (mode == Mode.THINKING || mode == Mode.ACTING) 1.65f else 0.72f) +
+                i * (PI.toFloat() / 2f)
+            val nx = coreX + cos(a) * coreR * 0.79f
+            val ny = coreY + sin(a) * coreR * 0.48f
+            paint.shader = RadialGradient(nx, ny, max(2f, coreR * 0.12f),
+                intArrayOf(0xFFFFFFFF.toInt(), col, 0x0000FCB6),
+                floatArrayOf(0f, 0.34f, 1f), Shader.TileMode.CLAMP)
+            canvas.drawCircle(nx, ny, max(2f, coreR * 0.12f), paint)
+            paint.shader = null
         }
-        canvas.drawPath(current2, fluid)
-
-        // Fine crescent highlight along the top edge creates the wet, polished finish.
-        fluid.strokeWidth = max(1f, sphereR * 0.035f)
-        fluid.color = 0xCCF5FFFE.toInt()
-        rect.set(coreX - sphereR * 0.72f, coreY - sphereR * 0.91f, coreX + sphereR * 0.62f, coreY + sphereR * 0.38f)
-        canvas.drawArc(rect, 208f + sin(t * 0.4f) * 4f, 104f, false, fluid)
-
-        // Tiny specular glint.
-        paint.shader = RadialGradient(coreX - sphereR * 0.34f, coreY - sphereR * 0.63f, sphereR * 0.24f,
-            intArrayOf(0xFFFFFFFF.toInt(), 0x66FFFFFF, 0x00FFFFFF),
-            floatArrayOf(0f, 0.38f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawCircle(coreX - sphereR * 0.30f, coreY - sphereR * 0.59f, sphereR * 0.24f, paint)
-        paint.shader = null
-        canvas.restoreToCount(save)
 
         // A few restrained orbit sparks give the core depth while keeping Canvas work cheap.
         val orbitSpeed = when (mode) {
