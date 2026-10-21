@@ -58,7 +58,11 @@ class SettingsActivity : Activity() {
             val pieces = label.split(" · ", limit = 2)
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
-                background = GradientDrawable().apply { setColor(0xFF11191A.toInt()); cornerRadius = dp(14).toFloat(); setStroke(dp(1), 0xFF203D37.toInt()) }
+                background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(0xE61A2426.toInt(), 0xE80D1416.toInt())).apply {
+                    cornerRadius = dp(14).toFloat()
+                    setStroke(dp(1), 0x443D6963)
+                }
                 isClickable = true; isFocusable = true; contentDescription = label
             }
             row.addView(text(pieces[0], 14f, Theme.TEXT, true))
