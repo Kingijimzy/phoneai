@@ -97,6 +97,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     interface MainChatListener {
         fun onMessage(kind: String, text: String)
         fun onStatus(text: String, mode: OrbView.Mode)
+        fun onAudioLevel(level: Float) {}
     }
 
     @Volatile
@@ -129,6 +130,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         voice.onLevel = { l ->
             for (o in orbs()) o.level = l
+            mainChatListener?.onAudioLevel(l)
         }
         agent = Agent(this, this)
         showBubble()
