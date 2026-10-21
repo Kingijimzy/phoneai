@@ -54,6 +54,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private val ChatInk = Color(0xFF070B0D)
+private val ChatPanel = Color(0xFF101719)
+private val ChatPanelRaised = Color(0xFF151F21)
+private val ChatMint = Color(0xFF72E3CE)
+private val ChatCopy = Color(0xFFF0F5F5)
+private val ChatMuted = Color(0xFF9BAAAC)
+private val ChatHairline = Color(0xFF263638)
+
 data class OrionChatLine(
     val id: Long,
     val kind: String,
