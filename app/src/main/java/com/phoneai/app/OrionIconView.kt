@@ -147,6 +147,19 @@ class OrionIconView @JvmOverloads constructor(
                 path.moveTo(4f, 12f); path.lineTo(9f, 17f); path.lineTo(20f, 6f)
                 canvas.drawPath(path, paint)
             }
+            "call", "phone" -> {
+                path.moveTo(6f, 3f); path.lineTo(9f, 8f); path.lineTo(7f, 10f)
+                path.quadTo(10f, 16f, 14f, 17f); path.lineTo(16f, 15f); path.lineTo(21f, 18f)
+                path.lineTo(20f, 21f); path.quadTo(19f, 23f, 16f, 22f)
+                path.quadTo(6f, 18f, 2f, 8f); path.quadTo(1f, 4f, 4f, 3f); path.close()
+                canvas.drawPath(path, paint)
+            }
+            "record" -> {
+                canvas.drawCircle(12f, 12f, 8.5f, paint)
+                paint.style = Paint.Style.FILL
+                canvas.drawCircle(12f, 12f, 4.5f, paint)
+                paint.style = Paint.Style.STROKE
+            }
             "arrow" -> {
                 path.moveTo(4f, 12f); path.lineTo(20f, 12f)
                 path.moveTo(13f, 5f); path.lineTo(20f, 12f); path.lineTo(13f, 19f)
