@@ -103,15 +103,15 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         titleCol.addView(status)
         titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        val live = label("●  LIVE VOICE", 10f, 0xFFE7FFFA.toInt(), true).apply {
+        val live = label("● LIVE", 10f, 0xFFE7FFFA.toInt(), true).apply {
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(13), dp(12), dp(13))
+            setPadding(dp(10), dp(11), dp(10), dp(11))
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF087A61.toInt(), 0xFF064638.toInt())).apply {
                 cornerRadius = dp(16).toFloat()
                 setStroke(dp(1), 0xFF20EAC2.toInt())
             }
             elevation = dp(3).toFloat()
-            minHeight = dp(46)
+            minHeight = dp(42)
             contentDescription = "Start live voice conversation with Orion"
             isFocusable = true
             setOnTouchListener { v, e ->
@@ -168,6 +168,16 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
             elevation = dp(2).toFloat()
         }
+        // The reference uses a single expressive animated centerpiece; keep it compact
+        // so the conversation and composer remain the focus on a 720px-wide phone.
+        intro.addView(OrbView(this).apply {
+            contentDescription = "Animated Orion energy core"
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(142), dp(118)).apply {
+            gravity = Gravity.CENTER
+            bottomMargin = dp(1)
+        })
         intro.addView(label("YOUR AI. YOUR FLOW.", 10f, Theme.CYAN, true).apply {
             letterSpacing = .13f
             gravity = Gravity.CENTER
