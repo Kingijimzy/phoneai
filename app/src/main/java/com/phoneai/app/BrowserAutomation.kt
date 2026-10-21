@@ -95,7 +95,7 @@ object BrowserAutomation {
             es.sort((a,b)=>(b.clientHeight*b.clientWidth)-(a.clientHeight*a.clientWidth));
             const e=es[0]||document.scrollingElement;
             if(!e)return 'error: no scrollable page area found';
-            e.scrollBy({top:Math.round(e.clientHeight*($delta)),behavior:'instant'});
+            e.scrollBy({top:Math.round(e.clientHeight*($delta)),behavior:'auto'});
             return 'scrolled $word';
           })()
         """.trimIndent())
