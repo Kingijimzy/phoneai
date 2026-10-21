@@ -1749,11 +1749,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     teachPathPoints.add(Pair(e.rawX, e.rawY))
                 }
             }
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val x1 = tDownX
                 val y1 = tDownY
-                val x2 = e.rawX
-                val y2 = e.rawY
+                val lastPoint = teachPathPoints.lastOrNull() ?: Pair(e.rawX, e.rawY)
+                val x2 = if (e.actionMasked == MotionEvent.ACTION_CANCEL) lastPoint.first else e.rawX
+                val y2 = if (e.actionMasked == MotionEvent.ACTION_CANCEL) lastPoint.second else e.rawY
                 val dur = SystemClock.uptimeMillis() - tDownUp
                 val wall = tDownWall
                 val sigF = tSig
