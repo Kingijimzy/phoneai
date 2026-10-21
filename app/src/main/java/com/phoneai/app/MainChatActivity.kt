@@ -221,18 +221,13 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF080C0E.toInt(), 0xFF071311.toInt(), 0xFF11191A.toInt()))
+            setBackgroundColor(Theme.BG)
             setPadding(dp(14), dp(10), dp(14), dp(9))
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF1A2B28.toInt(), 0xFF111A19.toInt(), 0xFF141F1D.toInt())).apply {
-                cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), 0xFF016856.toInt())
-            }
+            background = rounded(0xEE121A1D.toInt(), 22, Theme.LINE)
             elevation = dp(4).toFloat()
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }
@@ -314,12 +309,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val intro = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(17), dp(15), dp(17), dp(15))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF1A2B28.toInt(), 0xFF111A19.toInt(), 0xFF141F1D.toInt())).apply {
-                cornerRadius = dp(22).toFloat()
-                setStroke(dp(1), 0xFF2B3A3D.toInt())
-            }
-            elevation = dp(2).toFloat()
+            background = rounded(0xEE11191C.toInt(), 22, Theme.LINE)
+            elevation = dp(1).toFloat()
         }
         // The reference uses a single expressive animated centerpiece; keep it compact
         // so the conversation and composer remain the focus on a 720px-wide phone.
@@ -432,12 +423,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF151E21.toInt(), 0xFF0A1413.toInt())).apply {
-                cornerRadius = dp(25).toFloat()
-                setStroke(dp(1), 0xFF2B3A3D.toInt())
-            }
-            elevation = dp(5).toFloat()
+            background = rounded(0xF0151E21.toInt(), 24, Theme.LINE)
+            elevation = dp(2).toFloat()
             setPadding(dp(8), dp(6), dp(7), dp(6))
         }
         input = EditText(this).apply {
@@ -483,12 +470,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         composer.addView(attach, LinearLayout.LayoutParams(dp(42), dp(44)).apply { rightMargin = dp(6) })
         send = label("↑", 23f, 0xFF02110D.toInt(), true).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFFB9FFF0.toInt(), 0xFF8DE0D1.toInt(), 0xFF0BB0A1.toInt())).apply {
-                shape = GradientDrawable.OVAL
-                setStroke(dp(1), 0xFFB4EEE5.toInt())
-            }
-            elevation = dp(5).toFloat()
+            background = rounded(0xFF8DE0D1.toInt(), 23, 0xFFB4EEE5.toInt())
+            elevation = dp(2).toFloat()
             layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
             contentDescription = "Send message"
             setOnTouchListener { v, e ->
@@ -508,11 +491,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(7), dp(6), dp(7), dp(5))
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF0D211D.toInt(), 0xFF0B1012.toInt())).apply {
-                cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), 0xFF244B41.toInt())
-            }
-            elevation = dp(8).toFloat()
+            background = rounded(0xEE11191C.toInt(), 23, Theme.LINE)
+            elevation = dp(3).toFloat()
         }
         fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
             val item = LinearLayout(this).apply {
@@ -539,8 +519,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val liveDock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true; isFocusable = true; contentDescription = "Start full-screen live voice call with Orion"; setPadding(dp(4), 0, dp(4), 0) }
         val liveButton = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFB9FFF0.toInt(), 0xFF8DE0D1.toInt(), 0xFF0BB0A1.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFFB4EEE5.toInt()) }
-            elevation = dp(7).toFloat()
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF8DE0D1.toInt()); setStroke(dp(1), 0xFFB4EEE5.toInt()) }
+            elevation = dp(3).toFloat()
             addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
         }
         liveDock.addView(liveButton, LinearLayout.LayoutParams(dp(48), dp(48)))
