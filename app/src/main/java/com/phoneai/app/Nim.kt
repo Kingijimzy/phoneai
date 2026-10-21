@@ -578,6 +578,21 @@ class Nim(private val ctx: Context) {
                 }
                 continue
             }
+            if (r.code in listOf(500, 502, 503, 504)) {
+                // Temporary provider overload is not proof that the key or model is invalid.
+                // Try one alternate model from the same provider before moving to a backup provider.
+                lastNote = "$model -> HTTP ${r.code} ${r.body.replace("\n", " ").take(100)}"
+                if (!refilled) {
+                    refilled = true
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    if (backups.isNotEmpty()) {
+                        queue.addAll(0, backups)
+                        onStatus?.invoke("${p.label} is temporarily busy (HTTP ${r.code}); trying an alternate model…")
+                        continue
+                    }
+                }
+                throw AiException("${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider.")
+            }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
             val content = extract(p, r.body)
             if (content.isBlank() || content == "null") {
