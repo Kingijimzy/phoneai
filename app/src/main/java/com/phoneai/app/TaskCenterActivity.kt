@@ -292,27 +292,39 @@ class TaskCenterActivity : Activity() {
 
     private fun addTask() {
         val title = EditText(this).apply { hint = "What needs to get done?"; isSingleLine = true }
-        val details = EditText(this).apply { hint = "Notes or next step (optional)" }
-        val priority = Spinner(this).apply {
-            adapter = ArrayAdapter(this@TaskCenterActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("normal", "low", "high", "urgent"))
+        val details = EditText(this).apply { hint = "Notes or next step (optional) }
+        var selectedPriority = "normal"
+        lateinit var priorityButton: Button
+        priorityButton = button("PRIORITY  ·  NORMAL") {
+            showChoiceSheet("Task priority", "Choose how urgently this should be handled.", listOf("low", "normal", "high", "urgent")) {
+                selectedPriority = listOf("low", "normal", "high", "urgent")[it]
+                priorityButton.text = "PRIORITY  ·  " + selectedPriority.uppercase(Locale.ROOT)
+            }
         }
         val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0)
-            addView(title); addView(details, LinearLayout.LayoutParams(-1, dp(82)))
-            addView(label("Priority", 12f, Theme.MUTED)); addView(priority)
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(12), dp(18), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF07110F.toInt(), 0xFF0A1D19.toInt()))
+            addView(label("ORION  /  TASK CENTRE", 10f, Theme.CYAN, true))
+            addView(label("Create a task", 20f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, dp(8)) })
+            addView(title)
+            addView(details, LinearLayout.LayoutParams(-1, dp(82)).apply { topMargin = dp(8) })
+            addView(priorityButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
-        val dialog = AlertDialog.Builder(this).setTitle("New task").setView(box)
-            .setNegativeButton("Cancel", null).setPositiveButton("Save task", null).create()
+        val dialog = AlertDialog.Builder(this).setView(box)
+            .setNegativeButton("CANCEL", null).setPositiveButton("SAVE TASK", null).create()
         dialog.setOnShowListener {
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val task = TaskStore.add(this, title.text.toString(), details.text.toString(),
-                    priority.selectedItem?.toString() ?: "normal")
+                val task = TaskStore.add(this, title.text.toString(), details.text.toString(), selectedPriority)
                 if (task == null) title.error = "Enter a title and check storage"
                 else { dialog.dismiss(); filter = "all"; refresh() }
             }
         }
         dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
     private fun editTask(task: OrionTask) {
