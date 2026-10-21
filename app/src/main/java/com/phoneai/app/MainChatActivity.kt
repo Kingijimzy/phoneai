@@ -40,6 +40,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var commandModeIcon: OrionIconView
     private lateinit var talkModeText: TextView
     private lateinit var commandModeText: TextView
+    private lateinit var modeHint: TextView
     private var attachedService: PhoneAiService? = null
     private var lastMode = OrbView.Mode.IDLE
     private var welcomePanel: View? = null
@@ -86,6 +87,14 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         talkModeText.setTextColor(if (talkSelected) Theme.CYAN else Theme.MUTED)
         commandModeText.setTextColor(if (commandMode) Theme.CYAN else Theme.MUTED)
         if (::input.isInitialized) input.hint = if (commandMode) "Tell Orion what to do…" else "Talk to Orion…"
+        if (::modeHint.isInitialized) {
+            modeHint.text = if (commandMode) {
+                "Phone actions and deliberate web research · sensitive actions ask first"
+            } else {
+                "Normal conversation · no automatic web search or phone actions"
+            }
+            modeHint.setTextColor(if (commandMode) Theme.CYAN else Theme.MUTED)
+        }
     }
 
     private fun refreshPersonalityLabel(view: TextView) {
@@ -494,6 +503,13 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         commandModeChip.setOnClickListener { commandMode = true; refreshModeSelector() }
         modeRow.addView(commandModeChip, LinearLayout.LayoutParams(0, -2, 1.25f))
         root.addView(modeRow)
+        modeHint = label("Normal conversation · no automatic web search or phone actions", 10f, Theme.MUTED).apply {
+            setPadding(dp(4), 0, dp(4), dp(4))
+            maxLines = 2
+            setLineSpacing(dp(1).toFloat(), 1f)
+            contentDescription = "Explanation of the selected Orion mode"
+        }
+        root.addView(modeHint, LinearLayout.LayoutParams(-1, -2))
         refreshModeSelector()
 
         val composer = LinearLayout(this).apply {
