@@ -103,11 +103,22 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         titleCol.addView(status)
         titleCol.addView(label("Think clearly. Act with permission.", 11f, Theme.MUTED))
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        val live = label("◉ LIVE", 10f, Theme.CYAN, true).apply {
+        val live = label("●  LIVE VOICE", 10f, 0xFFE7FFFA.toInt(), true).apply {
             gravity = Gravity.CENTER
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            background = rounded(0xFF082D26.toInt(), 14, 0xFF167C66.toInt())
-            contentDescription = "Open live voice conversation"
+            setPadding(dp(12), dp(13), dp(12), dp(13))
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF087A61.toInt(), 0xFF064638.toInt())).apply {
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), 0xFF20EAC2.toInt())
+            }
+            elevation = dp(3).toFloat()
+            minHeight = dp(46)
+            contentDescription = "Start live voice conversation with Orion"
+            isFocusable = true
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.96f).scaleY(.96f).setDuration(70).start()
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
+                false
+            }
             setOnClickListener {
                 startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java))
             }
