@@ -259,7 +259,7 @@ class TaskCenterActivity : Activity() {
             actions.addView(button(if (task.status == "paused") "▶  Resume" else "▶  Start", true) { change(task, "running") })
         }
         if (task.status != "completed" && task.status != "done") {
-            actions.addView(button("✓  Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
+            actions.addView(button("Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
                 LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
             actions.addView(button("!  Fail") { change(task, "failed") }.apply { setTextColor(0xFFFF8D8D.toInt()) },
                 LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
