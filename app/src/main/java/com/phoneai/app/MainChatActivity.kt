@@ -1,7 +1,8 @@
 package com.phoneai.app
 
+import androidx.activity.ComponentActivity
+
 import android.Manifest
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.content.Intent
@@ -28,7 +29,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 
 /** Full-screen conversation. The floating orb keeps its separate, compact command panel. */
-class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
+class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private lateinit var messages: LinearLayout
     private lateinit var scroll: ScrollView
     private lateinit var status: TextView
