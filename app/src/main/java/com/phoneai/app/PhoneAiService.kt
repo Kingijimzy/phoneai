@@ -1760,9 +1760,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val sigF = tSig
                 val points = ArrayList(teachPathPoints)
                 if (points.isEmpty() || points.last() != Pair(x2, y2)) points.add(Pair(x2, y2))
-                // Lock the recorder immediately after touch-up. Previously the overlay stayed
-                // touchable until the worker reached teachReplay, so a quick next tap could
-                // overwrite the shared coordinates/path and silently drop a step.
+                // Show a clear busy state while this gesture is forwarded and saved. The
+                // overlay must briefly stop intercepting input while Android injects the same
+                // gesture into the target app; make that short pause visible instead of silently
+                // losing a rapid next touch.
+                main.post { teachCounter?.text = "… SAVING STEP · WAIT FOR REC" }
                 setTeachTouchable(false)
                 teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF, points) }
             }
@@ -1794,7 +1796,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         points: List<Pair<Float, Float>>
     ) {
         val sig = try {
-            sigF?.get(2, TimeUnit.SECONDS)
+            sigF?.get(400, TimeUnit.MILLISECONDS)
         } catch (e: Exception) {
             null
         }
@@ -1844,6 +1846,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             main.post {
                 Toast.makeText(this, "A recorded touch could not be replayed, so that step was not saved. Please repeat it.", Toast.LENGTH_LONG).show()
             }
+        }
+        main.post {
+            val count = synchronized(teachSteps) { teachSteps.length() }
+            teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE"
         }
         teachLastEnd = System.currentTimeMillis()
     }
