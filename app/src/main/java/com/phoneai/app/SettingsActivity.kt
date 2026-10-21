@@ -709,6 +709,26 @@ class SettingsActivity : Activity() {
         )
     }
 
+    private fun skillsDialog() {
+        val skills = SkillRegistry.list(this)
+        val message = if (skills.isEmpty()) {
+            "Create a small declarative skill using existing tools. Skills are disabled until you enable them and cannot download or execute code."
+        } else {
+            "Choose a skill to inspect, enable, disable, or remove. Each tool call is checked against its allowlist and budget."
+        }
+        if (skills.isEmpty()) {
+            showChoiceDialog("Skill studio · 0 skills", message, listOf("Create skill · Define a skill using supported tools", "Skill templates · Start from a reviewed template"),
+                { which -> if (which == 0) addSkillDialog() else skillTemplateDialog() })
+            return
+        }
+        showChoiceDialog("Skill studio · ${skills.size} skills", message,
+            skills.map { it.id + " · " + if (it.enabled) "ENABLED" else "DISABLED" } + listOf("Create skill · Add a custom skill", "Skill templates · Browse reviewed starters"),
+            { which ->
+                if (which < skills.size) skillOptions(skills[which])
+                else if (which == skills.size) addSkillDialog() else skillTemplateDialog()
+            })
+    }
+
     /** Creates reviewed starter skills from existing tools only; every generated skill starts disabled. */
     private fun skillTemplateDialog() {
         val templates = listOf(
