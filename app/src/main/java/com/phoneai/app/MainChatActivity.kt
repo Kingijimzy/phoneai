@@ -69,7 +69,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
     private fun refreshPersonalityLabel(view: TextView) {
         val profile = CharacterProfile.get(Prefs.characterProfile(this))
-        view.text = "◈  ${profile.label.substringBefore(" — ").uppercase()}  ▾"
+        view.text = profile.label.substringBefore(" — ").uppercase()
         view.background = glass(12, 0x443D6963)
         view.setPadding(dp(8), dp(5), dp(8), dp(5))
         view.setTextColor(Theme.MUTED)
@@ -86,7 +86,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             "muse" to "Imaginative concepts, unexpected connections and creative options.",
             "tech" to "Technical specialist for software, Android, debugging, architecture and APIs."
         )
-        val glyphs = mapOf("orion" to "◈", "nova" to "✳", "atlas" to "➤", "lumen" to "✧", "cipher" to "⌘", "muse" to "✦", "tech" to "⌬")
+        val iconNames = mapOf("orion" to "spark", "nova" to "voice", "atlas" to "arrow", "lumen" to "memory", "cipher" to "shield", "muse" to "skills", "tech" to "tools")
         val dialogRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(12))
@@ -114,7 +114,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
 
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val rowViews = mutableMapOf<String, LinearLayout>()
-        val iconViews = mutableMapOf<String, TextView>()
+        val iconViews = mutableMapOf<String, OrionIconView>()
         val checkViews = mutableMapOf<String, TextView>()
         val nameViews = mutableMapOf<String, TextView>()
         val descViews = mutableMapOf<String, TextView>()
