@@ -126,19 +126,19 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        backButton = pill("‹") { if (web.canGoBack()) web.goBack() }.apply {
+        backButton = pill("Back") { if (web.canGoBack()) web.goBack() }.apply {
             contentDescription = "Go back"
             minWidth = dp(42)
         }
-        forwardButton = pill("›") { if (web.canGoForward()) web.goForward() }.apply {
+        forwardButton = pill("Forward") { if (web.canGoForward()) web.goForward() }.apply {
             contentDescription = "Go forward"
             minWidth = dp(42)
         }
-        reloadButton = pill("↻") { web.reload() }.apply {
+        reloadButton = pill("Reload") { web.reload() }.apply {
             contentDescription = "Reload page"
             minWidth = dp(42)
         }
-        stopButton = pill("■") { web.stopLoading(); updateControls() }.apply {
+        stopButton = pill("Stop") { web.stopLoading(); updateControls() }.apply {
             contentDescription = "Stop loading"
             minWidth = dp(42)
         }
@@ -146,8 +146,8 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         controls.addView(forwardButton)
         controls.addView(reloadButton)
         controls.addView(stopButton)
-        controls.addView(pill("⌂ Home") { navigate("https://duckduckgo.com/") })
-        controls.addView(pill("↗ Share") {
+        controls.addView(pill("Home") { navigate("https://duckduckgo.com/") })
+        controls.addView(pill("Share") {
             val current = web.url ?: return@pill
             try {
                 startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
