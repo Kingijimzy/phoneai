@@ -43,10 +43,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     /** Shared liquid-glass surface: a quiet top reflection over deep charcoal, never a neon glow. */
     private fun panel(fill: Int, radius: Int, stroke: Int = Theme.LINE) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(fill, 0xE80D1416.toInt())
+        intArrayOf(0xF21A2426.toInt(), fill, 0xF2080E10.toInt())
     ).apply {
         cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), if (stroke == Theme.LINE) 0x663D6963 else stroke)
+        setStroke(dp(1), if (stroke == Theme.LINE) 0x554B6564 else stroke)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,14 +57,14 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(12))
+            setPadding(dp(18), dp(10), dp(18), dp(10))
             setBackgroundColor(Theme.BG)
         }
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(12))
+            setPadding(dp(3), dp(3), dp(3), dp(10))
         }
         val back = LinearLayout(this).apply {
             gravity = Gravity.CENTER
@@ -98,11 +98,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(10), dp(2), dp(10), dp(8))
+            setPadding(dp(10), dp(0), dp(10), dp(5))
         }
         val compact = resources.configuration.screenHeightDp < 720
-        val coreSize = if (compact) 132 else 172
-        val waveHeight = if (compact) 30 else 42
+        val coreSize = if (compact) 140 else 178
+        val waveHeight = if (compact) 28 else 36
         core = OrbView(this).apply {
             backing = true
             contentDescription = "Orion live animated reactor core"
@@ -139,8 +139,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(11), dp(14), dp(9))
-            background = panel(0xE811191C.toInt(), 18, Theme.LINE)
+            setPadding(dp(15), dp(12), dp(15), dp(10))
+            background = panel(0xE90F1719.toInt(), 20, Theme.LINE)
         }
         val transcriptHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -163,7 +163,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             topMargin = dp(6)
         })
         root.addView(transcriptCard, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(14)
+            bottomMargin = dp(10)
         })
 
         val controls = LinearLayout(this).apply {
@@ -173,7 +173,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val end = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "End live conversation"
-            background = panel(0xEE151E21.toInt(), 22, Theme.LINE)
+            background = panel(0xFF11191B.toInt(), 22, 0xFF334443.toInt())
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "phone-off"; tint = Theme.MUTED; contentDescription = null
@@ -265,7 +265,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(text("VOICE SESSION  ·  TAP THE MIC TO PAUSE", 8f, 0xFF71817F.toInt(), true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .07f
-            setPadding(dp(4), dp(8), dp(4), dp(1))
+            setPadding(dp(4), dp(7), dp(4), dp(1))
         })
         setContentView(root)
     }
