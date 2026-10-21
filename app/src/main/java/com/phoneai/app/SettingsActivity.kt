@@ -744,30 +744,23 @@ class SettingsActivity : Activity() {
             PhoneAiSkill("memory_review", "1.0.0", "Recall relevant saved context and optionally save a user-approved summary.",
                 setOf("recall", "remember"), maxCalls = 4, maxDurationMs = 20_000L)
         )
-        val labels = templates.map { it.id + " · " + it.description }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Generate a starter skill")
-            .setItems(labels) { _, which ->
+        showChoiceDialog("Reviewed skill templates", "Select a starter. Each skill is created disabled and can only use its listed existing tools.",
+            templates.map { it.id + " · " + it.description },
+            { which ->
                 val candidate = templates[which]
                 val result = SkillRegistry.register(this, candidate)
                 Toast.makeText(this, result.reason, Toast.LENGTH_LONG).show()
                 if (result.allowed) {
                     refresh()
-                    AlertDialog.Builder(this)
-                        .setTitle("Skill created disabled")
-                        .setMessage(candidate.description + "\n\nAllowed tools: " +
-                            candidate.allowedTools.sorted().joinToString(", ") +
-                            "\nBudget: " + candidate.maxCalls + " calls / " +
-                            (candidate.maxDurationMs / 1000L) + " seconds. Review it before enabling.")
-                        .setPositiveButton("Review skill") { _, _ ->
-                            SkillRegistry.list(this).firstOrNull { it.id == candidate.id }?.let { skillOptions(it) }
-                        }
-                        .setNegativeButton("Keep disabled", null)
-                        .show()
+                    showInfoDialog("Skill created disabled", candidate.description + "\n\nAllowed tools: " +
+                        candidate.allowedTools.sorted().joinToString(", ") +
+                        "\nBudget: " + candidate.maxCalls + " calls / " +
+                        (candidate.maxDurationMs / 1000L) + " seconds. Review it before enabling.",
+                        "REVIEW SKILL") {
+                        SkillRegistry.list(this).firstOrNull { it.id == candidate.id }?.let { skillOptions(it) }
+                    }
                 }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+            })
     }
 
     private fun skillOptions(skill: PhoneAiSkill) {
