@@ -156,7 +156,15 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 setStroke(dp(1), 0xFF72FFE7.toInt())
             }
             elevation = dp(7).toFloat()
-            setOnClickListener { startVoiceInput() }
+            setOnClickListener {
+                if (lastMode == OrbView.Mode.LISTENING) {
+                    PhoneAiService.instance?.stopVoiceInput()
+                    listeningRequested = false
+                    helperLabel.text = "Listening stopped. Tap the core button when you're ready."
+                } else {
+                    startVoiceInput()
+                }
+            }
         }
         controls.addView(micButton, LinearLayout.LayoutParams(dp(76), dp(76)))
         val textChat = text("☰", 21f, Theme.CYAN, true).apply {
@@ -288,7 +296,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.WAITING_APPROVAL -> "Please review the action request before proceeding."
             }
             micButton.text = if (mode == OrbView.Mode.LISTENING) "Ⅱ" else "●"
-            micButton.contentDescription = if (mode == OrbView.Mode.LISTENING) "Listening" else "Start voice input"
+            micButton.contentDescription = if (mode == OrbView.Mode.LISTENING) "Stop listening" else "Start voice input"
+            micButton.alpha = if (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING) .72f else 1f
         }
     }
 }
