@@ -114,6 +114,15 @@ class OrionIconView @JvmOverloads constructor(
                 canvas.drawPath(path, paint)
             }
             "stop" -> canvas.drawRoundRect(5f, 5f, 19f, 19f, 2f, 2f, paint)
+            "close", "x" -> {
+                path.moveTo(5f, 5f); path.lineTo(19f, 19f)
+                path.moveTo(19f, 5f); path.lineTo(5f, 19f)
+                canvas.drawPath(path, paint)
+            }
+            "pause" -> {
+                canvas.drawRoundRect(6f, 4f, 10f, 20f, 1f, 1f, paint)
+                canvas.drawRoundRect(14f, 4f, 18f, 20f, 1f, 1f, paint)
+            }
             "plus", "new" -> {
                 canvas.drawLine(12f, 4f, 12f, 20f, paint); canvas.drawLine(4f, 12f, 20f, 12f, paint)
             }
