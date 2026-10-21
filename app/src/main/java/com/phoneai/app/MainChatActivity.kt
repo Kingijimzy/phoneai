@@ -51,6 +51,15 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         cornerRadius = dp(radius).toFloat()
         if (stroke != 0) setStroke(dp(1), stroke)
     }
+    /** Lightweight glass treatment: translucent-looking layered charcoal, a cool top sheen and a fine reflective edge. */
+    private fun glass(radius: Int, stroke: Int = 0x553D6963) = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(0xE61B292B.toInt(), 0xD10D1518.toInt(), 0xE6091012.toInt())
+    ).apply {
+        cornerRadius = dp(radius).toFloat()
+        setStroke(dp(1), stroke)
+    }
+
     private fun animateIn(view: View, delay: Long = 0L) {
         view.alpha = 0f
         view.translationY = dp(8).toFloat()
@@ -367,7 +376,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(8), dp(13), dp(8))
-                background = rounded(0xFF0D1214.toInt(), 16, 0xFF263034.toInt())
+                background = glass(16, 0x442C504E)
                 isClickable = true
                 isFocusable = true
                 contentDescription = "$name prompt"
@@ -401,7 +410,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER_VERTICAL
             visibility = View.GONE
             setPadding(dp(9), dp(7), dp(9), dp(7))
-            background = rounded(0xFF111A19.toInt(), 16, 0xFF2B3A3D.toInt())
+            background = glass(16, 0x553D6963)
         }
         imagePreviewPanel = previewPanel
         root.addView(previewPanel, LinearLayout.LayoutParams(-1, -2).apply {
@@ -411,8 +420,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(0xFF111719.toInt(), 23, 0xFF344044.toInt())
-            elevation = 0f
+            background = glass(23, 0x77466B68)
+            elevation = dp(3).toFloat()
             setPadding(dp(7), dp(5), dp(6), dp(5))
         }
         input = EditText(this).apply {
@@ -433,7 +442,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val attach = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = rounded(0xFF171E21.toInt(), 20, 0xFF303A3E.toInt())
+            background = glass(20, 0x443D6963)
             isClickable = true
             isFocusable = true
             contentDescription = "Attach an image for Orion to analyse"
@@ -458,8 +467,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         composer.addView(attach, LinearLayout.LayoutParams(dp(42), dp(44)).apply { rightMargin = dp(6) })
         send = label("↑", 23f, 0xFF06110F.toInt(), true).apply {
             gravity = Gravity.CENTER
-            background = rounded(0xFF8DE0D1.toInt(), 23)
-            elevation = 0f
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF9FFFE5.toInt(), 0xFF00CFA1.toInt())).apply { cornerRadius = dp(23).toFloat(); setStroke(dp(1), 0xFFB8FFEC.toInt()) }
+            elevation = dp(2).toFloat()
             layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
             contentDescription = "Send message"
             setOnTouchListener { v, e ->
@@ -479,8 +488,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(7), dp(6), dp(7), dp(5))
-            background = null
-            elevation = 0f
+            background = glass(22, 0x553D6963)
+            elevation = dp(2).toFloat()
         }
         fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
             val item = LinearLayout(this).apply {
@@ -507,7 +516,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         val liveDock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true; isFocusable = true; contentDescription = "Start full-screen live voice call with Orion"; setPadding(dp(4), 0, dp(4), 0) }
         val liveButton = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xFF8DE0D1.toInt()) }
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFB1FFE9.toInt(), 0xFF00D8A6.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFFD5FFF4.toInt()) }
             elevation = dp(1).toFloat()
             addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
         }
@@ -536,7 +545,7 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         dock.addView(liveDock, LinearLayout.LayoutParams(0, dp(61), 1.15f))
         dock.addView(dockItem("Teach", "record") { startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
         dock.addView(dockItem("Tasks", "tasks") { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
-        root.addView(View(this).apply { setBackgroundColor(0xFF20282B.toInt()) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(7) })
+        root.addView(View(this).apply { setBackground(GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x002C504E, 0x884B8279.toInt(), 0x002C504E))) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(7) })
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         setContentView(root)
