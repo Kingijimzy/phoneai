@@ -124,7 +124,7 @@ class TaskCenterActivity : Activity() {
         title.addView(label("TASK CENTRE", 11f, Theme.CYAN, true))
         title.addView(label("Your work, in one place.", 24f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
         top.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(button("+ New task", true) { addTask() })
+        top.addView(button("＋  New task", true) { addTask() })
         page.addView(top)
         add(page, label("Track queued work, progress, reminders and completed items. Status is saved on this phone.", 13f, Theme.MUTED), 8)
 
@@ -145,8 +145,8 @@ class TaskCenterActivity : Activity() {
         add(page, summaryCard, 13)
 
         val filters = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        listOf("all" to "All", "queued" to "Queued", "running" to "Running", "paused" to "Paused",
-            "completed" to "Completed", "failed" to "Failed").forEach { pair ->
+        listOf("all" to "◉  All", "queued" to "◷  Queued", "running" to "↻  Running", "paused" to "Ⅱ  Paused",
+            "completed" to "✓  Completed", "failed" to "!  Failed").forEach { pair ->
             filters.addView(button(pair.second, pair.first == filter) {
                 filter = pair.first; refresh()
             }, LinearLayout.LayoutParams(-2, dp(42)).apply { rightMargin = dp(6) })
@@ -256,17 +256,23 @@ class TaskCenterActivity : Activity() {
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (task.status == "running" || task.status == "in_progress") {
-            actions.addView(button("Pause") { change(task, "paused") })
+            actions.addView(button("Ⅱ  Pause") { change(task, "paused") })
         } else if (task.status != "completed" && task.status != "done") {
-            actions.addView(button(if (task.status == "paused") "Resume" else "Start", true) { change(task, "running") })
+            actions.addView(button(if (task.status == "paused") "▶  Resume" else "▶  Start", true) { change(task, "running") })
         }
         if (task.status != "completed" && task.status != "done") {
-            actions.addView(button("Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
+            actions.addView(button("✓  Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
                 LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
-            actions.addView(button("Fail") { change(task, "failed") }.apply { setTextColor(0xFFFF8D8D.toInt()) },
+            actions.addView(button("!  Fail") { change(task, "failed") }.apply { setTextColor(0xFFFF8D8D.toInt()) },
                 LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
         }
-        card.addView(actions.apply { setPadding(0, dp(5), 0, 0) })
+        actions.setPadding(0, dp(5), 0, 0)
+        val actionScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(actions, ViewGroup.LayoutParams(-2, -2))
+        }
+        card.addView(actionScroll, LinearLayout.LayoutParams(-1, -2))
         return card
     }
 
