@@ -271,27 +271,6 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
         titleCol.addView(personality)
         refreshPersonalityLabel(personality)
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        val live = label("● LIVE", 10f, 0xFFE7FFFA.toInt(), true).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(10), dp(11), dp(10), dp(11))
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xFF087A61.toInt(), 0xFF064638.toInt())).apply {
-                cornerRadius = dp(16).toFloat()
-                setStroke(dp(1), 0xFF20EAC2.toInt())
-            }
-            elevation = dp(3).toFloat()
-            minHeight = dp(42)
-            contentDescription = "Start live voice conversation with Orion"
-            isFocusable = true
-            setOnTouchListener { v, e ->
-                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.96f).scaleY(.96f).setDuration(70).start()
-                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
-                false
-            }
-            setOnClickListener {
-                startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java))
-            }
-        }
-        header.addView(live, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
         stop = label("■", 13f, 0xFF15EAD3.toInt(), true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
@@ -496,27 +475,6 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         composer.addView(attach, LinearLayout.LayoutParams(dp(42), dp(44)).apply { rightMargin = dp(6) })
-        val mic = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            background = rounded(0xFF0A1916.toInt(), 22, 0xFF2C504E.toInt())
-            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
-            isClickable = true
-            isFocusable = true
-            contentDescription = "Speak to Orion"
-            addView(OrionIconView(this@MainChatActivity).apply {
-                icon = "mic"; tint = Theme.CYAN; contentDescription = null
-            }, LinearLayout.LayoutParams(dp(20), dp(20)))
-            setOnTouchListener { v, e ->
-                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.92f).scaleY(.92f).setDuration(75).start()
-                if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
-                false
-            }
-            setOnClickListener {
-                startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java))
-            }
-        }
-        composer.addView(mic, LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(7) })
         send = label("↑", 23f, 0xFF02110D.toInt(), true).apply {
             gravity = Gravity.CENTER
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
