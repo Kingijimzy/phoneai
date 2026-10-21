@@ -421,6 +421,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                     "Teach mode" -> startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java))
                     "Tasks" -> startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java))
                     else -> {
+                        commandMode = name == "Research" || name == "Phone command"
+                        refreshModeSelector()
                         input.setText(prompt)
                         input.setSelection(input.text.length)
                         input.requestFocus()
