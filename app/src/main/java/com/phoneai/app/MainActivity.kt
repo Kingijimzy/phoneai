@@ -78,8 +78,10 @@ class MainActivity : Activity() {
             contentDescription = null
         }
         heading.addView(glyph, LinearLayout.LayoutParams(dp(23), dp(23)).apply { rightMargin = dp(10) })
-        heading.addView(label(title, 15f, if (primary) Theme.CYAN else Theme.TEXT, true),
-            LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(label(title, 15f, if (primary) Theme.CYAN else Theme.TEXT, true).apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(OrionIconView(this).apply {
             icon = "arrow"
             tint = Theme.MUTED
@@ -89,6 +91,9 @@ class MainActivity : Activity() {
         row.addView(heading)
         if (subtitle != null) {
             row.addView(label(subtitle, 12f, Theme.MUTED).apply {
+                maxLines = 3
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setLineSpacing(dp(1).toFloat(), 1f)
                 setPadding(dp(33), dp(4), dp(2), 0)
             })
         }
