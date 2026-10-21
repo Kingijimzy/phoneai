@@ -289,8 +289,16 @@ class Nim(private val ctx: Context) {
         val probePrefs = ctx.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         val probeKey = "nvidia_probe_${if (vision) "vision" else "chat"}_${model.hashCode()}"
         val probeTime = probePrefs.getLong("${probeKey}_at", 0L)
-        if (probePrefs.getBoolean("${probeKey}_ok", false) &&
-            System.currentTimeMillis() - probeTime < 30 * 60 * 1000L) return ""
+        val cachedResult = probePrefs.getString("${probeKey}_result", null)
+        val cacheAge = if (cachedResult == "OK") 30 * 60 * 1000L else 2 * 60 * 1000L
+        if (cachedResult != null && System.currentTimeMillis() - probeTime < cacheAge) {
+            return if (cachedResult == "OK") "" else cachedResult
+        }
+        fun rememberFailure(message: String): String {
+            probePrefs.edit().putString("${probeKey}_result", message)
+                .putLong("${probeKey}_at", System.currentTimeMillis()).apply()
+            return message
+        }
         val userContent: Any = if (vision) {
             // A tiny known image makes the vision picker test the image path too, not only text chat.
             JSONArray()
@@ -322,19 +330,20 @@ class Nim(private val ctx: Context) {
             request(p, "POST", p.base + "/chat/completions", body.toString(),
                 Prefs.key(ctx, p.id), readMs0 = 25000)
         } catch (e: Exception) {
-            return "Connection test failed (${e.javaClass.simpleName}). Check internet and model access."
+            return rememberFailure("Connection test failed (${e.javaClass.simpleName}). Check internet and model access.")
         }
         if (response.code !in 200..299) {
             val detail = response.body.replace("\\s+".toRegex(), " ").take(120)
-            return "Model test failed: HTTP ${response.code}" + if (detail.isBlank()) "." else " — $detail"
+            return rememberFailure("Model test failed: HTTP ${response.code}" + if (detail.isBlank()) "." else " — $detail")
         }
         val answer = extract(p, response.body)
         if (answer.isBlank() || answer == "null") {
-            return "The endpoint returned HTTP ${response.code}, but no readable chat text. Choose another model."
+            return rememberFailure("The endpoint returned HTTP ${response.code}, but no readable chat text. Choose another model.")
         }
         // Remember successful probes briefly so reopening the picker does not spend quota again.
         probePrefs.edit()
             .putBoolean("${probeKey}_ok", true)
+            .putString("${probeKey}_result", "OK")
             .putLong("${probeKey}_at", System.currentTimeMillis())
             .apply()
         return ""
