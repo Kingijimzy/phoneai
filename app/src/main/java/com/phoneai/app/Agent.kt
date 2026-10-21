@@ -452,6 +452,7 @@ Rules:
 
     private val recordable = setOf(
         "open_app", "click_text", "click", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url",
+        "browser_click", "browser_type", "browser_scroll", "browser_navigate", "browser_back",
         "web_search", "settings", "wait", "wait_for", "volume", "flashlight", "record_screen", "dial", "alarm", "timer"
     )
 
