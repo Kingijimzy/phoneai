@@ -101,23 +101,27 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(10), dp(0), dp(10), dp(5))
         }
         val compact = resources.configuration.screenHeightDp < 720
-        val coreSize = if (compact) 140 else 178
-        val waveHeight = if (compact) 28 else 36
-        core = OrbView(this).apply {
-            backing = true
-            contentDescription = "Orion live animated reactor core"
-            mode = OrbView.Mode.IDLE
-        }
-        hero.addView(core, LinearLayout.LayoutParams(dp(coreSize), dp(coreSize)).apply {
+        val waveHeight = if (compact) 54 else 72
+        // The voice experience is waveform-led, not dominated by a large decorative orb.
+        val voiceSurface = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            bottomMargin = dp(1)
-        })
+            setPadding(dp(14), dp(if (compact) 14 else 20), dp(14), dp(if (compact) 14 else 20))
+            background = panel(0xFF101719.toInt(), 24, 0xFF2A403D.toInt())
+        }
+        val waveLabel = text("LIVE AUDIO", 9f, Theme.MUTED, true).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = .16f
+        }
+        voiceSurface.addView(waveLabel)
         wave = VoiceWaveView(this).apply {
             contentDescription = "Animated audio waveform that responds to Orion's current state"
         }
-        hero.addView(wave, LinearLayout.LayoutParams(dp(236), dp(waveHeight)).apply {
-            gravity = Gravity.CENTER
-            bottomMargin = dp(3)
+        voiceSurface.addView(wave, LinearLayout.LayoutParams(-1, dp(waveHeight)).apply {
+            topMargin = dp(8)
+        })
+        hero.addView(voiceSurface, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(if (compact) 13 else 18)
         })
         hero.addView(text("VOICE SESSION", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
@@ -382,7 +386,6 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             micCaption.text = if (mode == OrbView.Mode.LISTENING) "STOP LISTENING" else "MICROPHONE"
             micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING) Theme.OK else Theme.TEXT)
             wave.mode = mode
-            core.mode = mode
             stateLabel.text = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
