@@ -42,7 +42,7 @@ object Providers {
         ),
         Provider(
             "nvidia", "NVIDIA API Catalog", "https://integrate.api.nvidia.com/v1",
-            "meta/llama-3.3-70b-instruct", "nvidia/nemotron-nano-12b-v2-vl", "nvapi-...",
+            "deepseek-ai/deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1-flash", "nvapi-...",
             "NVIDIA-hosted models through an OpenAI-compatible API. Key and model access depend on your NVIDIA account. build.nvidia.com"
         ),
         Provider(
