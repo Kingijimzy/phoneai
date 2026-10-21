@@ -249,8 +249,8 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(10), 0, 0, 0)
         }
         titleCol.addView(label("ORION", 18f, Theme.TEXT, true))
-        titleCol.addView(label("PERSONAL AI COMPANION", 9f, Theme.MUTED, true).apply {
-            letterSpacing = .08f
+        titleCol.addView(label("TACTICAL AI  /  SYSTEMS ONLINE", 9f, Theme.MUTED, true).apply {
+            letterSpacing = .06f
             setPadding(0, dp(1), 0, dp(3))
         })
         status = label("●  READY WHEN YOU ARE", 11f, Theme.CYAN, true).apply {
@@ -346,15 +346,15 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             bottomMargin = dp(1)
         })
-        intro.addView(label("YOUR AI. YOUR FLOW.", 10f, Theme.CYAN, true).apply {
-            letterSpacing = .13f
+        intro.addView(label("ORION CORE  /  ONLINE", 10f, Theme.CYAN, true).apply {
+            letterSpacing = .15f
             gravity = Gravity.CENTER
         })
-        intro.addView(label("What’s on your mind?", 24f, Theme.TEXT, true).apply {
+        intro.addView(label("At your command.", 24f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(5), 0, dp(2))
         })
-        intro.addView(label("Think, create, research, or get things done — all with Orion.", 13f, Theme.MUTED).apply {
+        intro.addView(label("Voice, vision, browser control and phone automation — one command interface.", 13f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
             setLineSpacing(dp(2).toFloat(), 1f)
         })
@@ -390,7 +390,9 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
             Triple("Plan", "tasks", "Help me create a practical step-by-step plan. Ask what I want to achieve."),
             Triple("Explain", "spark", "Explain a difficult idea with a practical example."),
             Triple("Phone command", "shield", "Help me with my phone. Ask what action I want to perform."),
-            Triple("Teach", "record", "teach ")
+            Triple("Browser", "browser", ""),
+            Triple("Teach mode", "record", ""),
+            Triple("Tasks", "tasks", "")
         ).forEach { (name, iconName, prompt) ->
             val chip = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -412,7 +414,18 @@ class MainChatActivity : Activity(), PhoneAiService.MainChatListener {
                 if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
                 false
             }
-            chip.setOnClickListener { input.setText(prompt); input.setSelection(input.text.length); input.requestFocus() }
+            chip.setOnClickListener {
+                when (name) {
+                    "Browser" -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java))
+                    "Teach mode" -> startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java))
+                    "Tasks" -> startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java))
+                    else -> {
+                        input.setText(prompt)
+                        input.setSelection(input.text.length)
+                        input.requestFocus()
+                    }
+                }
+            }
             chips.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
         }
         chipsScroll.addView(chips)
