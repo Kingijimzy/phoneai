@@ -72,7 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val ChatInk = Color(0xFF050708)
+private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
 private val ChatMint = Color(0xFFE5E5E5)
@@ -378,7 +378,7 @@ private fun ChatBubble(item: OrionChatLine) {
                     Box(
                         Modifier.size(22.dp).clip(RoundedCornerShape(8.dp))
                             .background(Brush.linearGradient(listOf(Color(0xFF454545), Color(0xFF1A1A1A))))
-                            .border(1.dp, Color(0xFF355A52), RoundedCornerShape(8.dp)),
+                            .border(1.dp, Color(0xFF383838), RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(13.dp)) }
                     Text("Orion", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -390,7 +390,7 @@ private fun ChatBubble(item: OrionChatLine) {
                     .then(
                         if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
                             .background(if (note) Color(0xFF181818) else Color(0xFF202020))
-                            .border(1.dp, if (mine) Color(0xFF314A45) else ChatHairline, RoundedCornerShape(17.dp))
+                            .border(1.dp, if (mine) Color(0xFF252525) else ChatHairline, RoundedCornerShape(17.dp))
                         else Modifier
                     )
                     .padding(horizontal = if (mine || note) 14.dp else 0.dp, vertical = if (mine || note) 11.dp else 0.dp)
@@ -414,7 +414,7 @@ private fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector
     Box(
         Modifier.size(43.dp).clip(CircleShape)
             .background(if (secondary) Color(0xFF242424) else ChatMint)
-            .border(1.dp, if (secondary) ChatHairline else Color(0xFFB6F9E9), CircleShape)
+            .border(1.dp, if (secondary) ChatHairline else Color(0xFFE5E5E5), CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Icon(icon, contentDescription = description, tint = if (secondary) ChatMint else ChatInk, modifier = Modifier.size(19.dp)) }
