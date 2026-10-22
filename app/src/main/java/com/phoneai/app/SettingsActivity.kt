@@ -61,15 +61,15 @@ class SettingsActivity : Activity() {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(0xEA172124.toInt(), 0xEA0B1113.toInt())).apply {
-                    cornerRadius = dp(11).toFloat()
-                    setStroke(dp(1), 0x443D6963)
+                    cornerRadius = dp(10).toFloat()
+                    setStroke(dp(1), 0x33445653)
                 }
                 isClickable = true; isFocusable = true; contentDescription = label
             }
             row.addView(text(pieces[0], 14f, Theme.TEXT, true))
             if (pieces.size > 1) row.addView(text(pieces[1], 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
             row.setOnClickListener { sheet?.dismiss(); onPick(index) }
-            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
         }
         val scroll = ScrollView(this).apply { overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS; addView(list, -1, -2) }
         val height = (resources.displayMetrics.heightPixels - dp(270)).coerceAtLeast(dp(180)).coerceAtMost(dp(470))
@@ -140,11 +140,11 @@ class SettingsActivity : Activity() {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xEA172124.toInt(), 0xEA090F11.toInt()))
-        g.cornerRadius = dp(16).toFloat()
-        g.setStroke(dp(1), 0x443D6963)
+            intArrayOf(0xE8172023.toInt(), 0xE8091012.toInt()))
+        g.cornerRadius = dp(13).toFloat()
+        g.setStroke(dp(1), 0x3A45504F)
         c.background = g
-        c.setPadding(dp(14), dp(12), dp(14), dp(13))
+        c.setPadding(dp(12), dp(10), dp(12), dp(11))
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
