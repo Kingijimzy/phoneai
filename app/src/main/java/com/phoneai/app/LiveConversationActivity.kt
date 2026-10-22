@@ -155,7 +155,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        voiceHeader.addView(text("AUDIO ACTIVITY", 9f, Theme.MUTED, true).apply {
+        voiceHeader.addView(text("VOICE SIGNAL", 9f, Theme.MUTED, true).apply {
             letterSpacing = .10f
         }, LinearLayout.LayoutParams(0, -2, 1f))
         voiceHeader.addView(text("LIVE", 9f, 0xFFE5E5E5.toInt(), true).apply {
@@ -171,7 +171,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         hero.addView(voiceSurface, LinearLayout.LayoutParams(-1, -2).apply {
             bottomMargin = dp(if (compact) 3 else 7)
         })
-        hero.addView(text("ORION  /  LIVE VOICE", 9f, Theme.MUTED, true).apply {
+        hero.addView(text("ORION  ·  VOICE INTERFACE", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .18f
         })
@@ -199,10 +199,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        transcriptHeading.addView(text("RECENT TRANSCRIPT", 9f, Theme.MUTED, true).apply {
+        transcriptHeading.addView(text("CONVERSATION", 9f, Theme.MUTED, true).apply {
             letterSpacing = .12f
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        transcriptHeading.addView(text("LIVE", 9f, 0xFFE5E5E5.toInt(), true).apply {
+        transcriptHeading.addView(text("LIVE CAPTIONS", 9f, 0xFFE5E5E5.toInt(), true).apply {
             letterSpacing = .06f
         })
         transcriptCard.addView(transcriptHeading)
@@ -210,7 +210,13 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         }
-        transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        transcript = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text("Your conversation will appear here.", 12f, Theme.MUTED).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(2), dp(8), dp(2), dp(8))
+            }, LinearLayout.LayoutParams(-1, -2))
+        }
         transcriptScroll.addView(transcript)
         transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 64 else 80)).apply {
             topMargin = dp(6)
@@ -403,6 +409,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onMessage(kind: String, message: String) {
         runOnUiThread {
+            if (transcript.childCount == 1 &&
+                (transcript.getChildAt(0) as? TextView)?.text == "Your conversation will appear here.") {
+                transcript.removeAllViews()
+            }
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(9), dp(6), dp(9), dp(6))
@@ -448,7 +458,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             val statusColor = when (mode) {
                 OrbView.Mode.IDLE -> 0xFF9B9B9B.toInt()
                 OrbView.Mode.WAITING_APPROVAL -> 0xFFE9B984.toInt()
-                OrbView.Mode.THINKING, OrbView.Mode.ACTING -> Theme.CYAN
+                OrbView.Mode.THINKING, OrbView.Mode.ACTING -> 0xFFC5C5C5.toInt()
                 else -> Theme.OK
             }
             (liveDot.background as? GradientDrawable)?.setColor(statusColor)
