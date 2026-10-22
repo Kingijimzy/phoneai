@@ -124,12 +124,20 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         val compact = resources.configuration.screenHeightDp < 720
         val waveHeight = if (compact) 46 else 58
-        // The voice experience is waveform-led, not dominated by a large decorative orb.
+        // Rebrand live voice around Orion's actual animated orb; waveform is supporting feedback.
+        core = OrbView(this).apply {
+            mode = OrbView.Mode.IDLE
+            contentDescription = "Orion animated voice orb"
+            isFocusable = false
+        }
+        hero.addView(core, LinearLayout.LayoutParams(dp(if (compact) 150 else 184), dp(if (compact) 150 else 184)).apply {
+            bottomMargin = dp(if (compact) 12 else 18)
+        })
         val voiceSurface = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(if (compact) 11 else 15), dp(14), dp(if (compact) 11 else 15))
-            background = panel(0xFF0C1416.toInt(), 18, 0xFF2A403D.toInt())
+            background = panel(0xFF0B1113.toInt(), 16, 0xFF263A38.toInt())
         }
         val waveLabel = text("LIVE AUDIO", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
@@ -161,12 +169,13 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setLineSpacing(dp(2).toFloat(), 1f)
         }
         hero.addView(helperLabel)
-        root.addView(hero, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+        // Let content determine its height: weighted centering created the giant empty bands seen on-device.
+        root.addView(hero, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2); bottomMargin = dp(6) })
 
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(15), dp(12), dp(15), dp(10))
-            background = panel(0xE90F1719.toInt(), 16, Theme.LINE)
+            setPadding(dp(14), dp(10), dp(14), dp(8))
+            background = panel(0xE90C1214.toInt(), 15, 0xFF263633.toInt())
         }
         val transcriptHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -185,7 +194,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         transcriptScroll.addView(transcript)
-        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 58 else 76)).apply {
+        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 72 else 88)).apply {
             topMargin = dp(6)
         })
         root.addView(transcriptCard, LinearLayout.LayoutParams(-1, -2).apply {
