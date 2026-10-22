@@ -16,8 +16,8 @@ class VoiceWaveView(context: Context) : View(context) {
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var frame = 0
-    private val cyan = 0xFF00FCB6.toInt()
-    private val teal = 0xFF15EAD3.toInt()
+    private val silver = 0xFFB7B7B7.toInt()
+    private val dimSilver = 0xFF8F8F8F.toInt()
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -46,7 +46,7 @@ class VoiceWaveView(context: Context) : View(context) {
             val envelope = 0.18 + 0.82 * (a * 0.66 + b * 0.34)
             val h = (height * 0.68f * envelope * energy).toFloat().coerceAtLeast(height * 0.055f)
             val x = left + i * (barW + gap)
-            paint.color = if (i % 4 == 0) teal else cyan
+            paint.color = if (i % 4 == 0) dimSilver else silver
             paint.alpha = (120 + envelope * 135).toInt().coerceIn(0, 255)
             paint.strokeWidth = barW.coerceAtLeast(2f)
             paint.strokeCap = Paint.Cap.ROUND
