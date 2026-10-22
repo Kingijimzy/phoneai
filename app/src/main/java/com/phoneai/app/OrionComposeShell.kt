@@ -478,113 +478,28 @@ private fun VoiceWaveform(modifier: Modifier = Modifier) {
 
 @Composable
 private fun LiquidWaveCore(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "liquid-glass-orb")
-    val time by transition.animateFloat(
+    val transition = rememberInfiniteTransition(label = "orion-core")
+    val phase by transition.animateFloat(
         initialValue = 0f, targetValue = (PI * 2).toFloat(),
-        animationSpec = infiniteRepeatable(tween(6200, easing = FastOutSlowInEasing), RepeatMode.Restart),
-        label = "orb-time"
+        animationSpec = infiniteRepeatable(tween(4200, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        label = "core-phase"
     )
-    var drag by remember { mutableFloatStateOf(0f) }
-    var pulse by remember { mutableFloatStateOf(0f) }
-    val pulseValue by animateFloatAsState(targetValue = pulse, animationSpec = tween(360), label = "orb-touch")
-    Box(
-        modifier.pointerInput(Unit) {
-            detectDragGestures(
-                onDragStart = { pulse = 1f; drag += .35f },
-                onDragEnd = { pulse = 0f },
-                onDragCancel = { pulse = 0f },
-                onDrag = { change, amount ->
-                    change.consume()
-                    drag = (drag + amount.x / size.width * 1.4f).let { ((it % 12f) + 12f) % 12f }
-                    pulse = (pulse + amount.y / size.height).coerceIn(0f, 1f)
-                }
-            )
-        }.clickable { pulse = if (pulse > .5f) 0f else 1f },
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val cx = w / 2f
-            val cy = h / 2f
-            val radius = minOf(w, h) * .43f
-            // Soft atmospheric bloom, kept deliberately dim for a premium rather than neon look.
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0x5538DCC0), Color(0x2224A895), Color.Transparent),
-                    Offset(cx, cy), radius * 1.62f
-                ), radius * 1.62f
-            )
-            // Glass body: cool graphite edge, deep translucent teal core and a subtle lit rim.
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0xFF514064), Color(0xFF302641), Color(0xFF171522), Color(0xFF292238)),
-                    Offset(cx - radius * .28f, cy - radius * .34f), radius * 1.55f
-                ), radius
-            )
-            drawCircle(
-                Brush.linearGradient(
-                    listOf(Color(0x22FFFFFF), Color(0x05FFFFFF), Color(0x0010181A)),
-                    start = Offset(cx - radius, cy - radius),
-                    end = Offset(cx + radius, cy + radius)
-                ), radius * .965f
-            )
-            val clipPath = Path().apply {
-                addOval(androidx.compose.ui.geometry.Rect(cx - radius * .96f, cy - radius * .96f, cx + radius * .96f, cy + radius * .96f))
-            }
-            val waves = listOf(
-                Triple(.06f, 1.00f, .74f),
-                Triple(.10f, 1.17f, .43f),
-                Triple(.13f, .83f, .27f),
-                Triple(.16f, 1.31f, .17f)
-            )
-            for ((layer, wave) in waves.withIndex()) {
-                val path = Path()
-                val amplitude = radius * (wave.first + pulseValue * .045f)
-                for (i in 0..100) {
-                    val nx = i / 100f
-                    val x = cx - radius + 2f * radius * nx
-                    val envelope = (.18f + .82f * sin(PI.toFloat() * nx))
-                    val y = cy + radius * (.10f + layer * .055f) +
-                        sin(nx * 2f * PI.toFloat() * wave.second + time * (1f + layer * .12f) + drag) * amplitude * envelope
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                drawContext.canvas.save()
-                drawContext.canvas.clipPath(clipPath)
-                drawPath(
-                    path,
-                    Brush.horizontalGradient(listOf(Color(0x6639BBA7), Mint.copy(alpha = wave.third), Color(0x6642CBB4))),
-                    style = Stroke(width = if (layer == 0) 2.2.dp.toPx() else 1.15.dp.toPx(), cap = StrokeCap.Round)
-                )
-                if (layer == 0) {
-                    val fill = Path().apply {
-                        addPath(path)
-                        lineTo(cx + radius, cy + radius)
-                        lineTo(cx - radius, cy + radius)
-                        close()
-                    }
-                    drawPath(fill, Brush.verticalGradient(listOf(Color(0x333CE1C5), Color(0x0A08A997)), startY = cy, endY = cy + radius))
-                }
-                drawContext.canvas.restore()
-            }
-            // Fine glass rim and a broken inner reflection.
-            drawCircle(Color(0x887DA9A2), radius, style = Stroke(width = .85.dp.toPx()))
-            drawArc(
-                color = Color(0x88FFFFFF), startAngle = 208f, sweepAngle = 72f,
-                useCenter = false,
-                topLeft = Offset(cx - radius * .91f, cy - radius * .91f),
-                size = androidx.compose.ui.geometry.Size(radius * 1.82f, radius * 1.82f),
-                style = Stroke(width = 1.1.dp.toPx(), cap = StrokeCap.Round)
-            )
-            // Small specular reflection gives the orb a glass surface without a costly blur.
-            drawCircle(
-                Brush.radialGradient(listOf(Color(0x66FFFFFF), Color(0x12FFFFFF), Color.Transparent), Offset(cx - radius * .38f, cy - radius * .48f), radius * .42f),
-                radius * .42f, Offset(cx - radius * .38f, cy - radius * .48f)
-            )
-            val dotX = cx + sin(time + drag) * radius * .57f
-            val dotY = cy + radius * .10f + sin(time * 1.3f + drag) * radius * .12f
-            drawCircle(Color(0xAA8FFFF0), radius * .06f, Offset(dotX, dotY))
-            drawCircle(Color.White.copy(alpha = .9f), radius * .022f, Offset(dotX, dotY))
+    Canvas(modifier) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val radius = minOf(size.width, size.height) * .43f
+        drawCircle(Color(0xFF181818), radius, Offset(cx, cy))
+        drawCircle(Color(0xFF383838), radius, Offset(cx, cy), style = Stroke(width = 1.2.dp.toPx()))
+        drawCircle(Color(0xFF252525), radius * .78f, Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
+        val path = Path()
+        for (i in 0..80) {
+            val xRatio = i / 80f
+            val x = cx - radius * .78f + radius * 1.56f * xRatio
+            val envelope = sin(PI.toFloat() * xRatio)
+            val y = cy + sin(xRatio * PI.toFloat() * 4f + phase) * radius * .12f * envelope
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
+        drawPath(path, Color(0xFFD8D8D8), style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
+        drawCircle(Color(0xFFE8E8E8), radius * .035f, Offset(cx + sin(phase) * radius * .42f, cy))
     }
 }
