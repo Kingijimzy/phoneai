@@ -48,7 +48,7 @@ class SettingsActivity : Activity() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2426.toInt(), 0xF0070D0F.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x554B6564) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2426.toInt(), 0xF0070D0F.toInt())).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0x554B6564) }
         }
         outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
@@ -61,7 +61,7 @@ class SettingsActivity : Activity() {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(0xEA172124.toInt(), 0xEA0B1113.toInt())).apply {
-                    cornerRadius = dp(14).toFloat()
+                    cornerRadius = dp(11).toFloat()
                     setStroke(dp(1), 0x443D6963)
                 }
                 isClickable = true; isFocusable = true; contentDescription = label
@@ -82,7 +82,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun showInfoDialog(title: String, message: String, positive: String = "GOT IT", onPositive: () -> Unit = {}) {
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(20).toFloat(); setStroke(dp(1), Theme.LINE) } }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.LINE) } }
         body.addView(text("ORION  /  INFORMATION", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
         body.addView(text(title, 20f, Theme.TEXT, true))
         val detail = text(message, 13f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)); setTextIsSelectable(true) }
@@ -120,7 +120,7 @@ class SettingsActivity : Activity() {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xF0192527.toInt(), 0xF0070D0F.toInt()))
         }
-        g.cornerRadius = dp(12).toFloat()
+        g.cornerRadius = dp(10).toFloat()
         g.setStroke(dp(1), if (primary) 0xFFBDEFE3.toInt() else 0x553D6963)
         b.background = g
         b.elevation = 0f
@@ -141,7 +141,7 @@ class SettingsActivity : Activity() {
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(0xEA172124.toInt(), 0xEA090F11.toInt()))
-        g.cornerRadius = dp(20).toFloat()
+        g.cornerRadius = dp(16).toFloat()
         g.setStroke(dp(1), 0x443D6963)
         c.background = g
         c.setPadding(dp(14), dp(12), dp(14), dp(13))
