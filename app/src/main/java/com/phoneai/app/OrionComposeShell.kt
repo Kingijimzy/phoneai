@@ -139,9 +139,9 @@ private fun HomePage(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("O R I O N", color = Copy, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                Text("ORION", color = Copy, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.6.sp)
                 Spacer(Modifier.height(5.dp))
-                Text("PERSONAL INTELLIGENCE", color = Muted, fontSize = 10.sp, letterSpacing = 1.8.sp)
+                Text("PERSONAL AI", color = Muted, fontSize = 10.sp, letterSpacing = 1.6.sp)
             }
             Row(
                 Modifier.clip(CircleShape).background(Color(0xFF12231F)).border(1.dp, Color(0xFF315B51), CircleShape).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -154,22 +154,22 @@ private fun HomePage(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("Your world,\nwithin reach.", color = Copy, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.8).sp)
-            Text("Think it through. Say it out loud. Let Orion handle the steps.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
+            Text("A smarter way\nto get things done.", color = Copy, fontSize = 32.sp, lineHeight = 37.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
+            Text("Think freely. Speak naturally. Bring Orion in when you need a hand.", color = Muted, fontSize = 13.sp, lineHeight = 20.sp)
         }
 
         // Compact voice waveform replaces the oversized orb: a calmer, assistant-first workspace.
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF14201F), Color(0xFF0D1315))))
-                .border(1.dp, Color(0xFF2B403D), RoundedCornerShape(26.dp))
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF111B1D), Color(0xFF080E10))))
+                .border(1.dp, Color(0xFF273A37), RoundedCornerShape(20.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
-                        .background(Color(0xFF1A302D)).border(1.dp, Color(0xFF315B51), RoundedCornerShape(13.dp)),
+                    Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF142421)).border(1.dp, Color(0xFF29443D), RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Rounded.GraphicEq, null, tint = Mint, modifier = Modifier.size(20.dp))
@@ -186,7 +186,7 @@ private fun HomePage(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Box(
-                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Mint)
+                    Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).background(Mint)
                         .clickable(onClick = onOpenVoice).padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -232,7 +232,7 @@ private fun HomePage(
         }
 
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(20.dp)).padding(16.dp)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(15.dp)).padding(15.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Shield, null, tint = Mint, modifier = Modifier.size(19.dp))
@@ -348,7 +348,7 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
     )
     Row(
         Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 8.dp, bottom = 8.dp)
-            .clip(RoundedCornerShape(24.dp)).background(Color(0xFF101819)).border(1.dp, Hairline, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(18.dp)).background(Color(0xFF0B1214)).border(1.dp, Hairline, RoundedCornerShape(18.dp))
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -365,7 +365,7 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
                 label = "dock-tint-$label"
             )
             Column(
-                Modifier.weight(1f).height(54.dp).clip(RoundedCornerShape(17.dp))
+                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(12.dp))
                     .background(activeFill)
                     .clickable { onSelect(label) }.padding(vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
