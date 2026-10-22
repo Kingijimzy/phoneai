@@ -149,11 +149,19 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        heading.addView(OrionIconView(this).apply {
-            icon = settingsIcon(title)
-            tint = Theme.MUTED
-            contentDescription = null
-        }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { rightMargin = dp(9) })
+        heading.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF1D3934.toInt(), 0xFF101B1D.toInt())).apply {
+                cornerRadius = dp(9).toFloat()
+                setStroke(dp(1), 0x553C6D62)
+            }
+            addView(OrionIconView(this@SettingsActivity).apply {
+                icon = settingsIcon(title)
+                tint = Theme.CYAN
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(17), dp(17)))
+        }, LinearLayout.LayoutParams(dp(30), dp(30)).apply { rightMargin = dp(10) })
         heading.addView(text(title, 16f, Theme.TEXT, true).apply {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
@@ -209,8 +217,8 @@ class SettingsActivity : Activity() {
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xF01B292A.toInt(), 0xF00D1416.toInt())
             ).apply {
-                cornerRadius = dp(14).toFloat()
-                setStroke(dp(1), 0x66416B63)
+                cornerRadius = dp(11).toFloat()
+                setStroke(dp(1), 0x55416B63)
             }
             isClickable = true
             isFocusable = true
