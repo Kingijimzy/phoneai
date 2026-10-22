@@ -154,8 +154,8 @@ private fun HomePage(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("A smarter way\nto get things done.", color = Copy, fontSize = 32.sp, lineHeight = 37.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
-            Text("A calm space to think, speak and get things done.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("An AI that works\nwith you.", color = Copy, fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.8).sp)
+            Text("Think clearly. Speak naturally. Get things done.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
         }
 
         // Orion's focal surface: compact glass shell with a deliberately sculpted liquid orb.
@@ -214,9 +214,9 @@ private fun HomePage(
         }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("QUICK ACCESS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+            Text("PICK UP QUICKLY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
             Spacer(Modifier.weight(1f))
-            Text("Private by default", color = Muted, fontSize = 10.sp)
+            Text("Your workspace", color = Muted, fontSize = 10.sp)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -227,7 +227,7 @@ private fun HomePage(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("YOUR WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
             Spacer(Modifier.weight(1f))
-            Text("VIEW ALL  →", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenUtilities() })
+            Text("EXPLORE  →", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenUtilities() })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MiniTile("Task centre", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
