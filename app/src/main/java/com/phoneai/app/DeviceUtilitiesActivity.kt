@@ -60,9 +60,9 @@ class DeviceUtilitiesActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(14))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF0A1916.toInt(), 0xFF10211E.toInt())).apply {
+                intArrayOf(0xFF161616.toInt(), 0xFF1D1D1D.toInt())).apply {
                 cornerRadius = dp(19).toFloat()
-                setStroke(dp(1), 0xFF2C504E.toInt())
+                setStroke(dp(1), 0xFF484848.toInt())
             }
             elevation = dp(2).toFloat()
         }
@@ -99,7 +99,7 @@ class DeviceUtilitiesActivity : Activity() {
         super.onCreate(savedInstanceState)
         val scroll = ScrollView(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF02080A.toInt(), 0xFF071311.toInt(), 0xFF0A1715.toInt()))
+                intArrayOf(0xFF070707.toInt(), 0xFF101010.toInt(), 0xFF141414.toInt()))
         }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
