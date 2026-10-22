@@ -431,6 +431,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 topMargin = dp(5)
             })
             while (transcript.childCount > 4) transcript.removeViewAt(0)
+            // Keep the newest speaker turn visible without jumping while the row is measured.
+            transcript.post {
+                val scroll = transcript.parent as? ScrollView
+                scroll?.smoothScrollTo(0, transcript.bottom)
+            }
         }
     }
 
@@ -480,8 +485,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 }
                 statusPulse = AnimatorSet().apply { playTogether(pulseX, pulseY); start() }
             }
-            micCaption.text = if (mode == OrbView.Mode.LISTENING) "PAUSE" else "MIC"
-            micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING) Theme.OK else Theme.TEXT)
+            micCaption.text = when (mode) {
+                OrbView.Mode.LISTENING -> "PAUSE"
+                OrbView.Mode.SPEAKING -> "INTERRUPT"
+                else -> "MIC"
+            }
+            micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING || mode == OrbView.Mode.SPEAKING) Theme.OK else Theme.TEXT)
             wave.mode = mode
             core.mode = mode
             val nextState = when (mode) {
@@ -506,12 +515,16 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.IDLE -> "Tap the mic to talk. Say “Orion, open…” before a phone command."
                 OrbView.Mode.LISTENING -> "Speak naturally. Say “Orion” first for phone actions."
                 OrbView.Mode.THINKING -> "Connecting your words to the right response."
-                OrbView.Mode.SPEAKING -> "I'll listen again after this reply. Tap the mic to interrupt."
+                OrbView.Mode.SPEAKING -> "Tap the microphone to stop the reply and speak. I'll listen again after this turn."
                 OrbView.Mode.ACTING -> "Orion is carrying out the requested task."
                 OrbView.Mode.WAITING_APPROVAL -> "Please review the action request before proceeding."
             }
             micIcon.icon = if (mode == OrbView.Mode.LISTENING) "pause" else "mic"
-            micButton.contentDescription = if (mode == OrbView.Mode.LISTENING) "Stop listening" else "Start voice input"
+            micButton.contentDescription = when (mode) {
+                OrbView.Mode.LISTENING -> "Stop listening"
+                OrbView.Mode.SPEAKING -> "Interrupt Orion and speak"
+                else -> "Start voice input"
+            }
             if (mode == OrbView.Mode.LISTENING && micPulse == null) {
                 val scaleX = ObjectAnimator.ofFloat(micButton, View.SCALE_X, 1f, 1.055f).apply {
                     duration = 780L
