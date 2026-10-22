@@ -102,6 +102,25 @@ fun OrionComposeChatScreen(
 ) {
     var draft by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val statusDotColor by animateColorAsState(
+        targetValue = when {
+            status.contains("listen", true) || status.contains("speak", true) -> ChatMint
+            status.contains("think", true) || status.contains("work", true) -> Color(0xFF8FD8C3)
+            else -> Color(0xFF66817B)
+        },
+        animationSpec = tween(durationMillis = 260),
+        label = "chat-status-dot"
+    )
+    val modeChipFill by animateColorAsState(
+        targetValue = if (commandMode) Color(0xFF21433B) else Color(0xFF0D1517),
+        animationSpec = tween(durationMillis = 220),
+        label = "chat-mode-fill"
+    )
+    val modeChipAccent by animateColorAsState(
+        targetValue = if (commandMode) ChatMint else ChatCopy,
+        animationSpec = tween(durationMillis = 220),
+        label = "chat-mode-accent"
+    )
     LaunchedEffect(lines.size) {
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
@@ -120,19 +139,19 @@ fun OrionComposeChatScreen(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Orion", color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(if (status.contains("listen", true) || status.contains("speak", true)) ChatMint else Color(0xFF66817B)))
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(statusDotColor))
                     Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
                 }
             }
             Box(
-                Modifier.clip(RoundedCornerShape(9.dp)).background(Color(0xFF0D1517))
+                Modifier.clip(RoundedCornerShape(9.dp)).background(modeChipFill)
                     .border(1.dp, ChatHairline, RoundedCornerShape(9.dp)).clickable { onModeChange(!commandMode) }
                     .padding(horizontal = 11.dp, vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(if (commandMode) Icons.Rounded.Tune else Icons.Rounded.Waves, null,
-                        tint = ChatMint, modifier = Modifier.size(15.dp))
-                    Text(if (commandMode) "Command" else "Talk", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        tint = modeChipAccent, modifier = Modifier.size(15.dp))
+                    Text(if (commandMode) "Command" else "Talk", color = modeChipAccent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
