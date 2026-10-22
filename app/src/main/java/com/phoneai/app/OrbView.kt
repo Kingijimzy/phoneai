@@ -19,7 +19,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * A lightweight, animated liquid-glass orb inspired by the ChatAI Dribbble reference.
+ * A lightweight monochrome assistant core with classic graphite and silver orb styling.
  * It is drawn with Canvas (no heavy 3D renderer or downloaded asset), keeping entry-level
  * Android devices responsive. Modes subtly alter the fluid motion and glow.
  */
@@ -28,7 +28,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
 
     companion object {
         val CYAN = Theme.CYAN
-        val VIOLET = 0xFF016856.toInt()
+        val VIOLET = 0xFF858585.toInt()
         val OK = Theme.OK
         val WARN = Theme.WARN
     }
@@ -169,7 +169,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         glowPaint.shader = null
 
         paint.shader = RadialGradient(cx - radius * .22f, cy - radius * .28f, radius * 1.55f,
-            intArrayOf(0xFF17282A.toInt(), 0xFF0A1417.toInt(), 0xFF05090B.toInt()),
+            intArrayOf(0xFF292929.toInt(), 0xFF141414.toInt(), 0xFF080808.toInt()),
             floatArrayOf(0f, .66f, 1f), Shader.TileMode.CLAMP)
         canvas.drawCircle(cx, cy, radius, paint)
         paint.shader = null
@@ -181,7 +181,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
 
         // Subtle glass sheen.
         paint.shader = RadialGradient(cx - radius * .30f, cy - radius * .58f, radius * 1.2f,
-            intArrayOf(0x243C8F82, 0x102C625B, 0x00000000),
+            intArrayOf(0x244A4A4A, 0x102A2A2A, 0x00000000),
             floatArrayOf(0f, .5f, 1f), Shader.TileMode.CLAMP)
         canvas.drawCircle(cx, cy, radius, paint)
         paint.shader = null
@@ -230,7 +230,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
 
         // Fine glass rim and a restrained moving highlight.
         ring.strokeWidth = max(1.2f, radius * .012f)
-        ring.color = 0x604E7973
+        ring.color = 0x60707070
         canvas.drawCircle(cx, cy, radius * .965f, ring)
         ring.strokeWidth = max(1f, radius * .008f)
         ring.color = (col and 0x00FFFFFF) or 0x8A000000.toInt()
