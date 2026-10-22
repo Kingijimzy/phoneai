@@ -130,8 +130,22 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Orion animated voice orb"
             isFocusable = false
         }
-        hero.addView(core, LinearLayout.LayoutParams(dp(if (compact) 150 else 184), dp(if (compact) 150 else 184)).apply {
-            bottomMargin = dp(if (compact) 12 else 18)
+        // A dedicated call-stage gives the orb a deliberate visual home instead of floating
+        // directly on the page. Keep it native and lightweight for entry-level Android devices.
+        val orbStage = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF14231F.toInt(), 0xFF0C1516.toInt(), 0xFF080D0F.toInt())).apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dp(1), 0x664C8271)
+            }
+            elevation = dp(2).toFloat()
+            contentDescription = "Orion live conversation visual stage"
+        }
+        val orbSize = dp(if (compact) 142 else 166)
+        orbStage.addView(core, LinearLayout.LayoutParams(orbSize, orbSize))
+        hero.addView(orbStage, LinearLayout.LayoutParams(dp(if (compact) 204 else 232), dp(if (compact) 204 else 232)).apply {
+            bottomMargin = dp(if (compact) 9 else 13)
         })
         val voiceSurface = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -139,7 +153,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(14), dp(if (compact) 11 else 15), dp(14), dp(if (compact) 11 else 15))
             background = panel(0xFF0B1113.toInt(), 16, 0xFF263A38.toInt())
         }
-        val waveLabel = text("AUDIO ACTIVITY", 9f, Theme.MUTED, true).apply {
+        val waveLabel = text("VOICE SIGNAL", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .16f
         }
@@ -181,10 +195,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        transcriptHeading.addView(text("RECENT MESSAGES", 9f, Theme.MUTED, true).apply {
+        transcriptHeading.addView(text("CONVERSATION", 9f, Theme.MUTED, true).apply {
             letterSpacing = .12f
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        transcriptHeading.addView(text("LIVE TRANSCRIPT", 8f, 0xFF71817F.toInt(), true).apply {
+        transcriptHeading.addView(text("LIVE CAPTIONS", 8f, 0xFF83BDAA.toInt(), true).apply {
             letterSpacing = .06f
         })
         transcriptCard.addView(transcriptHeading)
