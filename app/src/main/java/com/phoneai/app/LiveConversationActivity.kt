@@ -455,6 +455,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             micCaption.text = if (mode == OrbView.Mode.LISTENING) "STOP LISTENING" else "MICROPHONE"
             micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING) Theme.OK else Theme.TEXT)
             wave.mode = mode
+            core.mode = mode
             val nextState = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
