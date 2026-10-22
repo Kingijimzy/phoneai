@@ -140,11 +140,12 @@ class SettingsActivity : Activity() {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xE8172023.toInt(), 0xE8091012.toInt()))
-        g.cornerRadius = dp(13).toFloat()
-        g.setStroke(dp(1), 0x3A45504F)
+            intArrayOf(0xF01A2527.toInt(), 0xF00D1416.toInt(), 0xF0080E10.toInt()))
+        g.cornerRadius = dp(20).toFloat()
+        g.setStroke(dp(1), 0x55415753)
         c.background = g
-        c.setPadding(dp(12), dp(10), dp(12), dp(11))
+        c.setPadding(dp(16), dp(15), dp(16), dp(16))
+        c.elevation = dp(1).toFloat()
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -228,26 +229,66 @@ class SettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = Theme.BG
+        window.navigationBarColor = Theme.BG
         val sv = ScrollView(this).apply {
             setBackgroundColor(Theme.BG)
+            isFillViewport = true
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         }
         val col = LinearLayout(this)
         col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(16), dp(24), dp(16), dp(24))
+        col.setPadding(dp(18), dp(18), dp(18), dp(30))
         sv.addView(col)
         setContentView(sv)
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(2), dp(4), dp(2), dp(8))
+            setPadding(dp(19), dp(20), dp(19), dp(20))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF172B27.toInt(), 0xFF0E191A.toInt(), 0xFF0A1113.toInt())).apply {
+                cornerRadius = dp(25).toFloat()
+                setStroke(dp(1), 0x66456B60)
+            }
         }
-        header.addView(text("SETTINGS  /  ORION", 11f, Theme.CYAN, true))
-        header.addView(text("Your workspace, your rules.", 25f, Theme.TEXT, true).apply {
-            setPadding(0, dp(5), 0, dp(3))
+        val headerTop = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val brandMark = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF2B5A4C.toInt(), 0xFF132B26.toInt())).apply {
+                cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0x665AA38A)
+            }
+            addView(OrionIconView(this@SettingsActivity).apply {
+                icon = "spark"; tint = Theme.CYAN; contentDescription = null
+            }, LinearLayout.LayoutParams(dp(25), dp(25)))
+        }
+        headerTop.addView(brandMark, LinearLayout.LayoutParams(dp(46), dp(46)))
+        val brandText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), 0, 0, 0)
+            addView(text("ORION CONTROL", 10f, Theme.CYAN, true).apply { letterSpacing = .16f })
+            addView(text("Personal AI", 17f, Theme.TEXT, true).apply { setPadding(0, dp(3), 0, 0) })
+        }
+        headerTop.addView(brandText, LinearLayout.LayoutParams(0, -2, 1f))
+        headerTop.addView(OrionIconView(this).apply {
+            icon = "settings"; tint = Theme.MUTED; contentDescription = "Settings"
+        }, LinearLayout.LayoutParams(dp(22), dp(22)))
+        header.addView(headerTop)
+        header.addView(text("Make Orion work\nyour way.", 29f, Theme.TEXT, true).apply {
+            setLineSpacing(dp(1).toFloat(), 1f)
+            setPadding(0, dp(22), 0, dp(8))
         })
-        header.addView(text("Manage AI providers, voice, memory, skills, device access, and integrations.", 13f, Theme.MUTED))
+        header.addView(text("Tune intelligence, voice, memory and device access from one place.", 13f, Theme.MUTED).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+        })
         add(col, header, 0)
-        add(col, button("‹  Back to Orion", false) { finish() }, 4)
+        val sectionLabel = text("PERSONALISE YOUR SYSTEM", 10f, Theme.MUTED, true).apply {
+            letterSpacing = .15f
+            setPadding(dp(2), dp(16), dp(2), dp(1))
+        }
+        add(col, sectionLabel, 5)
+        add(col, button("‹  Back to Orion", false) { finish() }, 8)
         
         // ---- 1. setup
         val s1 = card(col, "Access & permissions")
