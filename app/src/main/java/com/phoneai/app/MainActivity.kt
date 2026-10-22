@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
     private fun gradientSurface(radius: Int, colors: IntArray): GradientDrawable =
         GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
             cornerRadius = dp(radius).toFloat()
-            setStroke(dp(1), 0xFF3D625B.toInt())
+            setStroke(dp(1), 0xFF5A5A5A.toInt())
         }
 
     private fun animateEntrance(view: View, delay: Long = 0L) {
@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(15), dp(13), dp(15), dp(13))
-            background = surface(17, if (primary) 0xFF111C1D.toInt() else 0xFF0B1214.toInt())
+            background = surface(17, if (primary) 0xFF1A1A1A.toInt() else 0xFF111111.toInt())
             isClickable = true
             isFocusable = true
         }
@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setPadding(dp(6), dp(5), dp(6), dp(6))
             background = GradientDrawable().apply {
-                setColor(0xF50A1413.toInt())
+                setColor(0xF5121212.toInt())
                 cornerRadius = dp(24).toFloat()
                 setStroke(dp(1), Theme.LINE)
             }
@@ -195,9 +195,9 @@ class MainActivity : ComponentActivity() {
                 isClickable = true
                 isFocusable = true
                 background = if (selectedTab == tab) GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(0xFF20322F.toInt(), 0xFF111B1C.toInt())).apply {
+                    intArrayOf(0xFF2E2E2E.toInt(), 0xFF191919.toInt())).apply {
                     cornerRadius = dp(17).toFloat()
-                    setStroke(dp(1), 0xFF456A61.toInt())
+                    setStroke(dp(1), 0xFF616161.toInt())
                 } else GradientDrawable().apply {
                     setColor(0x00000000)
                     cornerRadius = dp(17).toFloat()
@@ -234,7 +234,7 @@ class MainActivity : ComponentActivity() {
             isFillViewport = true
             clipToPadding = false
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF05090B.toInt(), 0xFF080F11.toInt(), 0xFF0A1213.toInt()))
+                intArrayOf(0xFF080808.toInt(), 0xFF0E0E0E.toInt(), 0xFF101010.toInt()))
         }
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -272,9 +272,9 @@ class MainActivity : ComponentActivity() {
         }
         val brandMark = FrameLayout(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF21453E.toInt(), 0xFF101B1D.toInt())).apply {
+                intArrayOf(0xFF3D3D3D.toInt(), 0xFF191919.toInt())).apply {
                 cornerRadius = dp(13).toFloat()
-                setStroke(dp(1), 0xFF426B63.toInt())
+                setStroke(dp(1), 0xFF626262.toInt())
             }
             addView(OrionIconView(this@MainActivity).apply {
                 icon = "spark"; tint = Theme.CYAN; contentDescription = null
@@ -290,8 +290,8 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(7), dp(10), dp(7))
             background = GradientDrawable().apply {
-                setColor(0xFF101D1B.toInt()); cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), 0xFF294C45.toInt())
+                setColor(0xFF1A1A1A.toInt()); cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), 0xFF444444.toInt())
             }
         }
         brandRow.addView(livePill)
@@ -311,9 +311,9 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setPadding(dp(18), dp(16), dp(18), dp(17))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF111A1C.toInt(), 0xFF080F11.toInt(), 0xFF0B1515.toInt())).apply {
+                intArrayOf(0xFF181818.toInt(), 0xFF0E0E0E.toInt(), 0xFF131313.toInt())).apply {
                 cornerRadius = dp(27).toFloat()
-                setStroke(dp(1), 0xFF293D3D.toInt())
+                setStroke(dp(1), 0xFF393939.toInt())
             }
             elevation = dp(2).toFloat()
         }
@@ -372,7 +372,7 @@ class MainActivity : ComponentActivity() {
         val statusCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(15), dp(14), dp(15), dp(14))
-            background = surface(18, 0xFF0B1214.toInt())
+            background = surface(18, 0xFF111111.toInt())
         }
         statusCard.addView(label("SYSTEM STATUS", 10f, Theme.CYAN, true).apply { letterSpacing = .12f })
         statusLabel = label("", 12f, Theme.MUTED).apply { setPadding(0, dp(7), 0, 0); setLineSpacing(dp(2).toFloat(), 1f) }
@@ -383,9 +383,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun roundedPill(): GradientDrawable = GradientDrawable().apply {
-        setColor(0xFF063B30.toInt())
+        setColor(0xFF2F2F2F.toInt())
         cornerRadius = dp(30).toFloat()
-        setStroke(dp(1), 0xFF016856.toInt())
+        setStroke(dp(1), 0xFF515151.toInt())
     }
 
     private fun buildTools(page: LinearLayout) {
