@@ -189,7 +189,7 @@ fun OrionComposeChatScreen(
                                 contentAlignment = Alignment.Center) {
                                 Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(39.dp))
                             }
-                            Text(if (commandMode) "READY TO HELP" else "HERE WITH YOU", color = Color(0xFFD8D8D8),
+                            Text(if (commandMode) "YOUR AI, READY WHEN YOU ARE" else "YOUR AI, READY WHEN YOU ARE", color = Color(0xFFD8D8D8),
                                 fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
                         }
                     }
@@ -290,7 +290,7 @@ fun OrionComposeChatScreen(
                     Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onBrowser))
                     Text("Tasks", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onTasks))
                 }
-                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Color(0xFF647775),
+                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Color(0xFF9B9B9B),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(4.dp))
             }
         }
@@ -377,19 +377,19 @@ private fun ChatBubble(item: OrionChatLine) {
                 ) {
                     Box(
                         Modifier.size(22.dp).clip(RoundedCornerShape(8.dp))
-                            .background(Brush.linearGradient(listOf(Color(0xFF28564B), Color(0xFF172322))))
+                            .background(Brush.linearGradient(listOf(Color(0xFF454545), Color(0xFF1A1A1A))))
                             .border(1.dp, Color(0xFF355A52), RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(13.dp)) }
                     Text("Orion", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("AI assistant", color = Color(0xFF71817F), fontSize = 10.sp)
+                    Text("AI assistant", color = Color(0xFF9B9B9B), fontSize = 10.sp)
                 }
             }
             Column(
                 Modifier.fillMaxWidth(if (note) 1f else if (mine) .86f else .98f)
                     .then(
                         if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
-                            .background(if (note) Color(0xFF11191B) else Color(0xFF1A2928))
+                            .background(if (note) Color(0xFF181818) else Color(0xFF202020))
                             .border(1.dp, if (mine) Color(0xFF314A45) else ChatHairline, RoundedCornerShape(17.dp))
                         else Modifier
                     )
@@ -413,7 +413,7 @@ private fun ChatBubble(item: OrionChatLine) {
 private fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit, secondary: Boolean) {
     Box(
         Modifier.size(43.dp).clip(CircleShape)
-            .background(if (secondary) Color(0xFF1A2B2B) else ChatMint)
+            .background(if (secondary) Color(0xFF242424) else ChatMint)
             .border(1.dp, if (secondary) ChatHairline else Color(0xFFB6F9E9), CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -423,7 +423,7 @@ private fun ComposerButton(icon: androidx.compose.ui.graphics.vector.ImageVector
 @Composable
 private fun DockAction(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(if (selected) Color(0xFF1B3430) else Color.Transparent)
+        modifier.clip(RoundedCornerShape(16.dp)).background(if (selected) Color(0xFF303030) else Color.Transparent)
             .clickable(onClick = onClick).padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
