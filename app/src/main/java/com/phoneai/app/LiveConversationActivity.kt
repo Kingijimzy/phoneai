@@ -76,7 +76,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(10), dp(18), dp(10))
+            setPadding(dp(18), dp(8), dp(18), dp(8))
             setBackgroundColor(Theme.BG)
         }
 
@@ -123,12 +123,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(10), dp(0), dp(10), dp(5))
         }
         val compact = resources.configuration.screenHeightDp < 720
-        val waveHeight = if (compact) 54 else 72
+        val waveHeight = if (compact) 46 else 58
         // The voice experience is waveform-led, not dominated by a large decorative orb.
         val voiceSurface = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(14), dp(if (compact) 14 else 20), dp(14), dp(if (compact) 14 else 20))
+            setPadding(dp(14), dp(if (compact) 11 else 15), dp(14), dp(if (compact) 11 else 15))
             background = panel(0xFF0C1416.toInt(), 18, 0xFF2A403D.toInt())
         }
         val waveLabel = text("LIVE AUDIO", 9f, Theme.MUTED, true).apply {
@@ -161,7 +161,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setLineSpacing(dp(2).toFloat(), 1f)
         }
         hero.addView(helperLabel)
-        root.addView(hero, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(hero, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
 
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -185,11 +185,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         transcriptScroll.addView(transcript)
-        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 76 else 108)).apply {
+        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 58 else 76)).apply {
             topMargin = dp(6)
         })
         root.addView(transcriptCard, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(10)
+            bottomMargin = dp(7)
         })
 
         val controls = LinearLayout(this).apply {
@@ -203,7 +203,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "phone-off"; tint = Theme.MUTED; contentDescription = null
-            }, LinearLayout.LayoutParams(dp(23), dp(23)))
+            }, LinearLayout.LayoutParams(dp(21), dp(21)))
             setOnClickListener {
                 PhoneAiService.instance?.endLiveConversation()
                 listeningRequested = false
@@ -214,7 +214,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val endItem = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            addView(end, LinearLayout.LayoutParams(dp(50), dp(50)))
+            addView(end, LinearLayout.LayoutParams(dp(46), dp(46)))
             addView(text("END CALL", 8f, Theme.MUTED, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .04f
@@ -253,7 +253,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 }
             }
         }
-        micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 62 else 68), dp(if (compact) 62 else 68)))
+        micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 58 else 64), dp(if (compact) 58 else 64)))
         micCaption = text("MICROPHONE", 8f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .04f
