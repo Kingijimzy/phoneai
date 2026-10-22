@@ -72,13 +72,13 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val ChatInk = Color(0xFF02080A)
-private val ChatPanel = Color(0xFF0A1113)
-private val ChatPanelRaised = Color(0xFF10191B)
-private val ChatMint = Color(0xFF00FCB6)
-private val ChatCopy = Color(0xFFF1F5F4)
-private val ChatMuted = Color(0xFFA0AEAD)
-private val ChatHairline = Color(0xFF243230)
+private val ChatInk = Color(0xFF050708)
+private val ChatPanel = Color(0xFF101516)
+private val ChatPanelRaised = Color(0xFF171E1F)
+private val ChatMint = Color(0xFF19D3B3)
+private val ChatCopy = Color(0xFFF7FAF9)
+private val ChatMuted = Color(0xFF9AA7A5)
+private val ChatHairline = Color(0xFF293333)
 
 data class OrionChatLine(
     val id: Long,
