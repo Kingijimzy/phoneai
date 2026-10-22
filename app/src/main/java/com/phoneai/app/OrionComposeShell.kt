@@ -163,7 +163,7 @@ private fun HomePage(
                     .clickable { onOpenSettings(null) }.padding(horizontal = 11.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(Mint.copy(alpha = .65f + glow)))
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Mint.copy(alpha = (.65f + glow).coerceIn(0f, 1f))))
                 Text(status.uppercase().take(13), color = Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
             }
         }
