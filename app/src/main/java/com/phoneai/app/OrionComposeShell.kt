@@ -181,7 +181,9 @@ private fun HomePage(
                 }
                 Text("PRIVATE", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             }
-            Box(Modifier.fillMaxWidth().height(154.dp), contentAlignment = Alignment.Center) {\n                LiquidWaveCore(Modifier.size(150.dp))\n            }
+            Box(Modifier.fillMaxWidth().height(154.dp), contentAlignment = Alignment.Center) {
+                LiquidWaveCore(Modifier.size(150.dp))
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Box(
                     Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Mint)
