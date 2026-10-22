@@ -1094,9 +1094,9 @@ class SettingsActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(10), dp(10), dp(10))
                 background = GradientDrawable().apply {
-                    setColor(if (selected) 0xFF203A34.toInt() else 0xFF11191A.toInt())
-                    cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0xFF203D37.toInt())
+                    setColor(if (selected) 0xFF14211F.toInt() else 0xFF0D1416.toInt())
+                    cornerRadius = dp(13).toFloat()
+                    setStroke(dp(1), if (selected) Theme.CYAN else 0x332F4A46)
                 }
                 isClickable = true; isFocusable = true
                 contentDescription = profile.label + ", " + descriptions[profile.id].orEmpty()
