@@ -134,8 +134,8 @@ private fun HomePage(
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(19.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(15.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -154,8 +154,8 @@ private fun HomePage(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("Meet your\npersonal intelligence.", color = Copy, fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.0).sp)
-            Text("A calmer space to think, create, and get things done.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
+            Text("Your AI,\nyour way.", color = Copy, fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.1).sp)
+            Text("Think clearly. Create freely. Get things done.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
         }
 
         // Orion's focal surface: compact glass shell with a deliberately sculpted liquid orb.
@@ -171,8 +171,8 @@ private fun HomePage(
                 Text("Think it through. Talk it out.", color = Copy, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.3).sp)
                 Text("A conversation first. Tools only when you ask.", color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
             }
-            Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                LiquidWaveCore(Modifier.size(138.dp))
+            Box(Modifier.fillMaxWidth().height(126.dp), contentAlignment = Alignment.Center) {
+                LiquidWaveCore(Modifier.size(124.dp))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
@@ -201,24 +201,9 @@ private fun HomePage(
             }
         }
 
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("YOUR TOOLS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
-            Spacer(Modifier.weight(1f))
-            Text("Made for your workflow", color = Muted, fontSize = 10.sp)
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionTile("Live voice", "Speak naturally", Icons.Rounded.GraphicEq, Modifier.weight(1f), onOpenVoice)
-            ActionTile("Browser", "Research and explore", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
-        }
-
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
-            Spacer(Modifier.weight(1f))
-            Text("ALL TOOLS  ↗", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenUtilities() })
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MiniTile("Task centre", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
+        // Keep the home screen focused on conversation; the full catalogue remains in Tools.
+        Row(Modifier.fillMaxWidth().padding(top = 1.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            MiniTile("Tasks", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
             MiniTile("Memory", Icons.Rounded.Memory, Modifier.weight(1f)) { onOpenSettings("memory") }
             MiniTile("Skills", Icons.Rounded.Bolt, Modifier.weight(1f)) { onOpenSettings("skills") }
         }
