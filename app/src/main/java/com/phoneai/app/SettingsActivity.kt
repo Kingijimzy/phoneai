@@ -115,13 +115,13 @@ class SettingsActivity : Activity() {
         b.setTextColor(if (primary) Theme.ON_ACCENT else Theme.TEXT)
         val g = if (primary) {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFFB0F1E2.toInt(), 0xFF65D9BE.toInt()))
+                intArrayOf(0xFFD8D8D8.toInt(), 0xFFBFBFBF.toInt()))
         } else {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xF0192527.toInt(), 0xF0070D0F.toInt()))
         }
         g.cornerRadius = dp(10).toFloat()
-        g.setStroke(dp(1), if (primary) 0xFFBDEFE3.toInt() else 0x553D6963)
+        g.setStroke(dp(1), if (primary) 0xFFE5E5E5.toInt() else 0x553D6963)
         b.background = g
         b.elevation = 0f
         b.stateListAnimator = null
@@ -153,7 +153,7 @@ class SettingsActivity : Activity() {
         heading.addView(LinearLayout(this).apply {
             gravity = Gravity.CENTER
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF1D3934.toInt(), 0xFF101B1D.toInt())).apply {
+                intArrayOf(0xFF303030.toInt(), 0xFF141414.toInt())).apply {
                 cornerRadius = dp(9).toFloat()
                 setStroke(dp(1), 0x553C6D62)
             }
@@ -247,7 +247,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(19), dp(20), dp(19), dp(20))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF172B27.toInt(), 0xFF0E191A.toInt(), 0xFF0A1113.toInt())).apply {
+                intArrayOf(0xFF242424.toInt(), 0xFF141414.toInt(), 0xFF121212.toInt())).apply {
                 cornerRadius = dp(25).toFloat()
                 setStroke(dp(1), 0x66456B60)
             }
@@ -256,7 +256,7 @@ class SettingsActivity : Activity() {
         val brandMark = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF2B5A4C.toInt(), 0xFF132B26.toInt())).apply {
+                intArrayOf(0xFF454545.toInt(), 0xFF252525.toInt())).apply {
                 cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0x665AA38A)
             }
             addView(OrionIconView(this@SettingsActivity).apply {
@@ -614,11 +614,11 @@ class SettingsActivity : Activity() {
                 setPadding(dp(12), dp(11), dp(11), dp(11))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(
-                        if (selected) 0xFF182724.toInt() else if (saved) 0xFF151D1F.toInt() else 0xE6101719.toInt(),
-                        if (selected) 0xFF101A18.toInt() else 0xE80B1113.toInt()
+                        if (selected) 0xFF222222.toInt() else if (saved) 0xFF1C1C1C.toInt() else 0xE6101719.toInt(),
+                        if (selected) 0xFF181818.toInt() else 0xE80B1113.toInt()
                     )).apply {
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF344643.toInt() else 0x332F4A46)
+                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF363636.toInt() else 0x332F4A46)
                 }
                 isClickable = true
                 isFocusable = true
@@ -636,9 +636,9 @@ class SettingsActivity : Activity() {
                 icon = iconName
                 tint = if (saved || selected) Theme.CYAN else Theme.MUTED
                 background = GradientDrawable().apply {
-                    setColor(if (saved || selected) 0xFF273536.toInt() else 0xFF171F21.toInt())
+                    setColor(if (saved || selected) 0xFF303030.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
-                    setStroke(dp(1), if (selected) 0xFF52716D.toInt() else 0x443D6963)
+                    setStroke(dp(1), if (selected) 0xFF737373.toInt() else 0x443D6963)
                 }
                 contentDescription = null
             }
@@ -1126,7 +1126,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(10), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt(), 0xFF0A0E10.toInt()))
+                intArrayOf(0xFF101010.toInt(), 0xFF171717.toInt(), 0xFF0B0B0B.toInt()))
         }
         outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.CYAN, true).apply {
             letterSpacing = .12f; setPadding(0, 0, 0, dp(7))
@@ -1143,7 +1143,7 @@ class SettingsActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(10), dp(10), dp(10))
                 background = GradientDrawable().apply {
-                    setColor(if (selected) 0xFF14211F.toInt() else 0xFF0D1416.toInt())
+                    setColor(if (selected) 0xFF1B1B1B.toInt() else 0xFF121212.toInt())
                     cornerRadius = dp(13).toFloat()
                     setStroke(dp(1), if (selected) Theme.CYAN else 0x332F4A46)
                 }
@@ -1154,7 +1154,7 @@ class SettingsActivity : Activity() {
                 icon = icons[profile.id] ?: "spark"
                 tint = if (selected) Theme.CYAN else Theme.MUTED
                 background = GradientDrawable().apply {
-                    setColor(if (selected) 0xFF254A43.toInt() else 0xFF172122.toInt())
+                    setColor(if (selected) 0xFF3A3A3A.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
                     setStroke(dp(1), if (selected) Theme.CYAN else 0x443D6963)
                 }
