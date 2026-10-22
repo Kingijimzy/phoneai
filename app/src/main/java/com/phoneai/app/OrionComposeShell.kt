@@ -132,145 +132,169 @@ private fun HomePage(
     onOpenUtilities: () -> Unit,
     onOpenSettings: (String?) -> Unit
 ) {
+    val pulse = rememberInfiniteTransition(label = "orion-ready-pulse")
+    val glow by pulse.animateFloat(
+        initialValue = 0.18f, targetValue = 0.42f,
+        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "ready-glow"
+    )
     Column(
         Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())
-            .padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+            .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                Box(
-                    Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF12483F), Color(0xFF101516))))
-                        .border(1.dp, Color(0xFF67558A), RoundedCornerShape(15.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = Mint, modifier = Modifier.size(22.dp))
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("ORION", color = Copy, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.3.sp)
-                    Text("YOUR PERSONAL AI", color = Muted, fontSize = 9.sp, letterSpacing = 1.4.sp)
-                }
+        Row(Modifier.fillMaxWidth().padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(42.dp).clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF173D38), Panel)))
+                    .border(1.dp, Mint.copy(alpha = .55f), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = Mint, modifier = Modifier.size(23.dp))
+            }
+            Spacer(Modifier.width(11.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text("ORION", color = Copy, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Text("PERSONAL AI ASSISTANT", color = Muted, fontSize = 9.sp, letterSpacing = 1.1.sp)
             }
             Spacer(Modifier.weight(1f))
-            Box(
-                Modifier.clip(CircleShape).background(Color(0xFF171E1F))
-                    .border(1.dp, Color(0xFF45365F), CircleShape).padding(horizontal = 11.dp, vertical = 8.dp)
+            Row(
+                Modifier.clip(CircleShape).background(Panel).border(1.dp, Hairline, CircleShape)
+                    .clickable { onOpenSettings(null) }.padding(horizontal = 11.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(Mint))
-                    Text(status.uppercase().take(14), color = Mint, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-                }
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Mint.copy(alpha = .65f + glow)))
+                Text(status.uppercase().take(13), color = Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("Meet your new\nthinking space.", color = Copy, fontSize = 36.sp, lineHeight = 39.sp,
-                fontWeight = FontWeight.SemiBold, letterSpacing = (-1.4).sp)
-            Text("A calmer place to explore ideas, ask questions and make things happen.", color = Muted,
-                fontSize = 13.sp, lineHeight = 19.sp)
-        }
-
-        // Full-bleed-feeling orb stage replaces the old stacked promotional card.
-        Box(
-            Modifier.fillMaxWidth().height(278.dp).clip(RoundedCornerShape(30.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF2A203A), Color(0xFF101516), Color(0xFF121019))))
-                .border(1.dp, Color(0xFF514064), RoundedCornerShape(30.dp))
+        // Live assistant core: compact, functional, and deliberately not a promotional splash screen.
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(27.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF0D1919), Color(0xFF080D0E))))
+                .border(1.dp, Mint.copy(alpha = .25f + glow * .25f), RoundedCornerShape(27.dp))
+                .padding(horizontal = 19.dp, vertical = 17.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Canvas(Modifier.fillMaxSize()) {
-                val cx = size.width * .5f
-                val cy = size.height * .43f
-                drawCircle(Brush.radialGradient(listOf(Color(0x3325E6B1), Color.Transparent), center = Offset(cx, cy), radius = size.width * .58f),
-                    radius = size.width * .58f, center = Offset(cx, cy))
-                for (i in 0..4) {
-                    drawCircle(color = Color(0xFF6FE8C8).copy(alpha = .09f - i * .012f),
-                        radius = size.width * (.23f + i * .055f), center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
-                }
-            }
-            Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 17.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("THE ORION ENGINE", color = Color(0xFFD7CCFF), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
-                    Spacer(Modifier.weight(1f))
-                    Icon(Icons.Rounded.GraphicEq, null, tint = Mint.copy(alpha = .8f), modifier = Modifier.size(18.dp))
-                }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("ORION CORE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
                 Spacer(Modifier.weight(1f))
-                LiquidWaveCore(Modifier.size(154.dp))
-                Spacer(Modifier.weight(1f))
-                Text("Your mind, with more room.", color = Copy, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(5.dp))
-                Text("Start with a thought. Take it anywhere.", color = Muted, fontSize = 11.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Icon(Icons.Rounded.GraphicEq, null, tint = Mint, modifier = Modifier.size(19.dp))
             }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("WHAT DO YOU NEED TODAY?", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Column(
-                    Modifier.weight(1f).height(116.dp).clip(RoundedCornerShape(20.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFFD7CCFF), Color(0xFF9C83E8))))
-                        .clickable(onClick = onOpenChat).padding(15.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(23.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("AI Chat", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("Think out loud", color = Color(0xFF12483F), fontSize = 11.sp)
+            Spacer(Modifier.height(4.dp))
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(184.dp)) {
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    for (i in 0..3) {
+                        drawCircle(
+                            color = Mint.copy(alpha = (0.055f + glow * .035f) - i * .008f),
+                            radius = size.width * (.28f + i * .095f),
+                            center = center,
+                            style = Stroke(width = 1.dp.toPx())
+                        )
                     }
+                    drawCircle(
+                        brush = Brush.radialGradient(listOf(Color(0xFF123A36), Color(0xFF071012), Color(0xFF030708))),
+                        radius = size.width * .36f, center = center
+                    )
+                    drawCircle(color = Mint.copy(alpha = .55f), radius = size.width * .36f, center = center, style = Stroke(width = 1.2.dp.toPx()))
                 }
-                Column(
-                    Modifier.weight(1f).height(116.dp).clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF171E1F)).border(1.dp, Color(0xFF45365F), RoundedCornerShape(20.dp))
-                        .clickable(onClick = onOpenVoice).padding(15.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Icon(Icons.Rounded.Mic, null, tint = Mint, modifier = Modifier.size(23.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Live voice", color = Copy, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Talk hands-free", color = Muted, fontSize = 11.sp)
-                    }
-                }
+                LiquidWaveCore(Modifier.size(126.dp))
+            }
+            Text("Orion is ready", color = Copy, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(7.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Mint))
+                Text("Assistant standing by", color = Muted, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(17.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(Mint).clickable(onClick = onOpenVoice).padding(vertical = 15.dp),
+                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.GraphicEq, null, tint = Ink, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Start a live conversation", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("YOUR STUDIO", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-                Spacer(Modifier.weight(1f))
-                Text("Explore", color = Mint, fontSize = 11.sp, modifier = Modifier.clickable { onOpenSettings(null) })
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                MiniTile("Tasks", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
-                MiniTile("Browser", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
-                MiniTile("Memory", Icons.Rounded.Memory, Modifier.weight(1f)) { onOpenSettings("memory") }
-                MiniTile("Skills", Icons.Rounded.Bolt, Modifier.weight(1f)) { onOpenSettings("skills") }
-            }
+        Text("What would you like to do?", color = Copy, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HomeActionCard("Chat with Orion", "Ask, reason, create", Icons.Rounded.ChatBubbleOutline, Modifier.weight(1f), onOpenChat)
+            HomeActionCard("Explore the web", "Research when requested", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HomeActionCard("Run a workflow", "Tasks and teach mode", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
+            HomeActionCard("Orion memory", "Continue your work", Icons.Rounded.Memory, Modifier.weight(1f)) { onOpenSettings("memory") }
         }
 
+        // Tappable prompt dock opens the full chat composer, including voice and image input.
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF101516))
-                .border(1.dp, Hairline, RoundedCornerShape(16.dp)).clickable { onOpenUtilities() }
-                .padding(15.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF101819))
+                .border(1.dp, Hairline, RoundedCornerShape(22.dp)).clickable(onClick = onOpenChat)
+                .padding(start = 15.dp, end = 9.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF302641)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.SmartToy, null, tint = Mint, modifier = Modifier.size(21.dp))
+            Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Muted, modifier = Modifier.size(21.dp))
+            Spacer(Modifier.width(11.dp))
+            Text("Message Orion...", color = Muted, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Box(
+                Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(Mint),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.ChevronRight, null, tint = Ink, modifier = Modifier.size(25.dp))
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("YOUR WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+            Spacer(Modifier.weight(1f))
+            Text("Explore all", color = Mint, fontSize = 12.sp, modifier = Modifier.clickable { onOpenUtilities() })
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MiniTile("Tasks", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
+            MiniTile("Browser", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
+            MiniTile("Memory", Icons.Rounded.Memory, Modifier.weight(1f)) { onOpenSettings("memory") }
+            MiniTile("Skills", Icons.Rounded.Bolt, Modifier.weight(1f)) { onOpenSettings("skills") }
+        }
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(Panel)
+                .border(1.dp, Hairline, RoundedCornerShape(17.dp)).clickable { onOpenUtilities() }
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFF12342F)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.SmartToy, null, tint = Mint, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Show Orion how you work", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text("Turn your steps into reusable skills", color = Muted, fontSize = 11.sp)
+                Text("Teach Orion your workflow", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Save repeatable steps as skills", color = Muted, fontSize = 11.sp)
             }
-            Icon(Icons.Rounded.ChevronRight, null, tint = Muted, modifier = Modifier.size(19.dp))
+            Icon(Icons.Rounded.ChevronRight, null, tint = Muted, modifier = Modifier.size(20.dp))
         }
+    }
+}
 
-        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Rounded.Shield, null, tint = Mint.copy(alpha = .8f), modifier = Modifier.size(17.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("SYSTEM STATUS", color = Copy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                Text(status, color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
-            }
+@Composable
+private fun HomeActionCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier.height(133.dp).clip(RoundedCornerShape(21.dp)).background(Color(0xFF101718))
+            .border(1.dp, Color(0xFF293737), RoundedCornerShape(21.dp))
+            .clickable(onClick = onClick).padding(15.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Icon(icon, null, tint = Mint, modifier = Modifier.size(25.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, color = Copy, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, color = Muted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
