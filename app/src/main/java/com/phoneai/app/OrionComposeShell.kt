@@ -76,14 +76,14 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
 
-private val Ink = Color(0xFF02080A)
-private val Panel = Color(0xFF0A1113)
-private val PanelRaised = Color(0xFF10191B)
-private val Mint = Color(0xFF00FCB6)
-private val MintDim = Color(0xFF016856)
-private val Copy = Color(0xFFF1F5F4)
-private val Muted = Color(0xFFA0AEAD)
-private val Hairline = Color(0xFF243230)
+private val Ink = Color(0xFF100F18)
+private val Panel = Color(0xFF191724)
+private val PanelRaised = Color(0xFF211E2E)
+private val Mint = Color(0xFFB8A1FF)
+private val MintDim = Color(0xFF55418D)
+private val Copy = Color(0xFFF4F0FF)
+private val Muted = Color(0xFFA6A0B8)
+private val Hairline = Color(0xFF383247)
 
 @Composable
 fun OrionComposeShell(
@@ -141,8 +141,8 @@ private fun HomePage(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                 Box(
                     Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF193D35), Color(0xFF0A1716))))
-                        .border(1.dp, Color(0xFF41675B), RoundedCornerShape(15.dp)),
+                        .background(Brush.linearGradient(listOf(Color(0xFF34284D), Color(0xFF191724))))
+                        .border(1.dp, Color(0xFF67558A), RoundedCornerShape(15.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Rounded.AutoAwesome, null, tint = Mint, modifier = Modifier.size(22.dp))
@@ -154,8 +154,8 @@ private fun HomePage(
             }
             Spacer(Modifier.weight(1f))
             Box(
-                Modifier.clip(CircleShape).background(Color(0xFF0E1D19))
-                    .border(1.dp, Color(0xFF29483E), CircleShape).padding(horizontal = 11.dp, vertical = 8.dp)
+                Modifier.clip(CircleShape).background(Color(0xFF211E2E))
+                    .border(1.dp, Color(0xFF45365F), CircleShape).padding(horizontal = 11.dp, vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(Mint))
@@ -165,17 +165,17 @@ private fun HomePage(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("A little more\nintelligence.", color = Copy, fontSize = 36.sp, lineHeight = 39.sp,
+            Text("Meet your new\nthinking space.", color = Copy, fontSize = 36.sp, lineHeight = 39.sp,
                 fontWeight = FontWeight.SemiBold, letterSpacing = (-1.4).sp)
-            Text("One place to think, talk, create and get things done.", color = Muted,
+            Text("A calmer place to explore ideas, ask questions and make things happen.", color = Muted,
                 fontSize = 13.sp, lineHeight = 19.sp)
         }
 
         // Full-bleed-feeling orb stage replaces the old stacked promotional card.
         Box(
             Modifier.fillMaxWidth().height(278.dp).clip(RoundedCornerShape(30.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF14221F), Color(0xFF0A1113), Color(0xFF070B0D))))
-                .border(1.dp, Color(0xFF304840), RoundedCornerShape(30.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF2A203A), Color(0xFF191724), Color(0xFF121019))))
+                .border(1.dp, Color(0xFF514064), RoundedCornerShape(30.dp))
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 val cx = size.width * .5f
@@ -190,38 +190,38 @@ private fun HomePage(
             Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 17.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("ORION CORE", color = Color(0xFFB7D5CC), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+                    Text("THE ORION ENGINE", color = Color(0xFFD7CCFF), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
                     Spacer(Modifier.weight(1f))
                     Icon(Icons.Rounded.GraphicEq, null, tint = Mint.copy(alpha = .8f), modifier = Modifier.size(18.dp))
                 }
                 Spacer(Modifier.weight(1f))
                 LiquidWaveCore(Modifier.size(154.dp))
                 Spacer(Modifier.weight(1f))
-                Text("Ready when you are.", color = Copy, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("Your mind, with more room.", color = Copy, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(5.dp))
-                Text("Ask naturally. Bring tools in when you need them.", color = Muted, fontSize = 11.sp,
+                Text("Start with a thought. Take it anywhere.", color = Muted, fontSize = 11.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("START A CONVERSATION", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Text("WHAT DO YOU NEED TODAY?", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(
                     Modifier.weight(1f).height(116.dp).clip(RoundedCornerShape(20.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFFB8F6E6), Color(0xFF70D8BD))))
+                        .background(Brush.linearGradient(listOf(Color(0xFFD7CCFF), Color(0xFF9C83E8))))
                         .clickable(onClick = onOpenChat).padding(15.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(23.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("AI Chat", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("Think out loud", color = Color(0xFF234A40), fontSize = 11.sp)
+                        Text("Think out loud", color = Color(0xFF34284D), fontSize = 11.sp)
                     }
                 }
                 Column(
                     Modifier.weight(1f).height(116.dp).clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF111A1C)).border(1.dp, Color(0xFF2A3D39), RoundedCornerShape(20.dp))
+                        .background(Color(0xFF211E2E)).border(1.dp, Color(0xFF45365F), RoundedCornerShape(20.dp))
                         .clickable(onClick = onOpenVoice).padding(15.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -236,7 +236,7 @@ private fun HomePage(
 
         Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("YOUR WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Text("YOUR STUDIO", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                 Spacer(Modifier.weight(1f))
                 Text("Explore", color = Mint, fontSize = 11.sp, modifier = Modifier.clickable { onOpenSettings(null) })
             }
@@ -249,18 +249,18 @@ private fun HomePage(
         }
 
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF0B1214))
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF191724))
                 .border(1.dp, Hairline, RoundedCornerShape(16.dp)).clickable { onOpenUtilities() }
                 .padding(15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF172A26)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF302641)), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.SmartToy, null, tint = Mint, modifier = Modifier.size(21.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Teach Orion a workflow", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text("Build repeatable routines from your steps", color = Muted, fontSize = 11.sp)
+                Text("Show Orion how you work", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("Turn your steps into reusable skills", color = Muted, fontSize = 11.sp)
             }
             Icon(Icons.Rounded.ChevronRight, null, tint = Muted, modifier = Modifier.size(19.dp))
         }
@@ -313,7 +313,7 @@ private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
 @Composable
 private fun PageHeading(title: String, subtitle: String) {
     Column(Modifier.padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("ORION / WORKSPACE", color = Mint, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+        Text("ORION  /  STUDIO", color = Mint, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
         Text(title, color = Copy, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.5).sp)
         Text(subtitle, color = Muted, fontSize = 14.sp)
     }
@@ -322,11 +322,11 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF11191B), Color(0xFF0A1012)))).border(1.dp, Color(0xFF273231).copy(alpha = .8f), RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF211E2E), Color(0xFF0A1012)))).border(1.dp, Color(0xFF383247).copy(alpha = .8f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF203A35), Color(0xFF11191B)))).border(1.dp, Color(0xFF3A554D).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF34284D), Color(0xFF211E2E)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(21.dp))
         }
         Spacer(Modifier.width(13.dp))
@@ -345,7 +345,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
             .clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF203A35), Color(0xFF11191B)))).border(1.dp, Color(0xFF3A554D).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF34284D), Color(0xFF211E2E)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(20.dp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -378,14 +378,14 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
     )
     Row(
         Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 6.dp, bottom = 6.dp)
-            .clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color(0xFF11191B), Color(0xF0080E10)))).border(1.dp, Color(0xFF34403F).copy(alpha = .8f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color(0xFF211E2E), Color(0xF0080E10)))).border(1.dp, Color(0xFF34403F).copy(alpha = .8f), RoundedCornerShape(16.dp))
             .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items.forEach { (label, icon, _) ->
             val active = label == selected
             val activeFill by animateColorAsState(
-                targetValue = if (active) Color(0xFF1D3731) else Color.Transparent,
+                targetValue = if (active) Color(0xFF34284D) else Color.Transparent,
                 animationSpec = tween(220),
                 label = "dock-fill-$label"
             )
@@ -481,7 +481,7 @@ private fun LiquidWaveCore(modifier: Modifier = Modifier) {
             // Glass body: cool graphite edge, deep translucent teal core and a subtle lit rim.
             drawCircle(
                 Brush.radialGradient(
-                    listOf(Color(0xFF25413F), Color(0xFF132426), Color(0xFF081114), Color(0xFF172626)),
+                    listOf(Color(0xFF514064), Color(0xFF302641), Color(0xFF171522), Color(0xFF292238)),
                     Offset(cx - radius * .28f, cy - radius * .34f), radius * 1.55f
                 ), radius
             )
