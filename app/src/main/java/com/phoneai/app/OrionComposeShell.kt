@@ -76,14 +76,14 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
 
-private val Ink = Color(0xFF070B0D)
-private val Panel = Color(0xFF101719)
-private val PanelRaised = Color(0xFF151F21)
-private val Mint = Color(0xFF72E3CE)
-private val MintDim = Color(0xFF2F8278)
-private val Copy = Color(0xFFF0F5F5)
-private val Muted = Color(0xFF9BAAAC)
-private val Hairline = Color(0xFF263638)
+private val Ink = Color(0xFF02080A)
+private val Panel = Color(0xFF0A1113)
+private val PanelRaised = Color(0xFF10191B)
+private val Mint = Color(0xFF00FCB6)
+private val MintDim = Color(0xFF016856)
+private val Copy = Color(0xFFF1F5F4)
+private val Muted = Color(0xFFA0AEAD)
+private val Hairline = Color(0xFF243230)
 
 @Composable
 fun OrionComposeShell(
