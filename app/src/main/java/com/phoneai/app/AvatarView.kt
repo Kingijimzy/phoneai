@@ -161,7 +161,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         // ---- backing and glow
         if (backing) {
             fill.shader = null
-            fill.color = 0xE6070B12.toInt()
+            fill.color = 0xE60B0B0B.toInt()
             canvas.drawCircle(w / 2f, h / 2f, s * 0.5f, fill)
         }
         fill.shader = RadialGradient(
@@ -225,7 +225,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
 
         // head
         rect.set(cx - s * headW, headTop, cx + s * headW, headBottom)
-        fill.shader = LinearGradient(0f, headTop, 0f, headBottom, 0xFF22324F.toInt(), 0xFF0E1522.toInt(), Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(0f, headTop, 0f, headBottom, 0xFF313131.toInt(), 0xFF141414.toInt(), Shader.TileMode.CLAMP)
         c.drawRoundRect(rect, s * 0.18f, s * 0.18f, fill)
         fill.shader = null
         line.color = alpha(col, 230)
@@ -236,7 +236,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         val visorTop = cy - s * (if (big) 0.19f else 0.22f)
         val visorBottom = cy + s * (if (big) 0.07f else 0.06f)
         rect.set(cx - s * (headW - 0.05f), visorTop, cx + s * (headW - 0.05f), visorBottom)
-        fill.color = 0xFF050A12.toInt()
+        fill.color = 0xFF0A0A0A.toInt()
         c.drawRoundRect(rect, s * 0.1f, s * 0.1f, fill)
 
         // eyes
@@ -381,7 +381,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
                 val iy = eyeY + gy * eh * 0.35f
                 fill.color = col
                 c.drawCircle(ix, iy, ew * 0.62f, fill)
-                fill.color = 0xFF10131F.toInt()
+                fill.color = 0xFF131313.toInt()
                 c.drawCircle(ix, iy, ew * 0.3f, fill)
                 fill.color = 0xFFFFFFFF.toInt()
                 c.drawCircle(ix - ew * 0.2f, iy - ew * 0.2f, ew * 0.14f, fill)
@@ -444,7 +444,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         val w = s * 0.34f
         val top = cy - s * 0.31f
         val bottom = cy + s * 0.31f
-        fill.color = 0xFF172330.toInt()
+        fill.color = 0xFF212121.toInt()
         path.reset()
         path.moveTo(cx - w, top + s * 0.10f)
         path.quadTo(cx - w * 1.05f, top - s * 0.02f, cx, top - s * 0.04f)
@@ -463,7 +463,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         line.strokeWidth = s * 0.014f
         c.drawRoundRect(rect, s * 0.06f, s * 0.06f, line)
         if (blink > 0.5f) {
-            fill.color = 0xFFB9FFFF.toInt()
+            fill.color = 0xFFF0F0F0.toInt()
             c.drawCircle(cx - s * 0.13f + gx * s * 0.01f, cy - s * 0.02f + gy * s * 0.01f, s * 0.025f, fill)
             c.drawCircle(cx + s * 0.13f + gx * s * 0.01f, cy - s * 0.02f + gy * s * 0.01f, s * 0.025f, fill)
         }
@@ -473,7 +473,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         if (mouth < 0.08f) {
             c.drawLine(cx - s * 0.08f, my, cx + s * 0.08f, my, line)
         } else {
-            fill.color = 0xFF050B11.toInt()
+            fill.color = 0xFF0A0A0A.toInt()
             rect.set(cx - s * 0.07f, my - s * 0.015f, cx + s * 0.07f, my + mouth * s * 0.07f)
             c.drawOval(rect, fill)
         }
@@ -491,24 +491,24 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         line.strokeWidth = s * 0.014f
         rect.set(cx - s * 0.30f, cy - s * 0.33f, cx + s * 0.30f, cy + s * 0.33f)
         c.drawOval(rect, line)
-        fill.shader = LinearGradient(cx, cy - s * 0.28f, cx, cy + s * 0.29f, 0xFFF3FCFF.toInt(), 0xFFB7E8F5.toInt(), Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(cx, cy - s * 0.28f, cx, cy + s * 0.29f, 0xFFF3FCFF.toInt(), 0xFFDFDFDF.toInt(), Shader.TileMode.CLAMP)
         rect.set(cx - s * 0.25f, cy - s * 0.28f, cx + s * 0.25f, cy + s * 0.29f)
         c.drawOval(rect, fill)
         fill.shader = null
         val eyeY = cy - s * 0.045f
         for (side in intArrayOf(-1, 1)) {
             val ex = cx + side * s * 0.105f
-            fill.color = 0xFF24465B.toInt()
+            fill.color = 0xFF404040.toInt()
             if (blink > 0.5f) {
                 c.drawCircle(ex + gx * s * 0.012f, eyeY + gy * s * 0.01f, s * 0.028f, fill)
             } else {
-                line.color = 0xFF24465B.toInt()
+                line.color = 0xFF404040.toInt()
                 line.strokeWidth = s * 0.012f
                 c.drawLine(ex - s * 0.025f, eyeY, ex + s * 0.025f, eyeY, line)
             }
         }
         val my = cy + s * 0.12f
-        line.color = 0xFF52859A.toInt()
+        line.color = 0xFF7C7C7C.toInt()
         line.strokeWidth = s * 0.014f
         if (mouth < 0.08f) {
             path.reset()
@@ -516,7 +516,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             path.quadTo(cx, my + s * 0.045f, cx + s * 0.06f, my)
             c.drawPath(path, line)
         } else {
-            fill.color = 0xFF52859A.toInt()
+            fill.color = 0xFF7C7C7C.toInt()
             rect.set(cx - s * 0.055f, my - s * 0.01f, cx + s * 0.055f, my + mouth * s * 0.055f)
             c.drawOval(rect, fill)
         }
