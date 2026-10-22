@@ -187,8 +187,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setLineSpacing(dp(2).toFloat(), 1f)
         }
         hero.addView(helperLabel)
-        // Let content determine its height: weighted centering created the giant empty bands seen on-device.
-        root.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2); bottomMargin = dp(6) })
+        // Give the core the flexible middle zone so captions and call controls stay anchored below it.
+        root.addView(hero, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2); bottomMargin = dp(4) })
 
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
