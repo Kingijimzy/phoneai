@@ -61,10 +61,10 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     /** Browser controls use the same restrained reflective charcoal as the chat composer. */
     private fun rounded(fill: Int) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(fill, 0xE80D1416.toInt())
+        intArrayOf(fill, 0xE8131313.toInt())
     ).apply {
         cornerRadius = dp(15).toFloat()
-        setStroke(dp(1), 0x553D6963)
+        setStroke(dp(1), 0x555F5F5F)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -189,7 +189,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         }
         agentPrompt = EditText(this).apply {
             hint = "e.g. find the signup form and fill these fields…"
-            setHintTextColor(0xFF82928E.toInt())
+            setHintTextColor(0xFF8E8E8E.toInt())
             setTextColor(Color.WHITE)
             textSize = 13f
             minHeight = dp(42)
