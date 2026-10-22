@@ -278,4 +278,3 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         if (isShown && windowVisibility == VISIBLE) postInvalidateDelayed(nextFrameDelayMs())
     }
 }
-}
