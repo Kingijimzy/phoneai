@@ -76,13 +76,13 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
 
-private val Ink = Color(0xFF050708)
+private val Ink = Color(0xFF050505)
 private val Panel = Color(0xFF141414)
 private val PanelRaised = Color(0xFF202020)
 private val Mint = Color(0xFFE5E5E5)
 private val MintDim = Color(0xFF363636)
 private val Copy = Color(0xFFF7FAF9)
-private val Muted = Color(0xFF9AA7A5)
+private val Muted = Color(0xFF9B9B9B)
 private val Hairline = Color(0xFF303030)
 
 @Composable
@@ -346,11 +346,11 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF202020), Color(0xFF0A1012)))).border(1.dp, Color(0xFF303030).copy(alpha = .8f), RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF202020), Color(0xFF101010)))).border(1.dp, Color(0xFF303030).copy(alpha = .8f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF303030), Color(0xFF202020)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF303030), Color(0xFF202020)))).border(1.dp, Color(0xFF383838).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(21.dp))
         }
         Spacer(Modifier.width(13.dp))
@@ -365,11 +365,11 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
 @Composable
 private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF181818), Color(0xFF0A1012)))).border(1.dp, Color(0xFF383838).copy(alpha = .7f), RoundedCornerShape(12.dp))
+        modifier.clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF181818), Color(0xFF101010)))).border(1.dp, Color(0xFF383838).copy(alpha = .7f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF303030), Color(0xFF202020)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF303030), Color(0xFF202020)))).border(1.dp, Color(0xFF383838).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(20.dp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -382,7 +382,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
 @Composable
 private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF181818), Color(0xFF0A1012)))).border(1.dp, Color(0xFF383838).copy(alpha = .72f), RoundedCornerShape(11.dp))
+        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF181818), Color(0xFF101010)))).border(1.dp, Color(0xFF383838).copy(alpha = .72f), RoundedCornerShape(11.dp))
             .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 11.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(9.dp)
@@ -403,7 +403,7 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 5.dp, bottom = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF141414), Color(0xFF070B0C))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF141414), Color(0xFF101010))))
             .border(1.dp, Color(0xFF383838), RoundedCornerShape(20.dp))
             .padding(horizontal = 7.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
