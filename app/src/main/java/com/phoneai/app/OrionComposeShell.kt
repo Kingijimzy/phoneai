@@ -155,7 +155,7 @@ private fun HomePage(
 
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("Meet your\npersonal intelligence.", color = Copy, fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.0).sp)
-            Text("One place to think, talk, and take action.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
+            Text("A calmer space to think, create, and get things done.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
         }
 
         // Orion's focal surface: compact glass shell with a deliberately sculpted liquid orb.
@@ -163,28 +163,16 @@ private fun HomePage(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFF172321), Color(0xFF0B1314), Color(0xFF070C0E))))
                 .border(1.dp, Color(0xFF3B514C).copy(alpha = .78f), RoundedCornerShape(26.dp))
-                .padding(horizontal = 17.dp, vertical = 17.dp),
+                .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("YOUR AI COMPANION", color = Color(0xFFC6D7D2), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
-                    Text("Here when you need it.", color = Muted, fontSize = 12.sp)
-                }
-                Row(
-                    Modifier.clip(CircleShape)
-                        .background(Color(0xFF11241F).copy(alpha = .9f))
-                        .border(1.dp, Color(0xFF38665A).copy(alpha = .6f), CircleShape)
-                        .padding(horizontal = 9.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(Mint))
-                    Spacer(Modifier.width(6.dp))
-                    Text(status.uppercase().take(10), color = Color(0xFFB9EDE0), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("ORION · READY WHEN YOU ARE", color = Color(0xFFC6D7D2), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.45.sp)
+                Text("Think it through. Talk it out.", color = Copy, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.3).sp)
+                Text("A conversation first. Tools only when you ask.", color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
             }
-            Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
-                LiquidWaveCore(Modifier.size(166.dp))
+            Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                LiquidWaveCore(Modifier.size(138.dp))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
