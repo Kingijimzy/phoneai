@@ -29,6 +29,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var micIcon: OrionIconView
     private lateinit var helperLabel: TextView
     private lateinit var liveBadgeLabel: TextView
+    private lateinit var liveDot: View
+    private var statusPulse: AnimatorSet? = null
     private lateinit var micCaption: TextView
     private var attachedService: PhoneAiService? = null
     private var listeningRequested = false
@@ -89,9 +91,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             setPadding(dp(9), dp(7), dp(10), dp(7))
             background = panel(0xEE121A1D.toInt(), 11, Theme.LINE)
-            addView(View(this@LiveConversationActivity).apply {
+            liveDot = View(this@LiveConversationActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Theme.OK) }
-            }, LinearLayout.LayoutParams(dp(6), dp(6)).apply { rightMargin = dp(6) })
+                contentDescription = "Voice session status"
+            }
+            addView(liveDot, LinearLayout.LayoutParams(dp(6), dp(6)).apply { rightMargin = dp(6) })
             liveBadgeLabel = text("READY", 9f, Theme.MUTED, true)
             addView(liveBadgeLabel)
         }
@@ -343,6 +347,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     override fun onDestroy() {
         micPulse?.cancel()
         micPulse = null
+        statusPulse?.cancel()
+        statusPulse = null
         micButton.scaleX = 1f
         micButton.scaleY = 1f
         if (isFinishing) PhoneAiService.instance?.endLiveConversation()
@@ -380,6 +386,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onStatus(value: String, mode: OrbView.Mode) {
         runOnUiThread {
+            val previousMode = lastMode
             lastMode = mode
             liveBadgeLabel.text = when (mode) {
                 OrbView.Mode.IDLE -> "READY"
@@ -389,17 +396,56 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.ACTING -> "WORKING"
                 OrbView.Mode.WAITING_APPROVAL -> "REVIEW"
             }
-            liveBadgeLabel.setTextColor(if (mode == OrbView.Mode.IDLE) Theme.MUTED else Theme.OK)
+            liveBadgeLabel.setTextColor(when (mode) {
+                OrbView.Mode.IDLE -> Theme.MUTED
+                OrbView.Mode.WAITING_APPROVAL -> 0xFFE9B984.toInt()
+                else -> Theme.OK
+            })
+            val statusColor = when (mode) {
+                OrbView.Mode.IDLE -> 0xFF647775.toInt()
+                OrbView.Mode.WAITING_APPROVAL -> 0xFFE9B984.toInt()
+                OrbView.Mode.THINKING, OrbView.Mode.ACTING -> Theme.CYAN
+                else -> Theme.OK
+            }
+            (liveDot.background as? GradientDrawable)?.setColor(statusColor)
+            statusPulse?.cancel()
+            statusPulse = null
+            liveDot.animate().cancel()
+            liveDot.scaleX = 1f
+            liveDot.scaleY = 1f
+            if (mode == OrbView.Mode.LISTENING || mode == OrbView.Mode.SPEAKING) {
+                val pulseX = ObjectAnimator.ofFloat(liveDot, View.SCALE_X, 1f, 1.45f).apply {
+                    duration = 720L
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                }
+                val pulseY = ObjectAnimator.ofFloat(liveDot, View.SCALE_Y, 1f, 1.45f).apply {
+                    duration = 720L
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                }
+                statusPulse = AnimatorSet().apply { playTogether(pulseX, pulseY); start() }
+            }
             micCaption.text = if (mode == OrbView.Mode.LISTENING) "STOP LISTENING" else "MICROPHONE"
             micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING) Theme.OK else Theme.TEXT)
             wave.mode = mode
-            stateLabel.text = when (mode) {
+            val nextState = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
                 OrbView.Mode.THINKING -> "Let me think"
                 OrbView.Mode.SPEAKING -> "I’m speaking"
                 OrbView.Mode.ACTING -> "Working on it"
                 OrbView.Mode.WAITING_APPROVAL -> "Your approval needed"
+            }
+            if (previousMode != mode && stateLabel.text.toString() != nextState) {
+                stateLabel.animate().cancel()
+                stateLabel.animate().alpha(0f).translationY(dp(3).toFloat()).setDuration(90L)
+                    .withEndAction {
+                        stateLabel.text = nextState
+                        stateLabel.animate().alpha(1f).translationY(0f).setDuration(170L).start()
+                    }.start()
+            } else {
+                stateLabel.text = nextState
             }
             helperLabel.text = when (mode) {
                 OrbView.Mode.IDLE -> "Tap the mic to talk. Say “Orion, open…” before a phone command."
