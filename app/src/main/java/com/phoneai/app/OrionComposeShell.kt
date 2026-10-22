@@ -107,7 +107,7 @@ fun OrionComposeShell(
     MaterialTheme(colorScheme = scheme) {
         Surface(Modifier.fillMaxSize(), color = Ink) {
             Column(Modifier.fillMaxSize()) {
-                AnimatedContent(targetState = selected, label = "orion-page") { page ->
+                AnimatedContent(targetState = selected, modifier = Modifier.weight(1f), label = "orion-page") { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
                         "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
@@ -115,7 +115,7 @@ fun OrionComposeShell(
                     }
                 }
                 BottomDock(selected) { next ->
-                    if (next == "Chat") onOpenChat() else selected = next
+                    when (next) { "Chat" -> onOpenChat(); "Live" -> onOpenVoice(); else -> selected = next }
                 }
             }
         }
@@ -401,35 +401,48 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
         Triple("Settings", Icons.Rounded.Settings, "Settings")
     )
     Row(
-        Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 6.dp, bottom = 6.dp)
-            .clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color(0xFF171E1F), Color(0xF0080E10)))).border(1.dp, Color(0xFF34403F).copy(alpha = .8f), RoundedCornerShape(16.dp))
-            .padding(5.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 5.dp, bottom = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF111819), Color(0xFF070B0C))))
+            .border(1.dp, Color(0xFF293737), RoundedCornerShape(20.dp))
+            .padding(horizontal = 7.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        items.forEach { (label, icon, _) ->
-            val active = label == selected
-            val activeFill by animateColorAsState(
-                targetValue = if (active) Color(0xFF12483F) else Color.Transparent,
-                animationSpec = tween(220),
-                label = "dock-fill-$label"
-            )
-            val activeTint by animateColorAsState(
-                targetValue = if (active) Mint else Muted,
-                animationSpec = tween(180),
-                label = "dock-tint-$label"
-            )
-            Column(
-                Modifier.weight(1f).height(47.dp).clip(RoundedCornerShape(10.dp))
-                    .background(activeFill)
-                    .clickable { onSelect(label) }.padding(vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(icon, null, tint = activeTint, modifier = Modifier.size(21.dp))
-                Spacer(Modifier.height(3.dp))
-                Text(label, color = activeTint, fontSize = 10.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
+        items.take(2).forEach { (label, icon, _) ->
+            DockItem(label, icon, selected == label, Modifier.weight(1f)) { onSelect(label) }
+        }
+        Box(
+            Modifier.weight(1.12f).height(58.dp).clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF1A6B5C), Color(0xFF0D3932), Color(0xFF10201F))))
+                .border(1.5.dp, Mint.copy(alpha = .85f), CircleShape)
+                .clickable { onSelect("Live") },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(Icons.Rounded.GraphicEq, null, tint = Color.White, modifier = Modifier.size(25.dp))
+                Text("LIVE", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
         }
+        items.drop(2).forEach { (label, icon, _) ->
+            DockItem(label, icon, selected == label, Modifier.weight(1f)) { onSelect(label) }
+        }
+    }
+}
+
+@Composable
+private fun DockItem(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val tint by animateColorAsState(if (active) Mint else Muted, animationSpec = tween(180), label = "dock-item-$label")
+    Column(
+        modifier.height(49.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (active) Color(0xFF12342F) else Color.Transparent)
+            .clickable(onClick = onClick).padding(vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = tint, fontSize = 9.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
 
