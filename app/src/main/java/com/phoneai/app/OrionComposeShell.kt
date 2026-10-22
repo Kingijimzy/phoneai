@@ -76,14 +76,14 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
 
-private val Ink = Color(0xFF100F18)
-private val Panel = Color(0xFF191724)
-private val PanelRaised = Color(0xFF211E2E)
-private val Mint = Color(0xFFB8A1FF)
-private val MintDim = Color(0xFF55418D)
-private val Copy = Color(0xFFF4F0FF)
-private val Muted = Color(0xFFA6A0B8)
-private val Hairline = Color(0xFF383247)
+private val Ink = Color(0xFF050708)
+private val Panel = Color(0xFF101516)
+private val PanelRaised = Color(0xFF171E1F)
+private val Mint = Color(0xFF19D3B3)
+private val MintDim = Color(0xFF145A50)
+private val Copy = Color(0xFFF7FAF9)
+private val Muted = Color(0xFF9AA7A5)
+private val Hairline = Color(0xFF293333)
 
 @Composable
 fun OrionComposeShell(
@@ -141,7 +141,7 @@ private fun HomePage(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                 Box(
                     Modifier.size(42.dp).clip(RoundedCornerShape(15.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF34284D), Color(0xFF191724))))
+                        .background(Brush.linearGradient(listOf(Color(0xFF12483F), Color(0xFF101516))))
                         .border(1.dp, Color(0xFF67558A), RoundedCornerShape(15.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -154,7 +154,7 @@ private fun HomePage(
             }
             Spacer(Modifier.weight(1f))
             Box(
-                Modifier.clip(CircleShape).background(Color(0xFF211E2E))
+                Modifier.clip(CircleShape).background(Color(0xFF171E1F))
                     .border(1.dp, Color(0xFF45365F), CircleShape).padding(horizontal = 11.dp, vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -174,7 +174,7 @@ private fun HomePage(
         // Full-bleed-feeling orb stage replaces the old stacked promotional card.
         Box(
             Modifier.fillMaxWidth().height(278.dp).clip(RoundedCornerShape(30.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF2A203A), Color(0xFF191724), Color(0xFF121019))))
+                .background(Brush.verticalGradient(listOf(Color(0xFF2A203A), Color(0xFF101516), Color(0xFF121019))))
                 .border(1.dp, Color(0xFF514064), RoundedCornerShape(30.dp))
         ) {
             Canvas(Modifier.fillMaxSize()) {
@@ -216,12 +216,12 @@ private fun HomePage(
                     Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(23.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("AI Chat", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("Think out loud", color = Color(0xFF34284D), fontSize = 11.sp)
+                        Text("Think out loud", color = Color(0xFF12483F), fontSize = 11.sp)
                     }
                 }
                 Column(
                     Modifier.weight(1f).height(116.dp).clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF211E2E)).border(1.dp, Color(0xFF45365F), RoundedCornerShape(20.dp))
+                        .background(Color(0xFF171E1F)).border(1.dp, Color(0xFF45365F), RoundedCornerShape(20.dp))
                         .clickable(onClick = onOpenVoice).padding(15.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -249,7 +249,7 @@ private fun HomePage(
         }
 
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF191724))
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF101516))
                 .border(1.dp, Hairline, RoundedCornerShape(16.dp)).clickable { onOpenUtilities() }
                 .padding(15.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -322,11 +322,11 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF211E2E), Color(0xFF0A1012)))).border(1.dp, Color(0xFF383247).copy(alpha = .8f), RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF171E1F), Color(0xFF0A1012)))).border(1.dp, Color(0xFF293333).copy(alpha = .8f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF34284D), Color(0xFF211E2E)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF12483F), Color(0xFF171E1F)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(21.dp))
         }
         Spacer(Modifier.width(13.dp))
@@ -345,7 +345,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
             .clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF34284D), Color(0xFF211E2E)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF12483F), Color(0xFF171E1F)))).border(1.dp, Color(0xFF67558A).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(20.dp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -378,14 +378,14 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
     )
     Row(
         Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 6.dp, bottom = 6.dp)
-            .clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color(0xFF211E2E), Color(0xF0080E10)))).border(1.dp, Color(0xFF34403F).copy(alpha = .8f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color(0xFF171E1F), Color(0xF0080E10)))).border(1.dp, Color(0xFF34403F).copy(alpha = .8f), RoundedCornerShape(16.dp))
             .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items.forEach { (label, icon, _) ->
             val active = label == selected
             val activeFill by animateColorAsState(
-                targetValue = if (active) Color(0xFF34284D) else Color.Transparent,
+                targetValue = if (active) Color(0xFF12483F) else Color.Transparent,
                 animationSpec = tween(220),
                 label = "dock-fill-$label"
             )
