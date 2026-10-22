@@ -135,7 +135,7 @@ private fun HomePage(
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -161,15 +161,15 @@ private fun HomePage(
         // Compact voice waveform replaces the oversized orb: a calmer, assistant-first workspace.
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF111B1D), Color(0xFF080E10))))
-                .border(1.dp, Color(0xFF273A37), RoundedCornerShape(20.dp))
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                 .background(Brush.verticalGradient(listOf(Color(0xFF172023), Color(0xCC0A1114), Color(0xFF080D10))))
+                .border(1.dp, Color(0xFF34413F).copy(alpha = .72f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF142421)).border(1.dp, Color(0xFF29443D), RoundedCornerShape(10.dp)),
+                        .background(Brush.linearGradient(listOf(Color(0xFF1B3530), Color(0xFF101C1D)))).border(1.dp, Color(0xFF3B6258).copy(alpha = .65f), RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Rounded.GraphicEq, null, tint = Mint, modifier = Modifier.size(20.dp))
@@ -181,13 +181,13 @@ private fun HomePage(
                 }
                 Text("PRIVATE", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             }
-            Box(Modifier.fillMaxWidth().height(154.dp), contentAlignment = Alignment.Center) {
-                LiquidWaveCore(Modifier.size(150.dp))
+            Box(Modifier.fillMaxWidth().height(136.dp), contentAlignment = Alignment.Center) {
+                LiquidWaveCore(Modifier.size(132.dp))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Box(
                     Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).background(Mint)
-                        .clickable(onClick = onOpenVoice).padding(vertical = 12.dp),
+                        .clickable(onClick = onOpenVoice) .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -196,8 +196,8 @@ private fun HomePage(
                     }
                 }
                 Box(
-                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Color(0xFF192322))
-                        .border(1.dp, Hairline, RoundedCornerShape(13.dp))
+                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp)) .background(Brush.verticalGradient(listOf(Color(0xFF202A2B), Color(0xFF121A1C))))
+                        .border(1.dp, Color(0xFF33403F), RoundedCornerShape(11.dp))
                         .clickable(onClick = onOpenChat).padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -232,7 +232,7 @@ private fun HomePage(
         }
 
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(15.dp)).padding(15.dp)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(Brush.verticalGradient(listOf(Color(0xFF101719), Color(0xFF0A1012)))).border(1.dp, Color(0xFF273130), RoundedCornerShape(13.dp)).padding(13.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Shield, null, tint = Mint, modifier = Modifier.size(19.dp))
@@ -292,7 +292,7 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF0C1315)).border(1.dp, Color(0xFF1D2A2B), RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF11191B), Color(0xFF0A1012)))).border(1.dp, Color(0xFF273231).copy(alpha = .8f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -328,7 +328,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
 @Composable
 private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(11.dp)).background(Color(0xFF0C1315)).border(1.dp, Color(0xFF1D2A2B), RoundedCornerShape(11.dp))
+        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF11191B), Color(0xFF0A1012)))).border(1.dp, Color(0xFF273231).copy(alpha = .8f), RoundedCornerShape(11.dp))
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(9.dp)
@@ -411,15 +411,15 @@ private fun VoiceWaveform(modifier: Modifier = Modifier) {
 
 @Composable
 private fun LiquidWaveCore(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "liquid-wave")
+    val transition = rememberInfiniteTransition(label = "liquid-glass-orb")
     val time by transition.animateFloat(
         initialValue = 0f, targetValue = (PI * 2).toFloat(),
-        animationSpec = infiniteRepeatable(tween(5200, easing = FastOutSlowInEasing), RepeatMode.Restart),
-        label = "wave-time"
+        animationSpec = infiniteRepeatable(tween(6200, easing = FastOutSlowInEasing), RepeatMode.Restart),
+        label = "orb-time"
     )
     var drag by remember { mutableFloatStateOf(0f) }
     var pulse by remember { mutableFloatStateOf(0f) }
-    val pulseValue by animateFloatAsState(targetValue = pulse, animationSpec = tween(320), label = "wave-pulse")
+    val pulseValue by animateFloatAsState(targetValue = pulse, animationSpec = tween(360), label = "orb-touch")
     Box(
         modifier.pointerInput(Unit) {
             detectDragGestures(
@@ -432,7 +432,7 @@ private fun LiquidWaveCore(modifier: Modifier = Modifier) {
                     pulse = (pulse + amount.y / size.height).coerceIn(0f, 1f)
                 }
             )
-        }.clickable { pulse = 1f - pulse },
+        }.clickable { pulse = if (pulse > .5f) 0f else 1f },
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -440,25 +440,55 @@ private fun LiquidWaveCore(modifier: Modifier = Modifier) {
             val h = size.height
             val cx = w / 2f
             val cy = h / 2f
-            val radius = minOf(w, h) * .44f
-            drawCircle(Brush.radialGradient(listOf(Color(0xAA00FCB6), Color(0x4421A895), Color.Transparent), Offset(cx, cy), radius * 1.5f), radius * 1.5f)
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF1A3433), Color(0xFF0A171A), Color(0xFF071012)), Offset(cx - radius * .25f, cy - radius * .30f), radius * 1.35f), radius)
-            val clipPath = Path().apply { addOval(androidx.compose.ui.geometry.Rect(cx - radius * .96f, cy - radius * .96f, cx + radius * .96f, cy + radius * .96f)) }
-            val waveColor = Mint
-            for (layer in 0..3) {
+            val radius = minOf(w, h) * .43f
+            // Soft atmospheric bloom, kept deliberately dim for a premium rather than neon look.
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color(0x5538DCC0), Color(0x2224A895), Color.Transparent),
+                    Offset(cx, cy), radius * 1.62f
+                ), radius * 1.62f
+            )
+            // Glass body: cool graphite edge, deep translucent teal core and a subtle lit rim.
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color(0xFF25413F), Color(0xFF132426), Color(0xFF081114), Color(0xFF172626)),
+                    Offset(cx - radius * .28f, cy - radius * .34f), radius * 1.55f
+                ), radius
+            )
+            drawCircle(
+                Brush.linearGradient(
+                    listOf(Color(0x22FFFFFF), Color(0x05FFFFFF), Color(0x0010181A)),
+                    start = Offset(cx - radius, cy - radius),
+                    end = Offset(cx + radius, cy + radius)
+                ), radius * .965f
+            )
+            val clipPath = Path().apply {
+                addOval(androidx.compose.ui.geometry.Rect(cx - radius * .96f, cy - radius * .96f, cx + radius * .96f, cy + radius * .96f))
+            }
+            val waves = listOf(
+                Triple(.06f, 1.00f, .74f),
+                Triple(.10f, 1.17f, .43f),
+                Triple(.13f, .83f, .27f),
+                Triple(.16f, 1.31f, .17f)
+            )
+            for ((layer, wave) in waves.withIndex()) {
                 val path = Path()
-                val amplitude = radius * (.10f + layer * .025f + pulseValue * .08f)
-                for (i in 0..90) {
-                    val nx = i / 90f
+                val amplitude = radius * (wave.first + pulseValue * .045f)
+                for (i in 0..100) {
+                    val nx = i / 100f
                     val x = cx - radius + 2f * radius * nx
-                    val envelope = (.3f + .7f * sin(PI.toFloat() * nx))
-                    val y = cy + radius * (.12f + layer * .055f) +
-                        sin(nx * 2f * PI.toFloat() + time * (1f + layer * .13f) + drag) * amplitude * envelope
+                    val envelope = (.18f + .82f * sin(PI.toFloat() * nx))
+                    val y = cy + radius * (.10f + layer * .055f) +
+                        sin(nx * 2f * PI.toFloat() * wave.second + time * (1f + layer * .12f) + drag) * amplitude * envelope
                     if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 drawContext.canvas.save()
                 drawContext.canvas.clipPath(clipPath)
-                drawPath(path, waveColor.copy(alpha = .82f - layer * .15f), style = Stroke(width = if (layer == 0) 2.7.dp.toPx() else 1.5.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(
+                    path,
+                    Brush.horizontalGradient(listOf(Color(0x6639BBA7), Mint.copy(alpha = wave.third), Color(0x6642CBB4))),
+                    style = Stroke(width = if (layer == 0) 2.2.dp.toPx() else 1.15.dp.toPx(), cap = StrokeCap.Round)
+                )
                 if (layer == 0) {
                     val fill = Path().apply {
                         addPath(path)
@@ -466,14 +496,28 @@ private fun LiquidWaveCore(modifier: Modifier = Modifier) {
                         lineTo(cx - radius, cy + radius)
                         close()
                     }
-                    drawPath(fill, Brush.verticalGradient(listOf(Color(0x443EE0C7), Color(0x0807A997)), startY = cy, endY = cy + radius))
+                    drawPath(fill, Brush.verticalGradient(listOf(Color(0x333CE1C5), Color(0x0A08A997)), startY = cy, endY = cy + radius))
                 }
                 drawContext.canvas.restore()
             }
-            drawCircle(Color(0x6600FCB6), radius, style = Stroke(width = 1.1.dp.toPx()))
-            val dotX = cx + sin(time + drag) * radius * .62f
-            val dotY = cy + radius * .12f + sin(time * 1.3f + drag) * radius * .10f
-            drawCircle(Color.White.copy(alpha = .85f), radius * .035f, Offset(dotX, dotY))
+            // Fine glass rim and a broken inner reflection.
+            drawCircle(Color(0x887DA9A2), radius, style = Stroke(width = .85.dp.toPx()))
+            drawArc(
+                color = Color(0x88FFFFFF), startAngle = 208f, sweepAngle = 72f,
+                useCenter = false,
+                topLeft = Offset(cx - radius * .91f, cy - radius * .91f),
+                size = androidx.compose.ui.geometry.Size(radius * 1.82f, radius * 1.82f),
+                style = Stroke(width = 1.1.dp.toPx(), cap = StrokeCap.Round)
+            )
+            // Small specular reflection gives the orb a glass surface without a costly blur.
+            drawCircle(
+                Brush.radialGradient(listOf(Color(0x66FFFFFF), Color(0x12FFFFFF), Color.Transparent), Offset(cx - radius * .38f, cy - radius * .48f), radius * .42f),
+                radius * .42f, Offset(cx - radius * .38f, cy - radius * .48f)
+            )
+            val dotX = cx + sin(time + drag) * radius * .57f
+            val dotY = cy + radius * .10f + sin(time * 1.3f + drag) * radius * .12f
+            drawCircle(Color(0xAA8FFFF0), radius * .06f, Offset(dotX, dotY))
+            drawCircle(Color.White.copy(alpha = .9f), radius * .022f, Offset(dotX, dotY))
         }
     }
 }
