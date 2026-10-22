@@ -614,8 +614,8 @@ class SettingsActivity : Activity() {
                 setPadding(dp(12), dp(11), dp(11), dp(11))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(
-                        if (selected) 0xFF222222.toInt() else if (saved) 0xFF1C1C1C.toInt() else 0xE6101719.toInt(),
-                        if (selected) 0xFF181818.toInt() else 0xE80B1113.toInt()
+                        if (selected) 0xFF222222.toInt() else if (saved) 0xFF1C1C1C.toInt() else 0xE61A1A1A.toInt(),
+                        if (selected) 0xFF181818.toInt() else 0xE8141414.toInt()
                     )).apply {
                     cornerRadius = dp(13).toFloat()
                     setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF363636.toInt() else 0x332F4A46)
