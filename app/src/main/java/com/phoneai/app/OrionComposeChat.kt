@@ -2,6 +2,10 @@ package com.phoneai.app
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -277,13 +281,23 @@ private fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
 
 @Composable
 private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val pillFill by animateColorAsState(
+        targetValue = if (selected) Color(0xFF21433B) else Color.Transparent,
+        animationSpec = tween(durationMillis = 220),
+        label = "mode-pill-fill"
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) ChatMint else ChatMuted,
+        animationSpec = tween(durationMillis = 180),
+        label = "mode-pill-label"
+    )
     Box(
         modifier.clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Color(0xFF21433B) else Color.Transparent)
+            .background(pillFill)
             .clickable(onClick = onClick).padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = if (selected) ChatMint else ChatMuted, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
+        Text(label, color = labelColor, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
     }
 }
 
@@ -291,29 +305,35 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
 private fun ChatBubble(item: OrionChatLine) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
-    Column(
-        Modifier.fillMaxWidth(),
-        horizontalAlignment = if (mine) Alignment.End else Alignment.Start
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(220)) +
+            slideInVertically(animationSpec = tween(220)) { it / 12 }
     ) {
-        if (!mine && !note) {
-            Text("ORION", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 5.dp, bottom = 3.dp))
-        }
         Column(
-            Modifier.fillMaxWidth(if (note) 1f else if (mine) .82f else .94f)
-                .clip(RoundedCornerShape(if (mine) 20.dp else 16.dp))
-                .background(when {
-                    note -> Color(0xFF111A1C)
-                    mine -> Color(0xFF1C2C2B)
-                    else -> ChatPanel
-                })
-                .border(1.dp, if (mine) Color(0xFF34524C) else ChatHairline, RoundedCornerShape(if (mine) 20.dp else 16.dp))
-                .padding(horizontal = 14.dp, vertical = 11.dp)
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = if (mine) Alignment.End else Alignment.Start
         ) {
-            if (note) Text("LIVE ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-            Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 21.sp)
-            if (item.imageUri != null) {
-                Spacer(Modifier.height(9.dp))
-                ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
+            if (!mine && !note) {
+                Text("ORION", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 5.dp, bottom = 3.dp))
+            }
+            Column(
+                Modifier.fillMaxWidth(if (note) 1f else if (mine) .82f else .94f)
+                    .clip(RoundedCornerShape(if (mine) 20.dp else 16.dp))
+                    .background(when {
+                        note -> Color(0xFF111A1C)
+                        mine -> Color(0xFF1C2C2B)
+                        else -> ChatPanel
+                    })
+                    .border(1.dp, if (mine) Color(0xFF34524C) else ChatHairline, RoundedCornerShape(if (mine) 20.dp else 16.dp))
+                    .padding(horizontal = 14.dp, vertical = 11.dp)
+            ) {
+                if (note) Text("LIVE ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 21.sp)
+                if (item.imageUri != null) {
+                    Spacer(Modifier.height(9.dp))
+                    ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
+                }
             }
         }
     }
