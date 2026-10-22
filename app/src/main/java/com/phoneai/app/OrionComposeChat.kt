@@ -308,28 +308,43 @@ private fun ChatBubble(item: OrionChatLine) {
     AnimatedVisibility(
         visible = true,
         enter = fadeIn(animationSpec = tween(220)) +
-            slideInVertically(animationSpec = tween(220)) { it / 12 }
+            slideInVertically(animationSpec = tween(220)) { it / 16 }
     ) {
         Column(
             Modifier.fillMaxWidth(),
             horizontalAlignment = if (mine) Alignment.End else Alignment.Start
         ) {
             if (!mine && !note) {
-                Text("ORION", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier.padding(start = 5.dp, bottom = 3.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 7.dp)
+                ) {
+                    Box(
+                        Modifier.size(22.dp).clip(RoundedCornerShape(8.dp))
+                            .background(Brush.linearGradient(listOf(Color(0xFF28564B), Color(0xFF172322))))
+                            .border(1.dp, Color(0xFF355A52), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(13.dp)) }
+                    Text("Orion", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("AI assistant", color = Color(0xFF71817F), fontSize = 10.sp)
+                }
             }
             Column(
-                Modifier.fillMaxWidth(if (note) 1f else if (mine) .82f else .94f)
-                    .clip(RoundedCornerShape(if (mine) 20.dp else 16.dp))
-                    .background(when {
-                        note -> Color(0xFF111A1C)
-                        mine -> Color(0xFF1C2C2B)
-                        else -> ChatPanel
-                    })
-                    .border(1.dp, if (mine) Color(0xFF34524C) else ChatHairline, RoundedCornerShape(if (mine) 20.dp else 16.dp))
-                    .padding(horizontal = 14.dp, vertical = 11.dp)
+                Modifier.fillMaxWidth(if (note) 1f else if (mine) .86f else .98f)
+                    .then(
+                        if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
+                            .background(if (note) Color(0xFF11191B) else Color(0xFF1A2928))
+                            .border(1.dp, if (mine) Color(0xFF314A45) else ChatHairline, RoundedCornerShape(17.dp))
+                        else Modifier
+                    )
+                    .padding(horizontal = if (mine || note) 14.dp else 0.dp, vertical = if (mine || note) 11.dp else 0.dp)
             ) {
-                if (note) Text("LIVE ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 21.sp)
+                if (note) {
+                    Text("ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Spacer(Modifier.height(4.dp))
+                }
+                Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 22.sp)
                 if (item.imageUri != null) {
                     Spacer(Modifier.height(9.dp))
                     ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
