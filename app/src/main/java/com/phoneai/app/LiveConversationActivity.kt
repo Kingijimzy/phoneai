@@ -85,6 +85,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         val back = LinearLayout(this).apply {
             gravity = Gravity.CENTER
+            background = panel(0xFF171717.toInt(), 22, 0xFF333333.toInt())
             contentDescription = "Back to chat"
             isClickable = true
             isFocusable = true
@@ -140,42 +141,47 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             elevation = dp(2).toFloat()
             contentDescription = "Orion live conversation visual stage"
         }
-        val orbSize = dp(if (compact) 142 else 166)
+        val orbSize = dp(if (compact) 170 else 190)
         orbStage.addView(core, LinearLayout.LayoutParams(orbSize, orbSize))
-        hero.addView(orbStage, LinearLayout.LayoutParams(dp(if (compact) 204 else 232), dp(if (compact) 204 else 232)).apply {
-            bottomMargin = dp(if (compact) 9 else 13)
+        hero.addView(orbStage, LinearLayout.LayoutParams(dp(if (compact) 198 else 222), dp(if (compact) 198 else 222)).apply {
+            bottomMargin = dp(if (compact) 5 else 9)
         })
         val voiceSurface = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(14), dp(if (compact) 11 else 15), dp(14), dp(if (compact) 11 else 15))
-            background = panel(0xFF111111.toInt(), 16, 0xFF383838.toInt())
+            setPadding(dp(7), dp(4), dp(7), dp(2))
         }
-        val waveLabel = text("VOICE SIGNAL", 9f, Theme.MUTED, true).apply {
-            gravity = Gravity.CENTER
-            letterSpacing = .16f
+        val voiceHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        voiceSurface.addView(waveLabel)
+        voiceHeader.addView(text("AUDIO ACTIVITY", 9f, Theme.MUTED, true).apply {
+            letterSpacing = .10f
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        voiceHeader.addView(text("LIVE", 9f, 0xFFE5E5E5.toInt(), true).apply {
+            letterSpacing = .08f
+        })
+        voiceSurface.addView(voiceHeader)
         wave = VoiceWaveView(this).apply {
             contentDescription = "Animated audio waveform that responds to Orion's current state"
         }
-        voiceSurface.addView(wave, LinearLayout.LayoutParams(-1, dp(waveHeight)).apply {
-            topMargin = dp(8)
+        voiceSurface.addView(wave, LinearLayout.LayoutParams(-1, dp(if (compact) 31 else 38)).apply {
+            topMargin = dp(1)
         })
         hero.addView(voiceSurface, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(if (compact) 13 else 18)
+            bottomMargin = dp(if (compact) 3 else 7)
         })
-        hero.addView(text("J A R V I S   /   V O I C E   S Y S T E M", 9f, Theme.MUTED, true).apply {
+        hero.addView(text("ORION  /  LIVE VOICE", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .18f
         })
-        stateLabel = text("At your service.", if (compact) 23f else 26f, Theme.TEXT, true).apply {
+        stateLabel = text("Ready when you are", if (compact) 23f else 26f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = -.025f
             setPadding(0, dp(if (compact) 4 else 8), 0, dp(4))
         }
         hero.addView(stateLabel)
-        helperLabel = text("Speak naturally. Switch back to chat whenever you like.", if (compact) 12f else 13f, Theme.MUTED).apply {
+        helperLabel = text("Tap the microphone and speak naturally.", if (compact) 12f else 13f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
             maxLines = 2
             setLineSpacing(dp(2).toFloat(), 1f)
@@ -187,16 +193,16 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(7))
-            background = panel(0xFF101010.toInt(), 15, 0xFF303030.toInt())
+            background = panel(0xFF111111.toInt(), 13, 0xFF303030.toInt())
         }
         val transcriptHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        transcriptHeading.addView(text("CONVERSATION", 9f, Theme.MUTED, true).apply {
+        transcriptHeading.addView(text("RECENT TRANSCRIPT", 9f, Theme.MUTED, true).apply {
             letterSpacing = .12f
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        transcriptHeading.addView(text("LIVE CAPTIONS", 8f, 0xFFE5E5E5.toInt(), true).apply {
+        transcriptHeading.addView(text("LIVE", 9f, 0xFFE5E5E5.toInt(), true).apply {
             letterSpacing = .06f
         })
         transcriptCard.addView(transcriptHeading)
@@ -206,7 +212,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         transcriptScroll.addView(transcript)
-        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 72 else 88)).apply {
+        transcriptCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(if (compact) 64 else 80)).apply {
             topMargin = dp(6)
         })
         root.addView(transcriptCard, LinearLayout.LayoutParams(-1, -2).apply {
@@ -220,7 +226,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val end = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "End live conversation"
-            background = panel(0xFF202020.toInt(), 17, 0xFF454545.toInt())
+            background = panel(0xFF202020.toInt(), 24, 0xFF454545.toInt())
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "phone-off"; tint = Theme.MUTED; contentDescription = null
@@ -236,7 +242,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             addView(end, LinearLayout.LayoutParams(dp(46), dp(46)))
-            addView(text("END CALL", 8f, Theme.MUTED, true).apply {
+            addView(text("END", 10f, Theme.MUTED, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .04f
                 setPadding(0, dp(5), 0, 0)
@@ -252,8 +258,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Start voice input"
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Theme.CYAN)
-                setStroke(dp(1), 0xFFEEEEEE.toInt())
+                setColor(0xFFF1F1F1.toInt())
+                setStroke(dp(1), 0xFFFFFFFF.toInt())
             }
             elevation = dp(7).toFloat()
             isClickable = true; isFocusable = true
@@ -274,8 +280,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 }
             }
         }
-        micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 58 else 64), dp(if (compact) 58 else 64)))
-        micCaption = text("MICROPHONE", 8f, Theme.TEXT, true).apply {
+        micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 60 else 66), dp(if (compact) 60 else 66)))
+        micCaption = text("MIC", 10f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .04f
             setPadding(0, dp(5), 0, 0)
@@ -288,7 +294,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             background = panel(0xFF181818.toInt(), 17, 0xFF454545.toInt())
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
-                icon = "chat"; tint = Theme.CYAN; contentDescription = null
+                icon = "chat"; tint = Theme.TEXT; contentDescription = null
             }, LinearLayout.LayoutParams(dp(23), dp(23)))
             setOnClickListener {
                 PhoneAiService.instance?.endLiveConversation()
@@ -303,7 +309,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             addView(textChat, LinearLayout.LayoutParams(dp(50), dp(50)))
-            addView(text("TEXT CHAT", 8f, Theme.MUTED, true).apply {
+            addView(text("CHAT", 10f, Theme.MUTED, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .04f
                 setPadding(0, dp(5), 0, 0)
@@ -311,7 +317,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         controls.addView(textItem, LinearLayout.LayoutParams(dp(82), -2))
         root.addView(controls)
-        root.addView(text("VOICE SESSION  ·  TAP THE MIC TO PAUSE", 8f, 0xFF9B9B9B.toInt(), true).apply {
+        root.addView(text("VOICE SESSION  ·  MICROPHONE CONTROL", 9f, 0xFF9B9B9B.toInt(), true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .07f
             setPadding(dp(4), dp(7), dp(4), dp(1))
@@ -464,16 +470,16 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 }
                 statusPulse = AnimatorSet().apply { playTogether(pulseX, pulseY); start() }
             }
-            micCaption.text = if (mode == OrbView.Mode.LISTENING) "STOP LISTENING" else "MICROPHONE"
+            micCaption.text = if (mode == OrbView.Mode.LISTENING) "PAUSE" else "MIC"
             micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING) Theme.OK else Theme.TEXT)
             wave.mode = mode
             core.mode = mode
             val nextState = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
-                OrbView.Mode.THINKING -> "Let me think"
-                OrbView.Mode.SPEAKING -> "I’m speaking"
-                OrbView.Mode.ACTING -> "Working on it"
+                OrbView.Mode.THINKING -> "Thinking…"
+                OrbView.Mode.SPEAKING -> "Orion is speaking"
+                OrbView.Mode.ACTING -> "Working on your request"
                 OrbView.Mode.WAITING_APPROVAL -> "Your approval needed"
             }
             if (previousMode != mode && stateLabel.text.toString() != nextState) {
