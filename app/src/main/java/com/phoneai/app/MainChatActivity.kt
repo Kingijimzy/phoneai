@@ -70,9 +70,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         if (stroke != 0) setStroke(dp(1), stroke)
     }
     /** Lightweight glass treatment: translucent-looking layered charcoal, a cool top sheen and a fine reflective edge. */
-    private fun glass(radius: Int, stroke: Int = 0x553D6963) = GradientDrawable(
+    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(0xF0192527.toInt(), 0xEA10191B.toInt(), 0xF0070D0F.toInt())
+        intArrayOf(0xF0232323.toInt(), 0xEA171717.toInt(), 0xF00C0C0C.toInt())
     ).apply {
         cornerRadius = dp(radius).toFloat()
         setStroke(dp(1), stroke)
@@ -88,10 +88,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private fun refreshModeSelector() {
         if (!::talkModeChip.isInitialized || !::commandModeChip.isInitialized) return
         val talkSelected = !commandMode
-        talkModeChip.background = rounded(if (talkSelected) 0xFF18312D.toInt() else 0xFF101719.toInt(),
-            16, if (talkSelected) 0xFF3D8978.toInt() else 0xFF293638.toInt())
-        commandModeChip.background = rounded(if (commandMode) 0xFF18312D.toInt() else 0xFF101719.toInt(),
-            16, if (commandMode) 0xFF3D8978.toInt() else 0xFF293638.toInt())
+        talkModeChip.background = rounded(if (talkSelected) 0xFF2B2B2B.toInt() else 0xFF161616.toInt(),
+            16, if (talkSelected) 0xFF787878.toInt() else 0xFF333333.toInt())
+        commandModeChip.background = rounded(if (commandMode) 0xFF2B2B2B.toInt() else 0xFF161616.toInt(),
+            16, if (commandMode) 0xFF787878.toInt() else 0xFF333333.toInt())
         talkModeIcon.tint = if (talkSelected) Theme.CYAN else Theme.MUTED
         commandModeIcon.tint = if (commandMode) Theme.CYAN else Theme.MUTED
         talkModeText.setTextColor(if (talkSelected) Theme.CYAN else Theme.MUTED)
@@ -110,7 +110,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private fun refreshPersonalityLabel(view: TextView) {
         val profile = CharacterProfile.get(Prefs.characterProfile(this))
         view.text = profile.label.substringBefore(" — ").uppercase()
-        view.background = glass(12, 0x443D6963)
+        view.background = glass(12, 0x445F5F5F)
         view.setPadding(dp(8), dp(5), dp(8), dp(5))
         view.setTextColor(Theme.MUTED)
     }
@@ -131,9 +131,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply { setStroke(dp(1), 0x553D6963); cornerRadius = dp(22).toFloat() }
+                intArrayOf(0xF2212121.toInt(), 0xF00F0F0F.toInt())).apply { setStroke(dp(1), 0x555F5F5F); cornerRadius = dp(22).toFloat() }
         }
-        val eyebrow = label("ORION PERSONALITY SYSTEM", 10f, 0xFF48DDBB.toInt(), true).apply {
+        val eyebrow = label("ORION PERSONALITY SYSTEM", 10f, 0xFFBBBBBB.toInt(), true).apply {
             letterSpacing = .13f
             setPadding(0, dp(4), 0, dp(7))
         }
@@ -141,13 +141,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialogRoot.addView(label("Choose your mode", 23f, 0xFFF0FFFA.toInt(), true).apply {
             setPadding(0, 0, 0, dp(4))
         })
-        dialogRoot.addView(label("Same Orion. Different way of thinking and communicating.", 12f, 0xFF9AB8B0.toInt()).apply {
+        dialogRoot.addView(label("Same Orion. Different way of thinking and communicating.", 12f, 0xFFB1B1B1.toInt()).apply {
             setLineSpacing(dp(2).toFloat(), 1f)
             setPadding(0, 0, 0, dp(12))
         })
-        val currentLabel = label("", 10f, 0xFF65F4D0.toInt(), true).apply {
+        val currentLabel = label("", 10f, 0xFFD3D3D3.toInt(), true).apply {
             setPadding(dp(9), dp(6), dp(9), dp(6))
-            background = glass(10, 0x443D6963)
+            background = glass(10, 0x445F5F5F)
         }
         currentLabel.text = "ACTIVE MODE  ·  ${CharacterProfile.get(Prefs.characterProfile(this)).label.substringBefore(" — ").uppercase()}"
         dialogRoot.addView(currentLabel, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(10) })
@@ -164,23 +164,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             profiles.forEach { profile ->
                 val selected = profile.id == selectedId
                 rowViews[profile.id]?.apply {
-                    background = rounded(if (selected) 0xFF20292B.toInt() else 0xFF111719.toInt(),
-                        16, if (selected) 0xFF52716D.toInt() else 0xFF293638.toInt())
+                    background = rounded(if (selected) 0xFF272727.toInt() else 0xFF161616.toInt(),
+                        16, if (selected) 0xFF6A6A6A.toInt() else 0xFF333333.toInt())
                     alpha = if (selected) 1f else .94f
                 }
                 iconViews[profile.id]?.apply {
-                    background = rounded(if (selected) 0xFF273536.toInt() else 0xFF171F21.toInt(), 12,
-                        if (selected) 0xFF52716D.toInt() else 0xFF293638.toInt())
+                    background = rounded(if (selected) 0xFF323232.toInt() else 0xFF1D1D1D.toInt(), 12,
+                        if (selected) 0xFF6A6A6A.toInt() else 0xFF333333.toInt())
                     tint = if (selected) Theme.CYAN else Theme.MUTED
                 }
                 checkViews[profile.id]?.apply {
                     icon = if (selected) "check" else "spark"
                     alpha = if (selected) 1f else 0f
-                    tint = 0xFF9CE9D7.toInt()
-                    background = if (selected) rounded(0xFF20312F.toInt(), 20, 0xFF3C625B.toInt()) else null
+                    tint = 0xFFD7D7D7.toInt()
+                    background = if (selected) rounded(0xFF2D2D2D.toInt(), 20, 0xFF595959.toInt()) else null
                 }
-                nameViews[profile.id]?.setTextColor(if (selected) 0xFFE8FFF8.toInt() else 0xFFD0E1DC.toInt())
-                descViews[profile.id]?.setTextColor(if (selected) 0xFFB5E8D9.toInt() else 0xFF88A59C.toInt())
+                nameViews[profile.id]?.setTextColor(if (selected) 0xFFFAFAFA.toInt() else 0xFFDDDDDD.toInt())
+                descViews[profile.id]?.setTextColor(if (selected) 0xFFDCDCDC.toInt() else 0xFF9E9E9E.toInt())
             }
         }
 
@@ -195,13 +195,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
             val iconView = OrionIconView(this).apply {
                 this.icon = iconNames[profile.id] ?: "spark"
-                tint = 0xFF9AB8B0.toInt()
+                tint = 0xFFB1B1B1.toInt()
                 contentDescription = null
             }
             row.addView(iconView, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(11) })
             val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            val name = label(profile.label.substringBefore(" — "), 14f, 0xFFD0E1DC.toInt(), true)
-            val desc = label(descriptions[profile.id].orEmpty(), 11f, 0xFF88A59C.toInt()).apply {
+            val name = label(profile.label.substringBefore(" — "), 14f, 0xFFDDDDDD.toInt(), true)
+            val desc = label(descriptions[profile.id].orEmpty(), 11f, 0xFF9E9E9E.toInt()).apply {
                 setLineSpacing(dp(1).toFloat(), 1f)
                 setPadding(0, dp(3), dp(2), 0)
             }
@@ -210,7 +210,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             row.addView(textCol, LinearLayout.LayoutParams(0, -2, 1f))
             val check = OrionIconView(this).apply {
                 icon = "check"
-                tint = 0xFF9CE9D7.toInt()
+                tint = 0xFFD7D7D7.toInt()
                 alpha = 0f
                 background = null
                 contentDescription = "Selected personality"
@@ -252,7 +252,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         listScroll.addView(list, -1, -2)
         val availableHeight = (resources.displayMetrics.heightPixels - dp(250)).coerceAtLeast(dp(250))
         dialogRoot.addView(listScroll, LinearLayout.LayoutParams(-1, availableHeight.coerceAtMost(dp(480))))
-        dialogRoot.addView(label("PERSONALITY IS SAVED ON THIS PHONE", 9f, 0xFF64877D.toInt(), true).apply {
+        dialogRoot.addView(label("PERSONALITY IS SAVED ON THIS PHONE", 9f, 0xFF7F7F7F.toInt(), true).apply {
             letterSpacing = .08f
             gravity = Gravity.CENTER
             setPadding(0, dp(7), 0, dp(2))
@@ -323,7 +323,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         stop = label("■", 13f, Theme.CYAN, true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
-            background = rounded(0xFF141F1D.toInt(), 14, 0xFF4B897C.toInt())
+            background = rounded(0xFF1D1D1D.toInt(), 14, 0xFF7B7B7B.toInt())
             setPadding(dp(11), dp(10), dp(11), dp(10))
             visibility = View.GONE
             setOnClickListener {
@@ -425,7 +425,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(7), dp(13), dp(7))
-                background = glass(16, 0x442C504E)
+                background = glass(16, 0x44484848)
                 isClickable = true
                 isFocusable = true
                 contentDescription = "$name prompt"
@@ -461,7 +461,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER_VERTICAL
             visibility = View.GONE
             setPadding(dp(9), dp(7), dp(9), dp(7))
-            background = glass(16, 0x553D6963)
+            background = glass(16, 0x555F5F5F)
         }
         imagePreviewPanel = previewPanel
         root.addView(previewPanel, LinearLayout.LayoutParams(-1, -2).apply {
@@ -525,7 +525,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val composer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = glass(24, 0x66516E6B)
+            background = glass(24, 0x66686868)
             elevation = dp(3).toFloat()
             setPadding(dp(7), dp(4), dp(6), dp(4))
         }
@@ -555,7 +555,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val attach = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            background = glass(20, 0x443D6963)
+            background = glass(20, 0x445F5F5F)
             isClickable = true
             isFocusable = true
             contentDescription = "Attach an image for Orion to analyse"
@@ -578,9 +578,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         composer.addView(attach, LinearLayout.LayoutParams(dp(42), dp(44)).apply { rightMargin = dp(6) })
-        send = label("↑", 23f, 0xFF06110F.toInt(), true).apply {
+        send = label("↑", 23f, 0xFF0F0F0F.toInt(), true).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFF9FFFE5.toInt(), 0xFF00CFA1.toInt())).apply { cornerRadius = dp(23).toFloat(); setStroke(dp(1), 0xFFB8FFEC.toInt()) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFFE9E9E9.toInt(), 0xFFA0A0A0.toInt())).apply { cornerRadius = dp(23).toFloat(); setStroke(dp(1), 0xFFEFEFEF.toInt()) }
             elevation = dp(2).toFloat()
             layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
             contentDescription = "Send message"
@@ -601,7 +601,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(6), dp(4), dp(6), dp(4))
-            background = rounded(0xFF0B1214.toInt(), 22, 0xFF263735.toInt())
+            background = rounded(0xFF111111.toInt(), 22, 0xFF333333.toInt())
             elevation = dp(2).toFloat()
         }
         fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
@@ -612,7 +612,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 isFocusable = true
                 contentDescription = title
                 setPadding(dp(3), dp(3), dp(3), dp(2))
-                background = if (selected) rounded(0xFF172124.toInt(), 14, Theme.LINE) else null
+                background = if (selected) rounded(0xFF1F1F1F.toInt(), 14, Theme.LINE) else null
             }
             item.addView(OrionIconView(this).apply { icon = iconName; tint = if (selected) Theme.CYAN else Theme.MUTED; contentDescription = null }, LinearLayout.LayoutParams(dp(21), dp(21)))
             item.addView(label(title, 9f, if (selected) Theme.CYAN else Theme.MUTED, selected).apply { gravity = Gravity.CENTER; setPadding(0, dp(3), 0, 0) })
@@ -629,9 +629,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val liveDock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isClickable = true; isFocusable = true; contentDescription = "Start full-screen live voice call with Orion"; setPadding(dp(4), 0, dp(4), 0) }
         val liveButton = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFB5F5E5.toInt(), 0xFF66DCC0.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFFE0FFF6.toInt()) }
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFE6E6E6.toInt(), 0xFFC1C1C1.toInt())).apply { shape = GradientDrawable.OVAL; setStroke(dp(1), 0xFFF8F8F8.toInt()) }
             elevation = dp(1).toFloat()
-            addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF02110D.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
+            addView(OrionIconView(this@MainChatActivity).apply { icon = "call"; tint = 0xFF0E0E0E.toInt(); contentDescription = null }, LinearLayout.LayoutParams(dp(24), dp(24)))
         }
         liveDock.addView(liveButton, LinearLayout.LayoutParams(dp(48), dp(48)))
         val pulseX = android.animation.ObjectAnimator.ofFloat(liveButton, View.SCALE_X, 1f, 1.045f, 1f).apply {
@@ -658,7 +658,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dock.addView(liveDock, LinearLayout.LayoutParams(0, dp(61), 1.15f))
         dock.addView(dockItem("Teach", "record") { startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
         dock.addView(dockItem("Tasks", "tasks") { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, LinearLayout.LayoutParams(0, dp(52), 1f))
-        root.addView(View(this).apply { setBackground(GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x002C504E, 0x884B8279.toInt(), 0x002C504E))) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(7) })
+        root.addView(View(this).apply { setBackground(GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x00484848, 0x88767676.toInt(), 0x00484848))) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(7) })
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
@@ -764,7 +764,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val thumbnail = ImageView(this).apply {
             setImageBitmap(decodeThumbnail(uri, dp(72)))
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = rounded(0xFF151E21.toInt(), 10, 0xFF2B3A3D.toInt())
+            background = rounded(0xFF1C1C1C.toInt(), 10, 0xFF373737.toInt())
             clipToOutline = true
             contentDescription = "Selected image preview"
         }
@@ -860,7 +860,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             setPadding(dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12), dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12))
             background = when {
                 isNote -> rounded(Theme.PANEL, 13, Theme.LINE)
-                kind == "me" -> rounded(0xFF20272A.toInt(), 19, 0xFF303A3E.toInt())
+                kind == "me" -> rounded(0xFF262626.toInt(), 19, 0xFF383838.toInt())
                 kind == "ai" -> null
                 else -> rounded(Theme.PANEL, 16, Theme.LINE)
             }
