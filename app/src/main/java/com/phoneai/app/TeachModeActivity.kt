@@ -26,10 +26,10 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
     /** Subtle top-lit glass surface shared by Teach Mode controls. */
     private fun shape(fill: Int, stroke: Int = Theme.LINE) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(fill, 0xE80D1416.toInt())
+        intArrayOf(fill, 0xE8131313.toInt())
     ).apply {
         cornerRadius = dp(14).toFloat()
-        setStroke(dp(1), if (stroke == Theme.LINE) 0x553D6963 else stroke)
+        setStroke(dp(1), if (stroke == Theme.LINE) 0x555F5F5F else stroke)
     }
     private fun button(s: String, action: () -> Unit) = label(s, 13f, Theme.CYAN, true).apply {
         gravity = Gravity.CENTER; setPadding(dp(13), dp(12), dp(13), dp(12))
@@ -56,7 +56,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(2), dp(14), dp(2), dp(16))
         })
         nameInput = EditText(this).apply {
-            hint = "Routine name, e.g. FC daily rewards"; setHintTextColor(0xFF80918D.toInt())
+            hint = "Routine name, e.g. FC daily rewards"; setHintTextColor(0xFF8D8D8D.toInt())
             setTextColor(Theme.TEXT); textSize = 14f; setSingleLine(true)
             background = shape(Theme.PANEL); setPadding(dp(14), dp(6), dp(14), dp(6))
         }
