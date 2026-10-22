@@ -1,6 +1,8 @@
 package com.phoneai.app
 
 import android.Manifest
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -31,6 +33,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private var attachedService: PhoneAiService? = null
     private var listeningRequested = false
     private var lastMode = OrbView.Mode.IDLE
+    private var micPulse: AnimatorSet? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun text(value: String, size: Float, color: Int, bold: Boolean = false) =
@@ -338,6 +341,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     override fun onDestroy() {
+        micPulse?.cancel()
+        micPulse = null
+        micButton.scaleX = 1f
+        micButton.scaleY = 1f
         if (isFinishing) PhoneAiService.instance?.endLiveConversation()
         attachedService?.detachMainChat(this)
         attachedService = null
@@ -404,6 +411,31 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             }
             micIcon.icon = if (mode == OrbView.Mode.LISTENING) "pause" else "mic"
             micButton.contentDescription = if (mode == OrbView.Mode.LISTENING) "Stop listening" else "Start voice input"
+            if (mode == OrbView.Mode.LISTENING && micPulse == null) {
+                micPulse = AnimatorSet().apply {
+                    playTogether(
+                        ObjectAnimator.ofFloat(micButton, View.SCALE_X, 1f, 1.07f, 1f),
+                        ObjectAnimator.ofFloat(micButton, View.SCALE_Y, 1f, 1.07f, 1f)
+                    )
+                    duration = 1250L
+                    startDelay = 80L
+                    addListener(object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: android.animation.Animator) {
+                            if (lastMode == OrbView.Mode.LISTENING) {
+                                micPulse = null
+                                // Restart with a fresh animator to keep the breathing motion smooth.
+                                onStatus(value, mode)
+                            }
+                        }
+                    })
+                    start()
+                }
+            } else if (mode != OrbView.Mode.LISTENING) {
+                micPulse?.cancel()
+                micPulse = null
+                micButton.scaleX = 1f
+                micButton.scaleY = 1f
+            }
             val blocked = mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING ||
                 mode == OrbView.Mode.WAITING_APPROVAL
             micButton.alpha = if (blocked) .72f else 1f
