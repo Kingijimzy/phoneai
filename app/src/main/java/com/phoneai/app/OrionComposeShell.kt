@@ -194,7 +194,7 @@ private fun HomePage(
                         )
                     }
                     drawCircle(
-                        brush = Brush.radialGradient(listOf(Color(0xFF123A36), Color(0xFF101010), Color(0xFF050505))),
+                        brush = Brush.radialGradient(listOf(Color(0xFF202020), Color(0xFF101010), Color(0xFF050505))),
                         radius = size.width * .36f, center = center
                     )
                     drawCircle(color = Mint.copy(alpha = .55f), radius = size.width * .36f, center = center, style = Stroke(width = 1.2.dp.toPx()))
@@ -231,7 +231,7 @@ private fun HomePage(
 
         // Tappable prompt dock opens the full chat composer, including voice and image input.
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF101819))
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF141414))
                 .border(1.dp, Hairline, RoundedCornerShape(22.dp)).clickable(onClick = onOpenChat)
                 .padding(start = 15.dp, end = 9.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -286,8 +286,8 @@ private fun HomeActionCard(
     onClick: () -> Unit
 ) {
     Column(
-        modifier.height(133.dp).clip(RoundedCornerShape(21.dp)).background(Color(0xFF101718))
-            .border(1.dp, Color(0xFF293737), RoundedCornerShape(21.dp))
+        modifier.height(133.dp).clip(RoundedCornerShape(21.dp)).background(Color(0xFF141414))
+            .border(1.dp, Color(0xFF383838), RoundedCornerShape(21.dp))
             .clickable(onClick = onClick).padding(15.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -365,7 +365,7 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
 @Composable
 private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF131D1F), Color(0xFF0A1012)))).border(1.dp, Color(0xFF35413F).copy(alpha = .7f), RoundedCornerShape(12.dp))
+        modifier.clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF181818), Color(0xFF0A1012)))).border(1.dp, Color(0xFF383838).copy(alpha = .7f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -382,7 +382,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
 @Composable
 private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF141D1F), Color(0xFF0A1012)))).border(1.dp, Color(0xFF34403F).copy(alpha = .72f), RoundedCornerShape(11.dp))
+        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF181818), Color(0xFF0A1012)))).border(1.dp, Color(0xFF383838).copy(alpha = .72f), RoundedCornerShape(11.dp))
             .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 11.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(9.dp)
@@ -403,8 +403,8 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 5.dp, bottom = 8.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF111819), Color(0xFF070B0C))))
-            .border(1.dp, Color(0xFF293737), RoundedCornerShape(20.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF141414), Color(0xFF070B0C))))
+            .border(1.dp, Color(0xFF383838), RoundedCornerShape(20.dp))
             .padding(horizontal = 7.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
