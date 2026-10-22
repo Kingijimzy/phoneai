@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -351,16 +352,26 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
     ) {
         items.forEach { (label, icon, _) ->
             val active = label == selected
+            val activeFill by animateColorAsState(
+                targetValue = if (active) Color(0xFF1D3731) else Color.Transparent,
+                animationSpec = tween(220),
+                label = "dock-fill-$label"
+            )
+            val activeTint by animateColorAsState(
+                targetValue = if (active) Mint else Muted,
+                animationSpec = tween(180),
+                label = "dock-tint-$label"
+            )
             Column(
                 Modifier.weight(1f).height(54.dp).clip(RoundedCornerShape(17.dp))
-                    .background(if (active) Brush.linearGradient(listOf(Color(0xFF24413A), Color(0xFF142321))) else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)))
+                    .background(activeFill)
                     .clickable { onSelect(label) }.padding(vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(icon, null, tint = if (active) Mint else Muted, modifier = Modifier.size(21.dp))
+                Icon(icon, null, tint = activeTint, modifier = Modifier.size(21.dp))
                 Spacer(Modifier.height(3.dp))
-                Text(label, color = if (active) Mint else Muted, fontSize = 10.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
+                Text(label, color = activeTint, fontSize = 10.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
             }
         }
     }
