@@ -278,12 +278,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Theme.BG)
-            setPadding(dp(14), dp(10), dp(14), dp(9))
+            setPadding(dp(16), dp(7), dp(16), dp(6))
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(2), dp(3), dp(2), dp(5))
+            setPadding(dp(1), dp(2), dp(1), dp(3))
         }
         val mark = LinearLayout(this).apply {
             gravity = Gravity.CENTER
@@ -299,7 +299,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             setPadding(dp(10), 0, 0, 0)
         }
         titleCol.addView(label("Orion", 19f, Theme.TEXT, true))
-        titleCol.addView(label("AI ASSISTANT", 9f, Theme.MUTED, true).apply {
+        titleCol.addView(label("PERSONAL INTELLIGENCE", 8f, Theme.MUTED, true).apply {
             letterSpacing = .08f
             setPadding(0, dp(1), 0, dp(2))
         })
@@ -363,7 +363,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
         val intro = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(3), dp(3), dp(3), dp(8))
+            setPadding(dp(2), dp(1), dp(2), dp(4))
             background = null
         }
         // The reference uses a single expressive animated centerpiece; keep it compact
@@ -372,7 +372,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             contentDescription = "Animated Orion energy core"
             isFocusable = false
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(104), dp(84)).apply {
+        }, LinearLayout.LayoutParams(dp(88), dp(70)).apply {
             gravity = Gravity.CENTER
             bottomMargin = dp(1)
         })
@@ -380,11 +380,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             letterSpacing = .18f
             gravity = Gravity.CENTER
         })
-        intro.addView(label("What can I help with?", 23f, Theme.TEXT, true).apply {
+        intro.addView(label("What’s on your mind?", 22f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(5), 0, dp(2))
         })
-        intro.addView(label("Ask anything, share an image, or tell me what you need done.", 13f, Theme.MUTED).apply {
+        intro.addView(label("Ask naturally. I’ll keep conversation separate from actions and web research.", 12f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
             setLineSpacing(dp(2).toFloat(), 1f)
         })
@@ -424,7 +424,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             val chip = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(11), dp(8), dp(13), dp(8))
+                setPadding(dp(12), dp(7), dp(13), dp(7))
                 background = glass(16, 0x442C504E)
                 isClickable = true
                 isFocusable = true
@@ -527,15 +527,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER_VERTICAL
             background = glass(24, 0x66516E6B)
             elevation = dp(3).toFloat()
-            setPadding(dp(7), dp(5), dp(6), dp(5))
+            setPadding(dp(7), dp(4), dp(6), dp(4))
         }
         input = EditText(this).apply {
             hint = "Message Orion…"
             setHintTextColor(Theme.MUTED)
             setTextColor(Theme.TEXT)
-            textSize = 15f
+            textSize = 16f
             background = null
-            minHeight = dp(44)
+            minHeight = dp(42)
             maxLines = 5
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             imeOptions = EditorInfo.IME_ACTION_SEND
@@ -600,8 +600,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val dock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(7), dp(6), dp(7), dp(5))
-            background = glass(23, 0x444C6462)
+            setPadding(dp(6), dp(4), dp(6), dp(4))
+            background = rounded(0xFF0B1214.toInt(), 22, 0xFF263735.toInt())
             elevation = dp(2).toFloat()
         }
         fun dockItem(title: String, iconName: String, selected: Boolean = false, action: () -> Unit): View {
