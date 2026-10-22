@@ -73,12 +73,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val ChatInk = Color(0xFF050708)
-private val ChatPanel = Color(0xFF101516)
-private val ChatPanelRaised = Color(0xFF171E1F)
-private val ChatMint = Color(0xFF19D3B3)
+private val ChatPanel = Color(0xFF141414)
+private val ChatPanelRaised = Color(0xFF202020)
+private val ChatMint = Color(0xFFE5E5E5)
 private val ChatCopy = Color(0xFFF7FAF9)
-private val ChatMuted = Color(0xFF9AA7A5)
-private val ChatHairline = Color(0xFF293333)
+private val ChatMuted = Color(0xFF9B9B9B)
+private val ChatHairline = Color(0xFF303030)
 
 data class OrionChatLine(
     val id: Long,
@@ -108,14 +108,14 @@ fun OrionComposeChatScreen(
     val statusDotColor by animateColorAsState(
         targetValue = when {
             status.contains("listen", true) || status.contains("speak", true) -> ChatMint
-            status.contains("think", true) || status.contains("work", true) -> Color(0xFF8FD8C3)
-            else -> Color(0xFF66817B)
+            status.contains("think", true) || status.contains("work", true) -> Color(0xFFD0D0D0)
+            else -> Color(0xFF777777)
         },
         animationSpec = tween(durationMillis = 260),
         label = "chat-status-dot"
     )
     val modeChipFill by animateColorAsState(
-        targetValue = if (commandMode) Color(0xFF21433B) else Color(0xFF0D1517),
+        targetValue = if (commandMode) Color(0xFF303030) else Color(0xFF121212),
         animationSpec = tween(durationMillis = 220),
         label = "chat-mode-fill"
     )
@@ -134,7 +134,7 @@ fun OrionComposeChatScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF0D1416))
+                Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF121212))
                     .border(1.dp, ChatHairline, CircleShape).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
@@ -169,8 +169,8 @@ fun OrionComposeChatScreen(
             ) {
                 Box(
                     Modifier.fillMaxWidth().height(205.dp).clip(RoundedCornerShape(26.dp))
-                        .background(Brush.verticalGradient(listOf(Color(0xFF14231F), Color(0xFF091112))))
-                        .border(1.dp, Color(0xFF2A443C), RoundedCornerShape(26.dp)),
+                        .background(Brush.verticalGradient(listOf(Color(0xFF202020), Color(0xFF0D0D0D))))
+                        .border(1.dp, Color(0xFF383838), RoundedCornerShape(26.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -184,12 +184,12 @@ fun OrionComposeChatScreen(
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
                             Box(Modifier.size(94.dp).clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(Color(0xFF2B6A58), Color(0xFF10231E), Color(0xFF0A1113))))
-                                .border(1.dp, Color(0xFF5A9D85).copy(alpha = .7f), CircleShape),
+                                .background(Brush.radialGradient(listOf(Color(0xFF555555), Color(0xFF242424), Color(0xFF141414))))
+                                .border(1.dp, Color(0xFF8A8A8A).copy(alpha = .7f), CircleShape),
                                 contentAlignment = Alignment.Center) {
                                 Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(39.dp))
                             }
-                            Text(if (commandMode) "READY TO HELP" else "HERE WITH YOU", color = Color(0xFFB7D9CE),
+                            Text(if (commandMode) "READY TO HELP" else "HERE WITH YOU", color = Color(0xFFD8D8D8),
                                 fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
                         }
                     }
@@ -205,7 +205,7 @@ fun OrionComposeChatScreen(
                     color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp
                 )
                 Spacer(Modifier.height(24.dp))
-                Text("TRY ASKING", color = Color(0xFF7F9690), fontSize = 10.sp,
+                Text("TRY ASKING", color = Color(0xFF9B9B9B), fontSize = 10.sp,
                     fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                 Spacer(Modifier.height(10.dp))
                 listOf(
@@ -215,7 +215,7 @@ fun OrionComposeChatScreen(
                 ).forEach { item ->
                     Row(
                         Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF0D1517)).border(1.dp, ChatHairline, RoundedCornerShape(16.dp))
+                            .background(Color(0xFF121212)).border(1.dp, ChatHairline, RoundedCornerShape(16.dp))
                             .clickable { onSend(item.third) }.padding(horizontal = 14.dp, vertical = 13.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -259,8 +259,8 @@ fun OrionComposeChatScreen(
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF131D1F), Color(0xFF0B1214))))
-                    .border(1.dp, Color(0xFF2A3B39), RoundedCornerShape(17.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF1A1A1A), Color(0xFF101010))))
+                    .border(1.dp, Color(0xFF333333), RoundedCornerShape(17.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -337,7 +337,7 @@ private fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
 @Composable
 private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val pillFill by animateColorAsState(
-        targetValue = if (selected) Color(0xFF21433B) else Color.Transparent,
+        targetValue = if (selected) Color(0xFF303030) else Color.Transparent,
         animationSpec = tween(durationMillis = 220),
         label = "mode-pill-fill"
     )
