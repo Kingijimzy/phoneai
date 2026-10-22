@@ -34,6 +34,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Send
@@ -167,7 +168,7 @@ fun OrionComposeChatScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(prompt, color = ChatCopy.copy(alpha = .88f), fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        Icon(Icons.Rounded.ArrowBack, null, tint = Color(0xFF718783), modifier = Modifier.size(15.dp).then(Modifier))
+                        Icon(Icons.Rounded.ChevronRight, null, tint = Color(0xFF718783), modifier = Modifier.size(16.dp))
                     }
                     if (index < 2) Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .6f)))
                 }
