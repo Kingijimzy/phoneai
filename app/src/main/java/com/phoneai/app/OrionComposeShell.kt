@@ -290,7 +290,7 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(20.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(15.dp))
             .clickable(onClick = onClick).padding(17.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -309,7 +309,7 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
 @Composable
 private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(21.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(21.dp))
+        modifier.clip(RoundedCornerShape(15.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(15.dp))
             .clickable(onClick = onClick).padding(15.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -326,7 +326,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
 @Composable
 private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(18.dp)).background(PanelRaised).border(1.dp, Hairline, RoundedCornerShape(18.dp))
+        modifier.clip(RoundedCornerShape(13.dp)).background(PanelRaised).border(1.dp, Hairline, RoundedCornerShape(13.dp))
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(9.dp)
