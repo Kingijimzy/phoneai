@@ -48,7 +48,7 @@ class SettingsActivity : Activity() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2426.toInt(), 0xF0070D0F.toInt())).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0x554B6564) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21E1E1E.toInt(), 0xF0101010.toInt())).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0x55464646) }
         }
         outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
@@ -60,9 +60,9 @@ class SettingsActivity : Activity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0xEA172124.toInt(), 0xEA0B1113.toInt())).apply {
+                    intArrayOf(0xEA1B1B1B.toInt(), 0xEA101010.toInt())).apply {
                     cornerRadius = dp(10).toFloat()
-                    setStroke(dp(1), 0x33445653)
+                    setStroke(dp(1), 0x333A3A3A)
                 }
                 isClickable = true; isFocusable = true; contentDescription = label
             }
@@ -118,10 +118,10 @@ class SettingsActivity : Activity() {
                 intArrayOf(0xFFD8D8D8.toInt(), 0xFFBFBFBF.toInt()))
         } else {
             GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF0192527.toInt(), 0xF0070D0F.toInt()))
+                intArrayOf(0xF0202020.toInt(), 0xF0101010.toInt()))
         }
         g.cornerRadius = dp(10).toFloat()
-        g.setStroke(dp(1), if (primary) 0xFFE5E5E5.toInt() else 0x553D6963)
+        g.setStroke(dp(1), if (primary) 0xFFE5E5E5.toInt() else 0x55484848)
         b.background = g
         b.elevation = 0f
         b.stateListAnimator = null
@@ -140,9 +140,9 @@ class SettingsActivity : Activity() {
         val c = LinearLayout(this)
         c.orientation = LinearLayout.VERTICAL
         val g = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xF01A2527.toInt(), 0xF00D1416.toInt(), 0xF0080E10.toInt()))
+            intArrayOf(0xF0202020.toInt(), 0xF0141414.toInt(), 0xF0101010.toInt()))
         g.cornerRadius = dp(20).toFloat()
-        g.setStroke(dp(1), 0x55415753)
+        g.setStroke(dp(1), 0x55464646)
         c.background = g
         c.setPadding(dp(16), dp(15), dp(16), dp(16))
         c.elevation = dp(1).toFloat()
@@ -155,7 +155,7 @@ class SettingsActivity : Activity() {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xFF303030.toInt(), 0xFF141414.toInt())).apply {
                 cornerRadius = dp(9).toFloat()
-                setStroke(dp(1), 0x553C6D62)
+                setStroke(dp(1), 0x55484848)
             }
             addView(OrionIconView(this@SettingsActivity).apply {
                 icon = settingsIcon(title)
@@ -216,10 +216,10 @@ class SettingsActivity : Activity() {
             setPadding(dp(14), dp(11), dp(14), dp(11))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF01B292A.toInt(), 0xF00D1416.toInt())
+                intArrayOf(0xF0202020.toInt(), 0xF0141414.toInt())
             ).apply {
                 cornerRadius = dp(11).toFloat()
-                setStroke(dp(1), 0x55416B63)
+                setStroke(dp(1), 0x55484848)
             }
             isClickable = true
             isFocusable = true
@@ -249,7 +249,7 @@ class SettingsActivity : Activity() {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xFF242424.toInt(), 0xFF141414.toInt(), 0xFF121212.toInt())).apply {
                 cornerRadius = dp(25).toFloat()
-                setStroke(dp(1), 0x66456B60)
+                setStroke(dp(1), 0x66464646)
             }
         }
         val headerTop = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -257,7 +257,7 @@ class SettingsActivity : Activity() {
             gravity = Gravity.CENTER
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xFF454545.toInt(), 0xFF252525.toInt())).apply {
-                cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0x665AA38A)
+                cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0x666B6B6B)
             }
             addView(OrionIconView(this@SettingsActivity).apply {
                 icon = "spark"; tint = Theme.CYAN; contentDescription = null
@@ -583,9 +583,9 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(10), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply {
+                intArrayOf(0xF21E1E1E.toInt(), 0xF0101010.toInt())).apply {
                 cornerRadius = dp(22).toFloat()
-                setStroke(dp(1), 0x553D6963)
+                setStroke(dp(1), 0x55484848)
             }
         }
         outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.CYAN, true).apply {
@@ -618,7 +618,7 @@ class SettingsActivity : Activity() {
                         if (selected) 0xFF181818.toInt() else 0xE8141414.toInt()
                     )).apply {
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF363636.toInt() else 0x332F4A46)
+                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF363636.toInt() else 0x33383838)
                 }
                 isClickable = true
                 isFocusable = true
@@ -638,7 +638,7 @@ class SettingsActivity : Activity() {
                 background = GradientDrawable().apply {
                     setColor(if (saved || selected) 0xFF303030.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
-                    setStroke(dp(1), if (selected) 0xFF737373.toInt() else 0x443D6963)
+                    setStroke(dp(1), if (selected) 0xFF737373.toInt() else 0x44464646)
                 }
                 contentDescription = null
             }
@@ -701,9 +701,9 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply {
+                intArrayOf(0xF21E1E1E.toInt(), 0xF0101010.toInt())).apply {
                 cornerRadius = dp(22).toFloat()
-                setStroke(dp(1), 0x553D6963)
+                setStroke(dp(1), 0x55484848)
             }
             addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.CYAN, true).apply {
                 letterSpacing = .1f; setPadding(0, 0, 0, dp(7))
@@ -1145,7 +1145,7 @@ class SettingsActivity : Activity() {
                 background = GradientDrawable().apply {
                     setColor(if (selected) 0xFF1B1B1B.toInt() else 0xFF121212.toInt())
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0x332F4A46)
+                    setStroke(dp(1), if (selected) Theme.CYAN else 0x33383838)
                 }
                 isClickable = true; isFocusable = true
                 contentDescription = profile.label + ", " + descriptions[profile.id].orEmpty()
@@ -1156,7 +1156,7 @@ class SettingsActivity : Activity() {
                 background = GradientDrawable().apply {
                     setColor(if (selected) 0xFF3A3A3A.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0x443D6963)
+                    setStroke(dp(1), if (selected) Theme.CYAN else 0x44464646)
                 }
                 contentDescription = profile.label
             }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
