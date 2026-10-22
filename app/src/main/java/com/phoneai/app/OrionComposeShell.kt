@@ -181,7 +181,7 @@ private fun HomePage(
                 }
                 Text("PRIVATE", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             }
-            VoiceWaveform(Modifier.fillMaxWidth().height(66.dp))
+            Box(Modifier.fillMaxWidth().height(154.dp), contentAlignment = Alignment.Center) {\n                LiquidWaveCore(Modifier.size(150.dp))\n            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Box(
                     Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Mint)
@@ -439,7 +439,7 @@ private fun LiquidWaveCore(modifier: Modifier = Modifier) {
             val cx = w / 2f
             val cy = h / 2f
             val radius = minOf(w, h) * .44f
-            drawCircle(Brush.radialGradient(listOf(Color(0xAA2BC7AE), Color(0x4421A895), Color.Transparent), Offset(cx, cy), radius * 1.5f), radius * 1.5f)
+            drawCircle(Brush.radialGradient(listOf(Color(0xAA00FCB6), Color(0x4421A895), Color.Transparent), Offset(cx, cy), radius * 1.5f), radius * 1.5f)
             drawCircle(Brush.radialGradient(listOf(Color(0xFF1A3433), Color(0xFF0A171A), Color(0xFF071012)), Offset(cx - radius * .25f, cy - radius * .30f), radius * 1.35f), radius)
             val clipPath = Path().apply { addOval(androidx.compose.ui.geometry.Rect(cx - radius * .96f, cy - radius * .96f, cx + radius * .96f, cy + radius * .96f)) }
             val waveColor = Mint
@@ -468,7 +468,7 @@ private fun LiquidWaveCore(modifier: Modifier = Modifier) {
                 }
                 drawContext.canvas.restore()
             }
-            drawCircle(Color(0x663FE5CF), radius, style = Stroke(width = 1.1.dp.toPx()))
+            drawCircle(Color(0x6600FCB6), radius, style = Stroke(width = 1.1.dp.toPx()))
             val dotX = cx + sin(time + drag) * radius * .62f
             val dotY = cy + radius * .12f + sin(time * 1.3f + drag) * radius * .10f
             drawCircle(Color.White.copy(alpha = .85f), radius * .035f, Offset(dotX, dotY))
