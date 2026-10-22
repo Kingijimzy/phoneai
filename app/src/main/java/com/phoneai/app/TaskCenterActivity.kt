@@ -32,7 +32,7 @@ class TaskCenterActivity : Activity() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21A2325.toInt(), 0xF0091012.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x553D6963) }
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF2212121.toInt(), 0xF00F0F0F.toInt())).apply { cornerRadius = dp(22).toFloat(); setStroke(dp(1), 0x555F5F5F) }
         }
         body.addView(label("TASKS", 10f, Theme.MUTED, true))
         body.addView(label(titleText, 21f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
@@ -44,9 +44,9 @@ class TaskCenterActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(13), dp(12), dp(13), dp(12))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0xE61A2426.toInt(), 0xE80D1416.toInt())).apply {
+                    intArrayOf(0xE6222222.toInt(), 0xE8131313.toInt())).apply {
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), 0x443D6963)
+                    setStroke(dp(1), 0x445F5F5F)
                 }
                 isClickable = true; isFocusable = true; contentDescription = option
             }
@@ -76,10 +76,10 @@ class TaskCenterActivity : Activity() {
         }
     private fun panel(fill: Int = Theme.PANEL) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(fill, 0xE80D1416.toInt())
+        intArrayOf(fill, 0xE8131313.toInt())
     ).apply {
         cornerRadius = dp(18).toFloat()
-        setStroke(dp(1), 0x443D6963)
+        setStroke(dp(1), 0x445F5F5F)
     }
     private fun button(caption: String, primary: Boolean = false, click: () -> Unit) =
         Button(this).apply {
@@ -87,11 +87,11 @@ class TaskCenterActivity : Activity() {
             setTextColor(if (primary) Theme.PANEL else Theme.TEXT)
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                if (primary) intArrayOf(0xFF28DDB0.toInt(), 0xFF00B98B.toInt())
-                else intArrayOf(0xE61B292B.toInt(), 0xD10D1518.toInt())
+                if (primary) intArrayOf(0xFFB3B3B3.toInt(), 0xFF8E8E8E.toInt())
+                else intArrayOf(0xE6262626.toInt(), 0xD1141414.toInt())
             ).apply {
                 cornerRadius = dp(12).toFloat()
-                setStroke(dp(1), if (primary) 0xFF39E7B9.toInt() else 0x553D6963)
+                setStroke(dp(1), if (primary) 0xFFBFBFBF.toInt() else 0x555F5F5F)
             }
             elevation = 0f
             stateListAnimator = null
@@ -222,7 +222,7 @@ class TaskCenterActivity : Activity() {
         if (checkpoint != null) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = panel(0xFF1A2B28.toInt())
+                background = panel(0xFF272727.toInt())
             }
             card.addView(label("SAVED AGENT SESSION · " + checkpoint.optString("status").uppercase(Locale.getDefault()),
                 10f, Theme.CYAN, true))
@@ -318,7 +318,7 @@ class TaskCenterActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0B1012.toInt(), 0xFF101719.toInt()))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0xFF0F0F0F.toInt(), 0xFF161616.toInt()))
             addView(label("ORION  /  TASK CENTRE", 10f, Theme.CYAN, true))
             addView(label("Create a task", 20f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, dp(8)) })
             addView(title)
