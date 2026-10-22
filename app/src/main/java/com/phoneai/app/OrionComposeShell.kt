@@ -134,8 +134,8 @@ private fun HomePage(
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 22.dp, end = 22.dp, top = 20.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(start = 19.dp, end = 19.dp, top = 16.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -155,55 +155,59 @@ private fun HomePage(
 
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("A smarter way\nto get things done.", color = Copy, fontSize = 32.sp, lineHeight = 37.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
-            Text("Think freely. Speak naturally. Bring Orion in when you need a hand.", color = Muted, fontSize = 13.sp, lineHeight = 20.sp)
+            Text("A calm space to think, speak and get things done.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
         }
 
-        // Compact voice waveform replaces the oversized orb: a calmer, assistant-first workspace.
+        // Orion's focal surface: compact glass shell with a deliberately sculpted liquid orb.
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                 .background(Brush.verticalGradient(listOf(Color(0xFF172023), Color(0xCC0A1114), Color(0xFF080D10))))
-                .border(1.dp, Color(0xFF34413F).copy(alpha = .72f), RoundedCornerShape(18.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xE51B292A), Color(0xD50D1719), Color(0xF2080E10))))
+                .border(1.dp, Color(0xFF52635F).copy(alpha = .52f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF1B3530), Color(0xFF101C1D)))).border(1.dp, Color(0xFF3B6258).copy(alpha = .65f), RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("ORION CORE", color = Color(0xFFC6D7D2), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
+                    Text("Ready when you are", color = Muted, fontSize = 11.sp)
+                }
+                Row(
+                    Modifier.clip(CircleShape)
+                        .background(Color(0xFF11241F).copy(alpha = .9f))
+                        .border(1.dp, Color(0xFF38665A).copy(alpha = .6f), CircleShape)
+                        .padding(horizontal = 9.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.GraphicEq, null, tint = Mint, modifier = Modifier.size(20.dp))
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(Mint))
+                    Spacer(Modifier.width(6.dp))
+                    Text(status.uppercase().take(10), color = Color(0xFFB9EDE0), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Spacer(Modifier.width(11.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Your AI workspace", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .2.sp)
-                    Text("Talk, think, or ask for help.", color = Muted, fontSize = 12.sp)
-                }
-                Text("PRIVATE", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             }
-            Box(Modifier.fillMaxWidth().height(136.dp), contentAlignment = Alignment.Center) {
-                LiquidWaveCore(Modifier.size(132.dp))
+            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                LiquidWaveCore(Modifier.size(116.dp))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
-                    Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).background(Mint)
-                        .clickable(onClick = onOpenVoice) .padding(vertical = 10.dp),
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(Brush.verticalGradient(listOf(Color(0xFFB4F6E5), Color(0xFF65D9BE))))
+                        .clickable(onClick = onOpenVoice).padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Icon(Icons.Rounded.Mic, null, tint = Ink, modifier = Modifier.size(17.dp))
-                        Text("Start voice", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Rounded.Mic, null, tint = Ink, modifier = Modifier.size(16.dp))
+                        Text("Talk to Orion", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 Box(
-                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp)) .background(Brush.verticalGradient(listOf(Color(0xFF202A2B), Color(0xFF121A1C))))
-                        .border(1.dp, Color(0xFF33403F), RoundedCornerShape(11.dp))
-                        .clickable(onClick = onOpenChat).padding(vertical = 12.dp),
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(Brush.verticalGradient(listOf(Color(0xFF1B292B), Color(0xFF11191B))))
+                        .border(1.dp, Color(0xFF465653).copy(alpha = .72f), RoundedCornerShape(10.dp))
+                        .clickable(onClick = onOpenChat).padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Copy, modifier = Modifier.size(17.dp))
-                        Text("Text chat", color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Copy, modifier = Modifier.size(16.dp))
+                        Text("Open chat", color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
