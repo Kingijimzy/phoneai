@@ -134,8 +134,8 @@ private fun HomePage(
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 19.dp, end = 19.dp, top = 16.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(19.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -154,22 +154,22 @@ private fun HomePage(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("An AI that works\nwith you.", color = Copy, fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.8).sp)
-            Text("Think clearly. Speak naturally. Get things done.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("Meet your\npersonal intelligence.", color = Copy, fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.0).sp)
+            Text("One place to think, talk, and take action.", color = Muted, fontSize = 13.sp, lineHeight = 19.sp)
         }
 
         // Orion's focal surface: compact glass shell with a deliberately sculpted liquid orb.
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xE51B292A), Color(0xD50D1719), Color(0xF2080E10))))
-                .border(1.dp, Color(0xFF52635F).copy(alpha = .52f), RoundedCornerShape(18.dp))
-                .padding(horizontal = 13.dp, vertical = 11.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF172321), Color(0xFF0B1314), Color(0xFF070C0E))))
+                .border(1.dp, Color(0xFF3B514C).copy(alpha = .78f), RoundedCornerShape(26.dp))
+                .padding(horizontal = 17.dp, vertical = 17.dp),
+            verticalArrangement = Arrangement.spacedBy(13.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("ORION CORE", color = Color(0xFFC6D7D2), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
-                    Text("Ready when you are", color = Muted, fontSize = 11.sp)
+                    Text("YOUR AI COMPANION", color = Color(0xFFC6D7D2), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+                    Text("Here when you need it.", color = Muted, fontSize = 12.sp)
                 }
                 Row(
                     Modifier.clip(CircleShape)
@@ -183,8 +183,8 @@ private fun HomePage(
                     Text(status.uppercase().take(10), color = Color(0xFFB9EDE0), fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                LiquidWaveCore(Modifier.size(116.dp))
+            Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+                LiquidWaveCore(Modifier.size(166.dp))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
@@ -214,20 +214,20 @@ private fun HomePage(
         }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("PICK UP QUICKLY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+            Text("YOUR TOOLS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
             Spacer(Modifier.weight(1f))
-            Text("Your workspace", color = Muted, fontSize = 10.sp)
+            Text("Made for your workflow", color = Muted, fontSize = 10.sp)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ActionTile("Live voice", "Speak naturally", Icons.Rounded.GraphicEq, Modifier.weight(1f), onOpenVoice)
-            ActionTile("Orion browser", "Browse with intent", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
+            ActionTile("Browser", "Research and explore", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
         }
 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("YOUR WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Text("WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
             Spacer(Modifier.weight(1f))
-            Text("EXPLORE  →", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenUtilities() })
+            Text("ALL TOOLS  ↗", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onOpenUtilities() })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MiniTile("Task centre", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
