@@ -59,13 +59,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setTextColor(color)
             if (bold) typeface = Typeface.DEFAULT_BOLD
         }
-    /** Shared liquid-glass surface: a quiet top reflection over deep charcoal, never a neon glow. */
-    private fun panel(fill: Int, radius: Int, stroke: Int = Theme.LINE) = GradientDrawable(
-        GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(0xF21A2426.toInt(), fill, 0xF2080E10.toInt())
-    ).apply {
+    /** Flat graphite surface: no glass reflections, gradients, or neon glow. */
+    private fun panel(fill: Int, radius: Int, stroke: Int = Theme.LINE) = GradientDrawable().apply {
+        setColor(fill)
         cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), if (stroke == Theme.LINE) 0x554B6564 else stroke)
+        setStroke(dp(1), stroke)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,10 +132,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         // directly on the page. Keep it native and lightweight for entry-level Android devices.
         val orbStage = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF14231F.toInt(), 0xFF0C1516.toInt(), 0xFF080D0F.toInt())).apply {
+            background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setStroke(dp(1), 0x664C8271)
+                setColor(0xFF151515.toInt())
+                setStroke(dp(1), 0xFF383838.toInt())
             }
             elevation = dp(2).toFloat()
             contentDescription = "Orion live conversation visual stage"
@@ -151,7 +149,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(if (compact) 11 else 15), dp(14), dp(if (compact) 11 else 15))
-            background = panel(0xFF0B1113.toInt(), 16, 0xFF263A38.toInt())
+            background = panel(0xFF141414.toInt(), 16, 0xFF303030.toInt())
         }
         val waveLabel = text("VOICE SIGNAL", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
@@ -189,7 +187,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(7))
-            background = panel(0xE90C1214.toInt(), 15, 0xFF263633.toInt())
+            background = panel(0xE90C1214.toInt(), 15, 0xFF303030.toInt())
         }
         val transcriptHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -198,7 +196,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         transcriptHeading.addView(text("CONVERSATION", 9f, Theme.MUTED, true).apply {
             letterSpacing = .12f
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        transcriptHeading.addView(text("LIVE CAPTIONS", 8f, 0xFF83BDAA.toInt(), true).apply {
+        transcriptHeading.addView(text("LIVE CAPTIONS", 8f, 0xFFE5E5E5.toInt(), true).apply {
             letterSpacing = .06f
         })
         transcriptCard.addView(transcriptHeading)
@@ -222,7 +220,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val end = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "End live conversation"
-            background = panel(0xFF11191B.toInt(), 17, 0xFF334443.toInt())
+            background = panel(0xFF202020.toInt(), 17, 0xFF383838.toInt())
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "phone-off"; tint = Theme.MUTED; contentDescription = null
@@ -255,7 +253,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Theme.CYAN)
-                setStroke(dp(1), 0xFFB4EEE5.toInt())
+                setStroke(dp(1), 0xFFEEEEEE.toInt())
             }
             elevation = dp(7).toFloat()
             isClickable = true; isFocusable = true
@@ -313,7 +311,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         controls.addView(textItem, LinearLayout.LayoutParams(dp(82), -2))
         root.addView(controls)
-        root.addView(text("VOICE SESSION  ·  TAP THE MIC TO PAUSE", 8f, 0xFF71817F.toInt(), true).apply {
+        root.addView(text("VOICE SESSION  ·  TAP THE MIC TO PAUSE", 8f, 0xFF9B9B9B.toInt(), true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .07f
             setPadding(dp(4), dp(7), dp(4), dp(1))
@@ -402,8 +400,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(9), dp(6), dp(9), dp(6))
-                background = panel(if (kind == "me") 0xFF203A34.toInt() else 0xFF11191C.toInt(), 12,
-                    if (kind == "me") 0xFF426F67.toInt() else Theme.LINE)
+                background = panel(if (kind == "me") 0xFF303030.toInt() else 0xFF202020.toInt(), 12,
+                    if (kind == "me") 0xFF454545.toInt() else Theme.LINE)
             }
             row.addView(text(if (kind == "me") "YOU" else "ORION", 8f,
                 if (kind == "me") Theme.CYAN else Theme.MUTED, true))
@@ -442,7 +440,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 else -> Theme.OK
             })
             val statusColor = when (mode) {
-                OrbView.Mode.IDLE -> 0xFF647775.toInt()
+                OrbView.Mode.IDLE -> 0xFF9B9B9B.toInt()
                 OrbView.Mode.WAITING_APPROVAL -> 0xFFE9B984.toInt()
                 OrbView.Mode.THINKING, OrbView.Mode.ACTING -> Theme.CYAN
                 else -> Theme.OK
