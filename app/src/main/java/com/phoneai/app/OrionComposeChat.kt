@@ -112,7 +112,7 @@ fun OrionComposeChatScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF11191B))
+                Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF0D1416))
                     .border(1.dp, ChatHairline, CircleShape).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
@@ -125,8 +125,8 @@ fun OrionComposeChatScreen(
                 }
             }
             Box(
-                Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF121B1D))
-                    .border(1.dp, ChatHairline, RoundedCornerShape(10.dp)).clickable { onModeChange(!commandMode) }
+                Modifier.clip(RoundedCornerShape(9.dp)).background(Color(0xFF0D1517))
+                    .border(1.dp, ChatHairline, RoundedCornerShape(9.dp)).clickable { onModeChange(!commandMode) }
                     .padding(horizontal = 11.dp, vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -145,14 +145,14 @@ fun OrionComposeChatScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
+                    Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
                         .background(Brush.linearGradient(listOf(Color(0xFF254A43), Color(0xFF111B1D))))
                         .border(1.dp, Color(0xFF355A52), RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center
                 ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(24.dp)) }
                 Spacer(Modifier.height(27.dp))
-                Text(if (commandMode) "What should I take care of?" else "A thought, a question,\nor a plan.", color = ChatCopy,
-                    fontSize = 29.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.8).sp)
+                Text(if (commandMode) "What should I take care of?" else "What’s on your mind?", color = ChatCopy,
+                    fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.7).sp)
                 Spacer(Modifier.height(11.dp))
                 Text(
                     if (commandMode) "Describe the task. Orion will explain what it plans to do and ask before sensitive actions."
@@ -160,7 +160,7 @@ fun OrionComposeChatScreen(
                     color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp
                 )
                 Spacer(Modifier.height(27.dp))
-                Text("TRY ASKING", color = Color(0xFF758A88), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp)
+                Text("SUGGESTED PROMPTS", color = Color(0xFF758A88), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.3.sp)
                 Spacer(Modifier.height(10.dp))
                 listOf("Help me think through an idea", "Explain something simply", "Help me plan my next step").forEachIndexed { index, prompt ->
                     Row(
@@ -204,9 +204,9 @@ fun OrionComposeChatScreen(
         // Composer is the primary surface; actions remain reachable without a second oversized dock.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF172123), Color(0xFF101719))))
-                    .border(1.dp, Color(0xFF344644), RoundedCornerShape(22.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF131D1F), Color(0xFF0B1214))))
+                    .border(1.dp, Color(0xFF2A3B39), RoundedCornerShape(17.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
