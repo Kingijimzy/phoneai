@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -38,6 +39,19 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private var micPulse: AnimatorSet? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    /** Subtle tactile response for the live-call controls; returns false so click handling remains intact. */
+    private fun addPressFeedback(view: View) {
+        view.setOnTouchListener { touched, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> touched.animate().scaleX(.94f).scaleY(.94f)
+                    .setDuration(85L).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touched.animate().scaleX(1f).scaleY(1f)
+                    .setDuration(150L).start()
+            }
+            false
+        }
+    }
     private fun text(value: String, size: Float, color: Int, bold: Boolean = false) =
         TextView(this).apply {
             text = value
@@ -81,6 +95,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             }, LinearLayout.LayoutParams(dp(22), dp(22)))
             setOnClickListener { finish() }
         }
+        addPressFeedback(back)
         header.addView(back, LinearLayout.LayoutParams(dp(42), dp(46)))
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         brand.addView(text("ORION", 16f, Theme.TEXT, true))
@@ -195,6 +210,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 finish()
             }
         }
+        addPressFeedback(end)
         val endItem = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -237,6 +253,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 }
             }
         }
+        addPressFeedback(micButton)
         micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 62 else 68), dp(if (compact) 62 else 68)))
         micCaption = text("MICROPHONE", 8f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
@@ -261,6 +278,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 finish()
             }
         }
+        addPressFeedback(textChat)
         val textItem = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
