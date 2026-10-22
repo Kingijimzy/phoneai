@@ -412,22 +412,19 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             micIcon.icon = if (mode == OrbView.Mode.LISTENING) "pause" else "mic"
             micButton.contentDescription = if (mode == OrbView.Mode.LISTENING) "Stop listening" else "Start voice input"
             if (mode == OrbView.Mode.LISTENING && micPulse == null) {
+                val scaleX = ObjectAnimator.ofFloat(micButton, View.SCALE_X, 1f, 1.055f).apply {
+                    duration = 780L
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                }
+                val scaleY = ObjectAnimator.ofFloat(micButton, View.SCALE_Y, 1f, 1.055f).apply {
+                    duration = 780L
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                }
                 micPulse = AnimatorSet().apply {
-                    playTogether(
-                        ObjectAnimator.ofFloat(micButton, View.SCALE_X, 1f, 1.07f, 1f),
-                        ObjectAnimator.ofFloat(micButton, View.SCALE_Y, 1f, 1.07f, 1f)
-                    )
-                    duration = 1250L
+                    playTogether(scaleX, scaleY)
                     startDelay = 80L
-                    addListener(object : android.animation.AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: android.animation.Animator) {
-                            if (lastMode == OrbView.Mode.LISTENING) {
-                                micPulse = null
-                                // Restart with a fresh animator to keep the breathing motion smooth.
-                                onStatus(value, mode)
-                            }
-                        }
-                    })
                     start()
                 }
             } else if (mode != OrbView.Mode.LISTENING) {
