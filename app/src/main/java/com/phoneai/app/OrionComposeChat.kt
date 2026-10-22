@@ -105,139 +105,139 @@ fun OrionComposeChatScreen(
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
     Column(Modifier.fillMaxSize().background(ChatInk).imePadding()) {
+        // Editorial header: quiet branding, no oversized pill around every element.
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 14.dp, bottom = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(ChatPanel).border(1.dp, ChatHairline, CircleShape)
-                    .clickable(onClick = onBack),
+                Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF11191B))
+                    .border(1.dp, ChatHairline, CircleShape).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(19.dp)) }
-            Spacer(Modifier.width(11.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("ORION", color = ChatCopy, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.2.sp)
-                Text("PERSONAL INTELLIGENCE", color = ChatMuted, fontSize = 9.sp, letterSpacing = 1.3.sp)
+            ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Orion", color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(if (status.contains("listen", true) || status.contains("speak", true)) ChatMint else Color(0xFF66817B)))
+                    Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
+                }
             }
-            Row(
-                Modifier.clip(CircleShape).background(Color(0xFF12231F)).border(1.dp, Color(0xFF315B51), CircleShape)
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xFF121B1D))
+                    .border(1.dp, ChatHairline, RoundedCornerShape(10.dp)).clickable { onModeChange(!commandMode) }
+                    .padding(horizontal = 11.dp, vertical = 8.dp)
             ) {
-                Box(Modifier.size(5.dp).clip(CircleShape).background(if (status.contains("listen", true) || status.contains("speak", true)) ChatMint else ChatMuted))
-                Spacer(Modifier.width(6.dp))
-                Text(status.uppercase().take(14), color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .5.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(if (commandMode) Icons.Rounded.Tune else Icons.Rounded.Waves, null,
+                        tint = ChatMint, modifier = Modifier.size(15.dp))
+                    Text(if (commandMode) "Command" else "Talk", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
             }
         }
-
-        Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = 0.55f)))
-        Row(
-            Modifier.fillMaxWidth().padding(start = 17.dp, end = 17.dp, bottom = 10.dp, top = 10.dp)
-                .clip(RoundedCornerShape(16.dp)).background(ChatPanel).border(1.dp, ChatHairline, RoundedCornerShape(16.dp)).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            ModePill("Talk", !commandMode, Modifier.weight(1f)) { onModeChange(false) }
-            ModePill("Command", commandMode, Modifier.weight(1f)) { onModeChange(true) }
-        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .55f)))
 
         if (lines.isEmpty()) {
             Column(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 25.dp),
+                horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    Modifier.size(76.dp).clip(RoundedCornerShape(26.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF1C4039), Color(0xFF142122))))
-                        .border(1.dp, Color(0xFF37685D), RoundedCornerShape(26.dp)),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFF254A43), Color(0xFF111B1D))))
+                        .border(1.dp, Color(0xFF355A52), RoundedCornerShape(16.dp)),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(35.dp)) }
-                Spacer(Modifier.height(20.dp))
-                Text("Let's think it through.", color = ChatCopy, fontSize = 25.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
+                ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(24.dp)) }
+                Spacer(Modifier.height(27.dp))
+                Text(if (commandMode) "What should I take care of?" else "A thought, a question,\nor a plan.", color = ChatCopy,
+                    fontSize = 29.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.8).sp)
+                Spacer(Modifier.height(11.dp))
                 Text(
-                    if (commandMode) "Tell Orion what you want done. It will ask before sensitive actions." else "Ask anything. Talk naturally—no automatic web search or phone actions.",
-                    color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.Center
+                    if (commandMode) "Describe the task. Orion will explain what it plans to do and ask before sensitive actions."
+                    else "Talk naturally. Orion answers from the conversation first — it won’t search the web or control your phone unless you ask.",
+                    color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp
                 )
+                Spacer(Modifier.height(27.dp))
+                Text("TRY ASKING", color = Color(0xFF758A88), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp)
+                Spacer(Modifier.height(10.dp))
+                listOf("Help me think through an idea", "Explain something simply", "Help me plan my next step").forEachIndexed { index, prompt ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onSend(prompt) }.padding(vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(prompt, color = ChatCopy.copy(alpha = .88f), fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Icon(Icons.Rounded.ArrowBack, null, tint = Color(0xFF718783), modifier = Modifier.size(15.dp).then(Modifier))
+                    }
+                    if (index < 2) Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .6f)))
+                }
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
             ) {
-                itemsIndexed(lines, key = { _, item -> item.id }) { _, item ->
-                    ChatBubble(item)
-                }
+                itemsIndexed(lines, key = { _, item -> item.id }) { _, item -> ChatBubble(item) }
             }
         }
 
-        AnimatedVisibility(selectedImage != null) {
+        AnimatedVisibility(selectedImage != null, enter = fadeIn(animationSpec = tween(180))) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 5.dp)
-                    .clip(RoundedCornerShape(14.dp)).background(ChatPanelRaised).border(1.dp, ChatHairline, RoundedCornerShape(14.dp)).padding(12.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 5.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(ChatPanelRaised)
+                    .border(1.dp, ChatHairline, RoundedCornerShape(14.dp)).padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                selectedImage?.let { ImageThumbnail(it, Modifier.size(width = 54.dp, height = 54.dp)) }
+                selectedImage?.let { ImageThumbnail(it, Modifier.size(width = 48.dp, height = 48.dp)) }
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("IMAGE ATTACHED", color = ChatMint, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    Text("Ready for Orion to analyse", color = ChatMuted, fontSize = 11.sp)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Image attached", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text("Ready to analyse", color = ChatMuted, fontSize = 11.sp)
                 }
-                Text("Remove", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onRemoveImage).padding(5.dp))
+                Text("Remove", color = ChatMint, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onRemoveImage).padding(7.dp))
             }
         }
 
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)) {
+        // Composer is the primary surface; actions remain reachable without a second oversized dock.
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp)).background(ChatPanel)
-                    .border(1.dp, Color(0xFF36524E), RoundedCornerShape(25.dp)).padding(start = 15.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF172123), Color(0xFF101719))))
+                    .border(1.dp, Color(0xFF344644), RoundedCornerShape(22.dp))
+                    .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
-                Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
-                    if (draft.isEmpty()) Text(if (commandMode) "Tell Orion what to do…" else "Message Orion…", color = ChatMuted, fontSize = 14.sp)
+                Box(Modifier.weight(1f).padding(vertical = 11.dp)) {
+                    if (draft.isEmpty()) Text(if (commandMode) "Describe the task…" else "Message Orion…", color = ChatMuted, fontSize = 14.sp)
                     BasicTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 20.sp),
+                        value = draft, onValueChange = { draft = it }, modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
-                            if (draft.isNotBlank() || selectedImage != null) {
-                                onSend(draft.trim()); draft = ""
-                            }
-                        }),
-                        maxLines = 5
+                            if (draft.isNotBlank() || selectedImage != null) { onSend(draft.trim()); draft = "" }
+                        }), maxLines = 5
                     )
                 }
                 ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
                 Spacer(Modifier.width(5.dp))
                 ComposerButton(Icons.Rounded.Send, "Send message", {
-                    if (draft.isNotBlank() || selectedImage != null) {
-                        onSend(draft.trim()); draft = ""
-                    }
+                    if (draft.isNotBlank() || selectedImage != null) { onSend(draft.trim()); draft = "" }
                 }, secondary = false)
             }
             Row(
-                Modifier.fillMaxWidth().padding(top = 7.dp, start = 5.dp, end = 5.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().padding(top = 10.dp, start = 5.dp, end = 5.dp),
+                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Sensitive actions require confirmation.", color = ChatMuted, fontSize = 10.sp)
-                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else ChatMuted,
-                    fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(5.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Live voice", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onVoice))
+                    Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onBrowser))
+                    Text("Tasks", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onTasks))
+                }
+                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Color(0xFF647775),
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(4.dp))
             }
-        }
-
-        Row(
-            Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, bottom = 7.dp, top = 2.dp)
-                .clip(RoundedCornerShape(21.dp)).background(ChatPanel).border(1.dp, ChatHairline, RoundedCornerShape(21.dp)).padding(5.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            DockAction("Chat", Icons.Rounded.Send, true, Modifier.weight(1f)) {}
-            DockAction("Browser", Icons.Rounded.Public, false, Modifier.weight(1f), onBrowser)
-            DockAction("Live", Icons.Rounded.GraphicEq, false, Modifier.weight(1.1f), onVoice)
-            DockAction("Tasks", Icons.Rounded.Tune, false, Modifier.weight(1f), onTasks)
         }
     }
 }
