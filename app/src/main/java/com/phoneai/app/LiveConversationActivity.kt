@@ -253,7 +253,6 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 }
             }
         }
-        addPressFeedback(micButton)
         micItem.addView(micButton, LinearLayout.LayoutParams(dp(if (compact) 62 else 68), dp(if (compact) 62 else 68)))
         micCaption = text("MICROPHONE", 8f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
