@@ -300,7 +300,7 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
             .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF142421)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF203A35), Color(0xFF11191B)))).border(1.dp, Color(0xFF3A554D).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(21.dp))
         }
         Spacer(Modifier.width(13.dp))
@@ -315,11 +315,11 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
 @Composable
 private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF0C1315)).border(1.dp, Color(0xFF1D2A2B), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick).padding(13.dp),
+        modifier.clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(Color(0xFF131D1F), Color(0xFF0A1012)))).border(1.dp, Color(0xFF35413F).copy(alpha = .7f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF142421)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Color(0xFF203A35), Color(0xFF11191B)))).border(1.dp, Color(0xFF3A554D).copy(alpha = .65f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(20.dp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -332,8 +332,8 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
 @Composable
 private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF11191B), Color(0xFF0A1012)))).border(1.dp, Color(0xFF273231).copy(alpha = .8f), RoundedCornerShape(11.dp))
-            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 14.dp),
+        modifier.clip(RoundedCornerShape(11.dp)).background(Brush.verticalGradient(listOf(Color(0xFF141D1F), Color(0xFF0A1012)))).border(1.dp, Color(0xFF34403F).copy(alpha = .72f), RoundedCornerShape(11.dp))
+            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 11.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
@@ -351,9 +351,9 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
         Triple("Settings", Icons.Rounded.Settings, "Settings")
     )
     Row(
-        Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 8.dp, bottom = 8.dp)
-            .clip(RoundedCornerShape(18.dp)).background(Color(0xFF0B1214)).border(1.dp, Hairline, RoundedCornerShape(18.dp))
-            .padding(6.dp),
+        Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 6.dp, bottom = 6.dp)
+            .clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color(0xFF11191B), Color(0xF0080E10)))).border(1.dp, Color(0xFF34403F).copy(alpha = .8f), RoundedCornerShape(16.dp))
+            .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items.forEach { (label, icon, _) ->
@@ -369,7 +369,7 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
                 label = "dock-tint-$label"
             )
             Column(
-                Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(12.dp))
+                Modifier.weight(1f).height(47.dp).clip(RoundedCornerShape(10.dp))
                     .background(activeFill)
                     .clickable { onSelect(label) }.padding(vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
