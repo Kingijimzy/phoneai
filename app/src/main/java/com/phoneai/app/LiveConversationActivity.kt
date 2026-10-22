@@ -88,7 +88,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(9), dp(7), dp(10), dp(7))
-            background = panel(0xEE121A1D.toInt(), 15, Theme.LINE)
+            background = panel(0xEE121A1D.toInt(), 11, Theme.LINE)
             addView(View(this@LiveConversationActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Theme.OK) }
             }, LinearLayout.LayoutParams(dp(6), dp(6)).apply { rightMargin = dp(6) })
@@ -110,7 +110,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(14), dp(if (compact) 14 else 20), dp(14), dp(if (compact) 14 else 20))
-            background = panel(0xFF101719.toInt(), 24, 0xFF2A403D.toInt())
+            background = panel(0xFF0C1416.toInt(), 18, 0xFF2A403D.toInt())
         }
         val waveLabel = text("LIVE AUDIO", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
@@ -147,7 +147,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(15), dp(12), dp(15), dp(10))
-            background = panel(0xE90F1719.toInt(), 20, Theme.LINE)
+            background = panel(0xE90F1719.toInt(), 16, Theme.LINE)
         }
         val transcriptHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -180,7 +180,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val end = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "End live conversation"
-            background = panel(0xFF11191B.toInt(), 22, 0xFF334443.toInt())
+            background = panel(0xFF11191B.toInt(), 17, 0xFF334443.toInt())
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "phone-off"; tint = Theme.MUTED; contentDescription = null
@@ -244,7 +244,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         val textChat = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "Return to text chat"
-            background = panel(0xEE151E21.toInt(), 22, Theme.LINE)
+            background = panel(0xEE151E21.toInt(), 17, Theme.LINE)
             isClickable = true; isFocusable = true
             addView(OrionIconView(this@LiveConversationActivity).apply {
                 icon = "chat"; tint = Theme.CYAN; contentDescription = null
