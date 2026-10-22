@@ -292,11 +292,11 @@ private fun PageHeading(title: String, subtitle: String) {
 @Composable
 private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(15.dp))
-            .clickable(onClick = onClick).padding(17.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF0C1315)).border(1.dp, Color(0xFF1D2A2B), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A302D)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF142421)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(21.dp))
         }
         Spacer(Modifier.width(13.dp))
@@ -311,11 +311,11 @@ private fun ActionRow(title: String, subtitle: String, icon: androidx.compose.ui
 @Composable
 private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(15.dp)).background(Panel).border(1.dp, Hairline, RoundedCornerShape(15.dp))
-            .clickable(onClick = onClick).padding(15.dp),
+        modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF0C1315)).border(1.dp, Color(0xFF1D2A2B), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick).padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFF1B302D)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF142421)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Mint, modifier = Modifier.size(20.dp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -328,7 +328,7 @@ private fun ActionTile(title: String, subtitle: String, icon: androidx.compose.u
 @Composable
 private fun MiniTile(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
-        modifier.clip(RoundedCornerShape(13.dp)).background(PanelRaised).border(1.dp, Hairline, RoundedCornerShape(13.dp))
+        modifier.clip(RoundedCornerShape(11.dp)).background(Color(0xFF0C1315)).border(1.dp, Color(0xFF1D2A2B), RoundedCornerShape(11.dp))
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(9.dp)
