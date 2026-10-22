@@ -564,10 +564,12 @@ class SettingsActivity : Activity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(11), dp(11), dp(11))
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(if (saved || selected) 0xFF20292B.toInt() else 0xE61A2224.toInt(),
-                        if (saved || selected) 0xFF151D1F.toInt() else 0xE80D1416.toInt())).apply {
-                    cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), if (selected) 0xFF52716D.toInt() else 0x443D6963)
+                    intArrayOf(
+                        if (selected) 0xFF182724.toInt() else if (saved) 0xFF151D1F.toInt() else 0xE6101719.toInt(),
+                        if (selected) 0xFF101A18.toInt() else 0xE80B1113.toInt()
+                    )).apply {
+                    cornerRadius = dp(13).toFloat()
+                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF344643.toInt() else 0x332F4A46)
                 }
                 isClickable = true
                 isFocusable = true
@@ -604,9 +606,10 @@ class SettingsActivity : Activity() {
                 setPadding(0, dp(4), 0, 0)
             })
             card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            if (selected) card.addView(text("✓", 17f, Theme.CYAN, true).apply {
+            if (selected) card.addView(text("ACTIVE", 8f, Theme.CYAN, true).apply {
                 gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(dp(26), dp(30)))
+                letterSpacing = .04f
+            }, LinearLayout.LayoutParams(dp(42), dp(30)))
             card.setOnClickListener {
                 pickerDialog?.dismiss()
                 onPick(provider)
@@ -1114,9 +1117,10 @@ class SettingsActivity : Activity() {
                 setPadding(0, dp(3), 0, 0)
             })
             card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            if (selected) card.addView(text("✓", 16f, Theme.CYAN, true).apply {
+            if (selected) card.addView(text("ACTIVE", 8f, Theme.CYAN, true).apply {
                 gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(dp(24), dp(28)))
+                letterSpacing = .03f
+            }, LinearLayout.LayoutParams(dp(42), dp(28)))
             card.setOnClickListener {
                 Prefs.setCharacterProfile(this, profile.id)
                 refresh()
