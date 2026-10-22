@@ -159,37 +159,69 @@ fun OrionComposeChatScreen(
 
         if (lines.isEmpty()) {
             Column(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 25.dp),
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 22.dp, vertical = 18.dp),
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF254A43), Color(0xFF111B1D))))
-                        .border(1.dp, Color(0xFF355A52), RoundedCornerShape(16.dp)),
+                    Modifier.fillMaxWidth().height(205.dp).clip(RoundedCornerShape(26.dp))
+                        .background(Brush.verticalGradient(listOf(Color(0xFF14231F), Color(0xFF091112))))
+                        .border(1.dp, Color(0xFF2A443C), RoundedCornerShape(26.dp)),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(24.dp)) }
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            for (i in 0..4) drawCircle(
+                                color = ChatMint.copy(alpha = .10f - i * .015f),
+                                radius = size.minDimension * (.20f + i * .075f),
+                                center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Box(Modifier.size(94.dp).clip(CircleShape)
+                                .background(Brush.radialGradient(listOf(Color(0xFF2B6A58), Color(0xFF10231E), Color(0xFF0A1113))))
+                                .border(1.dp, Color(0xFF5A9D85).copy(alpha = .7f), CircleShape),
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(39.dp))
+                            }
+                            Text(if (commandMode) "READY TO HELP" else "HERE WITH YOU", color = Color(0xFFB7D9CE),
+                                fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(27.dp))
-                Text(if (commandMode) "What should I take care of?" else "What’s on your mind?", color = ChatCopy,
-                    fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.7).sp)
-                Spacer(Modifier.height(11.dp))
+                Text(if (commandMode) "What can I take\noff your hands?" else "What’s on your\nmind today?",
+                    color = ChatCopy, fontSize = 31.sp, lineHeight = 35.sp,
+                    fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    if (commandMode) "Describe the task. Orion will explain what it plans to do and ask before sensitive actions."
-                    else "Talk naturally. Orion answers from the conversation first — it won’t search the web or control your phone unless you ask.",
+                    if (commandMode) "Tell Orion what you want done. It will keep you informed and ask before sensitive actions."
+                    else "Start with a question, an idea, or something you want to understand. Just talk naturally.",
                     color = ChatMuted, fontSize = 13.sp, lineHeight = 20.sp
                 )
-                Spacer(Modifier.height(27.dp))
-                Text("SUGGESTED PROMPTS", color = Color(0xFF758A88), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.3.sp)
+                Spacer(Modifier.height(24.dp))
+                Text("TRY ASKING", color = Color(0xFF7F9690), fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                 Spacer(Modifier.height(10.dp))
-                listOf("Help me think through an idea", "Explain something simply", "Help me plan my next step").forEachIndexed { index, prompt ->
+                listOf(
+                    Triple("Help me think", "Work through an idea together", "Help me think through an idea"),
+                    Triple("Explain it simply", "Make a difficult topic clear", "Explain something simply"),
+                    Triple("Plan my next step", "Turn a goal into a practical plan", "Help me plan my next step")
+                ).forEach { item ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { onSend(prompt) }.padding(vertical = 11.dp),
+                        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF0D1517)).border(1.dp, ChatHairline, RoundedCornerShape(16.dp))
+                            .clickable { onSend(item.third) }.padding(horizontal = 14.dp, vertical = 13.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(prompt, color = ChatCopy.copy(alpha = .88f), fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        Icon(Icons.Rounded.ChevronRight, null, tint = Color(0xFF718783), modifier = Modifier.size(16.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(item.first, color = ChatCopy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(item.second, color = ChatMuted, fontSize = 11.sp)
+                        }
+                        Icon(Icons.Rounded.ChevronRight, null, tint = ChatMint.copy(alpha = .8f), modifier = Modifier.size(18.dp))
                     }
-                    if (index < 2) Box(Modifier.fillMaxWidth().height(1.dp).background(ChatHairline.copy(alpha = .6f)))
                 }
             }
         } else {
