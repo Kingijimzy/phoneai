@@ -76,7 +76,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(8), dp(18), dp(8))
+            setPadding(dp(16), dp(6), dp(16), dp(6))
             setBackgroundColor(Theme.BG)
         }
 
@@ -99,7 +99,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         header.addView(back, LinearLayout.LayoutParams(dp(42), dp(46)))
         val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         brand.addView(text("ORION", 16f, Theme.TEXT, true))
-        brand.addView(text("LIVE CONVERSATION", 9f, Theme.CYAN, true).apply { letterSpacing = .14f })
+        brand.addView(text("VOICE · ORION", 9f, Theme.CYAN, true).apply { letterSpacing = .14f })
         header.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
         val liveBadge = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -139,7 +139,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setPadding(dp(14), dp(if (compact) 11 else 15), dp(14), dp(if (compact) 11 else 15))
             background = panel(0xFF0B1113.toInt(), 16, 0xFF263A38.toInt())
         }
-        val waveLabel = text("LIVE AUDIO", 9f, Theme.MUTED, true).apply {
+        val waveLabel = text("AUDIO ACTIVITY", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .16f
         }
@@ -153,17 +153,17 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         hero.addView(voiceSurface, LinearLayout.LayoutParams(-1, -2).apply {
             bottomMargin = dp(if (compact) 13 else 18)
         })
-        hero.addView(text("VOICE SESSION", 9f, Theme.MUTED, true).apply {
+        hero.addView(text("ORION IS HERE", 9f, Theme.MUTED, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .18f
         })
-        stateLabel = text("Ready when you are", if (compact) 21f else 24f, Theme.TEXT, true).apply {
+        stateLabel = text("Let’s talk.", if (compact) 23f else 26f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = -.025f
             setPadding(0, dp(if (compact) 4 else 8), 0, dp(4))
         }
         hero.addView(stateLabel)
-        helperLabel = text("Tap the mic to talk. Say “Orion, open…” before a phone command.", if (compact) 12f else 13f, Theme.MUTED).apply {
+        helperLabel = text("Speak naturally. Switch back to chat whenever you like.", if (compact) 12f else 13f, Theme.MUTED).apply {
             gravity = Gravity.CENTER
             maxLines = 2
             setLineSpacing(dp(2).toFloat(), 1f)
@@ -174,17 +174,17 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         val transcriptCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(10), dp(14), dp(8))
+            setPadding(dp(12), dp(8), dp(12), dp(7))
             background = panel(0xE90C1214.toInt(), 15, 0xFF263633.toInt())
         }
         val transcriptHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        transcriptHeading.addView(text("CONVERSATION", 9f, Theme.MUTED, true).apply {
+        transcriptHeading.addView(text("RECENT MESSAGES", 9f, Theme.MUTED, true).apply {
             letterSpacing = .12f
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        transcriptHeading.addView(text("LATEST MESSAGES", 8f, 0xFF71817F.toInt(), true).apply {
+        transcriptHeading.addView(text("LIVE TRANSCRIPT", 8f, 0xFF71817F.toInt(), true).apply {
             letterSpacing = .06f
         })
         transcriptCard.addView(transcriptHeading)
