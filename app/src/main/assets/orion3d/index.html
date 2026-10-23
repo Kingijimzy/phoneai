@@ -39,6 +39,8 @@ renderer.toneMappingExposure = 1.18;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
+// Reveal the procedural particle head promptly; don't make the whole scene wait for the remote GLB.
+setTimeout(()=>{const veil=document.getElementById('veil');if(veil){veil.style.opacity='0';setTimeout(()=>{veil.style.display='none';},450);}},650);
 
 scene.add(new THREE.HemisphereLight(0xe1e5eb, 0x202329, 2.0));
 const key = new THREE.DirectionalLight(0xf1f3f6, 3.1);
