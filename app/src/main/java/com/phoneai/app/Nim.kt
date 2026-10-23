@@ -102,8 +102,8 @@ class Nim(private val ctx: Context) {
             listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite")
         ),
         "groq" to Pair(
-            listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b"),
-            listOf("qwen/qwen3.6-27b")
+            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
+            listOf("qwen/qwen3.8-27b")
         ),
         "cerebras" to Pair(
             listOf("llama-3.3-70b", "llama3.1-8b", "gpt-oss-120b", "qwen-3-32b"),
