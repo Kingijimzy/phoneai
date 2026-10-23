@@ -54,7 +54,7 @@ class TeachModeActivity : Activity() {
         nameInput = EditText(this).apply {
             hint = "Routine name, e.g. FC daily rewards"
             setHintTextColor(0xFF80918D.toInt()); setTextColor(Theme.TEXT); textSize = 14f
-            singleLine = true; background = shape(0xFF0C1715.toInt())
+            setSingleLine(true); background = shape(0xFF0C1715.toInt())
             setPadding(dp(14), dp(6), dp(14), dp(6))
         }
         root.addView(nameInput, LinearLayout.LayoutParams(-1, dp(50)))
