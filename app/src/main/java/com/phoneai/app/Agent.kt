@@ -226,7 +226,7 @@ When the user says “undo that”, “reverse the last change”, or asks wheth
 - task_list {}: list current saved tasks and their IDs/statuses
 - task_add {title, details?, priority?, dueAt?}: create a persistent task; priority low|normal|high|urgent; dueAt is optional Unix epoch milliseconds only when known
 - task_update {id, title?, details?, status?, priority?, dueAt?, clearDueAt?}: update an existing task; status queued|running|paused|completed|failed|cancelled (legacy open|in_progress|done are accepted too)
-- task_delete {id}: permanently delete a task; ALWAYS ask the user for confirmation first
+- task_delete {id}: permanently delete a task; ALWAYS ask the user for confirmation first\n- skills_list {}: list registered skill IDs, enabled state, purpose, allowed tools and approval requirement; read-only
 - ask_user {question}: yes/no question. REQUIRED before anything irreversible: sending a message or email, paying, buying, deleting, posting, calling, or changing account settings.
 
 Rules:
@@ -709,6 +709,12 @@ Rules:
                 result
             }
             "recall" -> tools.recall(a.optString("query"))
+            "skills_list" -> {
+                val skills = SkillRegistry.list(svc)
+                if (skills.isEmpty()) "No skills are registered yet. Open Skills Studio to create a reviewed skill." else skills.joinToString("\\n") { skill ->
+                    "${skill.id} [${if (skill.enabled) "ENABLED" else "DISABLED"}] v${skill.version}: ${skill.description} | tools: ${skill.allowedTools.sorted().joinToString(", ")} | approval required: ${skill.requiresApproval}"
+                }
+            }
             "task_list" -> {
                 val tasks = TaskStore.all(svc).take(30)
                 if (tasks.isEmpty()) "No saved tasks yet." else tasks.joinToString("\n") { task ->
