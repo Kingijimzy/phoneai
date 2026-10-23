@@ -56,6 +56,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             failedToolSignatures.add(signature)
             while (failedToolSignatures.size > 80) failedToolSignatures.remove(failedToolSignatures.first())
         }
+        // Persist a privacy-minimal event for the user's action history. ActionLogStore
+        // stores only the tool name and success/error outcome, never arguments or payloads.
+        try { ActionLogStore.record(svc, tool, result) } catch (_: Exception) { }
         return result
     }
 
