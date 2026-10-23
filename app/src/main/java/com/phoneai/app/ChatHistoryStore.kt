@@ -50,7 +50,7 @@ object ChatHistoryStore {
             val archives = try { JSONArray(prefs.getString(ARCHIVE, "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
             val messages = JSONArray()
             turns.forEach { (kind, text) -> messages.put(JSONObject().put("kind", kind).put("text", text)) }
-            val title = turns.firstOrNull { it.first == "me" }?.second?.replace("\\n", " ")?.take(64) ?: "Conversation"
+            val title = turns.firstOrNull { it.first == "me" }?.second?.replace("\n", " ")?.take(64) ?: "Conversation"
             val session = JSONObject().put("timestamp", System.currentTimeMillis()).put("title", title).put("messages", messages)
             val rebuilt = JSONArray().put(session)
             for (i in 0 until archives.length()) {
