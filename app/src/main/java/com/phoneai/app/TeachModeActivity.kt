@@ -130,7 +130,7 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
             list.addView(label("No routines yet. Start a recording above.", 13f, Theme.MUTED).apply { setPadding(dp(8), dp(12), dp(8), dp(12)) })
             return
         }
-        names.forEach { name ->
+        names.forEachIndexed { index, name ->
             val count = MacroStore.find(this, name)?.second?.length() ?: 0
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(12), dp(13), dp(12)); background = shape(Theme.PANEL)
@@ -175,7 +175,15 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
                         } else status.text = "Could not delete this routine."
                     }.show()
             }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
-            card.addView(actions); list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+            card.addView(actions)
+            card.alpha = 0f
+            card.translationY = dp(8).toFloat()
+            list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+            // A restrained stagger makes routine cards feel responsive without a heavy renderer.
+            card.animate().alpha(1f).translationY(0f)
+                .setDuration(220L)
+                .setStartDelay((index * 35L).coerceAtMost(175L))
+                .start()
         }
     }
 }
