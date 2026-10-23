@@ -342,9 +342,9 @@ Rules:
     }
 
     fun run(inputCommand: String) {
-        failedToolSignatures.clear()
         var command = inputCommand.trim()
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
+        if (!resumeRequest) failedToolSignatures.clear()
         // BrowserActivity tags these requests so general web-search shortcuts cannot steal
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
