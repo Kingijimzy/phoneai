@@ -14,7 +14,9 @@ class Local(
     private val exec: (String, JSONObject) -> String,
     private val lastSteps: () -> JSONArray,
     private val stopped: () -> Boolean,
-    private val note: (String) -> Unit
+    private val note: (String) -> Unit,
+    private val confirm: (String) -> Boolean = { false },
+    private val ai: (String, String) -> String = { _, _ -> "" }
 ) {
 
     private fun replay(name: String, steps: JSONArray): String {
@@ -132,6 +134,11 @@ class Local(
     fun tryRun(raw: String): String? {
         val t = clean(raw)
         if (t.isEmpty()) return null
+        if (Regex("^(open )?(trading|bybit) (settings|setup|keys|screen)$").matches(t)) {
+            svc.startActivity(android.content.Intent(svc, TradingActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            return "Opening trading settings."
+        }
+        Trading.handle(svc, t, confirm, ai)?.let { return it }
 
         // ---- chat basics
         if (Regex("^(hi|hello|hey|yo|good morning|good afternoon|good evening)( there)?$").matches(t)) {

@@ -22,9 +22,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val tools = Tools(svc)
     private val ranSteps = JSONArray()
     private val local = Local(
-        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) }
+        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
+        { q -> ui.ask(q) }, { ins, data -> aiOneShot(ins, data) }
     )
     private val history = JSONArray()
+
+    private fun aiOneShot(instruction: String, data: String): String {
+        val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
+        return nim.chat(msgs, false, 450, 0.3).trim()
+    }
     private val chatHist = JSONArray()
     private val liveHistory = JSONArray()
     private val chatCache = HashMap<String, Pair<Long, String>>()
