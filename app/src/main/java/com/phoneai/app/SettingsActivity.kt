@@ -469,12 +469,12 @@ class SettingsActivity : Activity() {
                 }
             }.start()
         }, 8)
-        add(s7, button("Check Telegram inbox (read-only)", false) {
+        add(s7, button("Check inbox & reply", false) {
             Toast.makeText(this, "Checking saved Telegram chat...", Toast.LENGTH_SHORT).show()
             Thread {
                 val result = TelegramBridge.checkUpdates(this)
                 runOnUiThread {
-                    showInfoDialog("Telegram inbox", result)
+                    showInfoDialog("Telegram inbox / replies", result)
                 }
             }.start()
         }, 8)
