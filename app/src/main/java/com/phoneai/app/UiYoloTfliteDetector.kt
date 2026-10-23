@@ -29,6 +29,11 @@ internal object UiYoloTfliteDetector {
         "Multi_Tab", "PageIndicator", "Remember", "Spinner", "Switch", "Text",
         "TextButton", "Toolbar", "UpperTaskBar"
     )
+    private val actionableLabels = setOf(
+        "Bottom_Navigation", "Card", "CheckBox", "Checkbox", "CheckedTextView",
+        "Drawer", "EditText", "Icon", "Map", "Modal", "Multi_Tab", "Remember",
+        "Spinner", "Switch", "TextButton", "Toolbar"
+    )
 
     @Volatile private var attempted = false
     @Volatile private var interpreter: Interpreter? = null
@@ -102,6 +107,7 @@ internal object UiYoloTfliteDetector {
                     if (score > bestScore) { bestScore = score; bestClass = c }
                 }
                 if (bestClass < 0 || bestScore < CONFIDENCE) continue
+                if (labels[bestClass] !in actionableLabels) continue
                 val cx = value(output, channelsFirst, i, 0)
                 val cy = value(output, channelsFirst, i, 1)
                 val bw = value(output, channelsFirst, i, 2)
