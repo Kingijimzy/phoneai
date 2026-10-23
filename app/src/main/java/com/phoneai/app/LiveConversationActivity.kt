@@ -481,11 +481,24 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     override fun onAudioLevel(level: Float) {
-        runOnUiThread { wave.audioLevel = level }
+        runOnUiThread {
+            wave.audioLevel = level
+            // Drive the 2D hologram's listening waveform from the actual recognizer level.
+            if (::core.isInitialized && core.visibility == View.VISIBLE) {
+                val safeLevel = level.coerceIn(0f, 1f)
+                core.evaluateJavascript("window.Orion3D && window.Orion3D.setMicLevel($safeLevel)", null)
+            }
+        }
     }
 
     override fun onSpeechWord() {
-        runOnUiThread { wave.speechPulse = 1f }
+        runOnUiThread {
+            wave.speechPulse = 1f
+            // TTS word-range callbacks animate the hologram in sync with spoken output.
+            if (::core.isInitialized && core.visibility == View.VISIBLE) {
+                core.evaluateJavascript("window.Orion3D && window.Orion3D.pulse(1)", null)
+            }
+        }
     }
 
     override fun onStatus(value: String, mode: OrbView.Mode) {
