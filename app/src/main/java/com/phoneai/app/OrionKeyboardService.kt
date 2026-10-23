@@ -39,6 +39,11 @@ class OrionKeyboardService : InputMethodService() {
         symbols = false
     }
 
+    override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        setInputView(buildKeyboard())
+    }
+
     override fun onEvaluateFullscreenMode(): Boolean = false
 
     private fun buildKeyboard(): View {
