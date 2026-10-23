@@ -311,6 +311,17 @@ class SettingsActivity : Activity() {
         add(s1, button("Open Accessibility settings", true) {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }, 8)
+        add(s1, button("Enable Orion Private Keyboard", false) {
+            startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+        }, 8)
+        add(s1, button("Select Orion Private Keyboard", false) {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showInputMethodPicker()
+        }, 8)
+        add(s1, text(
+            "Privacy: Orion's keyboard sends each key directly to the focused field. It never reads surrounding text, selected text, or the field's existing contents. Enable it in Android settings, then select it from the keyboard picker.",
+            12f, Theme.MUTED
+        ), 8)
         add(s1, button("Allow microphone and notifications", false) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
         }, 8)
@@ -327,7 +338,7 @@ class SettingsActivity : Activity() {
         // ---- 2. AI services
         val s2 = card(
             col, "AI providers & models",
-            "13 online services plus a free local AI. Add 3 or more free keys (Groq, Cerebras, Mistral, Gemini, OpenRouter): Orion spreads requests across all of them so none runs out, and switches instantly when one is busy. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
+            "Orion uses your selected primary provider first and only falls back when a request is rate-limited or the provider is unavailable. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
         )
         add(s2, button("Get a free Gemini key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
