@@ -140,6 +140,23 @@ class Local(
         }
         Trading.handle(svc, t, confirm, ai)?.let { return it }
 
+        // ---- instant on-device answers: no model call, no network, no quota
+        if (Regex("^(what time is it|what's the time|tell me the time|current time)$").matches(t)) {
+            val now = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+            return "It's $now."
+        }
+        if (Regex("^(what is the date|what's the date|today's date|what day is it|current date)$").matches(t)) {
+            val today = java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+            return "Today is $today."
+        }
+        if (Regex("^(show|open|view) (my )?(chat )?history$|^(what did we talk about recently|what was our last conversation)$").matches(t)) {
+            val recent = ChatHistoryStore.load(svc).takeLast(10)
+            if (recent.isEmpty()) return "There is no saved chat history yet."
+            return "Recent chat history:\n" + recent.joinToString("\n") { (kind, text) ->
+                (if (kind == "me") "You: " else "Orion: ") + text.replace("\\n", " ").take(180)
+            }
+        }
+
         // ---- chat basics
         if (Regex("^(hi|hello|hey|yo|good morning|good afternoon|good evening)( there)?$").matches(t)) {
             return "Hello${name()}. What would you like me to do?"
