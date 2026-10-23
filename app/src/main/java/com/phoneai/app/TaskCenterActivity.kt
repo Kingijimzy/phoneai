@@ -261,6 +261,8 @@ class TaskCenterActivity : Activity() {
         logTitle.addView(label("RECENT AGENT ACTIVITY", 10f, Theme.MUTED, true))
         logTitle.addView(label(if (events.isEmpty()) "No tool actions recorded yet" else "${events.size} recent events · private details omitted",
             12f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, 0) })
+        logTitle.addView(label("RESULT means Orion received a response; it does not by itself prove an external action succeeded.",
+            10f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
         logHeader.addView(logTitle, LinearLayout.LayoutParams(0, -2, 1f))
         if (events.isNotEmpty()) logHeader.addView(button("Clear") {
             AlertDialog.Builder(this)
@@ -282,7 +284,7 @@ class TaskCenterActivity : Activity() {
             details.addView(label(time(event.at), 10f, Theme.MUTED).apply { setPadding(0, dp(2), 0, 0) })
             row.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
             val failed = event.outcome == "error returned"
-            row.addView(label(if (failed) "ERROR" else "RETURNED", 10f,
+            row.addView(label(if (failed) "ERROR" else "RESULT", 10f,
                 if (failed) 0xFFFF8D8D.toInt() else Theme.MUTED, true))
             logCard.addView(row)
         }
