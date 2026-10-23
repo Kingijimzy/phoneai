@@ -3,285 +3,124 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="color-scheme" content="dark">
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050505;color:#f0f0f0;font-family:Arial,sans-serif}
-canvas{display:block;width:100%;height:100%}
-#veil{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:radial-gradient(ellipse at 50% 35%,#202226 0%,#0b0b0c 48%,#030303 100%);z-index:2;text-align:center;padding:26px}
-#veil .holo-head{position:relative;width:48px;height:62px;border:1px solid #d7dce2;border-radius:48% 48% 43% 43% / 36% 36% 56% 56%;background:linear-gradient(110deg,#e6e9ed22,#c9cdd30b 55%,#d7dce222);box-shadow:0 0 28px #d7dce244,inset 0 0 18px #d7dce222;animation:headPulse 2.4s ease-in-out infinite}
-#veil .holo-head:before{content:"";position:absolute;left:-19px;right:-19px;bottom:-18px;height:25px;border:1px solid #aebdce;border-bottom:0;border-radius:50% 50% 0 0 / 70% 70% 0 0;background:linear-gradient(90deg,transparent,#9fb2c51c,transparent);box-shadow:0 0 16px #d7dce222}
-#veil .holo-head:after{content:"";position:absolute;left:9px;right:9px;top:26px;height:2px;background:#d8e8f7;box-shadow:0 0 9px #d8e8f7;opacity:.7}
-#veil strong{letter-spacing:.18em;font-size:12px}
-#veil span{font-size:12px;color:#aab7c6;line-height:1.5}
-@keyframes headPulse{50%{transform:translateY(-3px);box-shadow:0 0 40px #d7dce266,inset 0 0 24px #d7dce233}}
+:root{color-scheme:dark;--blue:#56baff;--ice:#b9e6ff}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#f4f7fb;font-family:system-ui,-apple-system,Arial,sans-serif}
+#stage{position:absolute;inset:0;background:#000;overflow:hidden}
+canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+#ambient{pointer-events:none;position:absolute;inset:0;background:radial-gradient(ellipse 38% 40% at 50% 43%,#07518b20 0%,#03223b0d 46%,transparent 76%)}
+#headGlow{pointer-events:none;position:absolute;width:min(82vw,520px);height:min(82vw,520px);left:50%;top:43%;transform:translate(-50%,-50%);border-radius:50%;background:#087ed0;filter:blur(95px);opacity:.09;transition:opacity .5s ease}
+#wave{position:absolute;left:0;right:0;bottom:20%;height:100px;width:100%;opacity:.72;pointer-events:none}
+#status{position:absolute;top:calc(env(safe-area-inset-top,0px) + 22px);left:0;right:0;text-align:center;font-size:10px;font-weight:600;letter-spacing:.28em;color:#aeb9c8;text-transform:uppercase}
+#caption{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 13%);left:16px;right:16px;text-align:center;color:#8e9cad;font-size:12px;letter-spacing:.04em}
+#stage[data-state="listening"] #headGlow{opacity:.16}
+#stage[data-state="thinking"] #headGlow{opacity:.11}
+#stage[data-state="speaking"] #headGlow{opacity:.22}
+#stage[data-state="interrupted"] #headGlow{opacity:.04}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div id="veil"><div class="holo-head" aria-hidden="true"></div><strong>ORION HOLOGRAM</strong><span id="loadtext">Building cinematic scene…</span></div>
-<script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
+<div id="stage" data-state="idle" aria-label="Orion live hologram">
+<canvas id="network" aria-hidden="true"></canvas>
+<div id="headGlow"></div><div id="ambient"></div>
+<canvas id="wave" aria-hidden="true"></canvas>
+<div id="status">ORION · STANDBY</div>
+<div id="caption">Ready when you are</div>
+</div>
+<script>
+(()=> {
+'use strict';
+const stage=document.getElementById('stage'),canvas=document.getElementById('network'),ctx=canvas.getContext('2d',{alpha:false});
+const wave=document.getElementById('wave'),wx=wave.getContext('2d');
+const status=document.getElementById('status'),caption=document.getElementById('caption');
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let w=0,h=0,dpr=1,points=[],state='idle',speech=0,mic=0,frame=0;
+const labels={idle:['ORION · STANDBY','Ready when you are'],listening:['LISTENING','I’m listening'],thinking:['THINKING','Give me a moment'],speaking:['ORION · SPEAKING',''],interrupted:['PAUSED','I’m here'],disconnected:['RECONNECTING','Voice connection interrupted']};
+function insideHead(x,y){
+ const skull=((x-.5)/.205)**2+((y-.34)/.205)**2;
+ const jawX=(x-.5)/(.105+Math.max(0,y-.37)*.36);
+ const jaw=jawX*jawX+((y-.49)/.17)**2;
+ const neckX=(x-.5)/.075,neck=neckX*neckX+((y-.625)/.12)**2;
+ const shoulder=((x-.5)/.32)**2+((y-.76)/.19)**2;
+ return (skull<1&&y<.47)||(jaw<1&&y>=.36&&y<.62)||(neck<1&&y>.56&&y<.72)||(shoulder<1&&y>.67);
+}
+function resize(){
+ dpr=Math.min(window.devicePixelRatio||1,2);w=window.innerWidth;h=window.innerHeight;
+ for(const c of [canvas,wave]){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);c.style.width=w+'px';c.style.height=h+'px';}
+ ctx.setTransform(dpr,0,0,dpr,0,0);wx.setTransform(dpr,0,0,dpr,0,0);
+ points=[];const scale=Math.min(w,h),step=Math.max(6,Math.min(9,scale/65));
+ const cols=Math.ceil(w/step),rows=Math.ceil(h/step);
+ for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+  const x=(gx+.5)/cols,y=(gy+.5)/rows;
+  if(insideHead(x,y)&&Math.random()>.16)points.push({x:x*w,y:y*h,baseX:x*w,baseY:y*h,phase:Math.random()*6.28,seed:Math.random(),energy:.3+Math.random()*.7});
+ }
+}
+function setState(next,detail){
+ if(typeof next==='string')state=next.toLowerCase();
+ else if(next&&typeof next==='object')state=String(next.state||next.mode||state).toLowerCase();
+ if(!labels[state])state=state.includes('listen')?'listening':state.includes('think')?'thinking':state.includes('speak')?'speaking':state.includes('interrupt')?'interrupted':state.includes('disconnect')?'disconnected':'idle';
+ stage.dataset.state=state;status.textContent=labels[state][0];caption.textContent=(detail&&typeof detail==='string')?detail:labels[state][1];
+ if(state==='speaking')speech=Math.max(speech,.65);
+}
+function drawHead(t){
+ ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+ const cx=w*.5,cy=h*.43,scale=Math.min(w,h),motion=reduced?0:1;
+ const glow=ctx.createRadialGradient(cx,cy,scale*.025,cx,cy,scale*.34);
+ glow.addColorStop(0,state==='speaking'?'#07365b35':'#062b4a20');glow.addColorStop(1,'#00000000');
+ ctx.fillStyle=glow;ctx.fillRect(0,0,w,h);
+ // A flat, 2D particle-network silhouette. No 3D model, mesh, or external CDN.
+ for(let i=0;i<points.length;i++){
+  const p=points[i],x=p.baseX+Math.sin(t*.0011+p.phase)*1.7*motion,y=p.baseY+Math.cos(t*.0013+p.phase)*1.4*motion;
+  p.x=x;p.y=y;
+ }
+ const maxDist=Math.max(12,Math.min(19,Math.min(w,h)/38));
+ for(let i=0;i<points.length;i++){
+  const a=points[i],near=[];
+  for(let j=i+1;j<points.length;j++){
+   const b=points[j],dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
+   if(d<maxDist*maxDist)near.push([b,d]);
+  }
+  for(const [b,d] of near){
+   const alpha=(1-Math.sqrt(d)/maxDist)*(.14+a.seed*.16);
+   ctx.strokeStyle='rgba(70,177,255,'+alpha+')';ctx.lineWidth=.55;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+ }
+ for(const p of points){
+  const pulse=(Math.sin(t*.002+p.phase)+1)*.5;
+  const r=.45+p.energy*.9+(state==='speaking'?pulse*1.2:state==='listening'?mic*.8:0);
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
+  ctx.fillStyle='rgba(113,204,255,'+(0.36+p.seed*.56+pulse*.12)+')';ctx.shadowColor='#299eff';ctx.shadowBlur=state==='speaking'?7:3;ctx.fill();ctx.shadowBlur=0;
+ }
+ // Soft contour edge gives the particle field a recognizable human head/neck shape.
+ ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(60,163,255,.13)';ctx.lineWidth=1.2;
+ ctx.beginPath();ctx.ellipse(cx,h*.34,w*.205,h*.205,0,Math.PI*1.03,Math.PI*1.97);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(cx-w*.18,h*.39);ctx.quadraticCurveTo(cx-w*.16,h*.55,cx-w*.07,h*.61);ctx.lineTo(cx-w*.07,h*.69);
+ ctx.moveTo(cx+w*.18,h*.39);ctx.quadraticCurveTo(cx+w*.16,h*.55,cx+w*.07,h*.61);ctx.lineTo(cx+w*.07,h*.69);ctx.stroke();ctx.restore();
+}
+function drawWave(t){
+ const ww=w,hh=100;wx.clearRect(0,0,ww,hh);
+ const active=state==='speaking'?Math.max(.24,speech):state==='listening'?Math.max(.12,mic):state==='thinking'?.25:state==='interrupted'?.04:.09;
+ for(let line=0;line<3;line++){
+  wx.beginPath();for(let x=0;x<=ww;x+=3){
+   const n=x/ww,env=Math.sin(Math.PI*n)**.7;
+   const amp=(8+line*5)*active;
+   const y=hh/2+Math.sin(n*18+ t*.002-line*.8)*amp*env+Math.sin(n*33-t*.0015+line)*amp*.32*env;
+   if(x===0)wx.moveTo(x,y);else wx.lineTo(x,y);
+  }
+  wx.strokeStyle=line===1?'rgba(115,202,255,.65)':'rgba(57,151,224,.24)';wx.lineWidth=line===1?1.4:.8;wx.stroke();
+ }
+ speech*=.94;mic*=.9;
+}
+function animate(t){frame++;drawHead(t);drawWave(t);if(!reduced)requestAnimationFrame(animate);}
+window.Orion3D={setState,pulse(value){speech=Math.max(speech,Number(value)||.7)},setMicLevel(value){mic=Math.max(mic,Math.min(1,Number(value)||0))},destroy(){state='disconnected';setState('disconnected')}};
+window.OrionHologram=window.Orion3D;
+window.addEventListener('resize',resize,{passive:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!reduced)requestAnimationFrame(animate)});
+resize();requestAnimationFrame(animate);
+})();
 </script>
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
-scene.fog = new THREE.FogExp2(0x000000, 0.035);
-const camera = new THREE.PerspectiveCamera(29, innerWidth / innerHeight, 0.1, 80);
-camera.position.set(0, 1.72, 1.85);
-camera.lookAt(0, 1.72, 0);
-const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false, powerPreference:'low-power'});
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.35));
-renderer.setSize(innerWidth, innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.18;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
-// Reveal the procedural particle head promptly; don't make the whole scene wait for the remote GLB.
-setTimeout(()=>{const veil=document.getElementById('veil');if(veil){veil.style.opacity='0';setTimeout(()=>{veil.style.display='none';},450);}},650);
-
-scene.add(new THREE.HemisphereLight(0xe1e5eb, 0x202329, 2.0));
-const key = new THREE.DirectionalLight(0xf1f3f6, 3.1);
-key.position.set(1.4, 3.2, 3.5); key.castShadow = true; scene.add(key);
-const rim = new THREE.PointLight(0x43baff, 22, 5); rim.position.set(-1.2, 1.9, -1.1); scene.add(rim);
-const violet = new THREE.PointLight(0x8fd8ff, 12, 5); violet.position.set(1.2, 1.5, -1.5); scene.add(violet);
-const floor = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({color:0x171a1f,metalness:.55,roughness:.36,transparent:true,opacity:.72}));
-floor.rotation.x = -Math.PI/2; floor.position.y = -0.015; floor.receiveShadow = true; scene.add(floor);
-for (let i=0;i<3;i++){
- const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1+i*.26,.006,6,100),new THREE.MeshBasicMaterial({color:i===1?0x7e8792:0xc9d3df,transparent:true,opacity:.48-i*.1}));
- ring.rotation.x=Math.PI/2; ring.position.y=.012+i*.002; ring.userData.speed=(i%2?-.12:.18); scene.add(ring);
-}
-const starGeo = new THREE.BufferGeometry();
-const starPos = [];
-for(let i=0;i<180;i++){starPos.push((Math.random()-.5)*9,Math.random()*4.5,(Math.random()-.5)*7-1.5);}
-starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starPos,3));
-const stars = new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xaeb8c5,size:.018,transparent:true,opacity:.72}));
-scene.add(stars);
-
-let model=null, head=null, neck=null, jaw=null, spine=null, chest=null, hips=null;
-let sketchLines=[], sketchReveal=0, sketchSweep=null;
-let leftShoulder=null, rightShoulder=null, mouth=null, eyes=[], faceMorphs=[];
-let mixer=null, idleAction=null, baseModelY=0, state='idle', mouthTarget=.02, blinkUntil=0, nextBlink=performance.now()+2400;
-let rimEnergy=22, violetEnergy=17;
-const clock = new THREE.Clock();
-let lastDraw = 0;
-const loader = new GLTFLoader();
-// Procedural human-shaped particle head: visible independently of the external GLB.
-const particleHead = new THREE.Group();
-particleHead.position.set(0,1.72,0.12);
-scene.add(particleHead);
-const particlePoints=[], particleLinks=[], rows=[];
-for(let row=0;row<=24;row++){
- const v=row/24, y=-.39+v*.82;
- const taper=.72+.28*Math.sin(Math.PI*Math.min(1,v*1.12));
- const halfW=.245*taper*Math.sqrt(Math.max(.12,1-Math.pow((y-.035)/.43,2)));
- const depth=.155*Math.sqrt(Math.max(.08,1-Math.pow((y-.035)/.43,2)));
- const ring=[];
- for(let j=0;j<22;j++){
-  const a=j/22*Math.PI*2, x=Math.cos(a)*halfW, z=Math.sin(a)*depth+.018;
-  ring.push(particlePoints.length/3); particlePoints.push(x,y,z);
- }
- rows.push(ring);
-}
-for(let r=0;r<rows.length;r++) for(let j=0;j<rows[r].length;j++){
- const n=(j+1)%rows[r].length; particleLinks.push(rows[r][j],rows[r][n]);
- if(r<rows.length-1){particleLinks.push(rows[r][j],rows[r+1][j]);if(j%2===0)particleLinks.push(rows[r][j],rows[r+1][(j+1)%rows[r+1].length]);}
-}
-const particleGeo=new THREE.BufferGeometry();
-particleGeo.setAttribute('position',new THREE.Float32BufferAttribute(particlePoints,3));
-const particleMaterial=new THREE.PointsMaterial({color:0x67caff,size:.012,transparent:true,opacity:.82,depthWrite:false,blending:THREE.AdditiveBlending});
-particleHead.add(new THREE.Points(particleGeo,particleMaterial));
-const linkGeo=new THREE.BufferGeometry();
-linkGeo.setAttribute('position',new THREE.Float32BufferAttribute(particleLinks.map(i=>particlePoints[i]),3));
-const linkMaterial=new THREE.LineBasicMaterial({color:0x339fe8,transparent:true,opacity:.32,depthWrite:false,blending:THREE.AdditiveBlending});
-particleHead.add(new THREE.LineSegments(linkGeo,linkMaterial));
-const faceMarks=[];
-for(const side of [-1,1])for(let k=0;k<5;k++)faceMarks.push(side*(.055+k*.012),.055,.148);
-for(let k=0;k<9;k++)faceMarks.push(-.055+k*.01375,-.105,.142);
-const marksGeo=new THREE.BufferGeometry();
-marksGeo.setAttribute('position',new THREE.Float32BufferAttribute(faceMarks,3));
-particleHead.add(new THREE.Points(marksGeo,new THREE.PointsMaterial({color:0xb9e8ff,size:.018,transparent:true,opacity:.92,depthWrite:false,blending:THREE.AdditiveBlending})));
-
-const modelUrl = 'https://cdn.jsdelivr.net/gh/programasweights/avatar@ddd5fc34a445bcded3cf9836607aaeebc19a5c78/public/assets/character.glb';
-
-function addFaceRig(headBone, scale){
- const face = new THREE.Group();
- face.position.set(0, 0.005, 0.065);
- headBone.add(face);
- const eyeMat = new THREE.MeshStandardMaterial({color:0xe7edf4,emissive:0xb8c4d2,emissiveIntensity:2.2,metalness:.15,roughness:.2});
- for(const x of [-.033,.033]){
-   const eye = new THREE.Mesh(new THREE.SphereGeometry(.012,12,8),eyeMat);
-   eye.position.set(x,.018,0); eye.scale.set(1,1,.42); face.add(eye); eyes.push(eye);
- }
- const mouthMat = new THREE.MeshStandardMaterial({color:0x07121d,emissive:0xc9d3df,emissiveIntensity:.55,roughness:.3});
- mouth = new THREE.Mesh(new THREE.SphereGeometry(1,16,10),mouthMat);
- mouth.position.set(0,-.025,.003); mouth.scale.set(.031,.004,.006); face.add(mouth);
-}
-function fitCharacter(root){
- const box = new THREE.Box3().setFromObject(root);
- const size = box.getSize(new THREE.Vector3());
- const scale = 2.15 / Math.max(size.y, .1);
- root.scale.setScalar(scale);
- const center = box.getCenter(new THREE.Vector3());
- root.position.x = -center.x * scale;
- root.position.z = -center.z * scale;
- root.position.y = -box.min.y * scale;
-}
-loader.load(modelUrl, gltf=>{
- model = gltf.scene;
- model.traverse(o=>{
-   if(o.isMesh){
-     o.castShadow=true;
-     o.receiveShadow=true;
-     if(o.material){o.material.color && o.material.color.set(0xcbd2da);o.material.emissive && o.material.emissive.set(0x252a31);o.material.emissiveIntensity=.18;o.material.metalness=Math.max(o.material.metalness||0,.12);o.material.roughness=Math.min(o.material.roughness||.8,.48);}
-     if(o.morphTargetDictionary && o.morphTargetInfluences){
-       for(const [name,index] of Object.entries(o.morphTargetDictionary)){
-         const n=name.toLowerCase();
-         if(/blink|eye.?close|mouth.?open|jaw.?open/.test(n)) faceMorphs.push({mesh:o,index,name:n});
-       }
-     }
-   }
-   if(o.isBone){
-     const n=o.name.toLowerCase();
-     if(!head && n.includes('head')) head=o;
-     if(!neck && n.includes('neck')) neck=o;
-     if(!jaw && (n.includes('jaw')||n.includes('mandible'))) jaw=o;
-     if(!spine && /spine|spine1|spine_01/.test(n)) spine=o;
-     if(!chest && /chest|upperchest|upper_chest/.test(n)) chest=o;
-     if(!hips && /hips|pelvis/.test(n)) hips=o;
-     if(!leftShoulder && (n.includes('leftshoulder')||n.includes('shoulder_l'))) leftShoulder=o;
-     if(!rightShoulder && (n.includes('rightshoulder')||n.includes('shoulder_r'))) rightShoulder=o;
-   }
- });
- fitCharacter(model);
- baseModelY=model.position.y;
- // Add a fine silver technical-sketch pass directly to each mesh. Because the
- // line geometry is a child of its source mesh, it follows the rig and facial motion.
- model.traverse(o=>{
-   if(!o.isMesh || !o.geometry) return;
-   try{
-     const wireGeo=new THREE.WireframeGeometry(o.geometry);
-     const wireMat=new THREE.LineBasicMaterial({color:0xe0e5ec,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
-     const lines=new THREE.LineSegments(wireGeo,wireMat);
-     lines.scale.setScalar(1.0015);
-     lines.renderOrder=3;
-     o.add(lines);
-     sketchLines.push(wireMat);
-   }catch(e){console.warn('Sketch overlay skipped',e);}
- });
- sketchSweep=new THREE.Mesh(new THREE.PlaneGeometry(2.8,.018),new THREE.MeshBasicMaterial({color:0xe8edf4,transparent:true,opacity:.0,blending:THREE.AdditiveBlending,depthWrite:false}));
- sketchSweep.position.set(0,1.1,.18); scene.add(sketchSweep);
- scene.add(model);
- // Prefer a true idle/standing clip if the asset provides one; procedural motion remains
- // the fallback when the model has no useful built-in idle animation.
- if(gltf.animations && gltf.animations.length){
-   mixer=new THREE.AnimationMixer(model);
-   const idleClip=gltf.animations.find(clip=>/idle|stand|breath|relax/i.test(clip.name));
-   if(idleClip){idleAction=mixer.clipAction(idleClip);idleAction.setLoop(THREE.LoopRepeat,Infinity);idleAction.play();}
- }
- if(head) addFaceRig(head,model.scale.x);
- document.getElementById('loadtext').textContent='Orion is online.';
- document.getElementById('veil').style.opacity='0';
- setTimeout(()=>{document.getElementById('veil').style.display='none';},500);
-},undefined,err=>{
- console.error('Orion 3D model failed',err);
- document.getElementById('loadtext').textContent='Could not load the public CC0 model. Check internet and reopen the 3D stage.';
-});
-
-window.Orion3D = {
- setState: function(next){
-   state = String(next||'idle').toLowerCase();
-   const labels={idle:'ORION 3D · READY',listening:'ORION 3D · LISTENING',thinking:'ORION 3D · THINKING',speaking:'ORION 3D · SPEAKING',acting:'ORION 3D · WORKING',waiting_approval:'ORION 3D · AWAITING APPROVAL'};
-   const el=document.getElementById('loadtext');
-   if(el && document.getElementById('veil').style.display!=='none') el.textContent=labels[state]||'Orion is initializing…';
-   if(state==='speaking') mouthTarget=.28;
-   if(state==='listening') mouthTarget=.025;
- },
- pulseMouth: function(){mouthTarget=.18+Math.random()*.7;}
-};
-
-function animate(now){
- requestAnimationFrame(animate);
- if (now - lastDraw < 30) return;
- lastDraw = now;
- const dt=Math.min(clock.getDelta(),.05);
- const t=clock.elapsedTime;
- if(mixer) mixer.update(dt);
- // The wireframe draws in, settles to a restrained holographic edge shimmer,
- // and intensifies slightly while Orion is speaking or listening.
- const sketchTarget=state==='thinking'?.42:state==='listening'?.30:state==='speaking'?.38:state==='acting'?.28:.17;
- const particleEnergy=state==='speaking'?.62:state==='listening'?.52:state==='thinking'?.40:state==='acting'?.38:.26;
- particleMaterial.opacity=particleEnergy*(.84+.16*Math.sin(t*2.4));
- linkMaterial.opacity=particleEnergy*.58*(.82+.18*Math.sin(t*1.7));
- particleHead.rotation.y=Math.sin(t*.34)*.035+(state==='listening'?.018:0);
- particleHead.position.y=1.72+Math.sin(t*.9)*.008+(state==='thinking'?Math.sin(t*2.2)*.006:0);
- sketchReveal+=(sketchTarget-sketchReveal)*Math.min(1,dt*1.35);
- for(const mat of sketchLines) mat.opacity=sketchReveal*(.82+.18*Math.sin(t*2.1));
- if(sketchSweep){
-   const phase=(t*.28)%1;
-   sketchSweep.position.y=-.02+phase*2.2;
-   sketchSweep.material.opacity=phase<.92?.12*Math.sin(Math.PI*phase):0;
- }
- // Gentle camera and lighting drift adds depth without a distracting orbit.
- camera.position.x += (Math.sin(t*.18)*.045-camera.position.x)*Math.min(1,dt*.8);
- camera.position.y += (1.72+Math.sin(t*.31)*.012-camera.position.y)*Math.min(1,dt*.7);
- camera.position.z += (1.85+Math.sin(t*.19)*.025-camera.position.z)*Math.min(1,dt*.5);
- camera.lookAt(0,1.72+Math.sin(t*.24)*.012,0);
- rim.position.x=-2+Math.sin(t*.42)*.22;
- violet.position.x=2+Math.cos(t*.34)*.18;
- if(model){
-   const listenLean=state==='listening'?.018:0;
-   model.position.y=baseModelY+Math.sin(t*1.25)*.006+(state==='speaking'?Math.sin(t*7.2)*.003:0);
-   model.rotation.y += ((Math.sin(t*.22)*.09+(state==='listening'?.025:0))-model.rotation.y)*Math.min(1,dt*1.8);
-   model.rotation.x += ((state==='listening'?-listenLean:state==='thinking'?.008:0)-model.rotation.x)*Math.min(1,dt*1.8);
-   if(spine) spine.rotation.x += ((state==='speaking'?Math.sin(t*4.1)*.012:state==='listening'?.012:0)-spine.rotation.x)*Math.min(1,dt*2.6);
-   if(chest) chest.rotation.z += ((Math.sin(t*.72)*.012+(state==='acting'?.012:0))-chest.rotation.z)*Math.min(1,dt*2.2);
-   if(hips) hips.rotation.z += (Math.sin(t*.48)*.006-hips.rotation.z)*Math.min(1,dt*1.5);
-   if(leftShoulder) leftShoulder.rotation.x += ((state==='acting'?.025:0)-leftShoulder.rotation.x)*Math.min(1,dt*2.2);
-   if(rightShoulder) rightShoulder.rotation.x += ((state==='acting'?-.025:0)-rightShoulder.rotation.x)*Math.min(1,dt*2.2);
-   if(head){
-     const targetTilt = state==='thinking' ? -.12 : state==='listening' ? .07 : state==='waiting_approval' ? .04 : 0;
-     const nod = state==='speaking' ? Math.sin(t*3.4)*.018 : state==='listening' ? Math.sin(t*1.8)*.012 : 0;
-     head.rotation.z += (targetTilt + Math.sin(t*.7)*.018 - head.rotation.z)*Math.min(1,dt*2.8);
-     head.rotation.x += (nod-head.rotation.x)*Math.min(1,dt*2.4);
-     head.rotation.y += ((Math.sin(t*.55)*.08+(state==='listening'?.018:0))-head.rotation.y)*Math.min(1,dt*1.5);
-   }
-   if(neck) neck.rotation.x += ((state === 'speaking' ? -0.025 : state === 'listening' ? 0.025 : 0)-neck.rotation.x)*Math.min(1,dt*2);
-   if(jaw) jaw.rotation.x += ((state==='speaking'?-.22:0)-jaw.rotation.x)*Math.min(1,dt*12);
-   if(mouth){
-     const talking=state==='speaking';
-     if(talking && now%420<45) mouthTarget=.15+Math.random()*.55;
-     mouthTarget += (.02-mouthTarget)*Math.min(1,dt*(talking?1.8:7));
-     mouth.scale.y += ((talking?Math.max(.004,mouthTarget*.018):.004)-mouth.scale.y)*Math.min(1,dt*16);
-   }
-   if(now>nextBlink){blinkUntil=now+135;nextBlink=now+2200+Math.random()*2600;}
-   const blinkClosed = now < blinkUntil;
-   const blink = blinkClosed ? 0.12 : 1;
-   for(const eye of eyes) eye.scale.y += (blink-eye.scale.y)*Math.min(1,dt*35);
-   for(const morph of faceMorphs){
-     const isBlink=/blink|eye.?close/.test(morph.name);
-     const isMouth=/mouth.?open|jaw.?open/.test(morph.name);
-     const target=isBlink?(blinkClosed?1:0):(isMouth&&state==='speaking'?Math.min(1,Math.max(.08,mouthTarget)):0);
-     const influences=morph.mesh.morphTargetInfluences;
-     if(influences) influences[morph.index]+=(target-influences[morph.index])*Math.min(1,dt*12);
-   }
- }
- scene.children.forEach(o=>{if(o.userData.speed)o.rotation.z+=o.userData.speed*dt;});
- stars.rotation.y=t*.012;
- const rimTarget=state==='listening'?22:state==='speaking'?20:state==='thinking'?16:state==='acting'?19:18;
- const violetTarget=state==='thinking'?16:state==='waiting_approval'?10:12;
- rimEnergy+=(rimTarget-rimEnergy)*Math.min(1,dt*2.6);
- violetEnergy+=(violetTarget-violetEnergy)*Math.min(1,dt*2.2);
- rim.intensity=rimEnergy;
- violet.intensity=violetEnergy;
- renderer.render(scene,camera);
-}
-requestAnimationFrame(animate);
-addEventListener('resize',()=>{
- camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
- renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.35));renderer.setSize(innerWidth,innerHeight);
-});
-</script>
-</body></html>
+</body>
+</html>
