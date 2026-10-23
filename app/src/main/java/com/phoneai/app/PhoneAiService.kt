@@ -1596,10 +1596,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                             nodes.forEach { node ->
                                 val r = Rect()
                                 node.getBoundsInScreen(r)
-                                if (r.width() > 0 && r.height() > 0) occupied.add(Rect(
-                                    (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
-                                    (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
-                                ))
+                                // Ignore container nodes such as a full-screen WebView; they are not individual targets.
+                                if (r.width() > 0 && r.height() > 0 &&
+                                    r.width().toLong() * r.height() < bitmap.width().toLong() * bitmap.height() * 0.40) {
+                                    occupied.add(Rect(
+                                        (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
+                                        (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
+                                    ))
+                                }
                             }
                             ocrElements.forEach { item -> occupied.add(Rect(
                                 (item.bounds.left / shot.scale).toInt(), (item.bounds.top / shot.scale).toInt(),
