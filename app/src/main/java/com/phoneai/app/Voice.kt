@@ -106,26 +106,17 @@ class Voice(private val ctx: Context) {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
         val out = ArrayList<String>()
-        var current = StringBuilder()
         for (sentence in sentences) {
-            if (current.isNotEmpty() && current.length + sentence.length + 1 > limit) {
-                out.add(current.toString())
-                current = StringBuilder()
+            var remaining = sentence
+            while (remaining.length > limit) {
+                val window = remaining.substring(0, limit)
+                val cut = maxOf(window.lastIndexOf(", "), window.lastIndexOf("; "), window.lastIndexOf(" "))
+                val splitAt = if (cut > limit / 2) cut else limit
+                out.add(remaining.substring(0, splitAt).trim())
+                remaining = remaining.substring(splitAt).trim()
             }
-            if (sentence.length > limit) {
-                var start = 0
-                while (start < sentence.length) {
-                    val end = minOf(start + limit, sentence.length)
-                    val piece = sentence.substring(start, end).trim()
-                    if (piece.isNotEmpty()) out.add(piece)
-                    start = end
-                }
-            } else {
-                if (current.isNotEmpty()) current.append(' ')
-                current.append(sentence)
-            }
+            if (remaining.isNotEmpty()) out.add(remaining)
         }
-        if (current.isNotEmpty()) out.add(current.toString())
         return out
     }
 
