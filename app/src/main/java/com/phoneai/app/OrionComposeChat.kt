@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -102,6 +103,7 @@ fun OrionComposeChatScreen(
     selectedImage: Uri?,
     onBack: () -> Unit,
     onHistory: () -> Unit,
+    onNewChat: () -> Unit,
     onModeChange: (Boolean) -> Unit,
     onSend: (String) -> Unit,
     onPickImage: () -> Unit,
@@ -168,12 +170,23 @@ fun OrionComposeChatScreen(
                     Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
                 }
             }
-            Text(
-                "History",
-                color = ChatMuted,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(end = 9.dp).clickable(onClick = onHistory)
-            )
+            Row(
+                modifier = Modifier.padding(end = 7.dp).clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onNewChat).padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(Icons.Rounded.Add, null, tint = ChatCopy, modifier = Modifier.size(15.dp))
+                Text("New", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+            Row(
+                modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onHistory).padding(horizontal = 7.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("History", color = ChatMuted, fontSize = 11.sp)
+            }
             Box(
                 Modifier.clip(RoundedCornerShape(9.dp)).background(modeChipFill)
                     .border(1.dp, ChatHairline, RoundedCornerShape(9.dp)).clickable { onModeChange(!commandMode) }
