@@ -66,6 +66,42 @@ let rimEnergy=22, violetEnergy=17;
 const clock = new THREE.Clock();
 let lastDraw = 0;
 const loader = new GLTFLoader();
+// Procedural human-shaped particle head: visible independently of the external GLB.
+const particleHead = new THREE.Group();
+particleHead.position.set(0,1.72,0.12);
+scene.add(particleHead);
+const particlePoints=[], particleLinks=[], rows=[];
+for(let row=0;row<=24;row++){
+ const v=row/24, y=-.39+v*.82;
+ const taper=.72+.28*Math.sin(Math.PI*Math.min(1,v*1.12));
+ const halfW=.245*taper*Math.sqrt(Math.max(.12,1-Math.pow((y-.035)/.43,2)));
+ const depth=.155*Math.sqrt(Math.max(.08,1-Math.pow((y-.035)/.43,2)));
+ const ring=[];
+ for(let j=0;j<22;j++){
+  const a=j/22*Math.PI*2, x=Math.cos(a)*halfW, z=Math.sin(a)*depth+.018;
+  ring.push(particlePoints.length/3); particlePoints.push(x,y,z);
+ }
+ rows.push(ring);
+}
+for(let r=0;r<rows.length;r++) for(let j=0;j<rows[r].length;j++){
+ const n=(j+1)%rows[r].length; particleLinks.push(rows[r][j],rows[r][n]);
+ if(r<rows.length-1){particleLinks.push(rows[r][j],rows[r+1][j]);if(j%2===0)particleLinks.push(rows[r][j],rows[r+1][(j+1)%rows[r+1].length]);}
+}
+const particleGeo=new THREE.BufferGeometry();
+particleGeo.setAttribute('position',new THREE.Float32BufferAttribute(particlePoints,3));
+const particleMaterial=new THREE.PointsMaterial({color:0x67caff,size:.012,transparent:true,opacity:.82,depthWrite:false,blending:THREE.AdditiveBlending});
+particleHead.add(new THREE.Points(particleGeo,particleMaterial));
+const linkGeo=new THREE.BufferGeometry();
+linkGeo.setAttribute('position',new THREE.Float32BufferAttribute(particleLinks.map(i=>particlePoints[i]),3));
+const linkMaterial=new THREE.LineBasicMaterial({color:0x339fe8,transparent:true,opacity:.32,depthWrite:false,blending:THREE.AdditiveBlending});
+particleHead.add(new THREE.LineSegments(linkGeo,linkMaterial));
+const faceMarks=[];
+for(const side of [-1,1])for(let k=0;k<5;k++)faceMarks.push(side*(.055+k*.012),.055,.148);
+for(let k=0;k<9;k++)faceMarks.push(-.055+k*.01375,-.105,.142);
+const marksGeo=new THREE.BufferGeometry();
+marksGeo.setAttribute('position',new THREE.Float32BufferAttribute(faceMarks,3));
+particleHead.add(new THREE.Points(marksGeo,new THREE.PointsMaterial({color:0xb9e8ff,size:.018,transparent:true,opacity:.92,depthWrite:false,blending:THREE.AdditiveBlending})));
+
 const modelUrl = 'https://cdn.jsdelivr.net/gh/programasweights/avatar@ddd5fc34a445bcded3cf9836607aaeebc19a5c78/public/assets/character.glb';
 
 function addFaceRig(headBone, scale){
@@ -174,6 +210,11 @@ function animate(now){
  // The wireframe draws in, settles to a restrained holographic edge shimmer,
  // and intensifies slightly while Orion is speaking or listening.
  const sketchTarget=state==='thinking'?.42:state==='listening'?.30:state==='speaking'?.38:state==='acting'?.28:.17;
+ const particleEnergy=state==='speaking'?.62:state==='listening'?.52:state==='thinking'?.40:state==='acting'?.38:.26;
+ particleMaterial.opacity=particleEnergy*(.84+.16*Math.sin(t*2.4));
+ linkMaterial.opacity=particleEnergy*.58*(.82+.18*Math.sin(t*1.7));
+ particleHead.rotation.y=Math.sin(t*.34)*.035+(state==='listening'?.018:0);
+ particleHead.position.y=1.72+Math.sin(t*.9)*.008+(state==='thinking'?Math.sin(t*2.2)*.006:0);
  sketchReveal+=(sketchTarget-sketchReveal)*Math.min(1,dt*1.35);
  for(const mat of sketchLines) mat.opacity=sketchReveal*(.82+.18*Math.sin(t*2.1));
  if(sketchSweep){
