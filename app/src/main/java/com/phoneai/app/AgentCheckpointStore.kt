@@ -83,8 +83,8 @@ object AgentCheckpointStore {
             return "[$status; private result omitted; length=${result.length}]"
         }
         return result
-            .replace(Regex("(?i)(bearer\\s+)[a-z0-9._~+/-]+=*"), "$1[redacted]")
-            .replace(Regex("(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\\s*[:=]\\s*)[^\\s,;]+"), "$1[redacted]")
+            .replace(Regex("(?i)(bearer\\s+)[a-z0-9._~+/-]+=*")) { it.groupValues[1] + "[redacted]" }
+            .replace(Regex("(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\\s*[:=]\\s*)[^\\s,;]+")) { it.groupValues[1] + "[redacted]" }
             .replace(Regex("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", RegexOption.IGNORE_CASE), "[email redacted]")
             .take(900)
     }
