@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">Orion AI</string>
     <string name="service_desc">Lets Orion AI see the screen and tap, swipe and type for you when you give it a command. It asks before sending, paying or deleting.</string>
+    <string name="keyboard_name">Orion Private Keyboard</string>
+    <string name="keyboard_english">English (US)</string>
 </resources>
