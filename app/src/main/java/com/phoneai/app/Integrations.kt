@@ -121,8 +121,25 @@ object TelegramBridge {
             "/time", "/time@orionzai_bot" -> "Local phone time: " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
             "/date", "/date@orionzai_bot" -> "Today is " + java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
             "/status", "/status@orionzai_bot" -> "Orion Telegram responder is online when the background listener is running. AI replies require a working provider; /help lists local commands."
-            "/battery", "/battery@orionzai_bot" -> "Battery details are only available inside the Orion Android app."
-            else -> null
+            "/ping", "/ping@orionzai_bot" -> "Pong. Orion's Telegram command handler is responding."
+            else -> {
+                val calc = Regex("^/calc\\s+(-?\\d+(?:\\.\\d+)?)\\s*([+*/-])\\s*(-?\\d+(?:\\.\\d+)?)$").matchEntire(s)
+                if (s.startsWith("/calc")) {
+                    if (calc == null) "Usage: /calc 12 * 3 (supports +, -, *, /)"
+                    else {
+                        val x = calc.groupValues[1].toDouble()
+                        val op = calc.groupValues[2]
+                        val y = calc.groupValues[3].toDouble()
+                        when (op) {
+                            "+" -> "Result: " + (x + y)
+                            "-" -> "Result: " + (x - y)
+                            "*" -> "Result: " + (x * y)
+                            "/" -> if (y == 0.0) "Cannot divide by zero." else "Result: " + (x / y)
+                            else -> "Unsupported operation."
+                        }
+                    }
+                } else null
+            }
         }
     }
 
