@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
+import android.os.SystemClock
+import android.util.Log
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -52,6 +54,7 @@ internal object UiYoloTfliteDetector {
     @Synchronized
     fun detect(context: Context, bitmap: Bitmap, excluded: List<Rect>, maxResults: Int = 10): List<Region>? {
         val model = load(context) ?: return null
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
             val originalW = bitmap.width
             val originalH = bitmap.height
@@ -120,8 +123,10 @@ internal object UiYoloTfliteDetector {
                     if (selected.size >= maxResults) break
                 }
             }
+            Log.i("OrionUiDetector", "detect_ms=${SystemClock.elapsedRealtime() - startedAt} targets=${selected.size}")
             selected
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w("OrionUiDetector", "TFLite inference failed; heuristic fallback will be used", error)
             null
         }
     }
