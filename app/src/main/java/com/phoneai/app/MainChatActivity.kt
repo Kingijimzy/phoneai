@@ -127,7 +127,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setTitle("Chat history")
             .setItems(labels) { _, which ->
                 val chat = chats[which]
-                val body = chat.messages.joinToString("\\n\\n") { (kind, text) ->
+                val body = chat.messages.joinToString("\n\n") { (kind, text) ->
                     (if (kind == "me") "YOU" else "ORION") + "\\n" + text
                 }
                 AlertDialog.Builder(this)
