@@ -77,15 +77,21 @@ function drawHead(t){
   p.x=x;p.y=y;
  }
  const maxDist=Math.max(12,Math.min(19,Math.min(w,h)/38));
+ const cellSize=maxDist,grid=new Map();
  for(let i=0;i<points.length;i++){
-  const a=points[i],near=[];
-  for(let j=i+1;j<points.length;j++){
-   const b=points[j],dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
-   if(d<maxDist*maxDist)near.push([b,d]);
-  }
-  for(const [b,d] of near){
-   const alpha=(1-Math.sqrt(d)/maxDist)*(.14+a.seed*.16);
-   ctx.strokeStyle='rgba(70,177,255,'+alpha+')';ctx.lineWidth=.55;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  const p=points[i],gx=Math.floor(p.x/cellSize),gy=Math.floor(p.y/cellSize),key=gx+','+gy;
+  if(!grid.has(key))grid.set(key,[]);grid.get(key).push(i);
+ }
+ for(let i=0;i<points.length;i++){
+  const a=points[i],gx=Math.floor(a.x/cellSize),gy=Math.floor(a.y/cellSize);
+  for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+   const bucket=grid.get((gx+ox)+','+(gy+oy));if(!bucket)continue;
+   for(const j of bucket){if(j<=i)continue;const b=points[j],dx=a.x-b.x,dy=a.y-b.y,d=dx*dx+dy*dy;
+    if(d<maxDist*maxDist){
+     const alpha=(1-Math.sqrt(d)/maxDist)*(.14+a.seed*.16);
+     ctx.strokeStyle='rgba(70,177,255,'+alpha+')';ctx.lineWidth=.55;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    }
+   }
   }
  }
  for(const p of points){
