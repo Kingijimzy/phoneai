@@ -120,6 +120,8 @@ object TelegramBridge {
             "/start", "/start@orionzai_bot", "/help", "/help@orionzai_bot" -> "Hello! I am Orion. Send me a question and I will answer. For phone actions, open the Orion app. Commands: /start, /help, /time, /date."
             "/time", "/time@orionzai_bot" -> "Local phone time: " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
             "/date", "/date@orionzai_bot" -> "Today is " + java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+            "/status", "/status@orionzai_bot" -> "Orion Telegram responder is online when the background listener is running. AI replies require a working provider; /help lists local commands."
+            "/battery", "/battery@orionzai_bot" -> "Battery details are only available inside the Orion Android app."
             else -> null
         }
     }
