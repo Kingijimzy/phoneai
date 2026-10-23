@@ -111,9 +111,15 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             if (::status.isInitialized && (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING)) status.text = value
             if (::stopReplayButton.isInitialized) {
-                val active = mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING
+                // Keep Stop available while Orion is waiting for a real approval too.
+                // A user should never have to approve or wait through an action to cancel it.
+                val active = mode == OrbView.Mode.THINKING ||
+                    mode == OrbView.Mode.ACTING ||
+                    mode == OrbView.Mode.WAITING_APPROVAL
                 stopReplayButton.isEnabled = active
                 stopReplayButton.alpha = if (active) 1f else 0.42f
+                stopReplayButton.text = if (mode == OrbView.Mode.WAITING_APPROVAL)
+                    "CANCEL WAITING TASK" else "STOP CURRENT TASK"
             }
         }
     }
