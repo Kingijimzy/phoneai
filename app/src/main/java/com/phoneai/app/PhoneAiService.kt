@@ -1591,7 +1591,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 sb.append("[$id] OCR \"${item.text.take(70)}\"\n")
                                 existing.add(normalized)
                             }
-                            // Local visual fallback for unlabeled custom-drawn controls.
+                            // Accessibility + OCR always run first. Invoke the detector only for sparse
+                            // screens (common in games, WebViews and custom-drawn interfaces).
+                            if (nodes.size + ocrElements.size < 8) {
                             val occupied = ArrayList<Rect>()
                             nodes.forEach { node ->
                                 val r = Rect()
@@ -1609,7 +1611,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 (item.bounds.left / shot.scale).toInt(), (item.bounds.top / shot.scale).toInt(),
                                 (item.bounds.right / shot.scale).toInt(), (item.bounds.bottom / shot.scale).toInt()
                             )) }
-                            val regions = VisualElementDetector.detect(bitmap, excluded + occupied)
+                            val detected = UiYoloTfliteDetector.detect(this, bitmap, excluded + occupied)
+                            val regions = detected?.map {
+                                VisualElementDetector.Region(it.bounds, it.confidence, it.label)
+                            } ?: VisualElementDetector.detect(bitmap, excluded + occupied)
                             for (region in regions) {
                                 if (visualElements.size >= 10) break
                                 val scaled = Rect(
@@ -1617,9 +1622,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     (region.bounds.right * shot.scale).toInt(), (region.bounds.bottom * shot.scale).toInt()
                                 )
                                 if (scaled.width() <= 0 || scaled.height() <= 0) continue
-                                visualElements.add(VisualElementDetector.Region(scaled, region.confidence))
+                                visualElements.add(VisualElementDetector.Region(scaled, region.confidence, region.label))
                                 val id = nodes.size + ocrElements.size + visualElements.lastIndex
-                                sb.append("[$id] visual target (unlabeled)\\n")
+                                sb.append("[$id] visual target (${region.label}, ${(region.confidence * 100).toInt()}% confidence)\\n")
+                            }
                             }
                         } finally {
                             if (!bitmap.isRecycled) bitmap.recycle()
@@ -1672,7 +1678,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun nodeInfo(id: Int): Triple<String, Int, Int>? {
         if (id >= nodes.size + ocrElements.size) {
             val item = visualElements.getOrNull(id - nodes.size - ocrElements.size) ?: return null
-            return Triple("visual target", item.bounds.centerX(), item.bounds.centerY())
+            return Triple(item.label, item.bounds.centerX(), item.bounds.centerY())
         }
         if (id >= nodes.size) {
             val item = ocrElements.getOrNull(id - nodes.size) ?: return null
