@@ -27,6 +27,9 @@ class Nim(private val ctx: Context) {
         private val lastSuccess = ConcurrentHashMap<String, String>()
         /** Most recent failure per provider, kept only in memory for diagnostics. */
         private val lastFailure = ConcurrentHashMap<String, String>()
+        /** Successful model catalogues, cached briefly and keyed by provider + saved-key fingerprint. */
+        private val modelCatalogCache = ConcurrentHashMap<String, Pair<Long, List<String>>>()
+        private const val MODEL_CATALOG_TTL_MS = 10 * 60 * 1000L
 
         fun budget(id: String): Int = when (id) {
             "gemini" -> 9
@@ -189,6 +192,15 @@ class Nim(private val ctx: Context) {
     @Volatile
     private var active: HttpURLConnection? = null
 
+    private val requestBudgetLock = Any()
+    @Volatile private var commandHttpRequests = 0
+    private val maxHttpRequestsPerCommand = 15
+
+    /** Starts a fresh request budget for one user command. Every HTTP call, including /models, counts. */
+    fun beginCommand() {
+        synchronized(requestBudgetLock) { commandHttpRequests = 0 }
+    }
+
     fun resume() {
         cancelled = false
     }
@@ -203,6 +215,14 @@ class Nim(private val ctx: Context) {
     }
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
+        synchronized(requestBudgetLock) {
+            if (commandHttpRequests >= maxHttpRequestsPerCommand) {
+                throw AiException("Stopped before sending another request: this command reached Orion's $maxHttpRequestsPerCommand-request budget. No additional HTTP request was made.")
+            }
+            commandHttpRequests++
+        }
+        // Count every network attempt here, including model catalogues and requests that fail to connect.
+        noteHit(p.id)
         val readMs = if (p.id == "local") 240000 else readMs0
         val conn = URL(url).openConnection() as HttpURLConnection
         active = conn
@@ -253,10 +273,14 @@ class Nim(private val ctx: Context) {
         r.code == 401 || r.code == 403 ||
             (r.code == 400 && (r.body.contains("API key", true) || r.body.contains("api_key", true)))
 
-    /** Every model id this provider's key can see. Throws with a readable message on failure. */
+    /** Every model id this provider's key can see. Successful results are cached for ten minutes. */
     fun allModels(p: Provider): List<String> {
         val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
+        val cacheKey = p.id + ":" + key.hashCode()
+        val cached = modelCatalogCache[cacheKey]
+        val now = System.currentTimeMillis()
+        if (cached != null && now - cached.first < MODEL_CATALOG_TTL_MS) return cached.second
         val url = p.listUrl ?: (p.base + "/models")
         val r = try {
             request(p, "GET", url, null, key, 25000)
@@ -276,7 +300,9 @@ class Nim(private val ctx: Context) {
             val o = arr.optJSONObject(i) ?: continue
             ids.add(o.optString("id").removePrefix("models/"))
         }
-        return ids.filter { it.isNotBlank() }.sorted()
+        val result = ids.filter { it.isNotBlank() }.distinct().sorted()
+        modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
+        return result
     }
 
     /**
@@ -461,9 +487,8 @@ class Nim(private val ctx: Context) {
         // A text-only selected provider must never be the first attempt for an image.
         // If it cannot accept vision requests, select a compatible saved provider instead.
         if ((Prefs.hasKey(ctx, first.id) || first.noKey) && (!vision || first.hasVision)) order.add(first)
-        // Vision failures are especially frustrating because the image has already been
-        // selected. Always try saved vision-capable backups on 503/quota/model errors,
-        // even when chat auto-switching is disabled; never send an image to text-only providers.
+        // Keep the configured provider primary. Backups are considered only after a real HTTP 429;
+        // ordinary errors, timeouts, invalid keys, and empty responses do not rotate providers.
         if (Prefs.autoSwitch(ctx) || order.isEmpty() || vision) {
             for (p in Providers.all) {
                 if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
@@ -487,56 +512,41 @@ class Nim(private val ctx: Context) {
             order.add(primary)
             order.addAll(backups)
         }
-        if (fastResponse) {
-            // Telegram/background replies should favour low-latency providers and never
-            // wait through a slow NVIDIA/Gemini first response when a fast key is available.
+        if (fastResponse && order.size > 1) {
+            // Keep the selected provider first even for background replies; rank only backups.
+            val primary = order.first()
             val rank = listOf("groq", "cerebras", "mistral", "openrouter", "sambanova", "gemini", "nvidia", "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local")
-            order.sortBy { rank.indexOf(it.id).let { n -> if (n < 0) Int.MAX_VALUE else n } }
+            val backups = order.drop(1).sortedBy { rank.indexOf(it.id).let { n -> if (n < 0) Int.MAX_VALUE else n } }
+            order.clear()
+            order.add(primary)
+            order.addAll(backups)
         }
         val errors = LinkedHashMap<String, String>()
-        val start = System.currentTimeMillis()
-        val quotaSaver = Prefs.quotaSaver(ctx)
-        // Keep a failed request from serially waiting on every saved key. Try the selected
-        // provider and up to three fast-ranked backups, then report the real failure promptly.
-        // When all candidates are rate-limited, return the status instead of sleeping and retrying.
-        val maxRounds = 1
-        val providerLimit = minOf(order.size, if (fastResponse) 2 else if (vision) 4 else 3)
-        var round = 0
-        while (round < maxRounds) {
-            round++
+        if (cancelled) throw RuntimeException("Stopped.")
+        val now = System.currentTimeMillis()
+        val ready = order.filter { (cooldown[it.id] ?: 0L) <= now }
+        if (ready.isEmpty()) {
+            throw RuntimeException("The selected provider is cooling down. Orion did not rotate providers or send another request. Wait for its limit to reset, or change the primary provider in Settings.")
+        }
+        for ((idx, p) in ready.withIndex()) {
             if (cancelled) throw RuntimeException("Stopped.")
-            val now = System.currentTimeMillis()
-            val ready = order.take(providerLimit).filter { (cooldown[it.id] ?: 0L) <= now }
-            var allRateLimited = true
-            for ((idx, p) in ready.withIndex()) {
+            try {
+                onStatus?.invoke(if (idx == 0) "Using primary provider: ${p.label}..." else "Primary returned HTTP 429; trying backup ${p.label}...")
+                val answer = chatOne(p, messages, vision, maxTokens, temperature, ready.size > 1, fastResponse)
+                val mode = if (vision) "vision" else "chat"
+                lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
+                lastFailure.remove(p.id)
+                return answer
+            } catch (e: Exception) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                try {
-                    onStatus?.invoke("Trying ${p.label} (${idx + 1}/${ready.size})...")
-                    val answer = chatOne(p, messages, vision, maxTokens, temperature, order.size > 1, fastResponse)
-                    val mode = if (vision) "vision" else "chat"
-                    lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
-                    lastFailure.remove(p.id)
-                    return answer
-                } catch (e: Exception) {
-                    if (cancelled) throw RuntimeException("Stopped.")
-                    errors[p.id] = e.message ?: p.label
-                    lastFailure[p.id] = (e.message ?: "Unknown provider error").take(220)
-                    if (e !is AiException || !e.rateLimited) allRateLimited = false
-                }
-            }
-            // Nothing worked. If everything was only busy, wait for the first one to come back.
-            if (!allRateLimited || round >= maxRounds || System.currentTimeMillis() - start > 60000) break
-            val soonest = order.minOf { cooldown[it.id] ?: 0L }
-            val wait = (soonest - System.currentTimeMillis()).coerceIn(2000L, 40000L)
-            var left = wait
-            while (left > 0) {
-                if (cancelled) throw RuntimeException("Stopped.")
-                onStatus?.invoke("AI services are busy. Waiting ${left / 1000 + 1}s...")
-                Thread.sleep(500)
-                left -= 500
+                errors[p.id] = e.message ?: p.label
+                lastFailure[p.id] = (e.message ?: "Unknown provider error").take(220)
+                // Provider fallback is strictly rate-limit-triggered. Do not rotate on network,
+                // auth, model, empty-response, timeout, or server errors.
+                if (e !is AiException || !e.rateLimited) break
             }
         }
-        throw RuntimeException(if (errors.isNotEmpty()) "Every provider in the fast fallback set was tried: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "All saved providers are in cooldown or no saved key supports this request type. Check Settings → AI providers. The local usage counter is informational; actual limits are decided by each provider.")
+        throw RuntimeException(if (errors.isNotEmpty()) "AI request stopped without provider rotation except on HTTP 429: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "No saved provider is currently available. Check Settings → AI providers.")
     }
 
     private fun chatOne(
@@ -557,7 +567,6 @@ class Nim(private val ctx: Context) {
         var refilled = false
         var lastNote = ""
         var attempts = 0
-        var rateRetries = 0
         // In quota-saver mode, allow one alternate model only after an invalid/retired model response.
         // Timeouts, empty replies, and 429s exit immediately, so this does not create retry fan-out.
         // Prefer a quick, bounded recovery over silently cycling through a long catalogue.
@@ -573,7 +582,6 @@ class Nim(private val ctx: Context) {
             attempts++
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
-            noteHit(p.id)
             onStatus?.invoke(p.label + ": asking " + model.substringAfterLast('/') + "...")
             val url: String
             val payload: String
@@ -637,16 +645,6 @@ class Nim(private val ctx: Context) {
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
-                val canWait = !Prefs.quotaSaver(ctx) && !hasBackup && rateRetries < 2 && wait <= 30
-                if (canWait) {
-                    rateRetries++
-                    onStatus?.invoke("${p.label} is busy. Waiting ${wait}s...")
-                    pause(wait * 1000L)
-                    tried.remove(model)
-                    attempts--
-                    queue.add(0, model)
-                    continue
-                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
                 throw AiException("${p.label}: free limit reached (429).", true)
             }
