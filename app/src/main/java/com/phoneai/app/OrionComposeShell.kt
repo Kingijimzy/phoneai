@@ -107,7 +107,17 @@ fun OrionComposeShell(
     MaterialTheme(colorScheme = scheme) {
         Surface(Modifier.fillMaxSize(), color = Ink) {
             Column(Modifier.fillMaxSize()) {
-                AnimatedContent(targetState = selected, modifier = Modifier.weight(1f), label = "orion-page") { page ->
+                AnimatedContent(
+                    targetState = selected,
+                    modifier = Modifier.weight(1f),
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(tween(260)) +
+                            androidx.compose.animation.slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 18 }) togetherWith
+                            (androidx.compose.animation.fadeOut(tween(130)) +
+                                androidx.compose.animation.slideOutVertically(tween(180)) { -it / 30 })
+                    },
+                    label = "orion-page"
+                ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
                         "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
@@ -220,57 +230,24 @@ private fun HomePage(
         }
 
         Text("What would you like to do?", color = Copy, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        // Focus the home surface: one live action, two distinct destinations, and one workflow entry.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             HomeActionCard("Chat with Orion", "Ask, reason, create", Icons.Rounded.ChatBubbleOutline, Modifier.weight(1f), onOpenChat)
-            HomeActionCard("Explore the web", "Research when requested", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeActionCard("Run a workflow", "Tasks and teach mode", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
-            HomeActionCard("Orion memory", "Continue your work", Icons.Rounded.Memory, Modifier.weight(1f)) { onOpenSettings("memory") }
+            HomeActionCard("Explore the web", "Research when you ask", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
         }
 
-        // Tappable prompt dock opens the full chat composer, including voice and image input.
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xFF141414))
-                .border(1.dp, Hairline, RoundedCornerShape(22.dp)).clickable(onClick = onOpenChat)
-                .padding(start = 15.dp, end = 9.dp, top = 10.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF191919), Color(0xFF101010))))
+                .border(1.dp, Hairline, RoundedCornerShape(18.dp))
+                .clickable(onClick = onOpenTasks).padding(horizontal = 15.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Muted, modifier = Modifier.size(21.dp))
-            Spacer(Modifier.width(11.dp))
-            Text("Message Orion...", color = Muted, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Box(
-                Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(Mint),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.ChevronRight, null, tint = Ink, modifier = Modifier.size(25.dp))
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("YOUR WORKSPACE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-            Spacer(Modifier.weight(1f))
-            Text("Explore all", color = Mint, fontSize = 12.sp, modifier = Modifier.clickable { onOpenUtilities() })
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniTile("Tasks", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
-            MiniTile("Browser", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
-            MiniTile("Memory", Icons.Rounded.Memory, Modifier.weight(1f)) { onOpenSettings("memory") }
-            MiniTile("Skills", Icons.Rounded.Bolt, Modifier.weight(1f)) { onOpenSettings("skills") }
-        }
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(17.dp)).clickable { onOpenUtilities() }
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color(0xFF252525)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.SmartToy, null, tint = Mint, modifier = Modifier.size(22.dp))
-            }
+            Icon(Icons.Rounded.TaskAlt, null, tint = Mint, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Teach Orion your workflow", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("Save repeatable steps as skills", color = Muted, fontSize = 11.sp)
+                Text("Tasks & workflows", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Continue a saved task or teach Orion a routine", color = Muted, fontSize = 11.sp)
             }
             Icon(Icons.Rounded.ChevronRight, null, tint = Muted, modifier = Modifier.size(20.dp))
         }
