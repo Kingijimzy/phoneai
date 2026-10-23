@@ -113,6 +113,26 @@ object BrowserAutomation {
         """.trimIndent())
     }
 
+    /**
+     * Wait for a short, bounded interval and compare the current page with the pre-action URL.
+     * This does not claim a click succeeded; callers must inspect the returned state.
+     */
+    fun verifyPage(expectedText: String = "", previousUrl: String = ""): String {
+        val expected = org.json.JSONObject.quote(expectedText.trim())
+        val previous = org.json.JSONObject.quote(previousUrl.trim())
+        return evaluate("""
+          (function(){
+            const expected=$expected.toLowerCase();
+            const previous=$previous.toLowerCase();
+            const text=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+            const url=location.href;
+            const changed=!!previous && url.toLowerCase()!==previous;
+            const found=!!expected && text.toLowerCase().includes(expected);
+            return JSON.stringify({url:url,title:document.title,urlChanged:changed,expectedTextFound:found,ready:document.readyState,summary:text.slice(0,500)});
+          })()
+        """.trimIndent())
+    }
+
     fun navigate(url: String): String {
         val raw = url.trim()
         val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
