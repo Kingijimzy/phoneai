@@ -27,8 +27,8 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x08090b);
 scene.fog = new THREE.FogExp2(0x08090b, 0.035);
-const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 80);
-camera.position.set(0, 1.72, 2.55);
+const camera = new THREE.PerspectiveCamera(29, innerWidth / innerHeight, 0.1, 80);
+camera.position.set(0, 1.72, 1.85);
 camera.lookAt(0, 1.72, 0);
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false, powerPreference:'low-power'});
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.35));
@@ -184,6 +184,7 @@ function animate(now){
  // Gentle camera and lighting drift adds depth without a distracting orbit.
  camera.position.x += (Math.sin(t*.18)*.045-camera.position.x)*Math.min(1,dt*.8);
  camera.position.y += (1.72+Math.sin(t*.31)*.012-camera.position.y)*Math.min(1,dt*.7);
+ camera.position.z += (1.85+Math.sin(t*.19)*.025-camera.position.z)*Math.min(1,dt*.5);
  camera.lookAt(0,1.72+Math.sin(t*.24)*.012,0);
  rim.position.x=-2+Math.sin(t*.42)*.22;
  violet.position.x=2+Math.cos(t*.34)*.18;
