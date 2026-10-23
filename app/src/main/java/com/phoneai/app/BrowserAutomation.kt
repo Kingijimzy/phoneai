@@ -75,8 +75,11 @@ object BrowserAutomation {
 
     fun type(target: String, value: String): String {
         if (value.isEmpty()) return "error: text to enter is empty"
-        if (Regex("(?i)\\b(password|passcode|pin|otp|verification(\\s+code)?|security\\s+code|credit\\s+card|card\\s+number|cvv|cvc)\\b|one[- ]time").containsMatchIn(target)) {
+        if (Regex("(?i)\\b(password|passcode|pin|otp|verification(\\s+code)?|security\\s+code|credit\\s+card|card\\s+number|cvv|cvc|bank\\s+account|routing\\s+number|social\\s+security|national\\s+id|passport|recovery\\s+phrase|private\\s+key|seed\\s+phrase)\\b|one[- ]time").containsMatchIn(target)) {
             return "error: sensitive fields are not filled by Orion; enter that information yourself"
+        }
+        if (value.length > 2000) {
+            return "error: text entry is limited to 2000 characters per action"
         }
         val qt = org.json.JSONObject.quote(target)
         val qv = org.json.JSONObject.quote(value)
