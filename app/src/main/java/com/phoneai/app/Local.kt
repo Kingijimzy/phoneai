@@ -153,7 +153,7 @@ class Local(
             val recent = ChatHistoryStore.load(svc).takeLast(10)
             if (recent.isEmpty()) return "There is no saved chat history yet."
             return "Recent chat history:\n" + recent.joinToString("\n") { (kind, text) ->
-                (if (kind == "me") "You: " else "Orion: ") + text.replace("\\n", " ").take(180)
+                (if (kind == "me") "You: " else "Orion: ") + text.replace("\n", " ").take(180)
             }
         }
 
