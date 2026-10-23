@@ -220,8 +220,9 @@ Action outcome integrity is mandatory: distinguish confirmed success, failure, a
 Tools:
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
 - list_apps {}: names of installed apps
-- read_screen {}: numbered list of what is on screen. Use it before clicking in normal apps.
-- click {id}: click element number id from the latest read_screen
+- read_screen {}: merged numbered accessibility + on-device OCR screen map. Use it before clicking in normal apps; OCR runs locally and is withheld on potentially sensitive screens.
+- click {id}: click element number id from the latest read_screen, including OCR-only items.
+- SCREEN TARGET RULE: choose an element ID from read_screen and use click {id}; do not ask for or invent x/y coordinates when a numbered element exists. Screen coordinates are an internal device detail. Use look/play screenshots only when the numbered map cannot describe the screen (for example a game canvas or image-only UI).
 - click_text {text}: click the visible element containing this text
 - wait_for {text, seconds}: wait until text appears on screen
 - tap {x,y}  long_press {x,y}  swipe {x1,y1,x2,y2,ms}: raw touch in screen pixels
