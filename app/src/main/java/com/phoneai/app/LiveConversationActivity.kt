@@ -278,6 +278,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                     PhoneAiService.instance?.stopVoiceInput()
                     listeningRequested = false
                     helperLabel.text = "Listening stopped. Tap the microphone when you're ready."
+                } else if (lastMode == OrbView.Mode.SPEAKING) {
+                    // Explicit tap-to-interrupt: startLiveConversation stops TTS before
+                    // reopening recognition. Never use this path during an action or approval.
+                    startVoiceInput()
                 } else if (lastMode == OrbView.Mode.THINKING || lastMode == OrbView.Mode.ACTING ||
                     lastMode == OrbView.Mode.WAITING_APPROVAL) {
                     Toast.makeText(this@LiveConversationActivity, "Orion is busy. Wait for the current step to finish.", Toast.LENGTH_SHORT).show()
