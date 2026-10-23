@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.view.View
 import kotlin.math.abs
 import kotlin.math.sin
+import kotlin.math.max
 
 /** Lightweight audio waveform visual; intentionally not an orb or a heavy 3D scene. */
 class VoiceWaveView(context: Context) : View(context) {
@@ -16,6 +17,9 @@ class VoiceWaveView(context: Context) : View(context) {
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var frame = 0
+    /** Recent TTS word event, used as a real speech-activity cue (not claimed as output amplitude). */
+    @Volatile var speechPulse: Float = 0f
+        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
     private val silver = 0xFFB9E8FF.toInt()
     private val dimSilver = 0xFF32B8FF.toInt()
 
@@ -36,7 +40,7 @@ class VoiceWaveView(context: Context) : View(context) {
         }
         val energy = when (mode) {
             OrbView.Mode.LISTENING -> if (audioLevel > 0.02f) 0.12 + audioLevel * 0.88 else 0.12
-            OrbView.Mode.SPEAKING -> 0.72 + 0.20 * abs(sin(frame * 0.23))
+            OrbView.Mode.SPEAKING -> 0.20 + 0.72 * max(speechPulse.toDouble(), 0.20 + 0.20 * abs(sin(frame * 0.23)))
             OrbView.Mode.THINKING, OrbView.Mode.ACTING -> 0.34 + 0.12 * abs(sin(frame * 0.10))
             else -> 0.18 + 0.035 * abs(sin(frame * 0.07))
         }
@@ -52,6 +56,8 @@ class VoiceWaveView(context: Context) : View(context) {
             paint.strokeCap = Paint.Cap.ROUND
             canvas.drawLine(x + barW / 2f, mid - h / 2f, x + barW / 2f, mid + h / 2f, paint)
         }
+        if (mode == OrbView.Mode.SPEAKING) speechPulse = (speechPulse * 0.84f).coerceAtLeast(0f)
+        else speechPulse = 0f
         frame++
         postInvalidateDelayed(if (mode == OrbView.Mode.IDLE) 180L else 70L)
     }
