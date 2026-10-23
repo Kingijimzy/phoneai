@@ -103,7 +103,7 @@ class Nim(private val ctx: Context) {
         ),
         "groq" to Pair(
             listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b"),
-            listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct")
+            listOf("qwen/qwen3.6-27b")
         ),
         "cerebras" to Pair(
             listOf("llama-3.3-70b", "llama3.1-8b", "gpt-oss-120b", "qwen-3-32b"),
