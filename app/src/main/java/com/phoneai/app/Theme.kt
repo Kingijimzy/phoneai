@@ -8,10 +8,10 @@ object Theme {
     val LINE = 0xFF303030.toInt()
     val TEXT = 0xFFF7F7F7.toInt()
     val MUTED = 0xFF9B9B9B.toInt()
-    val CYAN = 0xFFE5E5E5.toInt()
-    val VIOLET = 0xFF363636.toInt()
+    val CYAN = 0xFF72E6C1.toInt()
+    val VIOLET = 0xFF17483B.toInt()
     val DANGER = 0xFFE98291.toInt()
     val WARN = 0xFFE7BD7B.toInt()
-    val OK = 0xFFE5E5E5.toInt()
+    val OK = 0xFF72E6C1.toInt()
     val ON_ACCENT = 0xFF050505.toInt()
 }
