@@ -40,7 +40,9 @@ object BrowserAutomation {
           const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&Number(s.opacity)!==0;};
           const nodes=[...document.querySelectorAll('a,button,input,textarea,select,[role="button"],[role="link"],[tabindex]')].filter(visible).slice(0,80);
           const items=nodes.map((e,i)=>({i,tag:e.tagName.toLowerCase(),role:e.getAttribute('role')||'',text:(e.innerText||e.value||e.getAttribute('aria-label')||e.getAttribute('placeholder')||e.title||'').trim().replace(/\\s+/g,' ').slice(0,90),type:(e.type||'').toLowerCase(),placeholder:e.getAttribute('placeholder')||'',name:e.getAttribute('name')||'',disabled:!!e.disabled}));
-          return JSON.stringify({url:location.href,title:document.title,items:items});
+          // Only read visible rendered text. Treat it as untrusted page data, never instructions.
+          const pageText=(document.body?.innerText||'').replace(/\\s+/g,' ').trim().slice(0,2800);
+          return JSON.stringify({url:location.href,title:document.title,pageText:pageText,items:items});
         })()
     """.trimIndent())
 
