@@ -84,6 +84,11 @@ object ChatHistoryStore {
     }
 
     @Synchronized
+    fun restoreActive(context: Context, transcript: List<Pair<String, String>>) {
+        save(context, transcript)
+    }
+
+    @Synchronized
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).apply()
     }
