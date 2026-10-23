@@ -112,7 +112,9 @@ internal object UiYoloTfliteDetector {
                 val bottom = (((cy + bh / 2f) - padY) / scale).toInt().coerceIn(0, originalH)
                 val box = Rect(left, top, right, bottom)
                 if (box.width() < originalW * 0.025f || box.height() < originalH * 0.012f) continue
-                if (excluded.any { Rect.intersects(it, box) }) continue
+                // A small intersection is expected when a button contains OCR/accessibility text.
+                // Suppress only detections substantially covered by an existing target.
+                if (excluded.any { overlapRatio(it, box) > 0.62f }) continue
                 candidates.add(Region(box, labels[bestClass], bestScore))
             }
 
@@ -133,6 +135,13 @@ internal object UiYoloTfliteDetector {
 
     private fun value(output: Array<Array<FloatArray>>, channelsFirst: Boolean, anchor: Int, channel: Int): Float =
         if (channelsFirst) output[0][channel][anchor] else output[0][anchor][channel]
+
+    private fun overlapRatio(a: Rect, b: Rect): Float {
+        val intersection = Rect(a)
+        if (!intersection.intersect(b)) return 0f
+        val smallerArea = min(a.width() * a.height(), b.width() * b.height()).coerceAtLeast(1)
+        return intersection.width() * intersection.height().toFloat() / smallerArea
+    }
 
     private fun iou(a: Rect, b: Rect): Float {
         val intersection = Rect(a)
