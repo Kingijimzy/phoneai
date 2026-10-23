@@ -109,6 +109,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        nim.beginCommand()
         stopped = false
         researchCancelled.set(false)
         nim.resume()
@@ -355,6 +356,7 @@ Rules:
     }
 
     fun run(inputCommand: String) {
+        nim.beginCommand()
         var command = inputCommand.trim()
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
         if (!resumeRequest) failedToolSignatures.clear()
