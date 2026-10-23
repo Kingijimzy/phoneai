@@ -6,6 +6,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -69,6 +73,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -124,9 +131,10 @@ fun OrionComposeChatScreen(
         animationSpec = tween(durationMillis = 220),
         label = "chat-mode-accent"
     )
-    LaunchedEffect(lines.size) {
+    LaunchedEffect(lines.size, status) {
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
+    val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
     Column(Modifier.fillMaxSize().background(ChatInk).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
@@ -235,10 +243,11 @@ fun OrionComposeChatScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
             ) {
                 itemsIndexed(lines, key = { _, item -> item.id }) { _, item -> ChatBubble(item) }
+                if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }
             }
         }
 
-        AnimatedVisibility(selectedImage != null, enter = fadeIn(animationSpec = tween(180))) {
+        AnimatedVisibility(selectedImage != null, enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 3 }) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 5.dp)
                     .clip(RoundedCornerShape(14.dp)).background(ChatPanelRaised)
@@ -258,9 +267,9 @@ fun OrionComposeChatScreen(
         // Composer is the primary surface; actions remain reachable without a second oversized dock.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF1A1A1A), Color(0xFF101010))))
-                    .border(1.dp, Color(0xFF333333), RoundedCornerShape(17.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF222222), Color(0xFF101010))))
+                    .border(1.dp, Color(0xFF444444), RoundedCornerShape(19.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -360,10 +369,12 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
 private fun ChatBubble(item: OrionChatLine) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
+    val clipboard = LocalClipboardManager.current
+    var actionsVisible by remember(item.id) { mutableStateOf(false) }
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(animationSpec = tween(220)) +
-            slideInVertically(animationSpec = tween(220)) { it / 16 }
+        enter = fadeIn(animationSpec = tween(260)) +
+            slideInVertically(animationSpec = tween(260)) { it / 10 }
     ) {
         Column(
             Modifier.fillMaxWidth(),
@@ -399,11 +410,63 @@ private fun ChatBubble(item: OrionChatLine) {
                     Text("ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                     Spacer(Modifier.height(4.dp))
                 }
-                Text(item.text, color = if (note) ChatMuted else ChatCopy, fontSize = 14.sp, lineHeight = 22.sp)
+                Text(
+                    item.text,
+                    color = if (note) ChatMuted else ChatCopy,
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                    modifier = Modifier.clickable(enabled = !note) { actionsVisible = !actionsVisible }
+                )
                 if (item.imageUri != null) {
                     Spacer(Modifier.height(9.dp))
                     ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
                 }
+                AnimatedVisibility(visible = actionsVisible && !note, enter = fadeIn(tween(140)) + slideInVertically(tween(140)) { it / 3 }) {
+                    Row(
+                        Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Copy", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable {
+                            clipboard.setText(AnnotatedString(item.text))
+                            actionsVisible = false
+                        }.padding(vertical = 4.dp))
+                        Text("Hide", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable {
+                            actionsVisible = false
+                        }.padding(vertical = 4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThinkingIndicator() {
+    val transition = rememberInfiniteTransition(label = "thinking-dots")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Restart),
+        label = "thinking-phase"
+    )
+    Row(
+        Modifier.fillMaxWidth().padding(start = 1.dp, top = 3.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            Modifier.size(24.dp).clip(RoundedCornerShape(8.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF444444), Color(0xFF181818))))
+                .border(1.dp, Color(0xFF3A3A3A), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) { Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(13.dp)) }
+        Text("Orion is thinking", color = ChatMuted, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+            repeat(3) { index ->
+                val distance = kotlin.math.abs(((phase * 3f + index) % 3f) - 1.5f) / 1.5f
+                Box(Modifier.size(4.dp).scale(0.7f + (1f - distance) * .55f)
+                    .clip(CircleShape).background(ChatMint.copy(alpha = .35f + (1f - distance) * .65f)))
             }
         }
     }
