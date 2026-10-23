@@ -128,7 +128,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setItems(labels) { _, which ->
                 val chat = chats[which]
                 val body = chat.messages.joinToString("\n\n") { (kind, text) ->
-                    (if (kind == "me") "YOU" else "ORION") + "\\n" + text
+                    (if (kind == "me") "YOU" else "ORION") + "\n" + text
                 }
                 AlertDialog.Builder(this)
                     .setTitle(chat.title)
