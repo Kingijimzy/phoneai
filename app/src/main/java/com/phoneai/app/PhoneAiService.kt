@@ -589,8 +589,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             if (!running) {
                 agent.reset()
+                ChatHistoryStore.archiveAndClear(this, transcript)
                 transcript.clear()
-                ChatHistoryStore.clear(this)
                 mainChatListener?.onMessage("ai", "New conversation. What are we working on?")
             }
         }
@@ -916,8 +916,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun newChat() {
         agent.reset()
+        ChatHistoryStore.archiveAndClear(this, transcript)
         transcript.clear()
-        ChatHistoryStore.clear(this)
         hideThinkingIndicator()
         logBox?.removeAllViews()
         addLine("ai", "New chat. What should I do?")
