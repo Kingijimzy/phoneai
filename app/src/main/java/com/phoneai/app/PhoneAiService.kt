@@ -615,7 +615,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         when (kind) {
             "me" -> {
                 t.setTextColor(Theme.TEXT)
-                t.background = rounded(0xFF0E4035.toInt(), dp(18).toFloat(), 0xFF016856.toInt())
+                t.background = rounded(0xFF292929.toInt(), dp(18).toFloat(), 0xFF454545.toInt())
                 lp.gravity = Gravity.END
                 lp.setMargins(dp(36), dp(7), 0, dp(7))
             }
@@ -701,9 +701,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF02080A.toInt(), Theme.PANEL, 0xFF0B211D.toInt())).apply {
+            intArrayOf(0xFF202020.toInt(), 0xFF111111.toInt(), 0xFF090909.toInt())).apply {
             cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0xFF2C504E.toInt())
+            setStroke(dp(1), 0xFF414141.toInt())
         }
         root.setPadding(dp(12), dp(10), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
@@ -712,9 +712,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF0C3028.toInt(), Theme.PANEL, 0xFF0B211D.toInt())).apply {
+            intArrayOf(0xFF292929.toInt(), 0xFF191919.toInt(), 0xFF141414.toInt())).apply {
             cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0xFF016856.toInt())
+            setStroke(dp(1), 0xFF3E3E3E.toInt())
         }
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
@@ -809,9 +809,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
         input.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF10211E.toInt(), 0xFF0A1413.toInt())).apply {
+            intArrayOf(0xFF242424.toInt(), 0xFF151515.toInt())).apply {
             cornerRadius = dp(22).toFloat()
-            setStroke(dp(1), 0xFF2C504E.toInt())
+            setStroke(dp(1), 0xFF414141.toInt())
         }
         input.setPadding(dp(15), dp(12), dp(15), dp(12))
         input.minHeight = dp(48)
@@ -868,6 +868,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             .setDuration(230L)
             .setInterpolator(android.view.animation.DecelerateInterpolator())
             .start()
+        // Stagger the panel's main surfaces so the overlay feels responsive rather than static.
+        listOf<View>(head, scroll, chipScroll, row).forEachIndexed { index, view ->
+            view.alpha = 0f
+            view.translationY = dp(7).toFloat()
+            view.animate().alpha(1f).translationY(0f)
+                .setStartDelay((index * 45L) + 35L)
+                .setDuration(220L)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .start()
+        }
         refreshMode()
     }
 
