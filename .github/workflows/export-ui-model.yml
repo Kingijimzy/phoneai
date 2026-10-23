@@ -3,6 +3,10 @@ name: Export Android UI detector model
 on:
   workflow_dispatch:
   workflow_call:
+  push:
+    branches: [feature/phoneai-integrated-character-agent]
+    paths:
+      - '.github/workflows/export-ui-model.yml'
 
 permissions:
   contents: write
