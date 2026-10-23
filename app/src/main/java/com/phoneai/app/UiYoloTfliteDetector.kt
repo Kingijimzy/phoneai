@@ -65,12 +65,12 @@ internal object UiYoloTfliteDetector {
             try {
                 val row = IntArray(resizedW)
                 for (y in 0 until INPUT) {
+                    val sy = y - padY
+                    val validY = sy in 0 until resizedH
+                    if (validY) resized.getPixels(row, 0, resizedW, 0, sy, resizedW, 1)
                     for (x in 0 until INPUT) {
                         val sx = x - padX
-                        val sy = y - padY
-                        val p = if (sx in 0 until resizedW && sy in 0 until resizedH) {
-                            if (sx == 0) resized.getPixel(sx, sy) else resized.getPixel(sx, sy)
-                        } else 0xFF727272.toInt()
+                        val p = if (validY && sx in 0 until resizedW) row[sx] else 0xFF727272.toInt()
                         input.putFloat(Color.red(p) / 255f)
                         input.putFloat(Color.green(p) / 255f)
                         input.putFloat(Color.blue(p) / 255f)
