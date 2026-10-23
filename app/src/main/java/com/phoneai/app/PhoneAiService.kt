@@ -1542,7 +1542,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         ocrElements.clear()
         val size = screenSize()
         val sb = StringBuilder()
-        sb.append("screen ${size.first}x${size.second}\\n")
+        sb.append("screen ${size.first}x${size.second}\n")
         walk(root, sb)
 
         // OCR is local-only. Do not OCR sensitive app screens or any editable/password field.
@@ -1595,13 +1595,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     }
                 }
             } catch (_: Exception) {
-                sb.append("(on-device OCR unavailable for this screen; accessibility results are still available)\\n")
+                sb.append("(on-device OCR unavailable for this screen; accessibility results are still available)\n")
             }
         } else {
-            sb.append("(OCR withheld on a potentially sensitive screen)\\n")
+            sb.append("(OCR withheld on a potentially sensitive screen)\n")
         }
         if (nodes.size + ocrElements.size < 3) {
-            sb.append("(very few readable elements: this may be a game or custom-drawn screen)\\n")
+            sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
         return sb.toString().take(2800)
     }
