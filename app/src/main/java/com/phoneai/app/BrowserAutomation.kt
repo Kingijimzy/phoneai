@@ -57,6 +57,13 @@ object BrowserAutomation {
             const es=[...document.querySelectorAll('a,button,[role="button"],[role="link"],input[type="button"],input[type="submit"]')].filter(e=>visible(e)&&!e.disabled);
             const e=es.find(e=>label(e).toLowerCase()===q)||es.find(e=>label(e).toLowerCase().includes(q));
             if(!e)return 'error: no visible clickable element matched '+$q;
+            const href=e instanceof HTMLAnchorElement ? e.href : '';
+            if(href){
+              try{
+                const u=new URL(href,location.href);
+                if(!['http:','https:'].includes(u.protocol))return 'blocked: only public HTTP/HTTPS links can be opened';
+              }catch(_){return 'blocked: invalid link target';}
+            }
             const actionLabel=(label(e)+' '+(e.getAttribute('name')||'')+' '+(e.getAttribute('value')||'')).toLowerCase();
             const sensitive=/(pay|purchase|buy now|place order|checkout|subscribe|transfer|send money|withdraw|deposit|trade|place bet|delete account|delete permanently|publish|post now|send message|confirm booking|change password|enable security)/i;
             if(sensitive.test(actionLabel))return 'approval required: this looks like a consequential action. Orion did not click it; review the page and confirm manually.';
