@@ -377,8 +377,16 @@ Rules:
             ui.say(answer)
             return
         }
+        // Explicit app/action requests must reach the agent tool loop before any generic
+        // web-search shortcut. Otherwise "open YouTube and search for X" gets sent to
+        // DuckDuckGo as one literal sentence and no phone action occurs.
+        val explicitAppAction = Regex(
+            "(?i)\\b(open|launch|start|switch to|go to|use)\\s+(the\\s+)?(youtube|whatsapp|telegram|instagram|tiktok|facebook|chrome|browser|settings|camera|photos|gallery|gmail|maps|spotify|play store)\\b"
+        ).containsMatchIn(command) || Regex(
+            "(?i)\\b(search in|search on|inside|within)\\s+(youtube|whatsapp|telegram|instagram|tiktok|facebook|spotify)\\b"
+        ).containsMatchIn(command)
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (!resumeRequest && !browserActionTask && LiveWebSearch.isSearchRequest(command)) {
+        if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = LiveWebSearch.search(LiveWebSearch.queryFrom(command))
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -386,7 +394,7 @@ Rules:
             return
         }
         // Freshness-dependent questions should use live web results, not a model's stale training data.
-        if (!resumeRequest && !browserActionTask && LiveWebSearch.isLiveInfoRequest(command)) {
+        if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val answer = LiveWebSearch.search(query)
