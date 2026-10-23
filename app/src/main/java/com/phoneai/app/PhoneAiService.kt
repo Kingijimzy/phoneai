@@ -98,6 +98,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         fun onMessage(kind: String, text: String)
         fun onStatus(text: String, mode: OrbView.Mode)
         fun onAudioLevel(level: Float) {}
+        fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
     }
 
     @Volatile
@@ -584,6 +585,21 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+
+    fun restoreArchivedChat(messages: List<Pair<String, String>>) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Let the current task finish or stop it before switching conversations.")
+                return@post
+            }
+            transcript.clear()
+            transcript.addAll(messages.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
+            ChatHistoryStore.restoreActive(this, transcript)
+            agent.reset()
+            mainChatListener?.onTranscriptRestored(transcript.toList())
+            mainChatListener?.onStatus("Previous conversation restored", OrbView.Mode.IDLE)
+        }
+    }
 
     fun resetMainChat() {
         main.post {
