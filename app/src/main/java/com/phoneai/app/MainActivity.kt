@@ -416,8 +416,8 @@ class MainActivity : ComponentActivity() {
         gap(agent, action("Skills studio", "Manage enabled skills and their permissions") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
         }, 8)
-        gap(agent, action("Memory & routines", "Manage long-term notes and saved task flows") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
+        gap(agent, action("Memory & routines", "Browse, search, edit, and delete Orion’s local memories") {
+            startActivity(Intent(this, MemoryActivity::class.java))
         }, 8)
         gap(agent, action("Open Orion Browser", "Search the web inside Orion; the screen agent can interact with accessible page elements", true) {
             startActivity(Intent(this, BrowserActivity::class.java)
