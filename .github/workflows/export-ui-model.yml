@@ -51,17 +51,18 @@ jobs:
           set -euo pipefail
           cd build/model-export
           if yolo export model=best.pt format=tflite imgsz=640 half=True; then
-            echo "EXPORT_PRECISION=fp16" >> "$GITHUB_ENV"
+            EXPORT_PRECISION=fp16
           else
             echo "FP16 export failed; retrying float32 (not int8; no calibration images available)."
             rm -rf best_saved_model best.tflite best_float16.tflite
             yolo export model=best.pt format=tflite imgsz=640 half=False
-            echo "EXPORT_PRECISION=float32" >> "$GITHUB_ENV"
+            EXPORT_PRECISION=float32
           fi
           MODEL="$(find . -type f -name '*.tflite' -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
           test -n "$MODEL"
           mkdir -p ../../app/src/main/assets/models
           cp "$MODEL" ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite
+          test -s ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite
           printf 'Model file: %s\nPrecision: %s\n' "$MODEL" "$EXPORT_PRECISION" > ../../app/src/main/assets/models/android_ui_detection_model.txt
           stat -c 'TFLite size: %s bytes' ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite | tee ../../build/model-export/model-size.txt
           sha256sum ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite | tee -a ../../build/model-export/model-size.txt
