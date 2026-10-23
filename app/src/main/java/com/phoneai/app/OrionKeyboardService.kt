@@ -30,7 +30,12 @@ class OrionKeyboardService : InputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
-        upper = attribute?.inputType?.and(android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0
+        val inputType = attribute?.inputType ?: 0
+        upper = inputType and (
+            android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            ) != 0
         symbols = false
     }
 
@@ -128,7 +133,14 @@ class OrionKeyboardService : InputMethodService() {
             }
             "," -> ic.commitText(",", 1)
             "." -> ic.commitText(".", 1)
-            else -> ic.commitText(key.trim(), 1)
+            else -> {
+                val value = key.trim()
+                ic.commitText(value, 1)
+                if (!symbols && upper && value.length == 1 && value[0].isLetter()) {
+                    upper = false
+                    setInputView(buildKeyboard())
+                }
+            }
         }
     }
 
