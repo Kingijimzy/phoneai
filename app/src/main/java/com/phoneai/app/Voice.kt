@@ -139,6 +139,12 @@ class Voice(private val ctx: Context) {
         engine.setSpeechRate(Prefs.rate(ctx).coerceIn(0.75f, 1.25f))
         engine.setPitch(if (Prefs.deepVoice(ctx)) 0.92f else 1.0f)
         for ((idx, part) in chunks.withIndex()) {
+            if (idx > 0) {
+                val previous = chunks[idx - 1]
+                val pauseMs = if (previous.endsWith("?") || previous.endsWith("!")) 210L
+                    else if (previous.endsWith(".")) 170L else 90L
+                engine.playSilentUtterance(pauseMs, TextToSpeech.QUEUE_ADD, "pause_" + System.nanoTime())
+            }
             val id = "u" + System.nanoTime()
             if (onDone != null && idx == chunks.lastIndex) callbacks[id] = onDone
             if (pending.getAndIncrement() == 0) main.post { onSpeaking?.invoke(true) }
