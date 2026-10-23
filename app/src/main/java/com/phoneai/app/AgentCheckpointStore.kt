@@ -46,11 +46,33 @@ object AgentCheckpointStore {
         it.remove("recoveryNotice")
     }
 
+    /**
+     * Checkpoints are for recovery, not a transcript. Keep useful non-sensitive arguments,
+     * but never persist message bodies, typed text, phone numbers, URLs, search queries,
+     * or fields that commonly carry credentials/private content.
+     */
+    private fun safeArgs(args: JSONObject): String {
+        val safe = JSONObject()
+        val sensitive = Regex("(?i)(text|message|number|url|query|password|pin|token|secret|code|email|body|content|credential)")
+        val keys = args.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = args.opt(key)
+            if (sensitive.containsMatchIn(key)) {
+                val length = value?.toString()?.length ?: 0
+                safe.put(key, if (length > 0) "[redacted; length=" + length + "]" else "[redacted]")
+            } else {
+                safe.put(key, value)
+            }
+        }
+        return safe.toString().take(700)
+    }
+
     /** Persist intent before executing any tool, so a process death cannot erase the uncertain action. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = update(c) { o ->
         o.put("inFlight", JSONObject()
             .put("tool", tool.take(80))
-            .put("args", args.toString().take(700))
+            .put("args", safeArgs(args))
             .put("startedAt", System.currentTimeMillis()))
         o.put("status", "running")
     }
@@ -61,7 +83,7 @@ object AgentCheckpointStore {
         steps.put(
             JSONObject()
                 .put("tool", tool.take(80))
-                .put("args", args.toString().take(700))
+                .put("args", safeArgs(args))
                 .put("result", result.take(900))
                 .put("at", System.currentTimeMillis())
         )
