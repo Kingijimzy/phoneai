@@ -278,9 +278,9 @@ Rules:
         history.put(msg("system", systemPrompt(svc)))
     }
 
-    private fun refreshSystem() {
+    private fun refreshSystem(request: String? = null) {
         if (history.length() > 0) {
-            val base = systemPrompt(svc)
+            val base = systemPrompt(svc, request)
             val skill = activeSkillId?.let { id -> SkillRegistry.list(svc).firstOrNull { it.id == id } }
             val prompt = if (skill == null) base else base +
                 "\n\nACTIVE DECLARATIVE SKILL: " + skill.id + " v" + skill.version +
@@ -360,7 +360,7 @@ Rules:
         stopped = false
         researchCancelled.set(false)
         nim.resume()
-        refreshSystem()
+        refreshSystem(command)
         history.put(msg("user", command))
         compact()
         // Live weather is a deterministic data lookup, not an LLM task. This preserves AI quota.
