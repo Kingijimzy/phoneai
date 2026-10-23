@@ -63,6 +63,30 @@ object SkillRegistry {
      * Register reviewed metadata. New skills are disabled by default.
      * Unknown tools, invalid IDs/versions, excessive budgets, and duplicate IDs are rejected.
      */
+    /**
+     * Rank enabled skills against the current request using lightweight token overlap.
+     * Discovery only: this never runs a skill or changes its permissions.
+     */
+    fun discover(context: Context, request: String, limit: Int = 4): List<PhoneAiSkill> {
+        if (request.isBlank() || limit <= 0) return emptyList()
+        val stopWords = setOf("the", "and", "for", "with", "that", "this", "from", "into", "please", "want", "need", "help", "make", "can", "you", "my", "me", "to", "a", "an", "on", "in", "of", "is", "it")
+        fun tokens(value: String): Set<String> = Regex("[a-z0-9]{3,}").findAll(value.lowercase())
+            .map { it.value }.filter { it !in stopWords }.toSet()
+        val wanted = tokens(request)
+        if (wanted.isEmpty()) return emptyList()
+        return list(context).filter { it.enabled }.map { skill ->
+            val idTokens = tokens(skill.id.replace('.', ' ').replace('-', ' ').replace('_', ' '))
+            val descriptionTokens = tokens(skill.description)
+            val toolTokens = tokens(skill.allowedTools.joinToString(" "))
+            val score = wanted.intersect(idTokens).size * 3 +
+                wanted.intersect(descriptionTokens).size * 2 +
+                wanted.intersect(toolTokens).size
+            skill to score
+        }.filter { it.second > 0 }
+            .sortedWith(compareByDescending<Pair<PhoneAiSkill, Int>> { it.second }.thenBy { it.first.id })
+            .take(limit).map { it.first }
+    }
+
     @Synchronized
     fun register(context: Context, candidate: PhoneAiSkill): SkillDecision {
         val validated = validate(candidate)
