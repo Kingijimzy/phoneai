@@ -16,8 +16,8 @@ class VoiceWaveView(context: Context) : View(context) {
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var frame = 0
-    private val silver = 0xFFB7B7B7.toInt()
-    private val dimSilver = 0xFF8F8F8F.toInt()
+    private val silver = 0xFFB9E8FF.toInt()
+    private val dimSilver = 0xFF32B8FF.toInt()
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -35,10 +35,10 @@ class VoiceWaveView(context: Context) : View(context) {
             else -> 0.08
         }
         val energy = when (mode) {
-            OrbView.Mode.LISTENING -> if (audioLevel > 0.02f) 0.24 + audioLevel * 0.76 else 0.42
-            OrbView.Mode.SPEAKING -> 1.0
-            OrbView.Mode.THINKING, OrbView.Mode.ACTING -> 0.62
-            else -> 0.32
+            OrbView.Mode.LISTENING -> if (audioLevel > 0.02f) 0.12 + audioLevel * 0.88 else 0.12
+            OrbView.Mode.SPEAKING -> 0.72 + 0.20 * abs(sin(frame * 0.23))
+            OrbView.Mode.THINKING, OrbView.Mode.ACTING -> 0.34 + 0.12 * abs(sin(frame * 0.10))
+            else -> 0.18 + 0.035 * abs(sin(frame * 0.07))
         }
         for (i in 0 until count) {
             val a = abs(sin(i * 0.42 + frame * speed))
