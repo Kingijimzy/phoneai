@@ -42,7 +42,7 @@ class MemoryActivity : Activity() {
         top.addView(button("＋ Add") { editMemory(null) }); root.addView(top)
         root.addView(text("Search saved facts, preferences, decisions and project notes.", 13f, 0xFF9A9A9A.toInt()).apply { setPadding(0, dp(12), 0, dp(10)) })
         val search = EditText(this).apply {
-            hint = "Search local memory"; setTextColor(0xFFF0F0F0.toInt()); setHintTextColor(0xFF777777.toInt()); textSize = 14f; singleLine = true
+            hint = "Search local memory"; setTextColor(0xFFF0F0F0.toInt()); setHintTextColor(0xFF777777.toInt()); textSize = 14f; setSingleLine(true)
             setPadding(dp(13), dp(11), dp(13), dp(11)); background = GradientDrawable().apply { setColor(0xFF151515.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF363636.toInt()) }
         }
         root.addView(search)
