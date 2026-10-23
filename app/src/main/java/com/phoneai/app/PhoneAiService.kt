@@ -75,6 +75,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
+    /** OCR-only elements from the latest read_screen; bounds are in physical screen coordinates. */
+    private val ocrElements = ArrayList<ScreenPerception.OcrItem>()
 
     private var bubble: OrbView? = null
     private var panel: LinearLayout? = null
@@ -1537,12 +1539,69 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun readScreen(): String {
         val root = rootInActiveWindow ?: return "error: cannot read this screen (it may be protected)"
         nodes.clear()
+        ocrElements.clear()
         val size = screenSize()
         val sb = StringBuilder()
-        sb.append("screen ${size.first}x${size.second}\n")
+        sb.append("screen ${size.first}x${size.second}\\n")
         walk(root, sb)
-        if (nodes.size < 3) {
-            sb.append("(very few elements: this may be a game or image screen. Use look or play.)\n")
+
+        // OCR is local-only. Do not OCR sensitive app screens or any editable/password field.
+        val visibleLabels = nodes.mapNotNull { n ->
+            if (n.isPassword) "(password field)" else
+                (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())?.lowercase()
+        }.joinToString(" ")
+        val packageId = root.packageName?.toString()?.lowercase().orEmpty()
+        val sensitiveScreen = Regex("bank|wallet|payment|pay\\b|authenticator|password|credential|otp|one.?time.?code")
+            .containsMatchIn(packageId + " " + visibleLabels)
+        if (!sensitiveScreen) {
+            try {
+                val shot = screenshotBase64()
+                if (shot != null) {
+                    val bytes = Base64.decode(shot.b64, Base64.DEFAULT)
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        try {
+                            val excluded = nodes.filter { it.isPassword || it.isEditable }.mapNotNull { node ->
+                                val r = Rect()
+                                node.getBoundsInScreen(r)
+                                if (r.width() <= 0 || r.height() <= 0) null else Rect(
+                                    (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
+                                    (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
+                                )
+                            }
+                            val found = ScreenPerception.recognize(bitmap, excluded)
+                            val existing = nodes.mapNotNull { n ->
+                                (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())
+                                    ?.trim()?.lowercase()?.replace(Regex("\\s+"), " ")
+                            }.toHashSet()
+                            for (item in found) {
+                                val normalized = item.text.trim().lowercase().replace(Regex("\\s+"), " ")
+                                if (normalized in existing || ocrElements.size >= 20) continue
+                                val scaled = Rect(
+                                    (item.bounds.left * shot.scale).toInt(),
+                                    (item.bounds.top * shot.scale).toInt(),
+                                    (item.bounds.right * shot.scale).toInt(),
+                                    (item.bounds.bottom * shot.scale).toInt()
+                                )
+                                if (scaled.width() <= 0 || scaled.height() <= 0) continue
+                                ocrElements.add(ScreenPerception.OcrItem(item.text, scaled))
+                                val id = nodes.size + ocrElements.lastIndex
+                                sb.append("[$id] OCR \"${item.text.take(70)}\" @${scaled.centerX()},${scaled.centerY()}\\n")
+                                existing.add(normalized)
+                            }
+                        } finally {
+                            if (!bitmap.isRecycled) bitmap.recycle()
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                sb.append("(on-device OCR unavailable for this screen; accessibility results are still available)\\n")
+            }
+        } else {
+            sb.append("(OCR withheld on a potentially sensitive screen)\\n")
+        }
+        if (nodes.size + ocrElements.size < 3) {
+            sb.append("(very few readable elements: this may be a game or custom-drawn screen)\\n")
         }
         return sb.toString().take(2800)
     }
@@ -1574,6 +1633,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Label and centre of an element from the latest read_screen (used to save routines). */
     fun nodeInfo(id: Int): Triple<String, Int, Int>? {
+        if (id >= nodes.size) {
+            val item = ocrElements.getOrNull(id - nodes.size) ?: return null
+            return Triple(item.text.take(40), item.bounds.centerX(), item.bounds.centerY())
+        }
         val n = nodes.getOrNull(id) ?: return null
         if (n.isPassword) return null
         val r = Rect()
@@ -1583,6 +1646,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun clickId(id: Int): String {
+        if (id >= nodes.size) {
+            val item = ocrElements.getOrNull(id - nodes.size)
+                ?: return "error: no element $id. Call read_screen first."
+            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
+        }
         val n = nodes.getOrNull(id) ?: return "error: no element $id. Call read_screen first."
         var cur: AccessibilityNodeInfo? = n
         var hops = 0
