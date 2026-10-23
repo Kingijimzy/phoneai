@@ -454,7 +454,7 @@ class Nim(private val ctx: Context) {
     }
 
     /** Asks the best chat or vision service; on failure, falls through to the others that have keys. */
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2): String {
+    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         val first = Prefs.provider(ctx, vision)
         val order = ArrayList<Provider>()
         // The local Ollama provider intentionally has no API key; allow it when explicitly selected.
@@ -487,6 +487,12 @@ class Nim(private val ctx: Context) {
             order.add(primary)
             order.addAll(backups)
         }
+        if (fastResponse) {
+            // Telegram/background replies should favour low-latency providers and never
+            // wait through a slow NVIDIA/Gemini first response when a fast key is available.
+            val rank = listOf("groq", "cerebras", "mistral", "openrouter", "sambanova", "gemini", "nvidia", "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local")
+            order.sortBy { rank.indexOf(it.id).let { n -> if (n < 0) Int.MAX_VALUE else n } }
+        }
         val errors = LinkedHashMap<String, String>()
         val start = System.currentTimeMillis()
         val quotaSaver = Prefs.quotaSaver(ctx)
@@ -494,7 +500,7 @@ class Nim(private val ctx: Context) {
         // provider and up to three fast-ranked backups, then report the real failure promptly.
         // When all candidates are rate-limited, return the status instead of sleeping and retrying.
         val maxRounds = 1
-        val providerLimit = minOf(order.size, if (vision) 4 else 3)
+        val providerLimit = minOf(order.size, if (fastResponse) 2 else if (vision) 4 else 3)
         var round = 0
         while (round < maxRounds) {
             round++
@@ -506,7 +512,7 @@ class Nim(private val ctx: Context) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 try {
                     onStatus?.invoke("Trying ${p.label} (${idx + 1}/${ready.size})...")
-                    val answer = chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
+                    val answer = chatOne(p, messages, vision, maxTokens, temperature, order.size > 1, fastResponse)
                     val mode = if (vision) "vision" else "chat"
                     lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
                     lastFailure.remove(p.id)
@@ -534,7 +540,7 @@ class Nim(private val ctx: Context) {
     }
 
     private fun chatOne(
-        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false
     ): String {
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
@@ -542,8 +548,8 @@ class Nim(private val ctx: Context) {
         // budget reasoning and return choices[0].message.content="" (finish_reason=length).
         // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
         val tokens = when (p.id) {
-            "gemini" -> maxOf(maxTokens * 4, 1024)
-            "nvidia" -> maxOf(maxTokens, 1024)
+            "gemini" -> if (fastResponse) maxOf(maxTokens * 2, 256) else maxOf(maxTokens * 4, 1024)
+            "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
             else -> maxTokens
         }
         val queue = mutableListOf(Prefs.model(ctx, p, vision))
@@ -557,9 +563,9 @@ class Nim(private val ctx: Context) {
         // Prefer a quick, bounded recovery over silently cycling through a long catalogue.
         // A retired/overloaded model gets one alternate attempt; another saved provider can
         // then take over instead of making the user wait through many model IDs.
-        val maxAttempts = if (Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
+        val maxAttempts = if (fastResponse || Prefs.quotaSaver(ctx) || hasBackup) 1 else 3
         val start = System.currentTimeMillis()
-        val totalTimeoutMs = if (p.id == "nvidia") 40000L else 27000L
+        val totalTimeoutMs = if (fastResponse) 10000L else if (p.id == "nvidia") 40000L else 27000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
@@ -593,7 +599,7 @@ class Nim(private val ctx: Context) {
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                request(p, "POST", url, payload, key, readMs0 = if (p.id == "nvidia") 35000 else 22000)
+                request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
