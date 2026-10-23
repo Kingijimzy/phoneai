@@ -257,7 +257,7 @@ Rules:
                         .append(": ").append(skill.description.take(220))
                         .append("; allowed tools: ").append(skill.allowedTools.sorted().joinToString(", ").take(240))
                 }
-                sb.append("\nUse a registered skill when it clearly matches the user's request, but preserve its allowed-tool, approval, call-count, and runtime restrictions. If invocation requires the explicit 'run skill' form, ask or explain rather than silently bypassing that guard.")
+                sb.append("\nSKILL INVOCATION UX: Discovery is only a suggestion, not authorization to execute. If one of the listed skills is a strong match but the user did not explicitly invoke it, briefly name the best matching skill and ask whether they want to run it. Give the exact command format: run skill <id>: <task>. Do not execute that skill, simulate its execution with other tools, or claim it ran until the user explicitly submits that command. Once invoked, enforce allowed tools, approval, call-count, and runtime restrictions on every call.")
             }
             return sb.toString()
         }
