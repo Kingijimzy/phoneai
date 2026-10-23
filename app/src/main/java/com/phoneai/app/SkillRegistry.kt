@@ -124,23 +124,16 @@ object SkillRegistry {
         userApprovedThisRun: Boolean
     ): SkillDecision {
         val skill = list(context).firstOrNull { it.id == skillId }
-            ?: return SkillDecision(false, "Skill is not registered.")
-        if (!skill.enabled) return SkillDecision(false, "Skill is disabled.")
-        if (toolName !in supportedTools || toolName !in skill.allowedTools) {
-            return SkillDecision(false, "This skill is not allowed to use that tool.")
-        }
-        if (callsUsed < 0 || callsUsed >= skill.maxCalls) {
-            return SkillDecision(false, "Skill call budget reached.")
-        }
-        if (elapsedMs < 0 || elapsedMs > skill.maxDurationMs) {
-            return SkillDecision(false, "Skill time budget reached.")
-        }
-        if ((skill.requiresApproval || toolName in consequentialTools) && !userApprovedThisRun) {
-            return SkillDecision(false, "User approval is required before this action.")
-        }
-        return SkillDecision(true, "Allowed.")
+        return SkillAuthorizationPolicy.evaluate(
+            skill = skill,
+            toolName = toolName,
+            callsUsed = callsUsed,
+            elapsedMs = elapsedMs,
+            userApprovedThisRun = userApprovedThisRun,
+            supportedTools = supportedTools,
+            consequentialTools = consequentialTools
+        )
     }
-
     private fun validate(skill: PhoneAiSkill): SkillDecision {
         if (!idPattern.matches(skill.id)) return SkillDecision(false, "Skill ID must be 2–48 lowercase letters, numbers, dots, underscores, or hyphens.")
         if (!versionPattern.matches(skill.version)) return SkillDecision(false, "Version must use MAJOR.MINOR.PATCH format.")
