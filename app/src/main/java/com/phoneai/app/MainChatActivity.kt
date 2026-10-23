@@ -118,6 +118,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         view.setTextColor(Theme.MUTED)
     }
 
+    private fun historyActionButton(text: String, action: () -> Unit): TextView = label(text, 13f, 0xFFE2E2E2.toInt(), true).apply {
+        gravity = Gravity.CENTER
+        setPadding(dp(12), dp(10), dp(12), dp(10))
+        background = rounded(0xFF202020.toInt(), 12, 0xFF454545.toInt())
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { action() }
+    }
+
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
         val dialog = android.app.Dialog(this)
@@ -135,7 +144,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
         heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
         header.addView(heading)
-        val close = button("Close") { dialog.dismiss() }
+        val close = historyActionButton("Close") { dialog.dismiss() }
         header.addView(close)
         root.addView(header)
         val divider = View(this).apply { setBackgroundColor(0xFF292929.toInt()) }
@@ -194,7 +203,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             setBackgroundColor(0xFF090909.toInt())
         }
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val back = button("‹ History") { dialog.dismiss(); showChatHistory() }
+        val back = historyActionButton("‹ History") { dialog.dismiss(); showChatHistory() }
         header.addView(back)
         val titleBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(8), 0) }
         titleBox.addView(label(title.ifBlank { "Conversation" }, 16f, 0xFFF4F4F4.toInt(), true).apply { maxLines = 2 })
@@ -212,7 +221,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 background = rounded(if (mine) 0xFF292929.toInt() else 0xFF151515.toInt(), 16, if (mine) 0xFF454545.toInt() else 0xFF2B2B2B.toInt())
             }
             bubble.addView(label(if (mine) "YOU" else "ORION", 10f, if (mine) 0xFFBDBDBD.toInt() else 0xFFE4E4E4.toInt(), true))
-            bubble.addView(label(item.second, 14f, 0xFFF0F0F0.toInt()).apply { setPadding(0, dp(5), 0, 0 }) )
+            bubble.addView(label(item.second, 14f, 0xFFF0F0F0.toInt()).apply { setPadding(0, dp(5), 0, 0) })
             val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = if (mine) Gravity.END else Gravity.START }
             line.addView(bubble, LinearLayout.LayoutParams((resources.displayMetrics.widthPixels - dp(68)).coerceAtLeast(dp(180)), -2))
             transcript.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
@@ -221,13 +230,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         scrollView.addView(transcript)
         root.addView(scrollView, LinearLayout.LayoutParams(-1, 0, 1f))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        actions.addView(button("Copy transcript") {
+        actions.addView(historyActionButton("Copy transcript") {
             val body = messages.joinToString("\\n\\n") { (kind, text) -> (if (kind == "me") "YOU" else "ORION") + "\\n" + text }
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
             clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
             Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(8) })
-        actions.addView(button("Continue chat") {
+        actions.addView(historyActionButton("Continue chat") {
             PhoneAiService.instance?.restoreArchivedChat(messages)
                 ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
             dialog.dismiss()
