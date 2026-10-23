@@ -562,9 +562,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             Triple("Plan", "tasks", "Help me create a practical step-by-step plan. Ask what I want to achieve."),
             Triple("Explain", "spark", "Explain a difficult idea with a practical example."),
             Triple("Phone command", "shield", "Help me open an app or perform a phone action. Ask which app or action I want."),
+            Triple("Memory", "memory", "Recall my saved memories and summarize the relevant entries. Use memory IDs if I ask to update or forget one; confirm before deleting anything."),
+            Triple("Skills", "skills", "List my registered Orion skills, show which are enabled, their purpose and allowed tools. Do not run a skill."),
+            Triple("Tasks", "tasks", "List my saved tasks with their status and priority, then help me create, update, or complete a task if I ask."),
             Triple("Browser", "browser", ""),
-            Triple("Teach mode", "record", ""),
-            Triple("Tasks", "tasks", "")
+            Triple("Teach mode", "record", "")
         ).forEach { (name, iconName, prompt) ->
             val chip = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -585,9 +587,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 when (name) {
                     "Browser" -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java))
                     "Teach mode" -> startActivity(Intent(this@MainChatActivity, TeachModeActivity::class.java))
-                    "Tasks" -> startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java))
                     else -> {
-                        commandMode = name == "Research" || name == "Phone command"
+                        commandMode = name == "Research" || name == "Phone command" || name == "Memory" || name == "Skills" || name == "Tasks"
                         refreshModeSelector()
                         input.setText(prompt)
                         input.setSelection(input.text.length)
