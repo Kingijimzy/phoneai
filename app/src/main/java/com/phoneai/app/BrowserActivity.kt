@@ -151,9 +151,30 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             agentResult.text = "Inspecting visible page controls…"
             Thread {
                 val report = BrowserAutomation.snapshot()
-                runOnUiThread {
-                    agentResult.text = report.take(900).ifBlank { "No page details returned." }
+                val readable = try {
+                    val page = org.json.JSONObject(report)
+                    val lines = mutableListOf<String>()
+                    lines += page.optString("title", "Untitled page").ifBlank { "Untitled page" }
+                    lines += page.optString("url", "")
+                    val items = page.optJSONArray("items")
+                    if (items == null || items.length() == 0) {
+                        lines += "No visible links, buttons, or form fields detected."
+                    } else {
+                        lines += "VISIBLE CONTROLS"
+                        for (i in 0 until minOf(items.length(), 12)) {
+                            val item = items.optJSONObject(i) ?: continue
+                            val label = item.optString("text").ifBlank { "(unlabelled ${item.optString("tag")})" }
+                            val kind = item.optString("role").ifBlank { item.optString("tag") }
+                            val disabled = if (item.optBoolean("disabled")) " · disabled" else ""
+                            lines += "${i + 1}. [${kind}] ${label.take(70)}$disabled"
+                        }
+                        if (items.length() > 12) lines += "…and ${items.length() - 12} more controls"
+                    }
+                    lines.joinToString("\n")
+                } catch (_: Exception) {
+                    report.take(900).ifBlank { "No page details returned." }
                 }
+                runOnUiThread { agentResult.text = readable.take(1200) }
             }.start()
         }.apply { contentDescription = "Inspect visible links, buttons, and form fields on this page" })
         controls.addView(pill("Share") {
