@@ -68,6 +68,27 @@ object AgentCheckpointStore {
         return safe.toString().take(700)
     }
 
+    /**
+     * Avoid copying private screen contents, message bodies, remote payloads, or memory text
+     * into crash-recovery state. Recovery needs the outcome, not a second copy of private data.
+     */
+    private fun safeResult(tool: String, result: String): String {
+        val privatePayloadTools = setOf(
+            "read_screen", "research_web", "fetch_url", "mcp_call", "telegram_inbox",
+            "telegram_send", "sms", "type", "copy", "remember", "update_memory", "recall",
+            "look", "play"
+        )
+        if (tool in privatePayloadTools) {
+            val status = if (result.startsWith("error", ignoreCase = true)) "error" else "returned"
+            return "[$status; private result omitted; length=${result.length}]"
+        }
+        return result
+            .replace(Regex("(?i)(bearer\\s+)[a-z0-9._~+/-]+=*"), "$1[redacted]")
+            .replace(Regex("(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\\s*[:=]\\s*)[^\\s,;]+"), "$1[redacted]")
+            .replace(Regex("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", RegexOption.IGNORE_CASE), "[email redacted]")
+            .take(900)
+    }
+
     /** Persist intent before executing any tool, so a process death cannot erase the uncertain action. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = update(c) { o ->
         o.put("inFlight", JSONObject()
@@ -84,7 +105,7 @@ object AgentCheckpointStore {
             JSONObject()
                 .put("tool", tool.take(80))
                 .put("args", safeArgs(args))
-                .put("result", result.take(900))
+                .put("result", safeResult(tool, result))
                 .put("at", System.currentTimeMillis())
         )
         while (steps.length() > MAX_RECORDED_STEPS) steps.remove(0)
