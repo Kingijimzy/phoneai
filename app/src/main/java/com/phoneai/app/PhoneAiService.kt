@@ -1600,7 +1600,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 node.getBoundsInScreen(r)
                                 // Ignore container nodes such as a full-screen WebView; they are not individual targets.
                                 if (r.width() > 0 && r.height() > 0 &&
-                                    r.width().toLong() * r.height() < bitmap.width().toLong() * bitmap.height() * 0.40) {
+                                    r.width().toLong() * r.height() < bitmap.width.toLong() * bitmap.height * 0.40) {
                                     occupied.add(Rect(
                                         (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
                                         (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
