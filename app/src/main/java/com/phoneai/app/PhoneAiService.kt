@@ -1547,8 +1547,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         // OCR is local-only. Do not OCR sensitive app screens or any editable/password field.
         val visibleLabels = nodes.mapNotNull { n ->
-            if (n.isPassword) "(password field)" else
-                (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())?.lowercase()
+            if (n.isPassword) "(password field)" else if (n.isEditable) n.hintText?.toString()?.lowercase()
+            else (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())?.lowercase()
         }.joinToString(" ")
         val packageId = root.packageName?.toString()?.lowercase().orEmpty()
         val sensitiveScreen = Regex("bank|wallet|payment|pay\\b|authenticator|password|credential|otp|one.?time.?code")
@@ -1608,8 +1608,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {
         if (nodes.size >= 45) return
-        val text = n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString() ?: ""
-        val lbl = if (n.isPassword) "(password field)" else text.trim()
+        // Never put the current contents of an editable field into the screen map.
+        val text = if (n.isEditable) "" else n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString() ?: ""
+        val lbl = when {
+            n.isPassword -> "(password field)"
+            n.isEditable -> n.hintText?.toString()?.takeIf { it.isNotBlank() } ?: "(text field)"
+            else -> text.trim()
+        }
         if (n.isVisibleToUser && (lbl.isNotEmpty() || n.isClickable || n.isEditable)) {
             val r = Rect()
             n.getBoundsInScreen(r)
