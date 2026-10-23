@@ -132,6 +132,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             for (o in orbs()) o.level = l
             mainChatListener?.onAudioLevel(l)
         }
+        transcript.clear()
+        transcript.addAll(ChatHistoryStore.load(this))
         agent = Agent(this, this)
         showBubble()
         startWake()
@@ -588,6 +590,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (!running) {
                 agent.reset()
                 transcript.clear()
+                ChatHistoryStore.clear(this)
                 mainChatListener?.onMessage("ai", "New conversation. What are we working on?")
             }
         }
@@ -601,6 +604,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         listening -> OrbView.Mode.LISTENING
         running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
         else -> OrbView.Mode.IDLE
+    }
+
+    private fun appendTranscript(kind: String, text: String) {
+        transcript.add(Pair(kind, text))
+        if (kind == "me" || kind == "ai") ChatHistoryStore.save(this, transcript)
     }
 
     private fun addLine(kind: String, text: String) {
@@ -1057,8 +1065,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         if (Regex("^(goodbye|bye|bye bye|end call|end the call|hang up|stop listening|that's all|that is all)[.!]?$").matches(t.lowercase())) {
             handsActive = false
-            transcript.add(Pair("me", t))
-            transcript.add(Pair("ai", "Talk soon."))
+            appendTranscript("me", t)
+            appendTranscript("ai", "Talk soon.")
             voice.stopListening()
             listening = false
             if (Prefs.voice(this)) voice.speak("Talk soon.")
@@ -1070,7 +1078,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // to the separate chat command workflow when they want phone actions.
         if (handsActive) {
             wakeGen++
-            transcript.add(Pair("me", t))
+            appendTranscript("me", t)
             mainChatListener?.onMessage("me", t)
             voice.stopSpeaking()
             voice.stopListening()
@@ -1097,7 +1105,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         if (conversationOnly || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t))) {
             wakeGen++
-            transcript.add(Pair("me", t))
+            appendTranscript("me", t)
             mainChatListener?.onMessage("me", t)
             voice.stopSpeaking()
             voice.stopListening()
@@ -1118,7 +1126,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
 
         wakeGen++
-        transcript.add(Pair("me", t))
+        appendTranscript("me", t)
         // Show the user's message immediately, like a real chat app, rather than
         // waiting for the model response to make the conversation feel alive.
         if (panel != null) {
@@ -1245,7 +1253,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             errored = true
             handsActive = false
             Toast.makeText(this, err, Toast.LENGTH_LONG).show()
-            transcript.add(Pair("note", err))
+            appendTranscript("note", err)
         })
     }
 
@@ -1324,7 +1332,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }, { _ -> }, { err ->
             wakeErr = true
-            transcript.add(Pair("note", "Wake word: $err"))
+            appendTranscript("note", "Wake word: $err")
             main.postDelayed({ wakeTick(my) }, 5000)
         })
     }
@@ -1338,7 +1346,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- AgentUi
 
     override fun say(text: String) {
-        transcript.add(Pair("ai", text))
+        appendTranscript("ai", text)
         main.post {
             hideThinkingIndicator()
             if (panel != null) {
@@ -1364,7 +1372,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun note(text: String) {
-        transcript.add(Pair("note", text))
+        appendTranscript("note", text)
         main.post {
             mainChatListener?.onMessage("note", text)
             if (panel != null) {
