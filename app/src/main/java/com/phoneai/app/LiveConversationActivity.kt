@@ -17,6 +17,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import androidx.webkit.WebViewAssetLoader
 import android.widget.Toast
 
 /**
@@ -26,6 +28,7 @@ import android.widget.Toast
 class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var wave: VoiceWaveView
     private lateinit var core: WebView
+    private lateinit var characterAssets: WebViewAssetLoader
     private lateinit var stateLabel: TextView
     private lateinit var transcript: LinearLayout
     private lateinit var micButton: LinearLayout
@@ -125,20 +128,38 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         val compact = resources.configuration.screenHeightDp < 720
         val waveHeight = if (compact) 46 else 58
-        // Human-shaped holographic character rendered in the bundled Three.js stage.
-        // Native waveform and controls remain responsive while the model loads.
+        // Serve the trusted local character page through WebViewAssetLoader rather than
+        // granting broad file:// access to remote scripts. The model and Three.js still need internet.
+        characterAssets = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
         core = WebView(this).apply {
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             isFocusable = false
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = false
-            settings.allowFileAccess = true
+            settings.allowFileAccess = false
             settings.allowContentAccess = false
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
-            webViewClient = WebViewClient()
-            loadUrl("file:///android_asset/orion3d/index.html")
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?) =
+                    request?.url?.let { characterAssets.shouldInterceptRequest(it) }
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    val current = when (lastMode) {
+                        OrbView.Mode.IDLE -> "idle"
+                        OrbView.Mode.LISTENING -> "listening"
+                        OrbView.Mode.THINKING -> "thinking"
+                        OrbView.Mode.SPEAKING -> "speaking"
+                        OrbView.Mode.ACTING -> "acting"
+                        OrbView.Mode.WAITING_APPROVAL -> "waiting_approval"
+                    }
+                    view?.evaluateJavascript("window.Orion3D && window.Orion3D.setState('" + current + "')", null)
+                }
+            }
+            loadUrl("https://appassets.androidplatform.net/assets/orion3d/index.html")
         }
         val characterStage = LinearLayout(this).apply {
             gravity = Gravity.CENTER
@@ -418,6 +439,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         if (isFinishing) PhoneAiService.instance?.endLiveConversation()
         attachedService?.detachMainChat(this)
         attachedService = null
+        if (::core.isInitialized) {
+            core.stopLoading()
+            core.loadUrl("about:blank")
+            (core.parent as? android.view.ViewGroup)?.removeView(core)
+            core.destroy()
+        }
         super.onDestroy()
     }
 
