@@ -31,11 +31,11 @@ class OrionKeyboardService : InputMethodService() {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         val inputType = attribute?.inputType ?: 0
-        upper = inputType and (
+        upper = (inputType and (
             android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or
                 android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS or
                 android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            ) != 0
+            )) != 0
         symbols = false
     }
 
@@ -60,7 +60,7 @@ class OrionKeyboardService : InputMethodService() {
             listOf(
                 listOf("1","2","3","4","5","6","7","8","9","0"),
                 listOf("@","#","$","%","&","-","+","(",")","/"),
-                listOf("=\u003c","*","\u0022","' ",":",";","!","?","⌫"),
+                listOf("<",">","*","\u0022","' ",":",";","!","?","⌫"),
                 listOf("ABC",",","space",".","↵")
             )
         } else {
