@@ -25,8 +25,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x08090b);
-scene.fog = new THREE.FogExp2(0x08090b, 0.035);
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.FogExp2(0x000000, 0.035);
 const camera = new THREE.PerspectiveCamera(29, innerWidth / innerHeight, 0.1, 80);
 camera.position.set(0, 1.72, 1.85);
 camera.lookAt(0, 1.72, 0);
@@ -43,8 +43,8 @@ document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xe1e5eb, 0x202329, 2.0));
 const key = new THREE.DirectionalLight(0xf1f3f6, 3.1);
 key.position.set(1.4, 3.2, 3.5); key.castShadow = true; scene.add(key);
-const rim = new THREE.PointLight(0xe1e5eb, 22, 5); rim.position.set(-1.2, 1.9, -1.1); scene.add(rim);
-const violet = new THREE.PointLight(0x8f969f, 12, 5); violet.position.set(1.2, 1.5, -1.5); scene.add(violet);
+const rim = new THREE.PointLight(0x43baff, 22, 5); rim.position.set(-1.2, 1.9, -1.1); scene.add(rim);
+const violet = new THREE.PointLight(0x8fd8ff, 12, 5); violet.position.set(1.2, 1.5, -1.5); scene.add(violet);
 const floor = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({color:0x171a1f,metalness:.55,roughness:.36,transparent:true,opacity:.72}));
 floor.rotation.x = -Math.PI/2; floor.position.y = -0.015; floor.receiveShadow = true; scene.add(floor);
 for (let i=0;i<3;i++){
