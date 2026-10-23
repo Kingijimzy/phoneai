@@ -6,11 +6,14 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
+import android.util.Base64
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -27,6 +30,7 @@ import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -776,7 +780,11 @@ class SettingsActivity : Activity() {
                     "parse", "clip", "segment", "detect", "diffusion", "image-generation",
                     "video-generation", "pose-estimation", "classifier"
                 )
-                val eligible = all.filter { id -> chatOnly.none { id.lowercase().contains(it) } }
+                // Live-preview models require Gemini's Live API and cannot use this app's standard image payload.
+                val eligible = all.filter { id ->
+                    chatOnly.none { id.lowercase().contains(it) } &&
+                        !id.lowercase().contains("live")
+                }
                 val nvidiaPreferred = listOf(
                     "deepseek-v4.1-flash", "nemotron-3.5-lightning", "nemotron-3.5-super-vl",
                     "llama-3.3-70b", "llama-4", "qwen"
@@ -884,7 +892,7 @@ class SettingsActivity : Activity() {
             for (vision in listOf(false, true)) {
                 if (isFinishing) break
                 val p = Prefs.provider(this, vision)
-                val name = if (vision) "Vision route (text probe only)" else "Chat route"
+                val name = if (vision) "Vision route (real image probe)" else "Chat route"
                 val nim = Nim(this)
                 activeNim = nim
                 nim.onStatus = { stage ->
@@ -897,12 +905,32 @@ class SettingsActivity : Activity() {
                         "$name\nSelected provider: ${p.label}\nSelected model: ${Prefs.model(this, p, vision)}\nSending a real test request…"
                 }
                 try {
-                    val m = JSONArray().put(
-                        JSONObject().put("role", "user").put(
-                            "content", "Reply with exactly this one word: OK"
+                    val m = if (vision) {
+                        // Exercise the same image_url/base64 format used by uploaded pictures.
+                        val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
+                        bitmap.eraseColor(Color.RED)
+                        val bytes = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, bytes)
+                        bitmap.recycle()
+                        val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                        val parts = JSONArray()
+                            .put(JSONObject().put("type", "text").put(
+                                "text", "Look at the attached test image. What is its main color? Reply with one word."
+                            ))
+                            .put(JSONObject().put("type", "image_url").put(
+                                "image_url", JSONObject()
+                                    .put("url", "data:image/jpeg;base64,$encoded")
+                                    .put("detail", "low")
+                            ))
+                        JSONArray().put(JSONObject().put("role", "user").put("content", parts))
+                    } else {
+                        JSONArray().put(
+                            JSONObject().put("role", "user").put(
+                                "content", "Reply with exactly this one word: OK"
+                            )
                         )
-                    )
-                    val answer = nim.chat(m, vision, 16, 0.0).trim()
+                    }
+                    val answer = nim.chat(m, vision, if (vision) 96 else 16, 0.0).trim()
                     val actual = if (vision) "vision route" else "chat route"
                     sb.append("$name: RESPONSE RECEIVED.\n")
                     sb.append("Selected: ${p.label} / ${Prefs.model(this, p, vision)}\n")
