@@ -420,7 +420,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                     if (kind == "me") 0xFF454545.toInt() else Theme.LINE)
             }
             row.addView(text(if (kind == "me") "YOU" else "ORION", 8f,
-                if (kind == "me") Theme.CYAN else Theme.MUTED, true))
+                if (kind == "me") 0xFFE2E2E2.toInt() else Theme.MUTED, true))
             row.addView(text(message, 12f, Theme.TEXT).apply {
                 maxWidth = (resources.displayMetrics.widthPixels - dp(100)).coerceAtLeast(dp(180))
                 maxLines = 4
