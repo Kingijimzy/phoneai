@@ -136,7 +136,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 AlertDialog.Builder(this)
                     .setTitle(chat.title)
                     .setMessage(body)
-                    .setPositiveButton("Close", null)
+                    .setPositiveButton("Continue this chat") { _, _ ->
+                        PhoneAiService.instance?.restoreArchivedChat(chat.messages)
+                            ?: Toast.makeText(this, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
+                    }
+                    .setNegativeButton("Close", null)
                     .setNeutralButton("Copy") { _, _ ->
                         val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                         clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
@@ -713,6 +717,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     commandMode = composeCommandMode.value,
                     selectedImage = composeSelectedImage.value,
                     onBack = { finish() },
+                    onHistory = { showChatHistory() },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
                     onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java)) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onStop = { if (::stop.isInitialized) stop.performClick() }
@@ -968,6 +973,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onMessage(kind: String, text: String) {
         runOnUiThread { addMessage(kind, text) }
+    }
+
+    override fun onTranscriptRestored(messages: List<Pair<String, String>>) {
+        runOnUiThread {
+            composeLines.clear()
+            messages.forEach { (kind, text) -> composeLines.add(OrionChatLine(System.nanoTime(), kind, text)) }
+            if (composeLines.isEmpty()) addMessage("ai", "Previous conversation restored. Continue whenever you are ready.")
+        }
     }
 
     override fun onStatus(text: String, mode: OrbView.Mode) {
