@@ -112,6 +112,19 @@ fun OrionComposeChatScreen(
 ) {
     var draft by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val welcomeTransition = rememberInfiniteTransition(label = "orion-welcome-motion")
+    val corePulse by welcomeTransition.animateFloat(
+        initialValue = 0.965f,
+        targetValue = 1.035f,
+        animationSpec = infiniteRepeatable(animation = tween(1700), repeatMode = RepeatMode.Reverse),
+        label = "orion-core-breath"
+    )
+    val ringPulse by welcomeTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(animation = tween(2300), repeatMode = RepeatMode.Reverse),
+        label = "orion-ring-breath"
+    )
     val statusDotColor by animateColorAsState(
         targetValue = when {
             status.contains("listen", true) || status.contains("speak", true) -> ChatMint
@@ -182,7 +195,7 @@ fun OrionComposeChatScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().scale(ringPulse)) {
                             val center = Offset(size.width / 2f, size.height / 2f)
                             for (i in 0..4) drawCircle(
                                 color = ChatMint.copy(alpha = .10f - i * .015f),
@@ -191,7 +204,7 @@ fun OrionComposeChatScreen(
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Box(Modifier.size(94.dp).clip(CircleShape)
+                            Box(Modifier.size(94.dp).scale(corePulse).clip(CircleShape)
                                 .background(Brush.radialGradient(listOf(Color(0xFF555555), Color(0xFF242424), Color(0xFF141414))))
                                 .border(1.dp, Color(0xFF8A8A8A).copy(alpha = .7f), CircleShape),
                                 contentAlignment = Alignment.Center) {
