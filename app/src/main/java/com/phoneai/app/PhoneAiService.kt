@@ -77,6 +77,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val nodes = ArrayList<AccessibilityNodeInfo>()
     /** OCR-only elements from the latest read_screen; bounds are in physical screen coordinates. */
     private val ocrElements = ArrayList<ScreenPerception.OcrItem>()
+    private val visualElements = ArrayList<VisualElementDetector.Region>()
 
     private var bubble: OrbView? = null
     private var panel: LinearLayout? = null
@@ -1540,6 +1541,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = rootInActiveWindow ?: return "error: cannot read this screen (it may be protected)"
         nodes.clear()
         ocrElements.clear()
+        visualElements.clear()
         val size = screenSize()
         val sb = StringBuilder()
         sb.append("screen ${size.first}x${size.second}\n")
@@ -1589,6 +1591,32 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 sb.append("[$id] OCR \"${item.text.take(70)}\"\n")
                                 existing.add(normalized)
                             }
+                            // Local visual fallback for unlabeled custom-drawn controls.
+                            val occupied = ArrayList<Rect>()
+                            nodes.forEach { node ->
+                                val r = Rect()
+                                node.getBoundsInScreen(r)
+                                if (r.width() > 0 && r.height() > 0) occupied.add(Rect(
+                                    (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
+                                    (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
+                                ))
+                            }
+                            ocrElements.forEach { item -> occupied.add(Rect(
+                                (item.bounds.left / shot.scale).toInt(), (item.bounds.top / shot.scale).toInt(),
+                                (item.bounds.right / shot.scale).toInt(), (item.bounds.bottom / shot.scale).toInt()
+                            )) }
+                            val regions = VisualElementDetector.detect(bitmap, excluded + occupied)
+                            for (region in regions) {
+                                if (visualElements.size >= 10) break
+                                val scaled = Rect(
+                                    (region.bounds.left * shot.scale).toInt(), (region.bounds.top * shot.scale).toInt(),
+                                    (region.bounds.right * shot.scale).toInt(), (region.bounds.bottom * shot.scale).toInt()
+                                )
+                                if (scaled.width() <= 0 || scaled.height() <= 0) continue
+                                visualElements.add(VisualElementDetector.Region(scaled, region.confidence))
+                                val id = nodes.size + ocrElements.size + visualElements.lastIndex
+                                sb.append("[$id] visual target (unlabeled)\\n")
+                            }
                         } finally {
                             if (!bitmap.isRecycled) bitmap.recycle()
                         }
@@ -1600,7 +1628,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         } else {
             sb.append("(OCR withheld on a potentially sensitive screen)\n")
         }
-        if (nodes.size + ocrElements.size < 3) {
+        if (nodes.size + ocrElements.size + visualElements.size < 3) {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
         return sb.toString().take(2800)
@@ -1638,6 +1666,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Label and centre of an element from the latest read_screen (used to save routines). */
     fun nodeInfo(id: Int): Triple<String, Int, Int>? {
+        if (id >= nodes.size + ocrElements.size) {
+            val item = visualElements.getOrNull(id - nodes.size - ocrElements.size) ?: return null
+            return Triple("visual target", item.bounds.centerX(), item.bounds.centerY())
+        }
         if (id >= nodes.size) {
             val item = ocrElements.getOrNull(id - nodes.size) ?: return null
             return Triple(item.text.take(40), item.bounds.centerX(), item.bounds.centerY())
@@ -1651,6 +1683,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun clickId(id: Int): String {
+        if (id >= nodes.size + ocrElements.size) {
+            val item = visualElements.getOrNull(id - nodes.size - ocrElements.size)
+                ?: return "error: no element $id. Call read_screen first."
+            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
+        }
         if (id >= nodes.size) {
             val item = ocrElements.getOrNull(id - nodes.size)
                 ?: return "error: no element $id. Call read_screen first."
