@@ -30,6 +30,9 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 
 /** Full-screen conversation. The floating orb keeps its separate, compact command panel. */
 class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
+    companion object {
+        const val EXTRA_PICK_IMAGE = "com.phoneai.app.PICK_IMAGE_ON_OPEN"
+    }
     private lateinit var messages: LinearLayout
     private lateinit var scroll: ScrollView
     private lateinit var status: TextView
@@ -718,6 +721,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
         setContentView(composeRoot)
         addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
+        if (intent.getBooleanExtra(EXTRA_PICK_IMAGE, false)) {
+            window.decorView.postDelayed({
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    type = "image/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                startActivityForResult(Intent.createChooser(picker, "Choose an image for Orion"), 44)
+            }, 260L)
+        }
     }
 
     override fun onResume() {
