@@ -25,8 +25,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x040812);
-scene.fog = new THREE.FogExp2(0x040812, 0.035);
+scene.background = new THREE.Color(0x08090b);
+scene.fog = new THREE.FogExp2(0x08090b, 0.035);
 const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 80);
 camera.position.set(0, 1.45, 5.4);
 camera.lookAt(0, 1.05, 0);
@@ -40,22 +40,22 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0x9dcfff, 0x11172b, 2.0));
-const key = new THREE.DirectionalLight(0xe5f3ff, 3.1);
+scene.add(new THREE.HemisphereLight(0xcbd2dc, 0x202329, 2.0));
+const key = new THREE.DirectionalLight(0xf1f3f6, 3.1);
 key.position.set(3, 5, 4); key.castShadow = true; scene.add(key);
-const rim = new THREE.PointLight(0x38e1ff, 22, 8); rim.position.set(-2, 2.2, -1.5); scene.add(rim);
-const violet = new THREE.PointLight(0x7755ff, 17, 7); violet.position.set(2, 1.1, -2); scene.add(violet);
-const floor = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({color:0x08182a,metalness:.55,roughness:.36,transparent:true,opacity:.72}));
+const rim = new THREE.PointLight(0xc9d3df, 18, 8); rim.position.set(-2, 2.2, -1.5); scene.add(rim);
+const violet = new THREE.PointLight(0x7e8792, 17, 7); violet.position.set(2, 1.1, -2); scene.add(violet);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({color:0x171a1f,metalness:.55,roughness:.36,transparent:true,opacity:.72}));
 floor.rotation.x = -Math.PI/2; floor.position.y = -0.015; floor.receiveShadow = true; scene.add(floor);
 for (let i=0;i<3;i++){
- const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1+i*.26,.006,6,100),new THREE.MeshBasicMaterial({color:i===1?0x7755ff:0x38e1ff,transparent:true,opacity:.48-i*.1}));
+ const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1+i*.26,.006,6,100),new THREE.MeshBasicMaterial({color:i===1?0x7e8792:0xc9d3df,transparent:true,opacity:.48-i*.1}));
  ring.rotation.x=Math.PI/2; ring.position.y=.012+i*.002; ring.userData.speed=(i%2?-.12:.18); scene.add(ring);
 }
 const starGeo = new THREE.BufferGeometry();
 const starPos = [];
 for(let i=0;i<180;i++){starPos.push((Math.random()-.5)*9,Math.random()*4.5,(Math.random()-.5)*7-1.5);}
 starGeo.setAttribute('position',new THREE.Float32BufferAttribute(starPos,3));
-const stars = new THREE.Points(starGeo,new THREE.PointsMaterial({color:0x6bcbff,size:.018,transparent:true,opacity:.72}));
+const stars = new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xaeb8c5,size:.018,transparent:true,opacity:.72}));
 scene.add(stars);
 
 let model=null, head=null, neck=null, jaw=null, spine=null, chest=null, hips=null;
@@ -71,12 +71,12 @@ function addFaceRig(headBone, scale){
  const face = new THREE.Group();
  face.position.set(0, 0.005, 0.065);
  headBone.add(face);
- const eyeMat = new THREE.MeshStandardMaterial({color:0x7df4ff,emissive:0x20bde8,emissiveIntensity:2.2,metalness:.15,roughness:.2});
+ const eyeMat = new THREE.MeshStandardMaterial({color:0xe7edf4,emissive:0xb8c4d2,emissiveIntensity:2.2,metalness:.15,roughness:.2});
  for(const x of [-.033,.033]){
    const eye = new THREE.Mesh(new THREE.SphereGeometry(.012,12,8),eyeMat);
    eye.position.set(x,.018,0); eye.scale.set(1,1,.42); face.add(eye); eyes.push(eye);
  }
- const mouthMat = new THREE.MeshStandardMaterial({color:0x07121d,emissive:0x38e1ff,emissiveIntensity:.55,roughness:.3});
+ const mouthMat = new THREE.MeshStandardMaterial({color:0x07121d,emissive:0xc9d3df,emissiveIntensity:.55,roughness:.3});
  mouth = new THREE.Mesh(new THREE.SphereGeometry(1,16,10),mouthMat);
  mouth.position.set(0,-.025,.003); mouth.scale.set(.031,.004,.006); face.add(mouth);
 }
@@ -199,8 +199,8 @@ function animate(now){
  }
  scene.children.forEach(o=>{if(o.userData.speed)o.rotation.z+=o.userData.speed*dt;});
  stars.rotation.y=t*.012;
- const rimTarget=state==='listening'?28:state==='speaking'?25:state==='thinking'?18:state==='acting'?24:22;
- const violetTarget=state==='thinking'?22:state==='waiting_approval'?14:17;
+ const rimTarget=state==='listening'?22:state==='speaking'?20:state==='thinking'?16:state==='acting'?19:18;
+ const violetTarget=state==='thinking'?16:state==='waiting_approval'?10:12;
  rimEnergy+=(rimTarget-rimEnergy)*Math.min(1,dt*2.6);
  violetEnergy+=(violetTarget-violetEnergy)*Math.min(1,dt*2.2);
  rim.intensity=rimEnergy;
