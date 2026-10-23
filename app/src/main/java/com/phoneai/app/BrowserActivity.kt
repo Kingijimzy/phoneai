@@ -147,6 +147,15 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         controls.addView(reloadButton)
         controls.addView(stopButton)
         controls.addView(pill("Home") { navigate("https://duckduckgo.com/") })
+        controls.addView(pill("Inspect") {
+            agentResult.text = "Inspecting visible page controls…"
+            Thread {
+                val report = BrowserAutomation.snapshot()
+                runOnUiThread {
+                    agentResult.text = report.take(900).ifBlank { "No page details returned." }
+                }
+            }.start()
+        }.apply { contentDescription = "Inspect visible links, buttons, and form fields on this page" })
         controls.addView(pill("Share") {
             val current = web.url ?: return@pill
             try {
