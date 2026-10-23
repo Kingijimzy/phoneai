@@ -718,6 +718,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     selectedImage = composeSelectedImage.value,
                     onBack = { finish() },
                     onHistory = { showChatHistory() },
+                    onNewChat = {
+                        val service = PhoneAiService.instance
+                        if (service != null) service.startNewChat()
+                        else {
+                            ChatHistoryStore.archiveAndClear(this@MainChatActivity, composeLines.map { it.kind to it.text })
+                            composeLines.clear()
+                            Toast.makeText(this@MainChatActivity, "New chat ready", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
                     onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java)) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onStop = { if (::stop.isInitialized) stop.performClick() }
@@ -978,8 +987,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     override fun onTranscriptRestored(messages: List<Pair<String, String>>) {
         runOnUiThread {
             composeLines.clear()
-            messages.forEach { (kind, text) -> composeLines.add(OrionChatLine(System.nanoTime(), kind, text)) }
-            if (composeLines.isEmpty()) addMessage("ai", "Previous conversation restored. Continue whenever you are ready.")
+            messages.forEachIndexed { index, pair ->
+                val (kind, text) = pair
+                composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
+            }
         }
     }
 
