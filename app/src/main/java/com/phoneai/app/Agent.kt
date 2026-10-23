@@ -188,6 +188,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     companion object {
         const val MAX_STEPS = 16
+        private const val MAX_VISION_STEPS_PER_MINUTE = 5
+        private val visionStepTimes = java.util.concurrent.ConcurrentLinkedDeque<Long>()
+
+        private fun reserveVisionStep(): Boolean {
+            val now = System.currentTimeMillis()
+            val cutoff = now - 60_000L
+            synchronized(visionStepTimes) {
+                while (true) {
+                    val oldest = visionStepTimes.peekFirst() ?: break
+                    if (oldest < cutoff) visionStepTimes.pollFirst() else break
+                }
+                if (visionStepTimes.size >= MAX_VISION_STEPS_PER_MINUTE) return false
+                visionStepTimes.addLast(now)
+                return true
+            }
+        }
 
         private const val BASE = """
 You are Orion, a personal AI assistant living on the user's Android phone, in the style of JARVIS: calm, sharp, loyal, a little witty. You hear the user and your replies are SPOKEN aloud, so write plain sentences: no markdown, no lists, no emojis, no asterisks.
@@ -861,6 +877,9 @@ Rules:
         val n = steps.coerceIn(1, 40)
         for (i in 1..n) {
             if (stopped) return "stopped at step $i"
+            if (!reserveVisionStep()) {
+                return "vision paused: Orion allows at most $MAX_VISION_STEPS_PER_MINUTE vision steps per minute to protect API quota. Review the screen and continue after the limit window resets."
+            }
             val shot = svc.screenshotBase64() ?: return "error: could not take a screenshot"
             if (stopped) return "stopped at step $i"
             val prompt = "User's goal: ${goal.take(300)}\n$note\nThe image is ${shot.w}x${shot.h} pixels. " +
