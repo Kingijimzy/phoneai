@@ -159,6 +159,13 @@ object Prefs {
         // Migrate stale NVIDIA preferences. Model pickers can persist embedding,
         // retrieval, or vision-only catalog entries as chat models; those cannot answer chat.
         // Always restore the intended DeepSeek chat default for those incompatible selections.
+        // Gemini Live preview models are designed for the real-time Live API, not
+        // ordinary OpenAI-compatible chat/completions image requests. Migrate them to
+        // the provider's supported standard image-understanding model.
+        if (vision && p.id == "gemini" && saved != null && saved.lowercase().contains("live")) {
+            sp(c).edit().putString("vm_${p.id}", def).apply()
+            return def
+        }
         if (p.id == "nvidia" && saved != null) {
             val id = saved.lowercase()
             val retired = saved in setOf(
