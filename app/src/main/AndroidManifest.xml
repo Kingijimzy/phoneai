@@ -94,6 +94,11 @@
         <activity android:name=".TradingActivity" android:exported="false" />
 
         <service
+            android:name=".TelegramListenerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
             android:name=".WatchService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
