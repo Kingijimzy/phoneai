@@ -369,8 +369,8 @@ class MainActivity : ComponentActivity() {
         gap(workspace, action("Task centre", "Running tasks, saved sessions, and progress", true) {
             startActivity(Intent(this, TaskCenterActivity::class.java))
         }, 8)
-        gap(workspace, action("Memory & routines", "Saved notes and repeatable workflows") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
+        gap(workspace, action("Memory & routines", "Search and manage Orion’s saved local memories") {
+            startActivity(Intent(this, MemoryActivity::class.java))
         }, 8)
         gap(workspace, action("Skills studio", "Manage Orion's available capabilities") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
@@ -445,8 +445,8 @@ class MainActivity : ComponentActivity() {
         gap(page, action("Voice & character", "Voice, speech speed, avatar, and personality") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "voice"))
         })
-        gap(page, action("Memory & routines", "Manage stored facts, routines, and agent skills") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "memory"))
+        gap(page, action("Memory & routines", "Search and manage Orion’s saved local memories") {
+            startActivity(Intent(this, MemoryActivity::class.java))
         })
         gap(page, action("Integrations", "Telegram, remote MCP, connection status") {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "integrations"))
