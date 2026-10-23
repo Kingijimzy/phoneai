@@ -469,7 +469,24 @@ class SettingsActivity : Activity() {
                 }
             }.start()
         }, 8)
-        add(s7, button("Check inbox & reply", false) {
+        add(s7, button(
+            if (TelegramListenerService.isEnabled(this)) "Stop continuous Telegram replies" else "Start continuous Telegram replies",
+            true
+        ) {
+            if (TelegramListenerService.isEnabled(this)) {
+                TelegramListenerService.stop(this)
+                showInfoDialog("Telegram listener", "Continuous replies stopped. Orion will no longer poll Telegram in the background.")
+            } else {
+                val started = TelegramListenerService.start(this)
+                showInfoDialog(
+                    "Telegram listener",
+                    if (started) "Continuous Telegram replies started. Keep the ongoing Orion notification visible. Orion checks for messages about every 12 seconds while Android allows the service to run. Send /start to test."
+                    else "Could not start the listener. First configure a valid bot token and numeric personal chat ID, then try again."
+                )
+            }
+            recreate()
+        }, 8)
+        add(s7, button("Check inbox & reply once", false) {
             Toast.makeText(this, "Checking saved Telegram chat...", Toast.LENGTH_SHORT).show()
             Thread {
                 val result = TelegramBridge.checkUpdates(this)
