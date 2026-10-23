@@ -985,14 +985,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val text = message.trim().lowercase(java.util.Locale.ROOT)
         if (text.isBlank()) return false
         val patterns = listOf(
-            Regex("\\\\b(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\\\b"),
-            Regex("\\\\b(search (the )?web|look up|google|browse to|visit (the )?website|go to (the )?website|find (online|on the web)|research (online|the latest))\\\\b"),
-            Regex("\\\\b(current|latest|today'?s|right now|live)\\\\b.*\\\\b(weather|news|price|rate|score|forecast|exchange rate|market|time in)\\\\b"),
-            Regex("\\\\b(what is|what's|check|find|show me|look at|compare)\\\\b.*\\\\b(current price|price of|weather|news|exchange rate|market price|latest update|live score|forecast)\\\\b"),
-            Regex("\\\\b(remember this|save this|save to memory|remember that|recall my|search my memories|show my memories|update my memory|forget this|forget my|delete memory)\\\\b"),
-            Regex("\\\\b(list my tasks|show my tasks|create a task|add a task|update my task|complete my task|delete my task|list my skills|show my skills|run skill)\\\\b"),
-            Regex("\\\\b(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\\\b"),
-            Regex("\\\\b(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\\\b")
+            Regex("\\b(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b"),
+            Regex("\\b(search (the )?web|look up|google|browse to|visit (the )?website|go to (the )?website|find (online|on the web)|research (online|the latest))\\b"),
+            Regex("\\b(current|latest|today'?s|right now|live)\\b.*\\b(weather|news|price|rate|score|forecast|exchange rate|market|time in)\\b"),
+            Regex("\\b(what is|what's|check|find|show me|look at|compare)\\b.*\\b(current price|price of|weather|news|exchange rate|market price|latest update|live score|forecast)\\b"),
+            Regex("\\b(remember this|save this|save to memory|remember that|recall my|search my memories|show my memories|update my memory|forget this|forget my|delete memory)\\b"),
+            Regex("\\b(list my tasks|show my tasks|create a task|add a task|update my task|complete my task|delete my task|list my skills|show my skills|run skill)\\b"),
+            Regex("\\b(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\b"),
+            Regex("\\b(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\b")
         )
         return patterns.any { it.containsMatchIn(text) }
     }
