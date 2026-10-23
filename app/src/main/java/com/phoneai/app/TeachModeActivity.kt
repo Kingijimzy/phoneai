@@ -146,9 +146,32 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
                 } else if (service.isTaskRunning()) {
                     status.text = "Orion is already running another task. Stop it or wait for it to finish first."
                 } else {
+                    val savedSteps = MacroStore.find(this@TeachModeActivity, name)?.second
+                    val previewLines = mutableListOf<String>()
+                    if (savedSteps != null) {
+                        for (i in 0 until minOf(savedSteps.length(), 8)) {
+                            val step = savedSteps.optJSONObject(i) ?: continue
+                            val tool = step.optString("tool", "action")
+                            val args = step.optJSONObject("args") ?: org.json.JSONObject()
+                            val detail = when (tool) {
+                                "click_text" -> args.optString("text")
+                                "open_app" -> args.optString("name")
+                                "open_url", "browser_navigate" -> args.optString("url")
+                                "type" -> "text entry (content hidden)"
+                                "tap", "long_press" -> "screen coordinates"
+                                "swipe", "swipe_path", "scroll" -> "screen gesture"
+                                "wait" -> "short wait"
+                                "key" -> args.optString("key")
+                                else -> ""
+                            }
+                            previewLines.add("${i + 1}. $tool" + if (detail.isBlank()) "" else " — $detail")
+                        }
+                        if (savedSteps.length() > 8) previewLines.add("…and ${savedSteps.length() - 8} more steps")
+                    }
+                    val previewText = if (previewLines.isEmpty()) "No step preview is available. " else "Steps preview:\n" + previewLines.joinToString("\n") + "\n\n"
                     AlertDialog.Builder(this@TeachModeActivity)
                         .setTitle("Replay $name?")
-                        .setMessage("This routine contains $count recorded steps and replays locally without AI calls. Keep the target app open and make sure the screen is in the expected starting state. Recorded taps may submit forms or change data.")
+                        .setMessage(previewText + "This routine contains $count recorded steps and replays locally without AI calls. Keep the target app open and make sure the screen is in the expected starting state. Recorded taps may submit forms or change data.")
                         .setNegativeButton("Cancel", null)
                         .setPositiveButton("Replay routine") { _, _ ->
                             val currentService = PhoneAiService.instance
