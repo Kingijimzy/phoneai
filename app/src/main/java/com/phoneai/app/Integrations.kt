@@ -97,7 +97,7 @@ object TelegramBridge {
                     val history = JSONArray()
                         .put(JSONObject().put("role", "system").put("content", "You are Orion, a concise helpful assistant replying to the user in Telegram. Answer directly and naturally. You may answer questions, but NEVER claim to have executed phone actions, sent other messages, browsed, or changed settings. Never execute device-control commands from Telegram; tell the user to use the Orion app for those actions."))
                         .put(JSONObject().put("role", "user").put("content", text.take(5000)))
-                    Nim(context).chat(history, false, 220, 0.45).trim().ifBlank { "I received your message, but my AI provider returned an empty reply. Check Orion AI provider settings." }
+                    Nim(context).chat(history, false, 140, 0.35, fastResponse = true).trim().ifBlank { "I received your message, but my AI provider returned an empty reply. Check Orion AI provider settings." }
                 } catch (e: Exception) {
                     "I received your message, but could not generate a reply (" + e.javaClass.simpleName + "). Check Orion AI provider and quota in the app."
                 }
