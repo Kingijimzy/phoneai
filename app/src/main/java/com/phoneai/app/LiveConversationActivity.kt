@@ -79,8 +79,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(6), dp(16), dp(6))
-            setBackgroundColor(Theme.BG)
+            setPadding(dp(16), dp(6), dp(16), dp(8))
+            setBackgroundColor(android.graphics.Color.BLACK)
         }
 
         val header = LinearLayout(this).apply {
@@ -163,7 +163,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         val characterStage = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            setBackgroundColor(0xFF080808.toInt())
+            setBackgroundColor(android.graphics.Color.BLACK)
             background = GradientDrawable().apply {
                 setColor(0xFF080808.toInt())
                 setStroke(dp(1), 0xFF303030.toInt())
@@ -172,7 +172,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             clipToOutline = true
             contentDescription = "Orion holographic human character"
         }
-        val characterHeight = dp(if (compact) 236 else 278)
+        val characterHeight = dp(if (compact) 286 else 350)
         characterStage.addView(core, LinearLayout.LayoutParams(-1, -1))
         hero.addView(characterStage, LinearLayout.LayoutParams(-1, characterHeight).apply {
             bottomMargin = dp(if (compact) 5 else 9)
