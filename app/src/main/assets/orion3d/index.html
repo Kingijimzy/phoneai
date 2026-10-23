@@ -59,6 +59,7 @@ const stars = new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xaeb8c5,
 scene.add(stars);
 
 let model=null, head=null, neck=null, jaw=null, spine=null, chest=null, hips=null;
+let sketchLines=[], sketchReveal=0, sketchSweep=null;
 let leftShoulder=null, rightShoulder=null, mouth=null, eyes=[], faceMorphs=[];
 let mixer=null, idleAction=null, baseModelY=0, state='idle', mouthTarget=.02, blinkUntil=0, nextBlink=performance.now()+2400;
 let rimEnergy=22, violetEnergy=17;
@@ -118,6 +119,22 @@ loader.load(modelUrl, gltf=>{
  });
  fitCharacter(model);
  baseModelY=model.position.y;
+ // Add a fine silver technical-sketch pass directly to each mesh. Because the
+ // line geometry is a child of its source mesh, it follows the rig and facial motion.
+ model.traverse(o=>{
+   if(!o.isMesh || !o.geometry) return;
+   try{
+     const wireGeo=new THREE.WireframeGeometry(o.geometry);
+     const wireMat=new THREE.LineBasicMaterial({color:0xe0e5ec,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
+     const lines=new THREE.LineSegments(wireGeo,wireMat);
+     lines.scale.setScalar(1.0015);
+     lines.renderOrder=3;
+     o.add(lines);
+     sketchLines.push(wireMat);
+   }catch(e){console.warn('Sketch overlay skipped',e);}
+ });
+ sketchSweep=new THREE.Mesh(new THREE.PlaneGeometry(2.8,.018),new THREE.MeshBasicMaterial({color:0xe8edf4,transparent:true,opacity:.0,blending:THREE.AdditiveBlending,depthWrite:false}));
+ sketchSweep.position.set(0,1.1,.18); scene.add(sketchSweep);
  scene.add(model);
  // Prefer a true idle/standing clip if the asset provides one; procedural motion remains
  // the fallback when the model has no useful built-in idle animation.
@@ -154,6 +171,16 @@ function animate(now){
  const dt=Math.min(clock.getDelta(),.05);
  const t=clock.elapsedTime;
  if(mixer) mixer.update(dt);
+ // The wireframe draws in, settles to a restrained holographic edge shimmer,
+ // and intensifies slightly while Orion is speaking or listening.
+ const sketchTarget=state==='thinking'?.42:state==='listening'?.30:state==='speaking'?.38:state==='acting'?.28:.17;
+ sketchReveal+=(sketchTarget-sketchReveal)*Math.min(1,dt*1.35);
+ for(const mat of sketchLines) mat.opacity=sketchReveal*(.82+.18*Math.sin(t*2.1));
+ if(sketchSweep){
+   const phase=(t*.28)%1;
+   sketchSweep.position.y=-.02+phase*2.2;
+   sketchSweep.material.opacity=phase<.92?.12*Math.sin(Math.PI*phase):0;
+ }
  // Gentle camera and lighting drift adds depth without a distracting orbit.
  camera.position.x += (Math.sin(t*.18)*.045-camera.position.x)*Math.min(1,dt*.8);
  camera.position.y += (1.72+Math.sin(t*.31)*.012-camera.position.y)*Math.min(1,dt*.7);
