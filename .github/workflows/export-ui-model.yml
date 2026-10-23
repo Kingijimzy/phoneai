@@ -50,15 +50,23 @@ jobs:
         run: |
           set -euo pipefail
           cd build/model-export
+          MODEL=""
           if yolo export model=best.pt format=tflite imgsz=640 half=True; then
-            EXPORT_PRECISION=fp16
-          else
-            echo "FP16 export failed; retrying float32 (not int8; no calibration images available)."
-            rm -rf best_saved_model best.tflite best_float16.tflite
-            yolo export model=best.pt format=tflite imgsz=640 half=False
-            EXPORT_PRECISION=float32
+            # Do not select the larger float32 sibling just because it has more bytes.
+            MODEL="$(find . -type f -name '*float16.tflite' -print -quit)"
           fi
-          MODEL="$(find . -type f -name '*.tflite' -printf '%s %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+          if [[ -z "$MODEL" ]]; then
+            echo "No FP16 TFLite output; retrying float32 (not int8; no calibration images available)."
+            rm -rf best_saved_model best.tflite best_float16.tflite best_float32.tflite
+            yolo export model=best.pt format=tflite imgsz=640 half=False
+            MODEL="$(find . -type f -name '*float32.tflite' -print -quit)"
+            EXPORT_PRECISION=float32
+          else
+            EXPORT_PRECISION=fp16
+          fi
+          if [[ -z "$MODEL" ]]; then
+            MODEL="$(find . -type f -name '*.tflite' -printf '%s %p\\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+          fi
           test -n "$MODEL"
           mkdir -p ../../app/src/main/assets/models
           cp "$MODEL" ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite
