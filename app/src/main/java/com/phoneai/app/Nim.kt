@@ -194,11 +194,15 @@ class Nim(private val ctx: Context) {
 
     private val requestBudgetLock = Any()
     @Volatile private var commandHttpRequests = 0
+    private val failedRequestSignatures = HashMap<String, Int>()
     private val maxHttpRequestsPerCommand = 15
 
-    /** Starts a fresh request budget for one user command. Every HTTP call, including /models, counts. */
+    /** Starts a fresh request budget and identical-failure counter for one user command. */
     fun beginCommand() {
-        synchronized(requestBudgetLock) { commandHttpRequests = 0 }
+        synchronized(requestBudgetLock) {
+            commandHttpRequests = 0
+            failedRequestSignatures.clear()
+        }
     }
 
     fun resume() {
@@ -262,6 +266,18 @@ class Nim(private val ctx: Context) {
             if (quotaParts.isNotEmpty()) providerQuota[p.id] = quotaParts.joinToString(", ")
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code !in 200..299) {
+                // Store only a hash signature, never request or response text, for repeat-failure detection.
+                val signature = listOf(p.id, method, url, body?.hashCode() ?: 0, code, text.hashCode()).joinToString("|")
+                val repeats = synchronized(requestBudgetLock) {
+                    val next = (failedRequestSignatures[signature] ?: 0) + 1
+                    failedRequestSignatures[signature] = next
+                    next
+                }
+                if (repeats >= 3) {
+                    throw AiException("${p.label}: stopped after three identical HTTP failures (HTTP $code). No more identical retries will be sent.")
+                }
+            }
             val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
             return Http(code, text, ra)
         } finally {
@@ -524,10 +540,11 @@ class Nim(private val ctx: Context) {
         val errors = LinkedHashMap<String, String>()
         if (cancelled) throw RuntimeException("Stopped.")
         val now = System.currentTimeMillis()
-        val ready = order.filter { (cooldown[it.id] ?: 0L) <= now }
-        if (ready.isEmpty()) {
-            throw RuntimeException("The selected provider is cooling down. Orion did not rotate providers or send another request. Wait for its limit to reset, or change the primary provider in Settings.")
+        val primary = order.first()
+        if ((cooldown[primary.id] ?: 0L) > now) {
+            throw RuntimeException("The selected primary provider is cooling down. Orion did not rotate providers or send another request. Wait for its limit to reset, or change the primary provider in Settings.")
         }
+        val ready = listOf(primary) + order.drop(1).filter { (cooldown[it.id] ?: 0L) <= now }
         for ((idx, p) in ready.withIndex()) {
             if (cancelled) throw RuntimeException("Stopped.")
             try {
