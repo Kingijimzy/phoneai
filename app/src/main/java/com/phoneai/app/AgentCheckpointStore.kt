@@ -36,7 +36,7 @@ object AgentCheckpointStore {
         .replace(Regex("(?i)\\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|passcode|pin|secret)\\s*[:=]\\s*[^\\s,;]+")) { it.groupValues[1] + "=[redacted]" }
         .replace(Regex("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", RegexOption.IGNORE_CASE), "[email redacted]")
         .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL redacted]")
-        .replace(Regex("(?<![A-Za-z0-9])\\+?\\d[\\d ()-]{6,}\\d(?![A-Za-z0-9] )"), "[number redacted]")
+        .replace(Regex("(?<![A-Za-z0-9])\\+?\\d[\\d ()-]{6,}\\d(?![A-Za-z0-9])"), "[number redacted]")
         .take(MAX_COMMAND)
 
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
