@@ -101,6 +101,7 @@ fun OrionComposeChatScreen(
     commandMode: Boolean,
     selectedImage: Uri?,
     onBack: () -> Unit,
+    onHistory: () -> Unit,
     onModeChange: (Boolean) -> Unit,
     onSend: (String) -> Unit,
     onPickImage: () -> Unit,
@@ -167,6 +168,12 @@ fun OrionComposeChatScreen(
                     Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
                 }
             }
+            Text(
+                "History",
+                color = ChatMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 9.dp).clickable(onClick = onHistory)
+            )
             Box(
                 Modifier.clip(RoundedCornerShape(9.dp)).background(modeChipFill)
                     .border(1.dp, ChatHairline, RoundedCornerShape(9.dp)).clickable { onModeChange(!commandMode) }
