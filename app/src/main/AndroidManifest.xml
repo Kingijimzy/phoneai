@@ -33,6 +33,10 @@
         android:theme="@style/Theme.Orion">
 
         <activity
+            android:name=".MemoryActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".TeachModeActivity"
             android:exported="false" />
 
