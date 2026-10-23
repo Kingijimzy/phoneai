@@ -22,7 +22,7 @@ object Providers {
     val all = listOf(
         Provider(
             "groq", "Groq", "https://api.groq.com/openai/v1",
-            "llama-3.3-70b-versatile", "qwen/qwen3.6-27b", "gsk_...",
+            "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "gsk_...",
             "FREE. Very fast chat. console.groq.com"
         ),
         Provider(
@@ -169,7 +169,7 @@ object Prefs {
         // Groq retired its old Llama 4 vision endpoints. Migrate saved models to its
         // current Qwen multimodal endpoint instead of repeatedly receiving HTTP 404.
         if (vision && p.id == "groq" && saved != null &&
-            (saved.lowercase().contains("llama-4") || saved.lowercase().contains("llama-3.2"))) {
+            (saved.lowercase().contains("llama-4") || saved.lowercase().contains("llama-3.2") || saved.lowercase().contains("qwen3.6"))) {
             sp(c).edit().putString("vm_${p.id}", def).apply()
             return def
         }
