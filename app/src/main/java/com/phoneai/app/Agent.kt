@@ -240,14 +240,14 @@ Rules:
 - MEMORY: when the user tells you a lasting preference, a project, a decision, or leaves work unfinished, call remember (one short fact each) and carry on. Use update_memory or forget to fix or finish old items. Do not save passwords, secrets or one-off trivia. Use what you remember naturally, without announcing that you remember.
 """
 
-        fun systemPrompt(svc: PhoneAiService): String {
+        fun systemPrompt(svc: PhoneAiService, request: String? = null): String {
             val name = Prefs.userName(svc)
             val sb = StringBuilder(BASE.trim())
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
-            sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc))
-            val enabledSkills = SkillRegistry.list(svc).filter { it.enabled }.take(24)
+            sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc).take(if (request.isNullOrBlank()) 1400 else 900))
+            val enabledSkills = if (request.isNullOrBlank()) SkillRegistry.list(svc).filter { it.enabled }.take(6) else SkillRegistry.discover(svc, request, 4)
             sb.append("\n\nRegistered skills available for relevant requests (do not claim a skill ran unless it was invoked and verified):")
             if (enabledSkills.isEmpty()) {
                 sb.append("\nNo enabled registered skills.")
