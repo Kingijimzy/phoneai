@@ -120,39 +120,129 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun showChatHistory() {
         val chats = ChatHistoryStore.archived(this)
-        if (chats.isEmpty()) {
-            Toast.makeText(this, "Previous chats will appear here when you start a new chat.", Toast.LENGTH_LONG).show()
-            return
+        val dialog = android.app.Dialog(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(18), dp(18), dp(12))
+            setBackgroundColor(0xFF090909.toInt())
         }
-        val dates = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault())
-        val labels = chats.map { dates.format(java.util.Date(it.timestamp)) + " · " + it.title }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Chat history")
-            .setItems(labels) { _, which ->
-                val chat = chats[which]
-                val body = chat.messages.joinToString("\n\n") { (kind, text) ->
-                    (if (kind == "me") "YOU" else "ORION") + "\n" + text
-                }
-                AlertDialog.Builder(this)
-                    .setTitle(chat.title)
-                    .setMessage(body)
-                    .setPositiveButton("Continue this chat") { _, _ ->
-                        PhoneAiService.instance?.restoreArchivedChat(chat.messages)
-                            ?: Toast.makeText(this, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
-                    }
-                    .setNegativeButton("Close", null)
-                    .setNeutralButton("Copy") { _, _ ->
-                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
-                        Toast.makeText(this, "Chat copied", Toast.LENGTH_SHORT).show()
-                    }
-                    .show()
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        heading.addView(label("CHAT ARCHIVE", 11f, 0xFF999999.toInt(), true))
+        heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
+        heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
+        header.addView(heading)
+        val close = button("Close") { dialog.dismiss() }
+        header.addView(close)
+        root.addView(header)
+        val divider = View(this).apply { setBackgroundColor(0xFF292929.toInt()) }
+        root.addView(divider, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(16); bottomMargin = dp(12) })
+        val list = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (chats.isEmpty()) {
+            val empty = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(22), dp(36), dp(22), dp(36))
+                background = rounded(0xFF151515.toInt(), 20, 0xFF303030.toInt())
             }
-            .setNegativeButton("Close", null)
-            .show()
+            empty.addView(label("◷", 34f, 0xFFBDBDBD.toInt(), true).apply { gravity = Gravity.CENTER })
+            empty.addView(label("No saved conversations yet", 18f, 0xFFF1F1F1.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)) })
+            empty.addView(label("When you start a new chat, Orion keeps the previous conversation here.", 13f, 0xFF9B9B9B.toInt()).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER })
+            rows.addView(empty, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        } else {
+            val dates = java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault())
+            chats.forEachIndexed { index, chat ->
+                val preview = chat.messages.lastOrNull()?.second.orEmpty().replace("\\n", " ").trim()
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(16), dp(14), dp(16), dp(14))
+                    background = rounded(0xFF171717.toInt(), 18, 0xFF303030.toInt())
+                    isClickable = true
+                    isFocusable = true
+                }
+                val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
+                top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
+                card.addView(top)
+                card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
+                card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
+                card.setOnClickListener { showArchivedConversation(chat.title, chat.messages, dates.format(java.util.Date(chat.timestamp))) }
+                rows.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+                animateIn(card, (index.coerceAtMost(6) * 35L))
+            }
+        }
+        list.addView(rows)
+        root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        dialog.setContentView(root)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(-1, -1)
+        dialog.show()
+        dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
+        dialog.window?.setLayout(-1, -1)
+        animateIn(root)
     }
 
-    private fun showPersonalityPicker() {
+    private fun showArchivedConversation(title: String, messages: List<Pair<String, String>>, date: String) {
+        val dialog = android.app.Dialog(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(12))
+            setBackgroundColor(0xFF090909.toInt())
+        }
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val back = button("‹ History") { dialog.dismiss(); showChatHistory() }
+        header.addView(back)
+        val titleBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(8), 0) }
+        titleBox.addView(label(title.ifBlank { "Conversation" }, 16f, 0xFFF4F4F4.toInt(), true).apply { maxLines = 2 })
+        titleBox.addView(label(date, 11f, 0xFF929292.toInt()))
+        header.addView(titleBox, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(header)
+        root.addView(View(this).apply { setBackgroundColor(0xFF292929.toInt()) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(12); bottomMargin = dp(10) })
+        val scrollView = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
+        val transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(2), dp(4), dp(2), dp(14)) }
+        messages.forEachIndexed { index, item ->
+            val mine = item.first == "me"
+            val bubble = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(13), dp(10), dp(13), dp(10))
+                background = rounded(if (mine) 0xFF292929.toInt() else 0xFF151515.toInt(), 16, if (mine) 0xFF454545.toInt() else 0xFF2B2B2B.toInt())
+            }
+            bubble.addView(label(if (mine) "YOU" else "ORION", 10f, if (mine) 0xFFBDBDBD.toInt() else 0xFFE4E4E4.toInt(), true))
+            bubble.addView(label(item.second, 14f, 0xFFF0F0F0.toInt()).apply { setPadding(0, dp(5), 0, 0 }) )
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = if (mine) Gravity.END else Gravity.START }
+            line.addView(bubble, LinearLayout.LayoutParams((resources.displayMetrics.widthPixels - dp(68)).coerceAtLeast(dp(180)), -2))
+            transcript.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            animateIn(line, (index.coerceAtMost(5) * 25L))
+        }
+        scrollView.addView(transcript)
+        root.addView(scrollView, LinearLayout.LayoutParams(-1, 0, 1f))
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        actions.addView(button("Copy transcript") {
+            val body = messages.joinToString("\\n\\n") { (kind, text) -> (if (kind == "me") "YOU" else "ORION") + "\\n" + text }
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
+            Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(8) })
+        actions.addView(button("Continue chat") {
+            PhoneAiService.instance?.restoreArchivedChat(messages)
+                ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
+            dialog.dismiss()
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(actions)
+        dialog.setContentView(root)
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(-1, -1)
+        dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
+        dialog.window?.setLayout(-1, -1)
+        animateIn(root)
+    }
+
+        private fun showPersonalityPicker() {
         val profiles = CharacterProfile.all
         val descriptions = mapOf(
             "orion" to "Calm, sharp and quietly witty. A composed everyday co-pilot.",
