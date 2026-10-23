@@ -1611,7 +1611,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 (item.bounds.left / shot.scale).toInt(), (item.bounds.top / shot.scale).toInt(),
                                 (item.bounds.right / shot.scale).toInt(), (item.bounds.bottom / shot.scale).toInt()
                             )) }
+                            val detectorStartedAt = SystemClock.elapsedRealtime()
                             val detected = UiYoloTfliteDetector.detect(this, bitmap, excluded + occupied)
+                            val detectorMs = SystemClock.elapsedRealtime() - detectorStartedAt
+                            sb.append("(visual detector: ${if (detected != null) "YOLO TFLite" else "heuristic fallback"}, ${detectorMs} ms)\\n")
                             val regions = detected?.map {
                                 VisualElementDetector.Region(it.bounds, it.confidence, it.label)
                             } ?: VisualElementDetector.detect(bitmap, excluded + occupied)
