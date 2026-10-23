@@ -15,7 +15,7 @@ import kotlin.math.min
  * A real trained detector can replace this implementation without changing the target API.
  */
 internal object VisualElementDetector {
-    data class Region(val bounds: Rect, val confidence: Float)
+    data class Region(val bounds: Rect, val confidence: Float, val label: String = "unlabeled")
 
     fun detect(bitmap: Bitmap, excluded: List<Rect> = emptyList(), maxResults: Int = 12): List<Region> {
         val w = bitmap.width
