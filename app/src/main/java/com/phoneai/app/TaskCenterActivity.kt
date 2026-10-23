@@ -244,6 +244,49 @@ class TaskCenterActivity : Activity() {
             }, 10)
             add(listHost, card, 16)
         }
+
+        // Recent tool activity is deliberately separate from the task board: it is an
+        // audit trail of tool names and outcomes, not a copy of private inputs or screen text.
+        val events = ActionLogStore.all(this).take(12)
+        val logCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = panel()
+        }
+        val logHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val logTitle = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        logTitle.addView(label("RECENT AGENT ACTIVITY", 10f, Theme.MUTED, true))
+        logTitle.addView(label(if (events.isEmpty()) "No tool actions recorded yet" else "${events.size} recent events · private details omitted",
+            12f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, 0) })
+        logHeader.addView(logTitle, LinearLayout.LayoutParams(0, -2, 1f))
+        if (events.isNotEmpty()) logHeader.addView(button("Clear") {
+            AlertDialog.Builder(this)
+                .setTitle("Clear action history?")
+                .setMessage("This removes the local list of tool names and outcomes. It does not undo actions already performed.")
+                .setNegativeButton("Keep", null)
+                .setPositiveButton("Clear") { _, _ -> ActionLogStore.clear(this); refresh() }
+                .show()
+        })
+        logCard.addView(logHeader)
+        events.forEach { event ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(9), 0, dp(2))
+            }
+            val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            details.addView(label(event.tool, 13f, Theme.TEXT, true))
+            details.addView(label(time(event.at), 10f, Theme.MUTED).apply { setPadding(0, dp(2), 0, 0) })
+            row.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            val failed = event.outcome == "error returned"
+            row.addView(label(if (failed) "ERROR" else "RETURNED", 10f,
+                if (failed) 0xFFFF8D8D.toInt() else Theme.MUTED, true))
+            logCard.addView(row)
+        }
+        add(listHost, logCard, 16)
     }
 
     private fun taskCard(task: OrionTask): View {
