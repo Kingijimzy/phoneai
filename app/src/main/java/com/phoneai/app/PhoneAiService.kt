@@ -601,6 +601,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    fun startNewChat() {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop or finish the current task before starting a new chat.")
+                return@post
+            }
+            ChatHistoryStore.archiveAndClear(this, transcript.toList())
+            transcript.clear()
+            agent.reset()
+            mainChatListener?.onTranscriptRestored(emptyList())
+            mainChatListener?.onStatus("New chat ready", OrbView.Mode.IDLE)
+        }
+    }
+
     fun resetMainChat() {
         main.post {
             if (!running) {
