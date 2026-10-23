@@ -67,19 +67,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val from = maxOf(0, chatHist.length() - 6)
         for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
         msgs.put(msg("user", command))
-        val done = java.util.concurrent.atomic.AtomicBoolean(false)
-        Thread {
-            try {
-                Thread.sleep(3500)
-            } catch (e: Exception) {
-            }
-            if (!done.get() && !stopped) ui.say("One second, thinking.")
-        }.start()
-        val raw = try {
-            nim.chat(msgs, false, 220, 0.6).trim()
-        } finally {
-            done.set(true)
-        }
+        // The service already switches the UI to THINKING before this worker starts.
+        // Avoid a delayed spoken filler: it interrupts the answer flow and makes Orion feel slower.
+        val raw = nim.chat(msgs, false, 220, 0.6).trim()
         if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
