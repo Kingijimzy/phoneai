@@ -78,6 +78,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The export may take several minutes while source commits land on this branch.
+          # Rebase the generated assets onto the current branch tip before committing.
+          git fetch origin "${{ github.ref_name }}"
+          git rebase FETCH_HEAD
           git add app/src/main/assets/models/android_ui_detection_yolov8.tflite app/src/main/assets/models/android_ui_detection_model.txt
           if git diff --cached --quiet; then
             echo "Bundled model is unchanged; no commit required."
