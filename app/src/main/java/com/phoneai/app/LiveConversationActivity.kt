@@ -484,6 +484,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         runOnUiThread { wave.audioLevel = level }
     }
 
+    override fun onSpeechWord() {
+        runOnUiThread { wave.speechPulse = 1f }
+    }
+
     override fun onStatus(value: String, mode: OrbView.Mode) {
         runOnUiThread {
             val previousMode = lastMode
