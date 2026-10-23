@@ -917,6 +917,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun newChat() {
         agent.reset()
         transcript.clear()
+        ChatHistoryStore.clear(this)
         hideThinkingIndicator()
         logBox?.removeAllViews()
         addLine("ai", "New chat. What should I do?")
