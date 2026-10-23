@@ -395,12 +395,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post { openPanel() }
     }
 
-    fun openMainChat() {
+    fun openMainChat(pickImage: Boolean = false) {
         main.post {
             closePanel(false)
             hideBubble()
             try {
-                startActivity(Intent(this, MainChatActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_PICK_IMAGE, pickImage).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (e: Exception) {
                 Toast.makeText(this, "Could not open Orion chat. Try opening it from the app home screen.", Toast.LENGTH_LONG).show()
                 showBubble()
@@ -850,6 +850,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
+        val imageBtn = pill("＋", Theme.PANEL2, Theme.TEXT) {
+            // Android's document picker belongs to an Activity; hand off to full chat.
+            openMainChat(true)
+        }
+        imageBtn.contentDescription = "Choose an image for Orion to analyse"
+        val imageLp = LinearLayout.LayoutParams(dp(42), dp(46))
+        imageLp.setMargins(dp(6), 0, 0, 0)
+        row.addView(imageBtn, imageLp)
         val send = pill("Send", Theme.CYAN, Theme.ON_ACCENT) {
             val t = input.text.toString()
             input.setText("")
