@@ -28,8 +28,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x08090b);
 scene.fog = new THREE.FogExp2(0x08090b, 0.035);
 const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 80);
-camera.position.set(0, 1.45, 5.4);
-camera.lookAt(0, 1.05, 0);
+camera.position.set(0, 1.72, 2.55);
+camera.lookAt(0, 1.72, 0);
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false, powerPreference:'low-power'});
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.35));
 renderer.setSize(innerWidth, innerHeight);
@@ -40,11 +40,11 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xcbd2dc, 0x202329, 2.0));
+scene.add(new THREE.HemisphereLight(0xe1e5eb, 0x202329, 2.0));
 const key = new THREE.DirectionalLight(0xf1f3f6, 3.1);
-key.position.set(3, 5, 4); key.castShadow = true; scene.add(key);
-const rim = new THREE.PointLight(0xc9d3df, 18, 8); rim.position.set(-2, 2.2, -1.5); scene.add(rim);
-const violet = new THREE.PointLight(0x7e8792, 17, 7); violet.position.set(2, 1.1, -2); scene.add(violet);
+key.position.set(1.4, 3.2, 3.5); key.castShadow = true; scene.add(key);
+const rim = new THREE.PointLight(0xe1e5eb, 22, 5); rim.position.set(-1.2, 1.9, -1.1); scene.add(rim);
+const violet = new THREE.PointLight(0x8f969f, 12, 5); violet.position.set(1.2, 1.5, -1.5); scene.add(violet);
 const floor = new THREE.Mesh(new THREE.CircleGeometry(2.1, 64), new THREE.MeshStandardMaterial({color:0x171a1f,metalness:.55,roughness:.36,transparent:true,opacity:.72}));
 floor.rotation.x = -Math.PI/2; floor.position.y = -0.015; floor.receiveShadow = true; scene.add(floor);
 for (let i=0;i<3;i++){
@@ -96,7 +96,7 @@ loader.load(modelUrl, gltf=>{
    if(o.isMesh){
      o.castShadow=true;
      o.receiveShadow=true;
-     if(o.material){o.material.metalness=Math.max(o.material.metalness||0,.08);o.material.roughness=Math.min(o.material.roughness||.8,.52);}
+     if(o.material){o.material.color && o.material.color.set(0xcbd2da);o.material.emissive && o.material.emissive.set(0x252a31);o.material.emissiveIntensity=.18;o.material.metalness=Math.max(o.material.metalness||0,.12);o.material.roughness=Math.min(o.material.roughness||.8,.48);}
      if(o.morphTargetDictionary && o.morphTargetInfluences){
        for(const [name,index] of Object.entries(o.morphTargetDictionary)){
          const n=name.toLowerCase();
@@ -156,13 +156,13 @@ function animate(now){
  if(mixer) mixer.update(dt);
  // Gentle camera and lighting drift adds depth without a distracting orbit.
  camera.position.x += (Math.sin(t*.18)*.045-camera.position.x)*Math.min(1,dt*.8);
- camera.position.y += (1.45+Math.sin(t*.31)*.012-camera.position.y)*Math.min(1,dt*.7);
- camera.lookAt(0,1.05+Math.sin(t*.24)*.012,0);
+ camera.position.y += (1.72+Math.sin(t*.31)*.012-camera.position.y)*Math.min(1,dt*.7);
+ camera.lookAt(0,1.72+Math.sin(t*.24)*.012,0);
  rim.position.x=-2+Math.sin(t*.42)*.22;
  violet.position.x=2+Math.cos(t*.34)*.18;
  if(model){
    const listenLean=state==='listening'?.018:0;
-   model.position.y=baseModelY+Math.sin(t*1.25)*.012+(state==='speaking'?Math.sin(t*7.2)*.006:0);
+   model.position.y=baseModelY+Math.sin(t*1.25)*.006+(state==='speaking'?Math.sin(t*7.2)*.003:0);
    model.rotation.y += ((Math.sin(t*.22)*.09+(state==='listening'?.025:0))-model.rotation.y)*Math.min(1,dt*1.8);
    model.rotation.x += ((state==='listening'?-listenLean:state==='thinking'?.008:0)-model.rotation.x)*Math.min(1,dt*1.8);
    if(spine) spine.rotation.x += ((state==='speaking'?Math.sin(t*4.1)*.012:state==='listening'?.012:0)-spine.rotation.x)*Math.min(1,dt*2.6);
