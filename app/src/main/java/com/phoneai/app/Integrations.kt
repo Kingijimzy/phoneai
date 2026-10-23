@@ -68,7 +68,7 @@ object TelegramBridge {
         }
     }
 
-    /** Reads pending messages from the saved numeric chat only; incoming text is never executed. */
+    /** Polls the saved numeric chat and replies to ordinary text messages. Phone actions are never run from Telegram. */
     fun checkUpdates(context: Context): String {
         val token = decryptToken(context) ?: return "error: Telegram is not configured."
         val target = chatId(context)
@@ -79,7 +79,9 @@ object TelegramBridge {
             val result = request(token, "getUpdates", mapOf("offset" to offset.toString(), "limit" to "10", "timeout" to "0"))
             val updates = result.optJSONArray("result") ?: return "Telegram returned no update list."
             var newest = offset
-            val messages = mutableListOf<String>()
+            var seen = 0
+            var replied = 0
+            val notes = mutableListOf<String>()
             for (i in 0 until updates.length()) {
                 val update = updates.optJSONObject(i) ?: continue
                 val updateId = update.optLong("update_id", -1L)
@@ -87,13 +89,45 @@ object TelegramBridge {
                 val msg = update.optJSONObject("message") ?: update.optJSONObject("edited_message") ?: continue
                 val chat = msg.optJSONObject("chat") ?: continue
                 if (chat.optString("id") != target) continue
-                val from = msg.optJSONObject("from")?.optString("username", "user") ?: "user"
-                messages.add("@" + from + ": " + msg.optString("text", "[non-text message]").take(400))
+                val text = msg.optString("text", "").trim()
+                if (text.isBlank()) continue
+                seen++
+                val reply = localTelegramReply(text) ?: try {
+                    val history = JSONArray()
+                        .put(JSONObject().put("role", "system").put("content", "You are Orion, a concise helpful assistant replying to the user in Telegram. Answer directly and naturally. You may answer questions, but NEVER claim to have executed phone actions, sent other messages, browsed, or changed settings. Never execute device-control commands from Telegram; tell the user to use the Orion app for those actions."))
+                        .put(JSONObject().put("role", "user").put("content", text.take(5000)))
+                    Nim(context).chat(history, false, 220, 0.45).trim().ifBlank { "I received your message, but my AI provider returned an empty reply. Check Orion AI provider settings." }
+                } catch (e: Exception) {
+                    "I received your message, but could not generate a reply (" + e.javaClass.simpleName + "). Check Orion AI provider and quota in the app."
+                }
+                val sent = sendTo(context, token, target, reply.take(3500))
+                if (sent) replied++ else notes.add("Telegram rejected a reply for one message.")
             }
             if (newest > offset) prefs.edit().putLong(UPDATE_OFFSET, newest).commit()
-            if (messages.isEmpty()) "No new messages from the saved chat." else
-                "New Telegram messages (read-only; incoming commands are not executed):\n" + messages.take(10).joinToString("\n")
-        } catch (e: Exception) { "Telegram inbox check failed (" + e.javaClass.simpleName + ")." }
+            when {
+                seen == 0 -> "No new messages from the saved chat."
+                replied == seen -> "Processed " + seen + " Telegram message(s) and sent " + replied + " repl" + (if (replied == 1) "y." else "ies.")
+                else -> "Received " + seen + " message(s); sent " + replied + " repl" + (if (replied == 1) "y. " else "ies. ") + notes.joinToString(" ")
+            }
+        } catch (e: Exception) { "Telegram inbox/reply failed (" + e.javaClass.simpleName + "). Check the saved chat ID and bot connection." }
+    }
+
+    /** Small commands handled locally without using an AI provider. */
+    private fun localTelegramReply(text: String): String? {
+        val s = text.trim().lowercase()
+        return when (s) {
+            "/start", "/start@orionzai_bot", "/help", "/help@orionzai_bot" -> "Hello! I am Orion. Send me a question and I will answer. For phone actions, open the Orion app. Commands: /start, /help, /time, /date."
+            "/time", "/time@orionzai_bot" -> "Local phone time: " + java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+            "/date", "/date@orionzai_bot" -> "Today is " + java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+            else -> null
+        }
+    }
+
+    private fun sendTo(context: Context, token: String, target: String, message: String): Boolean {
+        val body = message.trim().take(3500)
+        if (body.isEmpty()) return false
+        val result = request(token, "sendMessage", mapOf("chat_id" to target, "text" to body))
+        return result.optBoolean("ok")
     }
     /** Sends only to the saved target. Caller must obtain explicit user approval before calling. */
     fun send(context: Context, message: String): String {
