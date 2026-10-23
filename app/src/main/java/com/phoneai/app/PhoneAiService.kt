@@ -1586,7 +1586,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 if (scaled.width() <= 0 || scaled.height() <= 0) continue
                                 ocrElements.add(ScreenPerception.OcrItem(item.text, scaled))
                                 val id = nodes.size + ocrElements.lastIndex
-                                sb.append("[$id] OCR \"${item.text.take(70)}\" @${scaled.centerX()},${scaled.centerY()}\\n")
+                                sb.append("[$id] OCR \"${item.text.take(70)}\"\\n")
                                 existing.add(normalized)
                             }
                         } finally {
@@ -1622,7 +1622,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     n.isCheckable -> if (n.isChecked) "checked" else "unchecked"
                     else -> "text"
                 }
-                sb.append("[$id] $kind \"${lbl.take(40)}\" @${r.centerX()},${r.centerY()}\n")
+                sb.append("[$id] $kind \"${lbl.take(40)}\"\\n")
             }
         }
         for (i in 0 until n.childCount) {
