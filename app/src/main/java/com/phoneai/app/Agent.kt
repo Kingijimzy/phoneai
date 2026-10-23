@@ -394,6 +394,7 @@ Rules:
             ui.phase("acting")
             val place = WeatherService.requestedPlace(command)
             val answer = if (place.isBlank()) WeatherService.current("") else WeatherService.current(place)
+            logShortcut("weather", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -402,6 +403,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
             val answer = LiveNews.search(LiveNews.queryFrom(command))
+            logShortcut("live_news", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -418,6 +420,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = LiveWebSearch.search(LiveWebSearch.queryFrom(command))
+            logShortcut("web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -427,6 +430,7 @@ Rules:
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val answer = LiveWebSearch.search(query)
+            logShortcut("live_web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -446,6 +450,7 @@ Rules:
             }
             val symbol = baseSymbol + "USDT"
             val answer = tools.bybitPublicTicker(symbol)
+            logShortcut("market_quote", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -458,6 +463,7 @@ Rules:
             null
         }
         if (quick != null) {
+            logShortcut("quick_command", quick)
             history.put(msg("assistant", JSONObject().put("say", quick).put("tool", "done").toString()))
             ui.say(quick)
             return
@@ -562,6 +568,11 @@ Rules:
         AgentCheckpointStore.pause(svc)
         if (stopped) ui.say("Stopped. I saved the task progress locally; say \"continue\" when you want me to resume.")
         else ui.say("I paused at the step limit and saved the task progress locally. Say \"continue\" to resume from the recorded results.")
+    }
+
+    /** Record deterministic shortcuts too, so activity history covers more than model-planned tools. */
+    private fun logShortcut(name: String, result: String) {
+        try { ActionLogStore.record(svc, name, result) } catch (_: Exception) { }
     }
 
     private val recordable = setOf(
