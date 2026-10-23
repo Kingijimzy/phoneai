@@ -246,6 +246,18 @@ Rules:
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
             sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc))
+            val enabledSkills = SkillRegistry.list(svc).filter { it.enabled }.take(24)
+            sb.append("\n\nRegistered skills available for relevant requests (do not claim a skill ran unless it was invoked and verified):")
+            if (enabledSkills.isEmpty()) {
+                sb.append("\nNo enabled registered skills.")
+            } else {
+                enabledSkills.forEach { skill ->
+                    sb.append("\n- ").append(skill.id).append(" v").append(skill.version)
+                        .append(": ").append(skill.description.take(220))
+                        .append("; allowed tools: ").append(skill.allowedTools.sorted().joinToString(", ").take(240))
+                }
+                sb.append("\nUse a registered skill when it clearly matches the user's request, but preserve its allowed-tool, approval, call-count, and runtime restrictions. If invocation requires the explicit 'run skill' form, ask or explain rather than silently bypassing that guard.")
+            }
             return sb.toString()
         }
     }
