@@ -89,7 +89,7 @@ class TelegramListenerService : Service() {
                         } catch (_: Exception) {
                             // Keep listening; a later poll can recover from transient network/provider errors.
                         }
-                        try { Thread.sleep(12000L) } catch (_: InterruptedException) { break }
+                        try { Thread.sleep(3000L) } catch (_: InterruptedException) { break }
                     }
                 } finally {
                     if (wakeLock.isHeld) wakeLock.release()
