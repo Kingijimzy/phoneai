@@ -115,6 +115,36 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         view.setTextColor(Theme.MUTED)
     }
 
+    private fun showChatHistory() {
+        val chats = ChatHistoryStore.archived(this)
+        if (chats.isEmpty()) {
+            Toast.makeText(this, "Previous chats will appear here when you start a new chat.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val dates = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault())
+        val labels = chats.map { dates.format(java.util.Date(it.timestamp)) + " · " + it.title }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Chat history")
+            .setItems(labels) { _, which ->
+                val chat = chats[which]
+                val body = chat.messages.joinToString("\\n\\n") { (kind, text) ->
+                    (if (kind == "me") "YOU" else "ORION") + "\\n" + text
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(chat.title)
+                    .setMessage(body)
+                    .setPositiveButton("Close", null)
+                    .setNeutralButton("Copy") { _, _ ->
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
+                        Toast.makeText(this, "Chat copied", Toast.LENGTH_SHORT).show()
+                    }
+                    .show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     private fun showPersonalityPicker() {
         val profiles = CharacterProfile.all
         val descriptions = mapOf(
@@ -334,6 +364,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         header.addView(stop, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
+        val history = label("History", 11f, Theme.MUTED, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            contentDescription = "View previous chats"
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showChatHistory() }
+        }
+        header.addView(history, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(3) })
         val new = LinearLayout(this).apply {
             gravity = Gravity.CENTER
             contentDescription = "Start a new conversation"
