@@ -640,6 +640,14 @@ Rules:
             "open_url" -> svc.openUrl(a.optString("url"))
             "browser_snapshot" -> BrowserAutomation.snapshot().take(6000)
             "browser_verify" -> BrowserAutomation.verifyPage(a.optString("expected_text"), a.optString("previous_url")).take(1200)
+            "browser_click_verify" -> {
+                val target = a.optString("target").trim()
+                val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
+                    .containsMatchIn(target)
+                if (risky && !ui.ask("Orion is about to click '$target' and inspect the resulting page. This may submit or change data. Continue?")) {
+                    "error: user cancelled browser click"
+                } else BrowserAutomation.clickAndVerify(target, a.optString("expected_text")).take(1800)
+            }
             "browser_click" -> {
                 val target = a.optString("target").trim()
                 val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
