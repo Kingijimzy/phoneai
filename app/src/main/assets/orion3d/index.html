@@ -38,7 +38,7 @@ const wave=document.getElementById('wave'),wx=wave.getContext('2d');
 const status=document.getElementById('status'),caption=document.getElementById('caption');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let w=0,h=0,dpr=1,points=[],state='idle',speech=0,mic=0,frame=0;
-const labels={idle:['ORION · STANDBY','Ready when you are'],listening:['LISTENING','I’m listening'],thinking:['THINKING','Give me a moment'],speaking:['ORION · SPEAKING',''],interrupted:['PAUSED','I’m here'],disconnected:['RECONNECTING','Voice connection interrupted']};
+const labels={idle:['ORION · STANDBY','Ready when you are'],listening:['LISTENING','I’m listening'],thinking:['THINKING','Give me a moment'],speaking:['ORION · SPEAKING',''],acting:['WORKING','Orion is carrying out your request'],waiting_approval:['ACTION REVIEW','Review the requested action'],interrupted:['PAUSED','I’m here'],disconnected:['RECONNECTING','Voice connection interrupted']};
 function insideHead(x,y){
  const skull=((x-.5)/.205)**2+((y-.34)/.205)**2;
  const jawX=(x-.5)/(.105+Math.max(0,y-.37)*.36);
@@ -61,7 +61,7 @@ function resize(){
 function setState(next,detail){
  if(typeof next==='string')state=next.toLowerCase();
  else if(next&&typeof next==='object')state=String(next.state||next.mode||state).toLowerCase();
- if(!labels[state])state=state.includes('listen')?'listening':state.includes('think')?'thinking':state.includes('speak')?'speaking':state.includes('interrupt')?'interrupted':state.includes('disconnect')?'disconnected':'idle';
+ if(!labels[state])state=state.includes('listen')?'listening':state.includes('think')?'thinking':state.includes('speak')?'speaking':state.includes('act')?'acting':state.includes('approval')?'waiting_approval':state.includes('interrupt')?'interrupted':state.includes('disconnect')?'disconnected':'idle';
  stage.dataset.state=state;status.textContent=labels[state][0];caption.textContent=(detail&&typeof detail==='string')?detail:labels[state][1];
  if(state==='speaking')speech=Math.max(speech,.65);
 }
@@ -102,7 +102,7 @@ function drawHead(t){
 }
 function drawWave(t){
  const ww=w,hh=100;wx.clearRect(0,0,ww,hh);
- const active=state==='speaking'?Math.max(.24,speech):state==='listening'?Math.max(.12,mic):state==='thinking'?.25:state==='interrupted'?.04:.09;
+ const active=state==='speaking'?Math.max(.24,speech):state==='listening'?Math.max(.12,mic):state==='thinking'||state==='acting'||state==='waiting_approval'?.25:state==='interrupted'?.04:.09;
  for(let line=0;line<3;line++){
   wx.beginPath();for(let x=0;x<=ww;x+=3){
    const n=x/ww,env=Math.sin(Math.PI*n)**.7;
