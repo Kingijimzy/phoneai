@@ -73,6 +73,24 @@ object BrowserAutomation {
         """.trimIndent())
     }
 
+    /**
+     * One bounded browser step: record the current URL, click a visible control, then inspect
+     * the resulting page. The returned verification is evidence for the agent, not proof that
+     * the user's larger goal is complete.
+     */
+    fun clickAndVerify(target: String, expectedText: String = ""): String {
+        val before = snapshot()
+        val previousUrl = try { org.json.JSONObject(before).optString("url") } catch (_: Exception) { "" }
+        val clickResult = click(target)
+        if (!clickResult.startsWith("clicked ")) return clickResult
+        try { Thread.sleep(850L) } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return "clicked; verification interrupted, inspect the page before continuing"
+        }
+        val verified = verifyPage(expectedText, previousUrl)
+        return "Action: $clickResult\nPage check (not proof of task completion): $verified"
+    }
+
     fun type(target: String, value: String): String {
         if (value.isEmpty()) return "error: text to enter is empty"
         if (Regex("(?i)\\b(password|passcode|pin|otp|verification(\\s+code)?|security\\s+code|credit\\s+card|card\\s+number|cvv|cvc|bank\\s+account|routing\\s+number|social\\s+security|national\\s+id|passport|recovery\\s+phrase|private\\s+key|seed\\s+phrase)\\b|one[- ]time").containsMatchIn(target)) {
