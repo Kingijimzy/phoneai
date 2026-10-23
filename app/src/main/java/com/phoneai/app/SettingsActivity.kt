@@ -480,7 +480,7 @@ class SettingsActivity : Activity() {
                 val started = TelegramListenerService.start(this)
                 showInfoDialog(
                     "Telegram listener",
-                    if (started) "Continuous Telegram replies started. Keep the ongoing Orion notification visible. Orion checks for messages about every 12 seconds while Android allows the service to run. Send /start to test."
+                    if (started) "Continuous Telegram replies started. Keep the ongoing Orion notification visible. Orion checks for messages about every 3 seconds while Android allows the service to run. AI replies use a short timeout and prioritize faster saved providers. Send /start to test."
                     else "Could not start the listener. First configure a valid bot token and numeric personal chat ID, then try again."
                 )
             }
@@ -848,34 +848,29 @@ class SettingsActivity : Activity() {
                             list,
                             { which ->
                                 val selected = list[which]
-                                if (p.id != "nvidia") {
-                                    Prefs.setModel(this, p, vision, selected)
-                                    Toast.makeText(this, "Using $selected. Now tap Test the AI.", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(this, "Testing $selected...", Toast.LENGTH_SHORT).show()
-                                    Thread {
-                                        val problem = nim.testModel(p, selected, vision)
-                                        runOnUiThread {
-                                            if (problem.isBlank()) {
-                                                Prefs.setModel(this, p, vision, selected)
-                                                Toast.makeText(this, if (vision) "Chat endpoint saved: $selected. Test it with an image." else "Verified and saved: $selected", Toast.LENGTH_LONG).show()
-                                            } else {
-                                                AlertDialog.Builder(this)
-                                                    .setTitle("Model test did not confirm access")
-                                                    .setMessage("$selected did not pass the quick test. This can be a temporary endpoint issue or a model-specific response format. Your current model is still selected.")
-                                                    .setNegativeButton("KEEP CURRENT", null)
-                                                    .setNeutralButton("VIEW ERROR") { _, _ ->
-                                                        showInfoDialog("NVIDIA model test", "$selected\\n\\n$problem")
-                                                    }
-                                                    .setPositiveButton("USE ANYWAY") { _, _ ->
-                                                        Prefs.setModel(this, p, vision, selected)
-                                                        Toast.makeText(this, if (vision) "Selected $selected. Test it with an image." else "Selected $selected. Test it in chat now.", Toast.LENGTH_LONG).show()
-                                                    }
-                                                    .show()
-                                            }
+                                // Do not treat a model as working merely because it appears in /models.
+                                // Check real access for every provider before saving the selection.
+                                Toast.makeText(this, "Checking access to " + selected + "...", Toast.LENGTH_SHORT).show()
+                                Thread {
+                                    val problem = nim.testModel(p, selected, vision)
+                                    runOnUiThread {
+                                        if (problem.isBlank()) {
+                                            Prefs.setModel(this, p, vision, selected)
+                                            Toast.makeText(this, if (vision) "Endpoint verified: " + selected + ". Confirm with a real photo." else "Verified and saved: " + selected, Toast.LENGTH_LONG).show()
+                                        } else {
+                                            AlertDialog.Builder(this)
+                                                .setTitle("Model not verified")
+                                                .setMessage(selected + " did not pass the live test. It may be unavailable to your key, incompatible, or temporarily busy. Your current model has not changed.\n\n" + problem)
+                                                .setNegativeButton("KEEP CURRENT", null)
+                                                .setNeutralButton("VIEW ERROR") { _, _ -> showInfoDialog(p.label + " model test", selected + "\n\n" + problem) }
+                                                .setPositiveButton("USE ANYWAY") { _, _ ->
+                                                    Prefs.setModel(this, p, vision, selected)
+                                                    Toast.makeText(this, "Selected " + selected + " without verification.", Toast.LENGTH_LONG).show()
+                                                }
+                                                .show()
                                         }
-                                    }.start()
-                                }
+                                    }
+                                }.start()
                             }
                         )
                     }
