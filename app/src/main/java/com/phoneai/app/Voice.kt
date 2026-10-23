@@ -100,7 +100,7 @@ class Voice(private val ctx: Context) {
         s.replace(Regex("[*_`#>]+"), "").replace(Regex("https?://\\S+"), "link").trim()
 
     /** Split long replies on sentence boundaries, preserving conversational flow. */
-    private fun splitForSpeech(text: String, limit: Int = 2800): List<String> {
+    private fun splitForSpeech(text: String, limit: Int = 420): List<String> {
         val sentences = text.replace(Regex("\\s+"), " ")
             .split(Regex("(?<=[.!?])\\s+"))
             .map { it.trim() }
