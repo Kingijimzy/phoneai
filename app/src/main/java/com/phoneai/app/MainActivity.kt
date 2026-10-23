@@ -340,8 +340,15 @@ class MainActivity : ComponentActivity() {
         animateEntrance(hero, 70)
 
         val chatAction = action("Start a conversation", "A quiet space to think, ask, and create", true) { showTab("Chat") }
-        gap(page, chatAction, 12)
+        gap(page, chatAction, 8)
         animateEntrance(chatAction, 130)
+
+        val imageAction = action("Ask with an image", "Choose a photo or screenshot for Orion to analyse") {
+            startActivity(Intent(this@MainActivity, MainChatActivity::class.java)
+                .putExtra(MainChatActivity.EXTRA_PICK_IMAGE, true))
+        }
+        gap(page, imageAction, 12)
+        animateEntrance(imageAction, 175)
 
         val quickHeader = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(23), 0, dp(4)) }
         quickHeader.addView(label("QUICK ACCESS", 10f, Theme.CYAN, true).apply { letterSpacing = .13f })
