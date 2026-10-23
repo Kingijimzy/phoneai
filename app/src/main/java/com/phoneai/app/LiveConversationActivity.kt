@@ -15,6 +15,8 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 
 /**
@@ -23,7 +25,7 @@ import android.widget.Toast
  */
 class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var wave: VoiceWaveView
-    private lateinit var core: OrbView
+    private lateinit var core: WebView
     private lateinit var stateLabel: TextView
     private lateinit var transcript: LinearLayout
     private lateinit var micButton: LinearLayout
@@ -123,27 +125,35 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         val compact = resources.configuration.screenHeightDp < 720
         val waveHeight = if (compact) 46 else 58
-        // Rebrand live voice around Orion's actual animated orb; waveform is supporting feedback.
-        core = OrbView(this).apply {
-            mode = OrbView.Mode.IDLE
-            contentDescription = "Orion animated voice orb"
+        // Human-shaped holographic character rendered in the bundled Three.js stage.
+        // Native waveform and controls remain responsive while the model loads.
+        core = WebView(this).apply {
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
             isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = false
+            settings.allowFileAccess = true
+            settings.allowContentAccess = false
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            webViewClient = WebViewClient()
+            loadUrl("file:///android_asset/orion3d/index.html")
         }
-        // A dedicated call-stage gives the orb a deliberate visual home instead of floating
-        // directly on the page. Keep it native and lightweight for entry-level Android devices.
-        val orbStage = LinearLayout(this).apply {
+        val characterStage = LinearLayout(this).apply {
             gravity = Gravity.CENTER
+            setBackgroundColor(0xFF080808.toInt())
             background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0xFF111111.toInt())
-                setStroke(dp(1), 0xFF383838.toInt())
+                setColor(0xFF080808.toInt())
+                setStroke(dp(1), 0xFF303030.toInt())
+                cornerRadius = dp(22).toFloat()
             }
-            elevation = dp(2).toFloat()
-            contentDescription = "Orion live conversation visual stage"
+            clipToOutline = true
+            contentDescription = "Orion holographic human character"
         }
-        val orbSize = dp(if (compact) 170 else 190)
-        orbStage.addView(core, LinearLayout.LayoutParams(orbSize, orbSize))
-        hero.addView(orbStage, LinearLayout.LayoutParams(dp(if (compact) 198 else 222), dp(if (compact) 198 else 222)).apply {
+        val characterHeight = dp(if (compact) 236 else 278)
+        characterStage.addView(core, LinearLayout.LayoutParams(-1, -1))
+        hero.addView(characterStage, LinearLayout.LayoutParams(-1, characterHeight).apply {
             bottomMargin = dp(if (compact) 5 else 9)
         })
         val voiceSurface = LinearLayout(this).apply {
@@ -496,7 +506,15 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             }
             micCaption.setTextColor(if (mode == OrbView.Mode.LISTENING || mode == OrbView.Mode.SPEAKING) Theme.OK else Theme.TEXT)
             wave.mode = mode
-            core.mode = mode
+            val characterState = when (mode) {
+                OrbView.Mode.IDLE -> "idle"
+                OrbView.Mode.LISTENING -> "listening"
+                OrbView.Mode.THINKING -> "thinking"
+                OrbView.Mode.SPEAKING -> "speaking"
+                OrbView.Mode.ACTING -> "acting"
+                OrbView.Mode.WAITING_APPROVAL -> "waiting_approval"
+            }
+            core.evaluateJavascript("window.Orion3D && window.Orion3D.setState('" + characterState + "')", null)
             val nextState = when (mode) {
                 OrbView.Mode.IDLE -> "Ready when you are"
                 OrbView.Mode.LISTENING -> "I’m listening"
