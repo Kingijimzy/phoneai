@@ -156,6 +156,12 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                     val lines = mutableListOf<String>()
                     lines += page.optString("title", "Untitled page").ifBlank { "Untitled page" }
                     lines += page.optString("url", "")
+                    val pageText = page.optString("pageText", "").trim()
+                    if (pageText.isNotEmpty()) {
+                        lines += ""
+                        lines += "VISIBLE PAGE TEXT"
+                        lines += pageText.take(700)
+                    }
                     val items = page.optJSONArray("items")
                     if (items == null || items.length() == 0) {
                         lines += "No visible links, buttons, or form fields detected."
