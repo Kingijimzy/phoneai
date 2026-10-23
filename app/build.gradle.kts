@@ -56,6 +56,8 @@ dependencies {
     implementation("androidx.webkit:webkit:1.11.0")
     // Bundled on-device OCR; screen text stays on device until Orion explicitly chooses a tool.
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // CPU TFLite runtime for the optional bundled UI detector; no network inference.
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
