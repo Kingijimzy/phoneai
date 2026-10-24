@@ -27,6 +27,14 @@ data class SkillDecision(val allowed: Boolean, val reason: String)
 object SkillRegistry {
     private const val PREFS = "phoneai_skill_registry_v1"
     private const val KEY_SKILLS = "skills_json"
+    private val builtInSkills = listOf(
+        PhoneAiSkill("whatsapp_draft", "1.0.0", "Prepare a WhatsApp message draft for a user-confirmed recipient. Never send automatically.",
+            setOf("lookup_app", "open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
+            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true),
+        PhoneAiSkill("email_draft", "1.0.0", "Prepare an email draft using the installed mail app. Never send automatically.",
+            setOf("open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
+            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true)
+    )
 
     // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
     private val supportedTools = setOf(
@@ -50,14 +58,17 @@ object SkillRegistry {
     fun list(context: Context): List<PhoneAiSkill> {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_SKILLS, "[]") ?: "[]"
-        return try {
+        val stored = try {
             val array = JSONArray(raw)
-            (0 until array.length()).mapNotNull { index ->
-                parse(array.optJSONObject(index))
-            }.sortedBy { it.id }
-        } catch (_: Exception) {
-            emptyList()
+            (0 until array.length()).mapNotNull { index -> parse(array.optJSONObject(index)) }
+        } catch (_: Exception) { emptyList() }
+        // Seed reviewed, draft-only starter skills once; stored enabled/disabled choices always win.
+        val merged = builtInSkills.map { builtin -> stored.firstOrNull { it.id == builtin.id } ?: builtin } +
+            stored.filterNot { item -> builtInSkills.any { it.id == item.id } }
+        if (merged.size != stored.size || builtInSkills.any { builtin -> stored.none { it.id == builtin.id } }) {
+            save(context, merged)
         }
+        return merged.sortedBy { it.id }
     }
 
     /**
@@ -107,6 +118,7 @@ object SkillRegistry {
 
     @Synchronized
     fun remove(context: Context, id: String): SkillDecision {
+        if (builtInSkills.any { it.id == id }) return SkillDecision(false, "Built-in skills cannot be removed; disable them instead.")
         val current = list(context)
         if (current.none { it.id == id }) return SkillDecision(false, "Skill not found.")
         return save(context, current.filterNot { it.id == id })
