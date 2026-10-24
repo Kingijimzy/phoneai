@@ -748,7 +748,7 @@ Rules:
     }
 
     private val recordable = setOf(
-        "open_app", "click_text", "click", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url",
+        "open_app", "click_text", "click", "scroll", "type", "key", "open_url",
         "browser_click", "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_wait", "browser_tabs", "browser_upload", "browser_close",
         "web_search", "settings", "wait", "wait_for", "volume", "flashlight", "record_screen", "dial", "alarm", "timer"
     )
@@ -760,13 +760,12 @@ Rules:
         var a = args
         if (tool == "click") {
             val info = svc.nodeInfo(args.optInt("id", -1)) ?: return
-            if (info.first.isNotBlank()) {
-                t = "click_text"
-                a = JSONObject().put("text", info.first)
-            } else {
-                t = "tap"
-                a = JSONObject().put("x", info.second).put("y", info.third)
-            }
+            // Saved routines must be semantic and screen-relative. Never persist screen
+            // coordinates, and skip anonymous targets that cannot be replayed reliably.
+            val label = info.first.trim()
+            if (label.isBlank() || label.lowercase() in setOf("button", "text", "field", "visual target", "(text field)")) return
+            t = "click_text"
+            a = JSONObject().put("text", label)
         }
         ranSteps.put(JSONObject().put("tool", t).put("args", a))
     }
