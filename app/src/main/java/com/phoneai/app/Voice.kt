@@ -485,14 +485,18 @@ class Voice(private val ctx: Context) {
         // advertised on-device support. Only fall back to a service when privacy mode
         // is off; strict offline mode must never switch to a network recognizer.
         var usingOnDevice = false
+        val offlineOnly = Prefs.offlineSpeechOnly(ctx)
+        // Use Android's normal recognizer by default: on-device availability can be reported
+        // before its language model is downloaded, which leaves the microphone apparently active
+        // but never produces a transcript. Strict offline mode remains on-device-only.
         val r = try {
-            if (onDeviceAvailable) {
+            if (offlineOnly) {
                 SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx).also { usingOnDevice = true }
             } else {
                 SpeechRecognizer.createSpeechRecognizer(ctx)
             }
         } catch (e: Exception) {
-            if (Prefs.offlineSpeechOnly(ctx)) {
+            if (offlineOnly) {
                 onProblem?.invoke("Could not start Android's on-device speech recognizer. Check the offline speech model in system settings.")
                 onText(null)
                 return
@@ -555,9 +559,9 @@ class Voice(private val ctx: Context) {
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-        // Hint to the installed recognizer to prefer an offline model when it has one.
-        // Android may ignore this extra; the service can still fall back to a network recognizer.
-        i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        // Prefer offline recognition only when the user explicitly enabled strict offline mode.
+        // Otherwise, allow the installed speech service to use its configured online fallback.
+        i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, Prefs.offlineSpeechOnly(ctx))
         // Android's default end-of-speech silence can feel like a timeout in a live call.
         // Shorten turn detection without making it so aggressive that normal pauses cut users off.
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1300L)
