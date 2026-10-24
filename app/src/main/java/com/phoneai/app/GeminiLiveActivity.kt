@@ -24,6 +24,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
     private lateinit var usageView: TextView
     private lateinit var micButton: TextView
     private lateinit var endButton: TextView
+    private lateinit var standardModeButton: TextView
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: GeminiLiveSession? = null
@@ -139,6 +140,13 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
             marginStart = dp(8)
         })
         root.addView(controls, LinearLayout.LayoutParams(-1, View.LayoutParams.WRAP_CONTENT))
+        standardModeButton = label("Switch to standard Orion voice", 12f, 0xFF8CFFD0.toInt(), true).apply {
+            setPadding(dp(10), dp(12), dp(10), dp(8))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { endCall(returnToStandard = true) }
+        }
+        root.addView(standardModeButton, LinearLayout.LayoutParams(-1, dp(44)))
 
         root.addView(label("Conversation-only mode · no phone actions · maximum 5 minutes", 10f, 0xFF787878.toInt()),
             LinearLayout.LayoutParams(-1, dp(30)))
