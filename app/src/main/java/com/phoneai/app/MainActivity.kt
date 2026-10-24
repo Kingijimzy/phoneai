@@ -1,684 +1,542 @@
 package com.phoneai.app
 
-import android.Manifest
-import android.app.Activity
+import androidx.activity.ComponentActivity
+
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.SeekBar
-import android.widget.Spinner
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
-import org.json.JSONArray
-import org.json.JSONObject
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 
-/** Orion's control room: turn things on, save keys, tune the voice, manage memory, test recording. */
-class MainActivity : Activity() {
-    private lateinit var status: TextView
-    private lateinit var chatBtn: Button
-    private lateinit var visionBtn: Button
-    private lateinit var nameBtn: Button
-    private lateinit var memBtn: Button
-    private lateinit var avatarBtn: Button
-    private lateinit var routBtn: Button
-    private lateinit var topAvatar: AvatarView
-    private lateinit var tradeModeBtn: Button
+/**
+ * Orion app entry point. The home and primary navigation now render in Jetpack Compose;
+ * existing activities continue to own the agent, browser, settings, and device integrations.
+ */
+class MainActivity : ComponentActivity() {
+    private lateinit var content: FrameLayout
+    private lateinit var statusLabel: TextView
+    private var homeOrb: OrbView? = null
+    private var selectedTab = "Home"
+    private var composeStatus: MutableState<String>? = null
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
-    private fun text(s: String, size: Float, color: Int, bold: Boolean = false): TextView {
-        val t = TextView(this)
-        t.text = s
-        t.textSize = size
-        t.setTextColor(color)
-        if (bold) t.typeface = Typeface.DEFAULT_BOLD
-        return t
-    }
-
-    private fun button(label: String, primary: Boolean, onClick: () -> Unit): Button {
-        val b = Button(this)
-        b.text = label
-        b.isAllCaps = false
-        b.textSize = 15f
-        b.setTextColor(if (primary) Theme.ON_ACCENT else Theme.TEXT)
-        val g = GradientDrawable()
-        g.setColor(if (primary) Theme.CYAN else Theme.PANEL2)
-        g.cornerRadius = dp(14).toFloat()
-        if (!primary) g.setStroke(dp(1), Theme.LINE)
-        b.background = g
-        b.setOnClickListener { onClick() }
-        return b
-    }
-
-    private fun add(col: LinearLayout, v: View, top: Int = 10) {
-        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.setMargins(0, dp(top), 0, 0)
-        col.addView(v, lp)
-    }
-
-    /** A rounded section with a title. Returns the inside column. */
-    private fun card(parent: LinearLayout, title: String, note: String? = null): LinearLayout {
-        val c = LinearLayout(this)
-        c.orientation = LinearLayout.VERTICAL
-        val g = GradientDrawable()
-        g.setColor(Theme.PANEL)
-        g.cornerRadius = dp(20).toFloat()
-        g.setStroke(dp(1), Theme.LINE)
-        c.background = g
-        c.setPadding(dp(16), dp(14), dp(16), dp(16))
-        c.addView(text(title, 17f, Theme.CYAN, true))
-        if (note != null) {
-            val n = text(note, 13f, Theme.MUTED)
-            n.setPadding(0, dp(4), 0, 0)
-            c.addView(n)
+    private fun label(value: String, size: Float, color: Int, bold: Boolean = false): TextView =
+        TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            if (bold) typeface = Typeface.DEFAULT_BOLD
         }
-        add(parent, c, 14)
-        return c
+
+    private fun surface(radius: Int = 22, fill: Int = Theme.PANEL): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), Theme.LINE)
+        }
+
+    private fun gradientSurface(radius: Int, colors: IntArray): GradientDrawable =
+        GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), 0xFF5A5A5A.toInt())
+        }
+
+    private fun animateEntrance(view: View, delay: Long = 0L) {
+        view.alpha = 0f
+        view.translationY = dp(12).toFloat()
+        view.scaleX = .985f
+        view.scaleY = .985f
+        view.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+            .setStartDelay(delay).setDuration(360)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
-    private fun switchRow(col: LinearLayout, label: String, on: Boolean, onChange: (Boolean) -> Unit) {
-        val sw = Switch(this)
-        sw.text = label
-        sw.setTextColor(Theme.TEXT)
-        sw.isChecked = on
-        sw.setOnCheckedChangeListener { _, v -> onChange(v) }
-        add(col, sw, 10)
+    private fun action(title: String, subtitle: String? = null, primary: Boolean = false, onClick: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(15), dp(13), dp(15), dp(13))
+            background = surface(17, if (primary) 0xFF1A1A1A.toInt() else 0xFF111111.toInt())
+            isClickable = true
+            isFocusable = true
+        }
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val glyph = OrionIconView(this).apply {
+            icon = iconFor(title)
+            tint = if (primary) Theme.CYAN else Theme.MUTED
+            contentDescription = null
+        }
+        heading.addView(glyph, LinearLayout.LayoutParams(dp(23), dp(23)).apply { rightMargin = dp(10) })
+        heading.addView(label(title, 15f, if (primary) Theme.CYAN else Theme.TEXT, true).apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(OrionIconView(this).apply {
+            icon = "arrow"
+            tint = Theme.MUTED
+            alpha = 0.7f
+            contentDescription = null
+        }, LinearLayout.LayoutParams(dp(18), dp(18)))
+        row.addView(heading)
+        if (subtitle != null) {
+            row.addView(label(subtitle, 12f, Theme.MUTED).apply {
+                maxLines = 3
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setLineSpacing(dp(1).toFloat(), 1f)
+                setPadding(dp(33), dp(4), dp(2), 0)
+            })
+        }
+        row.setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> v.animate().scaleX(.985f).scaleY(.985f).setDuration(80).start()
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+            }
+            false
+        }
+        row.setOnClickListener { onClick() }
+        return row
+    }
+
+    private fun iconFor(title: String): String {
+        val t = title.lowercase()
+        return when {
+            "chat" in t || "conversation" in t -> "chat"
+            "task" in t || "routine" in t -> "tasks"
+            "memory" in t -> "memory"
+            "skill" in t -> "skills"
+            "browser" in t || "research" in t -> "browser"
+            "network" in t || "game" in t || "diagnostic" in t -> "network"
+            "screen" in t || "permission" in t || "privacy" in t -> "shield"
+            "voice" in t || "character" in t -> "voice"
+            "provider" in t || "service" in t || "integration" in t -> "spark"
+            "accessibility" in t -> "settings"
+            else -> "spark"
+        }
+    }
+
+    private fun section(parent: LinearLayout, heading: String, note: String? = null): LinearLayout {
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(17), 0, dp(2))
+        }
+        wrap.addView(label(heading, 17f, Theme.TEXT, true))
+        if (note != null) wrap.addView(label(note, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+        parent.addView(wrap)
+        return wrap
+    }
+
+    private fun gap(parent: LinearLayout, view: View, top: Int = 9) {
+        parent.addView(view, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(top) })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installCrashRecorder()
         super.onCreate(savedInstanceState)
-        val sv = ScrollView(this)
-        sv.setBackgroundColor(Theme.BG)
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.setPadding(dp(18), dp(40), dp(18), dp(32))
-        sv.addView(col)
-        setContentView(sv)
-
-        topAvatar = AvatarView(this)
-        val orbLp = LinearLayout.LayoutParams(dp(190), dp(190))
-        orbLp.gravity = Gravity.CENTER_HORIZONTAL
-        col.addView(topAvatar, orbLp)
-        val title = text("O R I O N   A I", 24f, Theme.TEXT, true)
-        title.gravity = Gravity.CENTER
-        add(col, title, 4)
-        val sub = text("Your personal AI for this phone. Speak, type, and let it act.", 14f, Theme.MUTED)
-        sub.gravity = Gravity.CENTER
-        add(col, sub, 4)
-
-        // ---- 1. setup
-        val s1 = card(col, "1. Switch it on")
-        status = text("", 13f, Theme.OK)
-        status.typeface = Typeface.MONOSPACE
-        add(s1, status, 8)
-        add(
-            s1,
-            text(
-                "Turn on Orion AI in Accessibility. If it says Restricted setting: App info of this app, " +
-                    "three dots, Allow restricted settings, then try again.",
-                12f, Theme.MUTED
-            ),
-            8
-        )
-        add(s1, button("Open Accessibility settings", true) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }, 8)
-        add(s1, button("Allow microphone and notifications", false) {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
-        }, 8)
-        add(s1, button("Open Orion", true) {
-            val s = PhoneAiService.instance
-            if (s == null) {
-                Toast.makeText(this, "Turn on Accessibility first.", Toast.LENGTH_LONG).show()
-            } else {
-                s.showPanel()
-                moveTaskToBack(true)
-            }
-        }, 8)
-
-        // ---- 2. AI services
-        val s2 = card(
-            col, "2. AI services",
-            "13 online services plus a free local AI. Add 3 or more free keys (Groq, Cerebras, Mistral, Gemini, OpenRouter): Orion spreads requests across all of them so none runs out, and switches instantly when one is busy. Simple commands (open apps, flashlight, volume, alarms...) need no AI at all."
-        )
-        add(s2, button("Get a free Gemini key (opens website)", false) {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
-        }, 10)
-        add(s2, button("Add or change an API key", true) { keyDialog() }, 8)
-        chatBtn = button("", false) { providerDialog(false) }
-        add(s2, chatBtn, 8)
-        visionBtn = button("", false) { providerDialog(true) }
-        add(s2, visionBtn, 8)
-        switchRow(s2, "Auto-switch to another service if one fails", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
-        add(s2, button("Test the AI", false) { testAi() }, 10)
-        add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
-        add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
-
-        // ---- 3. voice
-        val s3 = card(col, "3. Voice")
-        switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
-        switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
-        switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
-        switchRow(s3, "Wake word: say \"Orion\" (experimental, uses battery)", Prefs.wake(this)) {
-            Prefs.setWake(this, it)
-            if (it) {
-                Toast.makeText(
-                    this, "Turn Accessibility off and on once so Orion starts listening.", Toast.LENGTH_LONG
-                ).show()
+        window.statusBarColor = Theme.BG
+        window.navigationBarColor = Theme.BG
+        window.decorView.systemUiVisibility = 0
+        val statusState = mutableStateOf(buildStatusText())
+        composeStatus = statusState
+        val composeRoot = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                OrionComposeShell(
+                    status = statusState.value,
+                    onOpenChat = { startActivity(Intent(this@MainActivity, MainChatActivity::class.java)) },
+                    onOpenVoice = { startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java)) },
+                    onOpenBrowser = { startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")) },
+                    onOpenTasks = { startActivity(Intent(this@MainActivity, TaskCenterActivity::class.java)) },
+                    onOpenSettings = { section ->
+                        val intent = Intent(this@MainActivity, SettingsActivity::class.java)
+                        if (section != null) intent.putExtra("open_section", section)
+                        startActivity(intent)
+                    },
+                    onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) }
+                )
             }
         }
-        add(s3, text("Speaking speed", 13f, Theme.MUTED), 12)
-        val bar = SeekBar(this)
-        bar.max = 100
-        bar.progress = ((Prefs.rate(this) - 0.5f) * 100f).toInt().coerceIn(0, 100)
-        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                if (fromUser) Prefs.setRate(this@MainActivity, 0.5f + p / 100f)
-            }
+        setContentView(composeRoot)
+        showPreviousCrashIfPresent()
+    }
 
-            override fun onStartTrackingTouch(s: SeekBar?) {}
-            override fun onStopTrackingTouch(s: SeekBar?) {}
-        })
-        add(s3, bar, 2)
-        avatarBtn = button("", false) { avatarDialog() }
-        add(s3, avatarBtn, 10)
-        add(s3, button("Choose a voice", false) { voiceDialog() }, 8)
-        add(s3, button("Hear Orion's voice", false) { testVoice() }, 8)
-
-        // ---- 4. memory
-        val s4 = card(
-            col, "4. Memory",
-            "Orion remembers your preferences, projects, decisions and unfinished work, even after you close the app. " +
-                "You can view, edit or delete everything."
-        )
-        nameBtn = button("", false) { nameDialog() }
-        add(s4, nameBtn, 10)
-        memBtn = button("", true) { memoryDialog() }
-        add(s4, memBtn, 8)
-        add(
-            s4,
-            text(
-                "Routines: after Orion finishes a task, say \"save this as a routine called morning check\". " +
-                    "Later say \"run morning check\" and it repeats the steps with NO AI, so no limits and no waiting.",
-                12f, Theme.MUTED
-            ),
-            12
-        )
-        routBtn = button("", false) { routinesDialog() }
-        add(s4, routBtn, 8)
-
-        // ---- 5. recording
-        val s5 = card(
-            col, "5. Screen recording",
-            "Say \"record my screen\" to Orion, or test here. Android asks permission each time. Videos are saved in Movies/Orion."
-        )
-        add(s5, button("Start a test recording", false) {
-            if (RecordService.state == "recording") {
-                Toast.makeText(this, "Already recording.", Toast.LENGTH_SHORT).show()
-            } else {
-                RecordService.state = "waiting"
-                startActivity(Intent(this, RecordRequestActivity::class.java))
-            }
-        }, 10)
-        add(s5, button("Stop recording", false) {
-            val svc = RecordService.instance
-            if (svc == null || RecordService.state != "recording") {
-                Toast.makeText(this, "Not recording.", Toast.LENGTH_SHORT).show()
-            } else {
-                svc.stopRecording()
-                Toast.makeText(this, "Saving to Movies/Orion...", Toast.LENGTH_LONG).show()
-            }
-        }, 8)
-
-        // ---- 6. trading
-        val s6 = card(
-            col, "6. Trading (Bybit)",
-            "Orion reads your account, finds setups, and places orders only after you confirm. Create the key on Bybit with Read and Trade permissions ONLY, never Withdraw. Practice mode is on until you switch it."
-        )
-        add(s6, button("Save my Bybit key", true) { bybitDialog() }, 10)
-        tradeModeBtn = button("", false) { toggleTradeMode() }
-        add(s6, tradeModeBtn, 8)
-        switchRow(s6, "Market watch (works with the screen off)", Prefs.watchOn(this)) { on ->
-            if (on) {
-                if (android.os.Build.VERSION.SDK_INT >= 33 &&
-                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7)
-                WatchService.start(this)
-            } else {
-                WatchService.stop(this)
-            }
-        }
-        add(s6, button("Let Orion run in the background (battery)", false) {
+    /**
+     * Diagnostic reports stay in app-private storage. No crash data is uploaded.
+     * The default handler also records failures in secondary activities such as Chat and Settings.
+     */
+    private fun installCrashRecorder() {
+        val app = applicationContext
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (e: Exception) {
-                Toast.makeText(this, "Open Settings > Battery and set Orion to Unrestricted.", Toast.LENGTH_LONG).show()
+                val writer = StringWriter()
+                PrintWriter(writer).use { error.printStackTrace(it) }
+                val report = buildString {
+                    appendLine("Orion crash report")
+                    appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date()))
+                    appendLine("Thread: " + thread.name)
+                    appendLine("Android: " + android.os.Build.VERSION.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine()
+                    append(writer.toString().take(24000))
+                }
+                File(app.filesDir, "orion_last_crash.txt").writeText(report)
+            } catch (_: Throwable) {
+                // Never prevent Android's normal crash handling if report writing fails.
             }
-        }, 8)
-        add(
-            s6,
-            text(
-                "Try saying: balance, price of btc, analyse eth, scan the market, buy 50 usdt of eth stop 3200 target 3600, alert me when btc is above 70000, how are my setups doing, trading lesson never chase a pump.",
-                12f, Theme.MUTED
-            ),
-            10
-        )
+            if (previous != null) previous.uncaughtException(thread, error)
+            else android.os.Process.killProcess(android.os.Process.myPid())
+        }
+    }
 
-        add(
-            col,
-            text(
-                "Safety: Orion asks before sending, paying, buying or deleting, and never types passwords or codes. " +
-                    "Tap Stop any time. Free AI services may read what you send them, so avoid private screens. " +
-                    "Games can ban accounts that use automation.",
-                12f, Theme.MUTED
-            ),
-            20
-        )
+    private fun showPreviousCrashIfPresent() {
+        val reportFile = File(filesDir, "orion_last_crash.txt")
+        if (!reportFile.exists()) return
+        val report = try { reportFile.readText().take(24000) } catch (_: Exception) { return }
+        AlertDialog.Builder(this)
+            .setTitle("Orion saved a crash report")
+            .setMessage("Orion closed unexpectedly last time. Copy this report and send it here so I can identify the exact cause. The report stays on your phone until you choose to copy it.\\n\\n" + report.take(1800))
+            .setPositiveButton("Copy report") { _, _ ->
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Orion crash report", report))
+                Toast.makeText(this, "Crash report copied. Paste it into this chat.", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Not now", null)
+            .show()
+    }
+
+    private fun bottomNav(): View {
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(6), dp(5), dp(6), dp(6))
+            background = GradientDrawable().apply {
+                setColor(0xF5121212.toInt())
+                cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), Theme.LINE)
+            }
+            elevation = dp(8).toFloat()
+        }
+        listOf("Home", "Chat", "Tools", "Settings").forEach { tab ->
+            val cell = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(3), dp(5), dp(3), dp(4))
+                isClickable = true
+                isFocusable = true
+                background = if (selectedTab == tab) GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(0xFF2E2E2E.toInt(), 0xFF191919.toInt())).apply {
+                    cornerRadius = dp(17).toFloat()
+                    setStroke(dp(1), 0xFF616161.toInt())
+                } else GradientDrawable().apply {
+                    setColor(0x00000000)
+                    cornerRadius = dp(17).toFloat()
+                }
+            }
+            val glyph = OrionIconView(this).apply {
+                icon = when (tab) { "Home" -> "home"; "Chat" -> "chat"; "Tools" -> "tools"; else -> "settings" }
+                tint = if (selectedTab == tab) Theme.CYAN else Theme.MUTED
+                contentDescription = tab + " tab"
+            }
+            cell.addView(glyph, LinearLayout.LayoutParams(dp(22), dp(22)).apply {
+                topMargin = dp(1)
+            })
+            cell.addView(label(tab, 10f, if (selectedTab == tab) Theme.CYAN else Theme.MUTED, selectedTab == tab).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, dp(3), 0, 0)
+            })
+            cell.layoutParams = LinearLayout.LayoutParams(0, -1, 1f)
+            cell.setOnClickListener { showTab(tab) }
+            bar.addView(cell)
+        }
+        return bar
+    }
+
+    private fun showTab(tab: String, animate: Boolean = true) {
+        if (tab == "Chat") {
+            // Chat is a separate full-screen activity; preserve the current home/tools/settings
+            // selection so returning from chat does not leave the shell in a mismatched tab state.
+            startActivity(Intent(this, MainChatActivity::class.java))
+            return
+        }
+        selectedTab = tab
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF080808.toInt(), 0xFF0E0E0E.toInt(), 0xFF101010.toInt()))
+        }
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(19), dp(22), dp(19), dp(24))
+        }
+        scroll.addView(page)
+        when (tab) {
+            "Home" -> buildHome(page)
+            "Tools" -> buildTools(page)
+            else -> buildSettings(page)
+        }
+        val next = FrameLayout(this)
+        next.addView(scroll, FrameLayout.LayoutParams(-1, -1))
+        next.alpha = if (animate) 0f else 1f
+        next.translationY = if (animate) dp(8).toFloat() else 0f
+        content.removeAllViews()
+        content.addView(next, FrameLayout.LayoutParams(-1, -1))
+        if (animate) next.animate().alpha(1f).translationY(0f).setDuration(190)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        // Rebuild nav selection to keep the selected state visible.
+        val root = content.parent as? LinearLayout ?: return
+        if (root.childCount > 1) {
+            root.removeViewAt(1)
+            root.addView(bottomNav(), LinearLayout.LayoutParams(-1, dp(66)).apply {
+                leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(7)
+            })
+        }
+    }
+
+    private fun buildHome(page: LinearLayout) {
+        // Editorial home: near-black canvas, restrained mint, clearer hierarchy and fewer noisy cards.
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val brandMark = FrameLayout(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF3D3D3D.toInt(), 0xFF191919.toInt())).apply {
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), 0xFF626262.toInt())
+            }
+            addView(OrionIconView(this@MainActivity).apply {
+                icon = "spark"; tint = Theme.CYAN; contentDescription = null
+            }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        }
+        brandRow.addView(brandMark, LinearLayout.LayoutParams(dp(38), dp(38)).apply { rightMargin = dp(10) })
+        val brandText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        brandText.addView(label("ORION", 14f, Theme.TEXT, true).apply { letterSpacing = .12f })
+        brandText.addView(label("PERSONAL INTELLIGENCE", 9f, Theme.MUTED, true).apply { letterSpacing = .08f; setPadding(0, dp(2), 0, 0) })
+        brandRow.addView(brandText)
+        brandRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        val livePill = label("●  READY", 9f, Theme.OK, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            background = GradientDrawable().apply {
+                setColor(0xFF1A1A1A.toInt()); cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), 0xFF444444.toInt())
+            }
+        }
+        brandRow.addView(livePill)
+        page.addView(brandRow)
+        page.addView(label("A little more\ncapable. Every day.", 30f, Theme.TEXT, true).apply {
+            setPadding(0, dp(24), 0, dp(8))
+            setLineSpacing(dp(1).toFloat(), 1f)
+            letterSpacing = -.035f
+        })
+        page.addView(label("Your assistant for thinking clearly, getting things done, and staying in control.", 13f, Theme.MUTED).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setPadding(0, 0, dp(8), 0)
+        })
+
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(16), dp(18), dp(17))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF181818.toInt(), 0xFF0E0E0E.toInt(), 0xFF131313.toInt())).apply {
+                cornerRadius = dp(27).toFloat()
+                setStroke(dp(1), 0xFF393939.toInt())
+            }
+            elevation = dp(2).toFloat()
+        }
+        val avatar = OrbView(this).apply {
+            contentDescription = "Orion animated energy core. Tap to open chat."
+            isClickable = true
+            isFocusable = true
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.97f).scaleY(.97f).setDuration(90).start()
+                else if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
+                false
+            }
+            setOnClickListener { showTab("Chat") }
+        }
+        homeOrb = avatar
+        val heroOrbSize = if (resources.configuration.screenHeightDp < 700) 132 else 150
+        hero.addView(avatar, LinearLayout.LayoutParams(dp(heroOrbSize), dp(heroOrbSize)).apply { gravity = Gravity.CENTER; bottomMargin = dp(5) })
+        hero.addView(label("ORION  /  ONLINE", 10f, Theme.CYAN, true).apply { gravity = Gravity.CENTER; letterSpacing = .13f })
+        hero.addView(label("Ready when you are.", 18f, Theme.TEXT, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, dp(4)) })
+        hero.addView(label("Talk naturally, explore an idea, or ask for help with a task.", 12f, Theme.MUTED).apply {
+            gravity = Gravity.CENTER; setLineSpacing(dp(2).toFloat(), 1f)
+        })
+        gap(page, hero, 20)
+        animateEntrance(hero, 70)
+
+        val chatAction = action("Start a conversation", "A quiet space to think, ask, and create", true) { showTab("Chat") }
+        gap(page, chatAction, 8)
+        animateEntrance(chatAction, 130)
+
+        val imageAction = action("Ask with an image", "Choose a photo or screenshot for Orion to analyse") {
+            startActivity(Intent(this@MainActivity, MainChatActivity::class.java)
+                .putExtra(MainChatActivity.EXTRA_PICK_IMAGE, true))
+        }
+        gap(page, imageAction, 12)
+        animateEntrance(imageAction, 175)
+
+        val quickHeader = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(23), 0, dp(4)) }
+        quickHeader.addView(label("QUICK ACCESS", 10f, Theme.CYAN, true).apply { letterSpacing = .13f })
+        quickHeader.addView(label("Pick up where you need to be.", 17f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, 0) })
+        page.addView(quickHeader)
+        val quickLaunch = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val live = action("Live voice", "Speak with Orion") {
+            startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java))
+        }
+        val browser = action("Orion Browser", "Search and browse") {
+            startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"))
+        }
+        quickLaunch.addView(live, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(5) })
+        quickLaunch.addView(browser, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
+        gap(page, quickLaunch, 8)
+
+        val workspace = section(page, "Your workspace", "Tools and memory, organized in one place")
+        gap(workspace, action("Task centre", "Running tasks, saved sessions, and progress", true) {
+            startActivity(Intent(this, TaskCenterActivity::class.java))
+        }, 8)
+        gap(workspace, action("Memory & routines", "Search and manage Orion’s saved local memories") {
+            startActivity(Intent(this, MemoryActivity::class.java))
+        }, 8)
+        gap(workspace, action("Skills studio", "Manage Orion's available capabilities") {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
+        }, 8)
+
+        val statusCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+            background = surface(18, 0xFF111111.toInt())
+        }
+        statusCard.addView(label("SYSTEM STATUS", 10f, Theme.CYAN, true).apply { letterSpacing = .12f })
+        statusLabel = label("", 12f, Theme.MUTED).apply { setPadding(0, dp(7), 0, 0); setLineSpacing(dp(2).toFloat(), 1f) }
+        statusCard.addView(statusLabel)
+        gap(page, statusCard, 18)
+        refreshStatus()
+        animateEntrance(statusCard, 200)
+    }
+
+    private fun roundedPill(): GradientDrawable = GradientDrawable().apply {
+        setColor(0xFF2F2F2F.toInt())
+        cornerRadius = dp(30).toFloat()
+        setStroke(dp(1), 0xFF515151.toInt())
+    }
+
+    private fun buildTools(page: LinearLayout) {
+        page.addView(label("TOOLS", 11f, Theme.CYAN, true))
+        page.addView(label("A workspace for getting things done.", 25f, Theme.TEXT, true).apply { setPadding(0, dp(8), 0, dp(5)) })
+        page.addView(label("Tools are separated from chat so the conversation stays focused.", 13f, Theme.MUTED))
+        gap(page, action("Ask Orion to do it", "Describe your goal; Orion can choose the right available tools", true) {
+            startActivity(Intent(this, MainChatActivity::class.java))
+        }, 15)
+        val device = section(page, "Phone & diagnostics", "Local utilities for your device")
+        gap(device, action("Network Radar · Game Sentinel", "Connectivity, thermal, memory, and gaming-session diagnostics", true) {
+            startActivity(Intent(this, DeviceUtilitiesActivity::class.java))
+        }, 8)
+        val agent = section(page, "Agent workspace", "Capabilities that help Orion research and work")
+        gap(agent, action("Task centre", "Manage task status and resume saved agent sessions", true) {
+            startActivity(Intent(this, TaskCenterActivity::class.java))
+        }, 8)
+        gap(agent, action("Teach Mode · Routine recorder", "Record complex taps, swipes and waits once; replay locally without AI", true) {
+            startActivity(Intent(this, TeachModeActivity::class.java))
+        }, 8)
+        gap(agent, action("Skills studio", "Manage enabled skills and their permissions") {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
+        }, 8)
+        gap(agent, action("Memory & routines", "Browse, search, edit, and delete Orion’s local memories") {
+            startActivity(Intent(this, MemoryActivity::class.java))
+        }, 8)
+        gap(agent, action("Open Orion Browser", "Search the web inside Orion; the screen agent can interact with accessible page elements", true) {
+            startActivity(Intent(this, BrowserActivity::class.java)
+                .putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"))
+        }, 8)
+        gap(agent, action("Screen recording", "Start an Android-approved screen recording") {
+            startActivity(Intent(this, RecordRequestActivity::class.java))
+        }, 8)
+        val integrations = section(page, "Connected services", "Provider keys and integrations are managed in Settings")
+        gap(integrations, action("Configure services", "AI providers, Telegram, MCP, voice, and quota controls") {
+            showTab("Settings")
+        }, 8)
+    }
+
+    private fun buildSettings(page: LinearLayout) {
+        page.addView(label("SETTINGS", 11f, Theme.CYAN, true))
+        page.addView(label("Make Orion yours.", 26f, Theme.TEXT, true).apply { setPadding(0, dp(8), 0, dp(5)) })
+        page.addView(label("Organized controls, with sensitive settings kept out of the chat.", 13f, Theme.MUTED))
+        gap(page, action("Ask Orion", "Return to the central AI agent without losing your settings", true) {
+            startActivity(Intent(this, MainChatActivity::class.java))
+        }, 15)
+        gap(page, action("AI providers & models", "API keys, model selection, vision, quota saving") {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "providers"))
+        }, 15)
+        gap(page, action("Voice & character", "Voice, speech speed, avatar, and personality") {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "voice"))
+        })
+        gap(page, action("Memory & routines", "Search and manage Orion’s saved local memories") {
+            startActivity(Intent(this, MemoryActivity::class.java))
+        })
+        gap(page, action("Integrations", "Telegram, remote MCP, connection status") {
+            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "integrations"))
+        })
+        gap(page, action("Permissions & diagnostics", "Accessibility, microphone, network and device tools") {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        })
+        gap(page, action("Open full-screen chat", "A separate conversation from the floating command orb") {
+            startActivity(Intent(this, MainChatActivity::class.java))
+        })
+        gap(page, action("Open Android accessibility settings", "Required for on-screen phone control") {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        })
+        page.addView(label("Orion asks before consequential actions. API keys stay on-device and are not shown in chat.", 12f, Theme.MUTED).apply {
+            setPadding(0, dp(20), 0, 0)
+        })
+    }
+
+    private fun buildStatusText(): String {
+        val service = PhoneAiService.instance
+        val access = if (service != null) "Accessibility agent active" else "Accessibility agent not enabled"
+        val keys = Providers.all.count { Prefs.hasKey(this, it.id) }
+        return "$access  ·  $keys AI provider key(s) configured"
+    }
+
+    private fun refreshStatus() {
+        composeStatus?.value = buildStatusText()
+        val service = PhoneAiService.instance
+        homeOrb?.mode = service?.displayMode() ?: OrbView.Mode.IDLE
+        if (::statusLabel.isInitialized) statusLabel.text = "●  " + buildStatusText()
     }
 
     override fun onResume() {
         super.onResume()
-        refresh()
-    }
-
-    private fun refresh() {
-        val acc = if (PhoneAiService.instance != null) "ON" else "OFF"
-        val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
-        val sb = StringBuilder()
-        sb.append("Accessibility: $acc\n")
-        sb.append("Microphone:    $mic\n")
-        sb.append("Keys saved:    ")
-        val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
-        sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
-        status.text = sb.toString()
-        chatBtn.text = "Chat AI: " + Prefs.provider(this, false).label + "  (tap to change)"
-        visionBtn.text = "Screen-vision AI: " + Prefs.provider(this, true).label + "  (tap to change)"
-        val n = Prefs.userName(this)
-        nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
-        memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
-        routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
-        tradeModeBtn.text = "Trading mode: " + (if (Prefs.bybitTestnet(this)) "PRACTICE" else "REAL MONEY") + "  (tap to change)"
-        topAvatar.style = Prefs.avatar(this)
-        avatarBtn.text = "Character: " + listOf("Orion", "Nova", "Ava", "Kai").getOrElse(Prefs.avatar(this)) { "Orion" } + "  (tap to change)"
-    }
-
-    // ------------------------------------------------------------ keys and providers
-
-    /** Pick a service, then paste its key. */
-    private fun keyDialog() {
-        val labels = Providers.all.map { it.label + if (Prefs.hasKey(this, it.id)) (if (it.noKey) "  (on)" else "  (saved)") else "" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Which service is the key for?")
-            .setItems(labels) { _, which -> pasteKey(Providers.all[which]) }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun pasteKey(p: Provider) {
-        if (p.noKey) {
-            localDialog(p)
-            return
-        }
-        val box = EditText(this)
-        box.hint = p.keyHint
-        box.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        box.setSingleLine(true)
-        val pad = dp(20)
-        val wrap = LinearLayout(this)
-        wrap.setPadding(pad, dp(8), pad, 0)
-        wrap.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        AlertDialog.Builder(this)
-            .setTitle(p.label + " key")
-            .setMessage(p.info + "\n\nLong-press the box and tap Paste.")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
-                val k = box.text.toString().trim()
-                if (k.isEmpty()) {
-                    Toast.makeText(this, "Nothing pasted.", Toast.LENGTH_SHORT).show()
-                } else {
-                    val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
-                    val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
-                    Prefs.setKey(this, p.id, k)
-                    if (chatNeeds) Prefs.setProvider(this, false, p.id)
-                    if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
-                    Toast.makeText(this, p.label + " key saved.", Toast.LENGTH_SHORT).show()
-                    refresh()
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun providerDialog(vision: Boolean) {
-        val list = Providers.all.filter { !vision || it.hasVision }
-        val labels = list.map { it.label + if (Prefs.hasKey(this, it.id)) "" else "  (no key yet)" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle(if (vision) "Which AI reads the screen?" else "Which AI answers chat?")
-            .setItems(labels) { _, which ->
-                val p = list[which]
-                Prefs.setProvider(this, vision, p.id)
-                if (!Prefs.hasKey(this, p.id)) {
-                    Toast.makeText(this, "Add a " + p.label + " key first.", Toast.LENGTH_LONG).show()
-                }
-                refresh()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    /** Shows every model the chosen service offers; tap one to use it. */
-    private fun pickModel(vision: Boolean) {
-        val p = Prefs.provider(this, vision)
-        Toast.makeText(this, "Loading " + p.label + " models...", Toast.LENGTH_SHORT).show()
-        Thread {
-            try {
-                val nim = Nim(this)
-                val all = nim.allModels(p)
-                val list = if (vision) all.sortedBy { if (nim.isVision(it)) 0 else 1 } else all
-                runOnUiThread {
-                    if (list.isEmpty()) {
-                        Toast.makeText(this, "No models found.", Toast.LENGTH_LONG).show()
-                    } else {
-                        val items = list.toTypedArray()
-                        AlertDialog.Builder(this)
-                            .setTitle(p.label + (if (vision) " vision model" else " chat model"))
-                            .setItems(items) { _, which ->
-                                Prefs.setModel(this, p, vision, items[which])
-                                Toast.makeText(this, "Using " + items[which] + ". Now tap Test the AI.", Toast.LENGTH_LONG).show()
-                            }
-                            .setNegativeButton("Cancel", null)
-                            .show()
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread { Toast.makeText(this, "Problem: " + e.message, Toast.LENGTH_LONG).show() }
-            }
-        }.start()
-    }
-
-    private fun testAi() {
-        Toast.makeText(this, "Testing...", Toast.LENGTH_SHORT).show()
-        Thread {
-            val sb = StringBuilder()
-            for (vision in listOf(false, true)) {
-                val p = Prefs.provider(this, vision)
-                val name = if (vision) "Screen vision" else "Chat"
-                try {
-                    val m = JSONArray().put(JSONObject().put("role", "user").put("content", "Reply with the single word: ok"))
-                    val r = Nim(this).chat(m, vision, 10, 0.0)
-                    sb.append("$name: works.\n  Model: ${Prefs.model(this, p, vision)}\n  Said: ${r.take(30)}\n\n")
-                } catch (e: Exception) {
-                    sb.append("$name: FAILED.\n  ${e.message}\n\n")
-                }
-            }
-            runOnUiThread {
-                AlertDialog.Builder(this)
-                    .setTitle("Test result")
-                    .setMessage(sb.toString().trim())
-                    .setPositiveButton("OK", null)
-                    .show()
-                refresh()
-            }
-        }.start()
-    }
-
-    private fun testVoice() {
-        val v = Voice(this)
-        val n = Prefs.userName(this)
-        // the speech engine needs a moment to wake up
-        window.decorView.postDelayed({
-            v.speak("Hello" + (if (n.isEmpty()) "" else " $n") + ". I am Orion, at your service.") {
-                runOnUiThread { v.shutdown() }
-            }
-        }, 900)
-        Toast.makeText(this, "Speaking...", Toast.LENGTH_SHORT).show()
-    }
-
-    // ------------------------------------------------------------ name and memory
-
-    private fun routinesDialog() {
-        val names = MacroStore.names(this)
-        val b = AlertDialog.Builder(this).setTitle("My routines (" + names.size + ")")
-        if (names.isEmpty()) {
-            b.setMessage("No routines yet. Ask Orion to do a task, then say: save this as a routine called <name>.")
-        } else {
-            b.setItems(names.toTypedArray()) { _, which ->
-                val n = names[which]
-                AlertDialog.Builder(this)
-                    .setTitle("Delete \"" + n + "\"?")
-                    .setMessage("Say \"run " + n + "\" to Orion to play it.")
-                    .setPositiveButton("Delete") { _, _ ->
-                        MacroStore.delete(this, n)
-                        refresh()
-                        routinesDialog()
-                    }
-                    .setNegativeButton("Keep") { _, _ -> routinesDialog() }
-                    .show()
-            }
-        }
-        b.setNegativeButton("Close") { _, _ -> refresh() }
-        b.show()
-    }
-
-    private fun bybitDialog() {
-        val k = EditText(this)
-        k.hint = "Bybit API key"
-        k.setSingleLine(true)
-        k.setText(Prefs.bybitKey(this))
-        val sec = EditText(this)
-        sec.hint = "Bybit API secret"
-        sec.setSingleLine(true)
-        sec.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        val wrap = LinearLayout(this)
-        wrap.orientation = LinearLayout.VERTICAL
-        wrap.setPadding(dp(20), dp(8), dp(20), 0)
-        wrap.addView(k, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        wrap.addView(sec, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        AlertDialog.Builder(this)
-            .setTitle("Bybit API (Read + Trade only)")
-            .setMessage("Never enable Withdraw. Practice keys come from testnet.bybit.com, real keys from bybit.com.")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
-                Prefs.setBybit(this, k.text.toString(), sec.text.toString())
-                Toast.makeText(this, "Saved.", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun toggleTradeMode() {
-        if (Prefs.bybitTestnet(this)) {
-            AlertDialog.Builder(this)
-                .setTitle("Switch to REAL money?")
-                .setMessage("Orders will use your real Bybit balance. Orion still asks before every order, and your max order and max risk limits still apply.")
-                .setPositiveButton("Use real money") { _, _ ->
-                    Prefs.setBybitTestnet(this, false)
-                    refresh()
-                }
-                .setNegativeButton("Stay in practice", null)
-                .show()
-        } else {
-            Prefs.setBybitTestnet(this, true)
-            refresh()
-        }
-    }
-
-    private fun avatarDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Pick Orion's look")
-            .setItems(arrayOf("Orion (robot head)", "Nova (friendly face)", "Ava (human woman)", "Kai (human man)")) { _, which ->
-                Prefs.setAvatar(this, which)
-                refresh()
-                Toast.makeText(this, "Saved. Close and reopen the Orion panel to see it.", Toast.LENGTH_LONG).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun describeVoice(x: android.speech.tts.Voice): String {
-        val q = if (x.quality >= 400) "high quality" else "standard"
-        val net = if (x.isNetworkConnectionRequired) ", online" else ""
-        val place = x.locale.displayCountry.ifEmpty { x.locale.displayLanguage }
-        return place + " - " + q + net + " - " + x.name.split("-").takeLast(2).joinToString("-")
-    }
-
-    private fun voiceDialog() {
-        val v = Voice(this)
-        Toast.makeText(this, "Loading voices...", Toast.LENGTH_SHORT).show()
-        window.decorView.postDelayed({
-            val list = v.voiceList()
-            if (list.isEmpty()) {
-                Toast.makeText(
-                    this, "No voices found. Install Speech Services by Google from the Play Store.", Toast.LENGTH_LONG
-                ).show()
-                v.shutdown()
-            } else {
-                val labels = ArrayList<String>()
-                labels.add("Automatic (best available)")
-                for (x in list) labels.add(describeVoice(x))
-                AlertDialog.Builder(this)
-                    .setTitle("Choose Orion's voice")
-                    .setItems(labels.toTypedArray()) { _, which ->
-                        Prefs.setVoiceName(this, if (which == 0) "" else list[which - 1].name)
-                        v.refreshVoice()
-                        v.speak("Hello. This is how I sound.") { runOnUiThread { v.shutdown() } }
-                    }
-                    .setNegativeButton("Cancel") { _, _ -> v.shutdown() }
-                    .setOnCancelListener { v.shutdown() }
-                    .show()
-            }
-        }, 1000)
-    }
-
-    private fun localDialog(p: Provider) {
-        val on = Prefs.hasKey(this, p.id)
-        AlertDialog.Builder(this)
-            .setTitle("Local AI on this phone")
-            .setMessage(
-                "Free, unlimited and private. It runs inside Termux, so it is slower and best for plain chat.\n\n" +
-                    "Set it up once in Termux:\n" +
-                    "1. pkg update && pkg install ollama\n" +
-                    "2. ollama serve &\n" +
-                    "3. ollama pull llama3.2:3b   (or llama3.2:1b for faster)\n\n" +
-                    "Keep Termux open in the background, then tap Turn on here.\n\nNow: " + (if (on) "ON" else "off")
-            )
-            .setPositiveButton("Turn on") { _, _ ->
-                Prefs.setKey(this, p.id, "on")
-                Prefs.setProvider(this, false, p.id)
-                refresh()
-                Toast.makeText(this, "Local AI is now the chat AI. Tap Test the AI.", Toast.LENGTH_LONG).show()
-            }
-            .setNeutralButton("Turn off") { _, _ ->
-                Prefs.setKey(this, p.id, "")
-                refresh()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun nameDialog() {
-        val box = EditText(this)
-        box.hint = "Your name"
-        box.setSingleLine(true)
-        box.setText(Prefs.userName(this))
-        val wrap = LinearLayout(this)
-        wrap.setPadding(dp(20), dp(8), dp(20), 0)
-        wrap.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        AlertDialog.Builder(this)
-            .setTitle("What should Orion call you?")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
-                Prefs.setUserName(this, box.text.toString())
-                refresh()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun when2(ms: Long): String =
-        if (ms <= 0) "" else SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
-
-    private fun memoryDialog() {
-        val items = MemoryStore.all(this).sortedByDescending { it.updated }
-        val b = AlertDialog.Builder(this).setTitle("Orion's memory (" + items.size + ")")
-        if (items.isEmpty()) {
-            b.setMessage(
-                "Nothing saved yet. Tell Orion things like \"remember I prefer short answers\" " +
-                    "or \"we are working on my trading agent\", or tap Add."
-            )
-        } else {
-            val labels = items.map { "(" + it.category + ") " + it.text + "  " + when2(it.updated) }.toTypedArray()
-            b.setItems(labels) { _, which -> editMemory(items[which]) }
-        }
-        b.setPositiveButton("Add") { _, _ -> editMemory(null) }
-        b.setNegativeButton("Close") { _, _ -> refresh() }
-        if (items.isNotEmpty()) {
-            b.setNeutralButton("Clear all") { _, _ ->
-                AlertDialog.Builder(this)
-                    .setTitle("Delete ALL memories?")
-                    .setMessage("Orion will forget everything it saved. This cannot be undone.")
-                    .setPositiveButton("Delete all") { _, _ ->
-                        MemoryStore.clear(this)
-                        refresh()
-                        memoryDialog()
-                    }
-                    .setNegativeButton("Cancel") { _, _ -> memoryDialog() }
-                    .show()
-            }
-        }
-        b.show()
-    }
-
-    private fun editMemory(m: Memory?) {
-        val box = EditText(this)
-        box.hint = "What should Orion remember?"
-        box.setText(m?.text ?: "")
-        box.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        box.minLines = 2
-        val spin = Spinner(this)
-        spin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, MemoryStore.CATEGORIES)
-        spin.setSelection(MemoryStore.CATEGORIES.indexOf(m?.category ?: "fact").coerceAtLeast(0))
-        val wrap = LinearLayout(this)
-        wrap.orientation = LinearLayout.VERTICAL
-        wrap.setPadding(dp(20), dp(8), dp(20), 0)
-        wrap.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        wrap.addView(spin, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val b = AlertDialog.Builder(this)
-            .setTitle(if (m == null) "Add a memory" else "Edit memory")
-            .setView(wrap)
-            .setPositiveButton("Save") { _, _ ->
-                val cat = MemoryStore.CATEGORIES[spin.selectedItemPosition]
-                val t = box.text.toString()
-                if (m == null) MemoryStore.add(this, cat, t) else MemoryStore.update(this, m.id, cat, t)
-                refresh()
-                memoryDialog()
-            }
-            .setNegativeButton("Cancel") { _, _ -> memoryDialog() }
-        if (m != null) {
-            b.setNeutralButton("Delete") { _, _ ->
-                MemoryStore.delete(this, m.id)
-                refresh()
-                memoryDialog()
-            }
-        }
-        b.show()
+        refreshStatus()
     }
 }

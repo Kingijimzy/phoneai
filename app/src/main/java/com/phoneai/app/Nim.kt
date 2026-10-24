@@ -21,11 +21,21 @@ class Nim(private val ctx: Context) {
 
         /** provider id -> times of requests in the last minute (so we slow down BEFORE a limit is hit) */
         private val hits = ConcurrentHashMap<String, java.util.concurrent.ConcurrentLinkedDeque<Long>>()
+        /** Latest provider-reported quota headers, when that API exposes them. */
+        private val providerQuota = ConcurrentHashMap<String, String>()
+        /** Last confirmed provider/model per mode; response text is never stored here. */
+        private val lastSuccess = ConcurrentHashMap<String, String>()
+        /** Most recent failure per provider, kept only in memory for diagnostics. */
+        private val lastFailure = ConcurrentHashMap<String, String>()
+        /** Successful model catalogues, cached briefly and keyed by provider + saved-key fingerprint. */
+        private val modelCatalogCache = ConcurrentHashMap<String, Pair<Long, List<String>>>()
+        private const val MODEL_CATALOG_TTL_MS = 10 * 60 * 1000L
 
         fun budget(id: String): Int = when (id) {
             "gemini" -> 9
             "groq", "cerebras", "mistral" -> 24
             "openrouter" -> 14
+            "nvidia" -> 18
             "local" -> 1000
             else -> 18
         }
@@ -51,11 +61,26 @@ class Nim(private val ctx: Context) {
             for (p in Providers.all) {
                 if (!Prefs.hasKey(c, p.id)) continue
                 val cd = ((cooldown[p.id] ?: 0L) - now) / 1000
-                sb.append(p.label).append(": ").append(usedLastMinute(p.id)).append(" of ").append(budget(p.id)).append(" this minute")
-                if (cd > 0) sb.append(", resting ").append(cd).append(" seconds")
+                sb.append(p.label).append(": local usage counter ")
+                    .append(usedLastMinute(p.id)).append("/").append(budget(p.id)).append(" requests in the last minute (not the provider's actual quota)")
+                providerQuota[p.id]?.let { sb.append("; provider-reported quota: ").append(it) }
+                if (cd > 0) sb.append(", cooling down ").append(cd).append(" seconds")
                 sb.append(". ")
             }
-            return if (sb.isEmpty()) "No AI keys saved yet." else sb.toString().trim()
+            sb.append("\nSelected chat provider: ").append(Prefs.provider(c, false).label)
+            sb.append("\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
+            lastSuccess["chat"]?.let { sb.append("\nLast successful chat: ").append(it) }
+            lastSuccess["vision"]?.let { sb.append("\nLast successful screen-vision: ").append(it) }
+            if (lastFailure.isNotEmpty()) {
+                sb.append("\nRecent provider errors:")
+                for (p in Providers.all) lastFailure[p.id]?.let {
+                    sb.append("\n• ").append(p.label).append(": ").append(it.take(180))
+                }
+            }
+            val hasKeys = Providers.all.any { Prefs.hasKey(c, it.id) }
+            return if (!hasKeys && lastSuccess.isEmpty() && lastFailure.isEmpty()) {
+                "No AI keys saved yet. Add a provider key in Settings."
+            } else sb.toString().trim()
         }
     }
 
@@ -66,10 +91,11 @@ class Nim(private val ctx: Context) {
         "image", "imagen", "veo", "live", "transcribe", "translate", "audio", "moderation", "orpheus"
     )
     private val visionKeys = listOf(
-        "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal",
+        "vision", "-vl", "vila", "pixtral", "llava", "paligemma", "multimodal", "nemotron-nano-12b-v2-vl",
         "llama-4", "gemma-3", "gemini", "claude", "gpt-4o", "gpt-4.1"
     )
     private val preferred = listOf(
+        "deepseek-v4.1-flash", "deepseek-ai/deepseek-v4.1-flash",
         "llama-3.3-nemotron", "llama-3.3-70b", "llama-3.1-nemotron", "llama-3.1-70b",
         "llama-4", "qwen", "mistral-large", "mixtral", "llama-3.1-8b", "gemma", "mistral", "phi"
     )
@@ -79,27 +105,29 @@ class Nim(private val ctx: Context) {
             listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite")
         ),
         "groq" to Pair(
-            listOf("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b"),
-            listOf("meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct")
+            listOf("openai/gpt-oss-120b", "openai/gpt-oss-20b"),
+            listOf("qwen/qwen3.8-27b")
         ),
         "cerebras" to Pair(
             listOf("llama-3.3-70b", "llama3.1-8b", "gpt-oss-120b", "qwen-3-32b"),
             emptyList<String>()
         ),
         "openrouter" to Pair(
+            // Free model IDs change frequently; prefer current published free endpoints, then older backups.
             listOf(
-                "meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free",
-                "qwen/qwen-2.5-72b-instruct:free"
+                "nvidia/nemotron-3.5-lightning:free",
+                "nvidia/nemotron-3-ultra-550b-a55b:free",
+                "meta-llama/llama-3.3-70b-instruct:free"
             ),
-            listOf("google/gemma-3-27b-it:free", "qwen/qwen2.5-vl-72b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free")
+            listOf(
+                "nvidia/nemotron-3.5-super-vl:free",
+                "google/gemma-3-27b-it:free",
+                "qwen/qwen2.5-vl-72b-instruct:free"
+            )
         ),
         "mistral" to Pair(
             listOf("mistral-small-latest", "open-mistral-nemo", "mistral-large-latest"),
             listOf("mistral-small-latest", "pixtral-12b-2409")
-        ),
-        "github" to Pair(
-            listOf("openai/gpt-4o-mini", "openai/gpt-4.1-mini", "meta/Llama-3.3-70B-Instruct"),
-            listOf("openai/gpt-4o-mini", "openai/gpt-4.1-mini")
         ),
         "openai" to Pair(
             listOf("gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1-nano"),
@@ -109,7 +137,23 @@ class Nim(private val ctx: Context) {
             listOf("claude-haiku-5-5", "claude-sonnet-5-5"),
             listOf("claude-sonnet-5-5", "claude-haiku-5-5")
         ),
-        "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>())
+        "deepseek" to Pair(listOf("deepseek-chat"), emptyList<String>()),
+        "nvidia" to Pair(
+            // Keep the currently published multimodal Nemotron first; use other text models only as fallbacks.
+            listOf(
+                "nvidia/nemotron-3.5-super-vl-120b-a12b",
+                "deepseek-ai/deepseek-v4.1-flash",
+                "nvidia/nemotron-3.5-lightning-30b-a3b",
+                "nvidia/nemotron-3-super-120b-a12b",
+                "meta/llama-3.3-70b-instruct"
+            ),
+            listOf(
+                "nvidia/nemotron-3.5-super-vl-120b-a12b",
+                "deepseek-ai/deepseek-v4.1-flash",
+                "nvidia/nemotron-nano-12b-v2-vl",
+                "meta/llama-3.2-11b-vision-instruct"
+            )
+        )
     )
 
     private class Http(val code: Int, val body: String, val retryAfter: Int = -1)
@@ -129,7 +173,7 @@ class Nim(private val ctx: Context) {
             "gemini" -> 4500L
             "groq", "cerebras", "mistral" -> 2200L
             "openrouter" -> 3000L
-            "github" -> 4000L
+            "nvidia" -> 2500L
             "local" -> 0L
             else -> 800L
         }
@@ -148,6 +192,19 @@ class Nim(private val ctx: Context) {
     @Volatile
     private var active: HttpURLConnection? = null
 
+    private val requestBudgetLock = Any()
+    @Volatile private var commandHttpRequests = 0
+    private val failedRequestSignatures = HashMap<String, Int>()
+    private val maxHttpRequestsPerCommand = 15
+
+    /** Starts a fresh request budget and identical-failure counter for one user command. */
+    fun beginCommand() {
+        synchronized(requestBudgetLock) {
+            commandHttpRequests = 0
+            failedRequestSignatures.clear()
+        }
+    }
+
     fun resume() {
         cancelled = false
     }
@@ -162,6 +219,14 @@ class Nim(private val ctx: Context) {
     }
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
+        synchronized(requestBudgetLock) {
+            if (commandHttpRequests >= maxHttpRequestsPerCommand) {
+                throw AiException("Stopped before sending another request: this command reached Orion's $maxHttpRequestsPerCommand-request budget. No additional HTTP request was made.")
+            }
+            commandHttpRequests++
+        }
+        // Count every network attempt here, including model catalogues and requests that fail to connect.
+        noteHit(p.id)
         val readMs = if (p.id == "local") 240000 else readMs0
         val conn = URL(url).openConnection() as HttpURLConnection
         active = conn
@@ -182,8 +247,37 @@ class Nim(private val ctx: Context) {
                 conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
             val code = conn.responseCode
+            // Capture real provider quota headers when available. Header names vary by provider,
+            // so this is supplemental telemetry; the local throttle remains a conservative guard.
+            val rq = conn.getHeaderField("x-ratelimit-remaining-requests")
+                ?: conn.getHeaderField("X-RateLimit-Remaining-Requests")
+            val lq = conn.getHeaderField("x-ratelimit-limit-requests")
+                ?: conn.getHeaderField("X-RateLimit-Limit-Requests")
+            val rt = conn.getHeaderField("x-ratelimit-remaining-tokens")
+                ?: conn.getHeaderField("X-RateLimit-Remaining-Tokens")
+            val lt = conn.getHeaderField("x-ratelimit-limit-tokens")
+                ?: conn.getHeaderField("X-RateLimit-Limit-Tokens")
+            val reset = conn.getHeaderField("x-ratelimit-reset-requests")
+                ?: conn.getHeaderField("X-RateLimit-Reset-Requests")
+            val quotaParts = mutableListOf<String>()
+            if (!rq.isNullOrBlank() && !lq.isNullOrBlank()) quotaParts.add("$rq/$lq requests remain")
+            if (!rt.isNullOrBlank() && !lt.isNullOrBlank()) quotaParts.add("$rt/$lt tokens remain")
+            if (!reset.isNullOrBlank()) quotaParts.add("request reset $reset")
+            if (quotaParts.isNotEmpty()) providerQuota[p.id] = quotaParts.joinToString(", ")
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            if (code !in 200..299) {
+                // Store only a hash signature, never request or response text, for repeat-failure detection.
+                val signature = listOf(p.id, method, url, body?.hashCode() ?: 0, code, text.hashCode()).joinToString("|")
+                val repeats = synchronized(requestBudgetLock) {
+                    val next = (failedRequestSignatures[signature] ?: 0) + 1
+                    failedRequestSignatures[signature] = next
+                    next
+                }
+                if (repeats >= 3) {
+                    throw AiException("${p.label}: stopped after three identical HTTP failures (HTTP $code). No more identical retries will be sent.")
+                }
+            }
             val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
             return Http(code, text, ra)
         } finally {
@@ -195,10 +289,17 @@ class Nim(private val ctx: Context) {
         r.code == 401 || r.code == 403 ||
             (r.code == 400 && (r.body.contains("API key", true) || r.body.contains("api_key", true)))
 
-    /** Every model id this provider's key can see. Throws with a readable message on failure. */
+    /** Every model id this provider's key can see. Successful results are cached for ten minutes. */
     fun allModels(p: Provider): List<String> {
         val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
+        val keyFingerprint = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        val cacheKey = p.id + ":" + keyFingerprint
+        val cached = modelCatalogCache[cacheKey]
+        val now = System.currentTimeMillis()
+        if (cached != null && now - cached.first < MODEL_CATALOG_TTL_MS) return cached.second
         val url = p.listUrl ?: (p.base + "/models")
         val r = try {
             request(p, "GET", url, null, key, 25000)
@@ -211,20 +312,87 @@ class Nim(private val ctx: Context) {
         val arr: JSONArray = if (trimmed.startsWith("[")) {
             JSONArray(trimmed)
         } else {
-            JSONObject(trimmed).optJSONArray("data") ?: return emptyList()
+            JSONObject(trimmed).optJSONArray("data") ?: JSONArray()
         }
         val ids = ArrayList<String>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             ids.add(o.optString("id").removePrefix("models/"))
         }
-        return ids.filter { it.isNotBlank() }.sorted()
+        val result = ids.filter { it.isNotBlank() }.distinct().sorted()
+        modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
+        return result
+    }
+
+    /**
+     * One bounded, no-fallback live probe used before saving a selected NVIDIA model.
+     * A model appearing in /models is not proof that its chat endpoint is enabled for this key.
+     * Returns an empty string only when a real chat completion returns usable text.
+     */
+    fun testModel(p: Provider, model: String, vision: Boolean): String {
+        if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
+        val probePrefs = ctx.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
+        val probeKey = "nvidia_probe_${if (vision) "vision" else "chat"}_${model.hashCode()}"
+        val probeTime = probePrefs.getLong("${probeKey}_at", 0L)
+        val cachedResult = probePrefs.getString("${probeKey}_result", null)
+        val cacheAge = if (cachedResult == "OK") 30 * 60 * 1000L else 2 * 60 * 1000L
+        if (cachedResult != null && System.currentTimeMillis() - probeTime < cacheAge) {
+            return if (cachedResult == "OK") "" else cachedResult
+        }
+        fun rememberFailure(message: String): String {
+            probePrefs.edit().putString("${probeKey}_result", message)
+                .putLong("${probeKey}_at", System.currentTimeMillis()).apply()
+            return message
+        }
+        // Test chat availability with text for both pickers. A 1x1 synthetic image is
+        // rejected by some vision endpoints and falsely hides otherwise usable models.
+        val userContent = "Reply OK."
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content",
+                "You are checking whether this chat endpoint works. Reply with only OK."))
+            .put(JSONObject().put("role", "user").put("content", userContent))
+        val body = JSONObject()
+            .put("model", model)
+            .put("messages", messages)
+            .put("temperature", 0)
+            .put("max_tokens", 1024)
+        if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
+            body.put("chat_template_kwargs", JSONObject().put("thinking", false))
+        } else if (p.id == "nvidia" && model.lowercase().contains("nemotron-3.5-super-vl")) {
+            body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+        } else if (p.id == "nvidia" && model.lowercase().contains("nemotron-3.5-lightning")) {
+            body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+        }
+        val response = try {
+            request(p, "POST", p.base + "/chat/completions", body.toString(),
+                Prefs.key(ctx, p.id), readMs0 = 60000)
+        } catch (e: Exception) {
+            return rememberFailure("Connection test failed (${e.javaClass.simpleName}). Check internet and model access.")
+        }
+        if (response.code !in 200..299) {
+            val detail = response.body.replace("\\s+".toRegex(), " ").take(120)
+            return rememberFailure("Model test failed: HTTP ${response.code}" + if (detail.isBlank()) "." else " — $detail")
+        }
+        val answer = extract(p, response.body)
+        if (answer.isBlank() || answer == "null") {
+            return rememberFailure("The endpoint returned HTTP ${response.code}, but no readable chat text. Choose another model.")
+        }
+        // Remember successful probes briefly so reopening the picker does not spend quota again.
+        probePrefs.edit()
+            .putBoolean("${probeKey}_ok", true)
+            .putString("${probeKey}_result", "OK")
+            .putLong("${probeKey}_at", System.currentTimeMillis())
+            .apply()
+        return ""
     }
 
     fun isVision(id: String): Boolean = visionKeys.any { id.lowercase().contains(it) }
 
     private fun candidates(p: Provider, vision: Boolean): List<String> {
-        val ids = try {
+        // Normally quota-saver mode avoids the extra /models request. NVIDIA's catalog
+        // retires model IDs frequently (410 Gone), so discover IDs currently exposed to this
+        // key after a model failure even in quota-saver mode rather than retrying retired IDs.
+        val ids = if (Prefs.quotaSaver(ctx) && p.id != "nvidia") emptyList() else try {
             allModels(p)
         } catch (e: Exception) {
             emptyList()
@@ -330,78 +498,92 @@ class Nim(private val ctx: Context) {
         ""
     }
 
-    /** Asks the best chat or vision service; on failure, falls through to the others that have keys. */
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2): String {
-        val first = Prefs.provider(ctx, vision)
-        val order = ArrayList<Provider>()
-        if (Prefs.hasKey(ctx, first.id)) order.add(first)
-        if (Prefs.autoSwitch(ctx) || order.isEmpty()) {
-            for (p in Providers.all) {
-                if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
-            }
-        }
-        if (order.isEmpty()) {
-            throw IllegalStateException("No AI key saved. Open Orion AI and add a key (Groq or Gemini are free).")
-        }
-        if (order.size > 1) {
-            // Spread requests over every service that has a key: the least recently used (and fastest) goes first.
-            val rank = listOf(
-                "groq", "cerebras", "gemini", "mistral", "github", "sambanova", "openrouter",
-                "together", "fireworks", "huggingface", "deepseek", "openai", "anthropic", "local"
-            )
-            val nowMs = System.currentTimeMillis()
-            order.sortBy { (lastCall[it.id] ?: 0L).coerceAtLeast(nowMs - 30000L) + rank.indexOf(it.id).coerceAtLeast(0) * 1500L }
-        }
-        val errors = LinkedHashMap<String, String>()
-        val start = System.currentTimeMillis()
-        var round = 0
-        while (round < 4) {
-            round++
+    /**
+     * Uses the explicitly selected compatible provider as primary.
+     * Provider-level fallback is permitted only after an HTTP 429, and at most one
+     * alternate provider is tried. Other failures are surfaced instead of silently
+     * rotating through saved keys and burning their quotas.
+     */
+    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
+        if (cancelled) throw RuntimeException("Stopped.")
+
+        val selected = Prefs.provider(ctx, vision)
+        fun usable(p: Provider): Boolean =
+            (Prefs.hasKey(ctx, p.id) || p.noKey) && (!vision || p.hasVision)
+
+        val primary = if (usable(selected)) selected else Providers.all.firstOrNull { usable(it) }
+            ?: throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+
+        val backup = Providers.all.firstOrNull { it.id != primary.id && Prefs.hasKey(ctx, it.id) && (!vision || it.hasVision) }
+        val mode = if (vision) "vision" else "chat"
+
+        fun attempt(p: Provider): String {
             if (cancelled) throw RuntimeException("Stopped.")
-            val now = System.currentTimeMillis()
-            val ready = order.filter { (cooldown[it.id] ?: 0L) <= now && usedLastMinute(it.id) < budget(it.id) }
-            var allRateLimited = true
-            for ((idx, p) in ready.withIndex()) {
-                if (cancelled) throw RuntimeException("Stopped.")
-                try {
-                    if (idx > 0 || p !== order[0]) onStatus?.invoke("Using ${p.label}...")
-                    noteHit(p.id)
-                    return chatOne(p, messages, vision, maxTokens, temperature, order.size > 1)
-                } catch (e: AiException) {
-                    errors[p.id] = e.message ?: p.label
-                    if (!e.rateLimited) allRateLimited = false
-                }
+            onStatus?.invoke("Using provider: ${p.label}...")
+            val answer = chatOne(p, messages, vision, maxTokens, temperature, false, fastResponse)
+            lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
+            lastFailure.remove(p.id)
+            return answer
+        }
+
+        try {
+            return attempt(primary)
+        } catch (e: Exception) {
+            if (cancelled) throw RuntimeException("Stopped.")
+            lastFailure[primary.id] = (e.message ?: "Unknown provider error").take(220)
+
+            // Only a confirmed HTTP 429 permits one backup attempt.
+            if (!ProviderFallbackPolicy.shouldTryBackup(e)) {
+                throw RuntimeException("${primary.label} failed; no provider rotation was performed because the failure was not HTTP 429. ${e.message ?: "Unknown provider error"}", e)
             }
-            // Nothing worked. If everything was only busy, wait for the first one to come back.
-            if (!allRateLimited || round >= 4 || System.currentTimeMillis() - start > 170000) break
-            val soonest = order.minOf { cooldown[it.id] ?: 0L }
-            val wait = (soonest - System.currentTimeMillis()).coerceIn(2000L, 40000L)
-            var left = wait
-            while (left > 0) {
+
+            if (backup == null) {
+                throw RuntimeException("${primary.label} is rate-limited (HTTP 429), and no other compatible saved provider is available.", e)
+            }
+            if ((cooldown[backup.id] ?: 0L) > System.currentTimeMillis()) {
+                throw RuntimeException("${primary.label} is rate-limited (HTTP 429), but the eligible backup is cooling down. No further provider was tried.", e)
+            }
+
+            onStatus?.invoke("${primary.label} returned HTTP 429; trying one backup provider: ${backup.label}...")
+            try {
+                return attempt(backup)
+            } catch (backupError: Exception) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                onStatus?.invoke("AI services are busy. Waiting ${left / 1000 + 1}s...")
-                Thread.sleep(500)
-                left -= 500
+                lastFailure[backup.id] = (backupError.message ?: "Unknown provider error").take(220)
+                throw RuntimeException(
+                    "Primary ${primary.label} was rate-limited (HTTP 429). The single backup ${backup.label} also failed: ${backupError.message ?: "Unknown provider error"}. No additional providers were tried.",
+                    backupError
+                )
             }
         }
-        throw RuntimeException(errors.values.joinToString("\n").ifEmpty { "All AI services are cooling down. Try again in a minute." })
     }
 
     private fun chatOne(
-        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false
     ): String {
         val key = Prefs.key(ctx, p.id)
-        // Gemini models "think" first and that uses up the token budget, so leave room.
-        val tokens = if (p.id == "gemini") maxOf(maxTokens * 4, 1024) else maxTokens
+        // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
+        // reasons by default; short probes (e.g. max_tokens=16) can spend the entire
+        // budget reasoning and return choices[0].message.content="" (finish_reason=length).
+        // Disable thinking for reliable direct chat/vision replies and provide a safe minimum.
+        val tokens = when (p.id) {
+            "gemini" -> if (fastResponse) maxOf(maxTokens * 2, 256) else maxOf(maxTokens * 4, 1024)
+            "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
+            else -> maxTokens
+        }
         val queue = mutableListOf(Prefs.model(ctx, p, vision))
         val tried = HashSet<String>()
         var refilled = false
         var lastNote = ""
         var attempts = 0
-        var rateRetries = 0
-        val maxAttempts = if (hasBackup) 4 else 12
+        // Always reserve one bounded same-provider recovery attempt for a stale model ID
+        // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
+        // limit to 1 and the alternate model was queued but never actually attempted.
+        // Fast/background turns still stay bounded; the next saved provider is tried afterward.
+        val maxAttempts = if (fastResponse || Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
         val start = System.currentTimeMillis()
-        while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < 120000) {
+        val totalTimeoutMs = if (fastResponse) 10000L else if (p.id == "nvidia") 40000L else 27000L
+        while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
@@ -416,15 +598,24 @@ class Nim(private val ctx: Context) {
                 payload = anthropicBody(model, messages, tokens, temperature)
             } else {
                 url = p.base + "/chat/completions"
-                payload = JSONObject()
+                val requestBody = JSONObject()
                     .put("model", model)
                     .put("messages", messages)
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
-                    .toString()
+                if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
+                    // This template flag is documented for Nemotron 3.5 Super VL only.
+                    requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
+                } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
+                    // NVIDIA's DeepSeek V4 model examples use this flag to disable thinking.
+                    // Keep this separate from Nemotron's enable_thinking option.
+                    requestBody.put("chat_template_kwargs", JSONObject().put("thinking", false))
+                }
+                payload = requestBody.toString()
             }
             val r: Http? = try {
-                request(p, "POST", url, payload, key)
+                // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
+                request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
@@ -436,26 +627,32 @@ class Nim(private val ctx: Context) {
                 )
             }
             if (r == null) {
-                lastNote = "$model -> too slow"
-                if (!refilled) {
+                lastNote = "$model -> no response before timeout"
+                // NVIDIA may accept a request but fail to return a first response in time.
+                // Try one alternate catalog model, even in quota-saver mode, then report a
+                // useful timeout diagnostic rather than silently abandoning the provider.
+                if (p.id == "nvidia" && !refilled) {
+                    refilled = true
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    if (backups.isNotEmpty()) {
+                        queue.addAll(0, backups)
+                        onStatus?.invoke("NVIDIA response timed out; trying one alternate model...")
+                        continue
+                    }
+                } else if (!Prefs.quotaSaver(ctx) && !refilled) {
                     refilled = true
                     queue.addAll(candidates(p, vision))
+                    continue
                 }
-                continue
+                throw AiException(
+                    if (p.id == "nvidia")
+                        "NVIDIA timed out waiting for $model. The request was sent, but no response arrived in time. Check NVIDIA model access/status and try again."
+                    else "${p.label}: request timed out. Retry later or use the one configured backup."
+                )
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
-                val canWait = !hasBackup && rateRetries < 2 && wait <= 30
-                if (canWait) {
-                    rateRetries++
-                    onStatus?.invoke("${p.label} is busy. Waiting ${wait}s...")
-                    pause(wait * 1000L)
-                    tried.remove(model)
-                    attempts--
-                    queue.add(0, model)
-                    continue
-                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
                 throw AiException("${p.label}: free limit reached (429).", true)
             }
@@ -464,21 +661,48 @@ class Nim(private val ctx: Context) {
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
+                // Retired catalog models must never be persisted as the provider's active choice.
+                // Put distinct known fallbacks immediately after the failed model so quota-saver mode
+                // still makes a real recovery attempt instead of failing on a single stale default.
                 if (!refilled) {
                     refilled = true
-                    queue.addAll(candidates(p, vision))
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    queue.addAll(0, backups)
                 }
                 continue
+            }
+            if (r.code in listOf(500, 502, 503, 504)) {
+                // Temporary provider overload is not proof that the key or model is invalid.
+                // Try one alternate model from the same provider before moving to a backup provider.
+                lastNote = "$model -> HTTP ${r.code} ${r.body.replace("\n", " ").take(100)}"
+                if (!refilled) {
+                    refilled = true
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    if (backups.isNotEmpty()) {
+                        queue.addAll(0, backups)
+                        onStatus?.invoke("${p.label} is temporarily busy (HTTP ${r.code}); trying an alternate model…")
+                        continue
+                    }
+                }
+                throw AiException("${p.label}: service temporarily busy (HTTP ${r.code}). Try again shortly or use another saved provider.")
             }
             if (r.code !in 200..299) throw AiException("${p.label}: error ${r.code} ${r.body.take(120)}")
             val content = extract(p, r.body)
             if (content.isBlank() || content == "null") {
                 lastNote = "$model -> empty reply"
+                // A selected catalog model can return HTTP 200 but no usable text.
+                // Allow one bounded alternate-model attempt even in quota-saver mode;
+                // never loop through the entire catalog or retry the same model.
                 if (!refilled) {
                     refilled = true
-                    queue.addAll(candidates(p, vision))
+                    val backups = candidates(p, vision).filter { it != model && it !in tried }
+                    queue.addAll(0, backups)
+                    if (backups.isNotEmpty()) {
+                        onStatus?.invoke("${p.label} returned empty content; trying one alternate model...")
+                        continue
+                    }
                 }
-                continue
+                throw AiException(p.label + ": model returned an empty response. Try another model or check that model's NVIDIA API access.")
             }
             Prefs.setModel(ctx, p, vision, model)
             return content

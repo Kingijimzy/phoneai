@@ -15,22 +15,27 @@ class Local(
     private val lastSteps: () -> JSONArray,
     private val stopped: () -> Boolean,
     private val note: (String) -> Unit,
-    private val confirm: (String) -> Boolean,
-    private val ai: (String, String) -> String
+    private val confirm: (String) -> Boolean = { false },
+    private val ai: (String, String) -> String = { _, _ -> "" }
 ) {
 
     private fun replay(name: String, steps: JSONArray): String {
+        val targetSize = svc.replayScreenSize()
         for (i in 0 until steps.length()) {
             if (stopped()) return "Stopped."
             val s = steps.getJSONObject(i)
             val tool = s.optString("tool")
             val gap = s.optLong("gap", -1L)
+            val sourceW = s.optInt("screenW", targetSize.first).coerceAtLeast(1)
+            val sourceH = s.optInt("screenH", targetSize.second).coerceAtLeast(1)
+            fun scaleX(value: Double) = (value * targetSize.first / sourceW).toInt().coerceIn(0, targetSize.first)
+            fun scaleY(value: Double) = (value * targetSize.second / sourceH).toInt().coerceIn(0, targetSize.second)
             val sigA = s.optJSONArray("sig")
             if (sigA != null && s.has("sx") && s.has("sy")) {
-                // taught step: wait until the screen LOOKS right (colour maths, no AI), then act
+                // Wait for the recorded pre-action screen cue, scaled to this device's current resolution.
                 val sig = IntArray(sigA.length()) { sigA.getInt(it) }
                 val limit = (gap * 3).coerceIn(6000L, 30000L)
-                when (svc.waitForSig(s.getInt("sx"), s.getInt("sy"), sig, limit) { stopped() }) {
+                when (svc.waitForSig(scaleX(s.getDouble("sx")), scaleY(s.getDouble("sy")), sig, limit) { stopped() }) {
                     "timeout" -> return "I stopped at step ${i + 1} of $name because the screen did not look right after ${limit / 1000} seconds."
                     "stopped" -> return "Stopped."
                     "unavailable" -> Thread.sleep(gap.coerceIn(200L, 5000L))
@@ -39,9 +44,34 @@ class Local(
             } else {
                 Thread.sleep(if (gap >= 0) gap.coerceIn(100L, 5000L) else 600L)
             }
-            val r = exec(tool, s.optJSONObject("args") ?: JSONObject())
-            note(tool + ": " + r.take(60))
-            if (r.startsWith("error")) return "I stopped at step ${i + 1} of $name. " + r.removePrefix("error: ").take(80)
+
+            // Scale all stored coordinates to the current display so routines survive resolution changes.
+            val args = JSONObject((s.optJSONObject("args") ?: JSONObject()).toString())
+            when (tool) {
+                "tap", "long_press" -> {
+                    if (args.has("x")) args.put("x", scaleX(args.getDouble("x")))
+                    if (args.has("y")) args.put("y", scaleY(args.getDouble("y")))
+                }
+                "swipe" -> {
+                    listOf("x1", "x2").forEach { key -> if (args.has(key)) args.put(key, scaleX(args.getDouble(key))) }
+                    listOf("y1", "y2").forEach { key -> if (args.has(key)) args.put(key, scaleY(args.getDouble(key))) }
+                }
+                "swipe_path" -> {
+                    val oldPoints = args.optJSONArray("points")
+                    if (oldPoints != null) {
+                        val scaledPoints = JSONArray()
+                        for (j in 0 until oldPoints.length()) {
+                            val point = oldPoints.optJSONObject(j) ?: continue
+                            scaledPoints.put(JSONObject().put("x", scaleX(point.optDouble("x")))
+                                .put("y", scaleY(point.optDouble("y"))))
+                        }
+                        args.put("points", scaledPoints)
+                    }
+                }
+            }
+            val result = exec(tool, args)
+            note("step ${i + 1}/${steps.length()}: $tool · ${result.take(44)}")
+            if (result.startsWith("error")) return "I stopped at step ${i + 1} of $name. " + result.removePrefix("error: ").take(100)
         }
         return "Finished $name."
     }
@@ -60,17 +90,6 @@ class Local(
         }
         return "Finished $done runs of $name."
     }
-
-    private val SKILL_TOOLS = setOf(
-        "open_app", "click_text", "wait", "type", "key", "open_url", "scroll", "swipe", "tap", "settings", "volume", "flashlight", "web_search"
-    )
-
-    private val SKILL_PROMPT =
-        "Turn the user's request into a replayable phone routine. Reply with ONLY a JSON array of at most 12 steps. " +
-            "Each step is {\"tool\":\"name\",\"args\":{...}}. Allowed tools: open_app{name}, click_text{text}, wait{seconds}, type{text}, " +
-            "key{name: back|home|recents|notifications|quick_settings|enter}, open_url{url}, scroll{direction: up|down}, swipe{x1,y1,x2,y2,ms}, " +
-            "tap{x,y}, settings{page}, volume{action,percent}, flashlight{on}, web_search{query}. " +
-            "Never include passwords, payments or sending messages. Add a wait of 1 to 2 seconds after opening an app or page."
 
     private val fillers = listOf(
         "hey orion", "hi orion", "ok orion", "okay orion", "orion", "please", "can you", "could you",
@@ -115,6 +134,28 @@ class Local(
     fun tryRun(raw: String): String? {
         val t = clean(raw)
         if (t.isEmpty()) return null
+        if (Regex("^(open )?(trading|bybit) (settings|setup|keys|screen)$").matches(t)) {
+            svc.startActivity(android.content.Intent(svc, TradingActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            return "Opening trading settings."
+        }
+        Trading.handle(svc, t, confirm, ai)?.let { return it }
+
+        // ---- instant on-device answers: no model call, no network, no quota
+        if (Regex("^(what time is it|what's the time|tell me the time|current time)$").matches(t)) {
+            val now = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+            return "It's $now."
+        }
+        if (Regex("^(what is the date|what's the date|today's date|what day is it|current date)$").matches(t)) {
+            val today = java.text.SimpleDateFormat("EEEE, d MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+            return "Today is $today."
+        }
+        if (Regex("^(show|open|view) (my )?(chat )?history$|^(what did we talk about recently|what was our last conversation)$").matches(t)) {
+            val recent = ChatHistoryStore.load(svc).takeLast(10)
+            if (recent.isEmpty()) return "There is no saved chat history yet."
+            return "Recent chat history:\n" + recent.joinToString("\n") { (kind, text) ->
+                (if (kind == "me") "You: " else "Orion: ") + text.replace("\n", " ").take(180)
+            }
+        }
 
         // ---- chat basics
         if (Regex("^(hi|hello|hey|yo|good morning|good afternoon|good evening)( there)?$").matches(t)) {
@@ -175,70 +216,6 @@ class Local(
         val found = (if (runM != null) MacroStore.find(svc, runM.groupValues[4]) else null)
             ?: (if (exactName != null) MacroStore.find(svc, exactName) else null)
         if (found != null) return replay(found.first, found.second)
-
-        // ---- trading (Bybit): balance, prices, analysis, scanning, alerts, orders with confirmation
-        Trading.handle(svc, t, confirm, ai)?.let { return it }
-
-        // ---- network radar
-        if (Regex("^(network|internet|connection)( status| speed| radar| check| test)$").matches(t) ||
-            Regex("^(am i online|network radar|check (my )?(network|internet|connection)|speed test|is my internet working)$").matches(t)
-        ) return Radar.report(svc)
-
-        // ---- battery: let Orion keep working in the background
-        if (Regex("^(battery optimi[sz]ation|unrestricted battery|keep (orion|you) (alive|running))$").matches(t)) {
-            tools.settings("optimization")
-            return "Opened the battery page. Find Orion and choose Don't optimise or Unrestricted."
-        }
-
-        // ---- Orion browser
-        if (Regex("^(open|launch|start) (the )?(orion )?browser$").matches(t)) {
-            svc.openBrowser("https://www.google.com")
-            return "Browser is open."
-        }
-        val urlM = Regex("^(browse|visit|go to|open) ((https?://)?[a-z0-9\\-]+(\\.[a-z0-9\\-]+)+(/\\S*)?)$").find(t)
-        if (urlM != null) {
-            svc.openBrowser(urlM.groupValues[2])
-            return "Opening " + urlM.groupValues[2] + "."
-        }
-        val bsM = Regex("^(search|google|look up) (.+) (in|on) (the )?(orion )?browser$").find(t)
-        if (bsM != null) {
-            svc.openBrowser("https://www.google.com/search?q=" + URLEncoder.encode(bsM.groupValues[2], "UTF-8"))
-            return "Searching for " + bsM.groupValues[2] + "."
-        }
-        if (Regex("^(read|summari[sz]e|what does) (this |the |that )?(web ?page|page|article|website)( say)?$").matches(t)) {
-            val txt = svc.browserText()
-            if (failed(txt)) return "Open the Orion browser first, then ask me to read the page."
-            if (txt.length < 40) return "The page has hardly any text."
-            return try {
-                ai("Summarise this web page in at most four short spoken sentences. No markdown.", txt.take(6000))
-            } catch (e: Exception) {
-                txt.take(400)
-            }
-        }
-
-        // ---- AI-made skills: describe it, Orion builds the routine
-        val skM = Regex("^(learn|create|make|build|teach yourself) (a |the )?(new )?skill (called |named |for )?(.+?)( that | to |: |by )(.+)$").find(t)
-        if (skM != null) {
-            val nm = skM.groupValues[5].trim()
-            val steps = try {
-                val raw = ai(SKILL_PROMPT, skM.groupValues[7].trim())
-                val a = raw.indexOf('[')
-                val b = raw.lastIndexOf(']')
-                val arr = JSONArray(raw.substring(a, b + 1))
-                val ok = JSONArray()
-                for (i in 0 until minOf(arr.length(), 12)) {
-                    val o = arr.optJSONObject(i) ?: continue
-                    if (o.optString("tool") in SKILL_TOOLS) ok.put(o)
-                }
-                ok
-            } catch (e: Exception) {
-                null
-            }
-            if (steps == null || steps.length() == 0) return "I could not turn that into steps. Try describing it more simply, or say teach and show me."
-            val names = (0 until steps.length()).joinToString(", ") { steps.getJSONObject(it).optString("tool") }
-            if (!confirm("Save the skill " + nm + " with " + steps.length() + " steps? " + names)) return "Okay, I did not save it."
-            return if (MacroStore.save(svc, nm, steps)) "Skill saved. Say run $nm any time." else "I couldn't save that skill."
-        }
 
         // ---- help
         if (Regex("^(what can you do|help|help me|what are your commands|commands|what do you do)$").matches(t)) {

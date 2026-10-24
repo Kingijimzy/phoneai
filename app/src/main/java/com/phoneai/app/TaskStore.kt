@@ -52,14 +52,22 @@ object TaskStore {
         return tasks
     }
 
-    private fun validStatus(value: String) =
-        if (value.lowercase() in setOf("open", "in_progress", "done", "cancelled")) value.lowercase() else "open"
+    private fun validStatus(value: String): String = when (value.trim().lowercase()) {
+        "open", "queued" -> "queued"
+        "in_progress", "running" -> "running"
+        "done", "completed" -> "completed"
+        "paused" -> "paused"
+        "failed" -> "failed"
+        "cancelled", "canceled" -> "cancelled"
+        else -> "queued"
+    }
 
     private fun validPriority(value: String) =
         if (value.lowercase() in setOf("low", "normal", "high", "urgent")) value.lowercase() else "normal"
 
-    private fun save(c: Context) {
-        val tasks = cache ?: return
+    /** Persist through a temporary file and report failure instead of silently claiming success. */
+    private fun save(c: Context): Boolean {
+        val tasks = cache ?: return false
         val arr = JSONArray()
         tasks.forEach { t ->
             arr.put(
@@ -74,23 +82,30 @@ object TaskStore {
                     .put("updatedAt", t.updatedAt)
             )
         }
-        try {
-            val target = file(c)
-            val temp = File(c.filesDir, "orion_tasks.json.tmp")
+        val target = file(c)
+        val temp = File(c.filesDir, "orion_tasks.json.tmp")
+        return try {
             temp.writeText(arr.toString())
-            if (!temp.renameTo(target)) {
+            if (temp.renameTo(target)) {
+                true
+            } else {
                 target.writeText(arr.toString())
                 temp.delete()
+                true
             }
         } catch (_: Exception) {
-            // Storage errors are reported by the caller on the next read/write check.
+            temp.delete()
+            false
         }
     }
 
+    private fun copyOf(t: OrionTask) = t.copy()
+
     fun all(c: Context): List<OrionTask> = synchronized(lock) {
-        load(c).sortedWith(compareBy<OrionTask> { it.status == "done" || it.status == "cancelled" }
-            .thenBy { it.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.priority == "urgent" })
-            .map { it.copy() }
+        load(c).sortedWith(compareBy<OrionTask> { it.status in setOf("completed", "done", "failed", "cancelled") }
+            .thenByDescending { it.priority == "urgent" }
+            .thenBy { it.dueAt ?: Long.MAX_VALUE })
+            .map { copyOf(it) }
     }
 
     fun add(c: Context, title: String, details: String = "", priority: String = "normal", dueAt: Long? = null): OrionTask? =
@@ -103,43 +118,61 @@ object TaskStore {
                 (tasks.maxOfOrNull { it.id } ?: 0) + 1,
                 cleanTitle,
                 details.trim().take(500),
-                "open",
+                "queued",
                 validPriority(priority),
                 dueAt?.takeIf { it > 0L },
                 now,
                 now
             )
             tasks.add(task)
+            val removed = mutableListOf<OrionTask>()
             while (tasks.size > 500) {
-                val old = tasks.indexOfFirst { it.status == "done" || it.status == "cancelled" }
-                if (old >= 0) tasks.removeAt(old) else break
+                val old = tasks.indexOfFirst { it.status in setOf("completed", "done", "failed", "cancelled") }
+                if (old >= 0) removed.add(tasks.removeAt(old)) else break
             }
-            save(c)
+            if (!save(c)) {
+                tasks.removeAll { it.id == task.id }
+                tasks.addAll(removed)
+                return@synchronized null
+            }
             TaskReminder.schedule(c, task)
-            task.copy()
+            copyOf(task)
         }
 
     fun update(c: Context, id: Int, title: String? = null, details: String? = null,
                status: String? = null, priority: String? = null, dueAt: Long? = null,
                clearDueAt: Boolean = false): Boolean = synchronized(lock) {
         val task = load(c).firstOrNull { it.id == id } ?: return@synchronized false
+        val before = copyOf(task)
         title?.trim()?.takeIf { it.isNotEmpty() }?.let { task.title = it.replace(Regex("\\s+"), " ").take(160) }
         details?.let { task.details = it.trim().take(500) }
         status?.let { task.status = validStatus(it) }
         priority?.let { task.priority = validPriority(it) }
         if (clearDueAt) task.dueAt = null else if (dueAt != null && dueAt > 0L) task.dueAt = dueAt
         task.updatedAt = System.currentTimeMillis()
-        save(c)
-        load(c).firstOrNull { it.id == id }?.let { TaskReminder.schedule(c, it) }
+        if (!save(c)) {
+            task.title = before.title
+            task.details = before.details
+            task.status = before.status
+            task.priority = before.priority
+            task.dueAt = before.dueAt
+            task.updatedAt = before.updatedAt
+            return@synchronized false
+        }
+        TaskReminder.schedule(c, copyOf(task))
         true
     }
 
     fun delete(c: Context, id: Int): Boolean = synchronized(lock) {
-        val removed = load(c).removeAll { it.id == id }
-        if (removed) {
-            save(c)
-            TaskReminder.cancel(c, id)
+        val tasks = load(c)
+        val removed = tasks.filter { it.id == id }
+        if (removed.isEmpty()) return@synchronized false
+        tasks.removeAll { it.id == id }
+        if (!save(c)) {
+            tasks.addAll(removed)
+            return@synchronized false
         }
-        removed
+        TaskReminder.cancel(c, id)
+        true
     }
 }

@@ -9,6 +9,8 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.os.SystemClock
+import android.os.Build
+import android.os.PowerManager
 import android.util.AttributeSet
 import android.view.View
 import kotlin.math.abs
@@ -18,7 +20,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Orion's animated character. Two looks: 0 = Orion (robot head), 1 = Nova (friendly face).
+ * Orion's animated character. Looks: 0 = Orion, 1 = Nova, 2 = Atlas, 3 = Lumen.
  * It blinks, looks around, breathes, listens (ears glow with your voice), thinks (eyes drift up,
  * dots float), speaks (mouth moves with every word) and acts (eyes scan, ring orbits).
  */
@@ -57,11 +59,28 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
     private var blinkUntil = 0L
     private var nextBlink = 0L
     private var smoothLevel = 0f
+    private var smoothTilt = 0f
+    private var smoothGazeX = 0f
+    private var smoothGazeY = 0f
 
     /** Called for every spoken word; opens the mouth a bit. */
     fun pulseMouth() {
-        mouthTarget = 0.45f + 0.55f * ((SystemClock.uptimeMillis() % 7L) / 6f)
-        lastWord = SystemClock.uptimeMillis()
+        // Vary each syllable-like pulse so speech feels less like a fixed open/close loop.
+        val now = SystemClock.uptimeMillis()
+        mouthTarget = 0.28f + 0.68f * abs(sin(now * 0.017f))
+        lastWord = now
+        postInvalidateOnAnimation()
+    }
+
+    /** Adaptive frame pacing for entry-level phones under power or thermal pressure. */
+    private fun nextFrameDelayMs(): Long {
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 33L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val thermal = power.currentThermalStatus
+            if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return 120L
+            if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) return 66L
+        }
+        return if (power.isPowerSaveMode) 66L else 33L
     }
 
     private fun accent(): Int = when (mode) {
@@ -69,7 +88,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         OrbView.Mode.LISTENING -> Theme.OK
         OrbView.Mode.THINKING -> Theme.VIOLET
         OrbView.Mode.SPEAKING -> Theme.CYAN
-        OrbView.Mode.ACTING -> Theme.WARN
+        OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL -> Theme.WARN
     }
 
     private fun alpha(color: Int, a: Int): Int = (color and 0x00FFFFFF) or (a.coerceIn(0, 255) shl 24)
@@ -101,9 +120,10 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         if (mode == OrbView.Mode.SPEAKING && now - lastWord <= 450) mouthTarget *= 0.88f
 
         val bob = sin(t * 1.4f) * s * 0.012f
-        val tilt = when (mode) {
+        val targetTilt = when (mode) {
             OrbView.Mode.LISTENING -> sin(t * 1.1f) * 2.5f
             OrbView.Mode.THINKING -> -4f
+            OrbView.Mode.WAITING_APPROVAL -> sin(t * 1.5f) * 1.2f
             else -> 0f
         }
         var gazeX = 0f
@@ -123,7 +143,15 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             }
             OrbView.Mode.LISTENING -> gazeY = 0.05f
             OrbView.Mode.SPEAKING -> gazeX = sin(t * 0.9f) * 0.25f
+            OrbView.Mode.WAITING_APPROVAL -> gazeY = 0.2f
         }
+        // Ease expression/gaze changes so state changes feel intentional instead of snapping.
+        smoothTilt += (targetTilt - smoothTilt) * 0.18f
+        smoothGazeX += (gazeX - smoothGazeX) * 0.16f
+        smoothGazeY += (gazeY - smoothGazeY) * 0.16f
+        val tilt = smoothTilt
+        gazeX = smoothGazeX
+        gazeY = smoothGazeY
 
         val cx = w / 2f
         val cy = h / 2f + bob
@@ -133,7 +161,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         // ---- backing and glow
         if (backing) {
             fill.shader = null
-            fill.color = 0xE6070B12.toInt()
+            fill.color = 0xE60B0B0B.toInt()
             canvas.drawCircle(w / 2f, h / 2f, s * 0.5f, fill)
         }
         fill.shader = RadialGradient(
@@ -145,13 +173,21 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
 
         when (style) {
             1 -> drawNova(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
-            2 -> drawHuman(canvas, cx, cy, s, col, blink, gazeX, gazeY, t, true)
-            3 -> drawHuman(canvas, cx, cy, s, col, blink, gazeX, gazeY, t, false)
+            2 -> drawAtlas(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
+            3 -> drawLumen(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
+            4 -> drawHuman(canvas, cx, cy, s, col, blink, gazeX, gazeY, t, true)
+            5 -> drawHuman(canvas, cx, cy, s, col, blink, gazeX, gazeY, t, false)
             else -> drawRobot(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
         }
 
         canvas.restore()
-        postInvalidateOnAnimation()
+        // Cap decorative animation at about 30 fps. This is smoother than a static face but
+        // avoids driving a permanent 60 fps redraw loop on low-memory Android phones.
+        if (isAttachedToWindow) postInvalidateDelayed(nextFrameDelayMs())
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
     }
 
     // ------------------------------------------------------------------ Orion: robot head
@@ -191,7 +227,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
 
         // head
         rect.set(cx - s * headW, headTop, cx + s * headW, headBottom)
-        fill.shader = LinearGradient(0f, headTop, 0f, headBottom, 0xFF22324F.toInt(), 0xFF0E1522.toInt(), Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(0f, headTop, 0f, headBottom, 0xFF313131.toInt(), 0xFF141414.toInt(), Shader.TileMode.CLAMP)
         c.drawRoundRect(rect, s * 0.18f, s * 0.18f, fill)
         fill.shader = null
         line.color = alpha(col, 230)
@@ -202,7 +238,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         val visorTop = cy - s * (if (big) 0.19f else 0.22f)
         val visorBottom = cy + s * (if (big) 0.07f else 0.06f)
         rect.set(cx - s * (headW - 0.05f), visorTop, cx + s * (headW - 0.05f), visorBottom)
-        fill.color = 0xFF050A12.toInt()
+        fill.color = 0xFF0A0A0A.toInt()
         c.drawRoundRect(rect, s * 0.1f, s * 0.1f, fill)
 
         // eyes
@@ -258,14 +294,38 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         rect.set(cx - fw * 1.12f, top - s * 0.04f, cx + fw * 1.12f, bottom - s * 0.02f)
         c.drawRoundRect(rect, fw, fw, fill)
 
-        // face
-        rect.set(cx - fw, top + s * 0.03f, cx + fw, bottom)
-        fill.shader = LinearGradient(0f, top, 0f, bottom, 0xFFE9EEFF.toInt(), 0xFFB9C4FF.toInt(), Shader.TileMode.CLAMP)
-        c.drawRoundRect(rect, fw * 0.95f, fw * 0.95f, fill)
+        // Ears sit behind the jaw, with a soft warm inner shadow.
+        fill.shader = LinearGradient(cx - fw, 0f, cx + fw, 0f, 0xFFD5A18E.toInt(), 0xFFB97F70.toInt(), Shader.TileMode.CLAMP)
+        c.drawOval(cx - fw * 1.08f, cy - s * 0.045f, cx - fw * 0.82f, cy + s * 0.105f, fill)
+        c.drawOval(cx + fw * 0.82f, cy - s * 0.045f, cx + fw * 1.08f, cy + s * 0.105f, fill)
         fill.shader = null
 
-        // fringe
-        fill.color = 0xFF2A1F4D.toInt()
+        // Tapered cheek-to-chin silhouette; warm multi-stop shading gives the face volume.
+        path.reset()
+        path.moveTo(cx - fw * 0.91f, top + s * 0.11f)
+        path.quadTo(cx - fw * 0.98f, top + s * 0.01f, cx - fw * 0.58f, top + s * 0.025f)
+        path.quadTo(cx, top - s * 0.005f, cx + fw * 0.58f, top + s * 0.025f)
+        path.quadTo(cx + fw * 0.98f, top + s * 0.01f, cx + fw * 0.91f, top + s * 0.11f)
+        path.lineTo(cx + fw * 0.82f, cy + s * 0.13f)
+        path.quadTo(cx + fw * 0.64f, bottom - s * 0.015f, cx + fw * 0.28f, bottom - s * 0.005f)
+        path.quadTo(cx, bottom + s * 0.015f, cx - fw * 0.28f, bottom - s * 0.005f)
+        path.quadTo(cx - fw * 0.64f, bottom - s * 0.015f, cx - fw * 0.82f, cy + s * 0.13f)
+        path.close()
+        fill.shader = LinearGradient(cx - fw, top, cx + fw * 0.8f, bottom,
+            intArrayOf(0xFFE8BBA7.toInt(), 0xFFF5D5C3.toInt(), 0xFFD99F8D.toInt()),
+            floatArrayOf(0f, 0.48f, 1f), Shader.TileMode.CLAMP)
+        c.drawPath(path, fill)
+        fill.shader = null
+        // Subtle forehead highlight and jaw-side shadows make the face read less flat.
+        fill.shader = RadialGradient(cx - fw * 0.28f, top + s * 0.20f, fw * 1.1f,
+            intArrayOf(0x44FFFFFF, 0x00FFFFFF), floatArrayOf(0f, 1f), Shader.TileMode.CLAMP)
+        c.drawOval(cx - fw * 0.82f, top + s * 0.04f, cx + fw * 0.82f, bottom - s * 0.015f, fill)
+        fill.shader = null
+        fill.color = 0x1F7B3F39
+        c.drawOval(cx - fw * 0.95f, cy - s * 0.015f, cx - fw * 0.57f, cy + s * 0.20f, fill)
+        c.drawOval(cx + fw * 0.57f, cy - s * 0.015f, cx + fw * 0.95f, cy + s * 0.20f, fill)
+
+        // Layered fringe with warm highlights instead of a single flat hair shape.
         path.reset()
         path.moveTo(cx - fw, top + s * 0.17f)
         path.quadTo(cx - fw * 0.9f, top - s * 0.02f, cx, top - s * 0.01f)
@@ -273,7 +333,20 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         path.quadTo(cx + fw * 0.45f, top + s * 0.06f, cx + fw * 0.05f, top + s * 0.13f)
         path.quadTo(cx - fw * 0.4f, top + s * 0.05f, cx - fw, top + s * 0.17f)
         path.close()
+        fill.shader = LinearGradient(cx - fw, top, cx + fw, top + s * 0.18f,
+            intArrayOf(0xFF171326.toInt(), 0xFF46314D.toInt(), 0xFF241A32.toInt()),
+            floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
         c.drawPath(path, fill)
+        fill.shader = null
+        line.color = 0x557E617D
+        line.strokeWidth = s * 0.006f
+        for (i in 0 until 5) {
+            val x = cx - fw * 0.68f + i * fw * 0.32f
+            path.reset()
+            path.moveTo(x, top + s * 0.045f)
+            path.quadTo(x + fw * 0.16f, top + s * 0.065f, x + fw * 0.20f, top + s * 0.14f)
+            c.drawPath(path, line)
+        }
 
         // glowing hair clip shows the state
         fill.color = col
@@ -285,6 +358,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             OrbView.Mode.LISTENING -> 0.03f + smoothLevel * 0.02f
             OrbView.Mode.THINKING -> 0.025f
             OrbView.Mode.ACTING -> -0.01f
+            OrbView.Mode.WAITING_APPROVAL -> 0.035f
             else -> 0f
         }
         for (side in intArrayOf(-1, 1)) {
@@ -309,7 +383,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
                 val iy = eyeY + gy * eh * 0.35f
                 fill.color = col
                 c.drawCircle(ix, iy, ew * 0.62f, fill)
-                fill.color = 0xFF10131F.toInt()
+                fill.color = 0xFF131313.toInt()
                 c.drawCircle(ix, iy, ew * 0.3f, fill)
                 fill.color = 0xFFFFFFFF.toInt()
                 c.drawCircle(ix - ew * 0.2f, iy - ew * 0.2f, ew * 0.14f, fill)
@@ -321,30 +395,138 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             }
         }
 
-        // mouth
+        // Nose bridge and soft nostril shadows add facial depth to Nova's human-style look.
+        fill.color = 0x332A1F4D
+        rect.set(cx - s * 0.018f, eyeY + s * 0.015f, cx + s * 0.018f, eyeY + s * 0.115f)
+        c.drawRoundRect(rect, s * 0.018f, s * 0.018f, fill)
+        fill.color = 0x558A6C8A
+        c.drawOval(cx - s * 0.032f, eyeY + s * 0.09f, cx - s * 0.004f, eyeY + s * 0.115f, fill)
+        c.drawOval(cx + s * 0.004f, eyeY + s * 0.09f, cx + s * 0.032f, eyeY + s * 0.115f, fill)
+        line.color = 0x668A6C8A
+        line.strokeWidth = s * 0.008f
+        path.reset()
+        path.moveTo(cx - s * 0.04f, eyeY + s * 0.12f)
+        path.quadTo(cx, eyeY + s * 0.15f, cx + s * 0.04f, eyeY + s * 0.12f)
+        c.drawPath(path, line)
+
+        // Natural-toned upper/lower lip shading; mouth aperture follows the speech envelope.
         val my = cy + s * 0.18f
         val mw = s * 0.075f
+        line.color = 0xFF9B5B59.toInt()
+        line.strokeWidth = s * 0.009f
+        path.reset()
+        path.moveTo(cx - mw * 1.08f, my)
+        path.quadTo(cx - mw * 0.48f, my - s * 0.022f, cx, my + s * 0.003f)
+        path.quadTo(cx + mw * 0.48f, my - s * 0.022f, cx + mw * 1.08f, my)
+        c.drawPath(path, line)
         if (mouth < 0.08f) {
-            line.color = 0xFF8A3B64.toInt()
-            line.strokeWidth = s * 0.016f
             path.reset()
-            path.moveTo(cx - mw, my)
-            path.quadTo(cx, my + s * 0.04f, cx + mw, my)
+            path.moveTo(cx - mw, my + s * 0.008f)
+            path.quadTo(cx, my + s * 0.042f, cx + mw, my + s * 0.008f)
             c.drawPath(path, line)
         } else {
-            val mh = s * 0.01f + mouth * s * 0.08f
-            fill.color = 0xFF5A1F44.toInt()
-            rect.set(cx - mw, my - mh * 0.3f, cx + mw, my + mh)
+            val mh = s * 0.008f + mouth * s * 0.065f
+            fill.shader = LinearGradient(0f, my - mh * 0.4f, 0f, my + mh,
+                0xFF5C2637.toInt(), 0xFF2D1722.toInt(), Shader.TileMode.CLAMP)
+            rect.set(cx - mw * (0.75f + mouth * 0.12f), my - mh * 0.25f, cx + mw * (0.75f + mouth * 0.12f), my + mh)
             c.drawOval(rect, fill)
-            fill.color = 0xFFFF8FB1.toInt()
-            rect.set(cx - mw * 0.6f, my + mh * 0.45f, cx + mw * 0.6f, my + mh * 0.95f)
+            fill.shader = null
+            fill.color = 0xFFB76F76.toInt()
+            rect.set(cx - mw * 0.55f, my + mh * 0.52f, cx + mw * 0.55f, my + mh * 0.84f)
             c.drawOval(rect, fill)
         }
 
         if (big) drawStateExtras(c, cx, cy, s, top - s * 0.04f, col, t)
     }
 
-    // ------------------------------------------------------------------ Ava and Kai: human faces
+    // ------------------------------------------------------------------ state decorations
+
+    // -------------------------------------------- Atlas: tactical visor
+    private fun drawAtlas(c: Canvas, cx: Float, cy: Float, s: Float, col: Int, blink: Float, gx: Float, gy: Float, t: Float) {
+        val w = s * 0.34f
+        val top = cy - s * 0.31f
+        val bottom = cy + s * 0.31f
+        fill.color = 0xFF212121.toInt()
+        path.reset()
+        path.moveTo(cx - w, top + s * 0.10f)
+        path.quadTo(cx - w * 1.05f, top - s * 0.02f, cx, top - s * 0.04f)
+        path.quadTo(cx + w * 1.05f, top - s * 0.02f, cx + w, top + s * 0.10f)
+        path.lineTo(cx + w * 0.92f, bottom - s * 0.08f)
+        path.quadTo(cx, bottom + s * 0.12f, cx - w * 0.92f, bottom - s * 0.08f)
+        path.close()
+        c.drawPath(path, fill)
+        line.color = alpha(col, 220)
+        line.strokeWidth = s * 0.018f
+        c.drawPath(path, line)
+        rect.set(cx - w * 0.88f, cy - s * 0.105f, cx + w * 0.88f, cy + s * 0.065f)
+        fill.color = alpha(col, 70)
+        c.drawRoundRect(rect, s * 0.06f, s * 0.06f, fill)
+        line.color = col
+        line.strokeWidth = s * 0.014f
+        c.drawRoundRect(rect, s * 0.06f, s * 0.06f, line)
+        if (blink > 0.5f) {
+            fill.color = 0xFFF0F0F0.toInt()
+            c.drawCircle(cx - s * 0.13f + gx * s * 0.01f, cy - s * 0.02f + gy * s * 0.01f, s * 0.025f, fill)
+            c.drawCircle(cx + s * 0.13f + gx * s * 0.01f, cy - s * 0.02f + gy * s * 0.01f, s * 0.025f, fill)
+        }
+        line.color = col
+        line.strokeWidth = s * 0.016f
+        val my = cy + s * 0.19f
+        if (mouth < 0.08f) {
+            c.drawLine(cx - s * 0.08f, my, cx + s * 0.08f, my, line)
+        } else {
+            fill.color = 0xFF0A0A0A.toInt()
+            rect.set(cx - s * 0.07f, my - s * 0.015f, cx + s * 0.07f, my + mouth * s * 0.07f)
+            c.drawOval(rect, fill)
+        }
+        fill.color = col
+        c.drawCircle(cx - w * 0.98f, cy + s * 0.08f, s * 0.025f, fill)
+        c.drawCircle(cx + w * 0.98f, cy + s * 0.08f, s * 0.025f, fill)
+        if (!compact) drawStateExtras(c, cx, cy, s, top, col, t)
+    }
+
+    // -------------------------------------------- Lumen: soft luminous guide
+    private fun drawLumen(c: Canvas, cx: Float, cy: Float, s: Float, col: Int, blink: Float, gx: Float, gy: Float, t: Float) {
+        fill.color = alpha(col, 28)
+        c.drawCircle(cx, cy, s * (0.37f + 0.012f * sin(t * 2f)), fill)
+        line.color = alpha(col, 190)
+        line.strokeWidth = s * 0.014f
+        rect.set(cx - s * 0.30f, cy - s * 0.33f, cx + s * 0.30f, cy + s * 0.33f)
+        c.drawOval(rect, line)
+        fill.shader = LinearGradient(cx, cy - s * 0.28f, cx, cy + s * 0.29f, 0xFFF3FCFF.toInt(), 0xFFDFDFDF.toInt(), Shader.TileMode.CLAMP)
+        rect.set(cx - s * 0.25f, cy - s * 0.28f, cx + s * 0.25f, cy + s * 0.29f)
+        c.drawOval(rect, fill)
+        fill.shader = null
+        val eyeY = cy - s * 0.045f
+        for (side in intArrayOf(-1, 1)) {
+            val ex = cx + side * s * 0.105f
+            fill.color = 0xFF404040.toInt()
+            if (blink > 0.5f) {
+                c.drawCircle(ex + gx * s * 0.012f, eyeY + gy * s * 0.01f, s * 0.028f, fill)
+            } else {
+                line.color = 0xFF404040.toInt()
+                line.strokeWidth = s * 0.012f
+                c.drawLine(ex - s * 0.025f, eyeY, ex + s * 0.025f, eyeY, line)
+            }
+        }
+        val my = cy + s * 0.12f
+        line.color = 0xFF7C7C7C.toInt()
+        line.strokeWidth = s * 0.014f
+        if (mouth < 0.08f) {
+            path.reset()
+            path.moveTo(cx - s * 0.06f, my)
+            path.quadTo(cx, my + s * 0.045f, cx + s * 0.06f, my)
+            c.drawPath(path, line)
+        } else {
+            fill.color = 0xFF7C7C7C.toInt()
+            rect.set(cx - s * 0.055f, my - s * 0.01f, cx + s * 0.055f, my + mouth * s * 0.055f)
+            c.drawOval(rect, fill)
+        }
+        fill.color = col
+        val orbit = t * 0.7f
+        c.drawCircle(cx + cos(orbit) * s * 0.36f, cy + sin(orbit) * s * 0.36f, s * 0.022f, fill)
+        c.drawCircle(cx + cos(orbit + 2.4f) * s * 0.36f, cy + sin(orbit + 2.4f) * s * 0.36f, s * 0.014f, fill)
+    }
 
     private fun drawHuman(c: Canvas, cx: Float, cy: Float, s: Float, col: Int, blink: Float, gx: Float, gy: Float, t: Float, female: Boolean) {
         val big = !compact
@@ -538,6 +720,13 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
                     fill.color = alpha(Theme.VIOLET, 230)
                     c.drawCircle(cx + (i - 1) * s * 0.07f, headTop - s * 0.14f - k * s * 0.012f, s * 0.022f, fill)
                 }
+            }
+            OrbView.Mode.WAITING_APPROVAL -> {
+                line.color = alpha(Theme.WARN, 230)
+                line.strokeWidth = s * 0.018f
+                rect.set(cx - s * 0.43f, cy - s * 0.43f, cx + s * 0.43f, cy + s * 0.43f)
+                c.drawArc(rect, -70f, 140f, false, line)
+                c.drawArc(rect, 110f, 140f, false, line)
             }
             OrbView.Mode.ACTING -> {
                 val ang = t * 2.4f

@@ -1,0 +1,2 @@
+Model file: ./best_saved_model/best_float16.tflite
+Precision: fp16

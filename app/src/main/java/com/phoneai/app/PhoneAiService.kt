@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -14,6 +16,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -72,19 +75,36 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
+    /** OCR-only elements from the latest read_screen; bounds are in physical screen coordinates. */
+    private val ocrElements = ArrayList<ScreenPerception.OcrItem>()
+    private val visualElements = ArrayList<VisualElementDetector.Region>()
 
-    private var bubble: AvatarView? = null
+    private var bubble: OrbView? = null
     private var panel: LinearLayout? = null
-    private var panelOrb: AvatarView? = null
+    private var panelOrb: OrbView? = null
     private var panelStatus: TextView? = null
+    private var stopBtnRef: TextView? = null
+    private var activityView: TextView? = null
+    private var activityRunnable: Runnable? = null
     private var micBtnRef: TextView? = null
     private var strip: LinearLayout? = null
-    private var stripOrb: AvatarView? = null
+    private var stripOrb: OrbView? = null
     private var stripText: TextView? = null
     private var confirmView: LinearLayout? = null
     private var logBox: LinearLayout? = null
     private var logScroll: ScrollView? = null
     private var pendingConfirm: ((Boolean) -> Unit)? = null
+    @Volatile private var mainChatListener: PhoneAiService.MainChatListener? = null
+    @Volatile private var mainChatActive = false
+
+    interface MainChatListener {
+        fun onMessage(kind: String, text: String)
+        fun onStatus(text: String, mode: OrbView.Mode)
+        fun onAudioLevel(level: Float) {}
+        fun onAudioAmplitude(amplitude: Float) {}
+        fun onSpeechWord() {}
+        fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
+    }
 
     @Volatile
     private var running = false
@@ -99,6 +119,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var emptyListens = 0
     private var wakeGen = 0
     private var wakeErr = false
+    /** Back off repeated speech-service failures so wake detection cannot hammer the recognizer. */
+    private var wakeErrorStreak = 0
+    @Volatile private var offlineWakeDetector: OfflineWakeWordDetector? = null
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -113,10 +136,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         voice.onWord = {
             for (o in orbs()) o.pulseMouth()
+            mainChatListener?.onSpeechWord()
         }
         voice.onLevel = { l ->
             for (o in orbs()) o.level = l
+            mainChatListener?.onAudioLevel(l)
         }
+        voice.onAudioAmplitude = { amplitude ->
+            mainChatListener?.onAudioAmplitude(amplitude)
+        }
+        voice.onProblem = { message ->
+            appendTranscript("note", "Voice output: $message")
+            main.post {
+                mainChatListener?.onMessage("note", "Voice output: $message")
+                if (panel == null && !mainChatActive) showStrip("Voice output unavailable: $message")
+            }
+        }
+        transcript.clear()
+        transcript.addAll(ChatHistoryStore.load(this))
         agent = Agent(this, this)
         showBubble()
         startWake()
@@ -129,6 +166,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
         wakeGen++
+        stopOfflineWakeDetector()
         removeAllViews()
         try {
             voice.shutdown()
@@ -160,6 +198,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
+    fun replayScreenSize(): Pair<Int, Int> = screenSize()
+
     private fun screenSize(): Pair<Int, Int> {
         val b = wm.maximumWindowMetrics.bounds
         return Pair(b.width(), b.height())
@@ -190,6 +230,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         t.gravity = Gravity.CENTER
         t.setPadding(dp(16), dp(10), dp(16), dp(10))
         t.background = rounded(bg, dp(14).toFloat())
+        t.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(75L).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(125L).start()
+            }
+            false
+        }
         t.setOnClickListener { onClick() }
         return t
     }
@@ -202,6 +250,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         t.gravity = Gravity.CENTER
         t.setPadding(dp(12), dp(7), dp(12), dp(7))
         t.background = rounded(Theme.PANEL2, dp(16).toFloat(), Theme.LINE)
+        t.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(75L).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(125L).start()
+            }
+            false
+        }
         t.setOnClickListener { onClick() }
         return t
     }
@@ -284,25 +340,38 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- orb state
 
-    private fun orbs(): List<AvatarView> = listOfNotNull(bubble, panelOrb, stripOrb)
+    private fun orbs(): List<OrbView> = listOfNotNull(bubble, panelOrb, stripOrb)
 
     /** Decides what the avatar should be doing and what the status line says. Main thread. */
     private fun refreshMode() {
         main.post {
             val m = when {
                 speaking -> OrbView.Mode.SPEAKING
+                confirmView != null -> OrbView.Mode.WAITING_APPROVAL
                 listening -> OrbView.Mode.LISTENING
                 running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
                 else -> OrbView.Mode.IDLE
             }
             for (o in orbs()) o.mode = m
+            mainChatListener?.onStatus(
+                when (m) {
+                    OrbView.Mode.IDLE -> "Ready when you are"
+                    OrbView.Mode.LISTENING -> "Listening…"
+                    OrbView.Mode.THINKING -> "Thinking through it…"
+                    OrbView.Mode.SPEAKING -> "Speaking…"
+                    OrbView.Mode.ACTING -> "Working on your request…"
+                    OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
+                }, m
+            )
             micBtnRef?.text = if (listening) "Stop" else "Mic"
+            stopBtnRef?.visibility = if (running) View.VISIBLE else View.GONE
             panelStatus?.text = when (m) {
                 OrbView.Mode.IDLE -> if (Prefs.wake(this)) "Say \"Orion\" or tap the mic" else "Ready"
                 OrbView.Mode.LISTENING -> "Listening..."
                 OrbView.Mode.THINKING -> "Thinking..."
                 OrbView.Mode.SPEAKING -> "Speaking..."
                 OrbView.Mode.ACTING -> "Working on it..."
+                OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
             }
         }
     }
@@ -311,8 +380,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun showBubble() {
         if (bubble != null || running || panel != null) return
-        val b = AvatarView(this)
-        b.compact = true
+        val b = OrbView(this)
         b.backing = true
         val lp = WindowManager.LayoutParams(dp(64), dp(64), OVERLAY, NOT_FOCUSABLE, PixelFormat.TRANSLUCENT)
         lp.gravity = Gravity.TOP or Gravity.START
@@ -348,36 +416,352 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post { openPanel() }
     }
 
+    fun openMainChat(pickImage: Boolean = false) {
+        main.post {
+            closePanel(false)
+            hideBubble()
+            try {
+                startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_PICK_IMAGE, pickImage).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Could not open Orion chat. Try opening it from the app home screen.", Toast.LENGTH_LONG).show()
+                showBubble()
+            }
+        }
+    }
+
+    fun attachMainChat(listener: MainChatListener) {
+        main.post {
+            stopOfflineWakeDetector()
+            // A visible chat/live-call surface owns microphone interaction. Cancel any
+            // background wake recognizer so it cannot compete with the foreground mic.
+            wakeGen++
+            if (!listening) voice.stopListening()
+            mainChatListener = listener
+            mainChatActive = true
+            if (panel != null) closePanel(false)
+            hideBubble()
+            listener.onStatus(if (running) "Orion is working…" else "Ready when you are", currentMode())
+            if (transcript.isEmpty()) {
+                listener.onMessage("ai", "Hi. I’m Orion. What are we working on today?")
+            } else {
+                transcript.forEach { listener.onMessage(it.first, it.second) }
+            }
+        }
+    }
+
+    fun detachMainChat(listener: MainChatListener) {
+        main.post {
+            if (mainChatListener === listener) {
+                mainChatListener = null
+                mainChatActive = false
+                if (!running && panel == null) showBubble()
+                startWake()
+            }
+        }
+    }
+
+    fun sendFromMainChat(
+        text: String,
+        conversationOnly: Boolean = false,
+        autoRoute: Boolean = false
+    ) {
+        main.post {
+            mainChatActive = mainChatListener != null
+            submit(text, conversationOnly, autoRoute)
+        }
+    }
+
+    @Volatile private var imageAnalysisRunning = false
+    private val imageAnalysisLock = Any()
+
+    /** Decode gallery images across Android-supported formats (including HEIC/AVIF where supported), then fall back to BitmapFactory. */
+    private fun decodeVisionBitmap(uri: Uri): Bitmap {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                val source = ImageDecoder.createSource(contentResolver, uri)
+                return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    val width = info.size.width.coerceAtLeast(1)
+                    val height = info.size.height.coerceAtLeast(1)
+                    val scale = minOf(1.0, 1024.0 / maxOf(width, height))
+                    decoder.setTargetSize((width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1))
+                }
+            } catch (_: Exception) {
+                // Some content providers expose formats ImageDecoder cannot read; try the classic decoder.
+            }
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            ?: throw IllegalArgumentException("The selected image could not be opened. Choose a photo saved on the device, or take a screenshot.")
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw IllegalArgumentException("Android could not decode this image format. Try exporting it as JPG or PNG.")
+        }
+        var sample = 1
+        while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: throw IllegalArgumentException("Android couldn't decode the selected image. Try a JPG or PNG copy.")
+    }
+
+    /** Sends a user-selected image to the configured vision provider without treating its URI as model-readable text. */
+    fun analyzeImageFromMainChat(uri: Uri, question: String) {
+        synchronized(imageAnalysisLock) {
+            if (running || imageAnalysisRunning) {
+                main.post { mainChatListener?.onMessage("ai", "Orion is already working on another task. Wait for it to finish before analysing another image.") }
+                return
+            }
+            imageAnalysisRunning = true
+        }
+        main.post {
+            mainChatActive = mainChatListener != null
+            mainChatListener?.onStatus("Analysing your image", OrbView.Mode.THINKING)
+        }
+        Thread({
+            try {
+                val bitmap = decodeVisionBitmap(uri)
+                val bytes = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
+                bitmap.recycle()
+                if (bytes.size() == 0) throw IllegalArgumentException("The image converted to an empty file. Try another image.")
+                if (bytes.size() > 5 * 1024 * 1024) throw IllegalArgumentException("This image is still too large after compression. Choose a smaller image or screenshot.")
+                val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                val content = JSONArray()
+                    .put(JSONObject().put("type", "text").put("text", question))
+                    .put(JSONObject().put("type", "image_url").put("image_url",
+                        JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
+                val messages = JSONArray()
+                    .put(JSONObject().put("role", "system").put("content",
+                        "You are Orion, a helpful visual assistant. Describe only what is visible, distinguish observation from inference, and ask for clarification if the image is unclear. Never claim to identify details that cannot be seen."))
+                    .put(JSONObject().put("role", "user").put("content", content))
+                val reply = Nim(this).chat(messages, true, 420, 0.2).trim()
+                main.post {
+                    mainChatListener?.onMessage("ai", if (reply.isBlank()) "I couldn't get a useful answer from that image. Please try again." else reply)
+                    mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
+                }
+            } catch (e: Exception) {
+                val reason = (e.message ?: "unknown error").take(320)
+                val guidance = when {
+                    reason.contains("No AI key", true) || reason.contains("key saved", true) ->
+                        " Open Settings → AI providers and save a key for a vision-capable provider."
+                    reason.contains("vision model", true) || reason.contains("no vision", true) ||
+                        reason.contains("supports this request type", true) ->
+                        " The selected model may be text-only. In Settings → AI providers, choose a provider and model that explicitly supports image input."
+                    reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) ->
+                        " The provider may be out of free quota or credit. Orion only tries one saved backup after an HTTP 429; if that fails, wait for the limit to reset or review the selected provider."
+                    reason.contains("503", true) || reason.contains("temporarily busy", true) ||
+                        reason.contains("service unavailable", true) ->
+                        " This is usually a temporary provider outage, not an unreadable image. Orion does not rotate providers for this error. Check the selected provider/model or retry later."
+                    reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) ||
+                        reason.contains("unsupported", true) ->
+                        " The provider may have rejected this image format or model. Try a smaller JPG/PNG image and verify that the selected model supports vision."
+                    else ->
+                        " Check internet access and the vision provider/model in Settings → AI providers."
+                }
+                main.post {
+                    val visionProvider = Prefs.provider(this, true)
+                    val visionModel = Prefs.model(this, visionProvider, true)
+                    mainChatListener?.onMessage(
+                        "ai",
+                        "Image analysis failed. Selected vision model: ${visionProvider.label} / $visionModel. Details: $reason.$guidance Check Settings → AI providers → Vision model; this error does not mean the image itself is unreadable."
+                    )
+                    mainChatListener?.onStatus("Image analysis failed · see details", OrbView.Mode.IDLE)
+                }
+            } finally {
+                synchronized(imageAnalysisLock) { imageAnalysisRunning = false }
+            }
+        }, "Orion-image-analysis").start()
+    }
+
+    fun listenFromMainChat() {
+        main.post {
+            if (!running && !listening) {
+                mainChatActive = mainChatListener != null
+                handsActive = false
+                emptyListens = 0
+                listenNow()
+            }
+        }
+    }
+
+    fun stopVoiceInput() {
+        main.post {
+            if (!listening) return@post
+            handsActive = false
+            emptyListens = 0
+            voice.stopListening()
+            listening = false
+            refreshMode()
+            if (panel == null) {
+                hideStrip()
+                showBubble()
+                startWake()
+            }
+        }
+    }
+
+    fun endLiveConversation() {
+        main.post {
+            handsActive = false
+            emptyListens = 0
+            if (listening) voice.stopListening()
+            listening = false
+            voice.stopSpeaking()
+            refreshMode()
+            if (panel == null) {
+                hideStrip()
+                showBubble()
+                startWake()
+            }
+        }
+    }
+
+
+    fun restoreArchivedChat(messages: List<Pair<String, String>>) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Let the current task finish or stop it before switching conversations.")
+                return@post
+            }
+            transcript.clear()
+            transcript.addAll(messages.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
+            ChatHistoryStore.restoreActive(this, transcript)
+            agent.reset()
+            mainChatListener?.onTranscriptRestored(transcript.toList())
+            mainChatListener?.onStatus("Previous conversation restored", OrbView.Mode.IDLE)
+        }
+    }
+
+    fun startNewChat() {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop or finish the current task before starting a new chat.")
+                return@post
+            }
+            ChatHistoryStore.archiveAndClear(this, transcript.toList())
+            transcript.clear()
+            agent.reset()
+            mainChatListener?.onTranscriptRestored(emptyList())
+            mainChatListener?.onStatus("New chat ready", OrbView.Mode.IDLE)
+        }
+    }
+
+    fun resetMainChat() {
+        main.post {
+            if (!running) {
+                agent.reset()
+                ChatHistoryStore.archiveAndClear(this, transcript)
+                transcript.clear()
+                mainChatListener?.onMessage("ai", "New conversation. What are we working on?")
+            }
+        }
+    }
+
+    fun displayMode(): OrbView.Mode = currentMode()
+
+    private fun currentMode(): OrbView.Mode = when {
+        speaking -> OrbView.Mode.SPEAKING
+        confirmView != null -> OrbView.Mode.WAITING_APPROVAL
+        listening -> OrbView.Mode.LISTENING
+        running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
+        else -> OrbView.Mode.IDLE
+    }
+
+    private fun appendTranscript(kind: String, text: String) {
+        transcript.add(Pair(kind, text))
+        if (kind == "me" || kind == "ai") ChatHistoryStore.save(this, transcript)
+    }
+
     private fun addLine(kind: String, text: String) {
         val box = logBox ?: return
         val t = TextView(this)
         t.text = text
         t.textSize = if (kind == "note") 11f else 15f
+        t.setLineSpacing(dp(2).toFloat(), 1.02f)
+        t.maxWidth = (screenSize().first * 0.82f).toInt()
         val lp = LinearLayout.LayoutParams(WRAP, WRAP)
-        lp.setMargins(0, dp(4), 0, dp(4))
+        lp.setMargins(0, dp(5), 0, dp(5))
         when (kind) {
             "me" -> {
-                t.setTextColor(Theme.ON_ACCENT)
-                t.background = rounded(Theme.CYAN, dp(16).toFloat())
+                t.setTextColor(Theme.TEXT)
+                t.background = rounded(0xFF292929.toInt(), dp(18).toFloat(), 0xFF454545.toInt())
                 lp.gravity = Gravity.END
+                lp.setMargins(dp(36), dp(7), 0, dp(7))
             }
             "ai" -> {
+                // Grok-inspired reading flow: assistant answers sit directly on the canvas,
+                // while only user turns are enclosed in a distinct bubble.
                 t.setTextColor(Theme.TEXT)
-                t.background = rounded(Theme.PANEL2, dp(16).toFloat(), Theme.LINE)
+                t.background = rounded(Theme.BG, dp(8).toFloat())
                 lp.gravity = Gravity.START
+                lp.setMargins(0, dp(8), dp(20), dp(8))
             }
             else -> {
                 t.setTextColor(Theme.MUTED)
                 t.typeface = Typeface.MONOSPACE
             }
         }
-        if (kind != "note") t.setPadding(dp(12), dp(8), dp(12), dp(8))
+        if (kind != "note") {
+            if (kind == "me") t.setPadding(dp(13), dp(10), dp(13), dp(10))
+            else t.setPadding(dp(3), dp(7), dp(3), dp(7))
+            t.contentDescription = if (kind == "me") "Your message. Long press to copy." else "Orion reply. Long press to copy."
+            t.setOnLongClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion message", text))
+                Toast.makeText(this, "Message copied", Toast.LENGTH_SHORT).show()
+                true
+            }
+        }
+        t.alpha = 0f
+        t.translationY = dp(if (kind == "me") 8 else 10).toFloat()
         box.addView(t, lp)
+        t.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(210L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
         logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun showThinkingIndicator() {
+        hideThinkingIndicator()
+        val box = logBox ?: return
+        val indicator = label("Orion is thinking", 13f, Theme.CYAN)
+        indicator.setPadding(dp(12), dp(9), dp(12), dp(9))
+        indicator.background = rounded(Theme.PANEL, dp(15).toFloat(), Theme.LINE)
+        indicator.contentDescription = "Orion is generating a response"
+        box.addView(indicator, LinearLayout.LayoutParams(WRAP, WRAP).apply {
+            setMargins(0, dp(5), 0, dp(5))
+        })
+        activityView = indicator
+        var frame = 0
+        val ticker = object : Runnable {
+            override fun run() {
+                if (activityView !== indicator || panel == null || !running) return
+                frame = (frame + 1) % 4
+                indicator.text = "Orion is thinking" + "·".repeat(frame)
+                val pulse = if (frame % 2 == 0) 1f else 0.76f
+                val scale = if (frame % 2 == 0) 1f else 0.985f
+                indicator.animate().alpha(pulse).scaleX(scale).scaleY(scale).setDuration(340L).start()
+                logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+                main.postDelayed(this, 420)
+            }
+        }
+        activityRunnable = ticker
+        main.postDelayed(ticker, 420)
+        logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun hideThinkingIndicator() {
+        activityRunnable?.let { main.removeCallbacks(it) }
+        activityRunnable = null
+        activityView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        activityView = null
     }
 
     private fun openPanel() {
         if (panel != null || running) return
+        stopOfflineWakeDetector()
         wakeGen++
         hideBubble()
         hideStrip()
@@ -385,29 +769,57 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.background = rounded(Theme.PANEL, dp(24).toFloat(), Theme.LINE)
-        root.setPadding(dp(14), dp(12), dp(14), dp(12))
+        root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF202020.toInt(), 0xFF111111.toInt(), 0xFF090909.toInt())).apply {
+            cornerRadius = dp(26).toFloat()
+            setStroke(dp(1), 0xFF414141.toInt())
+        }
+        root.setPadding(dp(12), dp(10), dp(12), dp(12))
+        root.elevation = dp(18).toFloat()
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
-        val orb = AvatarView(this)
-        head.addView(orb, LinearLayout.LayoutParams(dp(124), dp(124)))
+        head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(0xFF292929.toInt(), 0xFF191919.toInt(), 0xFF141414.toInt())).apply {
+            cornerRadius = dp(20).toFloat()
+            setStroke(dp(1), 0xFF3E3E3E.toInt())
+        }
+        head.setPadding(dp(8), dp(5), dp(6), dp(5))
+        val orb = OrbView(this)
+        orb.contentDescription = "Orion animated character. Tap to speak."
+        orb.isClickable = true
+        orb.setOnClickListener {
+            if (!running && !listening) {
+                handsActive = Prefs.hands(this)
+                emptyListens = 0
+                listenNow()
+            }
+        }
+        head.addView(orb, LinearLayout.LayoutParams(dp(56), dp(56)))
         val titleCol = LinearLayout(this)
         titleCol.orientation = LinearLayout.VERTICAL
         titleCol.setPadding(dp(8), 0, 0, 0)
-        val title = label("O R I O N", 16f, Theme.TEXT)
+        val title = label("ORION", 16f, Theme.TEXT)
         title.typeface = Typeface.DEFAULT_BOLD
         titleCol.addView(title)
-        val st = label("Ready", 13f, Theme.CYAN)
+        val st = label("PERSONAL AI  ·  READY TO HELP", 11f, Theme.CYAN)
         titleCol.addView(st)
+        val tagline = label("Think with you. Act with permission.", 10f, Theme.MUTED)
+        titleCol.addView(tagline)
         head.addView(titleCol, LinearLayout.LayoutParams(0, WRAP, 1f))
-        val fresh = label("New", 14f, Theme.MUTED)
+        val stop = label("■ Stop", 12f, Theme.WARN)
+        stop.setPadding(dp(8), dp(6), dp(8), dp(6))
+        stop.setOnClickListener { stopAll() }
+        stop.visibility = View.GONE
+        head.addView(stop)
+        stopBtnRef = stop
+        val fresh = label("＋ New", 13f, Theme.MUTED)
         fresh.setPadding(dp(10), dp(6), dp(10), dp(6))
         fresh.setOnClickListener { newChat() }
         head.addView(fresh)
-        val close = label("Close", 14f, Theme.MUTED)
-        close.setPadding(dp(10), dp(6), dp(10), dp(6))
+        val close = label("×", 22f, Theme.MUTED)
+        close.setPadding(dp(12), dp(4), dp(10), dp(4))
         close.setOnClickListener { closePanel(true) }
         head.addView(close)
         root.addView(head)
@@ -433,17 +845,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val quick = listOf(
             "What's on screen" to "Look at my screen and tell me what is on it.",
             "Battery" to "What is my battery level?",
-            "Record screen" to "Start recording my screen.",
-            "Stop recording" to "Stop the screen recording.",
-            "Flashlight" to "Toggle the flashlight on.",
-            "FC Mobile" to "Open FC Mobile.",
+            "Read screen" to "read my screen",
             "AI status" to "ai status",
-            "Read screen" to "read my screen"
+            "Network status" to "network status"
         )
-        val liveChip = chip("Live call") { startLive() }
+        val liveChip = chip("Voice command") { startLive() }
         val llp = LinearLayout.LayoutParams(WRAP, WRAP)
         llp.setMargins(0, 0, dp(6), 0)
         chips.addView(liveChip, llp)
+        val fullChatChip = chip("Full chat  ↗") { openMainChat() }
+        val fullChatLp = LinearLayout.LayoutParams(WRAP, WRAP)
+        fullChatLp.setMargins(0, 0, dp(6), 0)
+        chips.addView(fullChatChip, fullChatLp)
         for ((chipName, cmd) in quick) {
             val c = chip(chipName) { submit(cmd) }
             val clp = LinearLayout.LayoutParams(WRAP, WRAP)
@@ -461,11 +874,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         val input = EditText(this)
-        input.hint = "Message Orion..."
+        input.hint = "Quick command for your phone…"
         input.setHintTextColor(Theme.MUTED)
         input.setTextColor(Theme.TEXT)
-        input.background = rounded(Theme.PANEL2, dp(18).toFloat(), Theme.LINE)
-        input.setPadding(dp(14), dp(10), dp(14), dp(10))
+        input.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(0xFF242424.toInt(), 0xFF151515.toInt())).apply {
+            cornerRadius = dp(22).toFloat()
+            setStroke(dp(1), 0xFF414141.toInt())
+        }
+        input.setPadding(dp(15), dp(12), dp(15), dp(12))
+        input.minHeight = dp(48)
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         input.imeOptions = EditorInfo.IME_ACTION_SEND
         input.setOnEditorActionListener { _, _, _ ->
@@ -493,6 +911,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
+        val imageBtn = pill("＋", Theme.PANEL2, Theme.TEXT) {
+            // Android's document picker belongs to an Activity; hand off to full chat.
+            openMainChat(true)
+        }
+        imageBtn.contentDescription = "Choose an image for Orion to analyse"
+        val imageLp = LinearLayout.LayoutParams(dp(42), dp(46))
+        imageLp.setMargins(dp(6), 0, 0, 0)
+        row.addView(imageBtn, imageLp)
         val send = pill("Send", Theme.CYAN, Theme.ON_ACCENT) {
             val t = input.text.toString()
             input.setText("")
@@ -504,13 +930,31 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         root.addView(row)
 
         val lp = WindowManager.LayoutParams(
-            size.first - dp(24), (size.second * 0.74f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), (size.second * 0.70f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
         lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        root.alpha = 0f
+        root.translationY = dp(24).toFloat()
         wm.addView(root, lp)
         panel = root
+        root.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(230L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
+        // Stagger the panel's main surfaces so the overlay feels responsive rather than static.
+        listOf<View>(head, scroll, chipScroll, row).forEachIndexed { index, view ->
+            view.alpha = 0f
+            view.translationY = dp(7).toFloat()
+            view.animate().alpha(1f).translationY(0f)
+                .setStartDelay((index * 45L) + 35L)
+                .setDuration(220L)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .start()
+        }
         refreshMode()
     }
 
@@ -525,6 +969,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         panel = null
         panelOrb = null
         panelStatus = null
+        stopBtnRef = null
         micBtnRef = null
         logBox = null
         logScroll = null
@@ -540,7 +985,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun newChat() {
         agent.reset()
+        ChatHistoryStore.archiveAndClear(this, transcript)
         transcript.clear()
+        hideThinkingIndicator()
         logBox?.removeAllViews()
         addLine("ai", "New chat. What should I do?")
     }
@@ -556,10 +1003,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
-        row.background = rounded(0xF00E1522.toInt(), dp(22).toFloat(), Theme.CYAN)
+        row.background = rounded(0xF002080A.toInt(), dp(22).toFloat(), Theme.CYAN)
         row.setPadding(dp(8), dp(6), dp(10), dp(6))
-        val orb = AvatarView(this)
-        orb.compact = true
+        val orb = OrbView(this)
         row.addView(orb, LinearLayout.LayoutParams(dp(52), dp(52)))
         val t = label(text, 14f, Theme.TEXT)
         t.maxLines = 3
@@ -602,7 +1048,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Shows text in the panel's status line if the panel is open, otherwise in the top strip. */
     private fun showStatusText(text: String) {
-        if (panel != null) {
+        if (mainChatActive) {
+            mainChatListener?.onStatus(text, OrbView.Mode.LISTENING)
+        } else if (panel != null) {
             panelStatus?.text = text
         } else {
             showStrip(text)
@@ -620,11 +1068,63 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         confirmView = null
     }
 
+    /** Multi-choice ask_user surface. The access badge is explicit and no option is preselected. */
+    private fun showUserChoices(question: String, options: List<String>, access: String, cb: (String) -> Unit) {
+        removeConfirm()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0xFF111A20.toInt(), dp(20).toFloat(), Theme.CYAN)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        box.addView(label("ORION NEEDS YOUR CHOICE", 11f, Theme.CYAN).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.08f
+        })
+        val badgeText = when (access.uppercase()) {
+            "WRITE", "WRITE DATA", "WRITE/CHANGE" -> "WRITE · MAY CHANGE DATA"
+            else -> "READ · NO DATA CHANGES REQUESTED"
+        }
+        box.addView(label(badgeText, 10f, if (badgeText.startsWith("WRITE")) Theme.WARN else Theme.OK).apply {
+            setPadding(0, dp(5), 0, dp(4))
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        box.addView(label(question, 16f, Theme.TEXT).apply { setPadding(0, dp(6), 0, dp(10)) })
+        options.forEach { option ->
+            val choice = pill(option, Theme.PANEL2, Theme.TEXT) {
+                removeConfirm()
+                pendingConfirm = null
+                refreshMode()
+                cb(option)
+            }
+            val lp = LinearLayout.LayoutParams(-1, WRAP)
+            lp.topMargin = dp(6)
+            box.addView(choice, lp)
+        }
+        val cancel = pill("Cancel", Theme.PANEL, Theme.MUTED) {
+            removeConfirm()
+            pendingConfirm = null
+            refreshMode()
+            cb("")
+        }
+        val cancelLp = LinearLayout.LayoutParams(-1, WRAP)
+        cancelLp.topMargin = dp(8)
+        box.addView(cancel, cancelLp)
+        val size = screenSize()
+        val lp = WindowManager.LayoutParams(
+            size.first - dp(24), WRAP, OVERLAY, NOT_FOCUSABLE or NOT_MODAL, PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.CENTER
+        wm.addView(box, lp)
+        confirmView = box
+        refreshMode()
+    }
+
     private fun showConfirm(question: String, cb: (Boolean) -> Unit) {
         removeConfirm()
         val answer: (Boolean) -> Unit = { yes ->
             removeConfirm()
             pendingConfirm = null
+            refreshMode()
             cb(yes)
         }
         pendingConfirm = answer
@@ -632,11 +1132,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         box.orientation = LinearLayout.VERTICAL
         box.background = rounded(0xFF191409.toInt(), dp(20).toFloat(), Theme.WARN)
         box.setPadding(dp(16), dp(14), dp(16), dp(14))
-        box.addView(label(question, 16f, Theme.TEXT))
+        box.addView(label("APPROVAL REQUIRED", 11f, Theme.WARN).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.08f
+        })
+        box.addView(label(question, 16f, Theme.TEXT).apply {
+            setPadding(0, dp(7), 0, 0)
+        })
+        box.addView(label("Orion will wait here. Nothing in this step continues until you choose.", 12f, Theme.MUTED).apply {
+            setPadding(0, dp(6), 0, 0)
+        })
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
-        val no = pill("No", Theme.PANEL2, Theme.TEXT) { answer(false) }
-        val yes = pill("Yes, do it", Theme.CYAN, Theme.ON_ACCENT) { answer(true) }
+        val no = pill("Cancel action", Theme.PANEL2, Theme.TEXT) { answer(false) }
+        val yes = pill("Approve & continue", Theme.CYAN, Theme.ON_ACCENT) { answer(true) }
         val noLp = LinearLayout.LayoutParams(0, WRAP, 1f)
         noLp.setMargins(0, dp(12), dp(6), 0)
         val yesLp = LinearLayout.LayoutParams(0, WRAP, 1f)
@@ -651,34 +1160,151 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         lp.gravity = Gravity.CENTER
         wm.addView(box, lp)
         confirmView = box
+        refreshMode()
     }
 
     // ---------------------------------------------------------------- running commands
 
-    private fun submit(text: String) {
+    private fun isConversationStarter(text: String): Boolean {
+        val normalized = text.lowercase()
+            .replace(Regex("[^a-z0-9' ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return Regex("^(hey|hi|hello|good morning|good evening|let'?s talk|can we talk|i want to talk|talk to me|are you there|how are you|can i ask you something|i (also )?(have|got) a question)(\\b|$)")
+            .containsMatchIn(normalized)
+    }
+
+    /**
+     * Central chat intent router. UI surfaces pass the user's mode preference; this
+     * service owns the decision about whether an explicit request needs the tool agent.
+     * Keep live voice on its separate wake-phrase guard below.
+     */
+    private fun shouldAutoRouteToAgent(message: String): Boolean {
+        val text = message.trim().lowercase(java.util.Locale.ROOT)
+        if (text.isBlank()) return false
+        val patterns = listOf(
+            Regex("\\b(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b"),
+            Regex("\\b(search (the )?web|look up|google|browse to|visit (the )?website|go to (the )?website|find (online|on the web)|research (online|the latest))\\b"),
+            Regex("\\b(current|latest|today'?s|right now|live)\\b.*\\b(weather|news|price|rate|score|forecast|exchange rate|market|time in|model|release|version)\\b"),
+            Regex("\\b(what is|what's|check|find|show me|look at|compare)\\b.*\\b(current price|price of|price|weather|news|exchange rate|market price|latest update|live score|forecast)\\b"),
+            Regex("\\b(check|look up|find|show me)\\b.*\\b([a-z0-9]{2,}(usdt|usd|btc|eth)?|bitcoin|ethereum|btc|eth)('?s)?\\s+(price|quote|value)\\b"),
+            Regex("\\b(search|look up|find|research)\\b.*\\b(latest|newest|current|available)\\b.*\\b(model|nvidia|ai model|release|version)\\b|\\b(search|look up|find|research)\\b.*\\b(nvidia|nemotron|model catalog)\\b"),
+            Regex("\\b(save|remember|keep|store)\\b.*\\b(this preference|my preference|preference|prefer|i like|i want you to)\\b|\\b(from now on|going forward)\\b.*\\b(always|prefer|remember)\\b"),
+            Regex("\\b(remember this|save this|save to memory|remember that|recall my|search my memories|show my memories|update my memory|forget this|forget my|delete memory)\\b"),
+            Regex("\\b(list my tasks|show my tasks|create a task|add a task|update my task|complete my task|delete my task|list my skills|show my skills|run skill)\\b"),
+            Regex("\\b(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\b"),
+            Regex("\\b(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\b")
+        )
+        return patterns.any { it.containsMatchIn(text) }
+    }
+
+    private fun submit(
+        text: String,
+        conversationOnly: Boolean = false,
+        autoRoute: Boolean = false
+    ) {
         val t = text.trim()
-        if (t.isEmpty() || running) return
+        if (t.isEmpty()) return
+        stopOfflineWakeDetector()
+        if (running) {
+            main.post {
+                mainChatListener?.onMessage("ai", "I'm already working on another task. Let that finish, then send this request again.")
+                mainChatListener?.onStatus("Another task is still running", currentMode())
+            }
+            return
+        }
         if (Regex("^(goodbye|bye|bye bye|end call|end the call|hang up|stop listening|that's all|that is all)[.!]?$").matches(t.lowercase())) {
             handsActive = false
-            transcript.add(Pair("me", t))
-            transcript.add(Pair("ai", "Talk soon."))
+            appendTranscript("me", t)
+            appendTranscript("ai", "Talk soon.")
             voice.stopListening()
             listening = false
             if (Prefs.voice(this)) voice.speak("Talk soon.")
             endHands()
             return
         }
+        // In a user-started live call, recognised speech is always a conversation turn.
+        // Do not route everyday words through the command detector; the user can switch
+        // to the separate chat command workflow when they want phone actions.
+        if (handsActive) {
+            wakeGen++
+            appendTranscript("me", t)
+            mainChatListener?.onMessage("me", t)
+            voice.stopSpeaking()
+            voice.stopListening()
+            listening = false
+            hideBubble()
+            running = true
+            phase = "thinking"
+            refreshMode()
+            // Natural speech stays conversational. Phone actions in a live call need
+            // the explicit wake phrase ("Orion, open ...") so a passing word never triggers
+            // an accidental tap, message, or other action.
+            val explicitCommand = afterWake(t)?.takeIf { it.isNotBlank() }
+            worker.execute {
+                try {
+                    if (explicitCommand != null) agent.run(explicitCommand)
+                    else agent.runLiveConversation(t)
+                } catch (e: Exception) {
+                    say("I couldn't reach the AI just now. Please try again.")
+                }
+                main.post { finishRun() }
+            }
+            return
+        }
+
+        val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
+        if ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent)) {
+            wakeGen++
+            appendTranscript("me", t)
+            mainChatListener?.onMessage("me", t)
+            voice.stopSpeaking()
+            voice.stopListening()
+            listening = false
+            hideBubble()
+            running = true
+            phase = "thinking"
+            refreshMode()
+            worker.execute {
+                try {
+                    agent.runConversation(t)
+                } catch (e: Exception) {
+                    say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
+                }
+                main.post { finishRun() }
+            }
+            return
+        }
+
         wakeGen++
-        transcript.add(Pair("me", t))
+        appendTranscript("me", t)
+        // Show the user's message immediately, like a real chat app, rather than
+        // waiting for the model response to make the conversation feel alive.
+        if (panel != null) {
+            addLine("me", t)
+            logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+        }
         voice.stopSpeaking()
         voice.stopListening()
         listening = false
-        closePanel(false)
+
+        // Keep ordinary conversation inside the chat surface. Hide it only when Orion
+        // needs to see or operate another app, otherwise the user sees a disappearing strip
+        // instead of a continuous chatbot conversation.
+        val needsPhoneControl = AgentHooks.isPhoneActionRequest(t)
+        if (needsPhoneControl) closePanel(false)
+        if (mainChatActive) mainChatListener?.onMessage("me", t)
         hideBubble()
         running = true
         phase = "thinking"
-        showStrip("Thinking...")
+        if (panel != null) {
+            panelStatus?.text = "Thinking..."
+            hideStrip()
+        } else if (!mainChatActive) {
+            showStrip("Thinking...")
+        }
         refreshMode()
+        if (panel != null) showThinkingIndicator()
         worker.execute {
             try {
                 agent.run(t)
@@ -690,38 +1316,64 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     private fun finishRun() {
+        hideThinkingIndicator()
         running = false
         refreshMode()
         val last = transcript.lastOrNull { it.first == "ai" }?.second ?: "Done."
-        showStrip(last)
+        if (panel != null) {
+            panelStatus?.text = "Ready"
+            hideStrip()
+            logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
+        } else if (!mainChatActive) {
+            showStrip(last)
+        }
         if (handsActive) {
-            voice.whenIdle { listenNow() }
+            voice.whenIdle { if (handsActive && !running) listenNow() }
         } else {
             handsActive = false
-            showBubble()
-            startWake()
-            main.postDelayed({
-                if (!running && !listening) hideStrip()
-            }, 7000)
+            if (!mainChatActive) {
+                showBubble()
+                startWake()
+                main.postDelayed({
+                    if (!running && !listening) hideStrip()
+                }, 7000)
+            }
         }
+    }
+
+    /** Starts the continuous, user-initiated live conversation used by the full-screen voice UI. */
+    fun startLiveConversation() {
+        main.post { startLive() }
     }
 
     /** Live call: Orion listens, answers, listens again, until you say goodbye or stay quiet. */
     private fun startLive() {
-        if (running) return
+        if (running) {
+            showStatusText("Orion is already working. Wait or stop the current task before starting live voice.")
+            return
+        }
+        if (listening) {
+            handsActive = true
+            emptyListens = 0
+            showStatusText("Live voice is active. Go ahead when ready.")
+            return
+        }
         handsActive = true
         emptyListens = 0
         closePanel(false)
-        if (Prefs.voice(this)) voice.speak("I'm listening.")
-        voice.whenIdle { listenNow() }
+        // A spoken greeting adds a full TTS cycle before the microphone opens and is a
+        // common cause of users thinking the live call has timed out. Start listening now.
+        voice.stopSpeaking()
+        listenNow()
     }
 
     private fun listenNow() {
         if (running) return
+        stopOfflineWakeDetector()
         wakeGen++
         listening = true
         hideBubble()
-        if (panel == null) showStrip("Listening...")
+        if (panel == null && !mainChatActive) showStrip("Listening...")
         voice.stopSpeaking()
         refreshMode()
         var errored = false
@@ -730,8 +1382,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             refreshMode()
             if (text.isNullOrBlank()) {
                 emptyListens++
-                if (handsActive && emptyListens < 3 && !errored) {
-                    main.postDelayed({ listenNow() }, 500)
+                // A silence timeout is not the end of a live call. Re-arm recognition until
+                // the user ends the call or the speech service reports a real error.
+                if (handsActive && !errored) {
+                    if (emptyListens % 3 == 0) {
+                        showStatusText("Still listening — speak whenever you're ready.")
+                    }
+                    main.postDelayed({ if (handsActive && !running) listenNow() }, 300)
                 } else {
                     endHands()
                 }
@@ -745,7 +1402,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             errored = true
             handsActive = false
             Toast.makeText(this, err, Toast.LENGTH_LONG).show()
-            transcript.add(Pair("note", err))
+            appendTranscript("note", err)
         })
     }
 
@@ -761,6 +1418,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** True until the worker has actually left its current run. */
+    fun isTaskRunning(): Boolean = running
+
+    /** Public entry point for the full-screen chat Stop control. */
+    fun stopCurrentTask() {
+        stopAll()
+    }
+
     private fun stopAll() {
         handsActive = false
         agent.stop()
@@ -770,6 +1435,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         pendingConfirm?.invoke(false)
         if (running) {
             stripText?.text = "Stopping..."
+            panelStatus?.text = "Stopping..."
         } else {
             hideStrip()
             showBubble()
@@ -781,13 +1447,53 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- wake word "Orion"
 
     private fun wakeAllowed(): Boolean =
-        Prefs.wake(this) && !running && !listening && panel == null && confirmView == null &&
+        Prefs.wake(this) && !running && !listening && !mainChatActive && panel == null && confirmView == null &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private fun startWake() {
-        if (!Prefs.wake(this)) return
+        if (!wakeAllowed()) return
+        if (voice.isSpeaking()) { main.postDelayed({ startWake() }, 800); return }
+        if (WakeWordModelInstaller.isInstalled(this)) {
+            val detector = offlineWakeDetector ?: OfflineWakeWordDetector(
+                this,
+                onWake = { main.post {
+                    if (wakeAllowed()) {
+                        wakeGen++
+                        stopOfflineWakeDetector()
+                        showStatusText("Orion heard the wake word. Speak your command now.")
+                        listenNow()
+                    }
+                } },
+                onError = { error -> main.post {
+                    if (wakeAllowed()) {
+                        appendTranscript("note", "Offline wake word failed: $error")
+                        wakeGen++
+                        main.postDelayed({ if (wakeAllowed()) startWake() }, 2500)
+                    }
+                } }
+            ).also { offlineWakeDetector = it }
+            if (detector.start()) return
+        }
         val my = ++wakeGen
-        main.postDelayed({ wakeTick(my) }, 700)
+        main.postDelayed({ wakeTick(my) }, 900)
+    }
+
+    private fun stopOfflineWakeDetector() {
+        try { offlineWakeDetector?.stop() } catch (_: Exception) { }
+        offlineWakeDetector = null
+    }
+
+    /** Apply the wake-word preference immediately without requiring an Accessibility restart. */
+    fun updateWakeWord(enabled: Boolean) {
+        main.post {
+            wakeGen++
+            if (!enabled) {
+                stopOfflineWakeDetector()
+                if (!listening) voice.stopListening()
+            } else if (!mainChatActive && !running && !listening) {
+                startWake()
+            }
+        }
     }
 
     private fun wakeTick(my: Int) {
@@ -799,6 +1505,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         wakeErr = false
         voice.listen({ text ->
             if (my == wakeGen) {
+                if (!wakeErr) wakeErrorStreak = 0
                 val cmd = if (text.isNullOrBlank()) null else afterWake(text)
                 if (cmd != null) {
                     wakeGen++
@@ -810,13 +1517,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                         submit(cmd)
                     }
                 } else if (!wakeErr) {
-                    main.postDelayed({ wakeTick(my) }, 400)
+                    // Give the Android recognizer a little breathing room between sessions.
+                    main.postDelayed({ wakeTick(my) }, 900)
                 }
             }
         }, { _ -> }, { err ->
             wakeErr = true
-            transcript.add(Pair("note", "Wake word: $err"))
-            main.postDelayed({ wakeTick(my) }, 5000)
+            wakeErrorStreak = (wakeErrorStreak + 1).coerceAtMost(6)
+            appendTranscript("note", "Wake word: $err")
+            // 5s, 10s, 20s, then cap at 30s while the speech service is unhealthy.
+            val retryMs = (5000L shl (wakeErrorStreak - 1)).coerceAtMost(30_000L)
+            main.postDelayed({ wakeTick(my) }, retryMs)
         })
     }
 
@@ -829,23 +1540,40 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- AgentUi
 
     override fun say(text: String) {
-        transcript.add(Pair("ai", text))
+        appendTranscript("ai", text)
         main.post {
-            if (running || listening) showStrip(text)
+            hideThinkingIndicator()
+            if (panel != null) {
+                addLine("ai", text)
+                panelStatus?.text = if (running) "Working..." else "Ready"
+                hideStrip()
+            } else if ((running || listening) && !mainChatActive) {
+                showStrip(text)
+            }
         }
+        main.post { mainChatListener?.onMessage("ai", text) }
         if (Prefs.voice(this)) voice.speak(text)
     }
 
     override fun status(text: String) {
         main.post {
-            if (running) showStrip(text)
+            if (panel != null) {
+                panelStatus?.text = text
+            } else if (running) {
+                showStrip(text)
+            }
         }
     }
 
     override fun note(text: String) {
-        transcript.add(Pair("note", text))
+        appendTranscript("note", text)
         main.post {
-            if (running) showStrip(text)
+            mainChatListener?.onMessage("note", text)
+            if (panel != null) {
+                addLine("note", text)
+            } else if (running) {
+                showStrip(text)
+            }
         }
     }
 
@@ -868,9 +1596,32 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return answer.get()
     }
 
+    override fun askUser(question: String, options: List<String>, access: String): String {
+        val latch = CountDownLatch(1)
+        val answer = java.util.concurrent.atomic.AtomicReference("")
+        main.post {
+            showUserChoices(question, options, access) { choice ->
+                answer.set(choice)
+                latch.countDown()
+            }
+        }
+        if (Prefs.voice(this)) voice.speak(question)
+        latch.await()
+        return answer.get()
+    }
+
     // ---------------------------------------------------------------- tools: apps
 
     private fun norm(s: String): String = s.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+
+    /** Current foreground package exposed only for the local safety gate. */
+    fun currentPackageName(): String = try { rootInActiveWindow?.packageName?.toString().orEmpty() } catch (_: Exception) { "" }
+
+    fun currentAppLabel(): String {
+        val pkg = currentPackageName()
+        if (pkg.isBlank()) return ""
+        return try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { "" }
+    }
 
     fun openApp(name: String): String {
         val pm = packageManager
@@ -897,6 +1648,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             val names = list.map { it.loadLabel(pm).toString() }.sorted().take(40)
             return "error: app not found. Installed apps include: " + names.joinToString(", ")
         }
+        if (SafetyGate.isSensitiveApp(best.activityInfo.packageName, bestLabel)) {
+            return "error: Orion's safety gate blocks opening or automating banking and payment apps. Open and operate that app manually."
+        }
         val launch = pm.getLaunchIntentForPackage(best.activityInfo.packageName)
             ?: return "error: cannot launch $bestLabel"
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -906,46 +1660,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun openUrl(url: String): String {
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(i)
-        Thread.sleep(1500)
-        return "opened $url"
-    }
-
-    /** Lets other screens (like Teach Mode) send a command as if it was typed in the chat. */
-    fun sendFromMainChat(text: String) {
-        main.post { submit(text) }
-    }
-
-    // ---------------------------------------------------------------- Orion browser
-
-    fun openBrowser(url: String): String {
+        val raw = url.trim()
+        if (raw.isBlank()) return "error: URL is empty"
+        val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+        val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
+        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+            return "error: provide a valid http or https website URL"
+        }
+        val i = Intent(this, BrowserActivity::class.java)
+            .putExtra(BrowserActivity.EXTRA_URL, candidate)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
-            val i = Intent(this, BrowserActivity::class.java)
-            i.putExtra("url", url)
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(i)
-            Thread.sleep(1200)
-            "ok"
+            "opened in Orion's in-app browser: $candidate"
         } catch (e: Exception) {
-            "error: ${e.message}"
+            "error: could not open in-app browser (" + (e.message ?: "launch failed") + ")"
         }
-    }
-
-    fun browserText(): String {
-        val b = BrowserActivity.current ?: return "error: the Orion browser is not open"
-        val holder = arrayOfNulls<String>(1)
-        val latch = CountDownLatch(1)
-        main.post {
-            b.pageText { txt ->
-                holder[0] = txt
-                latch.countDown()
-            }
-        }
-        latch.await(5, TimeUnit.SECONDS)
-        val t = holder[0] ?: return "error: could not read the page"
-        return t.replace(Regex("\\s+"), " ").trim()
     }
 
     // ---------------------------------------------------------------- tools: reading the screen
@@ -953,20 +1683,122 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun readScreen(): String {
         val root = rootInActiveWindow ?: return "error: cannot read this screen (it may be protected)"
         nodes.clear()
+        ocrElements.clear()
+        visualElements.clear()
         val size = screenSize()
         val sb = StringBuilder()
         sb.append("screen ${size.first}x${size.second}\n")
         walk(root, sb)
-        if (nodes.size < 3) {
-            sb.append("(very few elements: this may be a game or image screen. Use look or play.)\n")
+
+        // OCR is local-only. Do not OCR sensitive app screens or any editable/password field.
+        val visibleLabels = nodes.mapNotNull { n ->
+            if (n.isPassword) "(password field)" else if (n.isEditable) n.hintText?.toString()?.lowercase()
+            else (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())?.lowercase()
+        }.joinToString(" ")
+        val packageId = root.packageName?.toString()?.lowercase().orEmpty()
+        val sensitiveScreen = Regex("bank|wallet|payment|pay\\b|authenticator|password|credential|otp|one.?time.?code")
+            .containsMatchIn(packageId + " " + visibleLabels)
+        if (!sensitiveScreen) {
+            try {
+                val shot = screenshotBase64()
+                if (shot != null) {
+                    val bytes = Base64.decode(shot.b64, Base64.DEFAULT)
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        try {
+                            val excluded = nodes.filter { it.isPassword || it.isEditable }.mapNotNull { node ->
+                                val r = Rect()
+                                node.getBoundsInScreen(r)
+                                if (r.width() <= 0 || r.height() <= 0) null else Rect(
+                                    (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
+                                    (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
+                                )
+                            }
+                            val found = ScreenPerception.recognize(bitmap, excluded)
+                            val existing = nodes.mapNotNull { n ->
+                                (n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString())
+                                    ?.trim()?.lowercase()?.replace(Regex("\\s+"), " ")
+                            }.toHashSet()
+                            for (item in found) {
+                                val normalized = item.text.trim().lowercase().replace(Regex("\\s+"), " ")
+                                if (normalized in existing || ocrElements.size >= 20) continue
+                                val scaled = Rect(
+                                    (item.bounds.left * shot.scale).toInt(),
+                                    (item.bounds.top * shot.scale).toInt(),
+                                    (item.bounds.right * shot.scale).toInt(),
+                                    (item.bounds.bottom * shot.scale).toInt()
+                                )
+                                if (scaled.width() <= 0 || scaled.height() <= 0) continue
+                                ocrElements.add(ScreenPerception.OcrItem(item.text, scaled))
+                                val id = nodes.size + ocrElements.lastIndex
+                                sb.append("[$id] OCR \"${item.text.take(70)}\"\n")
+                                existing.add(normalized)
+                            }
+                            // Accessibility + OCR always run first. Invoke the detector only for sparse
+                            // screens (common in games, WebViews and custom-drawn interfaces).
+                            if (nodes.size + ocrElements.size < 8) {
+                            val occupied = ArrayList<Rect>()
+                            nodes.forEach { node ->
+                                val r = Rect()
+                                node.getBoundsInScreen(r)
+                                // Ignore container nodes such as a full-screen WebView; they are not individual targets.
+                                if (r.width() > 0 && r.height() > 0 &&
+                                    r.width().toLong() * r.height() < bitmap.width.toLong() * bitmap.height * 0.40) {
+                                    occupied.add(Rect(
+                                        (r.left / shot.scale).toInt(), (r.top / shot.scale).toInt(),
+                                        (r.right / shot.scale).toInt(), (r.bottom / shot.scale).toInt()
+                                    ))
+                                }
+                            }
+                            ocrElements.forEach { item -> occupied.add(Rect(
+                                (item.bounds.left / shot.scale).toInt(), (item.bounds.top / shot.scale).toInt(),
+                                (item.bounds.right / shot.scale).toInt(), (item.bounds.bottom / shot.scale).toInt()
+                            )) }
+                            val detectorStartedAt = SystemClock.elapsedRealtime()
+                            val detected = UiYoloTfliteDetector.detect(this, bitmap, excluded + occupied)
+                            val regions = detected?.map {
+                                VisualElementDetector.Region(it.bounds, it.confidence, it.label)
+                            } ?: VisualElementDetector.detect(bitmap, excluded + occupied)
+                            val detectorMs = SystemClock.elapsedRealtime() - detectorStartedAt
+                            sb.append("(visual detector: ${if (detected != null) "YOLO TFLite" else "heuristic fallback"}, ${detectorMs} ms)\\n")
+                            for (region in regions) {
+                                if (visualElements.size >= 10) break
+                                val scaled = Rect(
+                                    (region.bounds.left * shot.scale).toInt(), (region.bounds.top * shot.scale).toInt(),
+                                    (region.bounds.right * shot.scale).toInt(), (region.bounds.bottom * shot.scale).toInt()
+                                )
+                                if (scaled.width() <= 0 || scaled.height() <= 0) continue
+                                visualElements.add(VisualElementDetector.Region(scaled, region.confidence, region.label))
+                                val id = nodes.size + ocrElements.size + visualElements.lastIndex
+                                sb.append("[$id] visual target (${region.label}, ${(region.confidence * 100).toInt()}% confidence)\\n")
+                            }
+                            }
+                        } finally {
+                            if (!bitmap.isRecycled) bitmap.recycle()
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                sb.append("(on-device OCR unavailable for this screen; accessibility results are still available)\n")
+            }
+        } else {
+            sb.append("(OCR withheld on a potentially sensitive screen)\n")
+        }
+        if (nodes.size + ocrElements.size + visualElements.size < 3) {
+            sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
         return sb.toString().take(2800)
     }
 
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {
         if (nodes.size >= 45) return
-        val text = n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString() ?: ""
-        val lbl = if (n.isPassword) "(password field)" else text.trim()
+        // Never put the current contents of an editable field into the screen map.
+        val text = if (n.isEditable) "" else n.text?.toString() ?: n.contentDescription?.toString() ?: n.hintText?.toString() ?: ""
+        val lbl = when {
+            n.isPassword -> "(password field)"
+            n.isEditable -> n.hintText?.toString()?.takeIf { it.isNotBlank() } ?: "(text field)"
+            else -> text.trim()
+        }
         if (n.isVisibleToUser && (lbl.isNotEmpty() || n.isClickable || n.isEditable)) {
             val r = Rect()
             n.getBoundsInScreen(r)
@@ -979,7 +1811,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     n.isCheckable -> if (n.isChecked) "checked" else "unchecked"
                     else -> "text"
                 }
-                sb.append("[$id] $kind \"${lbl.take(40)}\" @${r.centerX()},${r.centerY()}\n")
+                sb.append("[$id] $kind \"${lbl.take(40)}\"\n")
             }
         }
         for (i in 0 until n.childCount) {
@@ -990,6 +1822,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Label and centre of an element from the latest read_screen (used to save routines). */
     fun nodeInfo(id: Int): Triple<String, Int, Int>? {
+        if (id >= nodes.size + ocrElements.size) {
+            val item = visualElements.getOrNull(id - nodes.size - ocrElements.size) ?: return null
+            return Triple(item.label, item.bounds.centerX(), item.bounds.centerY())
+        }
+        if (id >= nodes.size) {
+            val item = ocrElements.getOrNull(id - nodes.size) ?: return null
+            return Triple(item.text.take(40), item.bounds.centerX(), item.bounds.centerY())
+        }
         val n = nodes.getOrNull(id) ?: return null
         if (n.isPassword) return null
         val r = Rect()
@@ -999,6 +1839,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun clickId(id: Int): String {
+        if (id >= nodes.size + ocrElements.size) {
+            val item = visualElements.getOrNull(id - nodes.size - ocrElements.size)
+                ?: return "error: no element $id. Call read_screen first."
+            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
+        }
+        if (id >= nodes.size) {
+            val item = ocrElements.getOrNull(id - nodes.size)
+                ?: return "error: no element $id. Call read_screen first."
+            return tap(item.bounds.centerX().toFloat(), item.bounds.centerY().toFloat())
+        }
         val n = nodes.getOrNull(id) ?: return "error: no element $id. Call read_screen first."
         var cur: AccessibilityNodeInfo? = n
         var hops = 0
@@ -1028,13 +1878,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun typeText(text: String): String {
-        val root = rootInActiveWindow ?: return "error: cannot read this screen"
+        if (text.isEmpty()) return "error: refusing to type empty text"
+        if (text.length > 4000) return "error: text exceeds the 4000 character limit"
+        if (SafetyGate.containsSensitiveCredentialText(text)) {
+            return "error: Orion's safety gate blocks typing card, CVV/CVC, password, passcode, PIN, OTP, security-code, or card-number text. Enter sensitive details yourself."
+        }
+        val root = rootInActiveWindow ?: return "error: cannot inspect the current screen"
         val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
-            ?: return "error: no text field found. Click a text field first."
-        if (field.isPassword) return "error: that is a password field. Ask the user to type it themselves."
-        val args = Bundle()
-        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
-        return if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) "typed" else "error: could not type there"
+            ?: return "error: no editable text field found. Click the intended field first."
+        if (field.isPassword) return "error: refusing to type into a password field. Ask the user to enter credentials themselves."
+        val targetPackage = field.packageName?.toString()
+        // Flutter and React Native fields may reject ACTION_SET_TEXT. Focus the target, then
+        // send the agent's explicit payload through Orion's InputConnection instead.
+        try {
+            if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } catch (_: Exception) { }
+        return OrionKeyboardService.typeIntoFocusedField(this, text, targetPackage)
     }
 
     // ---------------------------------------------------------------- tools: touch
@@ -1057,6 +1917,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (!dispatchGesture(g, cb, main)) return "error: the phone rejected the gesture"
         latch.await(6, TimeUnit.SECONDS)
         return if (ok.get()) "ok" else "error: gesture was cancelled"
+    }
+
+    /** Replays a recorded multi-point gesture without an AI call. */
+    fun performRecordedPath(points: JSONArray, durationMs: Long): String {
+        if (points.length() < 2) return "error: recorded gesture has too few points"
+        val path = Path()
+        for (i in 0 until points.length()) {
+            val p = points.optJSONObject(i) ?: continue
+            val x = p.optDouble("x", Double.NaN).toFloat()
+            val y = p.optDouble("y", Double.NaN).toFloat()
+            if (!x.isFinite() || !y.isFinite()) continue
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        return gesture(path, durationMs.coerceIn(80L, 8000L))
     }
 
     fun tap(x: Float, y: Float): String {
@@ -1119,7 +1993,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- fast, no-AI: teach mode + screen checks
 
     private val cbExec = Executors.newSingleThreadExecutor()
-    private val sigExec = Executors.newCachedThreadPool()
+    private val sigExec = Executors.newFixedThreadPool(2)
     private val teachExec = Executors.newSingleThreadExecutor()
 
     /** Full-size screenshot with no AI and no resizing. Null if the screen is protected. */
@@ -1219,6 +2093,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var teachView: FrameLayout? = null
     private var teachLp: WindowManager.LayoutParams? = null
     private var teachName = ""
+    private var teachCounter: TextView? = null
     private val teachSteps = JSONArray()
     private var teachLastEnd = 0L
     private var tDownX = 0f
@@ -1226,6 +2101,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var tDownUp = 0L
     private var tDownWall = 0L
     private var tSig: java.util.concurrent.Future<IntArray?>? = null
+    private val teachPathPoints = ArrayList<Pair<Float, Float>>()
 
     fun isTeaching(): Boolean = teachView != null
 
@@ -1252,7 +2128,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             true
         }
         val done = TextView(this)
-        done.text = "REC  tap here when finished"
+        teachCounter = done
+        done.text = "● REC  ·  0 STEPS  ·  TAP TO SAVE"
         done.setTextColor(Theme.TEXT)
         done.textSize = 14f
         done.typeface = Typeface.DEFAULT_BOLD
@@ -1289,6 +2166,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 tDownY = e.rawY
                 tDownUp = SystemClock.uptimeMillis()
                 tDownWall = System.currentTimeMillis()
+                teachPathPoints.clear()
+                teachPathPoints.add(Pair(e.rawX, e.rawY))
                 val x = e.rawX.toInt()
                 val y = e.rawY.toInt()
                 tSig = sigExec.submit(java.util.concurrent.Callable<IntArray?> {
@@ -1296,15 +2175,30 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     if (b == null) null else signature(b, x, y).also { b.recycle() }
                 })
             }
-            MotionEvent.ACTION_UP -> {
+            MotionEvent.ACTION_MOVE -> {
+                val last = teachPathPoints.lastOrNull()
+                if (last == null || Math.hypot((e.rawX - last.first).toDouble(), (e.rawY - last.second).toDouble()) >= dp(5)) {
+                    teachPathPoints.add(Pair(e.rawX, e.rawY))
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val x1 = tDownX
                 val y1 = tDownY
-                val x2 = e.rawX
-                val y2 = e.rawY
+                val lastPoint = teachPathPoints.lastOrNull() ?: Pair(e.rawX, e.rawY)
+                val x2 = if (e.actionMasked == MotionEvent.ACTION_CANCEL) lastPoint.first else e.rawX
+                val y2 = if (e.actionMasked == MotionEvent.ACTION_CANCEL) lastPoint.second else e.rawY
                 val dur = SystemClock.uptimeMillis() - tDownUp
                 val wall = tDownWall
                 val sigF = tSig
-                teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF) }
+                val points = ArrayList(teachPathPoints)
+                if (points.isEmpty() || points.last() != Pair(x2, y2)) points.add(Pair(x2, y2))
+                // Show a clear busy state while this gesture is forwarded and saved. The
+                // overlay must briefly stop intercepting input while Android injects the same
+                // gesture into the target app; make that short pause visible instead of silently
+                // losing a rapid next touch.
+                main.post { teachCounter?.text = "… SAVING STEP · WAIT FOR REC" }
+                setTeachTouchable(false)
+                teachExec.execute { teachReplay(x1, y1, x2, y2, dur, wall, sigF, points) }
             }
         }
     }
@@ -1330,15 +2224,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** Passes the user's touch through to the game, and writes it down as a step. */
     private fun teachReplay(
         x1: Float, y1: Float, x2: Float, y2: Float, dur: Long, wall: Long,
-        sigF: java.util.concurrent.Future<IntArray?>?
+        sigF: java.util.concurrent.Future<IntArray?>?,
+        points: List<Pair<Float, Float>>
     ) {
         val sig = try {
-            sigF?.get(2, TimeUnit.SECONDS)
+            sigF?.get(400, TimeUnit.MILLISECONDS)
         } catch (e: Exception) {
             null
         }
         val dist = Math.hypot((x2 - x1).toDouble(), (y2 - y1).toDouble())
-        val step = JSONObject()
+        val size = screenSize()
+        val step = JSONObject().put("screenW", size.first).put("screenH", size.second)
         val path = Path()
         path.moveTo(x1, y1)
         val ms: Long
@@ -1351,30 +2247,41 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 step.put("tool", "tap").put("args", JSONObject().put("x", x1.toInt()).put("y", y1.toInt()))
             }
         } else {
-            path.lineTo(x2, y2)
-            ms = dur.coerceIn(80L, 2000L)
-            step.put(
-                "tool", "swipe"
-            ).put(
-                "args",
-                JSONObject().put("x1", x1.toInt()).put("y1", y1.toInt()).put("x2", x2.toInt()).put("y2", y2.toInt()).put("ms", ms)
+            points.forEach { point -> path.lineTo(point.first, point.second) }
+            ms = dur.coerceIn(80L, 8000L)
+            val pointArray = JSONArray()
+            points.forEach { point ->
+                pointArray.put(JSONObject().put("x", point.first.toInt()).put("y", point.second.toInt()))
+            }
+            step.put("tool", "swipe_path").put(
+                "args", JSONObject().put("points", pointArray).put("ms", ms)
             )
         }
-        setTeachTouchable(false)
         val r = try {
             gesture(path, ms)
         } catch (e: Exception) {
-            "error"
+            "error: ${e.javaClass.simpleName}"
+        } finally {
+            // Always unlock recording, even if the synthetic touch fails.
+            setTeachTouchable(true)
         }
-        setTeachTouchable(true)
         if (r == "ok") {
-            step.put("gap", (wall - teachLastEnd).coerceIn(0L, 30000L))
+            step.put("gap", (wall - teachLastEnd).coerceIn(0L, 120000L))
             if (sig != null) {
                 val arr = JSONArray()
                 for (v in sig) arr.put(v)
                 step.put("sig", arr).put("sx", x1.toInt()).put("sy", y1.toInt())
             }
-            synchronized(teachSteps) { teachSteps.put(step) }
+            val count = synchronized(teachSteps) { teachSteps.put(step); teachSteps.length() }
+            main.post { teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE" }
+        } else {
+            main.post {
+                Toast.makeText(this, "A recorded touch could not be replayed, so that step was not saved. Please repeat it.", Toast.LENGTH_LONG).show()
+            }
+        }
+        main.post {
+            val count = synchronized(teachSteps) { teachSteps.length() }
+            teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE"
         }
         teachLastEnd = System.currentTimeMillis()
     }
@@ -1383,6 +2290,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val v = teachView ?: return
         teachView = null
         teachLp = null
+        teachCounter = null
         try {
             wm.removeView(v)
         } catch (e: Exception) {
@@ -1432,14 +2340,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 latch.await(6, TimeUnit.SECONDS)
                 val bmp = holder[0]
                 if (bmp != null) {
-                    val width = 540
+                    val width = minOf(540, bmp.width)
                     val scale = bmp.width / width.toFloat()
                     val height = (bmp.height / scale).toInt()
                     val small = Bitmap.createScaledBitmap(bmp, width, height, true)
-                    val out = ByteArrayOutputStream()
-                    small.compress(Bitmap.CompressFormat.JPEG, 60, out)
-                    val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-                    return Shot(b64, scale, width, height)
+                    try {
+                        val out = ByteArrayOutputStream()
+                        small.compress(Bitmap.CompressFormat.JPEG, 60, out)
+                        val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+                        return Shot(b64, scale, width, height)
+                    } finally {
+                        if (small !== bmp && !small.isRecycled) small.recycle()
+                        if (!bmp.isRecycled) bmp.recycle()
+                    }
                 }
                 Thread.sleep(1100)
             }

@@ -5,6 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ContentUris
+import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -21,6 +24,8 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** The extra abilities the agent can use besides touching the screen. All run on the worker thread. */
 class Tools(private val svc: PhoneAiService) {
@@ -77,6 +82,37 @@ class Tools(private val svc: PhoneAiService) {
         return names.joinToString(", ").take(3000)
     }
 
+    /** List installed handlers for a fixed set of useful deep-link schemes; no arbitrary intents are exposed. */
+    fun listAppDeepLinks(schemeArg: String = ""): String {
+        val allowed = setOf("https", "tel", "sms", "smsto", "mailto", "geo", "whatsapp", "tg", "youtube", "spotify")
+        val requested = schemeArg.trim().lowercase()
+        if (requested.isNotBlank() && requested !in allowed) return "error: unsupported scheme. Allowed: " + allowed.sorted().joinToString(", ")
+        val schemes = if (requested.isBlank()) allowed else setOf(requested)
+        val pm = svc.packageManager
+        val rows = mutableListOf<String>()
+        for (scheme in schemes.sorted()) {
+            val sample = when (scheme) {
+                "https" -> "https://example.com/"
+                "tel" -> "tel:+10000000000"
+                "sms", "smsto" -> "$scheme:+10000000000"
+                "mailto" -> "mailto:example@example.com"
+                "geo" -> "geo:0,0"
+                "whatsapp" -> "whatsapp://send?phone=10000000000"
+                "tg" -> "tg://resolve?domain=telegram"
+                "youtube" -> "vnd.youtube://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                else -> "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(sample)).addCategory(Intent.CATEGORY_BROWSABLE)
+            val handlers = try { pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY) } catch (_: Exception) { emptyList() }
+            handlers.forEach { ri ->
+                val label = try { ri.loadLabel(pm).toString() } catch (_: Exception) { ri.activityInfo.packageName }
+                rows.add("$scheme · $label · ${ri.activityInfo.packageName}")
+            }
+        }
+        return if (rows.isEmpty()) "No installed app handlers were found for " + schemes.joinToString(", ") else
+            "Installed deep-link handlers (scheme · app · package):\n" + rows.distinct().take(80).joinToString("\n")
+    }
+
     // ---- web
 
     fun webSearch(query: String): String {
@@ -116,6 +152,370 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    /**
+     * Read-only public GitHub lookup. Calls a fixed api.github.com endpoint; never accepts
+     * arbitrary URLs, never sends a token, and never performs write operations.
+     * section: repo | release | issues | runs
+     */
+    fun githubPublic(owner: String, repository: String, section: String): String {
+        val safePart = Regex("^[A-Za-z0-9_.-]{1,100}$")
+        if (!safePart.matches(owner) || !safePart.matches(repository) ||
+            owner == "." || owner == ".." || repository == "." || repository == "..") {
+            return "error: provide a public GitHub owner and repository name"
+        }
+        val endpoint = when (section.lowercase().trim()) {
+            "repo" -> "repos/$owner/$repository"
+            "release" -> "repos/$owner/$repository/releases/latest"
+            "issues" -> "repos/$owner/$repository/issues?state=open&per_page=10"
+            "runs" -> "repos/$owner/$repository/actions/runs?per_page=5"
+            else -> return "error: section must be repo, release, issues, or runs"
+        }
+        return try {
+            val conn = (URL("https://api.github.com/$endpoint").openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            conn.setRequestProperty("User-Agent", "PhoneAI-ReadOnly-Integration")
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val raw = stream?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(4096)
+                var total = 0
+                while (total < 80_000) {
+                    val n = input.read(buffer, 0, minOf(buffer.size, 80_000 - total))
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                    total += n
+                }
+                out.toString(Charsets.UTF_8.name())
+            } ?: ""
+            conn.disconnect()
+            if (code !in 200..299) {
+                val detail = try { JSONObject(raw).optString("message", "HTTP $code") } catch (_: Exception) { "HTTP $code" }
+                return "GitHub returned $code: ${detail.take(180)}. The repository may be private, missing, or rate-limited."
+            }
+            when (section.lowercase().trim()) {
+                "repo" -> {
+                    val obj = JSONObject(raw)
+                    "Public GitHub repository: ${obj.optString("full_name", "$owner/$repository")}\n" +
+                        "Description: ${obj.optString("description", "No description provided")}\n" +
+                        "Default branch: ${obj.optString("default_branch", "unknown")}\n" +
+                        "Stars: ${obj.optInt("stargazers_count")} | Forks: ${obj.optInt("forks_count")} | Open issues: ${obj.optInt("open_issues_count")}\n" +
+                        "Updated: ${obj.optString("updated_at", "unknown")}\nURL: ${obj.optString("html_url", "https://github.com/$owner/$repository")}"
+                }
+                "runs" -> {
+                    val arr = JSONObject(raw).optJSONArray("workflow_runs") ?: JSONArray()
+                    if (arr.length() == 0) return "No public GitHub Actions runs were returned. Actions may be disabled or require authentication."
+                    val lines = (0 until minOf(arr.length(), 5)).mapNotNull { index ->
+                        val run = arr.optJSONObject(index) ?: return@mapNotNull null
+                        run.optString("name", "Workflow") + " — " + run.optString("status", "unknown") + "/" +
+                            run.optString("conclusion", "pending") + " — " + run.optString("head_branch", "unknown branch") +
+                            "\n" + run.optString("html_url", "")
+                    }
+                    "Latest public GitHub Actions runs for $owner/$repository (read-only):\n" + lines.joinToString("\n\n")
+                }
+                "release" -> {
+                    val obj = JSONObject(raw)
+                    "Latest published release for $owner/$repository: ${obj.optString("name", obj.optString("tag_name", "unnamed"))}\n" +
+                        "Tag: ${obj.optString("tag_name", "unknown")}\nPublished: ${obj.optString("published_at", "unknown")}\n" +
+                        "URL: ${obj.optString("html_url", "https://github.com/$owner/$repository/releases")}"
+                }
+                else -> {
+                    val arr = JSONArray(raw)
+                    val issues = (0 until arr.length()).mapNotNull { i ->
+                        val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+                        if (obj.has("pull_request")) return@mapNotNull null
+                        "#${obj.optInt("number")} ${obj.optString("title", "(untitled)")} — ${obj.optString("html_url", "")}"
+                    }
+                    if (issues.isEmpty()) "No open issues found for $owner/$repository (or the API returned none)." else
+                        "Open issues for $owner/$repository (up to 10):\n" + issues.joinToString("\n").take(2500)
+                }
+            }
+        } catch (e: Exception) {
+            "error: GitHub lookup failed: ${e.message ?: "network error"}"
+        }
+    }
+
+    /** Public Bybit spot ticker; read-only, no API key, never places orders. */
+    fun bybitPublicTicker(symbol: String): String {
+        val clean = symbol.trim().uppercase().replace("/", "")
+        if (!Regex("^[A-Z0-9]{5,20}$").matches(clean)) return "error: use a spot symbol such as BTCUSDT or ETHUSDT."
+        return try {
+            val url = URL("https://api.bybit.com/v5/market/tickers?category=spot&symbol=" + URLEncoder.encode(clean, "UTF-8"))
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("User-Agent", "PhoneAI-Public-Market-Reader")
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val raw = stream?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(2048)
+                var total = 0
+                while (total < 20000) {
+                    val n = input.read(buf, 0, minOf(buf.size, 20000 - total))
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    total += n
+                }
+                out.toString(Charsets.UTF_8.name())
+            } ?: ""
+            conn.disconnect()
+            if (code !in 200..299) return "Bybit public API returned HTTP " + code + "."
+            val root = JSONObject(raw)
+            if (root.optInt("retCode", -1) != 0) return "Bybit market lookup failed: " + root.optString("retMsg", "unknown API error")
+            val list = root.optJSONObject("result")?.optJSONArray("list")
+                ?: return "No spot ticker returned for " + clean + ". Check the symbol and market."
+            val item = list.optJSONObject(0) ?: return "No spot ticker returned for " + clean + "."
+            val last = item.optString("lastPrice", "unknown")
+            val changeRaw = item.optString("price24hPcnt", "")
+            val change = changeRaw.toDoubleOrNull()?.let { String.format(Locale.US, "%.2f%%", it * 100.0) } ?: "unknown"
+            val high = item.optString("highPrice24h", "unknown")
+            val low = item.optString("lowPrice24h", "unknown")
+            val volume = item.optString("volume24h", "unknown")
+            "Bybit spot ticker for " + clean + " (public market data, not a trading signal):\\nLast price: " + last +
+                "\\n24h change: " + change + "" +
+                "\\n24h high: " + high + "\\n24h low: " + low + "\\n24h base volume: " + volume
+        } catch (e: Exception) { "Bybit market lookup failed (" + e.javaClass.simpleName + ")." }
+    }
+    fun telegramStatus(): String = TelegramBridge.status(svc)
+
+    fun telegramSend(message: String): String = TelegramBridge.send(svc, message)
+
+    fun integrationStatus(): String = IntegrationStatus.summary(svc)
+
+    fun mcpStatus(): String = McpConnector.status(svc)
+
+    fun mcpListTools(): String = McpConnector.listTools(svc)
+
+    fun mcpCall(name: String, args: JSONObject): String = McpConnector.callTool(svc, name, args)
+
+    // ---- deterministic local routes (Stage 5)
+
+    fun lookupApp(name: String): String {
+        val query = name.trim()
+        if (query.isBlank()) return "error: app name or package is required"
+        val pm = svc.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val matches = pm.queryIntentActivities(intent, 0).map { ri ->
+            Triple(ri.loadLabel(pm).toString(), ri.activityInfo.packageName, ri)
+        }
+        val exact = matches.firstOrNull { it.first.equals(query, true) || it.second.equals(query, true) }
+        val match = exact ?: matches.firstOrNull { it.first.contains(query, true) || it.second.contains(query, true) }
+        return if (match != null) {
+            "APP MATCH: label=\"" + match.first + "\"; package=\"" + match.second + "\"; exact=" +
+                (match.first.equals(query, true) || match.second.equals(query, true))
+        } else {
+            "error: no installed launchable app matched \"" + query + "\"."
+        }
+    }
+
+    /** Only a fixed allowlist is accepted; arbitrary component/action names are never launched. */
+    fun systemIntent(actionName: String, query: String = "", uriText: String = ""): String {
+        val action = actionName.trim().lowercase().replace('-', '_').replace(' ', '_')
+        val i: Intent = when (action) {
+            "settings" -> Intent(Settings.ACTION_SETTINGS)
+            "wifi_settings" -> Intent(Settings.ACTION_WIFI_SETTINGS)
+            "bluetooth_settings" -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            "display_settings" -> Intent(Settings.ACTION_DISPLAY_SETTINGS)
+            "app_settings" -> Intent(Settings.ACTION_APPLICATION_SETTINGS)
+            "location_settings" -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+            "accessibility_settings" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            "notification_settings" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            "dial" -> {
+                val number = query.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
+                if (number.isBlank()) return "error: dial route needs a phone number"
+                Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))
+            }
+            "maps_search" -> {
+                if (query.isBlank()) return "error: maps_search needs a place or address"
+                Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)))
+            }
+            "camera" -> Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+            "calendar" -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR)
+            "clock" -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
+            "share" -> {
+                if (query.isBlank()) return "error: share route needs text in query"
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, query)
+                return try {
+                    svc.startActivity(Intent.createChooser(send, if (uriText.isBlank()) "Share with" else uriText).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    "Android share sheet opened; nothing is sent until you choose a destination and confirm"
+                } catch (e: Exception) { "error: share sheet could not open (" + e.javaClass.simpleName + ")" }
+            }
+            "sms" -> {
+                if (query.isBlank()) return "error: sms route needs a recipient number"
+                val number = query.filter { it.isDigit() || it == '+' }
+                val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).putExtra("sms_body", uriText)
+                return try { send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(send); "SMS draft opened; it was not sent" }
+                    catch (e: Exception) { "error: SMS draft could not open (" + e.javaClass.simpleName + ")" }
+            }
+            "alarm" -> {
+                val parts = query.trim().split(":")
+                if (parts.size !in 1..2) return "error: alarm time must be HH:mm"
+                val hour = parts[0].toIntOrNull() ?: return "error: alarm hour must be numeric"
+                val minute = if (parts.size == 2) parts[1].toIntOrNull() ?: return "error: alarm minute must be numeric" else 0
+                if (hour !in 0..23 || minute !in 0..59) return "error: alarm time is outside 24-hour range"
+                val alarm = Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    .putExtra(AlarmClock.EXTRA_MINUTES, minute).putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
+                return try { alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(alarm); "alarm request handed to the clock app; verify it was saved" }
+                    catch (e: Exception) { "error: clock app could not set alarm (" + e.javaClass.simpleName + ")" }
+            }
+            "timer" -> {
+                val seconds = query.toIntOrNull() ?: return "error: timer route needs duration in seconds"
+                if (seconds !in 1..86400) return "error: timer duration must be 1–86400 seconds"
+                val timer = Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
+                return try { timer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(timer); "timer request handed to the clock app; verify it was started" }
+                    catch (e: Exception) { "error: clock app could not start timer (" + e.javaClass.simpleName + ")" }
+            }
+            "open_url" -> {
+                val raw = uriText.trim()
+                val u = try { java.net.URI(raw) } catch (_: Exception) { null }
+                if (u == null || u.scheme?.lowercase() !in setOf("http", "https") || u.host.isNullOrBlank())
+                    return "error: open_url requires a complete HTTP/HTTPS URL"
+                Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+            }
+            else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, sms, alarm, timer, share, open_url"
+        }
+        return try {
+            if (i.resolveActivity(svc.packageManager) == null) return "error: no installed app can handle route '" + action + "'"
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            svc.startActivity(i)
+            "launched allowlisted system route '" + action + "'; destination state still needs verification"
+        } catch (e: Exception) {
+            "error: could not launch '" + action + "' (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
+    /**
+     * Launch a tightly allowlisted app deep link. Arbitrary intent:// components and
+     * bank/payment/credential URLs are deliberately rejected.
+     */
+    fun openDeepLink(uriText: String): String {
+        val raw = uriText.trim()
+        if (raw.isBlank() || raw.length > 2048) return "error: deep link must be 1–2048 characters"
+        if (SafetyGate.containsSensitiveCredentialText(raw) || SafetyGate.isSensitiveApp(raw, raw)) {
+            return "error: safety gate blocked a financial or credential-bearing deep link"
+        }
+        val uri = try { java.net.URI(raw) } catch (_: Exception) { null }
+            ?: return "error: malformed deep link"
+        val scheme = uri.scheme?.lowercase() ?: return "error: deep link needs an explicit scheme"
+        val allowed = setOf("tel", "geo", "mailto", "sms", "smsto", "whatsapp", "tg", "youtube", "spotify")
+        if (scheme !in allowed) {
+            return "error: unsupported deep-link scheme. Allowed: " + allowed.sorted().joinToString(", ") +
+                ". Use open_url for ordinary HTTP/HTTPS websites."
+        }
+        if (uri.rawUserInfo != null || raw.any { it == '\n' || it == '\r' }) return "error: unsafe deep-link format"
+        val intent = when (scheme) {
+            "tel" -> Intent(Intent.ACTION_DIAL, Uri.parse(raw))
+            "mailto", "sms", "smsto" -> Intent(Intent.ACTION_SENDTO, Uri.parse(raw))
+            else -> Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+        }
+        return try {
+            // Launch directly rather than pre-querying handlers; Android package-visibility
+            // rules can hide apps from resolveActivity even when a deep link is launchable.
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            svc.startActivity(intent)
+            "launched allowlisted '$scheme' deep link; destination state must still be verified"
+        } catch (e: android.content.ActivityNotFoundException) {
+            "error: no installed app can handle this '$scheme' deep link"
+        } catch (e: Exception) {
+            "error: could not launch deep link (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
+    fun resolveContact(name: String): String {
+        val q = name.trim()
+        if (q.isBlank()) return "error: contact name is required"
+        if (androidx.core.content.ContextCompat.checkSelfPermission(svc, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return "error: contacts permission is not granted. Enable Contacts permission for Orion in Android Settings, then retry."
+        }
+        val projection = arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME, ContactsContract.Contacts.HAS_PHONE_NUMBER)
+        return try {
+            val matches = mutableListOf<String>()
+            svc.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_URI, projection,
+                ContactsContract.Contacts.DISPLAY_NAME + " LIKE ?", arrayOf("%" + q + "%"),
+                ContactsContract.Contacts.DISPLAY_NAME + " COLLATE NOCASE ASC"
+            )?.use { c ->
+                while (c.moveToNext() && matches.size < 8) {
+                    val id = c.getString(0)
+                    val label = c.getString(1) ?: continue
+                    if (c.getInt(2) == 0) {
+                        matches.add(label + " (no saved phone number)")
+                    } else {
+                        val phone = svc.contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                            arrayOf(id), null
+                        )?.use { p -> if (p.moveToFirst()) p.getString(0) else null }
+                        matches.add(if (phone.isNullOrBlank()) label + " (phone unavailable)" else label + " — " + phone)
+                    }
+                }
+            }
+            if (matches.isEmpty()) "no contact matched '" + q + "'" else "CONTACT MATCHES (confirm the intended person before calling or messaging):\n" + matches.joinToString("\n")
+        } catch (e: Exception) {
+            "error: contact lookup failed (" + e.javaClass.simpleName + ")"
+        }
+    }
+
+    fun findFiles(query: String): String {
+        val q = query.trim()
+        if (q.isBlank()) return "error: file search needs a filename or keyword"
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.DISPLAY_NAME, MediaStore.Files.FileColumns.MIME_TYPE, MediaStore.Files.FileColumns.RELATIVE_PATH)
+        return try {
+            val results = mutableListOf<String>()
+            svc.contentResolver.query(
+                MediaStore.Files.getContentUri("external"), projection,
+                MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ?",
+                arrayOf("%" + q + "%"), MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC"
+            )?.use { c ->
+                while (c.moveToNext() && results.size < 12) {
+                    val id = c.getLong(0)
+                    val name = c.getString(1) ?: continue
+                    val mime = c.getString(2) ?: "application/octet-stream"
+                    val path = c.getString(3) ?: ""
+                    results.add("id=" + id + " | name=" + name + " | type=" + mime + " | folder=" + path)
+                }
+            }
+            if (results.isEmpty()) "No indexed, accessible file matched '" + q + "'. Android storage permissions and scoped-storage rules limit results; try the Files app if it is missing."
+            else "FILE MATCHES (use open_file with one exact numeric id):\n" + results.joinToString("\n")
+        } catch (e: SecurityException) {
+            "error: file search permission denied. Use Android Files to browse or grant the applicable media/storage permission."
+        } catch (e: Exception) {
+            "error: file search failed (" + e.javaClass.simpleName + ")"
+        }
+    }
+
+    fun openFile(idText: String): String {
+        val id = idText.trim().toLongOrNull() ?: return "error: open_file needs the numeric id returned by find_files"
+        if (id < 0L) return "error: file id must be non-negative"
+        return try {
+            val collection = MediaStore.Files.getContentUri("external")
+            val uri = ContentUris.withAppendedId(collection, id)
+            val mime = svc.contentResolver.getType(uri) ?: "*/*"
+            val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (intent.resolveActivity(svc.packageManager) == null) "error: no installed app can open this file type"
+            else {
+                svc.startActivity(intent)
+                "opened file id " + id + " with its registered viewer; verify the document displayed correctly"
+            }
+        } catch (e: SecurityException) {
+            "error: Android denied access to that file. Run find_files again and use a currently accessible id."
+        } catch (e: Exception) {
+            "error: could not open file (" + e.javaClass.simpleName + ")"
+        }
+    }
+
     // ---- phone features
 
     fun settings(page: String): String {
@@ -131,7 +531,6 @@ class Tools(private val svc: PhoneAiService) {
             "airplane" -> Settings.ACTION_AIRPLANE_MODE_SETTINGS
             "storage" -> Settings.ACTION_INTERNAL_STORAGE_SETTINGS
             "date" -> Settings.ACTION_DATE_SETTINGS
-            "optimization" -> Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
             "data" -> Settings.ACTION_DATA_ROAMING_SETTINGS
             else -> Settings.ACTION_SETTINGS
         }
@@ -293,15 +692,18 @@ class Tools(private val svc: PhoneAiService) {
     // ---- memory
 
     fun remember(category: String?, text: String): String {
-        val m = MemoryStore.add(svc, category, text) ?: return "error: nothing to remember"
+        val m = MemoryStore.add(svc, category, text)
+            ?: return "error: memory was not saved; check that the text is not empty and device storage is available"
         return "remembered [${m.id}] (${m.category})"
     }
 
     fun updateMemory(id: Int, category: String?, text: String?): String =
-        if (MemoryStore.update(svc, id, category, text)) "updated memory $id" else "error: no memory with id $id"
+        if (MemoryStore.update(svc, id, category, text)) "updated memory $id"
+        else "error: memory $id was not updated; it may not exist or device storage may be unavailable"
 
     fun forget(id: Int): String =
-        if (MemoryStore.delete(svc, id)) "forgot memory $id" else "error: no memory with id $id"
+        if (MemoryStore.delete(svc, id)) "forgot memory $id"
+        else "error: memory $id was not deleted; it may not exist or device storage may be unavailable"
 
     fun recall(query: String): String {
         val list = MemoryStore.search(svc, query).take(15)

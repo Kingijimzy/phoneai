@@ -1,0 +1,102 @@
+name: Export Android UI detector model
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  export-tflite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ github.token }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install pinned export toolchain
+        run: |
+          python -m pip install --upgrade pip
+          # Keep PyTorch on the legacy ONNX exporter path: current PyTorch + onnxscript
+          # conflicts with TensorFlow 2.16's ml-dtypes pin in this converter stack.
+          python -m pip install "torch==2.4.1+cpu" "torchvision==0.19.1+cpu" --extra-index-url https://download.pytorch.org/whl/cpu
+          # Pin Ultralytics' export dependencies so it does not mutate the environment mid-export.
+          python -m pip install "ultralytics==8.3.0" "tensorflow==2.16.1" "tf_keras==2.16.0" "onnx==1.17.0" "onnx2tf==1.22.3" "onnxslim==0.1.34" "onnxruntime==1.18.1" "onnx_graphsurgeon==0.6.1" "sng4onnx==2.0.1" "tflite_support==0.4.4"
+
+      - name: Download the published UI detection weights
+        run: |
+          set -euo pipefail
+          mkdir -p build/model-export
+          curl --fail --location --retry 3 \
+            "https://huggingface.co/yasirfaizahmed/android_ui_detection_yolov8/resolve/main/best.pt" \
+            --output build/model-export/best.pt
+          test -s build/model-export/best.pt
+          sha256sum build/model-export/best.pt
+          ls -lh build/model-export/best.pt
+
+      - name: Export FP16 TFLite first; use float32 only if FP16 export fails
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd build/model-export
+          MODEL=""
+          if yolo export model=best.pt format=tflite imgsz=640 half=True; then
+            # Do not select the larger float32 sibling just because it has more bytes.
+            MODEL="$(find . -type f -name '*float16.tflite' -print -quit)"
+          fi
+          if [[ -z "$MODEL" ]]; then
+            echo "No FP16 TFLite output; retrying float32 (not int8; no calibration images available)."
+            rm -rf best_saved_model best.tflite best_float16.tflite best_float32.tflite
+            yolo export model=best.pt format=tflite imgsz=640 half=False
+            MODEL="$(find . -type f -name '*float32.tflite' -print -quit)"
+            EXPORT_PRECISION=float32
+          else
+            EXPORT_PRECISION=fp16
+          fi
+          if [[ -z "$MODEL" ]]; then
+            MODEL="$(find . -type f -name '*.tflite' -printf '%s %p\\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+          fi
+          test -n "$MODEL"
+          mkdir -p ../../app/src/main/assets/models
+          cp "$MODEL" ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite
+          test -s ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite
+          printf 'Model file: %s\nPrecision: %s\n' "$MODEL" "$EXPORT_PRECISION" > ../../app/src/main/assets/models/android_ui_detection_model.txt
+          stat -c 'TFLite size: %s bytes' ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite | tee ../../build/model-export/model-size.txt
+          sha256sum ../../app/src/main/assets/models/android_ui_detection_yolov8.tflite | tee -a ../../build/model-export/model-size.txt
+          cat ../../build/model-export/model-size.txt
+
+      - name: Upload export and size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orion-UI-detector-TFLite
+          path: |
+            app/src/main/assets/models/android_ui_detection_yolov8.tflite
+            app/src/main/assets/models/android_ui_detection_model.txt
+            build/model-export/model-size.txt
+
+      - name: Commit bundled model asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The exported model replaces an existing tracked asset, so stash generated changes
+          # before rebasing onto any source commits that landed while conversion was running.
+          git stash push -u -m "generated UI detector model"
+          git fetch origin "${{ github.ref_name }}"
+          git rebase FETCH_HEAD
+          git stash pop
+          git add app/src/main/assets/models/android_ui_detection_yolov8.tflite app/src/main/assets/models/android_ui_detection_model.txt
+          if git diff --cached --quiet; then
+            echo "Bundled model is unchanged; no commit required."
+          else
+            git commit -m "Bundle exported Android UI detector TFLite model"
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi

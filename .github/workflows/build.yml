@@ -2,8 +2,15 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/phoneai-integrated-character-agent]
+  pull_request:
   workflow_dispatch:
+
+# Cancel stale builds on the same ref so every commit does not queue another full
+# ~50 MB native-runtime download/build behind obsolete commits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -23,8 +30,23 @@ jobs:
         with:
           gradle-version: 8.7
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Run unit tests and build debug APK
+        run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
+
+      - name: Validate APK package and signature before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          echo "Application ID and SDK requirements:"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | grep -E "^(package:|sdkVersion:|targetSdkVersion:)"
 
       - name: Keep the APK as a build artifact
         uses: actions/upload-artifact@v4
@@ -33,8 +55,10 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish the APK as a release (easy download on your phone)
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
           name: Phone AI build ${{ github.run_number }}
           files: app/build/outputs/apk/debug/app-debug.apk
