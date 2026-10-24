@@ -33,6 +33,10 @@ import java.net.URLEncoder
  */
 class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var web: WebView
+    private lateinit var webContainer: android.widget.FrameLayout
+    private lateinit var tabStrip: LinearLayout
+    private val browserTabs = mutableListOf<WebView>()
+    private var activeTabIndex = 0
     private lateinit var address: EditText
     private lateinit var progress: ProgressBar
     private lateinit var title: TextView
@@ -257,75 +261,180 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             bottomMargin = dp(6)
         })
 
-        web = WebView(this)
-        BrowserAutomation.attach(web)
-        web.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            cacheMode = WebSettings.LOAD_DEFAULT
-            loadsImagesAutomatically = true
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            allowFileAccess = false
-            allowContentAccess = false
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
+        tabStrip = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                val uri = request?.url ?: return true
-                return uri.scheme != "https" && uri.scheme != "http"
-            }
-            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                if (!url.isNullOrBlank()) address.setText(url)
-                title.text = "LOADING PAGE"
-                progress.visibility = View.VISIBLE
-                progress.progress = 5
-                updateControls()
-            }
-            override fun onPageFinished(view: WebView?, url: String?) {
-                if (!url.isNullOrBlank()) address.setText(url)
-                if (title.text.toString() == "LOADING PAGE") title.text = "ORION BROWSER"
-                progress.progress = 100
-                progress.visibility = View.GONE
-                updateControls()
-            }
+        val tabsScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipToPadding = false
         }
-        web.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                progress.progress = newProgress
-                progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
-                updateControls()
-            }
-            override fun onReceivedTitle(view: WebView?, pageTitle: String?) {
-                if (!pageTitle.isNullOrBlank()) title.text = pageTitle.take(42)
-            }
-        }
-        web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-            try {
-                val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                val request = DownloadManager.Request(Uri.parse(url)).apply {
-                    setMimeType(mimeType)
-                    setTitle(fileName)
-                    setDescription("Downloading from Orion Browser")
-                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-                    addRequestHeader("User-Agent", userAgent)
-                    CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
-                        addRequestHeader("Cookie", it)
-                    }
-                }
-                val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-                manager.enqueue(request)
-                Toast.makeText(this, "Download started: $fileName", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(this, "This download could not be started.", Toast.LENGTH_LONG).show()
-            }
-        }
-        root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
+        tabsScroll.addView(tabStrip, -2, -2)
+        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, dp(42)))
+        webContainer = android.widget.FrameLayout(this)
+        root.addView(webContainer, LinearLayout.LayoutParams(-1, 0, 1f))
+
         setContentView(root)
         val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { "https://duckduckgo.com/" }
-        navigate(initial)
+        createTab(initial, true)
         updateControls()
+    }
+
+
+    private fun configureWebView(web: WebView) {
+            web.settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                cacheMode = WebSettings.LOAD_DEFAULT
+                loadsImagesAutomatically = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                allowFileAccess = false
+                allowContentAccess = false
+                javaScriptCanOpenWindowsAutomatically = false
+                setSupportMultipleWindows(false)
+            }
+            web.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val uri = request?.url ?: return true
+                    return uri.scheme != "https" && uri.scheme != "http"
+                }
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    if (!url.isNullOrBlank()) address.setText(url)
+                    title.text = "LOADING PAGE"
+                    progress.visibility = View.VISIBLE
+                    progress.progress = 5
+                    updateControls()
+                }
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    if (!url.isNullOrBlank()) address.setText(url)
+                    if (title.text.toString() == "LOADING PAGE") title.text = "ORION BROWSER"
+                    progress.progress = 100
+                    progress.visibility = View.GONE
+                    updateControls()
+                }
+            }
+            web.webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                    progress.progress = newProgress
+                    progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
+                    updateControls()
+                }
+                override fun onReceivedTitle(view: WebView?, pageTitle: String?) {
+                    if (!pageTitle.isNullOrBlank() && ::web.isInitialized && web === view) title.text = pageTitle.take(42)
+                renderTabs()
+                }
+            }
+            web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                try {
+                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        setMimeType(mimeType)
+                        setTitle(fileName)
+                        setDescription("Downloading from Orion Browser")
+                        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                        addRequestHeader("User-Agent", userAgent)
+                        CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+                            addRequestHeader("Cookie", it)
+                        }
+                    }
+                    val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                    manager.enqueue(request)
+                    Toast.makeText(this, "Download started: $fileName", Toast.LENGTH_SHORT).show()
+                } catch (_: Exception) {
+                    Toast.makeText(this, "This download could not be started.", Toast.LENGTH_LONG).show()
+                }
+            }
+    }
+
+    private fun createTab(url: String, select: Boolean) {
+        if (browserTabs.size >= 8) {
+            Toast.makeText(this, "Orion supports up to 8 browser tabs.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val tab = WebView(this)
+        configureWebView(tab)
+        webContainer.addView(tab, android.widget.FrameLayout.LayoutParams(-1, -1))
+        browserTabs.add(tab)
+        if (select || browserTabs.size == 1) selectTab(browserTabs.lastIndex)
+        tab.loadUrl(validatedBrowserUrl(url))
+        renderTabs()
+    }
+
+    private fun validatedBrowserUrl(input: String): String {
+        val raw = input.trim()
+        val candidate = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
+            "https://duckduckgo.com/?q=" + URLEncoder.encode(raw, "UTF-8")
+        } else if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+        val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
+        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
+            return "https://duckduckgo.com/"
+        }
+        return candidate
+    }
+
+    private fun selectTab(index: Int) {
+        if (index !in browserTabs.indices) return
+        activeTabIndex = index
+        browserTabs.forEachIndexed { i, tab -> tab.visibility = if (i == index) View.VISIBLE else View.GONE }
+        web = browserTabs[index]
+        BrowserAutomation.attach(web)
+        address.setText(web.url.orEmpty())
+        renderTabs()
+        updateControls()
+    }
+
+    private fun closeTab(index: Int) {
+        if (index !in browserTabs.indices) return
+        if (browserTabs.size == 1) {
+            browserTabs[index].loadUrl("https://duckduckgo.com/")
+            return
+        }
+        val tab = browserTabs.removeAt(index)
+        BrowserAutomation.detach(tab)
+        tab.stopLoading()
+        if (tab.parent is android.view.ViewGroup) (tab.parent as android.view.ViewGroup).removeView(tab)
+        tab.destroy()
+        if (index < activeTabIndex) activeTabIndex--
+        else if (index == activeTabIndex) activeTabIndex = minOf(index, browserTabs.lastIndex)
+        selectTab(activeTabIndex)
+    }
+
+    private fun renderTabs() {
+        if (!::tabStrip.isInitialized) return
+        tabStrip.removeAllViews()
+        browserTabs.forEachIndexed { index, tab ->
+            val label = (tab.title?.takeIf { it.isNotBlank() } ?: try { Uri.parse(tab.url.orEmpty()).host } catch (_: Exception) { null } ?: "New tab").take(16)
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(9), 0, dp(4), 0)
+                background = rounded(if (index == activeTabIndex) Theme.PANEL2 else Theme.PANEL)
+            }
+            val titleView = TextView(this).apply {
+                text = label
+                textSize = 11f
+                setTextColor(if (index == activeTabIndex) Theme.CYAN else Theme.TEXT)
+                maxWidth = dp(118)
+                setSingleLine(true)
+                setOnClickListener { selectTab(index) }
+                isClickable = true
+                setPadding(0, dp(8), dp(5), dp(8))
+            }
+            item.addView(titleView)
+            if (browserTabs.size > 1) {
+                item.addView(pill("×") { closeTab(index) }.apply { setPadding(dp(5), dp(6), dp(5), dp(6)) })
+            }
+            item.setOnClickListener { selectTab(index) }
+            tabStrip.addView(item, LinearLayout.LayoutParams(-2, dp(34)).apply { rightMargin = dp(5) })
+        }
+        tabStrip.addView(pill("+") {
+            createTab("https://duckduckgo.com/", true)
+        }.apply {
+            contentDescription = "Open new browser tab"
+            background = rounded(Theme.PANEL2)
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+        })
     }
 
     private fun updateControls() {
@@ -356,6 +465,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         }
         address.setText(candidate)
         web.loadUrl(candidate)
+        renderTabs()
         updateControls()
     }
 
@@ -417,13 +527,15 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     override fun onDestroy() {
         if (agentAttached) PhoneAiService.instance?.detachMainChat(this)
         agentAttached = false
-        if (::web.isInitialized) {
-            BrowserAutomation.detach(web)
-            web.stopLoading()
-            web.webChromeClient = null
-            web.webViewClient = WebViewClient()
-            web.destroy()
+        browserTabs.toList().forEach { tab ->
+            BrowserAutomation.detach(tab)
+            tab.stopLoading()
+            tab.webChromeClient = null
+            tab.webViewClient = WebViewClient()
+            if (tab.parent is android.view.ViewGroup) (tab.parent as android.view.ViewGroup).removeView(tab)
+            tab.destroy()
         }
+        browserTabs.clear()
         super.onDestroy()
     }
 
