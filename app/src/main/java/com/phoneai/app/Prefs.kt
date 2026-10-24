@@ -215,6 +215,10 @@ object Prefs {
     fun offlineSpeechOnly(c: Context): Boolean = sp(c).getBoolean("offline_speech_only", false)
     fun setOfflineSpeechOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_speech_only", v).apply()
 
+    /** Prevent text-to-speech from using a voice that requires a network service. */
+    fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", false)
+    fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
+
     fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", false)
     fun setDeepVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("deep", v).apply()
 
