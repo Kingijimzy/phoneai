@@ -185,6 +185,11 @@ class Voice(private val ctx: Context) {
         onPartial: (String) -> Unit,
         onProblem: ((String) -> Unit)? = null
     ) {
+        // Treat an explicit new listen request as barge-in: stop playback before
+        // opening the recognizer so Orion does not transcribe its own voice.
+        // SpeechRecognizer owns the recording pipeline, so app-level AcousticEchoCanceler
+        // cannot be attached here; stopping playback is the reliable platform-safe guard.
+        stopSpeaking()
         stopListening()
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
             onProblem?.invoke("No speech recognition on this phone. Install or enable Google voice typing.")
