@@ -1412,9 +1412,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         wakeErr = false
         voice.listen({ text ->
             if (my == wakeGen) {
+                if (!wakeErr) wakeErrorStreak = 0
                 val cmd = if (text.isNullOrBlank()) null else afterWake(text)
                 if (cmd != null) {
-                    wakeErrorStreak = 0
                     wakeGen++
                     if (cmd.isBlank()) {
                         handsActive = Prefs.hands(this)
