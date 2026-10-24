@@ -39,6 +39,7 @@
         <activity android:name=".TaskCenterActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".LiveConversationActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".GeminiLiveActivity" android:exported="false" android:screenOrientation="unspecified" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".MainChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".BrowserActivity" android:exported="false" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
         <activity android:name=".MainActivity" android:exported="true">
