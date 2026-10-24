@@ -128,8 +128,9 @@ object McpConnector {
         if (value.isBlank()) return "No MCP server configured."
         val host = try { java.net.URI(value).host ?: "unknown" } catch (_: Exception) { "invalid" }
         val auth = if (readToken(c).isNullOrBlank()) "not saved" else "encrypted on device"
+        val pairing = if (isPaired(c)) "paired" else "not paired"
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
-            ". Local endpoint approval: " + if (isPaired(c)) "paired" else "not paired" +
+            ". Local endpoint approval: " + pairing +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
             ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
     }
