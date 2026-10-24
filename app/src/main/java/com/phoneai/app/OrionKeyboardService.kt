@@ -4,6 +4,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -157,8 +159,14 @@ class OrionKeyboardService : InputMethodService() {
         }
         val connection = currentInputConnection
             ?: return "error: Android has not provided an input connection for the focused field"
-        return if (connection.commitText(text, 1)) "typed via Orion Private Keyboard input connection"
-        else "error: the focused app rejected text from the active input connection"
+        val accepted = connection.commitText(text, 1)
+        if (!accepted) return "error: the focused app rejected text from the active input connection"
+        // Return to the IME the user had selected before Orion was temporarily activated.
+        // InputMethodService requires this switch on its main thread, after commitText completes.
+        Handler(Looper.getMainLooper()).postDelayed({
+            try { switchToPreviousInputMethod() } catch (_: Exception) { }
+        }, 250L)
+        return "typed via Orion Private Keyboard input connection; requested restoration of the previous keyboard"
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false
