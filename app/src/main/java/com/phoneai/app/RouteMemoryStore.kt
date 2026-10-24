@@ -132,6 +132,32 @@ object RouteMemoryStore {
         }
     }
 
+    /** A user-facing, redacted view of saved route memory; arguments/results are never stored. */
+    fun summaries(c: Context): List<String> = synchronized(lock) {
+        try {
+            val routes = read(c)
+            (0 until routes.length()).mapNotNull { i ->
+                val route = routes.optJSONObject(i) ?: return@mapNotNull null
+                val task = route.optString("task").take(MAX_LABEL)
+                val tools = route.optJSONArray("tools") ?: JSONArray()
+                val names = (0 until tools.length()).joinToString(" → ") { tools.optString(it).take(60) }
+                val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(route.optLong("at")))
+                "$date · $task\nRoute: $names"
+            }.asReversed()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** Permanently wipe encrypted route history and its device-local encryption key. */
+    fun clear(c: Context): Boolean = synchronized(lock) {
+        try {
+            android.util.AtomicFile(file(c)).delete()
+            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            if (ks.containsAlias(KEY_ALIAS)) ks.deleteEntry(KEY_ALIAS)
+            true
+        } catch (_: Exception) { false }
+    }
+
     /** Return only relevant, decrypted task labels and tool names as planning hints. */
     fun promptBlock(c: Context, request: String?): String {
         if (request.isNullOrBlank()) return ""
