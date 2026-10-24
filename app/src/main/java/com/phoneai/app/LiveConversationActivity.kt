@@ -31,6 +31,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private var lastMode = OrbView.Mode.IDLE
     private var listeningRequested = false
     private var autoStarted = false
+    private var redirectedToGemini = false
     private val main = Handler(Looper.getMainLooper())
     private val captionFade = Runnable { if (::caption.isInitialized) caption.animate().alpha(0f).setDuration(650L).start() }
     private val clearError = Runnable { if (::visual.isInitialized) visual.errorState = false }
@@ -53,6 +54,14 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Prefs.geminiLiveEnabled(this)) {
+            // GeminiLiveActivity takes ownership of microphone/wake-word coordination.
+            // Avoid restarting the wake listener as this routing Activity finishes.
+            redirectedToGemini = true
+            startActivity(Intent(this, GeminiLiveActivity::class.java))
+            finish()
+            return
+        }
         window.statusBarColor = android.graphics.Color.BLACK
         window.navigationBarColor = android.graphics.Color.BLACK
         applyImmersiveMode()
@@ -285,7 +294,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     override fun onDestroy() {
         main.removeCallbacks(captionFade)
         main.removeCallbacks(clearError)
-        if (isFinishing) PhoneAiService.instance?.endLiveConversation()
+        if (isFinishing && !redirectedToGemini) PhoneAiService.instance?.endLiveConversation()
         attachedService?.detachMainChat(this)
         attachedService = null
         super.onDestroy()
