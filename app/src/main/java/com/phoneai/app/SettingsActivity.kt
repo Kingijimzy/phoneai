@@ -1267,7 +1267,13 @@ class SettingsActivity : Activity() {
             PhoneAiSkill("crypto_snapshot", "1.0.0", "Read a public Bybit spot ticker and explain that it is market data, not a trade signal.",
                 setOf("bybit_public_ticker", "time"), maxCalls = 3, maxDurationMs = 15_000L),
             PhoneAiSkill("memory_review", "1.0.0", "Recall relevant saved context and optionally save a user-approved summary.",
-                setOf("recall", "remember"), maxCalls = 4, maxDurationMs = 20_000L)
+                setOf("recall", "remember"), maxCalls = 4, maxDurationMs = 20_000L),
+            PhoneAiSkill("whatsapp_draft", "1.0.0", "Prepare a WhatsApp message draft for a user-confirmed recipient. Never send automatically.",
+                setOf("lookup_app", "open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true),
+            PhoneAiSkill("email_draft", "1.0.0", "Prepare an email draft using the installed mail app. Never send automatically.",
+                setOf("open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true)
         )
         showChoiceDialog("Reviewed skill templates", "Select a starter. Each skill is created disabled and can only use its listed existing tools.",
             templates.map { it.id + " · " + it.description },

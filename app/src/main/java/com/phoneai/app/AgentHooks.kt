@@ -9,7 +9,7 @@ internal object AgentHooks {
   @Synchronized fun clear(){proofs.clear()}
   @Synchronized fun record(tool:String,result:String){
    val ok=!result.trimStart().startsWith("error",true)
-   val verified=result.contains("LOCAL VERIFY PASS",true)||Regex("\\bPASS:").containsMatchIn(result)||Regex("\\b(message sent|email sent|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(result)
+   val verified=Regex("\\bPASS:").containsMatchIn(result)||Regex("\\b(message sent|email sent|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(result)
    proofs.add(Proof(tool,ok,verified,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
   }
   @Synchronized fun snapshot():List<Proof> = proofs.toList()
