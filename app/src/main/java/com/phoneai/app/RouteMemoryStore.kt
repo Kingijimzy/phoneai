@@ -108,7 +108,7 @@ object RouteMemoryStore {
         try {
             val label = safeLabel(checkpoint.optString("command"))
             // Do not build reusable routes for finance, account security, credentials, or login flows.
-            if (label.contains(Regex("(?i)\\b(bank|payment|pay|transfer|withdraw|deposit|checkout|trading|trade|wallet|password|passcode|pin|otp|login|log in|sign in|security|credential|recovery phrase)\\b"))) {
+            if (label.contains(Regex("(?i)\\b(bank|payment|pay money|transfer money|send money|withdraw money|withdrawal amount|deposit money|checkout|trade order|wallet address|password|passcode|enter pin|pin code|otp|login|log in|sign in|security|credential|recovery phrase)\\b"))) {
                 return@synchronized true
             }
             val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
