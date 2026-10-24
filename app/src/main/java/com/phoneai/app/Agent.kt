@@ -269,6 +269,8 @@ Tools:
 - system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, open_url. Never use arbitrary action/component strings.
 - open_deep_link {uri}: launch only allowlisted tel/geo/mailto/sms/smsto/whatsapp/tg/youtube/spotify deep links; never use arbitrary intent:// links or banking/payment/credential links.
 - read_notifications {}: list recent safe notification summaries held in memory; banking/payment and authentication/security notifications are filtered before storage. Requires Android Notification access.
+- media_status {}: report active non-sensitive media sessions and playback state; requires Orion Notification access.
+- media_control {action}: control the most recent non-sensitive media session with play, pause, play_pause, next, previous, or stop. Requires Orion Notification access; report the command sent, not guaranteed playback success.
 - resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
 - find_files {query}: search accessible indexed shared files and return current numeric IDs; Android storage restrictions may limit results
 - open_file {id}: open a numeric ID returned by the latest find_files result
@@ -827,6 +829,8 @@ Rules:
             "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
             "open_deep_link" -> tools.openDeepLink(a.optString("uri"))
             "read_notifications" -> OrionNotificationListener.readSafeNotifications()
+            "media_status" -> OrionNotificationListener.mediaStatus()
+            "media_control" -> OrionNotificationListener.controlMedia(a.optString("action"))
             "resolve_contact" -> tools.resolveContact(a.optString("name"))
             "find_files" -> tools.findFiles(a.optString("query"))
             "open_file" -> tools.openFile(a.optString("id"))
