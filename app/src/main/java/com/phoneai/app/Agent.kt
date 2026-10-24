@@ -828,7 +828,7 @@ Rules:
         if (a.optBoolean("expect_change", false)) {
             val before = lastScreenBeforeAction
             if (before.isBlank()) checks.add("UNVERIFIED: no pre-action screen snapshot is available.")
-            else checks.add(if (screenFingerprint(before) != screenFingerprint(screen)) "PASS: visible screen state changed." else "FAIL: no visible screen change detected.")
+            else checks.add(if (AgentHooks.screenChanged(before, screen)) "PASS: visible screen state changed." else "FAIL: no visible screen change detected.")
         }
         if (checks.isEmpty()) return "SCREEN EVIDENCE (not proof of task completion):\n" + screen.take(2600)
         val summary = checks.joinToString(" ")
