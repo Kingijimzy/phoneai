@@ -44,21 +44,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val researchCancelled = java.util.concurrent.atomic.AtomicBoolean(false)
     // Adaptive recovery: never repeat the exact same failed tool call in one task.
     // A different tool/argument set may still be attempted after inspecting the failure.
-    private val failedToolSignatures = LinkedHashSet<String>()
+    private val failedCallGuard = AgentHooks.FailedCallGuard()
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var activeRequestScope: String = ""
     // Last locally perceived screen, used for post-action comparison without another model call.
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
 
-    private fun screenFingerprint(screen: String): String = screen.lineSequence()
-        .map { it.replace(Regex("^\\s*\\[?\\d+\\]?\\s*[:.)-]?\\s*"), "").trim().lowercase() }
-        .filter { it.isNotBlank() && !it.startsWith("screen map") && !it.startsWith("detector ") }
-        .joinToString("|")
-
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
-        val signature = tool + "|" + args.toString()
-        if (signature in failedToolSignatures) {
+        if (failedCallGuard.isBlocked(tool, args)) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
         val targetLabel = when (tool) {
@@ -126,7 +120,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 )
                 lastScreenBeforeAction = before
                 lastScreenSnapshot = after
-                val changed = screenFingerprint(before) != screenFingerprint(after)
+                val changed = AgentHooks.screenChanged(before, after)
                 if (changed) {
                     verifiedResult += "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
                 } else {
@@ -137,8 +131,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
-            failedToolSignatures.add(signature)
-            while (failedToolSignatures.size > 80) failedToolSignatures.remove(failedToolSignatures.first())
+            failedCallGuard.recordFailure(tool, args)
         }
         taskProofs.record(tool, verifiedResult)
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
@@ -480,7 +473,7 @@ Rules:
         nim.beginCommand()
         var command = inputCommand.trim()
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
-        if (!resumeRequest) failedToolSignatures.clear()
+        if (!resumeRequest) failedCallGuard.clear()
         // BrowserActivity tags these requests so general web-search shortcuts cannot steal
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
@@ -627,9 +620,8 @@ Rules:
             ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
             return
         }
-        var steps = 0
-        while (!stopped && steps < MAX_STEPS) {
-            steps++
+        val requestBudget = AgentHooks.RequestBudget(MAX_STEPS)
+        while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
             val raw = try {
                 nim.chat(history, false)
@@ -836,7 +828,7 @@ Rules:
         if (a.optBoolean("expect_change", false)) {
             val before = lastScreenBeforeAction
             if (before.isBlank()) checks.add("UNVERIFIED: no pre-action screen snapshot is available.")
-            else checks.add(if (screenFingerprint(before) != screenFingerprint(screen)) "PASS: visible screen state changed." else "FAIL: no visible screen change detected.")
+            else checks.add(if (AgentHooks.screenChanged(before, screen)) "PASS: visible screen state changed." else "FAIL: no visible screen change detected.")
         }
         if (checks.isEmpty()) return "SCREEN EVIDENCE (not proof of task completion):\n" + screen.take(2600)
         val summary = checks.joinToString(" ")
