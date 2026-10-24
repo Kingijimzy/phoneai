@@ -211,7 +211,7 @@ class OrionNotificationListener : NotificationListenerService() {
             return "Recent safe notifications (memory-only; sensitive financial/security notifications filtered):\n" +
                 items.joinToString("\n\n") {
                     val time = try { timeFormat.format(Date(it.whenMillis)) } catch (_: Exception) { "--:--" }
-                    "$time · ${it.app}\n${it.title}\n${it.text}".trim()
+                    "$time · ${it.app}\nNotification key (for reply/dismiss): ${it.key}\n${it.title}\n${it.text}".trim()
                 }.take(5000)
         }
     }
