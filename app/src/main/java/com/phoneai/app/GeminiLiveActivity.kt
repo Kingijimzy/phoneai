@@ -29,6 +29,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: GeminiLiveSession? = null
     @Volatile private var active = false
+    @Volatile private var liveConnected = false
     @Volatile private var microphoneEnabled = true
     @Volatile private var quotaWarningAccepted = false
     private val transcripts = ArrayDeque<String>()
@@ -47,7 +48,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
     }
 
     private val connectTimeout = Runnable {
-        if (active && statusView.text.toString().contains("CONNECTING", true)) {
+        if (active && !liveConnected) {
             session?.stop()
             session = null
             active = false
@@ -133,7 +134,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        controls.addView(micButton, LinearLayout.LayoutParams(0, View.LayoutParams.WRAP_CONTENT, 1f).apply {
+        controls.addView(micButton, LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = dp(8)
         })
         controls.addView(endButton, LinearLayout.LayoutParams(0, View.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -224,6 +225,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
             return
         }
         active = true
+        liveConnected = false
         microphoneEnabled = true
         visual.mode = OrbView.Mode.THINKING
         statusView.text = "CONNECTING · QUOTA MAY APPLY"
@@ -255,6 +257,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
         session = null
         active = false
         visual.mode = OrbView.Mode.IDLE
+        liveConnected = false
         statusView.text = if (returnToStandard) "STANDARD ORION MODE" else "CALL ENDED"
         updateControls()
         if (returnToStandard) {
@@ -285,7 +288,10 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
                 message.contains("ready", true) || message.contains("microphone", true) -> if (microphoneEnabled) OrbView.Mode.LISTENING else OrbView.Mode.IDLE
                 else -> visual.mode
             }
-            if (message.contains("connected", true)) main.removeCallbacks(connectTimeout)
+            if (message.contains("connected", true)) {
+                liveConnected = true
+                main.removeCallbacks(connectTimeout)
+            }
         }
     }
 
@@ -319,6 +325,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
             main.removeCallbacks(sessionLimit)
             main.removeCallbacks(connectTimeout)
             active = false
+            liveConnected = false
             session = null
             visual.mode = OrbView.Mode.IDLE
             visual.errorState = true
@@ -346,6 +353,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
             session?.stop()
             session = null
             active = false
+            liveConnected = false
         }
         super.onStop()
     }
