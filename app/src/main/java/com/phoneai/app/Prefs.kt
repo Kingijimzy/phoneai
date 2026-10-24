@@ -103,11 +103,11 @@ object Providers {
 object Prefs {
     private fun sp(c: Context) = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
 
-    fun key(c: Context, pid: String): String {
-        return sp(c).getString("key_$pid", "") ?: ""
-    }
+    fun key(c: Context, pid: String): String =
+        ApiKeyVault.read(c, "enc_key_$pid", "key_$pid")
 
-    fun setKey(c: Context, pid: String, v: String) = sp(c).edit().putString("key_$pid", v.trim()).apply()
+    fun setKey(c: Context, pid: String, v: String): Boolean =
+        ApiKeyVault.write(c, "enc_key_$pid", "key_$pid", v)
 
     fun hasKey(c: Context, pid: String): Boolean = key(c, pid).isNotEmpty()
 
@@ -115,9 +115,15 @@ object Prefs {
 
     // ---- trading (Orion Trading)
     // ---- trading
-    fun bybitKey(c: Context): String = sp(c).getString("bybit_key", "") ?: ""
-    fun bybitSecret(c: Context): String = sp(c).getString("bybit_secret", "") ?: ""
-    fun setBybit(c: Context, k: String, s: String) = sp(c).edit().putString("bybit_key", k.trim()).putString("bybit_secret", s.trim()).apply()
+    fun bybitKey(c: Context): String =
+        ApiKeyVault.read(c, "enc_bybit_key", "bybit_key")
+    fun bybitSecret(c: Context): String =
+        ApiKeyVault.read(c, "enc_bybit_secret", "bybit_secret")
+    fun setBybit(c: Context, k: String, s: String): Boolean {
+        val keySaved = ApiKeyVault.write(c, "enc_bybit_key", "bybit_key", k)
+        val secretSaved = ApiKeyVault.write(c, "enc_bybit_secret", "bybit_secret", s)
+        return keySaved && secretSaved
+    }
 
     /** Practice money by default. Real money must be switched on on purpose. */
     fun bybitTestnet(c: Context): Boolean = sp(c).getBoolean("bybit_test", true)
@@ -202,6 +208,36 @@ object Prefs {
     fun quotaSaver(c: Context): Boolean = sp(c).getBoolean("quota_saver", true)
     fun setQuotaSaver(c: Context, v: Boolean) = sp(c).edit().putBoolean("quota_saver", v).apply()
 
+    /** Whether Orion may save new successful tool routes for future planning. */
+    fun routeLearning(c: Context): Boolean = sp(c).getBoolean("route_learning", true)
+    fun setRouteLearning(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("route_learning", enabled).apply()
+
+    val knownLanguageLabels: Map<String, String> = linkedMapOf(
+        "en" to "English",
+        "yo" to "Yorùbá",
+        "ha" to "Hausa",
+        "ig" to "Igbo",
+        "fr" to "French",
+        "es" to "Spanish",
+        "pt" to "Portuguese",
+        "ar" to "Arabic"
+    )
+
+    fun knownLanguages(c: Context): Set<String> =
+        (sp(c).getStringSet("known_languages", setOf("en")) ?: setOf("en")).toSet()
+            .filter { it in knownLanguageLabels.keys }.toSet().ifEmpty { setOf("en") }
+
+    fun setKnownLanguages(c: Context, languages: Set<String>) {
+        val safe = languages.filter { it in knownLanguageLabels.keys }.toSet().ifEmpty { setOf("en") }
+        sp(c).edit().putStringSet("known_languages", safe).apply()
+    }
+
+    fun languagePolicy(c: Context): String {
+        val labels = knownLanguages(c).mapNotNull { knownLanguageLabels[it] }
+        return "Speak and write only in these user-approved languages: " + labels.joinToString(", ") +
+            ". Do not switch to another language unless the user changes this setting."
+    }
+
     /** Live-call renderer preference: dot_matrix (default) or eyes. */
     fun liveCallStyle(c: Context): String = sp(c).getString("live_call_style", "dot_matrix") ?: "dot_matrix"
     fun setLiveCallStyle(c: Context, v: String) = sp(c).edit()
@@ -215,6 +251,14 @@ object Prefs {
 
     fun wake(c: Context): Boolean = sp(c).getBoolean("wake", false)
     fun setWake(c: Context, v: Boolean) = sp(c).edit().putBoolean("wake", v).apply()
+
+    /** 0 is strict/less sensitive; 100 is more sensitive. */
+    fun wakeSensitivity(c: Context): Int = sp(c).getInt("wake_sensitivity", 55).coerceIn(0, 100)
+    fun setWakeSensitivity(c: Context, value: Int) = sp(c).edit().putInt("wake_sensitivity", value.coerceIn(0, 100)).apply()
+    fun wakeThreshold(c: Context): Float = WakeWordPolicy.thresholdForSensitivity(wakeSensitivity(c))
+
+    fun wakeTestMode(c: Context): Boolean = sp(c).getBoolean("wake_test_mode", false)
+    fun setWakeTestMode(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("wake_test_mode", enabled).apply()
 
     /** When enabled, speech input must use Android on-device recognition or fail closed. */
     fun offlineSpeechOnly(c: Context): Boolean = sp(c).getBoolean("offline_speech_only", true)

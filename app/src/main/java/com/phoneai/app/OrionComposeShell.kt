@@ -294,6 +294,54 @@ private fun ToolsPage(
         ActionRow("Teach mode", "Record a workflow for Orion to repeat", Icons.Rounded.SmartToy, onOpenUtilities)
         ActionRow("AI providers", "Models, API connections and selection", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
         ActionRow("Voice & interaction", "Voice controls and assistant behavior", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
+
+        Spacer(Modifier.height(4.dp))
+        Text("AVAILABLE AGENT TOOLS", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp)
+        Text(
+            "Access labels come from the same registry that builds Orion's tool prompt and scope guard.",
+            color = Muted,
+            fontSize = 12.sp
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            ToolRegistry.all.forEach { definition ->
+                val readOnly = definition.access == ToolAccess.READ
+                val badgeColor = if (readOnly) Mint else Color(0xFFE7BD7B)
+                val badgeBackground = if (readOnly) Color(0xFF172D28) else Color(0xFF302820)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Panel)
+                        .border(1.dp, Hairline, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(definition.name, color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            definition.description,
+                            color = Muted,
+                            fontSize = 11.sp,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        definition.access.name,
+                        Modifier.clip(RoundedCornerShape(8.dp))
+                            .background(badgeBackground)
+                            .border(1.dp, badgeColor.copy(alpha = .45f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        color = badgeColor,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
     }
 }
 

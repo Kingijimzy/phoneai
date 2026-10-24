@@ -38,6 +38,26 @@ internal object UiYoloTfliteDetector {
     @Volatile private var attempted = false
     @Volatile private var interpreter: Interpreter? = null
     @Volatile private var unavailable = false
+    @Volatile private var lastInferenceDurationMs: Long? = null
+    @Volatile private var lastInferenceTargetCount: Int? = null
+    @Volatile private var lastInferenceAtMs: Long? = null
+    @Volatile private var lastInferenceFailure: String? = null
+
+    /** Reports only a real inference recorded in this app process; no synthetic benchmark is run here. */
+    fun performanceSummary(): String {
+        val duration = lastInferenceDurationMs ?: run {
+            val failure = lastInferenceFailure
+            return if (failure != null) {
+                "UI detector latency: last inference failed ($failure); no valid timing sample is available."
+            } else {
+                "UI detector latency: not measured in this app session (detector only runs when accessibility/OCR results are sparse)."
+            }
+        }
+        val count = lastInferenceTargetCount ?: 0
+        val at = lastInferenceAtMs ?: return "UI detector latency: $duration ms; detected targets: $count."
+        val ageSeconds = ((SystemClock.elapsedRealtime() - at).coerceAtLeast(0L)) / 1000L
+        return "UI detector inference: $duration ms; targets: $count; measured $ageSeconds second(s) ago."
+    }
 
     @Synchronized
     private fun load(context: Context): Interpreter? {
@@ -131,9 +151,15 @@ internal object UiYoloTfliteDetector {
                     if (selected.size >= maxResults) break
                 }
             }
-            Log.i("OrionUiDetector", "detect_ms=${SystemClock.elapsedRealtime() - startedAt} targets=${selected.size}")
+            val durationMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
+            lastInferenceDurationMs = durationMs
+            lastInferenceTargetCount = selected.size
+            lastInferenceAtMs = SystemClock.elapsedRealtime()
+            lastInferenceFailure = null
+            Log.i("OrionUiDetector", "detect_ms=$durationMs targets=${selected.size}")
             selected
         } catch (error: Exception) {
+            lastInferenceFailure = error.javaClass.simpleName
             Log.w("OrionUiDetector", "TFLite inference failed; heuristic fallback will be used", error)
             null
         }

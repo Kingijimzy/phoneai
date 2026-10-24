@@ -588,6 +588,30 @@ class SettingsActivity : Activity() {
                 runWakeWordInstall()
             }
         }, 6)
+        val wakeSensitivityLabel = text("Wake-word sensitivity: ${Prefs.wakeSensitivity(this)} / 100 · lower threshold is more sensitive", 13f, Theme.MUTED)
+        add(s3, wakeSensitivityLabel, 10)
+        val wakeSensitivityBar = SeekBar(this).apply {
+            max = 100
+            progress = Prefs.wakeSensitivity(this@SettingsActivity)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        Prefs.setWakeSensitivity(this@SettingsActivity, progress)
+                        wakeSensitivityLabel.text = "Wake-word sensitivity: $progress / 100 · threshold ${String.format(java.util.Locale.US, "%.2f", Prefs.wakeThreshold(this@SettingsActivity))}"
+                    }
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    if (Prefs.wake(this@SettingsActivity)) PhoneAiService.instance?.updateWakeWord(true)
+                }
+            })
+        }
+        add(s3, wakeSensitivityBar, 2)
+        switchRow(s3, "Wake-word test mode (shows audio level and threshold)", Prefs.wakeTestMode(this)) {
+            Prefs.setWakeTestMode(this, it)
+            Toast.makeText(this, if (it) "Test mode shows audio level and threshold. The native model API does not expose a confidence score." else "Wake-word test mode disabled.", Toast.LENGTH_LONG).show()
+            if (Prefs.wake(this)) PhoneAiService.instance?.updateWakeWord(true)
+        }
         switchRow(s3, "Wake word: say \"Orion\" (offline model when installed; experimental fallback otherwise)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (it && !hasMic) {
@@ -626,6 +650,7 @@ class SettingsActivity : Activity() {
         add(s3, characterBtn, 8)
         add(s3, button("Choose a voice", false) { voiceDialog() }, 8)
         add(s3, button("Hear Orion's voice", false) { testVoice() }, 8)
+        add(s3, button("Languages Orion may speak", false) { knownLanguagesDialog() }, 8)
 
         // ---- 4. memory
         val s4 = card(
@@ -633,6 +658,10 @@ class SettingsActivity : Activity() {
             "Orion remembers your preferences, projects, decisions and unfinished work, even after you close the app. " +
                 "You can view, edit or delete everything."
         )
+        switchRow(s4, "Learn successful task routes", Prefs.routeLearning(this)) {
+            Prefs.setRouteLearning(this, it)
+            Toast.makeText(this, if (it) "Route learning enabled." else "Route learning paused; saved routes are not used.", Toast.LENGTH_SHORT).show()
+        }
         nameBtn = button("", false) { nameDialog() }
         add(s4, nameBtn, 10)
         memBtn = button("", true) { memoryDialog() }
@@ -1069,11 +1098,18 @@ class SettingsActivity : Activity() {
                 }
                 val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
                 val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
-                Prefs.setKey(this, p.id, k)
+                if (!Prefs.setKey(this, p.id, k)) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Secure storage unavailable")
+                        .setMessage("Orion could not encrypt and save this key. Your existing key was preserved; no plaintext fallback was written. Check the device lock/Keystore and try again.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@setOnClickListener
+                }
                 if (chatNeeds) Prefs.setProvider(this, false, p.id)
                 if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
                 dialog.dismiss()
-                Toast.makeText(this, p.label + " key saved.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, p.label + " key saved securely.", Toast.LENGTH_SHORT).show()
                 refresh()
             }
         }
@@ -1645,6 +1681,29 @@ class SettingsActivity : Activity() {
 
     private fun when2(ms: Long): String =
         if (ms <= 0) "" else SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
+
+    private fun knownLanguagesDialog() {
+        val codes = Prefs.knownLanguageLabels.keys.toList()
+        val names = codes.map { Prefs.knownLanguageLabels[it] ?: it }.toTypedArray()
+        val selected = Prefs.knownLanguages(this).toMutableSet()
+        val checked = codes.map { it in selected }.toBooleanArray()
+        AlertDialog.Builder(this)
+            .setTitle("Languages Orion may speak")
+            .setMessage("Orion will be instructed to reply only in selected languages. Spoken pronunciation also depends on the phone having a suitable Text-to-speech voice installed.")
+            .setMultiChoiceItems(names, checked) { _, which, isChecked ->
+                if (isChecked) selected.add(codes[which]) else selected.remove(codes[which])
+            }
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                Prefs.setKnownLanguages(this, selected)
+                Toast.makeText(
+                    this,
+                    "Allowed languages: " + Prefs.knownLanguages(this).mapNotNull { Prefs.knownLanguageLabels[it] }.joinToString(", "),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            .show()
+    }
 
     private fun routeMemoryDialog() {
         val routes = RouteMemoryStore.summaries(this)

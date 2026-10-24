@@ -17,6 +17,43 @@ internal object AgentHooks {
   @Synchronized fun snapshot():List<Proof> = proofs.toList()
  }
  data class GateDecision(val allowed:Boolean,val reason:String)
+
+ /** Deterministic guard state extracted from the runtime so budgets can be regression-tested. */
+ class RequestBudget(private val limit: Int) {
+  init { require(limit >= 0) }
+  var consumed: Int = 0
+   private set
+  @Synchronized fun tryConsume(): Boolean {
+   if (consumed >= limit) return false
+   consumed++
+   return true
+  }
+  val remaining: Int
+   @Synchronized get() = limit - consumed
+ }
+
+ /** Stops an exact failed tool/argument pair from being retried in the same task. */
+ class FailedCallGuard(private val maxEntries: Int = 80) {
+  init { require(maxEntries >= 1) }
+  private val signatures = LinkedHashSet<String>()
+  private fun signature(tool: String, args: JSONObject) = tool + "|" + args.toString()
+  @Synchronized fun isBlocked(tool: String, args: JSONObject): Boolean = signature(tool, args) in signatures
+  @Synchronized fun recordFailure(tool: String, args: JSONObject) {
+   signatures.add(signature(tool, args))
+   while (signatures.size > maxEntries) signatures.remove(signatures.first())
+  }
+  @Synchronized fun clear() = signatures.clear()
+  @Synchronized fun size(): Int = signatures.size
+ }
+
+ /** Normalizes screen-map line indexes and detector-only diagnostics before comparison. */
+ fun screenFingerprint(screen: String): String = screen.lineSequence()
+  .map { it.replace(Regex("^\\s*\\[?\\d+\\]?\\s*[:.)-]?\\s*"), "").trim().lowercase() }
+  .filter { it.isNotBlank() && !it.startsWith("screen map") && !it.startsWith("detector ") }
+  .joinToString("|")
+
+ fun screenChanged(before: String, after: String): Boolean =
+  screenFingerprint(before) != screenFingerprint(after)
  private val phoneActionWords=Regex(
   "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|whatsapp|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
@@ -41,11 +78,15 @@ internal object AgentHooks {
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  private val draftOnlyIntent=Regex("\\b(draft|prepare|compose|write|without\\s+sending)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
+  val definition = ToolRegistry.find(tool)
+   ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"notification_action"->args.optString("action");else->""}
   val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
-  val riskyTool=tool in setOf("task_delete","forget","update_memory","undo_last")||(tool=="notification_action"&&args.optString("action").equals("reply",true))
+  val writeAction = definition.access == ToolAccess.WRITE
+  val riskyTarget = writeAction && risky.containsMatchIn(label)
+  val riskyTool = writeAction && (tool in setOf("task_delete","forget","update_memory","undo_last")||(tool=="notification_action"&&args.optString("action").equals("reply",true)))
   val explicitSendIntent=explicit.containsMatchIn(request)||(target.equals("Send",true)&&messagingIntent.containsMatchIn(request)&&!draftOnlyIntent.containsMatchIn(request))
-  return if((risky.containsMatchIn(label)||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
+  return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
   if(tool in setOf("forget","update_memory","undo_last")) return true
