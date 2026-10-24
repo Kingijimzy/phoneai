@@ -26,7 +26,9 @@ import java.util.concurrent.Executors
 class Voice(private val ctx: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
-    private var ttsReady = false
+    @Volatile private var ttsReady = false
+    @Volatile private var ttsInitFinished = false
+    private val queuedSpeech = java.util.concurrent.ConcurrentLinkedQueue<Pair<List<String>, (() -> Unit)?>>()
     private var rec: SpeechRecognizer? = null
     @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
@@ -61,8 +63,12 @@ class Voice(private val ctx: Context) {
     /** Real RMS amplitude from each generated Piper PCM block; zero is not synthesized into fallback audio. */
     @Volatile var onAudioAmplitude: ((Float) -> Unit)? = null
 
+    /** Reports real playback/engine failures instead of silently dropping speech. */
+    @Volatile var onProblem: ((String) -> Unit)? = null
+
     init {
         tts = TextToSpeech(ctx) { status ->
+            ttsInitFinished = true
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) {
                 tts?.language = Locale.getDefault()
@@ -82,7 +88,28 @@ class Voice(private val ctx: Context) {
                     override fun onError(utteranceId: String?) {
                         finished(utteranceId)
                     }
+
+                    override fun onError(utteranceId: String?, errorCode: Int) {
+                        main.post {
+                            onProblem?.invoke("Android speech engine failed (error $errorCode). Check Text-to-speech settings and installed voice data.")
+                        }
+                        finished(utteranceId)
+                    }
                 })
+                main.post {
+                    while (true) {
+                        val queued = queuedSpeech.poll() ?: break
+                        speakWithAndroidTts(queued.first, queued.second)
+                    }
+                }
+            } else {
+                main.post {
+                    onProblem?.invoke("Android Text-to-speech could not initialize. Check Settings → System → Text-to-speech output and install a voice.")
+                    while (true) {
+                        val queued = queuedSpeech.poll() ?: break
+                        queued.second?.invoke()
+                    }
+                }
             }
         }
     }
@@ -174,8 +201,19 @@ class Voice(private val ctx: Context) {
             onDone?.invoke()
             return
         }
-        if (!ttsReady || chunks.isEmpty()) {
+        if (chunks.isEmpty()) {
             onDone?.invoke()
+            return
+        }
+        if (!ttsReady) {
+            if (!ttsInitFinished) {
+                // TextToSpeech initializes asynchronously. Preserve early replies rather than
+                // silently discarding them if the provider responds before the engine is ready.
+                queuedSpeech.add(Pair(chunks, onDone))
+            } else {
+                onProblem?.invoke("Orion could not speak: Android Text-to-speech is unavailable. Check the phone's Text-to-speech output and installed voice data.")
+                onDone?.invoke()
+            }
             return
         }
         val engine = tts
@@ -385,6 +423,7 @@ class Voice(private val ctx: Context) {
 
     fun stopSpeaking() {
         playbackGeneration.incrementAndGet()
+        queuedSpeech.clear()
         callbacks.clear()
         pendingIds.clear()
         try { tts?.stop() } catch (_: Exception) {}
