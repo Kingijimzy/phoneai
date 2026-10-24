@@ -218,6 +218,9 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
     private fun startSession() {
         if (active || isFinishing) return
+        // The user's confirmation applies to this session only. Any reconnect/retry must show
+        // the quota/privacy warning again before another microphone stream is started.
+        quotaWarningAccepted = false
         val key = Prefs.key(this, "gemini")
         if (key.isBlank()) {
             statusView.text = "GEMINI KEY NOT AVAILABLE"
