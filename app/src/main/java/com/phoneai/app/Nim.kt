@@ -192,18 +192,10 @@ class Nim(private val ctx: Context) {
     @Volatile
     private var active: HttpURLConnection? = null
 
-    private val requestBudgetLock = Any()
-    @Volatile private var commandHttpRequests = 0
-    private val failedRequestSignatures = HashMap<String, Int>()
-    private val maxHttpRequestsPerCommand = 15
+    private val requestGuard = RequestBudgetGuard(15)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
-    fun beginCommand() {
-        synchronized(requestBudgetLock) {
-            commandHttpRequests = 0
-            failedRequestSignatures.clear()
-        }
-    }
+    fun beginCommand() = requestGuard.beginCommand()
 
     fun resume() {
         cancelled = false
@@ -219,11 +211,8 @@ class Nim(private val ctx: Context) {
     }
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
-        synchronized(requestBudgetLock) {
-            if (commandHttpRequests >= maxHttpRequestsPerCommand) {
-                throw AiException("Stopped before sending another request: this command reached Orion's $maxHttpRequestsPerCommand-request budget. No additional HTTP request was made.")
-            }
-            commandHttpRequests++
+        if (!requestGuard.reserveRequest()) {
+            throw AiException("Stopped before sending another request: this command reached Orion's ${requestGuard.maxRequests}-request budget. No additional HTTP request was made.")
         }
         // Count every network attempt here, including model catalogues and requests that fail to connect.
         noteHit(p.id)
@@ -269,11 +258,7 @@ class Nim(private val ctx: Context) {
             if (code !in 200..299) {
                 // Store only a hash signature, never request or response text, for repeat-failure detection.
                 val signature = listOf(p.id, method, url, body?.hashCode() ?: 0, code, text.hashCode()).joinToString("|")
-                val repeats = synchronized(requestBudgetLock) {
-                    val next = (failedRequestSignatures[signature] ?: 0) + 1
-                    failedRequestSignatures[signature] = next
-                    next
-                }
+                val repeats = requestGuard.recordFailure(signature)
                 if (repeats >= 3) {
                     throw AiException("${p.label}: stopped after three identical HTTP failures (HTTP $code). No more identical retries will be sent.")
                 }
