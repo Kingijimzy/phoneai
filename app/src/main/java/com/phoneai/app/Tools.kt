@@ -82,6 +82,37 @@ class Tools(private val svc: PhoneAiService) {
         return names.joinToString(", ").take(3000)
     }
 
+    /** List installed handlers for a fixed set of useful deep-link schemes; no arbitrary intents are exposed. */
+    fun listAppDeepLinks(schemeArg: String = ""): String {
+        val allowed = setOf("https", "tel", "sms", "smsto", "mailto", "geo", "whatsapp", "tg", "youtube", "spotify")
+        val requested = schemeArg.trim().lowercase()
+        if (requested.isNotBlank() && requested !in allowed) return "error: unsupported scheme. Allowed: " + allowed.sorted().joinToString(", ")
+        val schemes = if (requested.isBlank()) allowed else setOf(requested)
+        val pm = svc.packageManager
+        val rows = mutableListOf<String>()
+        for (scheme in schemes.sorted()) {
+            val sample = when (scheme) {
+                "https" -> "https://example.com/"
+                "tel" -> "tel:+10000000000"
+                "sms", "smsto" -> "$scheme:+10000000000"
+                "mailto" -> "mailto:example@example.com"
+                "geo" -> "geo:0,0"
+                "whatsapp" -> "https://wa.me/10000000000"
+                "tg" -> "tg://resolve?domain=telegram"
+                "youtube" -> "https://www.youtube.com/"
+                else -> "https://open.spotify.com/"
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(sample)).addCategory(Intent.CATEGORY_BROWSABLE)
+            val handlers = try { pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY) } catch (_: Exception) { emptyList() }
+            handlers.forEach { ri ->
+                val label = try { ri.loadLabel(pm).toString() } catch (_: Exception) { ri.activityInfo.packageName }
+                rows.add("$scheme · $label · ${ri.activityInfo.packageName}")
+            }
+        }
+        return if (rows.isEmpty()) "No installed app handlers were found for " + schemes.joinToString(", ") else
+            "Installed deep-link handlers (scheme · app · package):\n" + rows.distinct().take(80).joinToString("\n")
+    }
+
     // ---- web
 
     fun webSearch(query: String): String {
@@ -310,6 +341,40 @@ class Tools(private val svc: PhoneAiService) {
             "camera" -> Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
             "calendar" -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR)
             "clock" -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
+            "share" -> {
+                if (query.isBlank()) return "error: share route needs text in query"
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, query)
+                return try {
+                    svc.startActivity(Intent.createChooser(send, if (uriText.isBlank()) "Share with" else uriText).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    "Android share sheet opened; nothing is sent until you choose a destination and confirm"
+                } catch (e: Exception) { "error: share sheet could not open (" + e.javaClass.simpleName + ")" }
+            }
+            "sms" -> {
+                if (query.isBlank()) return "error: sms route needs a recipient number"
+                val number = query.filter { it.isDigit() || it == '+' }
+                val send = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$number")).putExtra("sms_body", uriText)
+                return try { send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(send); "SMS draft opened; it was not sent" }
+                    catch (e: Exception) { "error: SMS draft could not open (" + e.javaClass.simpleName + ")" }
+            }
+            "alarm" -> {
+                val parts = query.trim().split(":")
+                if (parts.size !in 1..2) return "error: alarm time must be HH:mm"
+                val hour = parts[0].toIntOrNull() ?: return "error: alarm hour must be numeric"
+                val minute = if (parts.size == 2) parts[1].toIntOrNull() ?: return "error: alarm minute must be numeric" else 0
+                if (hour !in 0..23 || minute !in 0..59) return "error: alarm time is outside 24-hour range"
+                val alarm = Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    .putExtra(AlarmClock.EXTRA_MINUTES, minute).putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
+                return try { alarm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(alarm); "alarm request handed to the clock app; verify it was saved" }
+                    catch (e: Exception) { "error: clock app could not set alarm (" + e.javaClass.simpleName + ")" }
+            }
+            "timer" -> {
+                val seconds = query.toIntOrNull() ?: return "error: timer route needs duration in seconds"
+                if (seconds !in 1..86400) return "error: timer duration must be 1–86400 seconds"
+                val timer = Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, uriText)
+                return try { timer.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); svc.startActivity(timer); "timer request handed to the clock app; verify it was started" }
+                    catch (e: Exception) { "error: clock app could not start timer (" + e.javaClass.simpleName + ")" }
+            }
             "open_url" -> {
                 val raw = uriText.trim()
                 val u = try { java.net.URI(raw) } catch (_: Exception) { null }
@@ -317,7 +382,7 @@ class Tools(private val svc: PhoneAiService) {
                     return "error: open_url requires a complete HTTP/HTTPS URL"
                 Intent(Intent.ACTION_VIEW, Uri.parse(raw))
             }
-            else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, open_url"
+            else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, sms, alarm, timer, share, open_url"
         }
         return try {
             if (i.resolveActivity(svc.packageManager) == null) return "error: no installed app can handle route '" + action + "'"
