@@ -805,6 +805,28 @@ Rules:
         }
     }
 
+    private fun verifySend(a: JSONObject): String {
+        val contact = a.optString("contact").trim()
+        val message = a.optString("message").trim()
+        if (contact.isBlank() || message.isBlank()) {
+            return "error: verify_send requires the exact contact name and message text."
+        }
+        val screen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (e: Exception) {
+            return "UNVERIFIED: could not read the current messaging screen (" + e.javaClass.simpleName + ")."
+        }
+        if (screen.isBlank()) return "UNVERIFIED: the current screen map is empty."
+        val lines = screen.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
+        val contactVisible = lines.any { it.contains(contact, ignoreCase = true) }
+        val messageIndex = lines.indexOfFirst { it.contains(message, ignoreCase = true) }
+        if (!contactVisible) return "error: verification failed: contact '$contact' is not visible on the current screen."
+        if (messageIndex < 0) return "error: verification failed: the exact message is not visible in the conversation."
+        val nearby = lines.subList(maxOf(0, messageIndex - 2), minOf(lines.size, messageIndex + 4)).joinToString(" ")
+        val status = Regex("(?i)\\b(sent|delivered|read)\\b").containsMatchIn(nearby)
+        if (!status) return "UNVERIFIED: the contact and message are visible, but no sent/delivered/read status is exposed near the message."
+        return "PASS: message sent to $contact; the exact message and a sent/delivered/read status are visible. Delivery status shown by the app: " +
+            Regex("(?i)\\b(sent|delivered|read)\\b").find(nearby)?.value.orEmpty() + "."
+    }
+
     private fun verifyAction(a: JSONObject): String {
         val screen = try {
             if (a.optBoolean("refresh", true)) svc.readScreen().also { lastScreenSnapshot = it } else lastScreenSnapshot
@@ -922,6 +944,7 @@ Rules:
             "read_screen" -> svc.readScreen().also { lastScreenSnapshot = it }
             "validate_action" -> validateAction(a)
             "verify_action" -> verifyAction(a)
+            "verify_send" -> verifySend(a)
             "click" -> {
                 val id = a.optInt("id", -1)
                 if (id < 0 || svc.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
