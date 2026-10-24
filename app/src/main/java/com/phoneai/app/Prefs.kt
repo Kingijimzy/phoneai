@@ -219,6 +219,10 @@ object Prefs {
     fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", false)
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
+    /** Use the installed English Piper neural voice instead of Android TTS. */
+    fun neuralVoice(c: Context): Boolean = sp(c).getBoolean("neural_voice", false)
+    fun setNeuralVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("neural_voice", v).apply()
+
     fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", false)
     fun setDeepVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("deep", v).apply()
 

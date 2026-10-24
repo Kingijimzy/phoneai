@@ -3,6 +3,67 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Official sherpa-onnx Android AAR (pinned version + verified SHA-256).
+// Downloaded during builds rather than checked into this repository as a binary.
+val sherpaTtsAar = layout.buildDirectory.file("downloads/sherpa-onnx-1.13.8.aar")
+val sherpaTtsAarSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
+
+fun sha256Of(file: java.io.File): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().buffered().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+}
+
+val downloadSherpaTtsAar by tasks.registering {
+    val destination = sherpaTtsAar.get().asFile
+    outputs.file(destination)
+    outputs.upToDateWhen { destination.isFile && sha256Of(destination) == sherpaTtsAarSha256 }
+    doLast {
+        if (!destination.isFile || sha256Of(destination) != sherpaTtsAarSha256) {
+            destination.parentFile.mkdirs()
+            val temporary = java.io.File(destination.parentFile, destination.name + ".part")
+            temporary.delete()
+            val connection = java.net.URL(
+                "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
+            ).openConnection() as java.net.HttpURLConnection
+            try {
+                connection.connectTimeout = 30_000
+                connection.readTimeout = 90_000
+                connection.instanceFollowRedirects = true
+                connection.connect()
+                if (connection.responseCode !in 200..299) {
+                    throw org.gradle.api.GradleException("Could not download official sherpa-onnx AAR: HTTP " + connection.responseCode)
+                }
+                connection.inputStream.buffered().use { input ->
+                    temporary.outputStream().buffered().use { output -> input.copyTo(output) }
+                }
+                val actual = sha256Of(temporary)
+                if (actual != sherpaTtsAarSha256) {
+                    temporary.delete()
+                    throw org.gradle.api.GradleException("sherpa-onnx AAR SHA-256 mismatch; refusing to use an unverified native binary")
+                }
+                if (destination.exists() && !destination.delete()) {
+                    throw org.gradle.api.GradleException("Could not replace cached sherpa-onnx AAR")
+                }
+                if (!temporary.renameTo(destination)) {
+                    temporary.copyTo(destination, overwrite = true)
+                    temporary.delete()
+                }
+            } finally {
+                connection.disconnect()
+                temporary.delete()
+            }
+        }
+    }
+}
+
 android {
     namespace = "com.phoneai.app"
     compileSdk = 34
@@ -51,6 +112,8 @@ android {
 
 
 dependencies {
+    implementation(files(sherpaTtsAar).builtBy(downloadSherpaTtsAar))
+    implementation("org.apache.commons:commons-compress:1.27.1")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.webkit:webkit:1.11.0")
