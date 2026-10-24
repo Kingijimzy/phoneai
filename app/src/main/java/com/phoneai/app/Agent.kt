@@ -353,6 +353,11 @@ Rules:
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
             sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc).take(if (request.isNullOrBlank()) 1400 else 900))
+            val routeHints = RouteMemoryStore.promptBlock(svc, request)
+            if (routeHints.isNotBlank()) {
+                sb.append("\n\nEncrypted route memory (hints only; inspect current state and re-check safety before every action):\n")
+                    .append(routeHints.take(900))
+            }
             val enabledSkills = if (request.isNullOrBlank()) SkillRegistry.list(svc).filter { it.enabled }.take(6) else SkillRegistry.discover(svc, request, 4)
             sb.append("\n\nRegistered skills available for relevant requests (do not claim a skill ran unless it was invoked and verified):")
             if (enabledSkills.isEmpty()) {
