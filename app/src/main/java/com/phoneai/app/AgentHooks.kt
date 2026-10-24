@@ -78,11 +78,15 @@ internal object AgentHooks {
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  private val draftOnlyIntent=Regex("\\b(draft|prepare|compose|write|without\\s+sending)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
+  val definition = ToolRegistry.find(tool)
+   ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"notification_action"->args.optString("action");else->""}
   val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
-  val riskyTool=tool in setOf("task_delete","forget","update_memory","undo_last")||(tool=="notification_action"&&args.optString("action").equals("reply",true))
+  val writeAction = definition.access == ToolAccess.WRITE
+  val riskyTarget = writeAction && risky.containsMatchIn(label)
+  val riskyTool = writeAction && (tool in setOf("task_delete","forget","update_memory","undo_last")||(tool=="notification_action"&&args.optString("action").equals("reply",true)))
   val explicitSendIntent=explicit.containsMatchIn(request)||(target.equals("Send",true)&&messagingIntent.containsMatchIn(request)&&!draftOnlyIntent.containsMatchIn(request))
-  return if((risky.containsMatchIn(label)||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
+  return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
   if(tool in setOf("forget","update_memory","undo_last")) return true
