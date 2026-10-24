@@ -24,11 +24,15 @@ class SafetyGateTest {
     }
 
     @Test fun explicitCredentialContextsAreBlocked() {
-        listOf("enter your PIN", "card number", "CVV", "password", "one-time code", "bank account number", "recovery phrase", "private key").forEach { text ->
+        listOf("enter your PIN", "card number", "CVV", "enter your password", "one-time code", "bank account number", "recovery phrase", "private key").forEach { text ->
             assertNotNull("Expected credential block for: $text", SafetyGate.blockReason("type", null, text, "com.example.chat", "Chat"))
         }
         assertNotNull(SafetyGate.blockReason("browser_type", "password input", "hello", "com.example.browser", "Browser"))
         assertNotNull(SafetyGate.blockReason("browser_type", "card number", "hello", "com.example.browser", "Browser"))
+        assertNotNull(SafetyGate.blockReason("browser_type", "PIN", "1234", "com.example.browser", "Browser"))
+        assertNull(SafetyGate.blockReason("browser_type", "pin your favorite team", "Orion", "com.example.game", "FC Mobile"))
+        assertNull(SafetyGate.blockReason("type", null, "I read an article about password managers and trading card games.", "com.example.chat", "Chat"))
+        assertFalse(SafetyGate.isSensitiveActionScreen("A guide about password managers, pinned messages, and card collections."))
     }
 
     @Test fun actionScreenRequiresConsequentialContext() {
