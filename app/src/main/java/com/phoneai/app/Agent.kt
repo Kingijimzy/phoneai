@@ -41,6 +41,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     // Adaptive recovery: never repeat the exact same failed tool call in one task.
     // A different tool/argument set may still be attempted after inspecting the failure.
     private val failedToolSignatures = LinkedHashSet<String>()
+    // Last locally perceived screen, used for post-action comparison without another model call.
+    @Volatile private var lastScreenSnapshot: String = ""
+
+    private fun screenFingerprint(screen: String): String = screen.lineSequence()
+        .map { it.replace(Regex("^\\s*\\[?\\d+\\]?\\s*[:.)-]?\\s*"), "").trim().lowercase() }
+        .filter { it.isNotBlank() && !it.startsWith("screen map") && !it.startsWith("detector ") }
+        .joinToString("|")
 
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         val signature = tool + "|" + args.toString()
@@ -52,6 +59,23 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         } catch (e: Exception) {
             "error: ${e.message ?: e.javaClass.simpleName}"
         }
+        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll")
+        var verifiedResult = result
+        if (!result.trimStart().startsWith("error", ignoreCase = true) && tool in actionTools && lastScreenSnapshot.isNotBlank()) {
+            try {
+                val before = lastScreenSnapshot
+                val after = if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen()
+                lastScreenSnapshot = after
+                val changed = screenFingerprint(before) != screenFingerprint(after)
+                verifiedResult += if (changed) {
+                    "\\nLOCAL VERIFY: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
+                } else {
+                    "\\nLOCAL VERIFY: no visible state change detected. Do not claim the intended outcome is confirmed; inspect the screen or use wait_for/verify_action."
+                }
+            } catch (_: Exception) {
+                verifiedResult += "\\nLOCAL VERIFY: post-action screen comparison unavailable; outcome remains unverified."
+            }
+        }
         if (result.trimStart().startsWith("error", ignoreCase = true)) {
             failedToolSignatures.add(signature)
             while (failedToolSignatures.size > 80) failedToolSignatures.remove(failedToolSignatures.first())
@@ -59,7 +83,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
         try { ActionLogStore.record(svc, tool, result) } catch (_: Exception) { }
-        return result
+        return verifiedResult
     }
 
     private val actionWords = Regex(
@@ -221,6 +245,8 @@ Tools:
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
 - list_apps {}: names of installed apps
 - read_screen {}: merged numbered accessibility + on-device OCR + unlabeled visual-region targets. Visual regions are heuristic candidates for custom-drawn UI, not guaranteed semantic buttons. OCR and visual detection run locally and are withheld on potentially sensitive screens.
+- validate_action {tool, id?, text?, x?, y?}: local preflight before acting. For click, require a current numbered target ID; for click_text, require the text to be visible. For tap, require finite non-negative coordinates and use only when no suitable numbered target exists. It does not perform the action.
+- verify_action {expected_text?, previous_text?, expect_change?}: locally inspect the current screen after an action. Confirm expected_text only if it is actually visible; compare against the last screen snapshot when expect_change=true. A changed screen alone does not prove the overall task succeeded.
 - click {id}: click element number id from the latest read_screen, including OCR-only items and unlabeled visual targets; visual targets may be approximate, so prefer labeled/accessibility items when available.
 - SCREEN TARGET RULE: choose an element ID from read_screen and use click {id}; do not ask for or invent x/y coordinates when a numbered element exists. Screen coordinates are an internal device detail. Use look/play screenshots only when the numbered map cannot describe the screen (for example a game canvas or image-only UI).
 - click_text {text}: click the visible element containing this text
@@ -664,8 +690,14 @@ Rules:
         return when (tool) {
             "open_app" -> svc.openApp(a.optString("name"))
             "list_apps" -> tools.listApps()
-            "read_screen" -> svc.readScreen()
-            "click" -> svc.clickId(a.optInt("id", -1))
+            "read_screen" -> svc.readScreen().also { lastScreenSnapshot = it }
+            "validate_action" -> validateAction(a)
+            "verify_action" -> verifyAction(a)
+            "click" -> {
+                val id = a.optInt("id", -1)
+                if (id < 0 || svc.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
+                else svc.clickId(id)
+            }
             "click_text" -> tools.clickText(a.optString("text"))
             "wait_for" -> tools.waitFor(a.optString("text"), a.optDouble("seconds", 8.0))
             "tap" -> xy(a, "x", "y") { x, y -> svc.tap(x, y) }
