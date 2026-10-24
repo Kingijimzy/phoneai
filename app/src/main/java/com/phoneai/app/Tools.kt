@@ -5,6 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ContentUris
+import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -262,6 +265,153 @@ class Tools(private val svc: PhoneAiService) {
     fun mcpListTools(): String = McpConnector.listTools(svc)
 
     fun mcpCall(name: String, args: JSONObject): String = McpConnector.callTool(svc, name, args)
+
+    // ---- deterministic local routes (Stage 5)
+
+    fun lookupApp(name: String): String {
+        val query = name.trim()
+        if (query.isBlank()) return "error: app name or package is required"
+        val pm = svc.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val matches = pm.queryIntentActivities(intent, 0).map { ri ->
+            Triple(ri.loadLabel(pm).toString(), ri.activityInfo.packageName, ri)
+        }
+        val exact = matches.firstOrNull { it.first.equals(query, true) || it.second.equals(query, true) }
+        val match = exact ?: matches.firstOrNull { it.first.contains(query, true) || it.second.contains(query, true) }
+        return if (match != null) {
+            "APP MATCH: label=\"" + match.first + "\"; package=\"" + match.second + "\"; exact=" +
+                (match.first.equals(query, true) || match.second.equals(query, true))
+        } else {
+            "error: no installed launchable app matched \"" + query + "\"."
+        }
+    }
+
+    /** Only a fixed allowlist is accepted; arbitrary component/action names are never launched. */
+    fun systemIntent(actionName: String, query: String = "", uriText: String = ""): String {
+        val action = actionName.trim().lowercase().replace('-', '_').replace(' ', '_')
+        val i: Intent = when (action) {
+            "settings" -> Intent(Settings.ACTION_SETTINGS)
+            "wifi_settings" -> Intent(Settings.ACTION_WIFI_SETTINGS)
+            "bluetooth_settings" -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            "display_settings" -> Intent(Settings.ACTION_DISPLAY_SETTINGS)
+            "app_settings" -> Intent(Settings.ACTION_APPLICATION_SETTINGS)
+            "location_settings" -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+            "accessibility_settings" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            "dial" -> {
+                val number = query.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
+                if (number.isBlank()) return "error: dial route needs a phone number"
+                Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))
+            }
+            "maps_search" -> {
+                if (query.isBlank()) return "error: maps_search needs a place or address"
+                Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)))
+            }
+            "camera" -> Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+            "calendar" -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR)
+            "clock" -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK)
+            "open_url" -> {
+                val raw = uriText.trim()
+                val u = try { java.net.URI(raw) } catch (_: Exception) { null }
+                if (u == null || u.scheme?.lowercase() !in setOf("http", "https") || u.host.isNullOrBlank())
+                    return "error: open_url requires a complete HTTP/HTTPS URL"
+                Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+            }
+            else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, dial, maps_search, camera, calendar, clock, open_url"
+        }
+        return try {
+            if (i.resolveActivity(svc.packageManager) == null) return "error: no installed app can handle route '" + action + "'"
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            svc.startActivity(i)
+            "launched allowlisted system route '" + action + "'; destination state still needs verification"
+        } catch (e: Exception) {
+            "error: could not launch '" + action + "' (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
+    fun resolveContact(name: String): String {
+        val q = name.trim()
+        if (q.isBlank()) return "error: contact name is required"
+        if (androidx.core.content.ContextCompat.checkSelfPermission(svc, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return "error: contacts permission is not granted. Enable Contacts permission for Orion in Android Settings, then retry."
+        }
+        val projection = arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME, ContactsContract.Contacts.HAS_PHONE_NUMBER)
+        return try {
+            val matches = mutableListOf<String>()
+            svc.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_URI, projection,
+                ContactsContract.Contacts.DISPLAY_NAME + " LIKE ?", arrayOf("%" + q + "%"),
+                ContactsContract.Contacts.DISPLAY_NAME + " COLLATE NOCASE ASC"
+            )?.use { c ->
+                while (c.moveToNext() && matches.size < 8) {
+                    val id = c.getString(0)
+                    val label = c.getString(1) ?: continue
+                    if (c.getInt(2) == 0) {
+                        matches.add(label + " (no saved phone number)")
+                    } else {
+                        val phone = svc.contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                            arrayOf(id), null
+                        )?.use { p -> if (p.moveToFirst()) p.getString(0) else null }
+                        matches.add(if (phone.isNullOrBlank()) label + " (phone unavailable)" else label + " — " + phone)
+                    }
+                }
+            }
+            if (matches.isEmpty()) "no contact matched '" + q + "'" else "CONTACT MATCHES (confirm the intended person before calling or messaging):\n" + matches.joinToString("\n")
+        } catch (e: Exception) {
+            "error: contact lookup failed (" + e.javaClass.simpleName + ")"
+        }
+    }
+
+    fun findFiles(query: String): String {
+        val q = query.trim()
+        if (q.isBlank()) return "error: file search needs a filename or keyword"
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.DISPLAY_NAME, MediaStore.Files.FileColumns.MIME_TYPE, MediaStore.Files.FileColumns.RELATIVE_PATH)
+        return try {
+            val results = mutableListOf<String>()
+            svc.contentResolver.query(
+                MediaStore.Files.getContentUri("external"), projection,
+                MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ?",
+                arrayOf("%" + q + "%"), MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC"
+            )?.use { c ->
+                while (c.moveToNext() && results.size < 12) {
+                    val id = c.getLong(0)
+                    val name = c.getString(1) ?: continue
+                    val mime = c.getString(2) ?: "application/octet-stream"
+                    val path = c.getString(3) ?: ""
+                    results.add("id=" + id + " | name=" + name + " | type=" + mime + " | folder=" + path)
+                }
+            }
+            if (results.isEmpty()) "No indexed, accessible file matched '" + q + "'. Android storage permissions and scoped-storage rules limit results; try the Files app if it is missing."
+            else "FILE MATCHES (use open_file with one exact numeric id):\n" + results.joinToString("\n")
+        } catch (e: SecurityException) {
+            "error: file search permission denied. Use Android Files to browse or grant the applicable media/storage permission."
+        } catch (e: Exception) {
+            "error: file search failed (" + e.javaClass.simpleName + ")"
+        }
+    }
+
+    fun openFile(idText: String): String {
+        val id = idText.trim().toLongOrNull() ?: return "error: open_file needs the numeric id returned by find_files"
+        if (id < 0L) return "error: file id must be non-negative"
+        return try {
+            val collection = MediaStore.Files.getContentUri("external")
+            val uri = ContentUris.withAppendedId(collection, id)
+            val mime = svc.contentResolver.getType(uri) ?: "*/*"
+            val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (intent.resolveActivity(svc.packageManager) == null) "error: no installed app can open this file type"
+            else {
+                svc.startActivity(intent)
+                "opened file id " + id + " with its registered viewer; verify the document displayed correctly"
+            }
+        } catch (e: SecurityException) {
+            "error: Android denied access to that file. Run find_files again and use a currently accessible id."
+        } catch (e: Exception) {
+            "error: could not open file (" + e.javaClass.simpleName + ")"
+        }
+    }
 
     // ---- phone features
 
