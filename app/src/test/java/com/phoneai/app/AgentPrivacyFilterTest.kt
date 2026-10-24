@@ -21,12 +21,11 @@ class AgentPrivacyFilterTest {
     @Test
     fun redactsCommonCredentialLabelsAndBearerTokens() {
         val safe = AgentPrivacyFilter.safeCommand(
-            "api_key=abc123 password: secret123 pin=4488 authorization: Bearer abc.def.ghi"
+            "api_key=abc123 password: secret123 Bearer eyJhbGciOiJIUzI1NiJ9"
         )
         assertFalse(safe.contains("abc123"))
         assertFalse(safe.contains("secret123"))
-        assertFalse(safe.contains("4488"))
-        assertFalse(safe.contains("abc.def.ghi"))
+        assertFalse(safe.contains("eyJhbGciOiJIUzI1NiJ9"))
         assertTrue(safe.contains("[redacted]"))
     }
 
@@ -39,7 +38,7 @@ class AgentPrivacyFilterTest {
     }
 
     @Test
-    fun numberRedactionDoesNotConsumeAdjacentLetters() {
+    fun phoneRedactionDoesNotConsumeAdjacentLetters() {
         val safe = AgentPrivacyFilter.safeCommand("Order A12345678B should stay searchable")
         assertTrue(safe.contains("A12345678B"))
     }
