@@ -122,6 +122,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** Back off repeated speech-service failures so wake detection cannot hammer the recognizer. */
     private var wakeErrorStreak = 0
     @Volatile private var offlineWakeDetector: OfflineWakeWordDetector? = null
+    @Volatile private var offlineWakeFailedForSession = false
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -1453,7 +1454,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun startWake() {
         if (!wakeAllowed()) return
         if (voice.isSpeaking()) { main.postDelayed({ startWake() }, 800); return }
-        if (WakeWordModelInstaller.isInstalled(this)) {
+        if (WakeWordPolicy.useOfflineModel(WakeWordModelInstaller.isInstalled(this), offlineWakeFailedForSession)) {
             val detector = offlineWakeDetector ?: OfflineWakeWordDetector(
                 this,
                 onWake = { main.post {
@@ -1466,10 +1467,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 } },
                 onError = { error -> main.post {
                     if (wakeAllowed()) {
-                        appendTranscript("note", "Offline wake word failed: $error")
+                        offlineWakeFailedForSession = true
+                        stopOfflineWakeDetector()
+                        appendTranscript("note", "Offline wake word failed; switching to Android recognizer fallback: $error")
+                        showStatusText("Offline wake detector unavailable. Using Android recognizer fallback.")
                         wakeGen++
-                        main.postDelayed({ if (wakeAllowed()) startWake() }, 2500)
+                        main.postDelayed({ if (wakeAllowed()) startWake() }, 300)
                     }
+                } },
+                onDiagnostic = { diagnostic -> main.post {
+                    if (wakeAllowed() && Prefs.wakeTestMode(this)) showStatusText(diagnostic)
                 } }
             ).also { offlineWakeDetector = it }
             if (detector.start()) return
@@ -1487,6 +1494,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun updateWakeWord(enabled: Boolean) {
         main.post {
             wakeGen++
+            if (enabled) offlineWakeFailedForSession = false
             if (!enabled) {
                 stopOfflineWakeDetector()
                 if (!listening) voice.stopListening()
