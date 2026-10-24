@@ -89,8 +89,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 lastScreenBeforeAction = before
                 lastScreenSnapshot = after
                 val changed = screenFingerprint(before) != screenFingerprint(after)
-                verifiedResult += if (changed) {
-                    "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
+                if (changed) {
+                    verifiedResult += "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
                 } else {
                     verifiedResult = "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step. Original result: " + result
                 }
