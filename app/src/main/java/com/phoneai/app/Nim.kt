@@ -558,11 +558,10 @@ class Nim(private val ctx: Context) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 errors[p.id] = e.message ?: p.label
                 lastFailure[p.id] = (e.message ?: "Unknown provider error").take(220)
-                // A provider-specific failure should advance to the next saved provider.
-                // This includes retired-model 404/410/422, HTTP 200 empty replies, bad keys,
-                // exhausted credits, rate limits, timeouts and temporary 5xx errors. chatOne()
-                // bounds each provider attempt; cancellation remains the only hard stop above.
-                if (e !is AiException) break
+                // Any failed provider attempt must not prevent trying the next saved provider.
+                // AiException covers expected HTTP/model failures, but malformed responses or
+                // unexpected runtime exceptions can also happen inside a provider adapter.
+                // Record the failure and continue; cancellation remains the only hard stop.
             }
         }
         throw RuntimeException(if (errors.isNotEmpty()) "No saved AI provider returned a usable reply. Tried: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "No saved provider is currently available. Check Settings → AI providers.")
