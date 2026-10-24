@@ -353,13 +353,14 @@ class Tools(private val svc: PhoneAiService) {
             "mailto", "sms", "smsto" -> Intent(Intent.ACTION_SENDTO, Uri.parse(raw))
             else -> Intent(Intent.ACTION_VIEW, Uri.parse(raw))
         }
-        if (intent.resolveActivity(svc.packageManager) == null) {
-            return "error: no installed app can handle this '$scheme' deep link"
-        }
         return try {
+            // Launch directly rather than pre-querying handlers; Android package-visibility
+            // rules can hide apps from resolveActivity even when a deep link is launchable.
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             svc.startActivity(intent)
             "launched allowlisted '$scheme' deep link; destination state must still be verified"
+        } catch (e: android.content.ActivityNotFoundException) {
+            "error: no installed app can handle this '$scheme' deep link"
         } catch (e: Exception) {
             "error: could not launch deep link (" + (e.message ?: e.javaClass.simpleName) + ")"
         }
