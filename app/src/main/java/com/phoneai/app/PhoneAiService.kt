@@ -1291,10 +1291,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Keep ordinary conversation inside the chat surface. Hide it only when Orion
         // needs to see or operate another app, otherwise the user sees a disappearing strip
         // instead of a continuous chatbot conversation.
-        val needsPhoneControl = Regex(
-            "\\b(open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|whatsapp|email|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this)\\b",
-            RegexOption.IGNORE_CASE
-        ).containsMatchIn(t)
+        val needsPhoneControl = AgentHooks.isPhoneActionRequest(t)
         if (needsPhoneControl) closePanel(false)
         if (mainChatActive) mainChatListener?.onMessage("me", t)
         hideBubble()
