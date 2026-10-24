@@ -1053,6 +1053,57 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         confirmView = null
     }
 
+    /** Multi-choice ask_user surface. The access badge is explicit and no option is preselected. */
+    private fun showUserChoices(question: String, options: List<String>, access: String, cb: (String) -> Unit) {
+        removeConfirm()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0xFF111A20.toInt(), dp(20).toFloat(), Theme.CYAN)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        box.addView(label("ORION NEEDS YOUR CHOICE", 11f, Theme.CYAN).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.08f
+        })
+        val badgeText = when (access.uppercase()) {
+            "WRITE", "WRITE DATA", "WRITE/CHANGE" -> "WRITE · MAY CHANGE DATA"
+            else -> "READ · NO DATA CHANGES REQUESTED"
+        }
+        box.addView(label(badgeText, 10f, if (badgeText.startsWith("WRITE")) Theme.WARN else Theme.OK).apply {
+            setPadding(0, dp(5), 0, dp(4))
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        box.addView(label(question, 16f, Theme.TEXT).apply { setPadding(0, dp(6), 0, dp(10)) })
+        options.forEach { option ->
+            val choice = pill(option, Theme.PANEL2, Theme.TEXT) {
+                removeConfirm()
+                pendingConfirm = null
+                refreshMode()
+                cb(option)
+            }
+            val lp = LinearLayout.LayoutParams(-1, WRAP)
+            lp.topMargin = dp(6)
+            box.addView(choice, lp)
+        }
+        val cancel = pill("Cancel", Theme.PANEL, Theme.MUTED) {
+            removeConfirm()
+            pendingConfirm = null
+            refreshMode()
+            cb("")
+        }
+        val cancelLp = LinearLayout.LayoutParams(-1, WRAP)
+        cancelLp.topMargin = dp(8)
+        box.addView(cancel, cancelLp)
+        val size = screenSize()
+        val lp = WindowManager.LayoutParams(
+            size.first - dp(24), WRAP, OVERLAY, NOT_FOCUSABLE or NOT_MODAL, PixelFormat.TRANSLUCENT
+        )
+        lp.gravity = Gravity.CENTER
+        wm.addView(box, lp)
+        confirmView = box
+        refreshMode()
+    }
+
     private fun showConfirm(question: String, cb: (Boolean) -> Unit) {
         removeConfirm()
         val answer: (Boolean) -> Unit = { yes ->
@@ -1495,6 +1546,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             showConfirm(question) { yes ->
                 answer.set(yes)
+                latch.countDown()
+            }
+        }
+        if (Prefs.voice(this)) voice.speak(question)
+        latch.await()
+        return answer.get()
+    }
+
+    override fun askUser(question: String, options: List<String>, access: String): String {
+        val latch = CountDownLatch(1)
+        val answer = java.util.concurrent.atomic.AtomicReference("")
+        main.post {
+            showUserChoices(question, options, access) { choice ->
+                answer.set(choice)
                 latch.countDown()
             }
         }

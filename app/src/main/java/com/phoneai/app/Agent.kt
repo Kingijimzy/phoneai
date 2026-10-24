@@ -14,6 +14,10 @@ interface AgentUi {
 
     /** Blocks until the person answers yes or no. Called from the worker thread. */
     fun ask(question: String): Boolean
+
+    /** Presents bounded tap choices with an explicit access badge. Empty means cancelled. */
+    fun askUser(question: String, options: List<String>, access: String): String =
+        if (ask(question)) options.firstOrNull().orEmpty() else ""
 }
 
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
@@ -1111,10 +1115,21 @@ Rules:
                 Thread.sleep((s * 1000).toLong())
                 "waited"
             }
-            "ask_user" -> if (ui.ask(a.optString("question", "Okay to continue?"))) {
-                "user said YES"
-            } else {
-                "user said NO. Do not do it."
+            "ask_user" -> {
+                val rawOptions = a.optJSONArray("options")
+                val options = if (rawOptions == null) listOf("Continue", "Cancel") else
+                    (0 until minOf(rawOptions.length(), 4)).map { rawOptions.optString(it).trim().take(64) }
+                        .filter { it.isNotBlank() }.distinct()
+                if (options.size !in 2..4) "error: ask_user requires two to four distinct tap options."
+                else {
+                    val choice = ui.askUser(
+                        a.optString("question", "What would you like me to do?").take(500),
+                        options,
+                        a.optString("access", "READ").uppercase()
+                    )
+                    if (choice.isBlank()) "user cancelled the choice. Do not continue."
+                    else "USER CHOICE: " + choice.take(64)
+                }
             }
             else -> "error: unknown tool $tool"
         }
