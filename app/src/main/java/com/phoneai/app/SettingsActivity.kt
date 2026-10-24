@@ -450,7 +450,8 @@ class SettingsActivity : Activity() {
         nameBtn = button("", false) { nameDialog() }
         add(s4, nameBtn, 10)
         memBtn = button("", true) { memoryDialog() }
-        add(s4, memBtn, 8)\n        add(s4, button("View or wipe route memory", false) { routeMemoryDialog() }, 8)
+        add(s4, memBtn, 8)
+        add(s4, button("View or wipe route memory", false) { routeMemoryDialog() }, 8)
         add(
             s4,
             text(
