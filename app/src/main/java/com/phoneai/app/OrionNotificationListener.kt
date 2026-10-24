@@ -30,7 +30,10 @@ class OrionNotificationListener : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
-        if (instance === this) instance = null
+        if (instance === this) {
+            instance = null
+            synchronized(lock) { recent.clear() }
+        }
         super.onListenerDisconnected()
     }
 
