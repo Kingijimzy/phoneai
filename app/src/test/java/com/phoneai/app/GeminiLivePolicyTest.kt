@@ -34,10 +34,7 @@ class GeminiLivePolicyTest {
 
     @Test fun optionalLiveModeUsesExplicitStableModelAndNoPhoneActionTools() {
         assertEquals("models/gemini-3.8-live", GeminiLivePolicy.MODEL)
-        val sessionSource = javaClass.classLoader?.getResourceAsStream(
-            "com/phoneai/app/GeminiLiveSession.class"
-        )
         // This JVM-only test deliberately checks policy constants, not a live network/model call.
-        assertNotNull("The policy class should be loadable without a network call.", GeminiLivePolicy::class.java)
+        assertEquals(5 * 60 * 1000L, GeminiLivePolicy.SESSION_LIMIT_MS)
     }
 }
