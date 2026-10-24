@@ -533,7 +533,7 @@ class Nim(private val ctx: Context) {
             lastFailure[primary.id] = (e.message ?: "Unknown provider error").take(220)
 
             // Only a confirmed HTTP 429 permits one backup attempt.
-            if (e !is AiException || !e.rateLimited) {
+            if (!ProviderFallbackPolicy.shouldTryBackup(e)) {
                 throw RuntimeException("${primary.label} failed; no provider rotation was performed because the failure was not HTTP 429. ${e.message ?: "Unknown provider error"}", e)
             }
 
