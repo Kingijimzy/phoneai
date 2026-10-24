@@ -103,11 +103,11 @@ object Providers {
 object Prefs {
     private fun sp(c: Context) = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
 
-    fun key(c: Context, pid: String): String {
-        return sp(c).getString("key_$pid", "") ?: ""
-    }
+    fun key(c: Context, pid: String): String =
+        ApiKeyVault.read(c, "enc_key_$pid", "key_$pid")
 
-    fun setKey(c: Context, pid: String, v: String) = sp(c).edit().putString("key_$pid", v.trim()).apply()
+    fun setKey(c: Context, pid: String, v: String): Boolean =
+        ApiKeyVault.write(c, "enc_key_$pid", "key_$pid", v)
 
     fun hasKey(c: Context, pid: String): Boolean = key(c, pid).isNotEmpty()
 
@@ -115,9 +115,15 @@ object Prefs {
 
     // ---- trading (Orion Trading)
     // ---- trading
-    fun bybitKey(c: Context): String = sp(c).getString("bybit_key", "") ?: ""
-    fun bybitSecret(c: Context): String = sp(c).getString("bybit_secret", "") ?: ""
-    fun setBybit(c: Context, k: String, s: String) = sp(c).edit().putString("bybit_key", k.trim()).putString("bybit_secret", s.trim()).apply()
+    fun bybitKey(c: Context): String =
+        ApiKeyVault.read(c, "enc_bybit_key", "bybit_key")
+    fun bybitSecret(c: Context): String =
+        ApiKeyVault.read(c, "enc_bybit_secret", "bybit_secret")
+    fun setBybit(c: Context, k: String, s: String): Boolean {
+        val keySaved = ApiKeyVault.write(c, "enc_bybit_key", "bybit_key", k)
+        val secretSaved = ApiKeyVault.write(c, "enc_bybit_secret", "bybit_secret", s)
+        return keySaved && secretSaved
+    }
 
     /** Practice money by default. Real money must be switched on on purpose. */
     fun bybitTestnet(c: Context): Boolean = sp(c).getBoolean("bybit_test", true)
