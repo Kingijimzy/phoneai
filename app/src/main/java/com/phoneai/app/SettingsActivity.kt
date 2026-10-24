@@ -322,7 +322,7 @@ class SettingsActivity : Activity() {
             imm.showInputMethodPicker()
         }, 8)
         add(s1, text(
-            "Privacy: Orion's keyboard sends each key directly to the focused field. It never reads surrounding text, selected text, or the field's existing contents. Enable it in Android settings, then select it from the keyboard picker.",
+            "Typing setup: enable Orion Private Keyboard and select it in Android's picker. If Orion asks for the keyboard during a typing action, tap Orion in that picker; it requests restoration of your previous keyboard afterward. Orion selects existing field text before replacement and refuses to type if select-all is unsupported, rather than silently appending duplicates. The keyboard never reads field contents.",
             12f, Theme.MUTED
         ), 8)
         add(s1, button("Allow microphone and notifications", false) {
