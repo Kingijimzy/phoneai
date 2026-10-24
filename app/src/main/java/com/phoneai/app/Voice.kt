@@ -87,7 +87,7 @@ class Voice(private val ctx: Context) {
             val offline = all.firstOrNull { !it.features.contains("networkTts") }
             val pick = all.firstOrNull { it.name == wanted && !it.features.contains("networkTts") }
                 ?: offline
-                ?: all.firstOrNull { it.name == wanted }
+                ?: if (Prefs.offlineVoiceOnly(ctx)) null else all.firstOrNull { it.name == wanted }
             if (pick != null) engine.voice = pick
         } catch (e: Exception) {
         }
@@ -129,6 +129,13 @@ class Voice(private val ctx: Context) {
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
         val t = clean(text)
+        // Fail closed if the user requests offline output but this language has no
+        // installed offline voice. Never silently send synthesized speech to a server.
+        if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
+            onDone?.invoke()
+            main.post { onSpeaking?.invoke(false) }
+            return
+        }
         if (!ttsReady || t.isEmpty()) {
             onDone?.invoke()
             return
