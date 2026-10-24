@@ -58,6 +58,8 @@ class Voice(private val ctx: Context) {
     /** Fires for every spoken word (used to move the avatar's mouth). Runs on the main thread. */
     @Volatile
     var onWord: (() -> Unit)? = null
+    /** Real RMS amplitude from each generated Piper PCM block; zero is not synthesized into fallback audio. */
+    @Volatile var onAudioAmplitude: ((Float) -> Unit)? = null
 
     init {
         tts = TextToSpeech(ctx) { status ->
@@ -242,8 +244,16 @@ class Voice(private val ctx: Context) {
                                 val activeTrack = track
                                 if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
                                 else {
-                                    if (samples.isNotEmpty()) main.post {
-                                        if (token == playbackGeneration.get()) onWord?.invoke()
+                                    if (samples.isNotEmpty()) {
+                                        var sumSquares = 0.0
+                                        for (sample in samples) sumSquares += sample.toDouble() * sample.toDouble()
+                                        val rms = kotlin.math.sqrt(sumSquares / samples.size).toFloat().coerceIn(0f, 1f)
+                                        main.post {
+                                            if (token == playbackGeneration.get()) {
+                                                onAudioAmplitude?.invoke(rms)
+                                                onWord?.invoke()
+                                            }
+                                        }
                                     }
                                     1
                                 }
