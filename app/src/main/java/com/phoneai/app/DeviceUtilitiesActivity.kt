@@ -164,9 +164,16 @@ class DeviceUtilitiesActivity : Activity() {
                 val report = buildString {
                     appendLine("Battery: ${s.batteryPercent?.let { "$it%" } ?: "not exposed"}")
                     appendLine("Battery temperature: ${s.batteryTemperatureC?.let { "$it°C" } ?: "not exposed"}")
-                    appendLine("Memory available: ${s.availableMemoryMb} MB / ${s.totalMemoryMb} MB")
+                    appendLine("System memory available: ${s.availableMemoryMb} MB / ${s.totalMemoryMb} MB")
+                    appendLine("Orion process PSS: ${if (s.appPssMb >= 0L) "${s.appPssMb} MB" else "not exposed"}")
                     appendLine("Low-memory warning: ${s.lowMemory}")
-                    appendLine("Thermal status: ${s.thermalStatus}")
+                    appendLine("Android thermal status: ${s.thermalStatus}")
+                    appendLine()
+                    appendLine("ORION PERFORMANCE SAMPLES")
+                    appendLine(UiYoloTfliteDetector.performanceSummary())
+                    appendLine(Voice.piperPerformanceSummary())
+                    appendLine(LiveCallVisualView.performanceSummary())
+                    appendLine("Wake-word false-accept/reject rate: not measured automatically; requires a controlled on-device trial.")
                     appendLine()
                     append(s.recommendation)
                 }
@@ -175,6 +182,21 @@ class DeviceUtilitiesActivity : Activity() {
                     gameDiagnosticReport = report
                 }
             }.start()
+        })
+        add(game, button("Copy latest device report") {
+            val report = gameDiagnosticReport
+            if (report.isBlank()) {
+                Toast.makeText(this, "Run Check device health first.", Toast.LENGTH_SHORT).show()
+            } else {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Orion device report", report))
+                Toast.makeText(this, "Device report copied.", Toast.LENGTH_SHORT).show()
+            }
+        })
+        add(game, TextView(this).apply {
+            text = "For a complete sample, use Orion screen control, speak with the installed Piper voice, and leave Live Call running for a few seconds before checking device health again."
+            textSize = 12f
+            setTextColor(Theme.MUTED)
         })
         add(game, button("Start a game session") { startSessionDialog(gameResult) })
         add(game, button("End current session") {

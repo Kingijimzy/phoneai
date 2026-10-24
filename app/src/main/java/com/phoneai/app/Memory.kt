@@ -5,7 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-class Memory(val id: Int, var category: String, var text: String, val created: Long, var updated: Long)
+class Memory(val id: Int, var category: String, var text: String, val created: Long, var updated: Long, var pinned: Boolean = false)
 
 /** Orion's long-term memory. Saved in a file on the phone, so it survives closing the app. */
 object MemoryStore {
@@ -33,7 +33,7 @@ object MemoryStore {
                     out.add(
                         Memory(
                             o.getInt("id"), cat(o.optString("category", "fact")), o.optString("text", ""),
-                            o.optLong("created", 0L), o.optLong("updated", 0L)
+                            o.optLong("created", 0L), o.optLong("updated", 0L), o.optBoolean("pinned", false)
                         )
                     )
                 }
@@ -51,7 +51,7 @@ object MemoryStore {
         for (m in list) {
             arr.put(
                 JSONObject().put("id", m.id).put("category", m.category).put("text", m.text)
-                    .put("created", m.created).put("updated", m.updated)
+                     .put("created", m.created).put("updated", m.updated).put("pinned", m.pinned)
             )
         }
         val target = file(c)
@@ -72,9 +72,9 @@ object MemoryStore {
         }
     }
 
-    private fun copyOf(m: Memory) = Memory(m.id, m.category, m.text, m.created, m.updated)
+    private fun copyOf(m: Memory) = Memory(m.id, m.category, m.text, m.created, m.updated, m.pinned)
 
-    fun all(c: Context): List<Memory> = synchronized(lock) { load(c).map { copyOf(it) } }
+    fun all(c: Context): List<Memory> = synchronized(lock) { load(c).map { copyOf(it) }.sortedWith(compareByDescending<Memory> { it.pinned }.thenByDescending { it.updated }) }
 
     fun add(c: Context, category: String?, text: String): Memory? = synchronized(lock) {
         val t = text.trim().replace("\n", " ").take(300)
@@ -122,6 +122,17 @@ object MemoryStore {
             m.text = oldText
             m.category = oldCategory
             m.updated = oldUpdated
+            return@synchronized false
+        }
+        true
+    }
+
+    fun setPinned(c: Context, id: Int, pinned: Boolean): Boolean = synchronized(lock) {
+        val memory = load(c).firstOrNull { it.id == id } ?: return@synchronized false
+        val previous = memory.pinned
+        memory.pinned = pinned
+        if (!save(c)) {
+            memory.pinned = previous
             return@synchronized false
         }
         true

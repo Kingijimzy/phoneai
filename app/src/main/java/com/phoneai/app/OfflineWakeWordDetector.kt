@@ -19,7 +19,8 @@ internal class OfflineWakeWordDetector(
     context: Context,
     private val onWake: () -> Unit,
     private val onVad: (Boolean) -> Unit = {},
-    private val onError: (String) -> Unit = {}
+    private val onError: (String) -> Unit = {},
+    private val onDiagnostic: (String) -> Unit = {}
 ) {
     private val app = context.applicationContext
     @Volatile private var running = false
@@ -60,7 +61,7 @@ internal class OfflineWakeWordDetector(
                     numThreads = 1, provider = "cpu", modelType = "zipformer2", modelingUnit = "bpe"
                 ),
                 keywordsFile = File(dir, "keywords.txt").absolutePath,
-                keywordsScore = 1.5f, keywordsThreshold = 0.35f, numTrailingBlanks = 2
+                keywordsScore = 1.5f, keywordsThreshold = Prefs.wakeThreshold(app), numTrailingBlanks = 2
             )
             val activeSpotter = KeywordSpotter(config = config)
             spotter = activeSpotter
@@ -79,6 +80,7 @@ internal class OfflineWakeWordDetector(
             audio.startRecording()
             val buffer = ShortArray(maxOf(1600, min / 2))
             var speechActive = false
+            var lastDiagnosticAt = 0L
             while (running) {
                 val count = audio.read(buffer, 0, buffer.size)
                 if (count == AudioRecord.ERROR_DEAD_OBJECT || count == AudioRecord.ERROR_INVALID_OPERATION) throw IllegalStateException("Microphone capture stopped unexpectedly.")
@@ -87,6 +89,13 @@ internal class OfflineWakeWordDetector(
                 for (i in 0 until count) { val sample = buffer[i] / 32768.0; energy += sample * sample }
                 val rms = sqrt(energy / count)
                 val speech = rms >= 0.008
+                val now = System.currentTimeMillis()
+                if (Prefs.wakeTestMode(app) && now - lastDiagnosticAt >= 1000L) {
+                    lastDiagnosticAt = now
+                    val level = String.format(java.util.Locale.US, "%.3f", rms)
+                    val threshold = String.format(java.util.Locale.US, "%.2f", Prefs.wakeThreshold(app))
+                    onDiagnostic("Wake test · audio level $level · keyword threshold $threshold · native confidence score is not exposed by this model API.")
+                }
                 if (speech != speechActive) { speechActive = speech; onVad(speech) }
                 val samples = FloatArray(count) { buffer[it] / 32768.0f }
                 activeStream.acceptWaveform(samples, sampleRate = 16000)
@@ -94,7 +103,9 @@ internal class OfflineWakeWordDetector(
                     activeSpotter.decode(activeStream)
                     val keyword = activeSpotter.getResult(activeStream).keyword
                     if (keyword.isNotBlank() && keyword.filter { it.isLetterOrDigit() }.equals("ORION", ignoreCase = true)) {
-                        activeSpotter.reset(activeStream); detected = true; running = false; break
+                        activeSpotter.reset(activeStream); detected = true; running = false
+                        if (Prefs.wakeTestMode(app)) onDiagnostic("Wake test · ORION detected. The native API does not provide a confidence score.")
+                        break
                     }
                 }
                 if (detected) break
