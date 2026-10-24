@@ -673,7 +673,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                         else activity.browserTabs.mapIndexed { i, tab ->
                             val marker = if (i == activity.activeTabIndex) " (active)" else ""
                             "${i + 1}. ${(tab.title?.takeIf { it.isNotBlank() } ?: Uri.parse(tab.url.orEmpty()).host ?: "New tab").take(80)}$marker — ${tab.url.orEmpty().take(240)}"
-                        }.joinToString("\\n")
+                        }.joinToString("\n")
                     }
                     "open" -> {
                         val uri = try { Uri.parse(url.trim()) } catch (_: Exception) { null }

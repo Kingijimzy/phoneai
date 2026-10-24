@@ -115,9 +115,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         } catch (e: Exception) {
             "error: ${e.message ?: e.javaClass.simpleName}"
         }
-        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "system_intent", "open_file", "open_deep_link")
+        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file", "open_deep_link")
         var verifiedResult = result
-        if (!result.trimStart().startsWith("error", ignoreCase = true) && tool in actionTools && lastScreenSnapshot.isNotBlank()) {
+        val shouldVerifyAction = tool in actionTools &&
+            (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
+        if (!result.trimStart().startsWith("error", ignoreCase = true) && shouldVerifyAction && lastScreenSnapshot.isNotBlank()) {
             try {
                 val before = lastScreenSnapshot
                 val after = AgentHooks.awaitStableSnapshot(
