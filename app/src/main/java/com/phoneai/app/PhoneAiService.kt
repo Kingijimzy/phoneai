@@ -1682,6 +1682,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             startActivity(i)
+            BrowserAutomation.awaitWebView(3000L)
             "opened in Orion's in-app browser: $candidate"
         } catch (e: Exception) {
             "error: could not open in-app browser (" + (e.message ?: "launch failed") + ")"
