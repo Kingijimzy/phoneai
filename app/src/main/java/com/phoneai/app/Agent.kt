@@ -391,6 +391,7 @@ Rules:
         fun systemPrompt(svc: PhoneAiService, request: String? = null): String {
             val name = Prefs.userName(svc)
             val sb = StringBuilder(BASE.trim())
+            sb.append("\n\nLanguage policy:\n").append(Prefs.languagePolicy(svc))
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))

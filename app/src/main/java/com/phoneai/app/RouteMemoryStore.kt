@@ -105,6 +105,7 @@ object RouteMemoryStore {
 
     /** Called only after a task checkpoint has been durably marked completed. */
     fun recordCompleted(c: Context, checkpoint: JSONObject): Boolean = synchronized(lock) {
+        if (!Prefs.routeLearning(c)) return@synchronized true
         try {
             val label = safeLabel(checkpoint.optString("command"))
             // Do not build reusable routes for finance, account security, credentials, or login flows.
@@ -160,7 +161,7 @@ object RouteMemoryStore {
 
     /** Return only relevant, decrypted task labels and tool names as planning hints. */
     fun promptBlock(c: Context, request: String?): String {
-        if (request.isNullOrBlank()) return ""
+        if (!Prefs.routeLearning(c) || request.isNullOrBlank()) return ""
         return synchronized(lock) {
             try {
                 val words = request.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 3 }.toSet()

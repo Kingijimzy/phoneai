@@ -71,11 +71,18 @@ class MemoryActivity : Activity() {
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13)); background = panel() }
             val meta = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             meta.addView(text(memory.category.uppercase(Locale.ROOT), 10f, 0xFFBEBEBE.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
+            if (memory.pinned) meta.addView(text("PINNED", 10f, 0xFF65D8E8.toInt(), true).apply { setPadding(0, 0, dp(8), 0) })
             meta.addView(text("#${memory.id}", 10f, 0xFF777777.toInt())); card.addView(meta)
             card.addView(text(memory.text, 14f, 0xFFEAEAEA.toInt()).apply { setPadding(0, dp(7), 0, dp(9)) })
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
-            actions.addView(button("Edit") { editMemory(memory) })
-            actions.addView(button("Delete") { confirmDelete(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
+            actions.addView(button(if (memory.pinned) "Unpin" else "Pin") {
+                val ok = MemoryStore.setPinned(this, memory.id, !memory.pinned)
+                val message = if (!ok) "Could not update memory" else if (memory.pinned) "Memory unpinned" else "Memory pinned"
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                render()
+            })
+            actions.addView(button("Edit") { editMemory(memory) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+            actions.addView(button("Delete") { confirmDelete(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             card.addView(actions); page.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
             card.alpha = 0f; card.translationY = dp(6).toFloat(); card.animate().alpha(1f).translationY(0f).setDuration(220).start()
         }

@@ -626,6 +626,7 @@ class SettingsActivity : Activity() {
         add(s3, characterBtn, 8)
         add(s3, button("Choose a voice", false) { voiceDialog() }, 8)
         add(s3, button("Hear Orion's voice", false) { testVoice() }, 8)
+        add(s3, button("Languages Orion may speak", false) { knownLanguagesDialog() }, 8)
 
         // ---- 4. memory
         val s4 = card(
@@ -633,6 +634,10 @@ class SettingsActivity : Activity() {
             "Orion remembers your preferences, projects, decisions and unfinished work, even after you close the app. " +
                 "You can view, edit or delete everything."
         )
+        switchRow(s4, "Learn successful task routes", Prefs.routeLearning(this)) {
+            Prefs.setRouteLearning(this, it)
+            Toast.makeText(this, if (it) "Route learning enabled." else "Route learning paused; saved routes are not used.", Toast.LENGTH_SHORT).show()
+        }
         nameBtn = button("", false) { nameDialog() }
         add(s4, nameBtn, 10)
         memBtn = button("", true) { memoryDialog() }
@@ -1652,6 +1657,29 @@ class SettingsActivity : Activity() {
 
     private fun when2(ms: Long): String =
         if (ms <= 0) "" else SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
+
+    private fun knownLanguagesDialog() {
+        val codes = Prefs.knownLanguageLabels.keys.toList()
+        val names = codes.map { Prefs.knownLanguageLabels[it] ?: it }.toTypedArray()
+        val selected = Prefs.knownLanguages(this).toMutableSet()
+        val checked = codes.map { it in selected }.toBooleanArray()
+        AlertDialog.Builder(this)
+            .setTitle("Languages Orion may speak")
+            .setMessage("Orion will be instructed to reply only in selected languages. Spoken pronunciation also depends on the phone having a suitable Text-to-speech voice installed.")
+            .setMultiChoiceItems(names, checked) { _, which, isChecked ->
+                if (isChecked) selected.add(codes[which]) else selected.remove(codes[which])
+            }
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                Prefs.setKnownLanguages(this, selected)
+                Toast.makeText(
+                    this,
+                    "Allowed languages: " + Prefs.knownLanguages(this).mapNotNull { Prefs.knownLanguageLabels[it] }.joinToString(", "),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            .show()
+    }
 
     private fun routeMemoryDialog() {
         val routes = RouteMemoryStore.summaries(this)
