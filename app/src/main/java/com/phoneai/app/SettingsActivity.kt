@@ -18,6 +18,7 @@ import android.util.Base64
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ProgressBar
@@ -792,10 +793,19 @@ class SettingsActivity : Activity() {
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
         val notifications = if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 33) "allowed" else "not allowed"
         val contacts = if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
-        val enabledKeyboard = Settings.Secure.getString(contentResolver, "enabled_input_methods")
-            ?.contains(packageName, ignoreCase = true) == true
-        val selectedKeyboard = Settings.Secure.getString(contentResolver, "default_input_method")
-            ?.contains(packageName, ignoreCase = true) == true
+        // Android 14+ restricts direct reads of enabled_input_methods for modern target SDKs.
+        // Use the public InputMethodManager list instead, and guard the selected-method setting
+        // because system settings access can vary by Android version/device policy.
+        val enabledKeyboard = runCatching {
+            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
+                ?.enabledInputMethodList
+                ?.any { it.packageName == packageName } == true
+        }.getOrDefault(false)
+        val selectedKeyboard = runCatching {
+            Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                ?.substringBefore('/')
+                ?.equals(packageName, ignoreCase = true) == true
+        }.getOrDefault(false)
         val notificationListener = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
             ?.contains(packageName, ignoreCase = true) == true
         val sb = StringBuilder()
