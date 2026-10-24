@@ -199,8 +199,16 @@ class Voice(private val ctx: Context) {
         val my = ++gen
         val onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             try { SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) } catch (_: Exception) { false }
+        // Privacy mode is fail-closed: never silently send microphone audio to a
+        // network recognizer when the user explicitly chose offline-only input.
+        if (Prefs.offlineSpeechOnly(ctx) && !onDeviceAvailable) {
+            onProblem?.invoke("Offline speech recognition is unavailable. Android 12 or newer and an installed on-device speech model are required. Turn off Offline-only speech in Settings to allow the phone's speech service.")
+            onText(null)
+            return
+        }
         // Track the recognizer that was actually created, not just whether Android
-        // advertised on-device support. Creation can fail and fall back to the service.
+        // advertised on-device support. Only fall back to a service when privacy mode
+        // is off; strict offline mode must never switch to a network recognizer.
         var usingOnDevice = false
         val r = try {
             if (onDeviceAvailable) {
@@ -208,7 +216,12 @@ class Voice(private val ctx: Context) {
             } else {
                 SpeechRecognizer.createSpeechRecognizer(ctx)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (Prefs.offlineSpeechOnly(ctx)) {
+                onProblem?.invoke("Could not start Android's on-device speech recognizer. Check the offline speech model in system settings.")
+                onText(null)
+                return
+            }
             usingOnDevice = false
             SpeechRecognizer.createSpeechRecognizer(ctx)
         }
