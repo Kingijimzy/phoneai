@@ -113,6 +113,12 @@ object Prefs {
 
     fun hasAnyKey(c: Context): Boolean = Providers.all.any { hasKey(c, it.id) }
 
+    /** Live Gemini mode is opt-in; the existing local live-call path remains the default. */
+    fun geminiLiveEnabled(c: Context): Boolean = sp(c).getBoolean("gemini_live_enabled", false)
+    fun setGeminiLiveEnabled(c: Context, enabled: Boolean) {
+        sp(c).edit().putBoolean("gemini_live_enabled", enabled).apply()
+    }
+
     // ---- trading (Orion Trading)
     // ---- trading
     fun bybitKey(c: Context): String =
