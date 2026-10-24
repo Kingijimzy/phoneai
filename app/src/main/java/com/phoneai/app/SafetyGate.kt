@@ -17,7 +17,7 @@ object SafetyGate {
 
     private val sensitivePackageTokens = listOf(
         "bank", "banking", "payment", "wallet", "paypal", "venmo", "wise",
-        "revolut", "monzo", "cashapp", "googlequicksearchbox" // package check is token-based; label check is stricter
+        "revolut", "monzo", "cashapp" // package check is token-based; label check is stricter
     )
 
     private val credentialText = Regex(
