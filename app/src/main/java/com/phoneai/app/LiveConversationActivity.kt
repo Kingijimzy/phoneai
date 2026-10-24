@@ -254,6 +254,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onResume() {
         super.onResume()
+        visual.animationEnabled = true
+        visual.invalidate()
         val service = PhoneAiService.instance
         if (service != null && attachedService !== service) {
             attachedService?.detachMainChat(this)
@@ -267,6 +269,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             autoStarted = true
             visual.post { startVoiceInput() }
         }
+    }
+
+    override fun onPause() {
+        if (::visual.isInitialized) visual.animationEnabled = false
+        super.onPause()
     }
 
     override fun onStop() {
