@@ -876,7 +876,8 @@ Rules:
             "resolve_contact" -> tools.resolveContact(a.optString("name"))
             "find_files" -> tools.findFiles(a.optString("query"))
             "open_file" -> tools.openFile(a.optString("id"))
-            "list_apps" -> tools.listApps()\n            "list_app_deeplinks" -> tools.listAppDeepLinks(a.optString("scheme"))
+            "list_apps" -> tools.listApps()
+            "list_app_deeplinks" -> tools.listAppDeepLinks(a.optString("scheme"))
             "read_screen" -> svc.readScreen().also { lastScreenSnapshot = it }
             "validate_action" -> validateAction(a)
             "verify_action" -> verifyAction(a)
@@ -914,7 +915,9 @@ Rules:
             "look" -> look(a.optString("question", "Describe what is on the screen."))
             "play" -> play(a.optString("goal"), a.optInt("steps", 20))
             "open_url" -> svc.openUrl(a.optString("url"))
-            "browser_snapshot" -> BrowserAutomation.snapshot().take(6000)\n            "browser_find" -> BrowserAutomation.find(a.optString("query")).take(1800)\n            "browser_extract" -> BrowserAutomation.extract().take(9000)
+            "browser_snapshot" -> BrowserAutomation.snapshot().take(6000)
+            "browser_find" -> BrowserAutomation.find(a.optString("query")).take(1800)
+            "browser_extract" -> BrowserAutomation.extract().take(9000)
             "browser_verify" -> BrowserAutomation.verifyPage(a.optString("expected_text"), a.optString("previous_url")).take(1200)
             "browser_click_verify" -> {
                 val target = a.optString("target").trim()
