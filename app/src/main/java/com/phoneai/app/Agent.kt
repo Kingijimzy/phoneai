@@ -370,8 +370,7 @@ Rules:
                 sb.append("\nNo enabled registered skills.")
             } else {
                 enabledSkills.forEach { skill ->
-                    sb.append("
-- ").append(skill.id).append(" v").append(skill.version)
+                    sb.append("\n- ").append(skill.id).append(" v").append(skill.version)
                         .append(": ").append(skill.description.take(220))
                         .append("; allowed tools: ").append(skill.allowedTools.sorted().joinToString(", ").take(240))
                 }
