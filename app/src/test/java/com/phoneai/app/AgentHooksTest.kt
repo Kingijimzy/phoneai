@@ -24,10 +24,12 @@ class AgentHooksTest {
   assertTrue(AgentHooks.completionDecision("Send a WhatsApp message",p.snapshot()).allowed)
  }
  @Test fun sendVerificationRequiresContactExactMessageAndVisibleStatus(){
-  val sent="Amma\\nHi Amma, I am on my way.\\nSent 8:42 AM"
+  val sent=listOf("Amma","Hi Amma, I am on my way.","Sent 8:42 AM").joinToString(System.lineSeparator())
+  val draft=listOf("Amma","Hi Amma, I am on my way.").joinToString(System.lineSeparator())
+  val wrong=listOf("Amma","Sent message to another person").joinToString(System.lineSeparator())
   assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.",sent).startsWith("PASS:"))
-  assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.","Amma\\nHi Amma, I am on my way.").startsWith("UNVERIFIED:"))
-  assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.","Amma\\nSent message to another person").startsWith("error:"))
+  assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.",draft).startsWith("UNVERIFIED:"))
+  assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.",wrong).startsWith("error:"))
  }
  @Test fun settlesScreen(){val a=listOf("Loading","Loaded","Loaded");var i=0;assertEquals("Loaded",AgentHooks.awaitStableSnapshot({a[minOf(i++,a.lastIndex)]},4,2,0))}
 }
