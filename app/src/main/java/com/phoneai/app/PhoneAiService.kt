@@ -1454,7 +1454,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun startWake() {
         if (!wakeAllowed()) return
         if (voice.isSpeaking()) { main.postDelayed({ startWake() }, 800); return }
-        if (WakeWordModelInstaller.isInstalled(this) && !offlineWakeFailedForSession) {
+        if (WakeWordPolicy.useOfflineModel(WakeWordModelInstaller.isInstalled(this), offlineWakeFailedForSession)) {
             val detector = offlineWakeDetector ?: OfflineWakeWordDetector(
                 this,
                 onWake = { main.post {
