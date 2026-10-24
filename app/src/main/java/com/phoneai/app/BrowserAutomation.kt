@@ -159,7 +159,7 @@ object BrowserAutomation {
         val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
         val uri = try { android.net.Uri.parse(candidate) } catch (_: Exception) { null }
         if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() ||
-            !uri.userInfo.isNullOrBlank() || uri.host.any { it.isWhitespace() }) {
+            !uri.userInfo.isNullOrBlank() || uri.host.orEmpty().any { it.isWhitespace() }) {
             return "error: provide a valid HTTP or HTTPS URL without embedded credentials"
         }
         val web = current?.get() ?: return "error: Orion Browser is not open"
