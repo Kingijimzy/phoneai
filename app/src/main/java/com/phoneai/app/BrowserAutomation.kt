@@ -144,6 +144,35 @@ object BrowserAutomation {
         """.trimIndent())
     }
 
+    /** Find a phrase in rendered page text and report a short surrounding excerpt in one call. */
+    fun find(query: String): String {
+        if (query.isBlank()) return "error: search phrase is required"
+        val q = org.json.JSONObject.quote(query.trim().take(180))
+        return evaluate("""
+          (function(){
+            const q=$q.toLowerCase();
+            const text=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+            const i=text.toLowerCase().indexOf(q);
+            if(i<0)return JSON.stringify({found:false,url:location.href,title:document.title});
+            return JSON.stringify({found:true,url:location.href,title:document.title,index:i,excerpt:text.slice(Math.max(0,i-220),Math.min(text.length,i+q.length+420))});
+          })()
+        """.trimIndent())
+    }
+
+    /** Extract all visible HTML tables in one DOM pass, bounded to avoid oversized model payloads. */
+    fun extract(): String = evaluate("""
+        (function(){
+          const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
+          const tables=[...document.querySelectorAll('table')].filter(visible).slice(0,12).map((t,ti)=>({
+            index:ti,
+            caption:(t.caption?.innerText||'').trim().slice(0,160),
+            rows:[...t.querySelectorAll('tr')].slice(0,60).map(tr=>[...tr.querySelectorAll('th,td')].slice(0,20).map(c=>(c.innerText||'').replace(/\\s+/g,' ').trim().slice(0,240)))
+          }));
+          const text=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
+          return JSON.stringify({url:location.href,title:document.title,tables:tables,tableCount:document.querySelectorAll('table').length,summary:tables.length?undefined:text.slice(0,1000)});
+        })()
+    """.trimIndent(), 7000L)
+
     fun scroll(direction: String): String {
         val down = direction.equals("down", true)
         if (!down && !direction.equals("up", true)) return "error: direction must be up or down"
