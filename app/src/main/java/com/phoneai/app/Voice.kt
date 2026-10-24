@@ -128,25 +128,9 @@ class Voice(private val ctx: Context) {
         s.replace(Regex("[*_`#>]+"), "").replace(Regex("https?://\\S+"), "link").trim()
 
     /** Split long replies on sentence boundaries, preserving conversational flow. */
-    private fun splitForSpeech(text: String, limit: Int = 420): List<String> {
-        val sentences = text.replace(Regex("\\s+"), " ")
-            .split(Regex("(?<=[.!?])\\s+"))
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-        val out = ArrayList<String>()
-        for (sentence in sentences) {
-            var remaining = sentence
-            while (remaining.length > limit) {
-                val window = remaining.substring(0, limit)
-                val cut = maxOf(window.lastIndexOf(", "), window.lastIndexOf("; "), window.lastIndexOf(" "))
-                val splitAt = if (cut > limit / 2) cut else limit
-                out.add(remaining.substring(0, splitAt).trim())
-                remaining = remaining.substring(splitAt).trim()
-            }
-            if (remaining.isNotEmpty()) out.add(remaining)
-        }
-        return out
-    }
+    /** Keep split logic isolated so queue boundaries can be tested without a TTS engine. */
+    private fun splitForSpeech(text: String, limit: Int = 420): List<String> =
+        SpeechChunker.split(text, limit)
 
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
