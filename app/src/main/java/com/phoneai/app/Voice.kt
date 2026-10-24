@@ -82,7 +82,10 @@ class Voice(private val ctx: Context) {
         try {
             val all = voiceList()
             val wanted = Prefs.voiceName(ctx)
-            val pick = all.firstOrNull { it.name == wanted } ?: all.firstOrNull()
+            val offline = all.firstOrNull { !it.features.contains("networkTts") }
+            val pick = all.firstOrNull { it.name == wanted && !it.features.contains("networkTts") }
+                ?: offline
+                ?: all.firstOrNull { it.name == wanted }
             if (pick != null) engine.voice = pick
         } catch (e: Exception) {
         }
