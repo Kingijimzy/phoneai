@@ -365,14 +365,27 @@ class SettingsActivity : Activity() {
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
-        switchRow(s3, "Wake word: say \"Orion\" (experimental, uses battery)", Prefs.wake(this)) {
-            Prefs.setWake(this, it)
-            if (it) {
+        switchRow(s3, "Wake word: say \"Orion\" (experimental; uses Android speech service and battery)", Prefs.wake(this)) {
+            val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (it && !hasMic) {
+                Prefs.setWake(this, false)
+                PhoneAiService.instance?.updateWakeWord(false)
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 74)
+                Toast.makeText(this, "Allow microphone access, then enable wake word again.", Toast.LENGTH_LONG).show()
+            } else {
+                Prefs.setWake(this, it)
+                PhoneAiService.instance?.updateWakeWord(it)
                 Toast.makeText(
-                    this, "Turn Accessibility off and on once so Orion starts listening.", Toast.LENGTH_LONG
+                    this,
+                    if (it) "Wake word enabled. Say “Orion” followed by your command." else "Wake word disabled.",
+                    Toast.LENGTH_SHORT
                 ).show()
             }
         }
+        add(s3, text(
+            "Wake detection uses Android's speech-recognition service in short sessions; it is not an offline, always-on keyword detector. It pauses while chat or live voice owns the microphone and backs off when the speech service fails.",
+            12f, Theme.MUTED
+        ), 8)
         add(s3, text("Speaking speed", 13f, Theme.MUTED), 12)
         val bar = SeekBar(this)
         bar.max = 100
