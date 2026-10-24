@@ -101,6 +101,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         fun onMessage(kind: String, text: String)
         fun onStatus(text: String, mode: OrbView.Mode)
         fun onAudioLevel(level: Float) {}
+        fun onAudioAmplitude(amplitude: Float) {}
         fun onSpeechWord() {}
         fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
     }
@@ -140,6 +141,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice.onLevel = { l ->
             for (o in orbs()) o.level = l
             mainChatListener?.onAudioLevel(l)
+        }
+        voice.onAudioAmplitude = { amplitude ->
+            mainChatListener?.onAudioAmplitude(amplitude)
         }
         transcript.clear()
         transcript.addAll(ChatHistoryStore.load(this))
