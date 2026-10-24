@@ -134,7 +134,7 @@ class TaskCenterActivity : Activity() {
         top.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(button("＋  New task", true) { addTask() })
         page.addView(top)
-        add(page, label("Track queued work, progress, reminders and completed items. Status is saved on this phone.", 13f, Theme.MUTED), 8)
+        add(page, label("Task log: review queued, running, completed, failed and cancelled tasks. Status is saved on this phone.", 13f, Theme.MUTED), 8)
 
         val note = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(13), dp(11), dp(13), dp(11))
@@ -154,7 +154,7 @@ class TaskCenterActivity : Activity() {
 
         val filters = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         listOf("all" to "All", "queued" to "Queued", "running" to "Running", "paused" to "Paused",
-            "completed" to "Completed", "failed" to "Failed").forEach { pair ->
+            "completed" to "Completed", "failed" to "Failed", "cancelled" to "Cancelled").forEach { pair ->
             filters.addView(button(pair.second, pair.first == filter) {
                 filter = pair.first; refresh()
             }, LinearLayout.LayoutParams(-2, dp(42)).apply { rightMargin = dp(6) })
@@ -192,6 +192,7 @@ class TaskCenterActivity : Activity() {
                 "paused" -> t.status == "paused"
                 "completed" -> t.status == "completed" || t.status == "done"
                 "failed" -> t.status == "failed"
+                "cancelled" -> t.status == "cancelled"
                 else -> true
             }
         }
