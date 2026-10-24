@@ -509,6 +509,16 @@ class SettingsActivity : Activity() {
                 .setNegativeButton("Cancel", null)
                 .show()
         }, 8)
+        switchRow(s3, "Experimental Gemini Live mode for live calls (uses API quota)", Prefs.geminiLiveEnabled(this)) {
+            Prefs.setGeminiLiveEnabled(this, it)
+            Toast.makeText(
+                this,
+                if (it) "Gemini Live is enabled for the next call. A quota warning appears before every session."
+                else "Standard Orion live call restored.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        add(s3, label("Gemini Live streams microphone audio to Google and uses usage-based quota. Each session is capped at five minutes; account limits and costs vary.", 12f, Theme.MUTED), 6)
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Offline-only speech input (no network fallback)", Prefs.offlineSpeechOnly(this)) {
             Prefs.setOfflineSpeechOnly(this, it)
