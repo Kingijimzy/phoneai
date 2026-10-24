@@ -194,10 +194,6 @@ class MainActivity : ComponentActivity() {
     private fun installCrashRecorder() {
         val app = applicationContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
-        if (app.getSharedPreferences("orion_diagnostics", Context.MODE_PRIVATE)
-                .getBoolean("crash_handler_installed", false)) return
-        app.getSharedPreferences("orion_diagnostics", Context.MODE_PRIVATE)
-            .edit().putBoolean("crash_handler_installed", true).apply()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
                 val writer = StringWriter()
