@@ -58,8 +58,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
         val safetyBlock = SafetyGate.blockReason(
             tool,
-            if (tool == "open_app") args.optString("name") else null,
-            if (tool == "type") args.optString("text") else null,
+            when (tool) {
+                "open_app" -> args.optString("name")
+                "browser_type" -> args.optString("target")
+                "open_deep_link" -> args.optString("uri")
+                else -> null
+            },
+            if (tool == "type" || tool == "browser_type") args.optString("text") else null,
             svc.currentPackageName(),
             svc.currentAppLabel()
         )
@@ -67,6 +72,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val blocked = "error: safety gate blocked action. $safetyBlock"
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
+        }
+        if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
+            val browserBlock = BrowserAutomation.sensitivePageReason()
+            if (browserBlock != null) {
+                val blocked = "error: safety gate blocked browser action. $browserBlock"
+                try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+                return blocked
+            }
         }
         val result = try {
             if (tool in nativeUiActions) {
@@ -810,12 +823,21 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         val safetyBlock = SafetyGate.blockReason(
             tool,
-            if (tool == "open_app") a.optString("name") else null,
-            if (tool == "type") a.optString("text") else null,
+            when (tool) {
+                "open_app" -> a.optString("name")
+                "browser_type" -> a.optString("target")
+                "open_deep_link" -> a.optString("uri")
+                else -> null
+            },
+            if (tool == "type" || tool == "browser_type") a.optString("text") else null,
             svc.currentPackageName(),
             svc.currentAppLabel()
         )
         if (safetyBlock != null) return "error: safety gate blocked action. $safetyBlock"
+        if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
+            val browserBlock = BrowserAutomation.sensitivePageReason()
+            if (browserBlock != null) return "error: safety gate blocked browser action. $browserBlock"
+        }
         val skillId = activeSkillId
         if (skillId != null) {
             val elapsed = (System.currentTimeMillis() - activeSkillStartedAt).coerceAtLeast(0L)
