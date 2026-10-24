@@ -513,6 +513,7 @@ class SettingsActivity : Activity() {
             }.start()
         }, 8)
         add(s7, button("MCP permissions & scopes", true) { mcpPermissionsDialog() }, 8)
+        add(s7, button(if (McpConnector.isPaired(this)) "Re-pair MCP endpoint" else "Pair MCP endpoint with PIN", true) { mcpPairingDialog() }, 8)
         add(s7, button("MCP connection status", false) {
             showInfoDialog("MCP connection", McpConnector.status(this))
         }, 8)
@@ -1528,6 +1529,45 @@ class SettingsActivity : Activity() {
     }
 
 
+
+    private fun mcpPairingDialog() {
+        val pin = McpConnector.beginPairing(this)
+        if (pin.length != 6 || !pin.all { it.isDigit() }) {
+            showInfoDialog("MCP pairing", pin)
+            return
+        }
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.VERTICAL
+        wrap.setPadding(dp(20), dp(8), dp(20), 0)
+        val code = TextView(this).apply {
+            text = "LOCAL CONFIRMATION CODE\\n$pin\\n\\nEnter this same code below within 2 minutes to confirm you intentionally trust this configured endpoint on this device."
+            textSize = 18f
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, dp(12), 0, dp(16))
+        }
+        val entry = EditText(this).apply {
+            hint = "Enter 6-digit code"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+        }
+        wrap.addView(code)
+        wrap.addView(entry)
+        AlertDialog.Builder(this)
+            .setTitle("Approve MCP endpoint")
+            .setMessage("This is a local confirmation step, not proof of remote server identity. Use HTTPS and only connect to a server you trust. WebRTC pairing is not available yet.")
+            .setView(wrap)
+            .setPositiveButton("Confirm pairing") { _, _ ->
+                showInfoDialog("MCP pairing", McpConnector.confirmPairing(this, entry.text.toString()))
+                recreate()
+            }
+            .setNeutralButton("Revoke pairing") { _, _ ->
+                McpConnector.unpair(this)
+                showInfoDialog("MCP pairing", "Local endpoint approval revoked.")
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
     private fun mcpPermissionsDialog() {
         val wrap = LinearLayout(this)
