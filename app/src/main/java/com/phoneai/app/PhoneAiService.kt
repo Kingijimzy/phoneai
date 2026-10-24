@@ -1483,6 +1483,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun norm(s: String): String = s.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
 
+    /** Current foreground package exposed only for the local safety gate. */
+    fun currentPackageName(): String = try { rootInActiveWindow?.packageName?.toString().orEmpty() } catch (_: Exception) { "" }
+
+    fun currentAppLabel(): String {
+        val pkg = currentPackageName()
+        if (pkg.isBlank()) return ""
+        return try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { "" }
+    }
+
     fun openApp(name: String): String {
         val pm = packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -1507,6 +1516,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (best == null) {
             val names = list.map { it.loadLabel(pm).toString() }.sorted().take(40)
             return "error: app not found. Installed apps include: " + names.joinToString(", ")
+        }
+        if (SafetyGate.isSensitiveApp(best.activityInfo.packageName, bestLabel)) {
+            return "error: Orion's safety gate blocks opening or automating banking and payment apps. Open and operate that app manually."
         }
         val launch = pm.getLaunchIntentForPackage(best.activityInfo.packageName)
             ?: return "error: cannot launch $bestLabel"
@@ -1737,6 +1749,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun typeText(text: String): String {
         if (text.isEmpty()) return "error: refusing to type empty text"
         if (text.length > 4000) return "error: text exceeds the 4000 character limit"
+        if (SafetyGate.containsSensitiveCredentialText(text)) {
+            return "error: Orion's safety gate blocks typing card, CVV/CVC, password, passcode, PIN, OTP, security-code, or card-number text. Enter sensitive details yourself."
+        }
         val root = rootInActiveWindow ?: return "error: cannot inspect the current screen"
         val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
             ?: return "error: no editable text field found. Click the intended field first."
