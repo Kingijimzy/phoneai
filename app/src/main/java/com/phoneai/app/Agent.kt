@@ -73,14 +73,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
-            val browserBlock = BrowserAutomation.sensitivePageReason()
-            if (browserBlock != null) {
-                val blocked = "error: safety gate blocked browser action. $browserBlock"
-                try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-                return blocked
-            }
-        }
         val result = try {
             if (tool in nativeUiActions) {
                 val validationArgs = JSONObject(args.toString()).put("tool", tool)
