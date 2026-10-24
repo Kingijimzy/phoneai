@@ -71,7 +71,7 @@ internal class GeminiLiveSession(
             try {
                 val config = buildSetup()
                 setupConfig = config
-                val token = requestEphemeralToken(config)
+                val token = requestEphemeralToken()
                 if (stopped.get()) {
                     disposeClient()
                     return@Thread
@@ -132,9 +132,13 @@ internal class GeminiLiveSession(
 
     fun stop() {
         if (!stopped.compareAndSet(false, true)) return
-        try {
-            socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
-        } catch (_: Exception) { }
+        // Only send realtime input when setup completed and microphone capture actually started.
+        // Sending audioStreamEnd before the initial setup message would violate the WebSocket protocol.
+        if (audioStarted.get()) {
+            try {
+                socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
+            } catch (_: Exception) { }
+        }
         val activeSocket = socket
         try { activeSocket?.close(1000, "User ended Gemini Live session") } catch (_: Exception) { }
         try { recorder?.stop() } catch (_: Exception) { }
@@ -201,7 +205,7 @@ internal class GeminiLiveSession(
             )
     }
 
-    private fun requestEphemeralToken(setup: JSONObject): String {
+    private fun requestEphemeralToken(): String {
         if (apiKey.isBlank()) throw IOException("No Gemini API key is saved.")
         val now = Instant.now()
         // The Live API uses liveConnectConstraints for ephemeral-token setup restrictions.
