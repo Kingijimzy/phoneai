@@ -36,6 +36,8 @@ class LiveCallVisualView(context: Context) : View(context) {
     /** Event cue only, used for Android TTS word-range callbacks, never treated as amplitude. */
     @Volatile var wordPulse: Float = 0f
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
+    @Volatile var errorState: Boolean = false
+        set(value) { field = value; invalidate() }
     @Volatile var stepText: String = ""
         set(value) { field = value; invalidate() }
 
@@ -116,6 +118,7 @@ class LiveCallVisualView(context: Context) : View(context) {
         canvas.drawColor(android.graphics.Color.BLACK)
         if (style == Style.DOT_MATRIX) drawDots(canvas, w, h, t, now)
         else drawEyes(canvas, w, h, t, now)
+        if (errorState) { paint.color = android.graphics.Color.BLACK; paint.alpha = 125; canvas.drawRect(0f, 0f, w, h, paint) }
         if (wordPulse > 0f) wordPulse = max(0f, wordPulse - if (reducedMotion) 1f else 0.11f)
         if (speechAmplitude > 0f && mode != OrbView.Mode.SPEAKING) speechAmplitude = 0f
         frame++
