@@ -62,7 +62,7 @@ internal class OfflineWakeWordDetector(
                 keywordsFile = File(dir, "keywords.txt").absolutePath,
                 keywordsScore = 1.5f, keywordsThreshold = 0.35f, numTrailingBlanks = 2
             )
-            val activeSpotter = KeywordSpotter(config)
+            val activeSpotter = KeywordSpotter(config = config)
             spotter = activeSpotter
             val activeStream = activeSpotter.createStream()
             stream = activeStream
