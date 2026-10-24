@@ -40,7 +40,16 @@ class OrionKeyboardService : InputMethodService() {
             if (text.isEmpty()) return "error: refusing to type empty text"
             if (text.length > 4000) return "error: text exceeds the 4000 character limit"
             val service = active
-            if (service != null && service.currentInputConnection != null) {
+            val selectedIme = try {
+                android.provider.Settings.Secure.getString(
+                    context.contentResolver,
+                    android.provider.Settings.Secure.DEFAULT_INPUT_METHOD
+                )
+            } catch (_: Exception) { null }
+            val ourIme = android.content.ComponentName(context, OrionKeyboardService::class.java)
+                .flattenToShortString()
+            // Do not trust a stale InputConnection retained after Android switches to another IME.
+            if (service != null && selectedIme == ourIme && service.currentInputConnection != null) {
                 return service.commitAgentText(text, targetPackage)
             }
             val request = TypeRequest(text, targetPackage)
