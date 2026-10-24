@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -17,6 +18,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.ValueCallback
 import android.webkit.CookieManager
 import android.webkit.URLUtil
 import android.widget.EditText
@@ -26,6 +28,10 @@ import android.widget.TextView
 import android.widget.Toast
 import android.net.Uri
 import java.net.URLEncoder
+import java.lang.ref.WeakReference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Lightweight in-app browser. The accessibility agent can inspect and interact with
@@ -48,6 +54,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     private lateinit var agentResult: TextView
     private lateinit var agentRun: TextView
     private var agentAttached = false
+    private var uploadCallback: ValueCallback<Array<Uri>>? = null
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun pill(text: String, action: () -> Unit) = TextView(this).apply {
@@ -73,6 +80,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activeActivity = WeakReference(this)
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
@@ -372,6 +380,27 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                 }
             }
             web.webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?
+                ): Boolean {
+                    uploadCallback?.onReceiveValue(null)
+                    uploadCallback = filePathCallback
+                    return try {
+                        val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                        }
+                        startActivityForResult(intent, FILE_CHOOSER_REQUEST)
+                        true
+                    } catch (_: Exception) {
+                        uploadCallback?.onReceiveValue(null)
+                        uploadCallback = null
+                        false
+                    }
+                }
+
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                     if (view === web) {
                         progress.progress = newProgress
@@ -584,7 +613,21 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         }
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            val result = try { WebChromeClient.FileChooserParams.parseResult(resultCode, data) } catch (_: Exception) { null }
+            uploadCallback?.onReceiveValue(result)
+            uploadCallback = null
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
+        if (activeActivity?.get() === this) activeActivity = null
+        uploadCallback?.onReceiveValue(null)
+        uploadCallback = null
         if (agentAttached) PhoneAiService.instance?.detachMainChat(this)
         agentAttached = false
         browserTabs.toList().forEach { tab ->
@@ -604,5 +647,62 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
 
     companion object {
         const val EXTRA_URL = "com.phoneai.app.browser.URL"
+        private const val FILE_CHOOSER_REQUEST = 4318
+        @Volatile private var activeActivity: WeakReference<BrowserActivity>? = null
+
+        private fun onUi(fallback: String, action: (BrowserActivity) -> String): String {
+            val activity = activeActivity?.get() ?: return fallback
+            if (Looper.myLooper() == Looper.getMainLooper()) return action(activity)
+            val result = AtomicReference(fallback)
+            val latch = CountDownLatch(1)
+            activity.runOnUiThread {
+                try { result.set(action(activity)) }
+                catch (e: Exception) { result.set("error: browser action failed (${e.javaClass.simpleName})") }
+                finally { latch.countDown() }
+            }
+            if (!latch.await(3, TimeUnit.SECONDS)) return "error: browser action timed out"
+            return result.get()
+        }
+
+        /** Agent-facing tab API uses 1-based tab numbers and only explicit HTTP(S) URLs. */
+        fun manageTabs(actionRaw: String, index: Int = 0, url: String = ""): String =
+            onUi("error: Orion Browser is not open") { activity ->
+                when (actionRaw.trim().lowercase()) {
+                    "list" -> {
+                        if (activity.browserTabs.isEmpty()) "No browser tabs are open."
+                        else activity.browserTabs.mapIndexed { i, tab ->
+                            val marker = if (i == activity.activeTabIndex) " (active)" else ""
+                            "${i + 1}. ${(tab.title?.takeIf { it.isNotBlank() } ?: Uri.parse(tab.url.orEmpty()).host ?: "New tab").take(80)}$marker — ${tab.url.orEmpty().take(240)}"
+                        }.joinToString("\\n")
+                    }
+                    "open" -> {
+                        val uri = try { Uri.parse(url.trim()) } catch (_: Exception) { null }
+                        if (uri == null || uri.scheme?.lowercase() !in setOf("http", "https") || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
+                            "error: open tab requires an explicit HTTP or HTTPS URL without embedded credentials"
+                        } else if (activity.browserTabs.size >= 8) {
+                            "error: Orion Browser is limited to 8 tabs"
+                        } else {
+                            activity.createTab(uri.toString(), true)
+                            "Opened browser tab for ${uri.host}; inspect browser_snapshot before acting."
+                        }
+                    }
+                    "select" -> {
+                        val tabIndex = index - 1
+                        if (tabIndex !in activity.browserTabs.indices) "error: tab index must be between 1 and ${activity.browserTabs.size}"
+                        else { activity.selectTab(tabIndex); "Selected browser tab $index." }
+                    }
+                    "close" -> {
+                        val tabIndex = if (index <= 0) activity.activeTabIndex else index - 1
+                        if (tabIndex !in activity.browserTabs.indices) "error: no browser tab at that index"
+                        else { activity.closeTab(tabIndex); "Closed browser tab ${tabIndex + 1}." }
+                    }
+                    else -> "error: browser_tabs action must be list, open, select, or close"
+                }
+            }
+
+        fun closeBrowser(): String = onUi("error: Orion Browser is not open") { activity ->
+            activity.finish()
+            "Orion Browser close requested."
+        }
     }
 }

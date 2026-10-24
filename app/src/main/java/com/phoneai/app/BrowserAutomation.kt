@@ -248,6 +248,45 @@ object BrowserAutomation {
             ". Do not read or request passwords, one-time codes, recovery phrases, or payment credentials. After the user says they are done, take a fresh browser_snapshot before continuing."
     }
 
+    /** Bounded local polling; no model/API request is made while waiting for visible text. */
+    fun waitFor(text: String, seconds: Double = 8.0): String {
+        val expected = text.trim()
+        if (expected.isBlank()) return "error: wait_for needs non-empty visible text"
+        val timeoutMs = (seconds.coerceIn(0.5, 30.0) * 1000).toLong()
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var last = ""
+        while (System.currentTimeMillis() < deadline) {
+            last = snapshot()
+            if (last.contains(expected, ignoreCase = true)) {
+                return "found requested text after local wait: ${expected.take(120)}\\n" + last.take(2500)
+            }
+            try { Thread.sleep(350L) } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return "error: browser wait was interrupted"
+            }
+        }
+        return "error: timed out waiting for visible browser text: ${expected.take(120)}. Last page state: " + last.take(1200)
+    }
+
+    /** Ask the current page to open its native file picker; the user must choose the file. */
+    fun upload(target: String): String {
+        val block = sensitivePageReason()
+        if (block != null) return "error: safety gate blocked upload. $block"
+        val label = org.json.JSONObject.quote(target.trim())
+        return evaluate("""
+            (function(){
+              const q=$label.toLowerCase();
+              const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
+              const files=[...document.querySelectorAll('input[type="file"]')].filter(visible);
+              const labelOf=e=>(e.getAttribute('aria-label')||e.getAttribute('name')||e.id||e.title||'').toLowerCase();
+              const e=files.find(e=>!q||labelOf(e)===q||labelOf(e).includes(q));
+              if(!e)return 'error: no visible file upload control matched; open the upload form first';
+              e.click();
+              return 'native file picker requested. Choose the file yourself and review the page before submitting; Orion will not select or submit a file automatically.';
+            })()
+        """.trimIndent())
+    }
+
     fun back(): String {
         val web = current?.get() ?: return "error: Orion Browser is not open"
         val latch = CountDownLatch(1)
