@@ -161,6 +161,45 @@ class OrionNotificationListener : NotificationListenerService() {
             }
         }
 
+        /** Act only on a currently active notification already admitted to the safe in-memory list. */
+        fun notificationAction(key: String, action: String, replyText: String = ""): String {
+            val normalized = action.trim().lowercase()
+            if (key.isBlank()) return "error: notification key is required"
+            if (normalized !in setOf("reply", "dismiss")) return "error: action must be reply or dismiss"
+            val service = instance ?: return "error: enable Orion Notification access first"
+            val allowed = synchronized(lock) { recent.containsKey(key) }
+            if (!allowed) return "error: notification is unavailable or was filtered for safety"
+            val sbn = try { service.activeNotifications?.firstOrNull { it.key == key } }
+                catch (_: Exception) { null }
+                ?: return "error: notification is no longer active"
+            if (normalized == "dismiss") {
+                return try {
+                    service.cancelNotification(key)
+                    synchronized(lock) { recent.remove(key) }
+                    "dismiss request sent for the selected safe notification"
+                } catch (e: Exception) { "error: could not dismiss notification (" + e.javaClass.simpleName + ")" }
+            }
+            if (replyText.isBlank()) return "error: reply text is required"
+            if (replyText.length > 1000) return "error: reply is limited to 1000 characters"
+            val actions = sbn.notification.actions ?: emptyArray()
+            val candidate = actions.firstOrNull { action ->
+                val inputs = action.remoteInputs
+                !inputs.isNullOrEmpty() && inputs.any { it.allowFreeFormInput || it.choices?.isNotEmpty() == true }
+            } ?: return "error: this notification has no supported direct-reply action; open the app and reply manually"
+            val remoteInputs = candidate.remoteInputs ?: return "error: no reply input is available"
+            val freeForm = remoteInputs.firstOrNull { it.allowFreeFormInput } ?: remoteInputs.firstOrNull()
+                ?: return "error: no reply input is available"
+            return try {
+                val fillIn = android.content.Intent()
+                val results = android.os.Bundle().apply { putCharSequence(freeForm.resultKey, replyText) }
+                android.app.RemoteInput.addResultsToIntent(remoteInputs, fillIn, results)
+                candidate.actionIntent.send(service, 0, fillIn)
+                "reply action sent to the selected safe notification; verify delivery in the source app"
+            } catch (e: Exception) {
+                "error: notification reply failed (" + e.javaClass.simpleName + "); open the app and reply manually"
+            }
+        }
+
         fun readSafeNotifications(): String {
             if (instance == null) {
                 return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry. Orion excludes banking, payment, password, card, CVV, OTP, and security-code notifications."
