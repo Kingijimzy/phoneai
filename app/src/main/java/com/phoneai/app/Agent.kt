@@ -43,6 +43,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val failedToolSignatures = LinkedHashSet<String>()
     // Last locally perceived screen, used for post-action comparison without another model call.
     @Volatile private var lastScreenSnapshot: String = ""
+    @Volatile private var lastScreenBeforeAction: String = ""
 
     private fun screenFingerprint(screen: String): String = screen.lineSequence()
         .map { it.replace(Regex("^\\s*\\[?\\d+\\]?\\s*[:.)-]?\\s*"), "").trim().lowercase() }
@@ -65,6 +66,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try {
                 val before = lastScreenSnapshot
                 val after = if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen()
+                lastScreenBeforeAction = before
                 lastScreenSnapshot = after
                 val changed = screenFingerprint(before) != screenFingerprint(after)
                 verifiedResult += if (changed) {
@@ -652,6 +654,65 @@ Rules:
             }
         }
         ranSteps.put(JSONObject().put("tool", t).put("args", a))
+    }
+
+    private fun validateAction(a: JSONObject): String {
+        val action = a.optString("tool").trim().lowercase()
+        val screen = lastScreenSnapshot.ifBlank { svc.readScreen().also { lastScreenSnapshot = it } }
+        return when (action) {
+            "click" -> {
+                val id = a.optInt("id", -1)
+                if (id >= 0 && svc.nodeInfo(id) != null) "VALID: click target ID $id exists in the current accessibility/OCR target map."
+                else "INVALID: click target ID is missing or stale. Run read_screen and select a current numbered ID."
+            }
+            "click_text" -> {
+                val text = a.optString("text").trim()
+                if (text.isNotEmpty() && screen.contains(text, ignoreCase = true)) "VALID: requested text is visible in the latest screen map."
+                else "INVALID: requested text is not visible in the latest screen map. Re-perceive before acting."
+            }
+            "tap" -> {
+                val x = a.optDouble("x", Double.NaN)
+                val y = a.optDouble("y", Double.NaN)
+                if (x.isFinite() && y.isFinite() && x >= 0.0 && y >= 0.0 && a.optBoolean("allow_coordinates", false))
+                    "VALID: coordinate fallback arguments are finite and non-negative. Coordinates still require visual grounding."
+                else "INVALID: use a current numbered target when possible; coordinate fallback requires x/y and allow_coordinates=true."
+            }
+            "type" -> {
+                val value = a.optString("text")
+                if (value.isNotBlank() && value.length <= 4000) "VALID: text payload is non-empty and within the local size limit. This does not verify the focused field."
+                else "INVALID: text payload must be non-empty and no longer than 4000 characters."
+            }
+            "open_app" -> if (a.optString("name").isNotBlank()) "VALID: app target supplied." else "INVALID: app name or package is required."
+            "scroll" -> if (a.optString("direction", "down").lowercase() in setOf("up", "down")) "VALID: scroll direction is supported." else "INVALID: direction must be up or down."
+            else -> "INVALID: unsupported action type for local validation: $action"
+        }
+    }
+
+    private fun verifyAction(a: JSONObject): String {
+        val screen = try {
+            if (a.optBoolean("refresh", true)) svc.readScreen().also { lastScreenSnapshot = it } else lastScreenSnapshot
+        } catch (e: Exception) {
+            return "UNVERIFIED: could not read the current screen (" + e.javaClass.simpleName + ")."
+        }
+        if (screen.isBlank()) return "UNVERIFIED: the current screen map is empty."
+        val expected = a.optString("expected_text").trim()
+        val previous = a.optString("previous_text").trim()
+        val checks = mutableListOf<String>()
+        if (expected.isNotEmpty()) {
+            val visible = screen.contains(expected, ignoreCase = true)
+            checks.add(if (visible) "PASS: expected text is visible." else "FAIL: expected text is not visible.")
+        }
+        if (previous.isNotEmpty()) {
+            val absent = !screen.contains(previous, ignoreCase = true)
+            checks.add(if (absent) "PASS: previous text is no longer visible." else "FAIL: previous text remains visible.")
+        }
+        if (a.optBoolean("expect_change", false)) {
+            val before = lastScreenBeforeAction
+            if (before.isBlank()) checks.add("UNVERIFIED: no pre-action screen snapshot is available.")
+            else checks.add(if (screenFingerprint(before) != screenFingerprint(screen)) "PASS: visible screen state changed." else "FAIL: no visible screen change detected.")
+        }
+        if (checks.isEmpty()) return "SCREEN EVIDENCE (not proof of task completion):\n" + screen.take(2600)
+        return checks.joinToString(" ") + "\nCurrent screen evidence (untrusted UI text):\n" + screen.take(1800)
     }
 
     private fun num(a: JSONObject, k: String): Float? {
