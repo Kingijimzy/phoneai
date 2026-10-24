@@ -12,7 +12,9 @@ import java.net.URL
 
 /** Explicit installer for the small, English sherpa-onnx KWS model. Never downloads in the background. */
 object WakeWordModelInstaller {
-    private const val MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2"
+    // Pinned to the upstream GigaSpeech archive and its published SHA-256.
+    private const val MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"
+    private const val MODEL_SHA256 = "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a"
     private const val MAX_ARCHIVE_BYTES = 20L * 1024L * 1024L
     private const val MAX_EXTRACTED_FILE_BYTES = 20L * 1024L * 1024L
     private val required = setOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt", "keywords.txt")
@@ -34,7 +36,7 @@ object WakeWordModelInstaller {
                 stage.deleteRecursively()
                 if (!stage.mkdirs() && !stage.isDirectory) throw IOException("Could not create wake-word model directory.")
                 progress("Downloading English offline wake-word model (about 16 MB)…", 0)
-                download(archive, isCancelled) { progress("Downloading English offline wake-word model…", (it * 0.65f).toInt()) }
+                download(archive, MODEL_SHA256, isCancelled) { progress("Downloading English offline wake-word model…", (it * 0.65f).toInt()) }
                 checkCancelled(isCancelled)
                 progress("Extracting compact INT8 model…", 68)
                 extract(archive, stage, isCancelled)
@@ -63,7 +65,7 @@ object WakeWordModelInstaller {
     }
 
     private fun checkCancelled(cancelled: () -> Boolean) { if (cancelled()) throw InterruptedException("Wake-word installation cancelled.") }
-    private fun download(destination: File, cancelled: () -> Boolean, progress: (Int) -> Unit) {
+    private fun download(destination: File, expectedSha256: String, cancelled: () -> Boolean, progress: (Int) -> Unit) {
         val part = File(destination.parentFile, destination.name + ".part")
         val connection = URL(MODEL_URL).openConnection() as HttpURLConnection
         var received = 0L
@@ -83,6 +85,10 @@ object WakeWordModelInstaller {
                 }
             } }
             if (expected > 0 && received != expected) throw IOException("Wake-word download ended before all bytes arrived.")
+            checkCancelled(cancelled)
+            if (!AssetIntegrity.matchesSha256(part, expectedSha256)) {
+                throw IOException("SHA-256 verification failed for the wake-word model; the download was rejected.")
+            }
             if (destination.exists()) destination.delete()
             if (!part.renameTo(destination)) part.copyTo(destination, overwrite = true)
         } finally { connection.disconnect(); part.delete() }
