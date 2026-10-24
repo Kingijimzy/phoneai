@@ -312,7 +312,7 @@ Rules:
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
-            sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc).take(if (request.isNullOrBlank()) 1400 else 900))
+            sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc, request).take(if (request.isNullOrBlank()) 1400 else 900))
             val routeHints = RouteMemoryStore.promptBlock(svc, request)
             if (routeHints.isNotBlank()) {
                 sb.append("\n\nEncrypted route memory (hints only; inspect current state and re-check safety before every action):\n")

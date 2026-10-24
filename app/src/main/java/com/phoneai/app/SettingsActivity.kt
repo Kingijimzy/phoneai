@@ -230,6 +230,7 @@ class SettingsActivity : Activity() {
         b.elevation = 0f
         b.stateListAnimator = null
         b.setOnClickListener { onClick() }
+        Motion.pressFeedback(b)
         return b
     }
 
@@ -250,6 +251,7 @@ class SettingsActivity : Activity() {
         c.background = g
         c.setPadding(dp(16), dp(15), dp(16), dp(16))
         c.elevation = dp(1).toFloat()
+        Motion.enter(c, parent.childCount)
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -525,15 +527,17 @@ class SettingsActivity : Activity() {
         // ---- 3. voice
         val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
-        add(s3, button("Live-call visual · " + if (Prefs.liveCallStyle(this) == "eyes") "Eyes" else "Dot matrix", false) {
-            val choices = arrayOf("Dot matrix (default)", "Eyes")
-            val selected = if (Prefs.liveCallStyle(this) == "eyes") 1 else 0
+        val liveStyleKeys = arrayOf("dot_matrix", "eyes", "orb", "wave")
+        val liveStyleNames = arrayOf("Dot matrix", "Eyes", "Orb", "Waveform")
+        add(s3, button("Live-call visual · " + liveStyleNames[liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)], false) {
+            val selected = liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)
             AlertDialog.Builder(this)
                 .setTitle("Live-call visual")
-                .setSingleChoiceItems(choices, selected) { dialog, which ->
-                    Prefs.setLiveCallStyle(this, if (which == 1) "eyes" else "dot_matrix")
+                .setSingleChoiceItems(liveStyleNames, selected) { dialog, which ->
+                    Prefs.setLiveCallStyle(this, liveStyleKeys[which])
                     dialog.dismiss()
-                    Toast.makeText(this, choices[which] + " selected for your next live call.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, liveStyleNames[which] + " selected for your next live call.", Toast.LENGTH_SHORT).show()
+                    refresh()
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
