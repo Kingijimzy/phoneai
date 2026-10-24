@@ -194,13 +194,20 @@ class Voice(private val ctx: Context) {
         val my = ++gen
         val onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             try { SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) } catch (_: Exception) { false }
+        // Track the recognizer that was actually created, not just whether Android
+        // advertised on-device support. Creation can fail and fall back to the service.
+        var usingOnDevice = false
         val r = try {
-            if (onDeviceAvailable) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
-            else SpeechRecognizer.createSpeechRecognizer(ctx)
+            if (onDeviceAvailable) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx).also { usingOnDevice = true }
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(ctx)
+            }
         } catch (_: Exception) {
+            usingOnDevice = false
             SpeechRecognizer.createSpeechRecognizer(ctx)
         }
-        listeningOnDevice = onDeviceAvailable
+        listeningOnDevice = usingOnDevice
         rec = r
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
@@ -223,7 +230,7 @@ class Voice(private val ctx: Context) {
                 val msg = when (error) {
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is missing. Open Orion AI > Allow microphone."
                     SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-                    SpeechRecognizer.ERROR_SERVER -> if (listeningOnDevice) {
+                    SpeechRecognizer.ERROR_SERVER -> if (usingOnDevice) {
                         "On-device speech recognition failed. Check that an offline speech model is installed, then try again."
                     } else {
                         "Speech service needs internet."
