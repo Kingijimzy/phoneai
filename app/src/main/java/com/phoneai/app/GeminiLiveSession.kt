@@ -72,7 +72,10 @@ internal class GeminiLiveSession(
                 val config = buildSetup()
                 setupConfig = config
                 val token = requestEphemeralToken(config)
-                if (stopped.get()) return@Thread
+                if (stopped.get()) {
+                    disposeClient()
+                    return@Thread
+                }
                 val request = Request.Builder()
                     .url("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained")
                     .header("Authorization", "Token $token")
@@ -132,7 +135,8 @@ internal class GeminiLiveSession(
         try {
             socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
         } catch (_: Exception) { }
-        try { socket?.close(1000, "User ended Gemini Live session") } catch (_: Exception) { }
+        val activeSocket = socket
+        try { activeSocket?.close(1000, "User ended Gemini Live session") } catch (_: Exception) { }
         try { recorder?.stop() } catch (_: Exception) { }
         try { recorder?.release() } catch (_: Exception) { }
         recorder = null
@@ -149,7 +153,9 @@ internal class GeminiLiveSession(
         try { echoCanceler?.release() } catch (_: Exception) { }
         echoCanceler = null
         listener.onInputLevel(0f)
-        disposeClient()
+        if (activeSocket == null) disposeClient()
+        // Keep OkHttp alive long enough to send the WebSocket close frame.
+        // onClosed/onFailure dispose it when a socket was already established.
     }
 
     private fun buildSetup(): JSONObject {
@@ -197,11 +203,18 @@ internal class GeminiLiveSession(
     private fun requestEphemeralToken(setup: JSONObject): String {
         if (apiKey.isBlank()) throw IOException("No Gemini API key is saved.")
         val now = Instant.now()
+        // The Live API uses liveConnectConstraints for ephemeral-token setup restrictions.
+        // Lock the model and AUDIO output modality, while keeping token TTLs short.
+        val constrainedConfig = JSONObject()
+            .put("responseModalities", JSONArray().put("AUDIO"))
+            .put("sessionResumption", JSONObject())
         val body = JSONObject()
             .put("uses", 1)
             .put("expireTime", now.plusMillis(GeminiLivePolicy.TOKEN_EXPIRE_AFTER_MS).toString())
             .put("newSessionExpireTime", now.plusMillis(GeminiLivePolicy.TOKEN_NEW_SESSION_WINDOW_MS).toString())
-            .put("bidiGenerateContentSetup", setup)
+            .put("liveConnectConstraints", JSONObject()
+                .put("model", GeminiLivePolicy.MODEL)
+                .put("config", constrainedConfig))
         val connection = (URL("https://generativelanguage.googleapis.com/v1beta/auth_tokens").openConnection() as HttpURLConnection)
         try {
             connection.requestMethod = "POST"
