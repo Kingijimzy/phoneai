@@ -559,6 +559,30 @@ class SettingsActivity : Activity() {
                 runWakeWordInstall()
             }
         }, 6)
+        val wakeSensitivityLabel = text("Wake-word sensitivity: ${Prefs.wakeSensitivity(this)} / 100 · lower threshold is more sensitive", 13f, Theme.MUTED)
+        add(s3, wakeSensitivityLabel, 10)
+        val wakeSensitivityBar = SeekBar(this).apply {
+            max = 100
+            progress = Prefs.wakeSensitivity(this@SettingsActivity)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        Prefs.setWakeSensitivity(this@SettingsActivity, progress)
+                        wakeSensitivityLabel.text = "Wake-word sensitivity: $progress / 100 · threshold ${String.format(java.util.Locale.US, "%.2f", Prefs.wakeThreshold(this@SettingsActivity))}"
+                    }
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    if (Prefs.wake(this@SettingsActivity)) PhoneAiService.instance?.updateWakeWord(true)
+                }
+            })
+        }
+        add(s3, wakeSensitivityBar, 2)
+        switchRow(s3, "Wake-word test mode (shows audio level and threshold)", Prefs.wakeTestMode(this)) {
+            Prefs.setWakeTestMode(this, it)
+            Toast.makeText(this, if (it) "Test mode shows audio level and threshold. The native model API does not expose a confidence score." else "Wake-word test mode disabled.", Toast.LENGTH_LONG).show()
+            if (Prefs.wake(this)) PhoneAiService.instance?.updateWakeWord(true)
+        }
         switchRow(s3, "Wake word: say \"Orion\" (offline model when installed; experimental fallback otherwise)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (it && !hasMic) {
