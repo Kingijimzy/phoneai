@@ -21,7 +21,10 @@ object SafetyGate {
     )
 
     private val credentialText = Regex(
-        "(?i)\\b(card|cvv|cvc|password|passcode|security\\s+code|card\\s+number|credit\\s+card|debit\\s+card|one[- ]time\\s+(?:password|code)|otp|pin)\\b"
+        "(?i)\\b(card|cvv|cvc|password|passcode|security\\s+code|card\\s+number|credit\\s+card|debit\\s+card|one[- ]time\\s+(?:password|code)|otp|pin|recovery\\s+phrase|seed\\s+phrase|private\\s+key|access\\s+token|api\\s+key|bank\\s+account|routing\\s+number|social\\s+security|national\\s+id|passport)\\b"
+    )
+    private val sensitiveBrowserField = Regex(
+        "(?i)(password|passcode|pin|otp|one[- ]time|verification|security\\s+code|recovery|seed\\s+phrase|private\\s+key|api\\s+key|access\\s+token|card|cvv|cvc|bank\\s+account|routing\\s+number|national\\s+id|passport)"
     )
     private val longDigitRun = Regex("(?<!\\d)(?:\\d[ -]?){13,19}(?!\\d)")
 
@@ -42,8 +45,14 @@ object SafetyGate {
         if (tool == "open_app" && isSensitiveApp(target, target)) {
             return "Orion's safety gate blocks opening or automating banking and payment apps. Use the bank's own app manually."
         }
-        if (tool == "type" && containsSensitiveCredentialText(text)) {
-            return "Orion's safety gate blocks typing card, CVV/CVC, password, passcode, PIN, OTP, security-code, or card-number text. Enter sensitive details yourself."
+        if (tool in setOf("type", "browser_type") && containsSensitiveCredentialText(text)) {
+            return "Orion's safety gate blocks typing text that appears to contain credentials, payment details, identity numbers, or secrets. Enter sensitive details yourself."
+        }
+        if (tool == "browser_type" && sensitiveBrowserField.containsMatchIn(target.orEmpty())) {
+            return "Orion's safety gate blocks filling password, verification, recovery, payment, identity, or secret fields. Complete that field yourself."
+        }
+        if (tool == "open_deep_link" && containsSensitiveCredentialText(target)) {
+            return "Orion's safety gate blocks deep links containing credential-like or sensitive numeric data."
         }
         val readOnly = setOf("read_screen", "verify_action", "validate_action", "browser_snapshot", "browser_verify", "read_notifications")
         if (tool !in readOnly && isSensitiveApp(currentPackage, currentLabel)) {
