@@ -118,6 +118,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var emptyListens = 0
     private var wakeGen = 0
     private var wakeErr = false
+    /** Back off repeated speech-service failures so wake detection cannot hammer the recognizer. */
+    private var wakeErrorStreak = 0
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -1375,13 +1377,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- wake word "Orion"
 
     private fun wakeAllowed(): Boolean =
-        Prefs.wake(this) && !running && !listening && panel == null && confirmView == null &&
+        Prefs.wake(this) && !running && !listening && !mainChatActive && panel == null && confirmView == null &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private fun startWake() {
-        if (!Prefs.wake(this)) return
+        if (!wakeAllowed()) return
         val my = ++wakeGen
-        main.postDelayed({ wakeTick(my) }, 700)
+        main.postDelayed({ wakeTick(my) }, 900)
     }
 
     private fun wakeTick(my: Int) {
@@ -1395,6 +1397,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (my == wakeGen) {
                 val cmd = if (text.isNullOrBlank()) null else afterWake(text)
                 if (cmd != null) {
+                    wakeErrorStreak = 0
                     wakeGen++
                     if (cmd.isBlank()) {
                         handsActive = Prefs.hands(this)
@@ -1404,13 +1407,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                         submit(cmd)
                     }
                 } else if (!wakeErr) {
-                    main.postDelayed({ wakeTick(my) }, 400)
+                    // Give the Android recognizer a little breathing room between sessions.
+                    main.postDelayed({ wakeTick(my) }, 900)
                 }
             }
         }, { _ -> }, { err ->
             wakeErr = true
+            wakeErrorStreak = (wakeErrorStreak + 1).coerceAtMost(6)
             appendTranscript("note", "Wake word: $err")
-            main.postDelayed({ wakeTick(my) }, 5000)
+            // 5s, 10s, 20s, then cap at 30s while the speech service is unhealthy.
+            val retryMs = (5000L shl (wakeErrorStreak - 1)).coerceAtMost(30_000L)
+            main.postDelayed({ wakeTick(my) }, retryMs)
         })
     }
 
