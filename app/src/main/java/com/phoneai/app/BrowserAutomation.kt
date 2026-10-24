@@ -59,7 +59,11 @@ object BrowserAutomation {
             "bank", "banking", "payment", "wallet", "paypal", "stripe", "venmo", "cashapp",
             "revolut", "monzo", "wise", "opay", "palmpay", "kuda", "moniepoint", "flutterwave",
             "paytm", "phonepe", "binance", "coinbase", "kraken", "bybit", "kucoin", "okx",
-            "cryptoexchange", "trading"
+            "cryptoexchange", "trading", "chase", "hsbc", "barclays", "santander", "wellsfargo",
+            "bankofamerica", "capitalone", "citi", "fidelity", "ally", "navyfederal",
+            "gtbank", "zenith", "ubagroup", "firstbank", "ecobank", "accessbank", "stanbic",
+            "fcmb", "polarisbank", "sterlingbank", "unionbank", "wema", "providus", "keystone",
+            "paga", "payoneer", "skrill", "neteller", "cashapp"
         )
         val labels = host.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         return if (financialHostTokens.any { token ->
