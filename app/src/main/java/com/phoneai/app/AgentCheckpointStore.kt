@@ -30,17 +30,7 @@ object AgentCheckpointStore {
         }
     }
 
-    private fun safeCommand(command: String): String {
-        var safe = command
-            .replace(Regex("(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]+"), "Bearer [REDACTED]")
-            .replace(Regex("(?i)\\b(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret|authorization)\\b\\s*[:=]\\s*[^\\s,;]+"), "$1=[REDACTED]")
-            .replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "[EMAIL]")
-            .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
-            .replace(Regex("(?<![A-Za-z0-9])(?:\\+?\\d[\\d ().-]{7,}\\d)(?![A-Za-z0-9])"), "[PHONE]")
-        if (safe.length > MAX_COMMAND) safe = safe.take(MAX_COMMAND)
-        return safe
-    }
-
+    private fun safeCommand(command: String): String = AgentPrivacyFilter.safeCommand(command)
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
         val now = System.currentTimeMillis()
         val o = JSONObject()
