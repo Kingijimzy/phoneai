@@ -25,6 +25,8 @@ class OrionNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         instance = this
+        // Seed currently visible notifications as well as future post events.
+        try { activeNotifications?.forEach { capture(it) } } catch (_: Exception) { }
     }
 
     override fun onListenerDisconnected() {
