@@ -56,6 +56,18 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url")
+        val safetyBlock = SafetyGate.blockReason(
+            tool,
+            if (tool == "open_app") args.optString("name") else null,
+            if (tool == "type") args.optString("text") else null,
+            svc.currentPackageName(),
+            svc.currentAppLabel()
+        )
+        if (safetyBlock != null) {
+            val blocked = "error: safety gate blocked action. $safetyBlock"
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
         val result = try {
             if (tool in nativeUiActions) {
                 val validationArgs = JSONObject(args.toString()).put("tool", tool)
@@ -78,21 +90,21 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 lastScreenSnapshot = after
                 val changed = screenFingerprint(before) != screenFingerprint(after)
                 verifiedResult += if (changed) {
-                    "\\nLOCAL VERIFY: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
+                    "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
                 } else {
-                    "\\nLOCAL VERIFY: no visible state change detected. Do not claim the intended outcome is confirmed; inspect the screen or use wait_for/verify_action."
+                    "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step."
                 }
             } catch (_: Exception) {
                 verifiedResult += "\\nLOCAL VERIFY: post-action screen comparison unavailable; outcome remains unverified."
             }
         }
-        if (result.trimStart().startsWith("error", ignoreCase = true)) {
+        if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             failedToolSignatures.add(signature)
             while (failedToolSignatures.size > 80) failedToolSignatures.remove(failedToolSignatures.first())
         }
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
-        try { ActionLogStore.record(svc, tool, result) } catch (_: Exception) { }
+        try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
         return verifiedResult
     }
 
@@ -747,7 +759,14 @@ Rules:
             else checks.add(if (screenFingerprint(before) != screenFingerprint(screen)) "PASS: visible screen state changed." else "FAIL: no visible screen change detected.")
         }
         if (checks.isEmpty()) return "SCREEN EVIDENCE (not proof of task completion):\n" + screen.take(2600)
-        return checks.joinToString(" ") + "\nCurrent screen evidence (untrusted UI text):\n" + screen.take(1800)
+        val summary = checks.joinToString(" ")
+        if (summary.contains("FAIL:")) {
+            return "error: verification failed. $summary\nCurrent screen evidence (untrusted UI text):\n" + screen.take(1800)
+        }
+        if (summary.contains("UNVERIFIED:")) {
+            return "error: verification could not be completed. $summary\nCurrent screen evidence (untrusted UI text):\n" + screen.take(1800)
+        }
+        return summary + "\nCurrent screen evidence (untrusted UI text):\n" + screen.take(1800)
     }
 
     private fun num(a: JSONObject, k: String): Float? {
@@ -770,6 +789,14 @@ Rules:
     }
 
     private fun exec(tool: String, a: JSONObject): String {
+        val safetyBlock = SafetyGate.blockReason(
+            tool,
+            if (tool == "open_app") a.optString("name") else null,
+            if (tool == "type") a.optString("text") else null,
+            svc.currentPackageName(),
+            svc.currentAppLabel()
+        )
+        if (safetyBlock != null) return "error: safety gate blocked action. $safetyBlock"
         val skillId = activeSkillId
         if (skillId != null) {
             val elapsed = (System.currentTimeMillis() - activeSkillStartedAt).coerceAtLeast(0L)
