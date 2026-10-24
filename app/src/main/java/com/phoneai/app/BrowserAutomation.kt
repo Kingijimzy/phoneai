@@ -55,15 +55,16 @@ object BrowserAutomation {
         val host = try { android.net.Uri.parse(org.json.JSONObject(page).optString("url")).host.orEmpty() }
             catch (_: Exception) { "" }
         if (host.isBlank()) return null
+        // Match recognizable financial providers and bank brands, not generic words such as
+        // "wallet" or "trading" that may appear in ordinary games, shops, or documentation.
         val financialHostTokens = listOf(
-            "bank", "banking", "payment", "wallet", "paypal", "stripe", "venmo", "cashapp",
-            "revolut", "monzo", "wise", "opay", "palmpay", "kuda", "moniepoint", "flutterwave",
-            "paytm", "phonepe", "binance", "coinbase", "kraken", "bybit", "kucoin", "okx",
-            "cryptoexchange", "trading", "chase", "hsbc", "barclays", "santander", "wellsfargo",
-            "bankofamerica", "capitalone", "citi", "fidelity", "ally", "navyfederal",
+            "paypal", "stripe", "venmo", "cashapp", "revolut", "monzo", "wise", "opay",
+            "palmpay", "kuda", "moniepoint", "flutterwave", "paytm", "phonepe", "binance",
+            "coinbase", "kraken", "bybit", "kucoin", "okx", "chase", "hsbc", "barclays",
+            "santander", "wellsfargo", "bankofamerica", "capitalone", "fidelity", "navyfederal",
             "gtbank", "zenith", "ubagroup", "firstbank", "ecobank", "accessbank", "stanbic",
             "fcmb", "polarisbank", "sterlingbank", "unionbank", "wema", "providus", "keystone",
-            "paga", "payoneer", "skrill", "neteller", "cashapp"
+            "paga", "payoneer", "skrill", "neteller"
         )
         val labels = host.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         return if (financialHostTokens.any { token ->
@@ -159,17 +160,24 @@ object BrowserAutomation {
         """.trimIndent())
     }
 
-    /** Extract all visible HTML tables in one DOM pass, bounded to avoid oversized model payloads. */
+    /** Extract complete visible HTML tables in one call, keeping the total payload bounded. */
     fun extract(): String = evaluate("""
         (function(){
           const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
-          const tables=[...document.querySelectorAll('table')].filter(visible).slice(0,12).map((t,ti)=>({
-            index:ti,
-            caption:(t.caption?.innerText||'').trim().slice(0,160),
-            rows:[...t.querySelectorAll('tr')].slice(0,60).map(tr=>[...tr.querySelectorAll('th,td')].slice(0,20).map(c=>(c.innerText||'').replace(/\\s+/g,' ').trim().slice(0,240)))
-          }));
-          const text=(document.body?.innerText||'').replace(/\\s+/g,' ').trim();
-          return JSON.stringify({url:location.href,title:document.title,tables:tables,tableCount:document.querySelectorAll('table').length,summary:tables.length?undefined:text.slice(0,1000)});
+          const all=[...document.querySelectorAll('table')].filter(visible);
+          const accepted=[];
+          for(let ti=0;ti<all.length&&accepted.length<12;ti++){
+            const t=all[ti];
+            const table={index:ti,caption:(t.caption?.innerText||'').trim().slice(0,100),
+              rows:[...t.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(cell=>(cell.innerText||'').replace(/\\s+/g,' ').trim().slice(0,120)))};
+            if(table.rows.length>100||table.rows.some(row=>row.length>20)) continue;
+            const probe={url:location.href,title:document.title,tables:accepted.concat([table]),tableCount:all.length,omittedTables:0};
+            if(JSON.stringify(probe).length<=12000) accepted.push(table);
+          }
+          const result={url:location.href,title:document.title,tables:accepted,tableCount:all.length,omittedTables:Math.max(0,all.length-accepted.length)};
+          if(accepted.length===0&&all.length>0)result.note='Tables were too large for a safe single response; no partial table was returned.';
+          if(all.length===0)result.summary=(document.body?.innerText||'').replace(/\\s+/g,' ').trim().slice(0,1000);
+          return JSON.stringify(result);
         })()
     """.trimIndent(), 7000L)
 
