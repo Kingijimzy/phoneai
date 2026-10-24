@@ -558,9 +558,19 @@ class Nim(private val ctx: Context) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 errors[p.id] = e.message ?: p.label
                 lastFailure[p.id] = (e.message ?: "Unknown provider error").take(220)
-                // Provider fallback is strictly rate-limit-triggered. Do not rotate on network,
-                // auth, model, empty-response, timeout, or server errors.
-                if (e !is AiException || !e.rateLimited) break
+                // Rotate on rate limits AND confirmed model/endpoint failures. A retired
+                // NVIDIA model commonly returns 404; stopping here strands the user even when
+                // another saved provider is healthy. Do not rotate on bad keys, connectivity,
+                // timeouts, or ambiguous failures.
+                val detail = (e.message ?: "").lowercase()
+                val unavailableModel = e is AiException && (
+                    detail.contains("no chat model worked") &&
+                    (detail.contains("404") || detail.contains("410") || detail.contains("422"))
+                )
+                val temporaryProviderFailure = e is AiException &&
+                    (detail.contains("service temporarily busy") || detail.contains("http 500") ||
+                     detail.contains("http 502") || detail.contains("http 503") || detail.contains("http 504"))
+                if (e !is AiException || (!e.rateLimited && !unavailableModel && !temporaryProviderFailure)) break
             }
         }
         throw RuntimeException(if (errors.isNotEmpty()) "AI request stopped without provider rotation except on HTTP 429: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "No saved provider is currently available. Check Settings → AI providers.")
