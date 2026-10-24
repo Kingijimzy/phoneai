@@ -217,11 +217,11 @@ object Prefs {
     fun setWake(c: Context, v: Boolean) = sp(c).edit().putBoolean("wake", v).apply()
 
     /** When enabled, speech input must use Android on-device recognition or fail closed. */
-    fun offlineSpeechOnly(c: Context): Boolean = sp(c).getBoolean("offline_speech_only", false)
+    fun offlineSpeechOnly(c: Context): Boolean = sp(c).getBoolean("offline_speech_only", true)
     fun setOfflineSpeechOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_speech_only", v).apply()
 
     /** Prevent text-to-speech from using a voice that requires a network service. */
-    fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", false)
+    fun offlineVoiceOnly(c: Context): Boolean = sp(c).getBoolean("offline_voice_only", true)
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
     /** Use the installed English Piper neural voice instead of Android TTS. */
