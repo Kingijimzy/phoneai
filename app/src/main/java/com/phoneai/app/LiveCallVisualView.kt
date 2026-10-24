@@ -42,6 +42,7 @@ class LiveCallVisualView(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
 
     var onVisualTap: (() -> Unit)? = null
+    @Volatile var animationEnabled: Boolean = true
 
     private val mint = 0xFF8CFFD0.toInt()
     private val dimMint = 0xFF285E4C.toInt()
@@ -53,6 +54,7 @@ class LiveCallVisualView(context: Context) : View(context) {
         strokeJoin = Paint.Join.ROUND
     }
     private val mouth = Path()
+    private val eyeCurve = Path()
     private val eyeRect = RectF()
     private var frame = 0
     private var lastWordAt = 0L
@@ -122,7 +124,7 @@ class LiveCallVisualView(context: Context) : View(context) {
         if (wordPulse > 0f) wordPulse = max(0f, wordPulse - if (reducedMotion) 1f else 0.11f)
         if (speechAmplitude > 0f && mode != OrbView.Mode.SPEAKING) speechAmplitude = 0f
         frame++
-        if (isShown && windowVisibility == VISIBLE && !reducedMotion) postInvalidateDelayed(frameDelay)
+        if (animationEnabled && isShown && windowVisibility == VISIBLE && !reducedMotion) postInvalidateDelayed(frameDelay)
     }
 
     private fun drawDots(canvas: Canvas, w: Float, h: Float, t: Float, now: Long) {
@@ -195,10 +197,18 @@ class LiveCallVisualView(context: Context) : View(context) {
         val gazeY = if (mode == OrbView.Mode.THINKING) -unit * .16f else if (mode == OrbView.Mode.WAITING_APPROVAL) unit * .03f else 0f
         for (side in -1..1 step 2) {
             val ex = cx + side * unit * 1.12f
-            eyePaint.color = mint
-            eyeRect.set(ex - eyeW / 2f, cy - eyeH / 2f, ex + eyeW / 2f, cy + eyeH / 2f)
-            canvas.drawRoundRect(eyeRect, eyeH * .5f, eyeH * .5f, eyePaint)
-            if (mode != OrbView.Mode.SPEAKING) {
+            if (mode == OrbView.Mode.SPEAKING) {
+                linePaint.color = mint
+                linePaint.alpha = 245
+                linePaint.strokeWidth = max(2f, unit * .085f)
+                eyeCurve.reset()
+                eyeCurve.moveTo(ex - eyeW / 2f, cy + unit * .05f)
+                eyeCurve.quadTo(ex, cy - eyeH * .85f, ex + eyeW / 2f, cy + unit * .05f)
+                canvas.drawPath(eyeCurve, linePaint)
+            } else {
+                eyePaint.color = mint
+                eyeRect.set(ex - eyeW / 2f, cy - eyeH / 2f, ex + eyeW / 2f, cy + eyeH / 2f)
+                canvas.drawRoundRect(eyeRect, eyeH * .5f, eyeH * .5f, eyePaint)
                 eyePaint.color = android.graphics.Color.BLACK
                 val pupilR = max(2f, unit * .13f)
                 canvas.drawCircle(ex + gazeX, cy + gazeY, pupilR, eyePaint)
