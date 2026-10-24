@@ -2,6 +2,12 @@ package com.phoneai.app
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
+import com.k2fsa.sherpa.onnx.GenerationConfig
+import com.k2fsa.sherpa.onnx.OfflineTts
+import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
@@ -14,6 +20,7 @@ import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.Executors
 
 /** Speech in (SpeechRecognizer) and speech out (TextToSpeech). */
 class Voice(private val ctx: Context) {
@@ -24,6 +31,16 @@ class Voice(private val ctx: Context) {
     @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
     private val pending = AtomicInteger(0)
+    private val playbackGeneration = AtomicInteger(0)
+    private val neuralWorker = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "Orion-Neural-TTS").apply { isDaemon = true }
+    }
+    @Volatile private var neuralTrack: AudioTrack? = null
+    private var neuralTrackSampleRate = 0
+    private var neuralFramesWritten = 0L
+    // Accessed only by neuralWorker so native inference and release are serialized.
+    private var neuralEngine: OfflineTts? = null
+    private var neuralEnginePath: String? = null
 
     @Volatile
     private var gen = 0
@@ -94,11 +111,12 @@ class Voice(private val ctx: Context) {
     }
 
     private fun finished(id: String?) {
-        if (id != null) callbacks.remove(id)?.invoke()
-        if (pending.decrementAndGet() <= 0) {
-            pending.set(0)
-            main.post { onSpeaking?.invoke(false) }
+        val callback = if (id != null) callbacks.remove(id) else null
+        val remaining = pending.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
+        if (remaining == 0) {
+            main.post { if (pending.get() == 0) onSpeaking?.invoke(false) }
         }
+        callback?.let { cb -> main.post { cb() } }
     }
 
     private fun clean(s: String): String =
@@ -128,23 +146,44 @@ class Voice(private val ctx: Context) {
     fun isSpeaking(): Boolean = pending.get() > 0 || tts?.isSpeaking == true
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
-        val t = clean(text)
-        // Fail closed if the user requests offline output but this language has no
-        // installed offline voice. Never silently send synthesized speech to a server.
+        val cleaned = clean(text)
+        if (cleaned.isEmpty()) {
+            onDone?.invoke()
+            return
+        }
+        val chunks = splitForSpeech(cleaned)
+        if (chunks.isEmpty()) {
+            onDone?.invoke()
+            return
+        }
+
+        // The installed Piper voice is English-only for now. Other phone languages
+        // retain Android TTS rather than being read with an inappropriate English model.
+        if (Prefs.neuralVoice(ctx) &&
+            Locale.getDefault().language == "en" &&
+            NeuralVoiceInstaller.isInstalled(ctx)
+        ) {
+            speakNeural(chunks, onDone)
+            return
+        }
+
+        // Offline-only mode fails closed if the Android engine has no local voice.
         if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
             onDone?.invoke()
             main.post { onSpeaking?.invoke(false) }
             return
         }
-        if (!ttsReady || t.isEmpty()) {
+        speakWithAndroidTts(chunks, onDone)
+    }
+
+    /** Compatibility path if Piper is not installed or native initialization fails. */
+    private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
+        if (!ttsReady || chunks.isEmpty()) {
             onDone?.invoke()
             return
         }
-        val engine = tts ?: return
-        // Keep a stable rate and pitch across each response. Changing pitch sentence by
-        // sentence sounds synthetic; chunk only when needed to respect Android TTS limits.
-        val chunks = splitForSpeech(t)
-        if (chunks.isEmpty()) {
+        val engine = tts
+        if (engine == null) {
             onDone?.invoke()
             return
         }
@@ -160,14 +199,189 @@ class Voice(private val ctx: Context) {
             val id = "u" + System.nanoTime()
             if (onDone != null && idx == chunks.lastIndex) callbacks[id] = onDone
             if (pending.getAndIncrement() == 0) main.post { onSpeaking?.invoke(true) }
-            val res = engine.speak(part, TextToSpeech.QUEUE_ADD, null, id)
-            if (res != TextToSpeech.SUCCESS) finished(id)
+            val result = engine.speak(part, TextToSpeech.QUEUE_ADD, null, id)
+            if (result != TextToSpeech.SUCCESS) finished(id)
+        }
+    }
+
+    /**
+     * Each sentence is inferred separately, while sherpa-onnx's native callback feeds
+     * PCM blocks directly into AudioTrack. Blocking writes add back-pressure; synthesis
+     * of the next sentence overlaps playback of the current sentence.
+     */
+    private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?) {
+        val token = playbackGeneration.get()
+        val ids = chunks.map { "n" + System.nanoTime() + "_" + it.length }
+        if (onDone != null) callbacks[ids.last()] = onDone
+        if (pending.getAndAdd(chunks.size) == 0) {
+            main.post { if (token == playbackGeneration.get() && pending.get() > 0) onSpeaking?.invoke(true) }
+        }
+
+        neuralWorker.execute {
+            var track: AudioTrack? = null
+            var fallbackStart = 0
+            var completedBeforeFallback = 0
+            try {
+                if (token != playbackGeneration.get()) return@execute
+                val model = NeuralVoiceInstaller.modelFile(ctx)
+                if (!NeuralVoiceInstaller.isInstalled(ctx)) {
+                    throw IllegalStateException("Neural voice files are incomplete.")
+                }
+                val engine = obtainNeuralEngine(model)
+                track = obtainNeuralTrack(engine.sampleRate())
+                for (index in chunks.indices) {
+                    if (token != playbackGeneration.get()) return@execute
+                    fallbackStart = index
+                    val generation = GenerationConfig(
+                        speed = Prefs.rate(ctx).coerceIn(0.75f, 1.25f)
+                    )
+                    engine.generateWithConfigAndCallback(
+                        text = chunks[index],
+                        config = generation,
+                        callback = { samples ->
+                            if (token != playbackGeneration.get()) {
+                                0
+                            } else {
+                                val activeTrack = track
+                                if (activeTrack == null || !writeNeuralSamples(activeTrack, samples, token)) 0
+                                else {
+                                    if (samples.isNotEmpty()) main.post {
+                                        if (token == playbackGeneration.get()) onWord?.invoke()
+                                    }
+                                    1
+                                }
+                            }
+                        }
+                    )
+                    if (token != playbackGeneration.get()) return@execute
+                    fallbackStart = index + 1
+                    if (index < chunks.lastIndex) {
+                        finished(ids[index])
+                        completedBeforeFallback++
+                    }
+                }
+
+                val activeTrack = track
+                if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
+                if (token != playbackGeneration.get()) return@execute
+                finished(ids.last())
+            } catch (error: Throwable) {
+                // Drain any already-written sentence before switching engines so the
+                // fallback doesn't overlap neural playback. A stopped turn never falls back.
+                if (token != playbackGeneration.get()) return@execute
+                try {
+                    val activeTrack = track
+                    if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
+                } catch (_: Exception) {
+                }
+                if (token != playbackGeneration.get()) return@execute
+                val startIndex = fallbackStart.coerceIn(0, chunks.size)
+                if (startIndex < chunks.size) {
+                    val completion = callbacks.remove(ids.last())
+                    speakWithAndroidTts(chunks.subList(startIndex, chunks.size), completion)
+                    for (index in startIndex until chunks.size) finished(ids[index])
+                } else {
+                    // This covers a playback-drain failure after every sentence was generated.
+                    for (index in completedBeforeFallback until chunks.size) finished(ids[index])
+                }
+            }
+        }
+    }
+
+    private fun obtainNeuralEngine(model: java.io.File): OfflineTts {
+        val current = neuralEngine
+        if (current != null && neuralEnginePath == model.absolutePath) return current
+        try { current?.release() } catch (_: Exception) {}
+        val config = getOfflineTtsConfig(
+            modelDir = model.parentFile?.absolutePath
+                ?: throw IllegalStateException("Neural model folder is missing."),
+            modelName = model.name,
+            lexicon = "lexicon-en-us.txt",
+            numThreads = 2
+        )
+        return OfflineTts(assetManager = null, config = config).also {
+            neuralEngine = it
+            neuralEnginePath = model.absolutePath
+        }
+    }
+
+    private fun obtainNeuralTrack(sampleRate: Int): AudioTrack {
+        val current = neuralTrack
+        if (current != null && current.state == AudioTrack.STATE_INITIALIZED && neuralTrackSampleRate == sampleRate) {
+            if (current.playState != AudioTrack.PLAYSTATE_PLAYING) current.play()
+            return current
+        }
+        try { current?.release() } catch (_: Exception) {}
+        val minimum = AudioTrack.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_FLOAT
+        )
+        val bufferBytes = maxOf(minimum, sampleRate * 2)
+        val created = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                    .build()
+            )
+            .setBufferSizeInBytes(bufferBytes)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
+        if (created.state != AudioTrack.STATE_INITIALIZED) {
+            created.release()
+            throw IllegalStateException("Android could not open audio output for the neural voice.")
+        }
+        neuralTrack = created
+        neuralTrackSampleRate = sampleRate
+        neuralFramesWritten = 0L
+        created.play()
+        return created
+    }
+
+    private fun writeNeuralSamples(track: AudioTrack, samples: FloatArray, token: Int): Boolean {
+        var offset = 0
+        while (offset < samples.size) {
+            if (token != playbackGeneration.get()) return false
+            val written = track.write(samples, offset, samples.size - offset, AudioTrack.WRITE_BLOCKING)
+            if (written <= 0) {
+                if (token != playbackGeneration.get()) return false
+                throw IllegalStateException("AudioTrack could not accept neural voice audio (code " + written + ").")
+            }
+            offset += written
+            neuralFramesWritten += written.toLong()
+        }
+        return token == playbackGeneration.get()
+    }
+
+    private fun awaitNeuralPlayback(track: AudioTrack, targetFrames: Long, token: Int) {
+        while (token == playbackGeneration.get()) {
+            val played = track.playbackHeadPosition.toLong() and 0xffffffffL
+            if (played >= targetFrames) return
+            Thread.sleep(12L)
         }
     }
 
     fun stopSpeaking() {
+        playbackGeneration.incrementAndGet()
         callbacks.clear()
-        tts?.stop()
+        try { tts?.stop() } catch (_: Exception) {}
+        val activeTrack = neuralTrack
+        neuralTrack = null
+        neuralTrackSampleRate = 0
+        if (activeTrack != null) {
+            try { activeTrack.pause() } catch (_: Exception) {}
+            try { activeTrack.flush() } catch (_: Exception) {}
+            try { activeTrack.stop() } catch (_: Exception) {}
+            try { activeTrack.release() } catch (_: Exception) {}
+        }
         if (pending.getAndSet(0) > 0) main.post { onSpeaking?.invoke(false) }
     }
 
@@ -338,5 +552,14 @@ class Voice(private val ctx: Context) {
         stopSpeaking()
         tts?.shutdown()
         tts = null
+        try {
+            neuralWorker.execute {
+                try { neuralEngine?.release() } catch (_: Exception) {}
+                neuralEngine = null
+                neuralEnginePath = null
+            }
+            neuralWorker.shutdown()
+        } catch (_: Exception) {
+        }
     }
 }

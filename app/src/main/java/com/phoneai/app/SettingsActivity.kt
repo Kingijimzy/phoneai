@@ -20,6 +20,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.ProgressBar
+import java.util.concurrent.atomic.AtomicBoolean
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.HorizontalScrollView
@@ -50,6 +52,78 @@ class SettingsActivity : Activity() {
     private lateinit var skillBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun installNeuralVoice() {
+        AlertDialog.Builder(this)
+            .setTitle("Install local neural voice")
+            .setMessage(
+                "Install Piper Amy, an English neural voice that runs on this phone. " +
+                    "The download is about 28 MB and needs roughly 50–70 MB of free storage. " +
+                    "Orion will download it only after you confirm. The model is not included in the APK."
+            )
+            .setNegativeButton("NOT NOW", null)
+            .setPositiveButton("DOWNLOAD & INSTALL") { _, _ -> runNeuralVoiceInstall() }
+            .show()
+    }
+
+    private fun runNeuralVoiceInstall() {
+        val progressText = text("Preparing download…", 13f, Theme.MUTED)
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = 0
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(14), dp(20), dp(10))
+            addView(progressText, LinearLayout.LayoutParams(-1, -2))
+            addView(progressBar, LinearLayout.LayoutParams(-1, dp(12)).apply { topMargin = dp(14) })
+        }
+        val cancelled = AtomicBoolean(false)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Installing neural voice")
+            .setView(panel)
+            .setNegativeButton("CANCEL", null)
+            .create()
+        dialog.setCancelable(false)
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
+            cancelled.set(true)
+            progressText.text = "Cancelling safely…"
+            it.isEnabled = false
+        }
+
+        NeuralVoiceInstaller.install(
+            applicationContext,
+            { cancelled.get() },
+            { label, percent ->
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed && dialog.isShowing) {
+                        progressText.text = label
+                        progressBar.progress = percent
+                    }
+                }
+            },
+            { error ->
+                if (error == null) Prefs.setNeuralVoice(applicationContext, true)
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (dialog.isShowing) dialog.dismiss()
+                    when {
+                        error == null -> showInfoDialog(
+                            "Neural voice ready",
+                            "Piper Amy is installed. Orion now synthesizes English replies on-device and streams PCM audio to the speaker sentence by sentence. Android TextToSpeech remains the fallback if the neural engine cannot start."
+                        )
+                        error is InterruptedException -> Toast.makeText(this, "Neural voice installation cancelled.", Toast.LENGTH_SHORT).show()
+                        else -> showInfoDialog(
+                            "Neural voice installation failed",
+                            (error.message ?: "The download or model validation failed.") +
+                                "\n\nYour existing Android voice remains available. Check your connection and free storage before trying again."
+                        )
+                    }
+                }
+            }
+        )
+    }
+
     /** Orion-styled choice sheet replacing stock Android list dialogs. */
     private fun showChoiceDialog(title: String, subtitle: String, items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit = {}) {
         val outer = LinearLayout(this).apply {
@@ -419,6 +493,29 @@ class SettingsActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+        switchRow(s3, "Use installed English neural voice (Piper)", Prefs.neuralVoice(this)) {
+            if (it && !NeuralVoiceInstaller.isInstalled(this)) {
+                Prefs.setNeuralVoice(this, false)
+                Toast.makeText(this, "Install the neural voice below first.", Toast.LENGTH_LONG).show()
+                recreate()
+            } else {
+                Prefs.setNeuralVoice(this, it)
+                Toast.makeText(
+                    this,
+                    if (it) "English neural voice enabled. Speech is generated on-device."
+                    else "Android TextToSpeech is selected.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        add(s3, button(
+            if (NeuralVoiceInstaller.isInstalled(this)) "Reinstall / repair neural voice" else "Install neural English voice · about 28 MB",
+            true
+        ) { installNeuralVoice() }, 8)
+        add(s3, text(
+            "Piper currently supplies an English voice. Each sentence is synthesized separately and audio streams to the speaker as the model generates it. Other languages continue using Android's voice; the neural model is downloaded only when you press Install.",
+            12f, Theme.MUTED
+        ), 8)
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
         switchRow(s3, "Wake word: say \"Orion\" (experimental; uses Android speech service and battery)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
