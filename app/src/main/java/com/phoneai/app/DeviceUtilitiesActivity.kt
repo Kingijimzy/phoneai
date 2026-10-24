@@ -168,7 +168,6 @@ class DeviceUtilitiesActivity : Activity() {
                     appendLine("Orion process PSS: ${if (s.appPssMb >= 0L) "${s.appPssMb} MB" else "not exposed"}")
                     appendLine("Low-memory warning: ${s.lowMemory}")
                     appendLine("Android thermal status: ${s.thermalStatus}")
-                    appendLine("Battery temperature: ${s.batteryTemperatureC?.let { "${it}°C" } ?: "not exposed"}")
                     appendLine()
                     appendLine("ORION PERFORMANCE SAMPLES")
                     appendLine(UiYoloTfliteDetector.performanceSummary())
