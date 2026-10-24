@@ -1028,11 +1028,18 @@ class SettingsActivity : Activity() {
                 }
                 val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
                 val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
-                Prefs.setKey(this, p.id, k)
+                if (!Prefs.setKey(this, p.id, k)) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Secure storage unavailable")
+                        .setMessage("Orion could not encrypt and save this key. Your existing key was preserved; no plaintext fallback was written. Check the device lock/Keystore and try again.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@setOnClickListener
+                }
                 if (chatNeeds) Prefs.setProvider(this, false, p.id)
                 if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
                 dialog.dismiss()
-                Toast.makeText(this, p.label + " key saved.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, p.label + " key saved securely.", Toast.LENGTH_SHORT).show()
                 refresh()
             }
         }

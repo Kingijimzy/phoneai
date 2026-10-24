@@ -115,8 +115,16 @@ class TradingActivity : Activity() {
             .setMessage("Practice keys: testnet.bybit.com. Real keys: bybit.com.")
             .setView(w)
             .setPositiveButton("Save") { _, _ ->
-                Prefs.setBybit(this, k.text.toString(), s.text.toString())
-                Toast.makeText(this, "Saved.", Toast.LENGTH_SHORT).show(); render()
+                if (!Prefs.setBybit(this, k.text.toString(), s.text.toString())) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Secure storage unavailable")
+                        .setMessage("Orion could not encrypt and save the Bybit credentials. Check Android Keystore and try again.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@setPositiveButton
+                }
+                Toast.makeText(this, "Credentials saved securely.", Toast.LENGTH_SHORT).show()
+                render()
             }.setNegativeButton("Cancel", null).show()
     }
 
