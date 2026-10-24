@@ -1270,10 +1270,10 @@ class SettingsActivity : Activity() {
                 setOf("recall", "remember"), maxCalls = 4, maxDurationMs = 20_000L),
             PhoneAiSkill("whatsapp_draft", "1.0.0", "Prepare a WhatsApp message draft for a user-confirmed recipient. Never send automatically.",
                 setOf("lookup_app", "open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true),
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false),
             PhoneAiSkill("email_draft", "1.0.0", "Prepare an email draft using the installed mail app. Never send automatically.",
                 setOf("open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true)
+                maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false)
         )
         showChoiceDialog("Reviewed skill templates", "Select a starter. Each skill is created disabled and can only use its listed existing tools.",
             templates.map { it.id + " · " + it.description },

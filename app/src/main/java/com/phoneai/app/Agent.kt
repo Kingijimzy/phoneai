@@ -72,7 +72,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        if (AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
+        if (AgentHooks.requiresConfirmation(tool, args, targetLabel) && activeSkillId == null) {
             val description = when (tool) {
                 "forget" -> "Forget saved memory #" + args.optInt("id", -1)
                 "update_memory" -> "Change saved memory #" + args.optInt("id", -1)
@@ -115,7 +115,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         } catch (e: Exception) {
             "error: ${e.message ?: e.javaClass.simpleName}"
         }
-        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "system_intent", "open_file", "open_deep_link")
+        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "system_intent", "open_file", "open_deep_link")
         var verifiedResult = result
         if (!result.trimStart().startsWith("error", ignoreCase = true) && tool in actionTools && lastScreenSnapshot.isNotBlank()) {
             try {

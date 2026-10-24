@@ -16,7 +16,7 @@ internal object AgentHooks {
  }
  data class GateDecision(val allowed:Boolean,val reason:String)
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
- private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase)\\b",RegexOption.IGNORE_CASE)
+ private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"notification_action"->args.optString("action");else->""}
   val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
