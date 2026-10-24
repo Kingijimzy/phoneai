@@ -273,7 +273,7 @@ object BrowserAutomation {
         val block = sensitivePageReason()
         if (block != null) return "error: safety gate blocked upload. $block"
         val label = org.json.JSONObject.quote(target.trim())
-        return evaluate("""
+        val result = evaluate("""
             (function(){
               const q=$label.toLowerCase();
               const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none';};
@@ -285,6 +285,9 @@ object BrowserAutomation {
               return 'native file picker requested. Choose the file yourself and review the page before submitting; Orion will not select or submit a file automatically.';
             })()
         """.trimIndent())
+        return if (result.startsWith("native file picker requested")) {
+            "BROWSER HANDOFF REQUIRED: $result Automation is paused. Choose the file yourself, review the page, and tell Orion when to continue."
+        } else result
     }
 
     fun back(): String {

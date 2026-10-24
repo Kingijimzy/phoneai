@@ -702,7 +702,7 @@ Rules:
             val result = executeWithRecoveryGuard(tool, args)
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             record(tool, args, result)
-            if (tool == "browser_handoff" && result.startsWith("BROWSER HANDOFF REQUIRED")) {
+            if (tool in setOf("browser_handoff", "browser_upload") && result.startsWith("BROWSER HANDOFF REQUIRED")) {
                 AgentCheckpointStore.pause(svc)
                 ui.say(result + " I have paused the automated task. Complete the step yourself, then ask Orion to continue.")
                 return
