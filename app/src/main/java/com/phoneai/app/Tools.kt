@@ -328,6 +328,42 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    /**
+     * Launch a tightly allowlisted app deep link. Arbitrary intent:// components and
+     * bank/payment/credential URLs are deliberately rejected.
+     */
+    fun openDeepLink(uriText: String): String {
+        val raw = uriText.trim()
+        if (raw.isBlank() || raw.length > 2048) return "error: deep link must be 1–2048 characters"
+        if (SafetyGate.containsSensitiveCredentialText(raw) || SafetyGate.isSensitiveApp(raw, raw)) {
+            return "error: safety gate blocked a financial or credential-bearing deep link"
+        }
+        val uri = try { java.net.URI(raw) } catch (_: Exception) { null }
+            ?: return "error: malformed deep link"
+        val scheme = uri.scheme?.lowercase() ?: return "error: deep link needs an explicit scheme"
+        val allowed = setOf("tel", "geo", "mailto", "sms", "smsto", "whatsapp", "tg", "youtube", "spotify")
+        if (scheme !in allowed) {
+            return "error: unsupported deep-link scheme. Allowed: " + allowed.sorted().joinToString(", ") +
+                ". Use open_url for ordinary HTTP/HTTPS websites."
+        }
+        if (uri.rawUserInfo != null || raw.any { it == '\\n' || it == '\\r' }) return "error: unsafe deep-link format"
+        val intent = when (scheme) {
+            "tel" -> Intent(Intent.ACTION_DIAL, Uri.parse(raw))
+            "mailto", "sms", "smsto" -> Intent(Intent.ACTION_SENDTO, Uri.parse(raw))
+            else -> Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+        }
+        if (intent.resolveActivity(svc.packageManager) == null) {
+            return "error: no installed app can handle this '$scheme' deep link"
+        }
+        return try {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            svc.startActivity(intent)
+            "launched allowlisted '$scheme' deep link; destination state must still be verified"
+        } catch (e: Exception) {
+            "error: could not launch deep link (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
     fun resolveContact(name: String): String {
         val q = name.trim()
         if (q.isBlank()) return "error: contact name is required"
