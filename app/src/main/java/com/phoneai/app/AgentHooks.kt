@@ -31,9 +31,9 @@ internal object AgentHooks {
   val index=lines.indexOfFirst{it.contains(body,ignoreCase=true)}
   if(index<0) return "error: verification failed: exact outgoing message is not visible."
   val nearby=lines.subList(maxOf(0,index-2),minOf(lines.size,index+4))
-  val statusLine=nearby.firstOrNull{it.length<=40&&Regex("(?i)\\\\b(sent|delivered|read)\\\\b").containsMatchIn(it)}
+  val statusLine=nearby.firstOrNull{it.length<=40&&Regex("(?i)\\b(sent|delivered|read)\\b").containsMatchIn(it)}
    ?: return "UNVERIFIED: contact and message are visible, but no short sent/delivered/read status is exposed near the message."
-  val status=Regex("(?i)\\\\b(sent|delivered|read)\\\\b").find(statusLine)?.value.orEmpty()
+  val status=Regex("(?i)\\b(sent|delivered|read)\\b").find(statusLine)?.value.orEmpty()
   return "PASS: message sent to $target; exact message and status '$status' are visible."
  }
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
