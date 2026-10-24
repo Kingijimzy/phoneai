@@ -1735,13 +1735,20 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     fun typeText(text: String): String {
-        val root = rootInActiveWindow ?: return "error: cannot read this screen"
+        if (text.isEmpty()) return "error: refusing to type empty text"
+        if (text.length > 4000) return "error: text exceeds the 4000 character limit"
+        val root = rootInActiveWindow ?: return "error: cannot inspect the current screen"
         val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: findEditable(root)
-            ?: return "error: no text field found. Click a text field first."
-        if (field.isPassword) return "error: that is a password field. Ask the user to type it themselves."
-        val args = Bundle()
-        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
-        return if (field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) "typed" else "error: could not type there"
+            ?: return "error: no editable text field found. Click the intended field first."
+        if (field.isPassword) return "error: refusing to type into a password field. Ask the user to enter credentials themselves."
+        val targetPackage = field.packageName?.toString()
+        // Flutter and React Native fields may reject ACTION_SET_TEXT. Focus the target, then
+        // send the agent's explicit payload through Orion's InputConnection instead.
+        try {
+            if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            if (!field.isFocused) field.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } catch (_: Exception) { }
+        return OrionKeyboardService.typeIntoFocusedField(this, text, targetPackage)
     }
 
     // ---------------------------------------------------------------- tools: touch
