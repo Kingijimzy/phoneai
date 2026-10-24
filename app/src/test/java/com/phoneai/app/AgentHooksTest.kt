@@ -36,4 +36,37 @@ class AgentHooksTest {
   assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.",wrong).startsWith("error:"))
  }
  @Test fun settlesScreen(){val a=listOf("Loading","Loaded","Loaded");var i=0;assertEquals("Loaded",AgentHooks.awaitStableSnapshot({a[minOf(i++,a.lastIndex)]},4,2,0))}
+
+ @Test fun requestBudgetStopsAtConfiguredLimit() {
+  val budget = AgentHooks.RequestBudget(2)
+  assertEquals(0, budget.consumed)
+  assertEquals(2, budget.remaining)
+  assertTrue(budget.tryConsume())
+  assertTrue(budget.tryConsume())
+  assertFalse(budget.tryConsume())
+  assertEquals(2, budget.consumed)
+  assertEquals(0, budget.remaining)
+ }
+
+ @Test fun identicalFailedToolCallIsBlockedButDifferentArgumentsMayRecover() {
+  val guard = AgentHooks.FailedCallGuard()
+  val same = JSONObject().put("text", "Send")
+  assertFalse(guard.isBlocked("click_text", same))
+  guard.recordFailure("click_text", same)
+  assertTrue(guard.isBlocked("click_text", JSONObject().put("text", "Send")))
+  assertFalse(guard.isBlocked("click_text", JSONObject().put("text", "Retry")))
+  assertFalse(guard.isBlocked("read_screen", same))
+  guard.clear()
+  assertFalse(guard.isBlocked("click_text", same))
+ }
+
+ @Test fun screenComparisonIgnoresIndexAndDetectorNoiseButDetectsMeaningfulChange() {
+  val before = "Screen map\\n1: WhatsApp\\n2: Amma\\nDetector 7 ms"
+  val sameContent = "Screen map\\nWhatsApp\\nAmma\\nDetector 14 ms"
+  val after = "Screen map\\nWhatsApp\\nAmma\\nSent 8:42 AM"
+  assertFalse(AgentHooks.screenChanged(before, sameContent))
+  assertTrue(AgentHooks.screenChanged(before, after))
+  assertEquals(AgentHooks.screenFingerprint(before), AgentHooks.screenFingerprint(sameContent))
+ }
+
 }
