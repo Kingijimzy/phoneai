@@ -2,6 +2,10 @@ package com.phoneai.app
 
 import androidx.activity.ComponentActivity
 
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -16,6 +20,12 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
@@ -148,6 +158,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installCrashRecorder()
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
@@ -173,6 +184,55 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContentView(composeRoot)
+        showPreviousCrashIfPresent()
+    }
+
+    /**
+     * Diagnostic reports stay in app-private storage. No crash data is uploaded.
+     * The default handler also records failures in secondary activities such as Chat and Settings.
+     */
+    private fun installCrashRecorder() {
+        val app = applicationContext
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        if (app.getSharedPreferences("orion_diagnostics", Context.MODE_PRIVATE)
+                .getBoolean("crash_handler_installed", false)) return
+        app.getSharedPreferences("orion_diagnostics", Context.MODE_PRIVATE)
+            .edit().putBoolean("crash_handler_installed", true).apply()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            try {
+                val writer = StringWriter()
+                PrintWriter(writer).use { error.printStackTrace(it) }
+                val report = buildString {
+                    appendLine("Orion crash report")
+                    appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date()))
+                    appendLine("Thread: " + thread.name)
+                    appendLine("Android: " + android.os.Build.VERSION.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine()
+                    append(writer.toString().take(24000))
+                }
+                File(app.filesDir, "orion_last_crash.txt").writeText(report)
+            } catch (_: Throwable) {
+                // Never prevent Android's normal crash handling if report writing fails.
+            }
+            if (previous != null) previous.uncaughtException(thread, error)
+            else android.os.Process.killProcess(android.os.Process.myPid())
+        }
+    }
+
+    private fun showPreviousCrashIfPresent() {
+        val reportFile = File(filesDir, "orion_last_crash.txt")
+        if (!reportFile.exists()) return
+        val report = try { reportFile.readText().take(24000) } catch (_: Exception) { return }
+        AlertDialog.Builder(this)
+            .setTitle("Orion saved a crash report")
+            .setMessage("Orion closed unexpectedly last time. Copy this report and send it here so I can identify the exact cause. The report stays on your phone until you choose to copy it.\\n\\n" + report.take(1800))
+            .setPositiveButton("Copy report") { _, _ ->
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Orion crash report", report))
+                Toast.makeText(this, "Crash report copied. Paste it into this chat.", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 
     private fun bottomNav(): View {
