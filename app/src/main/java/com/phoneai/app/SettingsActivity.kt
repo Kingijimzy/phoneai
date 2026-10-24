@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
+import android.speech.SpeechRecognizer
 import android.text.InputType
 import android.util.Base64
 import android.view.Gravity
@@ -840,6 +841,10 @@ class SettingsActivity : Activity() {
         val batteryExempt = runCatching {
             getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
         }.getOrDefault(false)
+        val onDeviceSpeechAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && runCatching {
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
+        }.getOrDefault(false)
+        val neuralVoiceInstalled = runCatching { NeuralVoiceInstaller.isInstalled(this) }.getOrDefault(false)
         val sb = StringBuilder()
         sb.append("Accessibility: ").append(acc).append("\n")
         sb.append("Microphone:    ").append(mic).append("\n")
@@ -849,6 +854,8 @@ class SettingsActivity : Activity() {
         sb.append("Notification access: ").append(if (notificationListener) "enabled" else "disabled").append("\n")
         sb.append("Overlay access: ").append(if (overlayAllowed) "allowed" else "missing").append("\n")
         sb.append("Battery optimization: ").append(if (batteryExempt) "unrestricted" else "may restrict background work").append("\n")
+        sb.append("On-device speech: ").append(if (onDeviceSpeechAvailable) "available" else "unavailable; install an offline speech model").append(" (offline-only ").append(if (Prefs.offlineSpeechOnly(this)) "on" else "off").append(")\n")
+        sb.append("Neural voice package: ").append(if (neuralVoiceInstalled) "installed" else "not installed").append(" (offline-only output ").append(if (Prefs.offlineVoiceOnly(this)) "on" else "off").append(")\n")
         sb.append("Keys saved:    ")
         val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
         sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
