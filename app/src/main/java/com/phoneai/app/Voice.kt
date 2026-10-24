@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.Executors
 
-/** Speech in (SpeechRecognizer) and speech out (TextToSpeech). */
+/** Android speech recognition with optional sentence-streamed on-device neural TTS and Android TTS fallback. */
 class Voice(private val ctx: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
@@ -31,6 +31,8 @@ class Voice(private val ctx: Context) {
     @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
     private val pending = AtomicInteger(0)
+    // Prevent duplicate or late platform callbacks from decrementing a newer speech turn.
+    private val pendingIds = ConcurrentHashMap.newKeySet<String>()
     private val playbackGeneration = AtomicInteger(0)
     private val neuralWorker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "Orion-Neural-TTS").apply { isDaemon = true }
@@ -111,7 +113,10 @@ class Voice(private val ctx: Context) {
     }
 
     private fun finished(id: String?) {
-        val callback = if (id != null) callbacks.remove(id) else null
+        // TTS may deliver both an error and a late completion. Only the first owns
+        // this utterance's pending count; stopSpeaking clears the set before new turns.
+        if (id == null || !pendingIds.remove(id)) return
+        val callback = callbacks.remove(id)
         val remaining = pending.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
         if (remaining == 0) {
             main.post { if (pending.get() == 0) onSpeaking?.invoke(false) }
@@ -178,6 +183,11 @@ class Voice(private val ctx: Context) {
 
     /** Compatibility path if Piper is not installed or native initialization fails. */
     private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
+        // Neural-engine failure must not bypass the explicit no-network-TTS preference.
+        if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
+            onDone?.invoke()
+            return
+        }
         if (!ttsReady || chunks.isEmpty()) {
             onDone?.invoke()
             return
@@ -198,7 +208,9 @@ class Voice(private val ctx: Context) {
             }
             val id = "u" + System.nanoTime()
             if (onDone != null && idx == chunks.lastIndex) callbacks[id] = onDone
-            if (pending.getAndIncrement() == 0) main.post { onSpeaking?.invoke(true) }
+            if (pendingIds.add(id) && pending.getAndIncrement() == 0) {
+                main.post { onSpeaking?.invoke(true) }
+            }
             val result = engine.speak(part, TextToSpeech.QUEUE_ADD, null, id)
             if (result != TextToSpeech.SUCCESS) finished(id)
         }
@@ -211,7 +223,8 @@ class Voice(private val ctx: Context) {
      */
     private fun speakNeural(chunks: List<String>, onDone: (() -> Unit)?) {
         val token = playbackGeneration.get()
-        val ids = chunks.map { "n" + System.nanoTime() + "_" + it.length }
+        val ids = chunks.mapIndexed { index, _ -> "n" + System.nanoTime() + "_" + index }
+        ids.forEach { pendingIds.add(it) }
         if (onDone != null) callbacks[ids.last()] = onDone
         if (pending.getAndAdd(chunks.size) == 0) {
             main.post { if (token == playbackGeneration.get() && pending.get() > 0) onSpeaking?.invoke(true) }
@@ -372,6 +385,7 @@ class Voice(private val ctx: Context) {
     fun stopSpeaking() {
         playbackGeneration.incrementAndGet()
         callbacks.clear()
+        pendingIds.clear()
         try { tts?.stop() } catch (_: Exception) {}
         val activeTrack = neuralTrack
         neuralTrack = null
