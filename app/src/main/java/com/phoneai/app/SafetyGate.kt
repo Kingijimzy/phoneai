@@ -7,7 +7,7 @@ package com.phoneai.app
  */
 object SafetyGate {
     private val sensitiveAppTokens = listOf(
-        "bank", "banking", "payment", "wallet", "paypal", "cash app", "venmo",
+        "bank", "banking", "payment", "wallet", "paypal", "cash app", "venmo", "authenticator", "authentication app", "two-factor", "2fa",
         "wise", "revolut", "stripe", "monzo", "chime", "paytm", "phonepe",
         "google pay", "gpay", "apple pay", "samsung pay", "flutterwave",
         "opay", "palmpay", "kuda", "moniepoint", "paga", "stanbic",
@@ -17,13 +17,13 @@ object SafetyGate {
     )
 
     private val sensitivePackageTokens = listOf(
-        "bank", "banking", "payment", "wallet", "paypal", "venmo", "wise",
+        "bank", "banking", "payment", "wallet", "paypal", "venmo", "authenticator", "2fa", "wise",
         "revolut", "monzo", "cashapp"
     )
 
     // Specific credential phrases only; generic "card", "pin", and "wallet" are intentionally excluded.
     private val credentialText = Regex(
-        "(?i)\\b(cvv|cvc|security\\s+code|card\\s+number|credit\\s+card|debit\\s+card|one[- ]time\\s+(?:password|code)|(?:enter|type|confirm|verify|set|change|reset)\\s+(?:your\\s+)?(?:pin|pin\\s+code|password|passcode|otp)|(?:password|passcode|otp)\\s*(?:field|input)|(?:password|passcode|otp)\\s*[:=]|(?:pin|pin\\s+code)\\s+(?:for|to|of)\\s+(?:your\\s+)?(?:card|account|bank)|recovery\\s+phrase|seed\\s+phrase|private\\s+key|access\\s+token|api\\s+key|bank\\s+account(?:\\s+number)?|routing\\s+number|social\\s+security(?:\\s+number)?|national\\s+id|passport)\\b"
+        "(?i)\\b(cvv|cvc|security\\s+code|card\\s+number|credit\\s+card|debit\\s+card|one[- ]time\\s+(?:password|code)|(?:enter|type|confirm|verify|set|change|reset)\\s+(?:your\\s+)?(?:pin|pin\\s+code|password|passcode|otp)|(?:password|passcode|otp)\\s*(?:field|input)|(?:password|passcode|otp)\\s*[:=]|(?:pin|pin\\s+code)\\s+(?:for|to|of)\\s+(?:your\\s+)?(?:card|account|bank)|recovery\\s+phrase|seed\\s+phrase|private\\s+key|access\\s+token|api\\s+key|bank\\s+account(?:\\s+number)?|routing\\s+number|social\\s+security(?:\\s+number)?|national\\s+id|passport|(?:my|your|the)\\s+(?:account\\s+)?(?:password|passcode|pin|otp)\\s+is)\\b"
     )
     private val sensitiveBrowserField = Regex(
         "(?i)(password|passcode|otp|one[- ]time|verification|security\\s+code|recovery|seed\\s+phrase|private\\s+key|api\\s+key|access\\s+token|card\\s+number|credit\\s+card|debit\\s+card|cvv|cvc|bank\\s+account|routing\\s+number|national\\s+id|passport)"

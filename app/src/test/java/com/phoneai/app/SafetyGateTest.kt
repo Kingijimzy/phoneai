@@ -24,7 +24,7 @@ class SafetyGateTest {
     }
 
     @Test fun explicitCredentialContextsAreBlocked() {
-        listOf("enter your PIN", "card number", "CVV", "enter your password", "one-time code", "bank account number", "recovery phrase", "private key").forEach { text ->
+        listOf("enter your PIN", "card number", "CVV", "enter your password", "one-time code", "bank account number", "recovery phrase", "private key", "my password is hunter2").forEach { text ->
             assertNotNull("Expected credential block for: $text", SafetyGate.blockReason("type", null, text, "com.example.chat", "Chat"))
         }
         assertNotNull(SafetyGate.blockReason("browser_type", "password input", "hello", "com.example.browser", "Browser"))
@@ -46,6 +46,7 @@ class SafetyGateTest {
 
     @Test fun sensitiveAppsAndLongCardNumbersRemainProtected() {
         assertTrue(SafetyGate.isSensitiveApp("com.example.bankapp", "Banking"))
+        assertTrue(SafetyGate.isSensitiveApp("com.google.android.apps.authenticator2", "Google Authenticator"))
         assertNotNull(SafetyGate.blockReason("type", null, "4111 1111 1111 1111", "com.example.chat", "Chat"))
         assertNull(SafetyGate.blockReason("read_screen", null, null, "com.example.bankapp", "Banking"))
         assertNotNull(SafetyGate.blockReason("click", null, null, "com.example.bankapp", "Banking"))

@@ -448,41 +448,41 @@ class SettingsActivity : Activity() {
         add(updateCard, button("Check for Orion updates", true) { checkForUpdates(updateStatus) }, 8)
         add(updateCard, button("Xiaomi / Redmi background & overlay guide", false) {
             showInfoDialog("Xiaomi / Redmi permissions",
-                "For reliable wake word and background work on MIUI/HyperOS:\\n\\n" +
-                "1. Open Settings → Apps → Manage apps → Orion.\\n" +
-                "2. Enable Autostart (if your version shows it).\\n" +
-                "3. Battery saver → No restrictions; allow background activity.\\n" +
-                "4. Permissions → enable microphone and notifications as needed.\\n" +
-                "5. Other permissions → Display pop-up windows / Display over other apps, only if you use Orion's floating overlay.\\n" +
-                "6. Open Recent apps and lock Orion if your launcher offers a lock option.\\n\\n" +
+                "For reliable wake word and background work on MIUI/HyperOS:\n\n" +
+                "1. Open Settings → Apps → Manage apps → Orion.\n" +
+                "2. Enable Autostart (if your version shows it).\n" +
+                "3. Battery saver → No restrictions; allow background activity.\n" +
+                "4. Permissions → enable microphone and notifications as needed.\n" +
+                "5. Other permissions → Display pop-up windows / Display over other apps, only if you use Orion's floating overlay.\n" +
+                "6. Open Recent apps and lock Orion if your launcher offers a lock option.\n\n" +
                 "Xiaomi changes these labels by OS version and region. Orion cannot enable the vendor's Autostart switch itself; confirm each setting manually.")
         }, 8)
         add(updateCard, button("OPPO / realme background & overlay guide", false) {
             showInfoDialog("OPPO / realme permissions",
-                "For ColorOS / realme UI (labels vary by version):\\n\\n" +
-                "1. Settings → Apps → App management → Orion → Battery usage; allow background activity or choose Unrestricted if available.\\n" +
-                "2. Enable Auto launch / Allow auto-launch where offered.\\n" +
-                "3. Enable Display over other apps only if you use Orion's floating overlay.\\n" +
-                "4. Allow Microphone and Notifications when using voice or notification tools.\\n" +
-                "5. If Orion stops after screen-off, check Recent tasks and disable vendor app-freezing for Orion.\\n\\n" +
+                "For ColorOS / realme UI (labels vary by version):\n\n" +
+                "1. Settings → Apps → App management → Orion → Battery usage; allow background activity or choose Unrestricted if available.\n" +
+                "2. Enable Auto launch / Allow auto-launch where offered.\n" +
+                "3. Enable Display over other apps only if you use Orion's floating overlay.\n" +
+                "4. Allow Microphone and Notifications when using voice or notification tools.\n" +
+                "5. If Orion stops after screen-off, check Recent tasks and disable vendor app-freezing for Orion.\n\n" +
                 "Android does not expose every vendor switch to apps; confirm the options manually.")
         }, 8)
         add(updateCard, button("vivo background & overlay guide", false) {
             showInfoDialog("vivo permissions",
-                "For Funtouch OS / OriginOS (labels vary by version):\\n\\n" +
-                "1. Settings → Apps → Orion → Permissions; allow Microphone and Notifications as needed.\\n" +
-                "2. Enable Display over other apps only if you use Orion's floating overlay.\\n" +
-                "3. Battery → Background power consumption / High background power consumption; allow Orion to run when needed.\\n" +
-                "4. Check iManager or Background app management for restrictions on Orion.\\n\\n" +
+                "For Funtouch OS / OriginOS (labels vary by version):\n\n" +
+                "1. Settings → Apps → Orion → Permissions; allow Microphone and Notifications as needed.\n" +
+                "2. Enable Display over other apps only if you use Orion's floating overlay.\n" +
+                "3. Battery → Background power consumption / High background power consumption; allow Orion to run when needed.\n" +
+                "4. Check iManager or Background app management for restrictions on Orion.\n\n" +
                 "Do not disable system security protections globally; change only Orion's settings.")
         }, 8)
         add(updateCard, button("Huawei / Honor background & overlay guide", false) {
             showInfoDialog("Huawei / Honor permissions",
-                "For EMUI / MagicOS (labels vary by version):\\n\\n" +
-                "1. Settings → Apps → Orion → Permissions; allow Microphone and Notifications as needed.\\n" +
-                "2. Special access → Display over other apps, only if you use Orion's floating overlay.\\n" +
-                "3. Battery → App launch / Launch management; disable automatic management for Orion and allow Auto-launch, Secondary launch, and Run in background if available.\\n" +
-                "4. Check Protected apps / App launch restrictions if background wake word stops after screen-off.\\n\\n" +
+                "For EMUI / MagicOS (labels vary by version):\n\n" +
+                "1. Settings → Apps → Orion → Permissions; allow Microphone and Notifications as needed.\n" +
+                "2. Special access → Display over other apps, only if you use Orion's floating overlay.\n" +
+                "3. Battery → App launch / Launch management; disable automatic management for Orion and allow Auto-launch, Secondary launch, and Run in background if available.\n" +
+                "4. Check Protected apps / App launch restrictions if background wake word stops after screen-off.\n\n" +
                 "These are manual vendor settings; Orion cannot change them silently.")
         }, 8)
         add(updateCard, button("Open overlay permission settings", false) {
@@ -841,14 +841,14 @@ class SettingsActivity : Activity() {
             getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
         }.getOrDefault(false)
         val sb = StringBuilder()
-        sb.append("Accessibility: ").append(acc).append("\\n")
-        sb.append("Microphone:    ").append(mic).append("\\n")
-        sb.append("Notifications: ").append(notifications).append("\\n")
-        sb.append("Contacts:      ").append(contacts).append("\\n")
-        sb.append("Private keyboard: ").append(if (selectedKeyboard) "selected" else if (enabledKeyboard) "enabled, not selected" else "disabled").append("\\n")
-        sb.append("Notification access: ").append(if (notificationListener) "enabled" else "disabled").append("\\n")
-        sb.append("Overlay access: ").append(if (overlayAllowed) "allowed" else "missing").append("\\n")
-        sb.append("Battery optimization: ").append(if (batteryExempt) "unrestricted" else "may restrict background work").append("\\n")
+        sb.append("Accessibility: ").append(acc).append("\n")
+        sb.append("Microphone:    ").append(mic).append("\n")
+        sb.append("Notifications: ").append(notifications).append("\n")
+        sb.append("Contacts:      ").append(contacts).append("\n")
+        sb.append("Private keyboard: ").append(if (selectedKeyboard) "selected" else if (enabledKeyboard) "enabled, not selected" else "disabled").append("\n")
+        sb.append("Notification access: ").append(if (notificationListener) "enabled" else "disabled").append("\n")
+        sb.append("Overlay access: ").append(if (overlayAllowed) "allowed" else "missing").append("\n")
+        sb.append("Battery optimization: ").append(if (batteryExempt) "unrestricted" else "may restrict background work").append("\n")
         sb.append("Keys saved:    ")
         val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
         sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
@@ -864,7 +864,7 @@ class SettingsActivity : Activity() {
 
     private fun checkForUpdates(target: TextView) {
         val installed = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown" } catch (_: Exception) { "unknown" }
-        target.text = "Installed version: $installed\\nUpdate status: checking latest release…"
+        target.text = "Installed version: $installed\nUpdate status: checking latest release…"
         Thread {
             var connection: HttpURLConnection? = null
             val message = try {
@@ -876,19 +876,19 @@ class SettingsActivity : Activity() {
                     setRequestProperty("User-Agent", "Orion-Android-App")
                 }
                 if (connection.responseCode !in 200..299) {
-                    "Installed version: $installed\\nUpdate status: unable to check (HTTP ${connection.responseCode})."
+                    "Installed version: $installed\nUpdate status: unable to check (HTTP ${connection.responseCode})."
                 } else {
                     val payload = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
                     val tag = payload.optString("tag_name").ifBlank { "unknown" }
                     val normalizedInstalled = installed.removePrefix("v")
                     val normalizedLatest = tag.removePrefix("v")
                     if (normalizedLatest != normalizedInstalled && tag != "unknown")
-                        "Installed version: $installed\\nLatest release: $tag\\nA release differs from your installed version. Review the release page before installing."
+                        "Installed version: $installed\nLatest release: $tag\nA release differs from your installed version. Review the release page before installing."
                     else
-                        "Installed version: $installed\\nLatest release: $tag\\nYou appear to be on the latest tagged release."
+                        "Installed version: $installed\nLatest release: $tag\nYou appear to be on the latest tagged release."
                 }
             } catch (_: Exception) {
-                "Installed version: $installed\\nUpdate status: check failed. Check your connection or open Releases manually."
+                "Installed version: $installed\nUpdate status: check failed. Check your connection or open Releases manually."
             } finally {
                 connection?.disconnect()
             }
@@ -1791,7 +1791,7 @@ class SettingsActivity : Activity() {
         wrap.orientation = LinearLayout.VERTICAL
         wrap.setPadding(dp(20), dp(8), dp(20), 0)
         val code = TextView(this).apply {
-            text = "LOCAL CONFIRMATION CODE\\n$pin\\n\\nEnter this same code below within 2 minutes to confirm you intentionally trust this configured endpoint on this device."
+            text = "LOCAL CONFIRMATION CODE\n$pin\n\nEnter this same code below within 2 minutes to confirm you intentionally trust this configured endpoint on this device."
             textSize = 18f
             gravity = android.view.Gravity.CENTER
             setPadding(0, dp(12), 0, dp(16))

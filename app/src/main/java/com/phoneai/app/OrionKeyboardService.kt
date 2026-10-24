@@ -9,6 +9,7 @@ import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.LinearLayout
@@ -139,8 +140,10 @@ class OrionKeyboardService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         active = this
-        setInputView(buildKeyboard())
         val request = synchronized(OrionKeyboardService::class.java) { pending }
+        // Agent typing uses a 1×1 invisible IME view; the normal keyboard is not shown
+        // over the target app. Ordinary user keyboard sessions still use the full UI.
+        setInputView(if (request != null) buildAgentInputView() else buildKeyboard())
         if (request != null) {
             request.result = commitAgentText(request.text, request.targetPackage)
             synchronized(OrionKeyboardService::class.java) {
@@ -148,6 +151,14 @@ class OrionKeyboardService : InputMethodService() {
             }
             request.done.countDown()
         }
+    }
+
+    private fun buildAgentInputView(): View = View(this).apply {
+        layoutParams = ViewGroup.LayoutParams(1, 1)
+        visibility = View.INVISIBLE
+        isFocusable = false
+        isFocusableInTouchMode = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
     private fun commitAgentText(text: String, targetPackage: String?): String {
