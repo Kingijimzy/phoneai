@@ -495,6 +495,19 @@ class SettingsActivity : Activity() {
         // ---- 3. voice
         val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
+        add(s3, button("Live-call visual · " + if (Prefs.liveCallStyle(this) == "eyes") "Eyes" else "Dot matrix", false) {
+            val choices = arrayOf("Dot matrix (default)", "Eyes")
+            val selected = if (Prefs.liveCallStyle(this) == "eyes") 1 else 0
+            AlertDialog.Builder(this)
+                .setTitle("Live-call visual")
+                .setSingleChoiceItems(choices, selected) { dialog, which ->
+                    Prefs.setLiveCallStyle(this, if (which == 1) "eyes" else "dot_matrix")
+                    dialog.dismiss()
+                    Toast.makeText(this, choices[which] + " selected for your next live call.", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }, 8)
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Offline-only speech input (no network fallback)", Prefs.offlineSpeechOnly(this)) {
             Prefs.setOfflineSpeechOnly(this, it)
