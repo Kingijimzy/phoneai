@@ -586,12 +586,11 @@ class Nim(private val ctx: Context) {
         var refilled = false
         var lastNote = ""
         var attempts = 0
-        // In quota-saver mode, allow one alternate model only after an invalid/retired model response.
-        // Timeouts, empty replies, and 429s exit immediately, so this does not create retry fan-out.
-        // Prefer a quick, bounded recovery over silently cycling through a long catalogue.
-        // A retired/overloaded model gets one alternate attempt; another saved provider can
-        // then take over instead of making the user wait through many model IDs.
-        val maxAttempts = if (fastResponse || Prefs.quotaSaver(ctx) || hasBackup) 1 else 3
+        // Always reserve one bounded same-provider recovery attempt for a stale model ID
+        // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
+        // limit to 1 and the alternate model was queued but never actually attempted.
+        // Fast/background turns still stay bounded; the next saved provider is tried afterward.
+        val maxAttempts = if (fastResponse || Prefs.quotaSaver(ctx) || hasBackup) 2 else 3
         val start = System.currentTimeMillis()
         val totalTimeoutMs = if (fastResponse) 10000L else if (p.id == "nvidia") 40000L else 27000L
         while (queue.isNotEmpty() && attempts < maxAttempts && System.currentTimeMillis() - start < totalTimeoutMs) {
