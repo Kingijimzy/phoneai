@@ -46,6 +46,29 @@ object BrowserAutomation {
         })()
     """.trimIndent())
 
+    /**
+     * Fail closed on recognized financial/account portals. Read-only snapshots remain available,
+     * but browser automation must not interact with banking, payment, wallet, or trading pages.
+     */
+    fun sensitivePageReason(): String? {
+        val page = snapshot()
+        val host = try { android.net.Uri.parse(org.json.JSONObject(page).optString("url")).host.orEmpty() }
+            catch (_: Exception) { "" }
+        if (host.isBlank()) return null
+        val financialHostTokens = listOf(
+            "bank", "banking", "payment", "wallet", "paypal", "stripe", "venmo", "cashapp",
+            "revolut", "monzo", "wise", "opay", "palmpay", "kuda", "moniepoint", "flutterwave",
+            "paytm", "phonepe", "binance", "coinbase", "kraken", "bybit", "kucoin", "okx",
+            "cryptoexchange", "trading"
+        )
+        val labels = host.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+        return if (financialHostTokens.any { token ->
+                labels.any { it == token } || host.lowercase().contains(token)
+            }) {
+            "Orion's safety gate paused browser automation on a recognized financial, wallet, or trading domain. Review and operate this site manually; read-only page inspection remains available."
+        } else null
+    }
+
     fun click(target: String): String {
         if (target.isBlank()) return "error: tell me the visible button or link text"
         val q = org.json.JSONObject.quote(target)
