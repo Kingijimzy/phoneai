@@ -17,7 +17,7 @@ import android.widget.TextView
 import android.widget.Toast
 
 /** Optional short-lived, quota-visible Gemini Live conversation. Never exposes phone-control tools. */
-internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
+internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, PhoneAiService.MainChatListener {
     private lateinit var visual: LiveCallVisualView
     private lateinit var statusView: TextView
     private lateinit var transcriptView: TextView
@@ -28,6 +28,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: GeminiLiveSession? = null
+    private var attachedService: PhoneAiService? = null
     @Volatile private var active = false
     @Volatile private var liveConnected = false
     @Volatile private var microphoneEnabled = true
@@ -345,6 +346,17 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
         endCall(returnToStandard = false)
     }
 
+    override fun onResume() {
+        super.onResume()
+        val service = PhoneAiService.instance
+        if (service != null && attachedService !== service) {
+            attachedService?.detachMainChat(this)
+            attachedService = service
+            // This marks the visible Live screen as microphone owner and stops the wake recognizer.
+            service.attachMainChat(this)
+        }
+    }
+
     override fun onStop() {
         // Do not leave mic capture active when another activity covers Orion or the phone is locked.
         if (active) {
@@ -355,8 +367,14 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
             active = false
             liveConnected = false
         }
+        attachedService?.detachMainChat(this)
+        attachedService = null
         super.onStop()
     }
+
+    // Gemini Live owns the transcript and output; service callbacks are intentionally ignored.
+    override fun onMessage(kind: String, text: String) { }
+    override fun onStatus(text: String, mode: OrbView.Mode) { }
 
     override fun onDestroy() {
         main.removeCallbacks(sessionLimit)
@@ -364,6 +382,8 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
         session?.stop()
         session = null
         active = false
+        attachedService?.detachMainChat(this)
+        attachedService = null
         super.onDestroy()
     }
 
