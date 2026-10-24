@@ -208,6 +208,36 @@ object Prefs {
     fun quotaSaver(c: Context): Boolean = sp(c).getBoolean("quota_saver", true)
     fun setQuotaSaver(c: Context, v: Boolean) = sp(c).edit().putBoolean("quota_saver", v).apply()
 
+    /** Whether Orion may save new successful tool routes for future planning. */
+    fun routeLearning(c: Context): Boolean = sp(c).getBoolean("route_learning", true)
+    fun setRouteLearning(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("route_learning", enabled).apply()
+
+    val knownLanguageLabels: Map<String, String> = linkedMapOf(
+        "en" to "English",
+        "yo" to "Yorùbá",
+        "ha" to "Hausa",
+        "ig" to "Igbo",
+        "fr" to "French",
+        "es" to "Spanish",
+        "pt" to "Portuguese",
+        "ar" to "Arabic"
+    )
+
+    fun knownLanguages(c: Context): Set<String> =
+        (sp(c).getStringSet("known_languages", setOf("en")) ?: setOf("en")).toSet()
+            .filter { it in knownLanguageLabels.keys }.toSet().ifEmpty { setOf("en") }
+
+    fun setKnownLanguages(c: Context, languages: Set<String>) {
+        val safe = languages.filter { it in knownLanguageLabels.keys }.toSet().ifEmpty { setOf("en") }
+        sp(c).edit().putStringSet("known_languages", safe).apply()
+    }
+
+    fun languagePolicy(c: Context): String {
+        val labels = knownLanguages(c).mapNotNull { knownLanguageLabels[it] }
+        return "Speak and write only in these user-approved languages: " + labels.joinToString(", ") +
+            ". Do not switch to another language unless the user changes this setting."
+    }
+
     /** Live-call renderer preference: dot_matrix (default) or eyes. */
     fun liveCallStyle(c: Context): String = sp(c).getString("live_call_style", "dot_matrix") ?: "dot_matrix"
     fun setLiveCallStyle(c: Context, v: String) = sp(c).edit()
