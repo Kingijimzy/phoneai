@@ -137,10 +137,10 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener {
         controls.addView(micButton, LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = dp(8)
         })
-        controls.addView(endButton, LinearLayout.LayoutParams(0, View.LayoutParams.WRAP_CONTENT, 1f).apply {
+        controls.addView(endButton, LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginStart = dp(8)
         })
-        root.addView(controls, LinearLayout.LayoutParams(-1, View.LayoutParams.WRAP_CONTENT))
+        root.addView(controls, LinearLayout.LayoutParams(-1, android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
         standardModeButton = label("Switch to standard Orion voice", 12f, 0xFF8CFFD0.toInt(), true).apply {
             setPadding(dp(10), dp(12), dp(10), dp(8))
             isClickable = true
