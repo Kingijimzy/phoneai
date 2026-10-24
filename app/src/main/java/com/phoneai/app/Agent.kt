@@ -147,13 +147,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return verifiedResult
     }
 
-    private val actionWords = Regex(
-        "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|" +
-            "whatsapp|email|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|" +
-            "post|share|buy|order|book|find me|show me|check my|delete|write|compose|reply|click|task|tasks|remind|reminder|todo|to-do|mark as done|" +
-            "remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b"
-    )
-
     private fun chatSystem(): String {
         val n = Prefs.userName(svc)
         val mem = MemoryStore.promptBlock(svc).take(900)
@@ -609,7 +602,7 @@ Rules:
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
         // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
-        if (!resumeRequest && !browserActionTask && activeSkillId == null && !actionWords.containsMatchIn(command.lowercase())) {
+        if (!resumeRequest && !browserActionTask && activeSkillId == null && !AgentHooks.isPhoneActionRequest(command)) {
             ui.phase("thinking")
             val r = try {
                 chatReply(command)
