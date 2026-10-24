@@ -252,7 +252,12 @@ Live-data truthfulness is mandatory: do not claim to have checked current inform
 Action outcome integrity is mandatory: distinguish confirmed success, failure, and unverified outcome. A launch request or tool call returning without an error does not prove the requested result happened. Only say an action is complete when the returned evidence confirms it; if the screen/state cannot be checked, say you could not verify it and tell the user what to check. Never turn an unknown result into success. If an action is consequential, wait for a real user approval from the app interface; a model-supplied argument such as confirmed=true is not approval.
 
 Tools:
+- lookup_app {name}: resolve a launchable installed app to its exact label and package before opening it
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
+- system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, dial, maps_search, camera, calendar, clock, open_url. Never use arbitrary action/component strings.
+- resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
+- find_files {query}: search accessible indexed shared files and return current numeric IDs; Android storage restrictions may limit results
+- open_file {id}: open a numeric ID returned by the latest find_files result
 - list_apps {}: names of installed apps
 - read_screen {}: merged numbered accessibility + on-device OCR + unlabeled visual-region targets. Visual regions are heuristic candidates for custom-drawn UI, not guaranteed semantic buttons. OCR and visual detection run locally and are withheld on potentially sensitive screens.
 - validate_action {tool, id?, text?, x?, y?}: local preflight before acting. For click, require a current numbered target ID; for click_text, require the text to be visible. For tap, require finite non-negative coordinates and use only when no suitable numbered target exists. It does not perform the action.
@@ -704,7 +709,15 @@ Rules:
                 if (value.isNotBlank() && value.length <= 4000) "VALID: text payload is non-empty and within the local size limit. This does not verify the focused field."
                 else "INVALID: text payload must be non-empty and no longer than 4000 characters."
             }
-            "open_app" -> if (a.optString("name").isNotBlank()) "VALID: app target supplied." else "INVALID: app name or package is required."
+            "lookup_app", "open_app" -> if (a.optString("name").isNotBlank()) "VALID: app target supplied." else "INVALID: app name or package is required."
+            "system_intent" -> {
+                val allowed = setOf("settings", "wifi_settings", "bluetooth_settings", "display_settings", "app_settings", "location_settings", "accessibility_settings", "dial", "maps_search", "camera", "calendar", "clock", "open_url")
+                if (a.optString("action").trim().lowercase().replace('-', '_').replace(' ', '_') in allowed) "VALID: system route is allowlisted."
+                else "INVALID: system intent action is not in the local allowlist."
+            }
+            "resolve_contact" -> if (a.optString("name").isNotBlank()) "VALID: contact query supplied; permission and results are checked locally." else "INVALID: contact name is required."
+            "find_files" -> if (a.optString("query").isNotBlank()) "VALID: file search query supplied." else "INVALID: file search query is required."
+            "open_file" -> if (a.optString("id").toLongOrNull()?.let { it >= 0L } == true) "VALID: numeric file id supplied; Android access is checked at open time." else "INVALID: open_file requires a numeric id from find_files."
             "scroll" -> if (a.optString("direction", "down").lowercase() in setOf("up", "down")) "VALID: scroll direction is supported." else "INVALID: direction must be up or down."
             else -> "INVALID: unsupported action type for local validation: $action"
         }
@@ -771,7 +784,12 @@ Rules:
             activeSkillCalls++
         }
         return when (tool) {
+            "lookup_app" -> tools.lookupApp(a.optString("name"))
             "open_app" -> svc.openApp(a.optString("name"))
+            "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
+            "resolve_contact" -> tools.resolveContact(a.optString("name"))
+            "find_files" -> tools.findFiles(a.optString("query"))
+            "open_file" -> tools.openFile(a.optString("id"))
             "list_apps" -> tools.listApps()
             "read_screen" -> svc.readScreen().also { lastScreenSnapshot = it }
             "validate_action" -> validateAction(a)
