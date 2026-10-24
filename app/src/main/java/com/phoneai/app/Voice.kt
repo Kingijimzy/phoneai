@@ -293,7 +293,14 @@ class Voice(private val ctx: Context) {
             modelDir = model.parentFile?.absolutePath
                 ?: throw IllegalStateException("Neural model folder is missing."),
             modelName = model.name,
+            acousticModelName = "",
+            vocoder = "",
+            voices = "",
             lexicon = "lexicon-en-us.txt",
+            dataDir = "",
+            dictDir = "",
+            ruleFsts = "",
+            ruleFars = "",
             numThreads = 2
         )
         return OfflineTts(assetManager = null, config = config).also {
