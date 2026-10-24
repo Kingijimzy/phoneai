@@ -128,7 +128,8 @@ class OrionNotificationListener : NotificationListenerService() {
                     PlaybackState.STATE_STOPPED -> "stopped"
                     else -> "idle or unknown"
                 }
-                "${index + 1}. ${controller.packageName}: $title" + if (artist.isNotBlank()) " — $artist" else "" + " [$state]"
+                val artistText = if (artist.isNotBlank()) " — $artist" else ""
+                "${index + 1}. ${controller.packageName}: $title$artistText [$state]"
             }.joinToString("\n")
         }
 
