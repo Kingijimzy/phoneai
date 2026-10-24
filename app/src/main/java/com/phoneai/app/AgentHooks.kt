@@ -9,12 +9,19 @@ internal object AgentHooks {
   @Synchronized fun clear(){proofs.clear()}
   @Synchronized fun record(tool:String,result:String){
    val ok=!result.trimStart().startsWith("error",true)
-   val verified=Regex("\\bPASS:").containsMatchIn(result)||Regex("\\b(message sent|email sent|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(result)
+   // Screen-change markers and OCR snippets are not proof that a consequential action completed.
+   val summary=result.substringBefore("Current screen evidence").substringBefore("SCREEN EVIDENCE")
+   val verified=Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(summary)
    proofs.add(Proof(tool,ok,verified,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
   }
   @Synchronized fun snapshot():List<Proof> = proofs.toList()
  }
  data class GateDecision(val allowed:Boolean,val reason:String)
+ private val phoneActionWords=Regex(
+  "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|whatsapp|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b",
+  RegexOption.IGNORE_CASE
+ )
+ fun isPhoneActionRequest(request:String):Boolean=phoneActionWords.containsMatchIn(request)
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
