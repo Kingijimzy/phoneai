@@ -73,6 +73,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
+        val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
+        if (tool in screenSensitiveActions) {
+            val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
+            if (SafetyGate.isSensitiveActionScreen(currentScreen)) {
+                val blocked = "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
+                try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+                return blocked
+            }
+        }
         if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
             val browserBlock = BrowserAutomation.sensitivePageReason()
             if (browserBlock != null) {
@@ -1089,6 +1098,9 @@ Rules:
             }
             // Prefer a compact local screen map and numbered targets before sending any screenshot.
             val screenMap = svc.readScreen()
+            if (SafetyGate.isSensitiveActionScreen(screenMap)) {
+                return "vision stopped safely: the visible screen appears to involve money, account security, credentials, or an irreversible action. Please handle it manually."
+            }
             val numberedCount = Regex("(?m)^\\[\\d+\\] ").findAll(screenMap).count()
             if (numberedCount >= 3) {
                 val textPrompt = "User goal: ${goal.take(300)}\nPrevious step: $note\nCurrent numbered screen map:\n${screenMap.take(2400)}\n" +
