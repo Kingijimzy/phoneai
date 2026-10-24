@@ -545,7 +545,7 @@ class SettingsActivity : Activity() {
                 runWakeWordInstall()
             }
         }, 6)
-        switchRow(s3, "Wake word: say \"Orion\" (experimental; uses Android speech service and battery)", Prefs.wake(this)) {
+        switchRow(s3, "Wake word: say \"Orion\" (offline model when installed; experimental fallback otherwise)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (it && !hasMic) {
                 Prefs.setWake(this, false)

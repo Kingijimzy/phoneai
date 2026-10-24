@@ -41,7 +41,7 @@ object WakeWordModelInstaller {
                 archive.delete()
                 val tokens = File(stage, "tokens.txt")
                 val vocab = tokens.readText()
-                if (!vocab.lineSequence().any { it.contains("▁OR") } || !vocab.lineSequence().any { it.substringAfterLast(' ').trim() == "ION" }) {
+                if (!vocab.lineSequence().any { it.trimStart().startsWith("▁OR ") } || !vocab.lineSequence().any { it.trimStart().startsWith("ION ") }) {
                     throw IOException("The downloaded keyword vocabulary does not contain the expected ORION tokens; refusing to enable a mismatched model.")
                 }
                 // GigaSpeech's BPE vocabulary encodes ORION as ▁OR + ION. Keep the trigger conservative.

@@ -62,8 +62,10 @@ internal class OfflineWakeWordDetector(
                 keywordsFile = File(dir, "keywords.txt").absolutePath,
                 keywordsScore = 1.5f, keywordsThreshold = 0.35f, numTrailingBlanks = 2
             )
-            spotter = KeywordSpotter(config)
-            stream = spotter.createStream()
+            val activeSpotter = KeywordSpotter(config)
+            spotter = activeSpotter
+            val activeStream = activeSpotter.createStream()
+            stream = activeStream
             val min = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (min <= 0) throw IllegalStateException("Android could not allocate a 16 kHz microphone buffer.")
             val audio = AudioRecord.Builder()
@@ -87,12 +89,12 @@ internal class OfflineWakeWordDetector(
                 val speech = rms >= 0.008
                 if (speech != speechActive) { speechActive = speech; onVad(speech) }
                 val samples = FloatArray(count) { buffer[it] / 32768.0f }
-                stream.acceptWaveform(samples, sampleRate = 16000)
-                while (spotter.isReady(stream)) {
-                    spotter.decode(stream)
-                    val keyword = spotter.getResult(stream).keyword
+                activeStream.acceptWaveform(samples, sampleRate = 16000)
+                while (activeSpotter.isReady(activeStream)) {
+                    activeSpotter.decode(activeStream)
+                    val keyword = activeSpotter.getResult(activeStream).keyword
                     if (keyword.isNotBlank() && keyword.replace('_', ' ').contains("ORION", ignoreCase = true)) {
-                        spotter.reset(stream); detected = true; running = false; break
+                        activeSpotter.reset(activeStream); detected = true; running = false; break
                     }
                 }
                 if (detected) break
