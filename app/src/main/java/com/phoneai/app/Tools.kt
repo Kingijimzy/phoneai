@@ -297,6 +297,7 @@ class Tools(private val svc: PhoneAiService) {
             "app_settings" -> Intent(Settings.ACTION_APPLICATION_SETTINGS)
             "location_settings" -> Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
             "accessibility_settings" -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            "notification_settings" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
             "dial" -> {
                 val number = query.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }
                 if (number.isBlank()) return "error: dial route needs a phone number"
@@ -316,7 +317,7 @@ class Tools(private val svc: PhoneAiService) {
                     return "error: open_url requires a complete HTTP/HTTPS URL"
                 Intent(Intent.ACTION_VIEW, Uri.parse(raw))
             }
-            else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, dial, maps_search, camera, calendar, clock, open_url"
+            else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, open_url"
         }
         return try {
             if (i.resolveActivity(svc.packageManager) == null) return "error: no installed app can handle route '" + action + "'"
