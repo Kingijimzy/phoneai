@@ -225,6 +225,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runLiveConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        nim.beginCommand()
         stopped = false
         researchCancelled.set(false)
         nim.resume()
