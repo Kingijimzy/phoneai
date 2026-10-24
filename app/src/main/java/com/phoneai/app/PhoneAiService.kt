@@ -1391,6 +1391,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.postDelayed({ wakeTick(my) }, 900)
     }
 
+    /** Apply the wake-word preference immediately without requiring an Accessibility restart. */
+    fun updateWakeWord(enabled: Boolean) {
+        main.post {
+            wakeGen++
+            if (!enabled) {
+                if (!listening) voice.stopListening()
+            } else if (!mainChatActive && !running && !listening) {
+                startWake()
+            }
+        }
+    }
+
     private fun wakeTick(my: Int) {
         if (my != wakeGen || !wakeAllowed()) return
         if (voice.isSpeaking()) {
