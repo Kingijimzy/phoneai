@@ -11,6 +11,7 @@ import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
 import android.os.Bundle
 import android.os.Build
 import android.os.Handler
+import android.os.SystemClock
 import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -24,6 +25,24 @@ import java.util.concurrent.Executors
 
 /** Android speech recognition with optional sentence-streamed on-device neural TTS and Android TTS fallback. */
 class Voice(private val ctx: Context) {
+    companion object {
+        @Volatile private var lastPiperPerformance = "Piper synthesis: not measured in this app session (select the installed English Piper voice and speak a response)."
+        @Volatile private var lastPiperPerformanceAtMs: Long? = null
+
+        /** Latest real generation result; remains explicitly unmeasured until Piper has actually synthesized audio. */
+        fun piperPerformanceSummary(): String {
+            val value = lastPiperPerformance
+            val at = lastPiperPerformanceAtMs ?: return value
+            val ageSeconds = ((SystemClock.elapsedRealtime() - at).coerceAtLeast(0L)) / 1000L
+            return "$value Last sample: $ageSeconds second(s) ago."
+        }
+
+        private fun setPiperPerformance(value: String) {
+            lastPiperPerformance = value
+            lastPiperPerformanceAtMs = SystemClock.elapsedRealtime()
+        }
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
@@ -258,6 +277,7 @@ class Voice(private val ctx: Context) {
             var track: AudioTrack? = null
             var fallbackStart = 0
             var completedBeforeFallback = 0
+            var piperMetricsRecorded = false
             try {
                 if (token != playbackGeneration.get()) return@execute
                 val model = NeuralVoiceInstaller.modelFile(ctx)
@@ -266,6 +286,8 @@ class Voice(private val ctx: Context) {
                 }
                 val engine = obtainNeuralEngine(model)
                 track = obtainNeuralTrack(engine.sampleRate())
+                val generationStartedAtMs = SystemClock.elapsedRealtime()
+                val framesBeforeGeneration = neuralFramesWritten
                 for (index in chunks.indices) {
                     if (token != playbackGeneration.get()) return@execute
                     fallbackStart = index
@@ -306,11 +328,33 @@ class Voice(private val ctx: Context) {
                     }
                 }
 
+                val generationElapsedMs = (SystemClock.elapsedRealtime() - generationStartedAtMs).coerceAtLeast(1L)
+                val generatedFrames = (neuralFramesWritten - framesBeforeGeneration).coerceAtLeast(0L)
+                val generatedAudioSeconds = generatedFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
+                if (generatedFrames > 0L) {
+                    val realTimeFactor = generatedAudioSeconds / (generationElapsedMs / 1000.0)
+                    setPiperPerformance(String.format(
+                        Locale.US,
+                        "Piper synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
+                        generatedAudioSeconds,
+                        generationElapsedMs,
+                        realTimeFactor,
+                        chunks.sumOf { it.length },
+                        chunks.size
+                    ))
+                    piperMetricsRecorded = true
+                } else {
+                    setPiperPerformance("Piper synthesis: no audio frames were produced; this run is not a valid speed measurement.")
+                    piperMetricsRecorded = true
+                }
                 val activeTrack = track
                 if (activeTrack != null) awaitNeuralPlayback(activeTrack, neuralFramesWritten, token)
                 if (token != playbackGeneration.get()) return@execute
                 finished(ids.last())
             } catch (error: Throwable) {
+                if (!piperMetricsRecorded) {
+                    setPiperPerformance("Piper synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Piper speed measurement was recorded.")
+                }
                 // Drain any already-written sentence before switching engines so the
                 // fallback doesn't overlap neural playback. A stopped turn never falls back.
                 if (token != playbackGeneration.get()) return@execute

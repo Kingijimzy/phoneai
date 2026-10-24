@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.animation.ValueAnimator
 import android.view.MotionEvent
@@ -64,6 +65,22 @@ class LiveCallVisualView(context: Context) : View(context) {
     private val power by lazy { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
     private var reducedMotion = false
     private var frameDelay = 34L
+    private var fpsWindowStartMs = 0L
+    private var fpsWindowFrames = 0
+
+    companion object {
+        @Volatile private var lastMeasuredFps: Float? = null
+        @Volatile private var lastFpsMeasurementAtMs: Long? = null
+
+        /** FPS is measured from actual onDraw callbacks, never inferred from frameDelay. */
+        fun performanceSummary(): String {
+            val fps = lastMeasuredFps
+                ?: return "Live-call renderer FPS: not measured in this app session (open a live call and leave the visual running for at least one second)."
+            val at = lastFpsMeasurementAtMs ?: return "Live-call renderer FPS: %.1f".format(fps)
+            val age = ((SystemClock.elapsedRealtime() - at).coerceAtLeast(0L)) / 1000L
+            return "Live-call renderer FPS: %.1f; measured $age second(s) ago.".format(fps)
+        }
+    }
 
     init {
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -124,7 +141,25 @@ class LiveCallVisualView(context: Context) : View(context) {
         if (wordPulse > 0f) wordPulse = max(0f, wordPulse - if (reducedMotion) 1f else 0.11f)
         if (speechAmplitude > 0f && mode != OrbView.Mode.SPEAKING) speechAmplitude = 0f
         frame++
+        recordFrameForFps()
         if (animationEnabled && isShown && windowVisibility == VISIBLE && !reducedMotion) postInvalidateDelayed(frameDelay)
+    }
+
+    private fun recordFrameForFps() {
+        val now = SystemClock.elapsedRealtime()
+        if (fpsWindowStartMs == 0L) {
+            fpsWindowStartMs = now
+            fpsWindowFrames = 1
+            return
+        }
+        fpsWindowFrames++
+        val elapsed = now - fpsWindowStartMs
+        if (elapsed >= 1000L) {
+            lastMeasuredFps = fpsWindowFrames * 1000f / elapsed.toFloat()
+            lastFpsMeasurementAtMs = now
+            fpsWindowStartMs = now
+            fpsWindowFrames = 0
+        }
     }
 
     private fun drawDots(canvas: Canvas, w: Float, h: Float, t: Float, now: Long) {
