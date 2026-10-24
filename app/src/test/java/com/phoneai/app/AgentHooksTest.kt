@@ -61,9 +61,9 @@ class AgentHooksTest {
  }
 
  @Test fun screenComparisonIgnoresIndexAndDetectorNoiseButDetectsMeaningfulChange() {
-  val before = "Screen map\\n1: WhatsApp\\n2: Amma\\nDetector 7 ms"
-  val sameContent = "Screen map\\nWhatsApp\\nAmma\\nDetector 14 ms"
-  val after = "Screen map\\nWhatsApp\\nAmma\\nSent 8:42 AM"
+  val before = "Screen map\n1: WhatsApp\n2: Amma\nDetector 7 ms"
+  val sameContent = "Screen map\nWhatsApp\nAmma\nDetector 14 ms"
+  val after = "Screen map\nWhatsApp\nAmma\nSent 8:42 AM"
   assertFalse(AgentHooks.screenChanged(before, sameContent))
   assertTrue(AgentHooks.screenChanged(before, after))
   assertEquals(AgentHooks.screenFingerprint(before), AgentHooks.screenFingerprint(sameContent))
