@@ -70,7 +70,7 @@ class Voice(private val ctx: Context) {
         return try {
             (tts?.voices ?: emptySet<android.speech.tts.Voice>())
                 .filter { it.locale.language == lang && !it.features.contains("notInstalled") }
-                .sortedWith(compareByDescending<android.speech.tts.Voice> { it.quality }.thenBy { it.latency })
+                .sortedWith(compareBy<android.speech.tts.Voice> { it.features.contains("networkTts") }.thenByDescending { it.quality }.thenBy { it.latency })
         } catch (e: Exception) {
             emptyList()
         }
@@ -237,7 +237,7 @@ class Voice(private val ctx: Context) {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())\n        // Hint to the installed recognizer to prefer an offline model when it has one.\n        // Android may ignore this extra; the service can still fall back to a network recognizer.\n        i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         // Android's default end-of-speech silence can feel like a timeout in a live call.
         // Shorten turn detection without making it so aggressive that normal pauses cut users off.
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1300L)
