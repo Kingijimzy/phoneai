@@ -65,6 +65,27 @@ class SettingsActivity : Activity() {
             .show()
     }
 
+    private fun runWakeWordInstall() {
+        val progressText = text("Preparing download…", 13f, Theme.MUTED)
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = 0 }
+        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(14), dp(20), dp(10)); addView(progressText, LinearLayout.LayoutParams(-1, -2)); addView(progressBar, LinearLayout.LayoutParams(-1, dp(12)).apply { topMargin = dp(14) }) }
+        val cancelled = AtomicBoolean(false)
+        val dialog = AlertDialog.Builder(this).setTitle("Installing offline wake word").setView(panel).setNegativeButton("CANCEL", null).create()
+        dialog.setCancelable(false); dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { cancelled.set(true); progressText.text = "Cancelling safely…"; it.isEnabled = false }
+        WakeWordModelInstaller.install(applicationContext, { cancelled.get() }, { label, percent -> runOnUiThread {
+            if (!isFinishing && !isDestroyed && dialog.isShowing) { progressText.text = label; progressBar.progress = percent }
+        } }, { error -> runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            if (dialog.isShowing) dialog.dismiss()
+            when {
+                error == null -> { PhoneAiService.instance?.updateWakeWord(Prefs.wake(applicationContext)); showInfoDialog("Offline wake word ready", "The dedicated on-device ORION detector is installed. Enable the Wake word setting to use it. The first spoken command should follow the wake phrase.") }
+                error is InterruptedException -> Toast.makeText(this, "Wake-word installation cancelled.", Toast.LENGTH_SHORT).show()
+                else -> showInfoDialog("Wake-word installation failed", (error.message ?: "Download or model validation failed.") + "\n\nThe existing experimental Android-recognizer wake mode remains available.")
+            }
+        } })
+    }
+
     private fun runNeuralVoiceInstall() {
         val progressText = text("Preparing download…", 13f, Theme.MUTED)
         val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -517,6 +538,13 @@ class SettingsActivity : Activity() {
             12f, Theme.MUTED
         ), 8)
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
+        add(s3, button(if (WakeWordModelInstaller.isInstalled(this)) "Offline wake-word model · installed" else "Install dedicated offline wake-word model · about 16 MB", false) {
+            if (WakeWordModelInstaller.isInstalled(this)) {
+                showInfoDialog("Offline wake word installed", "Orion uses the local sherpa-onnx keyword spotter with a custom ORION phrase. Audio is processed on-device; Android speech recognition starts only after the wake phrase is detected.")
+            } else {
+                runWakeWordInstall()
+            }
+        }, 6)
         switchRow(s3, "Wake word: say \"Orion\" (experimental; uses Android speech service and battery)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (it && !hasMic) {

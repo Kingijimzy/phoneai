@@ -120,6 +120,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var wakeErr = false
     /** Back off repeated speech-service failures so wake detection cannot hammer the recognizer. */
     private var wakeErrorStreak = 0
+    @Volatile private var offlineWakeDetector: OfflineWakeWordDetector? = null
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -154,6 +155,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
         wakeGen++
+        stopOfflineWakeDetector()
         removeAllViews()
         try {
             voice.shutdown()
@@ -418,6 +420,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     fun attachMainChat(listener: MainChatListener) {
         main.post {
+            stopOfflineWakeDetector()
             // A visible chat/live-call surface owns microphone interaction. Cancel any
             // background wake recognizer so it cannot compete with the foreground mic.
             wakeGen++
@@ -747,6 +750,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun openPanel() {
         if (panel != null || running) return
+        stopOfflineWakeDetector()
         wakeGen++
         hideBubble()
         hideStrip()
@@ -1190,6 +1194,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     ) {
         val t = text.trim()
         if (t.isEmpty()) return
+        stopOfflineWakeDetector()
         if (running) {
             main.post {
                 mainChatListener?.onMessage("ai", "I'm already working on another task. Let that finish, then send this request again.")
@@ -1356,6 +1361,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun listenNow() {
         if (running) return
+        stopOfflineWakeDetector()
         wakeGen++
         listening = true
         hideBubble()
@@ -1438,8 +1444,34 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun startWake() {
         if (!wakeAllowed()) return
+        if (WakeWordModelInstaller.isInstalled(this)) {
+            val detector = offlineWakeDetector ?: OfflineWakeWordDetector(
+                this,
+                onWake = { main.post {
+                    if (wakeAllowed()) {
+                        wakeGen++
+                        stopOfflineWakeDetector()
+                        showStatusText("Orion heard the wake word. Speak your command now.")
+                        listenNow()
+                    }
+                } },
+                onError = { error -> main.post {
+                    if (wakeAllowed()) {
+                        appendTranscript("note", "Offline wake word failed: $error")
+                        wakeGen++
+                        main.postDelayed({ if (wakeAllowed()) startWake() }, 2500)
+                    }
+                } }
+            ).also { offlineWakeDetector = it }
+            if (detector.start()) return
+        }
         val my = ++wakeGen
         main.postDelayed({ wakeTick(my) }, 900)
+    }
+
+    private fun stopOfflineWakeDetector() {
+        try { offlineWakeDetector?.stop() } catch (_: Exception) { }
+        offlineWakeDetector = null
     }
 
     /** Apply the wake-word preference immediately without requiring an Accessibility restart. */
@@ -1447,6 +1479,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post {
             wakeGen++
             if (!enabled) {
+                stopOfflineWakeDetector()
                 if (!listening) voice.stopListening()
             } else if (!mainChatActive && !running && !listening) {
                 startWake()
