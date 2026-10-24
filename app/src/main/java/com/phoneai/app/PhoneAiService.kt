@@ -418,6 +418,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     fun attachMainChat(listener: MainChatListener) {
         main.post {
+            // A visible chat/live-call surface owns microphone interaction. Cancel any
+            // background wake recognizer so it cannot compete with the foreground mic.
+            wakeGen++
+            if (!listening) voice.stopListening()
             mainChatListener = listener
             mainChatActive = true
             if (panel != null) closePanel(false)
@@ -437,6 +441,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 mainChatListener = null
                 mainChatActive = false
                 if (!running && panel == null) showBubble()
+                startWake()
             }
         }
     }
