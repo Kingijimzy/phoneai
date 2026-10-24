@@ -92,7 +92,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 verifiedResult += if (changed) {
                     "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
                 } else {
-                    "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step."
+                    verifiedResult = "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step. Original result: " + result
                 }
             } catch (_: Exception) {
                 verifiedResult += "\\nLOCAL VERIFY: post-action screen comparison unavailable; outcome remains unverified."
