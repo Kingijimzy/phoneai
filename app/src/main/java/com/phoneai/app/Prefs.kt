@@ -252,6 +252,14 @@ object Prefs {
     fun wake(c: Context): Boolean = sp(c).getBoolean("wake", false)
     fun setWake(c: Context, v: Boolean) = sp(c).edit().putBoolean("wake", v).apply()
 
+    /** 0 is strict/less sensitive; 100 is more sensitive. */
+    fun wakeSensitivity(c: Context): Int = sp(c).getInt("wake_sensitivity", 55).coerceIn(0, 100)
+    fun setWakeSensitivity(c: Context, value: Int) = sp(c).edit().putInt("wake_sensitivity", value.coerceIn(0, 100)).apply()
+    fun wakeThreshold(c: Context): Float = WakeWordPolicy.thresholdForSensitivity(wakeSensitivity(c))
+
+    fun wakeTestMode(c: Context): Boolean = sp(c).getBoolean("wake_test_mode", false)
+    fun setWakeTestMode(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("wake_test_mode", enabled).apply()
+
     /** When enabled, speech input must use Android on-device recognition or fail closed. */
     fun offlineSpeechOnly(c: Context): Boolean = sp(c).getBoolean("offline_speech_only", true)
     fun setOfflineSpeechOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_speech_only", v).apply()
