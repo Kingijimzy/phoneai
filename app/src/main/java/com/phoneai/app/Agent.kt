@@ -266,9 +266,9 @@ Action outcome integrity is mandatory: distinguish confirmed success, failure, a
 Tools:
 - lookup_app {name}: resolve a launchable installed app to its exact label and package before opening it
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
-- system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, dial, maps_search, camera, calendar, clock, open_url. Never use arbitrary action/component strings.
+- system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, open_url. Never use arbitrary action/component strings.
 - open_deep_link {uri}: launch only allowlisted tel/geo/mailto/sms/smsto/whatsapp/tg/youtube/spotify deep links; never use arbitrary intent:// links or banking/payment/credential links.
-- resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
+- read_notifications {}: list recent safe notification summaries held in memory; banking/payment and authentication/security notifications are filtered before storage. Requires Android Notification access.\n- resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
 - find_files {query}: search accessible indexed shared files and return current numeric IDs; Android storage restrictions may limit results
 - open_file {id}: open a numeric ID returned by the latest find_files result
 - list_apps {}: names of installed apps
@@ -733,7 +733,7 @@ Rules:
                 else "INVALID: malformed, unsupported, financial, or credential-bearing deep link."
             }
             "system_intent" -> {
-                val allowed = setOf("settings", "wifi_settings", "bluetooth_settings", "display_settings", "app_settings", "location_settings", "accessibility_settings", "dial", "maps_search", "camera", "calendar", "clock", "open_url")
+                val allowed = setOf("settings", "wifi_settings", "bluetooth_settings", "display_settings", "app_settings", "location_settings", "accessibility_settings", "notification_settings", "dial", "maps_search", "camera", "calendar", "clock", "open_url")
                 if (a.optString("action").trim().lowercase().replace('-', '_').replace(' ', '_') in allowed) "VALID: system route is allowlisted."
                 else "INVALID: system intent action is not in the local allowlist."
             }
@@ -825,6 +825,7 @@ Rules:
             "open_app" -> svc.openApp(a.optString("name"))
             "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
             "open_deep_link" -> tools.openDeepLink(a.optString("uri"))
+            "read_notifications" -> OrionNotificationListener.readSafeNotifications()
             "resolve_contact" -> tools.resolveContact(a.optString("name"))
             "find_files" -> tools.findFiles(a.optString("query"))
             "open_file" -> tools.openFile(a.optString("id"))
