@@ -503,12 +503,11 @@ class Nim(private val ctx: Context) {
         // A text-only selected provider must never be the first attempt for an image.
         // If it cannot accept vision requests, select a compatible saved provider instead.
         if ((Prefs.hasKey(ctx, first.id) || first.noKey) && (!vision || first.hasVision)) order.add(first)
-        // Keep the configured provider primary. Backups are considered only after a real HTTP 429;
-        // ordinary errors, timeouts, invalid keys, and empty responses do not rotate providers.
-        if (Prefs.autoSwitch(ctx) || order.isEmpty() || vision) {
-            for (p in Providers.all) {
-                if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
-            }
+        // Always queue every saved, compatible provider behind the user's selection.
+        // A bad/retired model, empty response, rejected key, quota limit, or provider outage
+        // must not leave Orion silent while another saved provider may still work.
+        for (p in Providers.all) {
+            if (p !== first && Prefs.hasKey(ctx, p.id) && (!vision || p.hasVision)) order.add(p)
         }
         if (order.isEmpty()) {
             throw IllegalStateException("No AI key saved. Open Orion AI and add a key (Groq or Gemini are free).")
@@ -540,15 +539,16 @@ class Nim(private val ctx: Context) {
         val errors = LinkedHashMap<String, String>()
         if (cancelled) throw RuntimeException("Stopped.")
         val now = System.currentTimeMillis()
-        val primary = order.first()
-        if ((cooldown[primary.id] ?: 0L) > now) {
-            throw RuntimeException("The selected primary provider is cooling down. Orion did not rotate providers or send another request. Wait for its limit to reset, or change the primary provider in Settings.")
+        // Skip only providers that are cooling down; never let a cooled-down primary block
+        // healthy backups. Each provider is still attempted at most once per command in quota-saver mode.
+        val ready = order.filter { (cooldown[it.id] ?: 0L) <= now }
+        if (ready.isEmpty()) {
+            throw RuntimeException("All saved AI providers are cooling down. Wait for their limits to reset or change provider settings.")
         }
-        val ready = listOf(primary) + order.drop(1).filter { (cooldown[it.id] ?: 0L) <= now }
         for ((idx, p) in ready.withIndex()) {
             if (cancelled) throw RuntimeException("Stopped.")
             try {
-                onStatus?.invoke(if (idx == 0) "Using primary provider: ${p.label}..." else "Primary returned HTTP 429; trying backup ${p.label}...")
+                onStatus?.invoke(if (idx == 0 && p === first) "Using primary provider: ${p.label}..." else "Trying backup provider ${p.label}...")
                 val answer = chatOne(p, messages, vision, maxTokens, temperature, ready.size > 1, fastResponse)
                 val mode = if (vision) "vision" else "chat"
                 lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
@@ -558,22 +558,14 @@ class Nim(private val ctx: Context) {
                 if (cancelled) throw RuntimeException("Stopped.")
                 errors[p.id] = e.message ?: p.label
                 lastFailure[p.id] = (e.message ?: "Unknown provider error").take(220)
-                // Rotate on rate limits AND confirmed model/endpoint failures. A retired
-                // NVIDIA model commonly returns 404; stopping here strands the user even when
-                // another saved provider is healthy. Do not rotate on bad keys, connectivity,
-                // timeouts, or ambiguous failures.
-                val detail = (e.message ?: "").lowercase()
-                val unavailableModel = e is AiException && (
-                    detail.contains("no chat model worked") &&
-                    (detail.contains("404") || detail.contains("410") || detail.contains("422"))
-                )
-                val temporaryProviderFailure = e is AiException &&
-                    (detail.contains("service temporarily busy") || detail.contains("http 500") ||
-                     detail.contains("http 502") || detail.contains("http 503") || detail.contains("http 504"))
-                if (e !is AiException || (!e.rateLimited && !unavailableModel && !temporaryProviderFailure)) break
+                // A provider-specific failure should advance to the next saved provider.
+                // This includes retired-model 404/410/422, HTTP 200 empty replies, bad keys,
+                // exhausted credits, rate limits, timeouts and temporary 5xx errors. chatOne()
+                // bounds each provider attempt; cancellation remains the only hard stop above.
+                if (e !is AiException) break
             }
         }
-        throw RuntimeException(if (errors.isNotEmpty()) "AI request stopped without provider rotation except on HTTP 429: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "No saved provider is currently available. Check Settings → AI providers.")
+        throw RuntimeException(if (errors.isNotEmpty()) "No saved AI provider returned a usable reply. Tried: " + errors.entries.joinToString("; ") { (id, message) -> (Providers.find(id)?.label ?: id) + ": " + message } else "No saved provider is currently available. Check Settings → AI providers.")
     }
 
     private fun chatOne(
