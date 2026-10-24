@@ -924,7 +924,7 @@ Rules:
             "open_url" -> svc.openUrl(a.optString("url"))
             "browser_snapshot" -> BrowserAutomation.snapshot().take(6000)
             "browser_find" -> BrowserAutomation.find(a.optString("query")).take(1800)
-            "browser_extract" -> BrowserAutomation.extract().take(9000)
+            "browser_extract" -> BrowserAutomation.extract().take(13000)
             "browser_verify" -> BrowserAutomation.verifyPage(a.optString("expected_text"), a.optString("previous_url")).take(1200)
             "browser_click_verify" -> {
                 val target = a.optString("target").trim()
