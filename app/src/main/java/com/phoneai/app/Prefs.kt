@@ -211,6 +211,10 @@ object Prefs {
     fun wake(c: Context): Boolean = sp(c).getBoolean("wake", false)
     fun setWake(c: Context, v: Boolean) = sp(c).edit().putBoolean("wake", v).apply()
 
+    /** When enabled, speech input must use Android on-device recognition or fail closed. */
+    fun offlineSpeechOnly(c: Context): Boolean = sp(c).getBoolean("offline_speech_only", false)
+    fun setOfflineSpeechOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_speech_only", v).apply()
+
     fun deepVoice(c: Context): Boolean = sp(c).getBoolean("deep", false)
     fun setDeepVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("deep", v).apply()
 
