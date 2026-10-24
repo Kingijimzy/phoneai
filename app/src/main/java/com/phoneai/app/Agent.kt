@@ -268,7 +268,8 @@ Tools:
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
 - system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, open_url. Never use arbitrary action/component strings.
 - open_deep_link {uri}: launch only allowlisted tel/geo/mailto/sms/smsto/whatsapp/tg/youtube/spotify deep links; never use arbitrary intent:// links or banking/payment/credential links.
-- read_notifications {}: list recent safe notification summaries held in memory; banking/payment and authentication/security notifications are filtered before storage. Requires Android Notification access.\n- resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
+- read_notifications {}: list recent safe notification summaries held in memory; banking/payment and authentication/security notifications are filtered before storage. Requires Android Notification access.
+- resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
 - find_files {query}: search accessible indexed shared files and return current numeric IDs; Android storage restrictions may limit results
 - open_file {id}: open a numeric ID returned by the latest find_files result
 - list_apps {}: names of installed apps
