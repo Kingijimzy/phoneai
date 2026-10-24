@@ -17,13 +17,20 @@ import java.net.URL
 object NeuralVoiceInstaller {
     private const val MODEL_URL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-low-int8.tar.bz2"
-    private const val LEXICON_URL =
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt"
     private const val MODEL_SHA256 = "93070ac9fadf512e56c46bdd0c5d2ce96b424fdc4e683d560167410bd2c4df7d"
-    private const val LEXICON_SHA256 = "8b67ae549a465eee78f92ecb74644ad90c3c58ce65f19c68baf85878a10ef73a"
     private const val MAX_ARCHIVE_BYTES = 30L * 1024L * 1024L
-    private const val MAX_LEXICON_BYTES = 10L * 1024L * 1024L
     private const val MAX_EXTRACTED_FILE_BYTES = 80L * 1024L * 1024L
+    private const val MAX_ESPEAK_BYTES = 60L * 1024L * 1024L
+
+    /** Returns the path below espeak-ng-data/ for a safe archive entry, or null if it is not that data. */
+    internal fun espeakRelativePath(entryName: String): String? {
+        val parts = entryName.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
+        val index = parts.indexOf("espeak-ng-data")
+        if (index < 0 || index == parts.lastIndex) return null
+        val rest = parts.subList(index + 1, parts.size)
+        if (rest.any { it == ".." }) return null
+        return rest.joinToString("/")
+    }
 
     fun modelDirectory(context: Context): File =
         File(context.filesDir, "orion-neural-voice")
@@ -36,7 +43,15 @@ object NeuralVoiceInstaller {
         return File(dir, ".installed").isFile &&
             modelFile(context).isFile && modelFile(context).length() > 1_000_000L &&
             File(dir, "tokens.txt").isFile && File(dir, "tokens.txt").length() > 100L &&
-            File(dir, "lexicon-en-us.txt").isFile && File(dir, "lexicon-en-us.txt").length() > 100_000L
+            hasEspeakData(dir)
+    }
+
+    /** Piper voices phonemize with espeak-ng; without this folder the engine cannot start and speech is silent. */
+    fun espeakDataDirectory(context: Context): File = File(modelDirectory(context), "espeak-ng-data")
+
+    private fun hasEspeakData(dir: File): Boolean {
+        val data = File(dir, "espeak-ng-data")
+        return data.isDirectory && File(data, "phontab").isFile && File(data, "phondata").isFile
     }
 
     /**
@@ -65,23 +80,17 @@ object NeuralVoiceInstaller {
                     progress("Downloading compact Piper model…", (value * 0.72f).toInt())
                 }
                 checkCancelled(isCancelled)
-                progress("Extracting model and vocabulary…", 73)
+                progress("Extracting model, vocabulary and pronunciation data…", 80)
                 extractModel(archive, stage, isCancelled)
                 archive.delete()
-
-                progress("Downloading English pronunciation dictionary (about 6 MB)…", 79)
-                download(LEXICON_URL, File(stage, "lexicon-en-us.txt"), MAX_LEXICON_BYTES, LEXICON_SHA256, isCancelled) { value ->
-                    progress("Downloading English pronunciation dictionary…", 79 + (value * 0.19f).toInt())
-                }
                 checkCancelled(isCancelled)
 
                 val model = File(stage, "amy.onnx")
                 val tokens = File(stage, "tokens.txt")
-                val lexicon = File(stage, "lexicon-en-us.txt")
                 if (!model.isFile || model.length() < 1_000_000L) throw IOException("The downloaded ONNX voice model is missing or incomplete.")
                 if (!tokens.isFile || tokens.length() < 100L) throw IOException("The Piper token vocabulary is missing or incomplete.")
-                if (!lexicon.isFile || lexicon.length() < 100_000L) throw IOException("The English pronunciation dictionary is missing or incomplete.")
-                File(stage, ".installed").writeText("sherpa-onnx 1.13.8\npiper amy low int8\n")
+                if (!hasEspeakData(stage)) throw IOException("The Piper pronunciation data (espeak-ng-data) is missing or incomplete.")
+                File(stage, ".installed").writeText("sherpa-onnx 1.13.8\npiper amy low int8 espeak-ng-data\n")
 
                 checkCancelled(isCancelled)
                 progress("Finalizing the on-device voice…", 99)
@@ -173,6 +182,7 @@ object NeuralVoiceInstaller {
     private fun extractModel(archive: File, destination: File, isCancelled: () -> Boolean) {
         var modelExtracted = false
         var tokensExtracted = false
+        var espeakBytes = 0L
         TarArchiveInputStream(
             BZip2CompressorInputStream(BufferedInputStream(FileInputStream(archive)))
         ).use { tar ->
@@ -182,7 +192,17 @@ object NeuralVoiceInstaller {
                 if (!entry.isFile || entry.size <= 0L || entry.size > MAX_EXTRACTED_FILE_BYTES) continue
                 // Only extract the expected files; never trust file paths supplied by the tar.
                 val base = File(entry.name).name
+                val espeakRelative = espeakRelativePath(entry.name)
                 val target = when {
+                    espeakRelative != null -> {
+                        espeakBytes += entry.size
+                        if (espeakBytes > MAX_ESPEAK_BYTES) throw IOException("The pronunciation data exceeded its safety size limit.")
+                        File(destination, "espeak-ng-data/" + espeakRelative).also { file ->
+                            val root = File(destination, "espeak-ng-data").canonicalPath + File.separator
+                            if (!file.canonicalPath.startsWith(root)) throw IOException("Unsafe path in the voice archive.")
+                            file.parentFile?.mkdirs()
+                        }
+                    }
                     base.endsWith(".onnx", ignoreCase = true) && base.contains("amy", ignoreCase = true) ->
                         File(destination, "amy.onnx")
                     base.equals("tokens.txt", ignoreCase = true) -> File(destination, "tokens.txt")
@@ -205,8 +225,8 @@ object NeuralVoiceInstaller {
                 if (target.name == "tokens.txt") tokensExtracted = true
             }
         }
-        if (!modelExtracted || !tokensExtracted) {
-            throw IOException("The official Piper archive did not contain the expected ONNX model and tokens.")
+        if (!modelExtracted || !tokensExtracted || espeakBytes <= 0L) {
+            throw IOException("The official Piper archive did not contain the expected ONNX model, tokens and pronunciation data.")
         }
     }
 }

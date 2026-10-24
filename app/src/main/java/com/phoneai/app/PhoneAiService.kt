@@ -1647,7 +1647,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 bestLabel = ri.loadLabel(pm).toString()
                 break
             }
-            if (best == null && lbl.isNotEmpty() && (lbl.contains(q) || q.contains(lbl))) {
+            // Only accept a label that contains the request ("youtube" may match "YouTube Kids"); never the reverse,
+            // or "YouTube Music" would silently open the plain YouTube app when Music is not installed.
+            if (best == null && lbl.isNotEmpty() && lbl.contains(q)) {
                 best = ri
                 bestLabel = ri.loadLabel(pm).toString()
             }
