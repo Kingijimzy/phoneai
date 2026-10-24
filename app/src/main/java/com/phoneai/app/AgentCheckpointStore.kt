@@ -30,7 +30,11 @@ object AgentCheckpointStore {
         }
     }
 
-    private fun safeCommand(command: String): String = AgentPrivacyFilter.safeCommand(command)
+    private fun safeCommand(command: String): String = AgentPrivacyFilter.safeCommand(
+        command
+            .replace(Regex("(?i)\\bpasswd\\s*[:=]\\s*[^\\s,;]+")) { "passwd=[redacted]" }
+            .replace(Regex("(?i)\\bauthorization\\s*[:=]\\s*(?:bearer\\s+)?[^\\s,;]+"), "authorization=[redacted]")
+    )
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
         val now = System.currentTimeMillis()
         val o = JSONObject()
