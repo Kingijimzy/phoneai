@@ -79,6 +79,12 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // Orion targets the Redmi A3 Pro (ARM64). Exclude x86 and 32-bit ARM
+        // native runtimes from sherpa-onnx so the APK is not a 250 MB fat package.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     // A fixed debug key, so every new build can be installed over the old one.
