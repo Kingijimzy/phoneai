@@ -126,10 +126,19 @@ object AgentCheckpointStore {
 
     fun pause(c: Context): Boolean = update(c) { it.put("status", "paused") }
 
-    fun complete(c: Context): Boolean = update(c) {
-        it.put("status", "completed")
-        it.remove("inFlight")
-        it.remove("recoveryNotice")
+    fun complete(c: Context): Boolean {
+        val saved = update(c) {
+            it.put("status", "completed")
+            it.remove("inFlight")
+            it.remove("recoveryNotice")
+        }
+        if (!saved) return false
+        // Route learning is optional; it must never turn a completed task into a failed task.
+        try {
+            val checkpoint = JSONObject(file(c).readText())
+            RouteMemoryStore.recordCompleted(c, checkpoint)
+        } catch (_: Exception) { }
+        return true
     }
 
     fun recoveryRequired(c: Context, reason: String): Boolean = update(c) {
