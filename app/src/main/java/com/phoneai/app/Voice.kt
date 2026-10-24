@@ -185,10 +185,14 @@ class Voice(private val ctx: Context) {
             return
         }
 
-        // Offline-only mode fails closed if the Android engine has no local voice.
+        // Offline-only mode fails closed if the Android engine has no local voice,
+        // but never fail silently: tell the user exactly why speech was skipped.
         if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
+            main.post {
+                onProblem?.invoke("Orion cannot speak offline because no installed local voice is available. Install voice data in Android Text-to-speech settings, or turn off Offline-only voice.")
+                onSpeaking?.invoke(false)
+            }
             onDone?.invoke()
-            main.post { onSpeaking?.invoke(false) }
             return
         }
         speakWithAndroidTts(chunks, onDone)
@@ -197,7 +201,9 @@ class Voice(private val ctx: Context) {
     /** Compatibility path if Piper is not installed or native initialization fails. */
     private fun speakWithAndroidTts(chunks: List<String>, onDone: (() -> Unit)?) {
         // Neural-engine failure must not bypass the explicit no-network-TTS preference.
+        // Report the missing local voice instead of silently dropping the assistant reply.
         if (Prefs.offlineVoiceOnly(ctx) && voiceList().none { !it.features.contains("networkTts") }) {
+            main.post { onProblem?.invoke("Orion cannot speak offline because no installed local voice is available. Install voice data in Android Text-to-speech settings, or turn off Offline-only voice.") }
             onDone?.invoke()
             return
         }
