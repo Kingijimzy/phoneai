@@ -20,7 +20,7 @@ object WakeWordModelInstaller {
     fun modelDirectory(context: Context) = File(context.filesDir, "orion-offline-wake")
     fun isInstalled(context: Context): Boolean {
         val dir = modelDirectory(context)
-        return File(dir, ".installed").isFile && required.all { File(dir, it).isFile && File(dir, it).length() > 50L }
+        return File(dir, ".installed").isFile && required.all { name -> File(dir, name).isFile && File(dir, name).length() > if (name == "keywords.txt") 5L else 50L }
     }
 
     fun install(context: Context, isCancelled: () -> Boolean, progress: (String, Int) -> Unit, completion: (Throwable?) -> Unit) {
@@ -46,7 +46,7 @@ object WakeWordModelInstaller {
                 }
                 // GigaSpeech's BPE vocabulary encodes ORION as ▁OR + ION. Keep the trigger conservative.
                 File(stage, "keywords.txt").writeText("▁OR ION :1.5 #0.35\n")
-                for (name in required) if (!File(stage, name).isFile || File(stage, name).length() <= 50L) throw IOException("Wake-word asset is missing or incomplete: $name")
+                for (name in required) { val minBytes = if (name == "keywords.txt") 5L else 50L; if (!File(stage, name).isFile || File(stage, name).length() <= minBytes) throw IOException("Wake-word asset is missing or incomplete: $name") }
                 File(stage, ".installed").writeText("sherpa-onnx 1.13.8; GigaSpeech KWS INT8; keyword ORION\n")
                 checkCancelled(isCancelled)
                 progress("Activating offline wake-word model…", 96)
