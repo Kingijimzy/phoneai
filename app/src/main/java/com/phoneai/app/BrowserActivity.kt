@@ -299,25 +299,30 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                     return uri.scheme != "https" && uri.scheme != "http"
                 }
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    if (!url.isNullOrBlank()) address.setText(url)
-                    title.text = "LOADING PAGE"
+                    if (view === web && !url.isNullOrBlank()) address.setText(url)
+                    if (view === web) title.text = "LOADING PAGE"
                     progress.visibility = View.VISIBLE
                     progress.progress = 5
                     updateControls()
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    if (!url.isNullOrBlank()) address.setText(url)
-                    if (title.text.toString() == "LOADING PAGE") title.text = "ORION BROWSER"
-                    progress.progress = 100
-                    progress.visibility = View.GONE
-                    updateControls()
+                    if (view === web) {
+                        if (!url.isNullOrBlank()) address.setText(url)
+                        if (title.text.toString() == "LOADING PAGE") title.text = "ORION BROWSER"
+                        progress.progress = 100
+                        progress.visibility = View.GONE
+                        updateControls()
+                    }
+                    renderTabs()
                 }
             }
             web.webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                    progress.progress = newProgress
-                    progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
-                    updateControls()
+                    if (view === web) {
+                        progress.progress = newProgress
+                        progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
+                        updateControls()
+                    }
                 }
                 override fun onReceivedTitle(view: WebView?, pageTitle: String?) {
                     if (!pageTitle.isNullOrBlank() && ::web.isInitialized && web === view) title.text = pageTitle.take(42)
@@ -536,6 +541,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             tab.destroy()
         }
         browserTabs.clear()
+        try { CookieManager.getInstance().flush() } catch (_: Exception) { }
         super.onDestroy()
     }
 
