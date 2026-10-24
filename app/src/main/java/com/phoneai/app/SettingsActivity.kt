@@ -1250,13 +1250,17 @@ class SettingsActivity : Activity() {
     private fun testVoice() {
         val v = Voice(this)
         val n = Prefs.userName(this)
-        // the speech engine needs a moment to wake up
-        window.decorView.postDelayed({
-            v.speak("Hello" + (if (n.isEmpty()) "" else " $n") + ". I am Orion, at your service.") {
-                runOnUiThread { v.shutdown() }
+        v.onProblem = { message ->
+            runOnUiThread {
+                showInfoDialog("Voice output test failed", message)
+                v.shutdown()
             }
-        }, 900)
-        Toast.makeText(this, "Speaking...", Toast.LENGTH_SHORT).show()
+        }
+        // TTS startup is asynchronous; Voice queues this test until initialization completes.
+        v.speak("Hello" + (if (n.isEmpty()) "" else " $n") + ". I am Orion, at your service.") {
+            runOnUiThread { v.shutdown() }
+        }
+        Toast.makeText(this, "Testing voice output…", Toast.LENGTH_SHORT).show()
     }
 
     // ------------------------------------------------------------ name and memory
