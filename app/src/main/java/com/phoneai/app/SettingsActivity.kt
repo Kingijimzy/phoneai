@@ -410,6 +410,15 @@ class SettingsActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+        switchRow(s3, "Offline-only voice output (no network TTS)", Prefs.offlineVoiceOnly(this)) {
+            Prefs.setOfflineVoiceOnly(this, it)
+            Toast.makeText(
+                this,
+                if (it) "Offline-only output enabled. Orion will stay silent if no installed offline voice is available."
+                else "Offline-only output disabled. Android may use its configured TTS voice.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
         switchRow(s3, "Wake word: say \"Orion\" (experimental; uses Android speech service and battery)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
