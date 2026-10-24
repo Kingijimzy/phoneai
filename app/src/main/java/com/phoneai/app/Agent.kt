@@ -55,8 +55,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (signature in failedToolSignatures) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
+        val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url")
         val result = try {
-            exec(tool, args)
+            if (tool in nativeUiActions) {
+                val validationArgs = JSONObject(args.toString()).put("tool", tool)
+                val validation = validateAction(validationArgs)
+                if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
+                else exec(tool, args)
+            } else {
+                exec(tool, args)
+            }
         } catch (e: Exception) {
             "error: ${e.message ?: e.javaClass.simpleName}"
         }
@@ -670,12 +678,26 @@ Rules:
                 if (text.isNotEmpty() && screen.contains(text, ignoreCase = true)) "VALID: requested text is visible in the latest screen map."
                 else "INVALID: requested text is not visible in the latest screen map. Re-perceive before acting."
             }
-            "tap" -> {
+            "tap", "long_press" -> {
                 val x = a.optDouble("x", Double.NaN)
                 val y = a.optDouble("y", Double.NaN)
                 if (x.isFinite() && y.isFinite() && x >= 0.0 && y >= 0.0 && a.optBoolean("allow_coordinates", false))
                     "VALID: coordinate fallback arguments are finite and non-negative. Coordinates still require visual grounding."
                 else "INVALID: use a current numbered target when possible; coordinate fallback requires x/y and allow_coordinates=true."
+            }
+            "swipe" -> {
+                val coords = listOf("x1", "y1", "x2", "y2").map { a.optDouble(it, Double.NaN) }
+                if (coords.all { it.isFinite() && it >= 0.0 } && a.optBoolean("allow_coordinates", false))
+                    "VALID: swipe coordinates are finite and non-negative; verify the visible result afterward."
+                else "INVALID: swipe requires finite non-negative x1/y1/x2/y2 and allow_coordinates=true."
+            }
+            "key" -> if (a.optString("name").isNotBlank()) "VALID: key action supplied." else "INVALID: key name is required."
+            "open_url" -> {
+                val raw = a.optString("url").trim()
+                val uri = try { java.net.URI(raw) } catch (_: Exception) { null }
+                if (uri != null && uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrBlank())
+                    "VALID: URL uses HTTP or HTTPS and has a host."
+                else "INVALID: only complete HTTP or HTTPS URLs are allowed."
             }
             "type" -> {
                 val value = a.optString("text")
