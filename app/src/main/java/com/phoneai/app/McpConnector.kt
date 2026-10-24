@@ -24,6 +24,31 @@ object McpConnector {
     fun endpoint(c: Context): String = c.getSharedPreferences(PREFS, 0).getString(URL_KEY, "") ?: ""
     fun configured(c: Context): Boolean = endpoint(c).isNotBlank()
 
+    // Least-privilege scopes: read-only is the default.
+    private val knownScopes = setOf("read", "write", "communication", "system", "other")
+    fun scopes(c: Context): Set<String> {
+        val saved = c.getSharedPreferences(PREFS, 0).getString("allowed_scopes", "read") ?: "read"
+        return saved.split(",").map { it.trim() }.filter { it in knownScopes }.toSet() + "read"
+    }
+    fun setScopes(c: Context, selected: Set<String>): String {
+        if (selected.any { it !in knownScopes }) return "Invalid MCP permission scope."
+        val safe = selected + "read"
+        return if (c.getSharedPreferences(PREFS, 0).edit()
+            .putString("allowed_scopes", safe.sorted().joinToString(",")).commit()) {
+            "MCP scopes saved. Read-only access remains enabled; every remote call still requires in-app approval."
+        } else "Could not save MCP scopes."
+    }
+    fun scopeForTool(name: String): String {
+        val n = name.lowercase().replace('-', '_')
+        return when {
+            Regex("(^|_)(send|message|email|telegram|post|publish|reply|notify|share|call|sms)(_|$)").containsMatchIn(n) -> "communication"
+            Regex("(^|_)(delete|remove|update|create|write|edit|save|submit|purchase|pay|transfer|trade|order|execute|run|deploy)(_|$)").containsMatchIn(n) -> "write"
+            Regex("(^|_)(settings|system|shell|terminal|command|device|install|uninstall|permission|admin)(_|$)").containsMatchIn(n) -> "system"
+            Regex("(^|_)(get|list|read|search|fetch|find|query|lookup|status|inspect|view|describe|discover)(_|$)").containsMatchIn(n) -> "read"
+            else -> "other"
+        }
+    }
+
     fun save(c: Context, rawUrl: String, rawToken: String): String {
         val clean = rawUrl.trim()
         val uri = try { java.net.URI(clean) } catch (_: Exception) { return "Invalid MCP endpoint URL." }
@@ -61,7 +86,8 @@ object McpConnector {
         val host = try { java.net.URI(value).host ?: "unknown" } catch (_: Exception) { "invalid" }
         val auth = if (readToken(c).isNullOrBlank()) "not saved" else "encrypted on device"
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
-            ". Initial integration discovers tools only; remote execution is not enabled yet."
+            ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
+            ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope."
     }
 
     @Volatile private var sessionId: String? = null
@@ -100,6 +126,10 @@ object McpConnector {
         if (!configured(c)) return "error: no MCP server configured."
         if (!Regex("^[A-Za-z0-9_.:/-]{1,120}$").matches(name)) return "error: invalid MCP tool name."
         if (arguments.toString().length > 12000) return "error: MCP arguments exceed 12 KB."
+        val requiredScope = scopeForTool(name)
+        if (requiredScope !in scopes(c)) {
+            return "error: MCP permission denied. Tool '$name' requires the '$requiredScope' scope, which is disabled. Review MCP permissions in Orion Settings."
+        }
         sessionId = null
         return try {
             val init = post(c, JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "initialize")
