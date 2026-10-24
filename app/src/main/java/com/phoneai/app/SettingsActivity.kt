@@ -401,6 +401,15 @@ class SettingsActivity : Activity() {
         val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
+        switchRow(s3, "Offline-only speech input (no network fallback)", Prefs.offlineSpeechOnly(this)) {
+            Prefs.setOfflineSpeechOnly(this, it)
+            Toast.makeText(
+                this,
+                if (it) "Offline-only speech enabled. If Android has no offline speech model, voice input will stop instead of sending audio to a network service."
+                else "Offline-only speech disabled. Android may use its configured speech service.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
         switchRow(s3, "Hands-free: keep listening after each answer", Prefs.hands(this)) { Prefs.setHands(this, it) }
         switchRow(s3, "Wake word: say \"Orion\" (experimental; uses Android speech service and battery)", Prefs.wake(this)) {
             val hasMic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -420,7 +429,7 @@ class SettingsActivity : Activity() {
             }
         }
         add(s3, text(
-            "Wake detection uses Android's speech-recognition service in short sessions; it is not an offline, always-on keyword detector. It pauses while chat or live voice owns the microphone and backs off when the speech service fails.",
+            "Offline-only speech input applies to spoken conversation turns; it never silently falls back to a network recognizer. It requires Android 12+ and an installed offline language model. Wake detection is still experimental and uses Android's speech-recognition service in short sessions, not a dedicated always-on keyword model.",
             12f, Theme.MUTED
         ), 8)
         add(s3, text("Speaking speed", 13f, Theme.MUTED), 12)
