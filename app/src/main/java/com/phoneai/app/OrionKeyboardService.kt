@@ -159,8 +159,14 @@ class OrionKeyboardService : InputMethodService() {
         }
         val connection = currentInputConnection
             ?: return "error: Android has not provided an input connection for the focused field"
+        // Select the existing field contents first so agent text replaces rather than appends.
+        // If the editor does not support select-all, fail safely instead of duplicating text.
+        val selectedAll = try { connection.performContextMenuAction(android.R.id.selectAll) } catch (_: Exception) { false }
+        if (!selectedAll) {
+            return "error: this field did not support select-all, so Orion did not type to avoid appending duplicate text. Select the field contents manually and retry."
+        }
         val accepted = connection.commitText(text, 1)
-        if (!accepted) return "error: the focused app rejected text from the active input connection"
+        if (!accepted) return "error: the focused app rejected replacement text from the active input connection"
         // Return to the IME the user had selected before Orion was temporarily activated.
         // InputMethodService requires this switch on its main thread, after commitText completes.
         Handler(Looper.getMainLooper()).postDelayed({
