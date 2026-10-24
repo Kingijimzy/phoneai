@@ -53,6 +53,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Prefs.geminiLiveEnabled(this)) {
+            startActivity(Intent(this, GeminiLiveActivity::class.java))
+            finish()
+            return
+        }
         window.statusBarColor = android.graphics.Color.BLACK
         window.navigationBarColor = android.graphics.Color.BLACK
         applyImmersiveMode()
