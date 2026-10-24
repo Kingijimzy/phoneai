@@ -88,7 +88,7 @@ class LiveCallVisualView(context: Context) : View(context) {
     }
 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); postInvalidateOnAnimation() }
-    override fun onDetachedFromWindow() { removeCallbacks(null); super.onDetachedFromWindow() }
+    override fun onDetachedFromWindow() { super.onDetachedFromWindow() }
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
         if (visibility == VISIBLE) invalidate()
@@ -227,6 +227,5 @@ class LiveCallVisualView(context: Context) : View(context) {
             paint.alpha = 170
             canvas.drawCircle(cx, cy + unit * 1.15f, max(2f, unit * .06f), paint)
         }
-        if (mode == OrbView.Mode.ERROR) { /* reserved for forward compatibility */ }
     }
 }
