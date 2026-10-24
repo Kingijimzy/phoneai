@@ -27,12 +27,19 @@ import java.util.concurrent.Executors
 class Voice(private val ctx: Context) {
     companion object {
         @Volatile private var lastPiperPerformance = "Piper synthesis: not measured in this app session (select the installed English Piper voice and speak a response)."
+        @Volatile private var lastPiperPerformanceAtMs: Long? = null
 
         /** Latest real generation result; remains explicitly unmeasured until Piper has actually synthesized audio. */
-        fun piperPerformanceSummary(): String = lastPiperPerformance
+        fun piperPerformanceSummary(): String {
+            val value = lastPiperPerformance
+            val at = lastPiperPerformanceAtMs ?: return value
+            val ageSeconds = ((SystemClock.elapsedRealtime() - at).coerceAtLeast(0L)) / 1000L
+            return "$value Last sample: $ageSeconds second(s) ago."
+        }
 
-        internal fun recordPiperPerformanceForTest(value: String) {
+        private fun setPiperPerformance(value: String) {
             lastPiperPerformance = value
+            lastPiperPerformanceAtMs = SystemClock.elapsedRealtime()
         }
     }
 
@@ -326,7 +333,7 @@ class Voice(private val ctx: Context) {
                 val generatedAudioSeconds = generatedFrames.toDouble() / engine.sampleRate().coerceAtLeast(1)
                 if (generatedFrames > 0L) {
                     val realTimeFactor = generatedAudioSeconds / (generationElapsedMs / 1000.0)
-                    lastPiperPerformance = String.format(
+                    setPiperPerformance(String.format(
                         Locale.US,
                         "Piper synthesis: %.2f seconds of audio in %d ms; real-time factor %.2fx; %d characters across %d chunk(s).",
                         generatedAudioSeconds,
@@ -334,10 +341,10 @@ class Voice(private val ctx: Context) {
                         realTimeFactor,
                         chunks.sumOf { it.length },
                         chunks.size
-                    )
+                    ))
                     piperMetricsRecorded = true
                 } else {
-                    lastPiperPerformance = "Piper synthesis: no audio frames were produced; this run is not a valid speed measurement."
+                    setPiperPerformance("Piper synthesis: no audio frames were produced; this run is not a valid speed measurement.")
                     piperMetricsRecorded = true
                 }
                 val activeTrack = track
@@ -346,7 +353,7 @@ class Voice(private val ctx: Context) {
                 finished(ids.last())
             } catch (error: Throwable) {
                 if (!piperMetricsRecorded) {
-                    lastPiperPerformance = "Piper synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Piper speed measurement was recorded."
+                    setPiperPerformance("Piper synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Piper speed measurement was recorded.")
                 }
                 // Drain any already-written sentence before switching engines so the
                 // fallback doesn't overlap neural playback. A stopped turn never falls back.
