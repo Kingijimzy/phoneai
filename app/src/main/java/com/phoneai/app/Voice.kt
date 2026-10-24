@@ -3,6 +3,7 @@ package com.phoneai.app
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -20,6 +21,7 @@ class Voice(private val ctx: Context) {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var rec: SpeechRecognizer? = null
+    @Volatile private var listeningOnDevice = false
     private val callbacks = ConcurrentHashMap<String, () -> Unit>()
     private val pending = AtomicInteger(0)
 
@@ -190,7 +192,15 @@ class Voice(private val ctx: Context) {
             return
         }
         val my = ++gen
-        val r = SpeechRecognizer.createSpeechRecognizer(ctx)
+        val onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            try { SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx) } catch (_: Exception) { false }
+        val r = try {
+            if (onDeviceAvailable) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
+            else SpeechRecognizer.createSpeechRecognizer(ctx)
+        } catch (_: Exception) {
+            SpeechRecognizer.createSpeechRecognizer(ctx)
+        }
+        listeningOnDevice = onDeviceAvailable
         rec = r
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
@@ -213,7 +223,11 @@ class Voice(private val ctx: Context) {
                 val msg = when (error) {
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is missing. Open Orion AI > Allow microphone."
                     SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-                    SpeechRecognizer.ERROR_SERVER -> "Speech service needs internet."
+                    SpeechRecognizer.ERROR_SERVER -> if (listeningOnDevice) {
+                        "On-device speech recognition failed. Check that an offline speech model is installed, then try again."
+                    } else {
+                        "Speech service needs internet."
+                    }
                     SpeechRecognizer.ERROR_AUDIO -> "Microphone is busy or unavailable."
                     SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech service is busy. Try again."
                     else -> null
@@ -278,6 +292,7 @@ class Voice(private val ctx: Context) {
 
     fun stopListening() {
         gen++
+        listeningOnDevice = false
         try {
             rec?.cancel()
         } catch (e: Exception) {
