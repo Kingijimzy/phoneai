@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Debug
 import android.os.PowerManager
 import android.os.SystemClock
 import org.json.JSONArray
@@ -15,6 +16,7 @@ data class GameDeviceSnapshot(
     val lowMemory: Boolean,
     val availableMemoryMb: Long,
     val totalMemoryMb: Long,
+    val appPssMb: Long,
     val thermalStatus: String,
     val recommendation: String
 )
@@ -54,6 +56,11 @@ object GameSentinel {
         } else "Not available on this Android version"
         val availableMb = memory.availMem / (1024 * 1024)
         val totalMb = memory.totalMem / (1024 * 1024)
+        val processMemory = Debug.MemoryInfo()
+        val appPssMb = try {
+            Debug.getMemoryInfo(processMemory)
+            processMemory.totalPss.toLong() / 1024L
+        } catch (_: Exception) { -1L }
         val recommendation = when {
             Build.VERSION.SDK_INT >= 29 && power != null && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE ->
                 "High thermal pressure: stop or pause the game and let the phone cool."
@@ -65,7 +72,7 @@ object GameSentinel {
                 "Battery temperature is high: pause gaming and allow the phone to cool."
             else -> "No immediate warning from the available device indicators."
         }
-        return GameDeviceSnapshot(battery, batteryTemp, memory.lowMemory, availableMb, totalMb, thermal, recommendation)
+        return GameDeviceSnapshot(battery, batteryTemp, memory.lowMemory, availableMb, totalMb, appPssMb, thermal, recommendation)
     }
 
     @Synchronized
