@@ -486,6 +486,44 @@ class MainActivity : ComponentActivity() {
         gap(integrations, action("Configure services", "AI providers, Telegram, MCP, voice, and quota controls") {
             showTab("Settings")
         }, 8)
+
+        val catalog = section(
+            page,
+            "Available agent tools",
+            "READ/WRITE labels are generated from the same registry used by the agent prompt and scope guard."
+        )
+        ToolRegistry.all.forEach { definition ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(10), dp(10), dp(10))
+                background = surface(13)
+            }
+            val details = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            details.addView(label(definition.name, 12f, Theme.TEXT, true))
+            details.addView(label(definition.description, 11f, Theme.MUTED).apply {
+                maxLines = 3
+                setPadding(0, dp(3), 0, 0)
+            })
+            row.addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val isRead = definition.access == ToolAccess.READ
+            val badge = label(definition.access.name, 9f, if (isRead) Theme.CYAN else Theme.WARN, true).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(8), dp(5), dp(8), dp(5))
+                background = GradientDrawable().apply {
+                    setColor(if (isRead) 0xFF172D28.toInt() else 0xFF302820.toInt())
+                    cornerRadius = dp(9).toFloat()
+                    setStroke(dp(1), if (isRead) Theme.VIOLET else 0xFF5C4630.toInt())
+                }
+            }
+            row.addView(badge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(8)
+            })
+            gap(catalog, row, 6)
+        }
     }
 
     private fun buildSettings(page: LinearLayout) {
