@@ -20,6 +20,69 @@ import android.widget.TextView
  * typed content, and never sends keystrokes to Orion's AI providers.
  */
 class OrionKeyboardService : InputMethodService() {
+    companion object {
+        private data class TypeRequest(
+            val text: String,
+            val targetPackage: String?,
+            val done: java.util.concurrent.CountDownLatch = java.util.concurrent.CountDownLatch(1),
+            @Volatile var result: String = "error: Orion keyboard did not accept the text request"
+        )
+
+        @Volatile private var active: OrionKeyboardService? = null
+        @Volatile private var pending: TypeRequest? = null
+
+        /**
+         * Sends an explicit agent-provided string through the active IME connection.
+         * It never reads text back from the editor. If Orion is not the active IME,
+         * it opens Android's system picker and waits for the user to select it.
+         */
+        fun typeIntoFocusedField(context: android.content.Context, text: String, targetPackage: String?): String {
+            if (text.isEmpty()) return "error: refusing to type empty text"
+            if (text.length > 4000) return "error: text exceeds the 4000 character limit"
+            val service = active
+            if (service != null && service.currentInputConnection != null) {
+                return service.commitAgentText(text, targetPackage)
+            }
+            val request = TypeRequest(text, targetPackage)
+            synchronized(OrionKeyboardService::class.java) {
+                if (pending != null) return "error: another keyboard typing request is already waiting"
+                pending = request
+            }
+            try {
+                val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showInputMethodPicker()
+                if (!request.done.await(25, java.util.concurrent.TimeUnit.SECONDS)) {
+                    synchronized(OrionKeyboardService::class.java) {
+                        if (pending === request) pending = null
+                    }
+                    return "error: Orion Private Keyboard was not selected in Android's keyboard picker. Select it and retry the typing action."
+                }
+                return request.result
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                synchronized(OrionKeyboardService::class.java) {
+                    if (pending === request) pending = null
+                }
+                return "error: typing was interrupted before Orion Keyboard became active"
+            } catch (e: Exception) {
+                synchronized(OrionKeyboardService::class.java) {
+                    if (pending === request) pending = null
+                }
+                return "error: could not open the Android keyboard picker: ${e.javaClass.simpleName}"
+            }
+        }
+
+        private fun isPasswordInput(info: EditorInfo?): Boolean {
+            val type = info?.inputType ?: return false
+            val cls = type and InputType.TYPE_MASK_CLASS
+            val variation = type and InputType.TYPE_MASK_VARIATION
+            return (cls == InputType.TYPE_CLASS_TEXT && variation in setOf(
+                InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            )) || (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
+        }
+    }
     private var upper = true
     private var symbols = false
     private var inputClass = InputType.TYPE_CLASS_TEXT
@@ -36,6 +99,16 @@ class OrionKeyboardService : InputMethodService() {
 
     private val phoneMode: Boolean
         get() = inputClass == InputType.TYPE_CLASS_PHONE
+
+    override fun onCreate() {
+        super.onCreate()
+        active = this
+    }
+
+    override fun onDestroy() {
+        if (active === this) active = null
+        super.onDestroy()
+    }
 
     override fun onCreateInputView(): View = buildKeyboard()
 
@@ -54,7 +127,29 @@ class OrionKeyboardService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        active = this
         setInputView(buildKeyboard())
+        val request = synchronized(OrionKeyboardService::class.java) { pending }
+        if (request != null) {
+            request.result = commitAgentText(request.text, request.targetPackage)
+            synchronized(OrionKeyboardService::class.java) {
+                if (pending === request) pending = null
+            }
+            request.done.countDown()
+        }
+    }
+
+    private fun commitAgentText(text: String, targetPackage: String?): String {
+        val info = currentInputEditorInfo
+            ?: return "error: no active editor connection; focus the text field and retry"
+        if (isPasswordInput(info)) return "error: refusing to type into a password field"
+        if (!targetPackage.isNullOrBlank() && info.packageName != targetPackage) {
+            return "error: focused editor changed while switching keyboards; text was not entered"
+        }
+        val connection = currentInputConnection
+            ?: return "error: Android has not provided an input connection for the focused field"
+        return if (connection.commitText(text, 1)) "typed via Orion Private Keyboard input connection"
+        else "error: the focused app rejected text from the active input connection"
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false
