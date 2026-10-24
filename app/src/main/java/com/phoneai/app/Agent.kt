@@ -41,6 +41,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     // Adaptive recovery: never repeat the exact same failed tool call in one task.
     // A different tool/argument set may still be attempted after inspecting the failure.
     private val failedToolSignatures = LinkedHashSet<String>()
+    private val taskProofs = AgentHooks.ProofRecorder()
+    @Volatile private var activeRequestScope: String = ""
     // Last locally perceived screen, used for post-action comparison without another model call.
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
@@ -54,6 +56,30 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val signature = tool + "|" + args.toString()
         if (signature in failedToolSignatures) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
+        }
+        val targetLabel = when (tool) {
+            "click" -> svc.nodeInfo(args.optInt("id", -1))?.first.orEmpty()
+            "type" -> svc.currentAppLabel()
+            else -> ""
+        }
+        val scopeBlock = AgentHooks.scopeBlockReason(activeRequestScope, tool, args, targetLabel)
+        if (scopeBlock != null) {
+            val blocked = "error: scope guard blocked action. " + scopeBlock
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
+        if (AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
+            val description = when (tool) {
+                "forget" -> "Forget saved memory #" + args.optInt("id", -1)
+                "update_memory" -> "Change saved memory #" + args.optInt("id", -1)
+                "undo_last" -> "Undo the most recent action"
+                else -> "Proceed with the action " + (if (targetLabel.isBlank()) tool else targetLabel) + ". This may change or submit information."
+            }
+            if (!ui.ask(description + "?")) {
+                val denied = "error: user did not approve the consequential action."
+                taskProofs.record(tool, denied)
+                return denied
+            }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
         val safetyBlock = SafetyGate.blockReason(
@@ -90,7 +116,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (!result.trimStart().startsWith("error", ignoreCase = true) && tool in actionTools && lastScreenSnapshot.isNotBlank()) {
             try {
                 val before = lastScreenSnapshot
-                val after = if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen()
+                val after = AgentHooks.awaitStableSnapshot(
+                    read = { if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen() },
+                    maxSamples = 5, stableSamples = 2, intervalMs = 120L
+                )
                 lastScreenBeforeAction = before
                 lastScreenSnapshot = after
                 val changed = screenFingerprint(before) != screenFingerprint(after)
@@ -107,6 +136,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             failedToolSignatures.add(signature)
             while (failedToolSignatures.size > 80) failedToolSignatures.remove(failedToolSignatures.first())
         }
+        taskProofs.record(tool, verifiedResult)
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
         try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
@@ -162,6 +192,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (command.isEmpty()) return
         nim.beginCommand()
         stopped = false
+        activeRequestScope = command
+        if (!resumeRequest) taskProofs.clear()
         researchCancelled.set(false)
         nim.resume()
         val safeSystem = chatSystem().replace(
@@ -645,6 +677,12 @@ Rules:
             }
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") {
+                val completion = AgentHooks.completionDecision(command, taskProofs.snapshot())
+                if (!completion.allowed) {
+                    AgentCheckpointStore.pause(svc)
+                    ui.say("I stopped before marking this task complete: " + completion.reason + " I saved the task progress; please verify the current screen or state before continuing.")
+                    return
+                }
                 if (!AgentCheckpointStore.complete(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
                 }
