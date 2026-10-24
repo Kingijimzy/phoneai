@@ -45,7 +45,7 @@ object SafetyGate {
         if (tool == "type" && containsSensitiveCredentialText(text)) {
             return "Orion's safety gate blocks typing card, CVV/CVC, password, passcode, PIN, OTP, security-code, or card-number text. Enter sensitive details yourself."
         }
-        val readOnly = setOf("read_screen", "verify_action", "validate_action", "browser_snapshot", "browser_verify")
+        val readOnly = setOf("read_screen", "verify_action", "validate_action", "browser_snapshot", "browser_verify", "read_notifications")
         if (tool !in readOnly && isSensitiveApp(currentPackage, currentLabel)) {
             return "Orion's safety gate blocks automation inside banking and payment apps. Leave that app to continue."
         }
