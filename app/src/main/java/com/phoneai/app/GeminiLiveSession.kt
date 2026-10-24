@@ -192,6 +192,7 @@ internal class GeminiLiveSession(
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject()))
             .put("inputAudioTranscription", JSONObject())
             .put("outputAudioTranscription", JSONObject())
+            .put("sessionResumption", JSONObject())
             .put(
                 "contextWindowCompression",
                 JSONObject()
