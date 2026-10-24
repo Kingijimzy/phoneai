@@ -107,10 +107,17 @@ object RouteMemoryStore {
     fun recordCompleted(c: Context, checkpoint: JSONObject): Boolean = synchronized(lock) {
         try {
             val label = safeLabel(checkpoint.optString("command"))
+            // Do not build reusable routes for finance, account security, credentials, or login flows.
+            if (label.contains(Regex("(?i)\\b(bank|payment|pay|transfer|withdraw|deposit|checkout|trading|trade|wallet|password|passcode|pin|otp|login|log in|sign in|security|credential|recovery phrase)\\b"))) {
+                return@synchronized true
+            }
             val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
             val tools = JSONArray()
             for (i in 0 until steps.length()) {
-                val tool = steps.optJSONObject(i)?.optString("tool", "").orEmpty()
+                val step = steps.optJSONObject(i) ?: continue
+                val tool = step.optString("tool", "")
+                val result = step.optString("result", "")
+                if (result.startsWith("error", ignoreCase = true)) continue
                 if (tool.isNotBlank() && tool !in setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")) {
                     if (tools.length() == 0 || tools.optString(tools.length() - 1) != tool) tools.put(tool.take(80))
                 }
