@@ -175,6 +175,8 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             1 -> drawNova(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
             2 -> drawAtlas(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
             3 -> drawLumen(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
+            4 -> drawHuman(canvas, cx, cy, s, col, blink, gazeX, gazeY, t, true)
+            5 -> drawHuman(canvas, cx, cy, s, col, blink, gazeX, gazeY, t, false)
             else -> drawRobot(canvas, cx, cy, s, col, blink, gazeX, gazeY, t)
         }
 
@@ -525,6 +527,189 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         c.drawCircle(cx + cos(orbit) * s * 0.36f, cy + sin(orbit) * s * 0.36f, s * 0.022f, fill)
         c.drawCircle(cx + cos(orbit + 2.4f) * s * 0.36f, cy + sin(orbit + 2.4f) * s * 0.36f, s * 0.014f, fill)
     }
+
+    private fun drawHuman(c: Canvas, cx: Float, cy: Float, s: Float, col: Int, blink: Float, gx: Float, gy: Float, t: Float, female: Boolean) {
+        val big = !compact
+        val skinA = if (female) 0xFFF1C09A.toInt() else 0xFFD9A073.toInt()
+        val skinB = if (female) 0xFFD99B72.toInt() else 0xFFB87A50.toInt()
+        val hair = if (female) 0xFF2A1812.toInt() else 0xFF1B1410.toInt()
+        val fw = s * 0.25f
+        val top = cy - s * 0.34f
+        val chin = cy + s * 0.27f
+        val eyeY = cy - s * 0.055f
+        val eyeDx = fw * 0.47f
+
+        if (big) {
+            // shoulders and jacket
+            fill.color = 0xFF18213A.toInt()
+            path.reset()
+            path.moveTo(cx - s * 0.5f, cy + s * 0.5f)
+            path.cubicTo(cx - s * 0.5f, cy + s * 0.36f, cx - s * 0.3f, cy + s * 0.31f, cx - s * 0.12f, cy + s * 0.29f)
+            path.lineTo(cx + s * 0.12f, cy + s * 0.29f)
+            path.cubicTo(cx + s * 0.3f, cy + s * 0.31f, cx + s * 0.5f, cy + s * 0.36f, cx + s * 0.5f, cy + s * 0.5f)
+            path.close()
+            c.drawPath(path, fill)
+        }
+        if (female) {
+            fill.color = hair
+            rect.set(cx - fw * 1.22f, top - s * 0.03f, cx + fw * 1.22f, cy + s * 0.40f)
+            c.drawRoundRect(rect, fw * 1.1f, fw * 1.1f, fill)
+        }
+        // neck
+        fill.color = skinB
+        rect.set(cx - fw * 0.32f, cy + s * 0.18f, cx + fw * 0.32f, cy + s * 0.34f)
+        c.drawRect(rect, fill)
+        if (big) {
+            line.color = alpha(col, 230)
+            line.strokeWidth = s * 0.012f
+            path.reset()
+            path.moveTo(cx - s * 0.16f, cy + s * 0.3f)
+            path.lineTo(cx, cy + s * 0.42f)
+            path.lineTo(cx + s * 0.16f, cy + s * 0.3f)
+            c.drawPath(path, line)
+        }
+        // ears
+        fill.color = skinB
+        for (side in intArrayOf(-1, 1)) {
+            rect.set(cx + side * fw - s * 0.03f, eyeY + s * 0.0f, cx + side * fw + s * 0.03f, eyeY + s * 0.1f)
+            c.drawOval(rect, fill)
+        }
+        // face
+        rect.set(cx - fw, top, cx + fw, chin)
+        fill.shader = LinearGradient(0f, top, 0f, chin, skinA, skinB, Shader.TileMode.CLAMP)
+        c.drawOval(rect, fill)
+        fill.shader = null
+        if (big) {
+            fill.color = 0x2DFF6F6F
+            c.drawCircle(cx - fw * 0.55f, cy + s * 0.075f, s * 0.05f, fill)
+            c.drawCircle(cx + fw * 0.55f, cy + s * 0.075f, s * 0.05f, fill)
+        }
+
+        // hair in front
+        fill.color = hair
+        path.reset()
+        if (female) {
+            path.moveTo(cx - fw * 1.05f, eyeY + s * 0.05f)
+            path.cubicTo(cx - fw * 1.15f, top - s * 0.02f, cx - fw * 0.4f, top - s * 0.09f, cx + fw * 0.1f, top - s * 0.05f)
+            path.cubicTo(cx + fw * 0.7f, top - s * 0.07f, cx + fw * 1.15f, top, cx + fw * 1.05f, eyeY + s * 0.05f)
+            path.cubicTo(cx + fw * 0.9f, top + s * 0.08f, cx + fw * 0.5f, top + s * 0.1f, cx, top + s * 0.075f)
+            path.cubicTo(cx - fw * 0.5f, top + s * 0.14f, cx - fw * 0.85f, top + s * 0.16f, cx - fw * 1.05f, eyeY + s * 0.05f)
+        } else {
+            path.moveTo(cx - fw * 1.03f, eyeY - s * 0.03f)
+            path.cubicTo(cx - fw * 1.1f, top - s * 0.05f, cx - fw * 0.3f, top - s * 0.08f, cx, top - s * 0.07f)
+            path.cubicTo(cx + fw * 0.3f, top - s * 0.08f, cx + fw * 1.1f, top - s * 0.05f, cx + fw * 1.03f, eyeY - s * 0.03f)
+            path.lineTo(cx + fw * 0.88f, eyeY - s * 0.1f)
+            path.cubicTo(cx + fw * 0.5f, top + s * 0.05f, cx - fw * 0.5f, top + s * 0.05f, cx - fw * 0.88f, eyeY - s * 0.1f)
+        }
+        path.close()
+        c.drawPath(path, fill)
+
+        // eyes and brows
+        val browLift = when (mode) {
+            OrbView.Mode.LISTENING -> 0.025f + smoothLevel * 0.02f
+            OrbView.Mode.THINKING -> 0.02f
+            OrbView.Mode.ACTING -> -0.008f
+            else -> 0f
+        }
+        for (side in intArrayOf(-1, 1)) {
+            val ex = cx + side * eyeDx
+            val ew = s * 0.058f
+            val eh = s * 0.034f * blink
+            fill.color = 0xFFFFFFFF.toInt()
+            rect.set(ex - ew, eyeY - eh, ex + ew, eyeY + eh)
+            c.drawOval(rect, fill)
+            if (blink > 0.5f) {
+                val ix = ex + gx * ew * 0.3f
+                val iy = eyeY + gy * eh * 0.3f
+                fill.color = if (female) 0xFF4A2E1B.toInt() else 0xFF3B2616.toInt()
+                c.drawCircle(ix, iy, eh * 0.98f, fill)
+                fill.color = 0xFF0B0B0F.toInt()
+                c.drawCircle(ix, iy, eh * 0.45f, fill)
+                fill.color = 0xFFFFFFFF.toInt()
+                c.drawCircle(ix - eh * 0.3f, iy - eh * 0.3f, eh * 0.2f, fill)
+            }
+            // upper lid and lashes
+            line.color = hair
+            line.strokeWidth = s * 0.011f
+            path.reset()
+            path.moveTo(ex - ew * 1.05f, eyeY)
+            path.quadTo(ex, eyeY - eh * 2.1f - s * 0.004f, ex + ew * 1.05f, eyeY)
+            c.drawPath(path, line)
+            if (female) {
+                line.strokeWidth = s * 0.007f
+                val ox = ex + side * ew * 1.0f
+                c.drawLine(ox, eyeY - s * 0.004f, ox + side * s * 0.014f, eyeY - s * 0.016f, line)
+                c.drawLine(ox - side * s * 0.012f, eyeY - s * 0.012f, ox + side * s * 0.004f, eyeY - s * 0.026f, line)
+            }
+            // brow
+            line.color = hair
+            line.strokeWidth = s * (if (female) 0.014f else 0.021f)
+            val lift = if (mode == OrbView.Mode.THINKING && side == 1) browLift * 1.8f else browLift
+            path.reset()
+            path.moveTo(ex - ew * 1.1f, eyeY - s * (0.082f + lift * 0.5f))
+            path.quadTo(ex, eyeY - s * (0.112f + lift), ex + ew * 1.1f, eyeY - s * (0.085f + lift * 0.6f))
+            c.drawPath(path, line)
+        }
+
+        // nose
+        line.color = 0x66803E22
+        line.strokeWidth = s * 0.009f
+        path.reset()
+        path.moveTo(cx - s * 0.004f, eyeY + s * 0.035f)
+        path.quadTo(cx - s * 0.02f, cy + s * 0.07f, cx - s * 0.03f, cy + s * 0.088f)
+        path.quadTo(cx, cy + s * 0.104f, cx + s * 0.03f, cy + s * 0.088f)
+        c.drawPath(path, line)
+
+        // mouth
+        val my = cy + s * 0.17f
+        val mw = s * 0.07f
+        val lip = if (female) 0xFFB5424B.toInt() else 0xFFA85A4E.toInt()
+        if (mouth < 0.08f) {
+            fill.color = lip
+            path.reset()
+            path.moveTo(cx - mw, my)
+            path.quadTo(cx - mw * 0.4f, my - s * 0.017f, cx, my - s * 0.008f)
+            path.quadTo(cx + mw * 0.4f, my - s * 0.017f, cx + mw, my)
+            path.quadTo(cx, my + s * 0.034f, cx - mw, my)
+            path.close()
+            c.drawPath(path, fill)
+            line.color = 0xFF6E2430.toInt()
+            line.strokeWidth = s * 0.006f
+            path.reset()
+            path.moveTo(cx - mw, my)
+            path.quadTo(cx, my + s * 0.012f, cx + mw, my)
+            c.drawPath(path, line)
+        } else {
+            val mh = s * 0.012f + mouth * s * 0.07f
+            fill.color = 0xFF4A1A1E.toInt()
+            rect.set(cx - mw * 0.9f, my - mh * 0.25f, cx + mw * 0.9f, my + mh)
+            c.drawOval(rect, fill)
+            fill.color = 0xFFFFFFFF.toInt()
+            rect.set(cx - mw * 0.7f, my - mh * 0.2f, cx + mw * 0.7f, my + mh * 0.22f)
+            c.drawRoundRect(rect, s * 0.01f, s * 0.01f, fill)
+            fill.color = 0xFFD9707A.toInt()
+            rect.set(cx - mw * 0.45f, my + mh * 0.5f, cx + mw * 0.45f, my + mh * 0.95f)
+            c.drawOval(rect, fill)
+            line.color = lip
+            line.strokeWidth = s * 0.014f
+            path.reset()
+            path.moveTo(cx - mw, my)
+            path.quadTo(cx, my - mh * 0.55f - s * 0.012f, cx + mw, my)
+            c.drawPath(path, line)
+            path.reset()
+            path.moveTo(cx - mw, my)
+            path.quadTo(cx, my + mh * 1.4f, cx + mw, my)
+            c.drawPath(path, line)
+        }
+
+        // glowing earpiece shows the state
+        fill.color = col
+        c.drawCircle(cx + fw * 1.02f, eyeY + s * 0.07f, s * (0.014f + 0.005f * sin(t * 4f)), fill)
+
+        if (big) drawStateExtras(c, cx, cy, s, top - s * 0.05f, col, t)
+    }
+
+    // ------------------------------------------------------------------ state decorations
 
     private fun drawStateExtras(c: Canvas, cx: Float, cy: Float, s: Float, headTop: Float, col: Int, t: Float) {
         when (mode) {

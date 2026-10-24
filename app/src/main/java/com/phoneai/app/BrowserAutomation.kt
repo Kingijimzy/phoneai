@@ -258,7 +258,7 @@ object BrowserAutomation {
         while (System.currentTimeMillis() < deadline) {
             last = snapshot()
             if (last.contains(expected, ignoreCase = true)) {
-                return "found requested text after local wait: ${expected.take(120)}\\n" + last.take(2500)
+                return "found requested text after local wait: ${expected.take(120)}\n" + last.take(2500)
             }
             try { Thread.sleep(350L) } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()

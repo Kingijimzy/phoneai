@@ -1459,7 +1459,7 @@ class SettingsActivity : Activity() {
 
     private fun avatarDialog() {
         showChoiceDialog("Pick Orion's look", "Choose the visual identity shown in the assistant panel.",
-            listOf("Orion · Robot head", "Nova · Friendly face", "Atlas · Tactical visor", "Lumen · Luminous guide"),
+            listOf("Orion · Robot head", "Nova · Friendly face", "Atlas · Tactical visor", "Lumen · Luminous guide", "Ava · Human face", "Kai · Human face"),
             { which ->
                 Prefs.setAvatar(this, which)
                 refresh()

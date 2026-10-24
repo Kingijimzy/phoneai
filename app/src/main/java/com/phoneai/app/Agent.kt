@@ -528,6 +528,23 @@ Rules:
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
+        // Chart analysis is a deliberate vision fallback: send a screenshot only when the user
+        // explicitly asks Orion to inspect a chart, rather than sending screenshots on every turn.
+        val chartCommand = command.lowercase()
+        if (!resumeRequest && !browserActionTask &&
+            Regex("\\bchart\\b").containsMatchIn(chartCommand) &&
+            Regex("analy|study|read|look|see|opportunit|trade|setup|learn").containsMatchIn(chartCommand)) {
+            ui.phase("thinking")
+            val chartAnswer = try {
+                look("This is a trading chart. Name the symbol and timeframe if visible, then the trend, key support and resistance levels, any trade setup with entry, stop and target, and the main risk. Use four short spoken sentences and no markdown.")
+            } catch (e: Exception) {
+                "I could not read the chart. ${e.message ?: e.javaClass.simpleName}"
+            }
+            history.put(msg("assistant", JSONObject().put("say", chartAnswer).put("tool", "done").toString()))
+            compact()
+            ui.say(chartAnswer)
+            return
+        }
         // Live weather is a deterministic data lookup, not an LLM task. This preserves AI quota.
         if (!resumeRequest && !browserActionTask && WeatherService.isWeatherRequest(command)) {
             ui.phase("acting")
@@ -703,6 +720,11 @@ Rules:
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             record(tool, args, result)
             if (tool in setOf("browser_handoff", "browser_upload") && result.startsWith("BROWSER HANDOFF REQUIRED")) {
+                if (!AgentCheckpointStore.record(svc, tool, args, result)) {
+                    AgentCheckpointStore.recoveryRequired(svc, "The browser handed control to the user, but the handoff result could not be saved. Verify the page before resuming.")
+                    ui.say("Browser automation paused, but I could not save the handoff. Check the page before asking Orion to continue.")
+                    return
+                }
                 AgentCheckpointStore.pause(svc)
                 ui.say(result + " I have paused the automated task. Complete the step yourself, then ask Orion to continue.")
                 return
