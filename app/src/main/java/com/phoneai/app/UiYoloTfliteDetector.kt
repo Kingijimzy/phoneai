@@ -45,8 +45,14 @@ internal object UiYoloTfliteDetector {
 
     /** Reports only a real inference recorded in this app process; no synthetic benchmark is run here. */
     fun performanceSummary(): String {
-        val duration = lastInferenceDurationMs
-            ?: return "UI detector latency: not measured in this app session (detector only runs when accessibility/OCR results are sparse)."
+        val duration = lastInferenceDurationMs ?: run {
+            val failure = lastInferenceFailure
+            return if (failure != null) {
+                "UI detector latency: last inference failed ($failure); no valid timing sample is available."
+            } else {
+                "UI detector latency: not measured in this app session (detector only runs when accessibility/OCR results are sparse)."
+            }
+        }
         val count = lastInferenceTargetCount ?: 0
         val at = lastInferenceAtMs ?: return "UI detector latency: $duration ms; detected targets: $count."
         val ageSeconds = ((SystemClock.elapsedRealtime() - at).coerceAtLeast(0L)) / 1000L
