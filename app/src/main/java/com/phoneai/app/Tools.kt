@@ -347,7 +347,7 @@ class Tools(private val svc: PhoneAiService) {
             return "error: unsupported deep-link scheme. Allowed: " + allowed.sorted().joinToString(", ") +
                 ". Use open_url for ordinary HTTP/HTTPS websites."
         }
-        if (uri.rawUserInfo != null || raw.any { it == '\\n' || it == '\\r' }) return "error: unsafe deep-link format"
+        if (uri.rawUserInfo != null || raw.any { it == '\n' || it == '\r' }) return "error: unsafe deep-link format"
         val intent = when (scheme) {
             "tel" -> Intent(Intent.ACTION_DIAL, Uri.parse(raw))
             "mailto", "sms", "smsto" -> Intent(Intent.ACTION_SENDTO, Uri.parse(raw))
