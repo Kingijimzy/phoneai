@@ -1095,9 +1095,9 @@ class SettingsActivity : Activity() {
 
     // ------------------------------------------------------------ name and memory
 
-    private fun routeMemoryDialog() {
-        val entries = RouteMemoryStore.summaries(this)
-    sEmpty()) {
+    private fun routinesDialog() {
+        val names = MacroStore.names(this)
+        if (names.isEmpty()) {
             showInfoDialog("No routines yet", "Ask Orion to complete a task, then say: save this as a routine called <name>. Saved routines can replay steps without asking the AI each time.")
             return
         }
