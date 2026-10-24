@@ -93,7 +93,7 @@ internal class OfflineWakeWordDetector(
                 while (activeSpotter.isReady(activeStream)) {
                     activeSpotter.decode(activeStream)
                     val keyword = activeSpotter.getResult(activeStream).keyword
-                    if (keyword.isNotBlank() && keyword.replace('_', ' ').contains("ORION", ignoreCase = true)) {
+                    if (keyword.isNotBlank() && keyword.filter { it.isLetterOrDigit() }.equals("ORION", ignoreCase = true)) {
                         activeSpotter.reset(activeStream); detected = true; running = false; break
                     }
                 }
