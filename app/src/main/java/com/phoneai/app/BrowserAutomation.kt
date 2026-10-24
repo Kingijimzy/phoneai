@@ -158,14 +158,30 @@ object BrowserAutomation {
         val raw = url.trim()
         val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
         val uri = try { android.net.Uri.parse(candidate) } catch (_: Exception) { null }
-        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
-            return "error: provide a valid public HTTP or HTTPS URL"
+        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() ||
+            !uri.userInfo.isNullOrBlank() || uri.host.any { it.isWhitespace() }) {
+            return "error: provide a valid HTTP or HTTPS URL without embedded credentials"
         }
         val web = current?.get() ?: return "error: Orion Browser is not open"
         val latch = CountDownLatch(1)
         web.post { try { web.loadUrl(candidate) } finally { latch.countDown() } }
         if (!latch.await(2, TimeUnit.SECONDS)) return "error: browser navigation did not start"
         return "navigation started to ${uri.host}; wait for the page to load and verify it"
+    }
+
+    /**
+     * Explicitly hands control back to the person for login, CAPTCHA, MFA, or other
+     * site-controlled steps. Orion never attempts to solve or bypass these challenges.
+     */
+    fun handoff(reason: String): String {
+        val clean = reason.trim().replace(Regex("\\s+"), " ").take(180)
+        val page = snapshot()
+        val url = try { org.json.JSONObject(page).optString("url") } catch (_: Exception) { "" }
+        val host = try { android.net.Uri.parse(url).host.orEmpty() } catch (_: Exception) { "" }
+        return "BROWSER HANDOFF REQUIRED. Automation must stop here. Ask the user to complete this step manually in Orion Browser" +
+            (if (clean.isNotBlank()) ": $clean" else "") +
+            (if (host.isNotBlank()) " on $host" else "") +
+            ". Do not read or request passwords, one-time codes, recovery phrases, or payment credentials. After the user says they are done, take a fresh browser_snapshot before continuing."
     }
 
     fun back(): String {
