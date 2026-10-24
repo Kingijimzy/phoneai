@@ -149,14 +149,14 @@ class LiveCallVisualView(context: Context) : View(context) {
             for (col in 0 until cols) {
                 val dx = col - (cols - 1) * .5f
                 val dy = row - (rows - 1) * .5f
-                val radial = kotlin.math.sqrt(dx * dx + dy * dy)
-                val ripple = if (reducedMotion) .0f else abs(sin(radial * .85f - t * 2.1f))
+                val radial = kotlin.math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+                val ripple = if (reducedMotion) 0f else abs(kotlin.math.sin((radial * .85f - t * 2.1f).toDouble())).toFloat()
                 val columnVoice = when (mode) {
                     OrbView.Mode.LISTENING -> abs(sin(col * .58f)) * micLevel
                     OrbView.Mode.SPEAKING -> abs(sin(col * .51f)) * speechAmplitude + abs(sin(col * .51f)) * wordPulse * .48f
                     else -> 0f
                 }
-                val sweep = if (mode == OrbView.Mode.THINKING) (1f - abs(((col + row * 1.65f - diag).rem(cols + rows) / 4f) - .5f)).coerceIn(0f, 1f) else 0f
+                val sweep = if (mode == OrbView.Mode.THINKING) (1f - abs(((col + row * 1.65f - diag).rem((cols + rows).toFloat()) / 4f) - .5f)).coerceIn(0f, 1f) else 0f
                 val scan = if (mode == OrbView.Mode.ACTING) if (row == scanRow) .9f else .12f else 0f
                 val energy = when (mode) {
                     OrbView.Mode.IDLE -> .13f + ripple * .16f
