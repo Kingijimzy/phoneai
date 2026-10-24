@@ -58,6 +58,16 @@
         <activity android:name=".TradingActivity" android:exported="false" />
 
         <service
+            android:name=".OrionNotificationListener"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".OrionKeyboardService"
             android:label="@string/keyboard_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
