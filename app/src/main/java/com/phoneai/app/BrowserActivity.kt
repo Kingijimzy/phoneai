@@ -272,6 +272,61 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         tabsScroll.addView(tabStrip, -2, -2)
         root.addView(tabsScroll, LinearLayout.LayoutParams(-1, dp(42)))
         webContainer = android.widget.FrameLayout(this)
+        val browserBall = TextView(this).apply {
+            text = "O"
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Theme.BG)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Theme.CYAN)
+                setStroke(dp(2), 0xFFB8F7FF.toInt())
+            }
+            elevation = dp(8).toFloat()
+            contentDescription = "Orion browser tools"
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { anchor ->
+                val menu = android.widget.PopupMenu(this@BrowserActivity, anchor)
+                menu.menu.add("Inspect current page").setOnMenuItemClickListener {
+                    Thread {
+                        val report = BrowserAutomation.snapshot().take(3500)
+                        runOnUiThread {
+                            android.app.AlertDialog.Builder(this@BrowserActivity)
+                                .setTitle("Orion · Page inspection")
+                                .setMessage(report)
+                                .setPositiveButton("Done", null)
+                                .show()
+                        }
+                    }.start()
+                    true
+                }
+                menu.menu.add("Open new tab").setOnMenuItemClickListener {
+                    createTab("https://duckduckgo.com/", true)
+                    true
+                }
+                menu.menu.add("Ask Orion to act").setOnMenuItemClickListener {
+                    agentPrompt.requestFocus()
+                    val imm = getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                    imm?.showSoftInput(agentPrompt, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    true
+                }
+                menu.menu.add("Hand off to me").setOnMenuItemClickListener {
+                    android.app.AlertDialog.Builder(this@BrowserActivity)
+                        .setTitle("Manual browser handoff")
+                        .setMessage("Orion will not automate this step. Complete login, CAPTCHA, verification, consent, or final review yourself in this browser. Do not share passwords or one-time codes with Orion. When finished, return to the task and ask Orion to continue.")
+                        .setPositiveButton("Got it", null)
+                        .show()
+                    true
+                }
+                menu.show()
+            }
+        }
+        webContainer.addView(browserBall, android.widget.FrameLayout.LayoutParams(dp(52), dp(52), Gravity.END or Gravity.BOTTOM).apply {
+            rightMargin = dp(16)
+            bottomMargin = dp(16)
+        })
         root.addView(webContainer, LinearLayout.LayoutParams(-1, 0, 1f))
 
         setContentView(root)
