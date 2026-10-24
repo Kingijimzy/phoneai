@@ -549,7 +549,7 @@ Rules:
             return
         }
         val requestBudget = AgentHooks.RequestBudget(MAX_STEPS)
-        while (!stopped && requestBudget.tryConsume())
+        while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
             val raw = try {
                 nim.chat(history, false)
