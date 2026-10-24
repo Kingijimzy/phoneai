@@ -19,6 +19,8 @@ object NeuralVoiceInstaller {
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-amy-low-int8.tar.bz2"
     private const val LEXICON_URL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/lexicon-en-us.txt"
+    private const val MODEL_SHA256 = "93070ac9fadf512e56c46bdd0c5d2ce96b424fdc4e683d560167410bd2c4df7d"
+    private const val LEXICON_SHA256 = "8b67ae549a465eee78f92ecb74644ad90c3c58ce65f19c68baf85878a10ef73a"
     private const val MAX_ARCHIVE_BYTES = 30L * 1024L * 1024L
     private const val MAX_LEXICON_BYTES = 10L * 1024L * 1024L
     private const val MAX_EXTRACTED_FILE_BYTES = 80L * 1024L * 1024L
@@ -59,7 +61,7 @@ object NeuralVoiceInstaller {
                     throw IOException("Could not create the neural voice directory.")
                 }
                 progress("Downloading compact Piper model (about 21 MB)…", 0)
-                download(MODEL_URL, archive, MAX_ARCHIVE_BYTES, isCancelled) { value ->
+                download(MODEL_URL, archive, MAX_ARCHIVE_BYTES, MODEL_SHA256, isCancelled) { value ->
                     progress("Downloading compact Piper model…", (value * 0.72f).toInt())
                 }
                 checkCancelled(isCancelled)
@@ -68,7 +70,7 @@ object NeuralVoiceInstaller {
                 archive.delete()
 
                 progress("Downloading English pronunciation dictionary (about 6 MB)…", 79)
-                download(LEXICON_URL, File(stage, "lexicon-en-us.txt"), MAX_LEXICON_BYTES, isCancelled) { value ->
+                download(LEXICON_URL, File(stage, "lexicon-en-us.txt"), MAX_LEXICON_BYTES, LEXICON_SHA256, isCancelled) { value ->
                     progress("Downloading English pronunciation dictionary…", 79 + (value * 0.19f).toInt())
                 }
                 checkCancelled(isCancelled)
@@ -113,6 +115,7 @@ object NeuralVoiceInstaller {
         url: String,
         destination: File,
         maxBytes: Long,
+        expectedSha256: String,
         isCancelled: () -> Boolean,
         progress: (Int) -> Unit
     ) {
@@ -153,6 +156,9 @@ object NeuralVoiceInstaller {
             }
             if (expected > 0L && received != expected) throw IOException("Download ended before the entire voice asset arrived.")
             checkCancelled(isCancelled)
+            if (!AssetIntegrity.matchesSha256(temporary, expectedSha256)) {
+                throw IOException("SHA-256 verification failed for a Piper voice asset; the download was rejected.")
+            }
             if (destination.exists()) destination.delete()
             if (!temporary.renameTo(destination)) {
                 temporary.copyTo(destination, overwrite = true)
