@@ -1,7 +1,7 @@
-import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
+import File
+import HttpURLConnection
+import URL
+import MessageDigest
 
 plugins {
     id("com.android.application")
@@ -13,8 +13,8 @@ plugins {
 val sherpaTtsAar = layout.buildDirectory.file("downloads/sherpa-onnx-1.13.8.aar")
 val sherpaTtsAarSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
 
-fun sha256Of(file: java.io.File): String {
-    val digest = java.security.MessageDigest.getInstance("SHA-256")
+fun sha256Of(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
     file.inputStream().buffered().use { input ->
         val buffer = ByteArray(64 * 1024)
         while (true) {
@@ -33,11 +33,11 @@ val downloadSherpaTtsAar by tasks.registering {
     doLast {
         if (!destination.isFile || sha256Of(destination) != sherpaTtsAarSha256) {
             destination.parentFile.mkdirs()
-            val temporary = java.io.File(destination.parentFile, destination.name + ".part")
+            val temporary = File(destination.parentFile, destination.name + ".part")
             temporary.delete()
-            val connection = java.net.URL(
+            val connection = URL(
                 "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
-            ).openConnection() as java.net.HttpURLConnection
+            ).openConnection() as HttpURLConnection
             try {
                 connection.connectTimeout = 30_000
                 connection.readTimeout = 90_000
