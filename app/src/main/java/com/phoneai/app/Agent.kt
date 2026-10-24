@@ -197,7 +197,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         nim.beginCommand()
         stopped = false
         activeRequestScope = command
-        if (!resumeRequest) taskProofs.clear()
+        taskProofs.clear()
         researchCancelled.set(false)
         nim.resume()
         val safeSystem = chatSystem().replace(
