@@ -97,10 +97,10 @@ class Tools(private val svc: PhoneAiService) {
                 "sms", "smsto" -> "$scheme:+10000000000"
                 "mailto" -> "mailto:example@example.com"
                 "geo" -> "geo:0,0"
-                "whatsapp" -> "https://wa.me/10000000000"
+                "whatsapp" -> "whatsapp://send?phone=10000000000"
                 "tg" -> "tg://resolve?domain=telegram"
-                "youtube" -> "https://www.youtube.com/"
-                else -> "https://open.spotify.com/"
+                "youtube" -> "vnd.youtube://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                else -> "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
             }
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(sample)).addCategory(Intent.CATEGORY_BROWSABLE)
             val handlers = try { pm.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY) } catch (_: Exception) { emptyList() }
