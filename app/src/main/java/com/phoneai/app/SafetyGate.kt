@@ -41,6 +41,16 @@ object SafetyGate {
         return credentialText.containsMatchIn(value) || longDigitRun.containsMatchIn(value)
     }
 
+    /** Detect visible screens where autonomous interaction could change money, accounts, or secrets. */
+    fun isSensitiveActionScreen(screenText: String?): Boolean {
+        val value = screenText.orEmpty()
+        if (value.isBlank()) return false
+        val markers = Regex(
+            "(?i)\\b(payment|transfer|withdraw(?:al)?|deposit|purchase|checkout|subscribe|trading|trade order|delete account|password|passcode|one[- ]time code|verification code|security code|recovery phrase|seed phrase|private key|wallet|bank account|confirm transaction|send money|publish now|post now|place order|card number|cvv|cvc|otp)\\b"
+        )
+        return markers.containsMatchIn(value)
+    }
+
     fun blockReason(tool: String, target: String?, text: String?, currentPackage: String?, currentLabel: String?): String? {
         if (tool == "open_app" && isSensitiveApp(target, target)) {
             return "Orion's safety gate blocks opening or automating banking and payment apps. Use the bank's own app manually."
