@@ -34,6 +34,8 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.net.HttpURLConnection
+import java.net.URL
 
 /** Orion's control room: turn things on, save keys, tune the voice, manage memory, test recording. */
 class SettingsActivity : Activity() {
@@ -335,7 +337,23 @@ class SettingsActivity : Activity() {
             }
         }, 8)
 
-        // ---- 2. AI services
+        // ---- 2. permission health and updates
+        val updateCard = card(col, "Orion health & updates",
+            "Check required permissions and see whether a newer public GitHub release is available.")
+        val installedVersion = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown" } catch (_: Exception) { "unknown" }
+        val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
+        updateStatus.typeface = Typeface.MONOSPACE
+        add(updateCard, updateStatus, 8)
+        add(updateCard, button("Refresh permission health", false) {
+            refresh()
+            Toast.makeText(this, "Permission health refreshed.", Toast.LENGTH_SHORT).show()
+        }, 8)
+        add(updateCard, button("Check for Orion updates", true) { checkForUpdates(updateStatus) }, 8)
+        add(updateCard, button("Open Orion releases", false) {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/releases")))
+        }, 8)
+
+        // ---- 3. AI services
         val s2 = card(
             col, "AI providers & models",
             "Orion uses your selected primary provider first and only falls back when a request is rate-limited or the provider is unavailable. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
@@ -587,11 +605,25 @@ class SettingsActivity : Activity() {
     }
 
     private fun refresh() {
-        val acc = if (PhoneAiService.instance != null) "ON" else "OFF"
+        val accessibilityEnabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            ?.contains(packageName, ignoreCase = true) == true
+        val acc = if (accessibilityEnabled) "enabled" else "disabled"
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
+        val notifications = if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 33) "allowed" else "not allowed"
+        val contacts = if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
+        val enabledKeyboard = Settings.Secure.getString(contentResolver, "enabled_input_methods")
+            ?.contains(packageName, ignoreCase = true) == true
+        val selectedKeyboard = Settings.Secure.getString(contentResolver, "default_input_method")
+            ?.contains(packageName, ignoreCase = true) == true
+        val notificationListener = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            ?.contains(packageName, ignoreCase = true) == true
         val sb = StringBuilder()
-        sb.append("Accessibility: $acc\n")
-        sb.append("Microphone:    $mic\n")
+        sb.append("Accessibility: $acc\\n")
+        sb.append("Microphone:    $mic\\n")
+        sb.append("Notifications: $notifications\\n")
+        sb.append("Contacts:      $contacts\\n")
+        sb.append("Private keyboard: ").append(if (selectedKeyboard) "selected" else if (enabledKeyboard) "enabled, not selected" else "disabled").append("\\n")
+        sb.append("Notification access: ").append(if (notificationListener) "enabled" else "disabled").append("\\n")
         sb.append("Keys saved:    ")
         val saved = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
         sb.append(if (saved.isEmpty()) "none yet" else saved.joinToString(", "))
@@ -603,6 +635,40 @@ class SettingsActivity : Activity() {
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
         routBtn.text = "My routines (" + MacroStore.names(this).size + ")"
         skillBtn.text = "Skill Studio · " + SkillRegistry.list(this).count { it.enabled } + " enabled / " + SkillRegistry.list(this).size + " total"
+    }
+
+    private fun checkForUpdates(target: TextView) {
+        val installed = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown" } catch (_: Exception) { "unknown" }
+        target.text = "Installed version: $installed\\nUpdate status: checking latest release…"
+        Thread {
+            var connection: HttpURLConnection? = null
+            val message = try {
+                connection = (URL("https://api.github.com/repos/Kingijimzy/phoneai/releases/latest").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 7000
+                    readTimeout = 7000
+                    setRequestProperty("Accept", "application/vnd.github+json")
+                    setRequestProperty("User-Agent", "Orion-Android-App")
+                }
+                if (connection.responseCode !in 200..299) {
+                    "Installed version: $installed\\nUpdate status: unable to check (HTTP ${connection.responseCode})."
+                } else {
+                    val payload = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                    val tag = payload.optString("tag_name").ifBlank { "unknown" }
+                    val normalizedInstalled = installed.removePrefix("v")
+                    val normalizedLatest = tag.removePrefix("v")
+                    if (normalizedLatest != normalizedInstalled && tag != "unknown")
+                        "Installed version: $installed\\nLatest release: $tag\\nA release differs from your installed version. Review the release page before installing."
+                    else
+                        "Installed version: $installed\\nLatest release: $tag\\nYou appear to be on the latest tagged release."
+                }
+            } catch (_: Exception) {
+                "Installed version: $installed\\nUpdate status: check failed. Check your connection or open Releases manually."
+            } finally {
+                connection?.disconnect()
+            }
+            runOnUiThread { target.text = message }
+        }.start()
     }
 
     // ------------------------------------------------------------ keys and providers
