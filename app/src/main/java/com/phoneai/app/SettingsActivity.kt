@@ -518,7 +518,11 @@ class SettingsActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
-        add(s3, label("Gemini Live streams microphone audio to Google and uses usage-based quota. Each session is capped at five minutes; account limits and costs vary.", 12f, Theme.MUTED), 6)
+        add(s3, TextView(this).apply {
+            text = "Gemini Live streams microphone audio to Google and uses usage-based quota. Each session is capped at five minutes; account limits and costs vary."
+            textSize = 12f
+            setTextColor(Theme.MUTED)
+        }, 6)
         switchRow(s3, "Deeper voice", Prefs.deepVoice(this)) { Prefs.setDeepVoice(this, it) }
         switchRow(s3, "Offline-only speech input (no network fallback)", Prefs.offlineSpeechOnly(this)) {
             Prefs.setOfflineSpeechOnly(this, it)
