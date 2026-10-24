@@ -512,6 +512,10 @@ class SettingsActivity : Activity() {
                 }
             }.start()
         }, 8)
+        add(s7, button("MCP permissions & scopes", true) { mcpPermissionsDialog() }, 8)
+        add(s7, button("MCP connection status", false) {
+            showInfoDialog("MCP connection", McpConnector.status(this))
+        }, 8)
         add(s7, button(
             if (TelegramListenerService.isEnabled(this)) "Stop continuous Telegram replies" else "Start continuous Telegram replies",
             true
@@ -1525,6 +1529,44 @@ class SettingsActivity : Activity() {
 
 
 
+    private fun mcpPermissionsDialog() {
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.VERTICAL
+        wrap.setPadding(dp(20), dp(8), dp(20), 0)
+        val selected = McpConnector.scopes(this).toMutableSet()
+        val options = listOf(
+            "read" to "Read / search / inspect (always enabled)",
+            "write" to "Create / edit / delete / execute",
+            "communication" to "Send messages / email / publish",
+            "system" to "System / device / settings tools",
+            "other" to "Unclassified tools (use cautiously)"
+        )
+        val boxes = options.map { (scope, label) ->
+            android.widget.CheckBox(this).apply {
+                text = label
+                isChecked = scope in selected
+                isEnabled = scope != "read"
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected.add(scope) else selected.remove(scope)
+                }
+                wrap.addView(this)
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("MCP permissions")
+            .setMessage("Choose the categories Orion may call. Read-only stays enabled. Each remote tool call still requires a separate approval, and server tool names are classified conservatively.")
+            .setView(wrap)
+            .setPositiveButton("Save scopes") { _, _ ->
+                showInfoDialog("MCP permissions", McpConnector.setScopes(this, selected))
+            }
+            .setNeutralButton("Revoke remote access") { _, _ ->
+                McpConnector.clear(this)
+                showInfoDialog("MCP access revoked", "The saved endpoint, token, and scopes have been cleared.")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun mcpDialog() {
         val wrap = LinearLayout(this)
         wrap.orientation = LinearLayout.VERTICAL
@@ -1541,7 +1583,7 @@ class SettingsActivity : Activity() {
         wrap.addView(endpoint)
         wrap.addView(bearer)
         AlertDialog.Builder(this).setTitle("Remote MCP setup")
-            .setMessage("Use only an MCP server you trust. This first version only discovers tools; it does not execute remote tools. Use HTTPS; HTTP is allowed only for localhost. Credentials are encrypted with Android Keystore.")
+            .setMessage("Use only an MCP server you trust. Remote tools can execute actions, so configure least-privilege scopes and approve every call. Use HTTPS; HTTP is allowed only for localhost. Credentials are encrypted with Android Keystore.")
             .setView(wrap)
             .setPositiveButton("Save server") { _, _ ->
                 val result = McpConnector.save(this, endpoint.text.toString(), bearer.text.toString())
