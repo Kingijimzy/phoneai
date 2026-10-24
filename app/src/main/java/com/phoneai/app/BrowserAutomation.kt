@@ -13,8 +13,18 @@ object BrowserAutomation {
     fun attach(web: WebView) { current = WeakReference(web) }
     fun detach(web: WebView) { if (current?.get() === web) current = null }
 
+    /** The in-app browser opens asynchronously; wait briefly instead of reporting "not open" mid-launch. */
+    fun awaitWebView(timeoutMs: Long = 4000L): WebView? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            current?.get()?.let { return it }
+            if (System.currentTimeMillis() >= deadline) return null
+            try { Thread.sleep(100L) } catch (_: InterruptedException) { return null }
+        }
+    }
+
     private fun evaluate(script: String, timeoutMs: Long = 5000L): String {
-        val web = current?.get() ?: return "error: Orion Browser is not open"
+        val web = awaitWebView() ?: return "error: Orion Browser is not open"
         val result = AtomicReference<String?>()
         val latch = CountDownLatch(1)
         web.post {
@@ -226,7 +236,7 @@ object BrowserAutomation {
             !uri.userInfo.isNullOrBlank() || uri.host.orEmpty().any { it.isWhitespace() }) {
             return "error: provide a valid HTTP or HTTPS URL without embedded credentials"
         }
-        val web = current?.get() ?: return "error: Orion Browser is not open"
+        val web = awaitWebView() ?: return "error: Orion Browser is not open"
         val latch = CountDownLatch(1)
         web.post { try { web.loadUrl(candidate) } finally { latch.countDown() } }
         if (!latch.await(2, TimeUnit.SECONDS)) return "error: browser navigation did not start"
@@ -291,7 +301,7 @@ object BrowserAutomation {
     }
 
     fun back(): String {
-        val web = current?.get() ?: return "error: Orion Browser is not open"
+        val web = awaitWebView() ?: return "error: Orion Browser is not open"
         val latch = CountDownLatch(1)
         val result = AtomicReference("error: no previous page")
         web.post {

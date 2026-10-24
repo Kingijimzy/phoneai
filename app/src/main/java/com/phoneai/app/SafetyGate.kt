@@ -37,6 +37,17 @@ object SafetyGate {
         "(?i)\\b(bank\\s+transfer|transfer\\s+money|send\\s+money|make\\s+a\\s+payment|pay\\s+now|payment\\s+details|payment\\s+method|checkout|confirm\\s+(?:payment|transaction|purchase)|withdraw\\s+money|withdrawal\\s+amount|deposit\\s+money|place\\s+(?:a\\s+)?order|trade\\s+order|buy\\s+order|sell\\s+order|delete\\s+account|(?:enter|type|confirm|verify|reset|change|set)\\s+(?:your\\s+)?(?:pin|pin\\s+code|password|passcode|otp|verification\\s+code|security\\s+code)|(?:password|passcode|pin|otp)\\s+(?:field|required|incorrect|invalid)|one[- ]time\\s+code|verification\\s+code|security\\s+code|recovery\\s+phrase|seed\\s+phrase|private\\s+key|bank\\s+account|card\\s+number|cvv|cvc|publish\\s+now|post\\s+now)\\b"
     )
 
+    // In chat apps the screen is other people's messages ("send money", "bank account", "verification
+    // code" are ordinary conversation), so only explicit secret-entry prompts pause automation there.
+    private val messagingPackages = setOf(
+        "com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "org.thoughtcrime.securesms",
+        "com.google.android.apps.messaging", "com.android.mms", "com.samsung.android.messaging",
+        "com.facebook.orca", "com.instagram.android", "com.twitter.android", "com.discord"
+    )
+    private val secretEntryMarkers = Regex(
+        "(?i)\\b((?:enter|type|confirm|verify|reset|change|set)\\s+(?:your\\s+)?(?:pin|pin\\s+code|password|passcode)|(?:password|passcode|pin)\\s+(?:field|required|incorrect|invalid)|recovery\\s+phrase|seed\\s+phrase|private\\s+key|card\\s+number|cvv|cvc)\\b"
+    )
+
     fun isSensitiveApp(nameOrPackage: String?, label: String? = null): Boolean {
         val name = nameOrPackage.orEmpty().lowercase().replace('_', ' ')
         val appLabel = label.orEmpty().lowercase()
@@ -51,9 +62,11 @@ object SafetyGate {
     }
 
     /** Detect screens with explicit consequential-action or credential-entry context. */
-    fun isSensitiveActionScreen(screenText: String?): Boolean {
+    fun isSensitiveActionScreen(screenText: String?, packageName: String? = null): Boolean {
         val value = screenText.orEmpty()
-        return value.isNotBlank() && sensitiveActionMarkers.containsMatchIn(value)
+        if (value.isBlank()) return false
+        val markers = if (packageName.orEmpty().lowercase() in messagingPackages) secretEntryMarkers else sensitiveActionMarkers
+        return markers.containsMatchIn(value)
     }
 
     fun blockReason(tool: String, target: String?, text: String?, currentPackage: String?, currentLabel: String?): String? {

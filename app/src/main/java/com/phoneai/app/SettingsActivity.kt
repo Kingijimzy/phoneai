@@ -59,7 +59,7 @@ class SettingsActivity : Activity() {
             .setTitle("Install local neural voice")
             .setMessage(
                 "Install Piper Amy, an English neural voice that runs on this phone. " +
-                    "The download is about 28 MB and needs roughly 50–70 MB of free storage. " +
+                    "The download is about 21 MB and needs roughly 50–70 MB of free storage. " +
                     "Orion will download it only after you confirm. The model is not included in the APK."
             )
             .setNegativeButton("NOT NOW", null)
@@ -587,7 +587,7 @@ class SettingsActivity : Activity() {
             }
         }
         add(s3, button(
-            if (NeuralVoiceInstaller.isInstalled(this)) "Reinstall / repair neural voice" else "Install neural English voice · about 28 MB",
+            if (NeuralVoiceInstaller.isInstalled(this)) "Reinstall / repair neural voice" else "Install neural English voice · about 21 MB",
             true
         ) { installNeuralVoice() }, 8)
         add(s3, text(

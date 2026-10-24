@@ -51,4 +51,11 @@ class SafetyGateTest {
         assertNull(SafetyGate.blockReason("read_screen", null, null, "com.example.bankapp", "Banking"))
         assertNotNull(SafetyGate.blockReason("click", null, null, "com.example.bankapp", "Banking"))
     }
+
+    @Test fun chatAppsOnlyPauseForSecretEntryNotMoneyTalk() {
+        val chat = "[3] Please send money for the bank account, verification code is 1234, pay now"
+        assertTrue(SafetyGate.isSensitiveActionScreen(chat))
+        assertFalse(SafetyGate.isSensitiveActionScreen(chat, "com.whatsapp"))
+        assertTrue(SafetyGate.isSensitiveActionScreen("Enter your PIN to continue", "com.whatsapp"))
+    }
 }

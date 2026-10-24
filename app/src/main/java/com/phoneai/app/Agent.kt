@@ -829,7 +829,7 @@ Rules:
         val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
         if (tool in screenSensitiveActions) {
             val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
-            if (SafetyGate.isSensitiveActionScreen(currentScreen)) {
+            if (SafetyGate.isSensitiveActionScreen(currentScreen, svc.currentPackageName())) {
                 return "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
             }
         }
@@ -1117,7 +1117,7 @@ Rules:
             }
             // Prefer a compact local screen map and numbered targets before sending any screenshot.
             val screenMap = svc.readScreen()
-            if (SafetyGate.isSensitiveActionScreen(screenMap)) {
+            if (SafetyGate.isSensitiveActionScreen(screenMap, svc.currentPackageName())) {
                 return "vision stopped safely: the visible screen appears to involve money, account security, credentials, or an irreversible action. Please handle it manually."
             }
             val numberedCount = Regex("(?m)^\\[\\d+\\] ").findAll(screenMap).count()
