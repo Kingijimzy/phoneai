@@ -1,8 +1,9 @@
 package com.phoneai.app
 
 /**
- * Local, fail-closed guard for high-risk financial apps and credential/card text.
- * This is a safety boundary, not a substitute for Android's own authentication.
+ * Local guard for high-risk financial apps and credential entry.
+ * Ordinary words (for example "wallet" in a game, "transfer" in chat, or "trading")
+ * are not enough by themselves to block normal reading and typing.
  */
 object SafetyGate {
     private val sensitiveAppTokens = listOf(
@@ -17,16 +18,21 @@ object SafetyGate {
 
     private val sensitivePackageTokens = listOf(
         "bank", "banking", "payment", "wallet", "paypal", "venmo", "wise",
-        "revolut", "monzo", "cashapp" // package check is token-based; label check is stricter
+        "revolut", "monzo", "cashapp"
     )
 
+    // Specific credential phrases only; generic "card", "pin", and "wallet" are intentionally excluded.
     private val credentialText = Regex(
-        "(?i)\\b(card|cvv|cvc|password|passcode|security\\s+code|card\\s+number|credit\\s+card|debit\\s+card|one[- ]time\\s+(?:password|code)|otp|pin|recovery\\s+phrase|seed\\s+phrase|private\\s+key|access\\s+token|api\\s+key|bank\\s+account|routing\\s+number|social\\s+security|national\\s+id|passport)\\b"
+        "(?i)\\b(cvv|cvc|password|passcode|security\\s+code|card\\s+number|credit\\s+card|debit\\s+card|one[- ]time\\s+(?:password|code)|otp|(?:enter|type|confirm|verify|set|change|reset)\\s+(?:your\\s+)?(?:pin|pin\\s+code)|(?:pin|pin\\s+code)\\s+(?:for|to|of)\\s+(?:your\\s+)?(?:card|account|bank)|recovery\\s+phrase|seed\\s+phrase|private\\s+key|access\\s+token|api\\s+key|bank\\s+account(?:\\s+number)?|routing\\s+number|social\\s+security(?:\\s+number)?|national\\s+id|passport)\\b"
     )
     private val sensitiveBrowserField = Regex(
-        "(?i)(password|passcode|pin|otp|one[- ]time|verification|security\\s+code|recovery|seed\\s+phrase|private\\s+key|api\\s+key|access\\s+token|card|cvv|cvc|bank\\s+account|routing\\s+number|national\\s+id|passport)"
+        "(?i)(password|passcode|pin(?:\\s+code)?|otp|one[- ]time|verification|security\\s+code|recovery|seed\\s+phrase|private\\s+key|api\\s+key|access\\s+token|card\\s+number|credit\\s+card|debit\\s+card|cvv|cvc|bank\\s+account|routing\\s+number|national\\s+id|passport)"
     )
     private val longDigitRun = Regex("(?<!\\d)(?:\\d[ -]?){13,19}(?!\\d)")
+
+    private val sensitiveActionMarkers = Regex(
+        "(?i)\\b(bank\\s+transfer|transfer\\s+money|send\\s+money|make\\s+a\\s+payment|pay\\s+now|payment\\s+details|payment\\s+method|checkout|confirm\\s+(?:payment|transaction|purchase)|withdraw\\s+money|withdrawal\\s+amount|deposit\\s+money|place\\s+(?:a\\s+)?order|trade\\s+order|buy\\s+order|sell\\s+order|delete\\s+account|enter\\s+(?:your\\s+)?(?:pin|password|passcode|otp|verification\\s+code)|password|passcode|one[- ]time\\s+code|verification\\s+code|security\\s+code|recovery\\s+phrase|seed\\s+phrase|private\\s+key|bank\\s+account|card\\s+number|cvv|cvc|otp|publish\\s+now|post\\s+now)\\b"
+    )
 
     fun isSensitiveApp(nameOrPackage: String?, label: String? = null): Boolean {
         val name = nameOrPackage.orEmpty().lowercase().replace('_', ' ')
@@ -41,14 +47,10 @@ object SafetyGate {
         return credentialText.containsMatchIn(value) || longDigitRun.containsMatchIn(value)
     }
 
-    /** Detect visible screens where autonomous interaction could change money, accounts, or secrets. */
+    /** Detect screens with explicit consequential-action or credential-entry context. */
     fun isSensitiveActionScreen(screenText: String?): Boolean {
         val value = screenText.orEmpty()
-        if (value.isBlank()) return false
-        val markers = Regex(
-            "(?i)\\b(payment|transfer|withdraw(?:al)?|deposit|purchase|checkout|subscribe|trading|trade order|delete account|password|passcode|one[- ]time code|verification code|security code|recovery phrase|seed phrase|private key|wallet|bank account|confirm transaction|send money|publish now|post now|place order|card number|cvv|cvc|otp)\\b"
-        )
-        return markers.containsMatchIn(value)
+        return value.isNotBlank() && sensitiveActionMarkers.containsMatchIn(value)
     }
 
     fun blockReason(tool: String, target: String?, text: String?, currentPackage: String?, currentLabel: String?): String? {
