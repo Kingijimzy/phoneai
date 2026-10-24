@@ -358,6 +358,8 @@ class Voice(private val ctx: Context) {
                 if (token != playbackGeneration.get()) return@execute
                 finished(ids.last())
             } catch (error: Throwable) {
+                // Never fail silently: say why the neural voice did not speak.
+                main.post { onProblem?.invoke("Neural voice failed (" + error.javaClass.simpleName + (error.message?.let { ": " + it.take(120) } ?: "") + "). Try Reinstall / repair neural voice in Settings.") }
                 if (!piperMetricsRecorded) {
                     setPiperPerformance("Piper synthesis: failed (${error.javaClass.simpleName}); Android TTS fallback may be used. No successful Piper speed measurement was recorded.")
                 }
@@ -394,8 +396,8 @@ class Voice(private val ctx: Context) {
             acousticModelName = "",
             vocoder = "",
             voices = "",
-            lexicon = "lexicon-en-us.txt",
-            dataDir = "",
+            lexicon = "",
+            dataDir = NeuralVoiceInstaller.espeakDataDirectory(ctx).absolutePath,
             dictDir = "",
             ruleFsts = "",
             ruleFars = "",
