@@ -22,6 +22,20 @@ internal object AgentHooks {
   RegexOption.IGNORE_CASE
  )
  fun isPhoneActionRequest(request:String):Boolean=phoneActionWords.containsMatchIn(request)
+ fun verifySendEvidence(contact:String,message:String,screen:String):String {
+  val target=contact.trim(); val body=message.trim()
+  if(target.isBlank()||body.isBlank()) return "error: contact and exact message text are required."
+  if(screen.isBlank()) return "UNVERIFIED: the current screen map is empty."
+  val lines=screen.lineSequence().map{it.trim()}.filter{it.isNotBlank()}.toList()
+  if(lines.none{it.contains(target,ignoreCase=true)}) return "error: verification failed: contact '$target' is not visible."
+  val index=lines.indexOfFirst{it.contains(body,ignoreCase=true)}
+  if(index<0) return "error: verification failed: exact outgoing message is not visible."
+  val nearby=lines.subList(maxOf(0,index-2),minOf(lines.size,index+4))
+  val statusLine=nearby.firstOrNull{it.length<=40&&Regex("(?i)\\\\b(sent|delivered|read)\\\\b").containsMatchIn(it)}
+   ?: return "UNVERIFIED: contact and message are visible, but no short sent/delivered/read status is exposed near the message."
+  val status=Regex("(?i)\\\\b(sent|delivered|read)\\\\b").find(statusLine)?.value.orEmpty()
+  return "PASS: message sent to $target; exact message and status '$status' are visible."
+ }
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
