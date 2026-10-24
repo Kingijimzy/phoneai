@@ -73,15 +73,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
-        if (tool in screenSensitiveActions) {
-            val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
-            if (SafetyGate.isSensitiveActionScreen(currentScreen)) {
-                val blocked = "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
-                try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-                return blocked
-            }
-        }
         if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
             val browserBlock = BrowserAutomation.sensitivePageReason()
             if (browserBlock != null) {
@@ -843,6 +834,13 @@ Rules:
             svc.currentAppLabel()
         )
         if (safetyBlock != null) return "error: safety gate blocked action. $safetyBlock"
+        val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
+        if (tool in screenSensitiveActions) {
+            val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
+            if (SafetyGate.isSensitiveActionScreen(currentScreen)) {
+                return "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
+            }
+        }
         if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
             val browserBlock = BrowserAutomation.sensitivePageReason()
             if (browserBlock != null) return "error: safety gate blocked browser action. $browserBlock"
