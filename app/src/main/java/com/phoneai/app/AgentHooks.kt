@@ -17,6 +17,43 @@ internal object AgentHooks {
   @Synchronized fun snapshot():List<Proof> = proofs.toList()
  }
  data class GateDecision(val allowed:Boolean,val reason:String)
+
+ /** Deterministic guard state extracted from the runtime so budgets can be regression-tested. */
+ class RequestBudget(private val limit: Int) {
+  init { require(limit >= 0) }
+  var consumed: Int = 0
+   private set
+  @Synchronized fun tryConsume(): Boolean {
+   if (consumed >= limit) return false
+   consumed++
+   return true
+  }
+  val remaining: Int
+   @Synchronized get() = limit - consumed
+ }
+
+ /** Stops an exact failed tool/argument pair from being retried in the same task. */
+ class FailedCallGuard(private val maxEntries: Int = 80) {
+  init { require(maxEntries >= 1) }
+  private val signatures = LinkedHashSet<String>()
+  private fun signature(tool: String, args: JSONObject) = tool + "|" + args.toString()
+  @Synchronized fun isBlocked(tool: String, args: JSONObject): Boolean = signature(tool, args) in signatures
+  @Synchronized fun recordFailure(tool: String, args: JSONObject) {
+   signatures.add(signature(tool, args))
+   while (signatures.size > maxEntries) signatures.remove(signatures.first())
+  }
+  @Synchronized fun clear() = signatures.clear()
+  @Synchronized fun size(): Int = signatures.size
+ }
+
+ /** Normalizes screen-map line indexes and detector-only diagnostics before comparison. */
+ fun screenFingerprint(screen: String): String = screen.lineSequence()
+  .map { it.replace(Regex("^\\s*\\[?\\d+\\]?\\s*[:.)-]?\\s*"), "").trim().lowercase() }
+  .filter { it.isNotBlank() && !it.startsWith("screen map") && !it.startsWith("detector ") }
+  .joinToString("|")
+
+ fun screenChanged(before: String, after: String): Boolean =
+  screenFingerprint(before) != screenFingerprint(after)
  private val phoneActionWords=Regex(
   "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|whatsapp|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
