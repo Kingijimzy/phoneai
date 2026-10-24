@@ -55,7 +55,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (signature in failedToolSignatures) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
-        val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url")
+        val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
         val safetyBlock = SafetyGate.blockReason(
             tool,
             if (tool == "open_app") args.optString("name") else null,
@@ -80,7 +80,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         } catch (e: Exception) {
             "error: ${e.message ?: e.javaClass.simpleName}"
         }
-        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "system_intent", "open_file")
+        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "system_intent", "open_file", "open_deep_link")
         var verifiedResult = result
         if (!result.trimStart().startsWith("error", ignoreCase = true) && tool in actionTools && lastScreenSnapshot.isNotBlank()) {
             try {
@@ -267,6 +267,7 @@ Tools:
 - lookup_app {name}: resolve a launchable installed app to its exact label and package before opening it
 - open_app {name}: open an installed app by name (e.g. "WhatsApp", "FC Mobile") or package
 - system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, dial, maps_search, camera, calendar, clock, open_url. Never use arbitrary action/component strings.
+- open_deep_link {uri}: launch only allowlisted tel/geo/mailto/sms/smsto/whatsapp/tg/youtube/spotify deep links; never use arbitrary intent:// links or banking/payment/credential links.
 - resolve_contact {name}: local contact search; use only to identify a contact, and confirm the exact person before a call/message. Requires Android Contacts permission.
 - find_files {query}: search accessible indexed shared files and return current numeric IDs; Android storage restrictions may limit results
 - open_file {id}: open a numeric ID returned by the latest find_files result
@@ -722,6 +723,15 @@ Rules:
                 else "INVALID: text payload must be non-empty and no longer than 4000 characters."
             }
             "lookup_app", "open_app" -> if (a.optString("name").isNotBlank()) "VALID: app target supplied." else "INVALID: app name or package is required."
+            "open_deep_link" -> {
+                val raw = a.optString("uri").trim()
+                val uri = try { java.net.URI(raw) } catch (_: Exception) { null }
+                val allowed = setOf("tel", "geo", "mailto", "sms", "smsto", "whatsapp", "tg", "youtube", "spotify")
+                if (uri != null && uri.scheme?.lowercase() in allowed &&
+                    !SafetyGate.containsSensitiveCredentialText(raw) && !SafetyGate.isSensitiveApp(raw, raw))
+                    "VALID: deep-link scheme is allowlisted; launch will still be checked locally."
+                else "INVALID: malformed, unsupported, financial, or credential-bearing deep link."
+            }
             "system_intent" -> {
                 val allowed = setOf("settings", "wifi_settings", "bluetooth_settings", "display_settings", "app_settings", "location_settings", "accessibility_settings", "dial", "maps_search", "camera", "calendar", "clock", "open_url")
                 if (a.optString("action").trim().lowercase().replace('-', '_').replace(' ', '_') in allowed) "VALID: system route is allowlisted."
@@ -814,6 +824,7 @@ Rules:
             "lookup_app" -> tools.lookupApp(a.optString("name"))
             "open_app" -> svc.openApp(a.optString("name"))
             "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
+            "open_deep_link" -> tools.openDeepLink(a.optString("uri"))
             "resolve_contact" -> tools.resolveContact(a.optString("name"))
             "find_files" -> tools.findFiles(a.optString("query"))
             "open_file" -> tools.openFile(a.optString("id"))
