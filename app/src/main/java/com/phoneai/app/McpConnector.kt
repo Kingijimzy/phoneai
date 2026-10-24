@@ -24,6 +24,48 @@ object McpConnector {
     fun endpoint(c: Context): String = c.getSharedPreferences(PREFS, 0).getString(URL_KEY, "") ?: ""
     fun configured(c: Context): Boolean = endpoint(c).isNotBlank()
 
+    // Local user-confirmed trust gate. This is not a remote identity proof or WebRTC transport.
+    @Volatile private var pendingPairPin: String? = null
+    @Volatile private var pendingPairExpiry: Long = 0L
+    private fun endpointFingerprint(value: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.trim().toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    fun isPaired(c: Context): Boolean {
+        val value = endpoint(c)
+        if (value.isBlank()) return false
+        val saved = c.getSharedPreferences(PREFS, 0).getString("paired_endpoint_sha256", null)
+        return saved != null && saved == endpointFingerprint(value)
+    }
+    fun beginPairing(c: Context): String {
+        if (!configured(c)) return "Configure an MCP endpoint before pairing."
+        pendingPairPin = "%06d".format(java.security.SecureRandom().nextInt(1_000_000))
+        pendingPairExpiry = System.currentTimeMillis() + 120_000L
+        return pendingPairPin!!
+    }
+    fun confirmPairing(c: Context, enteredPin: String): String {
+        val expected = pendingPairPin
+        if (expected == null || System.currentTimeMillis() > pendingPairExpiry) {
+            pendingPairPin = null
+            return "Pairing code expired. Start pairing again."
+        }
+        if (!java.security.MessageDigest.isEqual(
+                expected.toByteArray(Charsets.UTF_8),
+                enteredPin.filter { it.isDigit() }.toByteArray(Charsets.UTF_8))) {
+            return "Pairing code does not match. Try again before it expires."
+        }
+        val saved = c.getSharedPreferences(PREFS, 0).edit()
+            .putString("paired_endpoint_sha256", endpointFingerprint(endpoint(c))).commit()
+        pendingPairPin = null
+        pendingPairExpiry = 0L
+        return if (saved) "This MCP endpoint is now locally approved on this device. This confirms local user intent only; it does not authenticate the remote server or provide WebRTC." else "Could not save local pairing approval."
+    }
+    fun unpair(c: Context) {
+        c.getSharedPreferences(PREFS, 0).edit().remove("paired_endpoint_sha256").commit()
+        pendingPairPin = null
+        pendingPairExpiry = 0L
+    }
+
     // Least-privilege scopes: read-only is the default.
     private val knownScopes = setOf("read", "write", "communication", "system", "other")
     fun scopes(c: Context): Set<String> {
@@ -63,6 +105,7 @@ object McpConnector {
             val prefs = c.getSharedPreferences(PREFS, 0)
             val previousEndpoint = prefs.getString(URL_KEY, "") ?: ""
             val edit = prefs.edit().putString(URL_KEY, clean)
+            if (clean != previousEndpoint) edit.remove("paired_endpoint_sha256")
             if (rawToken.isBlank()) {
                 // Preserve an existing token only when the endpoint is unchanged.
                 if (clean != previousEndpoint) edit.remove(TOKEN_KEY).remove(IV_KEY)
@@ -86,8 +129,9 @@ object McpConnector {
         val host = try { java.net.URI(value).host ?: "unknown" } catch (_: Exception) { "invalid" }
         val auth = if (readToken(c).isNullOrBlank()) "not saved" else "encrypted on device"
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
+            ". Local endpoint approval: " + if (isPaired(c)) "paired" else "not paired" +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
-            ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope."
+            ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
     }
 
     @Volatile private var sessionId: String? = null
@@ -124,6 +168,7 @@ object McpConnector {
     /** Executes only a currently advertised tool. The caller must obtain explicit user approval first. */
     fun callTool(c: Context, name: String, arguments: JSONObject): String {
         if (!configured(c)) return "error: no MCP server configured."
+        if (!isPaired(c)) return "error: MCP endpoint has not been locally approved. Open Orion Settings > MCP permissions and complete PIN confirmation first."
         if (!Regex("^[A-Za-z0-9_.:/-]{1,120}$").matches(name)) return "error: invalid MCP tool name."
         if (arguments.toString().length > 12000) return "error: MCP arguments exceed 12 KB."
         val requiredScope = scopeForTool(name)
