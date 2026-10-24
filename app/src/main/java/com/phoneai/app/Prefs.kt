@@ -202,6 +202,11 @@ object Prefs {
     fun quotaSaver(c: Context): Boolean = sp(c).getBoolean("quota_saver", true)
     fun setQuotaSaver(c: Context, v: Boolean) = sp(c).edit().putBoolean("quota_saver", v).apply()
 
+    /** Live-call renderer preference: dot_matrix (default) or eyes. */
+    fun liveCallStyle(c: Context): String = sp(c).getString("live_call_style", "dot_matrix") ?: "dot_matrix"
+    fun setLiveCallStyle(c: Context, v: String) = sp(c).edit()
+        .putString("live_call_style", if (v == "eyes") "eyes" else "dot_matrix").apply()
+
     fun voice(c: Context): Boolean = sp(c).getBoolean("voice", true)
     fun setVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("voice", v).apply()
 
