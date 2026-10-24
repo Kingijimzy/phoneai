@@ -193,7 +193,11 @@ class DeviceUtilitiesActivity : Activity() {
                 Toast.makeText(this, "Device report copied.", Toast.LENGTH_SHORT).show()
             }
         })
-        add(game, label("For a complete sample, use Orion screen control, speak with the installed Piper voice, and leave Live Call running for a few seconds before checking device health again.", 12f, Theme.MUTED))
+        add(game, TextView(this).apply {
+            text = "For a complete sample, use Orion screen control, speak with the installed Piper voice, and leave Live Call running for a few seconds before checking device health again."
+            textSize = 12f
+            setTextColor(Theme.MUTED)
+        })
         add(game, button("Start a game session") { startSessionDialog(gameResult) })
         add(game, button("End current session") {
             val ended = GameSentinel.endSession(this)
