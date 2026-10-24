@@ -9,10 +9,14 @@ class AgentHooksTest {
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
- @Test fun messageReplyTextAndEmailAreRecognizedAsPhoneActionRequests(){
+ @Test fun messageReplyTextAndEmailAreRecognizedAndAuthorizeRequestedSend(){
   listOf("message Amma on WhatsApp","reply to Amma","text Amma","email Amma").forEach { request ->
    assertTrue("$request should route to the phone action agent",AgentHooks.isPhoneActionRequest(request))
+   assertNull("$request should authorize its requested messaging send",
+    AgentHooks.scopeBlockReason(request,"click_text",JSONObject().put("text","Send")))
   }
+  assertNotNull("A draft request must not authorize sending",
+   AgentHooks.scopeBlockReason("Draft a message to Amma","click_text",JSONObject().put("text","Send")))
  }
  @Test fun consequentialCompletionNeedsActualSendEvidence(){
   val p=AgentHooks.ProofRecorder()
