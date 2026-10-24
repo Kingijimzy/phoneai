@@ -145,6 +145,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         voice.onAudioAmplitude = { amplitude ->
             mainChatListener?.onAudioAmplitude(amplitude)
         }
+        voice.onProblem = { message ->
+            appendTranscript("note", "Voice output: $message")
+            main.post {
+                mainChatListener?.onMessage("note", "Voice output: $message")
+                if (panel == null && !mainChatActive) showStrip("Voice output unavailable: $message")
+            }
+        }
         transcript.clear()
         transcript.addAll(ChatHistoryStore.load(this))
         agent = Agent(this, this)
