@@ -308,7 +308,7 @@ class Tools(private val svc: PhoneAiService) {
             }
             "camera" -> Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
             "calendar" -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR)
-            "clock" -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK)
+            "clock" -> Intent(AlarmClock.ACTION_SHOW_ALARMS)
             "open_url" -> {
                 val raw = uriText.trim()
                 val u = try { java.net.URI(raw) } catch (_: Exception) { null }
