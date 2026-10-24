@@ -463,6 +463,7 @@ class SettingsActivity : Activity() {
         )
         routBtn = button("", false) { routinesDialog() }
         add(s4, routBtn, 8)
+        add(s4, button("View or wipe encrypted route memory", false) { routeMemoryDialog() }, 8)
         skillBtn = button("", false) { skillsDialog() }
         add(s4, skillBtn, 8)
 
@@ -1094,6 +1095,31 @@ class SettingsActivity : Activity() {
     }
 
     // ------------------------------------------------------------ name and memory
+
+    private fun routeMemoryDialog() {
+        val entries = RouteMemoryStore.summaries(this)
+        val description = if (entries.isEmpty()) {
+            "No completed routes are saved. Orion stores only sanitized task labels and tool names, encrypted with a device-local Android Keystore key. It does not store screen text, arguments, or results."
+        } else {
+            "Saved routes: ${entries.size}. Only sanitized task labels and tool names are stored; arguments, screen text and results are excluded.\n\n" +
+                entries.take(30).joinToString("\n\n").take(7000)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Encrypted route memory")
+            .setMessage(description)
+            .setNeutralButton("Wipe route memory") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Permanently wipe route memory?")
+                    .setMessage("This deletes all saved encrypted route history and its device-local encryption key. It does not delete Orion's separate long-term notes or routines.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Wipe") { _, _ ->
+                        val ok = RouteMemoryStore.clear(this)
+                        Toast.makeText(this, if (ok) "Route memory wiped." else "Route memory could not be wiped.", Toast.LENGTH_LONG).show()
+                    }.show()
+            }
+            .setPositiveButton("Close", null)
+            .show()
+    }
 
     private fun routinesDialog() {
         val names = MacroStore.names(this)
