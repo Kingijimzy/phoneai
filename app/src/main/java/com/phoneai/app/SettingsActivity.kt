@@ -350,6 +350,24 @@ class SettingsActivity : Activity() {
             Toast.makeText(this, "Permission health refreshed.", Toast.LENGTH_SHORT).show()
         }, 8)
         add(updateCard, button("Check for Orion updates", true) { checkForUpdates(updateStatus) }, 8)
+        add(updateCard, button("Xiaomi / Redmi background & overlay guide", false) {
+            showInfoDialog("Xiaomi / Redmi permissions",
+                "For reliable wake word and background work on MIUI/HyperOS:\\n\\n" +
+                "1. Open Settings → Apps → Manage apps → Orion.\\n" +
+                "2. Enable Autostart (if your version shows it).\\n" +
+                "3. Battery saver → No restrictions; allow background activity.\\n" +
+                "4. Permissions → enable microphone and notifications as needed.\\n" +
+                "5. Other permissions → Display pop-up windows / Display over other apps, only if you use Orion's floating overlay.\\n" +
+                "6. Open Recent apps and lock Orion if your launcher offers a lock option.\\n\\n" +
+                "Xiaomi changes these labels by OS version and region. Orion cannot enable the vendor's Autostart switch itself; confirm each setting manually.")
+        }, 8)
+        add(updateCard, button("Open overlay permission settings", false) {
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
+        }, 8)
         add(updateCard, button("Open Orion releases", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/releases")))
         }, 8)
@@ -432,7 +450,7 @@ class SettingsActivity : Activity() {
         nameBtn = button("", false) { nameDialog() }
         add(s4, nameBtn, 10)
         memBtn = button("", true) { memoryDialog() }
-        add(s4, memBtn, 8)
+        add(s4, memBtn, 8)\n        add(s4, button("View or wipe route memory", false) { routeMemoryDialog() }, 8)
         add(
             s4,
             text(
@@ -1415,6 +1433,34 @@ class SettingsActivity : Activity() {
 
     private fun when2(ms: Long): String =
         if (ms <= 0) "" else SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(ms))
+
+    private fun routeMemoryDialog() {
+        val routes = RouteMemoryStore.summaries(this)
+        val wipeLabel = "WIPE ALL ROUTE MEMORY · Permanently delete encrypted route history"
+        val items = routes + wipeLabel
+        showChoiceDialog(
+            "Completed route memory · ${routes.size}",
+            "Encrypted on this phone. Orion stores only a sanitized task label and tool sequence, not screen text, tool arguments, results or credentials. Select a route to inspect its summary, or wipe all route history.",
+            items,
+            { which ->
+                if (which == routes.size) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Wipe route memory?")
+                        .setMessage("This permanently deletes Orion's encrypted completed-route history and its device-local encryption key. Long-term preferences and saved tasks are not affected.")
+                        .setPositiveButton("WIPE ROUTES") { _, _ ->
+                            val ok = RouteMemoryStore.clear(this)
+                            Toast.makeText(this, if (ok) "Route memory wiped." else "Could not wipe route memory.", Toast.LENGTH_SHORT).show()
+                            routeMemoryDialog()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    showInfoDialog("Saved route", routes[which], "BACK") { routeMemoryDialog() }
+                }
+            },
+            { }
+        )
+    }
 
     private fun memoryDialog() {
         val items = MemoryStore.all(this).sortedByDescending { it.updated }
