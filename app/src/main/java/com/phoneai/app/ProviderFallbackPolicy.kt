@@ -6,5 +6,5 @@ package com.phoneai.app
  */
 internal object ProviderFallbackPolicy {
     fun shouldTryBackup(error: Throwable): Boolean =
-        error is AiException && error.rateLimited
+        error is AiException && error.httpStatus == 429
 }
