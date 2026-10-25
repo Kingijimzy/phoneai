@@ -60,13 +60,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "type" -> svc.currentAppLabel()
             else -> ""
         }
+        val taskScopeBlock = TaskScopePolicy.blockReason(activeRequestScope, tool)
+        if (taskScopeBlock != null) {
+            val blocked = "error: task scope guard blocked tool. " + taskScopeBlock
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
         val scopeBlock = AgentHooks.scopeBlockReason(activeRequestScope, tool, args, targetLabel)
         if (scopeBlock != null) {
             val blocked = "error: scope guard blocked action. " + scopeBlock
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        if (AgentHooks.requiresConfirmation(tool, args, targetLabel) && activeSkillId == null) {
+        if (AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
             val description = when (tool) {
                 "forget" -> "Forget saved memory #" + args.optInt("id", -1)
                 "update_memory" -> "Change saved memory #" + args.optInt("id", -1)
