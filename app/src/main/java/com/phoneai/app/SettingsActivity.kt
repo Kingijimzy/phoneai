@@ -1123,6 +1123,12 @@ class SettingsActivity : Activity() {
             background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE) }
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
+        val approvalBox = android.widget.CheckBox(this).apply {
+            text = "Require approval for every run"
+            isChecked = true
+            setTextColor(Theme.TEXT)
+            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
+        }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
@@ -1505,7 +1511,8 @@ class SettingsActivity : Activity() {
     private fun skillOptions(skill: PhoneAiSkill) {
         showChoiceDialog(skill.id + " · v" + skill.version,
             skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
-                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds",
+                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds" +
+                "\nApproval: " + (if (skill.requiresApproval) "required before every run" else "write-capable tools still require approval"),
             listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Delete skill · Remove its local definition"),
             { which ->
                 if (which == 0) {
@@ -1544,6 +1551,7 @@ class SettingsActivity : Activity() {
             addView(idBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(descBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(toolsBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(approvalBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             val examples = listOf("web_search", "browser_snapshot", "browser_click", "read_screen", "open_app", "task_add", "remember", "ask_user")
                 .filter { ToolRegistry.find(it) != null }
                 .joinToString(", ")
@@ -1551,7 +1559,7 @@ class SettingsActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Create a declarative skill")
-            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled.")
+            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled. Write-capable tools always require explicit approval.")
             .setView(wrap)
             .setPositiveButton("Save skill") { _, _ ->
                 val allowed = toolsBox.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -1562,7 +1570,7 @@ class SettingsActivity : Activity() {
                     allowedTools = allowed,
                     maxCalls = 6,
                     maxDurationMs = 30_000L,
-                    requiresApproval = false,
+                    requiresApproval = approvalBox.isChecked,
                     enabled = false
                 )
                 val result = SkillRegistry.register(this, candidate)

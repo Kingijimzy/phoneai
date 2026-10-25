@@ -44,6 +44,12 @@ class SkillAuthorizationPolicyTest {
         assertFalse(SkillRegistry.isSupportedTool("execute_python"))
     }
 
+    @Test fun allWriteToolsRequireApprovalWhenUsedBySkills() {
+        listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember")
+            .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
+        assertFalse(SkillRegistry.requiresApprovalForTool("web_search"))
+    }
+
     @Test fun missingOrDisabledSkillIsDenied() {
         assertEquals("Skill is not registered.", check(skill = null).reason)
         assertEquals("Skill is disabled.", check(skill = skill(enabled = false)).reason)

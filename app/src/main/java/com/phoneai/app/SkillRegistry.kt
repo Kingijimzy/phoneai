@@ -127,6 +127,7 @@ object SkillRegistry {
      * in the current run; elapsedMs is the elapsed time for that run.
      */
     internal fun isSupportedTool(name: String): Boolean = name in supportedTools
+    internal fun requiresApprovalForTool(name: String): Boolean = name in consequentialTools
 
     fun authorize(
         context: Context,

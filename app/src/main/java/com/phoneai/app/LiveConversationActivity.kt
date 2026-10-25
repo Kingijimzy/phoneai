@@ -214,8 +214,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
     private fun startVoiceInput() {
         val service = PhoneAiService.instance
         if (service == null) {
-            Toast.makeText(this, "Enable Orion in Android Accessibility settings first.", Toast.LENGTH_LONG).show()
-            startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            Toast.makeText(this, "Enable Orion's screen access to use phone control.", Toast.LENGTH_LONG).show()
+            AccessibilityDisclosure.requestSettings(this)
             return
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
