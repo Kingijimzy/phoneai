@@ -113,7 +113,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             targetLabel = targetLabel,
             currentPackage = svc.currentPackageName(),
             currentLabel = svc.currentAppLabel(),
-            stopped = stopped
+            stopped = stopped,
+            executionMode = Prefs.executionMode(svc)
         )
         if (dispatchBlock != null) {
             val blocked = "error: " + dispatchBlock
