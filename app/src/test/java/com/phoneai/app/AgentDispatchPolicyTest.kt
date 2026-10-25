@@ -30,6 +30,11 @@ class AgentDispatchPolicyTest {
         assertTrue(reason!!.contains("stopped", ignoreCase = true))
     }
 
+    @Test fun cancellationCanBeRecheckedImmediatelyBeforeSideEffects() {
+        assertNotNull(AgentDispatchPolicy.cancellationBlockReason("click_text", stopped = true))
+        assertNull(AgentDispatchPolicy.cancellationBlockReason("click_text", stopped = false))
+    }
+
     @Test fun unknownToolsAndChatModeAreDeniedAtDispatch() {
         assertNotNull(block("Explain Bluetooth", "read_screen"))
         assertNotNull(block("Open WhatsApp", "run_shell"))
