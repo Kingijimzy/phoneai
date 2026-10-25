@@ -83,39 +83,50 @@ import kotlinx.coroutines.withContext
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
 private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\*\*(.+?)\*\*|`([^`]+)`""")
 
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
-    val ticks = 96.toChar().toString()
     source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
         val line = raw.trimEnd()
         if (index > 0) out.append("\n")
         val heading = ORION_HEADING_PATTERN.find(line)
         val bullet = ORION_BULLET_PATTERN.find(line)
         val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
-        val size = heading?.let { when (it.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp } }
-        val token = Regex("\\*\\*(.+?)\\*\\*|" + ticks + "([^" + ticks + "]+)" + ticks)
+        val headingSize = heading?.let {
+            when (it.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp }
+        }
+
+        fun appendPlain(value: String) {
+            if (value.isEmpty()) return
+            val start = out.length
+            out.append(value)
+            if (headingSize != null) {
+                out.addStyle(
+                    androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = headingSize),
+                    start, out.length
+                )
+            }
+        }
+
         var cursor = 0
-        token.findAll(content).forEach { match ->
-            if (match.range.first > cursor) out.append(content.substring(cursor, match.range.first))
-            val bold = match.value.startsWith("**")
-            val inner = match.groupValues[if (bold) 1 else 2]
+        ORION_INLINE_TOKEN_PATTERN.findAll(content).forEach { match ->
+            appendPlain(content.substring(cursor, match.range.first))
+            val isBold = match.value.startsWith("**")
+            val inner = match.groupValues[if (isBold) 1 else 2]
             val start = out.length
             out.append(inner)
-            out.addStyle(androidx.compose.ui.text.SpanStyle(
-                fontWeight = if (bold || size != null) FontWeight.Bold else FontWeight.Medium,
-                fontSize = size ?: 14.sp,
-                background = if (bold) Color.Transparent else Color(0xFF242424)
-            ), start, out.length)
+            out.addStyle(
+                androidx.compose.ui.text.SpanStyle(
+                    fontWeight = if (isBold || headingSize != null) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = headingSize ?: 14.sp,
+                    background = if (isBold) Color.Transparent else Color(0xFF242424)
+                ),
+                start, out.length
+            )
             cursor = match.range.last + 1
         }
-        if (cursor < content.length) {
-            val start = out.length
-            out.append(content.substring(cursor))
-            if (size != null) out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = size), start, out.length)
-        } else if (content.isEmpty() && size != null) {
-            out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = size), out.length, out.length)
-        }
+        appendPlain(content.substring(cursor))
     }
     return out.toAnnotatedString()
 }
