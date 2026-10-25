@@ -1575,7 +1575,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (panel != null) {
                 panelStatus?.text = text
             } else if (running) {
-                showStrip(text)
+                // While the user is looking at Orion's own chat, its header already shows status;
+                // a floating strip would just cover the title and Stop controls.
+                val inOwnChat = mainChatActive && try { currentPackageName() == packageName } catch (_: Exception) { false }
+                if (inOwnChat) mainChatListener?.onStatus(text, OrbView.Mode.THINKING) else showStrip(text)
             }
         }
     }

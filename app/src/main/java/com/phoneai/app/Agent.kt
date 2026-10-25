@@ -633,10 +633,11 @@ Rules:
             return
         }
         val requestBudget = AgentHooks.RequestBudget(MAX_STEPS)
+        var damagedReplies = 0
         while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
             val raw = try {
-                nim.chat(history, false)
+                nim.chat(history, false, 800)
             } catch (e: Exception) {
                 if (stopped) break
                 AgentCheckpointStore.pause(svc)
@@ -651,8 +652,22 @@ Rules:
                 ui.say("Stopped before the next action could start. I saved the task progress locally.")
                 return
             }
+            val parsedStep = AgentJson.parse(raw)
+            if (parsedStep.damaged) {
+                // Truncated or invalid JSON must never be shown as the answer or half-executed.
+                // Ask for one complete object again; give up politely after two bad replies.
+                damagedReplies++
+                if (damagedReplies > 2) {
+                    AgentCheckpointStore.pause(svc)
+                    ui.say("The AI model keeps returning incomplete replies, so I stopped before acting. Try again, or pick a different chat model in Settings.")
+                    return
+                }
+                history.put(msg("assistant", AgentJson.sayFromDamaged(raw).ifBlank { "(incomplete reply)" }))
+                history.put(msg("user", "Your last reply was cut off or was not valid JSON. Reply again with ONE complete, valid JSON object only, no extra text."))
+                continue
+            }
             history.put(msg("assistant", raw))
-            val step = parseJson(raw)
+            val step = parsedStep.obj
             val say = step.optString("say")
             if (say.isNotBlank()) ui.say(say)
             val batch = step.optJSONArray("steps")
