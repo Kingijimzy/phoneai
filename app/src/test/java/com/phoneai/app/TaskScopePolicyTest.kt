@@ -13,6 +13,22 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
     }
 
+    @Test fun explicitWhatsAppSendRequestAllowsPhoneToolScope() {
+        val request = "open WhatsApp and send kingi jimzy this message good morning chams"
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor(request))
+        assertNull(TaskScopePolicy.blockReason(request, "open_app"))
+        assertNull(TaskScopePolicy.blockReason(request, "read_screen"))
+        assertNotNull(TaskScopePolicy.blockReason(request, "bybit_public_ticker"))
+    }
+
+    @Test fun explicitActionIsNotDowngradedByConversationWording() {
+        assertEquals(
+            TaskMode.PHONE_AUTOMATION,
+            TaskScopePolicy.modeFor("Please help me with this: open WhatsApp and send good morning")
+        )
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("Explain what WhatsApp is used for"))
+    }
+
     @Test fun chatCannotInvokeToolsEvenIfModelRequestsOne() {
         assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "read_screen"))
         assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "open_app"))
