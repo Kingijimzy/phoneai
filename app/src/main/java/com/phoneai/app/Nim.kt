@@ -435,7 +435,9 @@ class Nim(private val ctx: Context) {
                 out.addAll(if (vision) fb.second else fb.first)
             }
         }
-        return out.distinct()
+        return out.distinct().filter { model ->
+            ProviderBillingPolicy.isAllowed(p.id, model, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
+        }
     }
 
     /** Converts OpenAI-style messages to Anthropic's format. */
@@ -512,11 +514,25 @@ class Nim(private val ctx: Context) {
         // multi-step user command. Its explicit beginCommand() must cover the
         // entire run, including every model retry and any permitted 429 backup.
         val selected = Prefs.provider(ctx, vision)
-        fun usable(p: Provider): Boolean =
+        fun configured(p: Provider): Boolean =
             (Prefs.hasKey(ctx, p.id) || p.noKey) && (!vision || p.hasVision)
+        fun modelAllowed(p: Provider): Boolean = ProviderBillingPolicy.isAllowed(
+            p.id, Prefs.model(ctx, p, vision), p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx)
+        )
+        if (configured(selected) && !modelAllowed(selected)) {
+            throw IllegalStateException(
+                "${selected.label} / ${Prefs.model(ctx, selected, vision)} may incur paid or metered usage. " +
+                    "Orion blocked the request because paid-provider use is off. Enable the explicit paid-provider setting in Settings only if you accept possible charges."
+            )
+        }
+        fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        val primary = if (usable(selected)) selected else Providers.all.firstOrNull { usable(it) }
-            ?: throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+        val primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
+            ?: if (Providers.all.any { configured(it) }) {
+                throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
+            } else {
+                throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+            }
 
         val now = System.currentTimeMillis()
         // A single backup is deliberate: a rate limit must not fan one user command

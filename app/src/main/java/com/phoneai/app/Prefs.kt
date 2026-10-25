@@ -13,7 +13,9 @@ class Provider(
     val info: String,
     val listUrl: String? = null,
     val anthropicStyle: Boolean = false,
-    val noKey: Boolean = false
+    val noKey: Boolean = false,
+    /** Provider/account/model may incur usage charges; disabled unless the user opts in. */
+    val requiresPaidOptIn: Boolean = false
 ) {
     val hasVision: Boolean get() = visionModel != null
 }
@@ -43,49 +45,57 @@ object Providers {
         Provider(
             "nvidia", "NVIDIA API Catalog", "https://integrate.api.nvidia.com/v1",
             "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvidia/nemotron-3.5-super-vl-120b-a12b", "nvapi-...",
-            "NVIDIA Nemotron 3.5 Super VL: text chat and image/video understanding. Confirm endpoint access in your NVIDIA account. build.nvidia.com"
+            "NVIDIA Nemotron 3.5 Super VL: text chat and image/video understanding. Confirm endpoint access in your NVIDIA account. build.nvidia.com",
+            requiresPaidOptIn = true
         ),
         Provider(
             "mistral", "Mistral", "https://api.mistral.ai/v1",
             "mistral-small-latest", "mistral-small-latest", "your Mistral key",
-            "FREE tier. console.mistral.ai"
+            "FREE tier. console.mistral.ai",
+            requiresPaidOptIn = true
         ),
         // GitHub Models was retired on 2026-07-30; do not expose a dead endpoint as a free provider.
         Provider(
             "sambanova", "SambaNova", "https://api.sambanova.ai/v1",
             "Meta-Llama-3.3-70B-Instruct", "Llama-3.2-11B-Vision-Instruct", "your SambaNova key",
-            "FREE tier. cloud.sambanova.ai"
+            "FREE tier. cloud.sambanova.ai",
+            requiresPaidOptIn = true
         ),
         Provider(
             "together", "Together AI", "https://api.together.xyz/v1",
             "meta-llama/Llama-3.3-70B-Instruct-Turbo", "meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo", "your Together key",
-            "Free credits. together.ai"
+            "Free credits. together.ai",
+            requiresPaidOptIn = true
         ),
         Provider(
             "fireworks", "Fireworks", "https://api.fireworks.ai/inference/v1",
             "accounts/fireworks/models/llama-v3p3-70b-instruct", "accounts/fireworks/models/llama-v3p2-11b-vision-instruct", "fw_...",
-            "Free credits. fireworks.ai"
+            "Free credits. fireworks.ai",
+            requiresPaidOptIn = true
         ),
         Provider(
             "huggingface", "Hugging Face", "https://router.huggingface.co/v1",
             "meta-llama/Llama-3.3-70B-Instruct", "Qwen/Qwen2.5-VL-72B-Instruct", "hf_...",
-            "Very small free inference credit (currently $0.10/month; subject to change). huggingface.co/settings/tokens"
+            "Very small free inference credit (currently $0.10/month; subject to change). huggingface.co/settings/tokens",
+            requiresPaidOptIn = true
         ),
         Provider(
             "deepseek", "DeepSeek", "https://api.deepseek.com",
             "deepseek-chat", null, "sk-...",
-            "Very cheap (paid), text only. platform.deepseek.com"
+            "Very cheap (paid), text only. platform.deepseek.com",
+            requiresPaidOptIn = true
         ),
         Provider(
             "openai", "OpenAI", "https://api.openai.com/v1",
             "gpt-4.1-mini", "gpt-4.1-mini", "sk-...",
-            "Paid. platform.openai.com"
+            "Paid. platform.openai.com",
+            requiresPaidOptIn = true
         ),
         Provider(
             "anthropic", "Anthropic Claude", "https://api.anthropic.com/v1",
             "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-...",
             "Paid. console.anthropic.com",
-            null, true
+            null, true, requiresPaidOptIn = true
         ),
         Provider(
             "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
@@ -220,6 +230,10 @@ object Prefs {
     /** Defaults on to avoid burning free-tier quota through repeated provider/model fallbacks. */
     fun quotaSaver(c: Context): Boolean = sp(c).getBoolean("quota_saver", true)
     fun setQuotaSaver(c: Context, v: Boolean) = sp(c).edit().putBoolean("quota_saver", v).apply()
+
+    /** Paid or metered provider/model requests are blocked unless the user explicitly opts in. */
+    fun allowPaidProviders(c: Context): Boolean = sp(c).getBoolean("allow_paid_providers", false)
+    fun setAllowPaidProviders(c: Context, v: Boolean) = sp(c).edit().putBoolean("allow_paid_providers", v).apply()
 
     /** Whether Orion may save new successful tool routes for future planning. */
     fun routeLearning(c: Context): Boolean = sp(c).getBoolean("route_learning", true)

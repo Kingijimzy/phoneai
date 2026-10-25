@@ -520,6 +520,10 @@ class SettingsActivity : Activity() {
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
+        switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
+            Prefs.setAllowPaidProviders(this, it)
+        }
+        add(s2, text("When enabled, providers or models marked paid/metered may consume paid credits. With this off, Orion blocks those requests and will not use them as a fallback.", 12f, Theme.MUTED), 4)
         add(s2, button("AI health, provider status & quota", false) { showAiHealth() }, 10)
         add(s2, button("Test the AI", false) { testAi() }, 10)
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
