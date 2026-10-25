@@ -15,10 +15,11 @@ class CheckpointTransitionPolicyTest {
     }
 
     @Test fun onlyMatchingInFlightToolCanRecordResult() {
-        assertTrue(CheckpointTransitionPolicy.canRecordResult("click_text", "click_text"))
-        assertFalse(CheckpointTransitionPolicy.canRecordResult("click_text", "type"))
-        assertFalse(CheckpointTransitionPolicy.canRecordResult(null, "click_text"))
-        assertFalse(CheckpointTransitionPolicy.canRecordResult("", "click_text"))
+        assertTrue(CheckpointTransitionPolicy.canRecordResult("click_text", "click_text", "{\"text\":\"Send\"}", "{\"text\":\"Send\"}"))
+        assertFalse(CheckpointTransitionPolicy.canRecordResult("click_text", "type", "{\"text\":\"Send\"}", "{\"text\":\"hello\"}"))
+        assertFalse(CheckpointTransitionPolicy.canRecordResult("click_text", "click_text", "{\"text\":\"Send\"}", "{\"text\":\"Delete\"}"))
+        assertFalse(CheckpointTransitionPolicy.canRecordResult("click_text", "click_text", null, "{\"text\":\"Send\"}"))
+        assertFalse(CheckpointTransitionPolicy.canRecordResult(null, "click_text", "{\"text\":\"Send\"}", "{\"text\":\"Send\"}"))
     }
 
     @Test fun uncertainActionCannotBeMarkedComplete() {
