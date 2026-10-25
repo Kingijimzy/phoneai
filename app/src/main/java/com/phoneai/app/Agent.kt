@@ -804,7 +804,15 @@ Rules:
             }
             if (!AgentCheckpointStore.record(svc, tool, args, result)) {
                 AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
+                ui.phase("error")
                 ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
+                return
+            }
+            val toolFailure = ToolResultPolicy.failureReason(result)
+            if (toolFailure != null) {
+                AgentCheckpointStore.pause(svc)
+                ui.phase("error")
+                ui.say("I couldn't complete the step '$tool'. $toolFailure I paused the task and saved its progress; I have not marked the task complete. Check the current screen before asking me to continue.")
                 return
             }
             history.put(msg("user", "RESULT: " + result.take(3500)))
