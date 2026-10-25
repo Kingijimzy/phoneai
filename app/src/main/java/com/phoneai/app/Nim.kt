@@ -496,11 +496,9 @@ class Nim(private val ctx: Context) {
      */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
-        // A Nim instance may be reused. Reset once per top-level user command so
-        // the primary, its model recovery attempts, model-list calls, and one
-        // permitted 429 backup all share the same hard request ceiling.
-        beginCommand()
-
+        // Do not reset here: Agent.run() can call chat() several times for one
+        // multi-step user command. Its explicit beginCommand() must cover the
+        // entire run, including every model retry and any permitted 429 backup.
         val selected = Prefs.provider(ctx, vision)
         fun usable(p: Provider): Boolean =
             (Prefs.hasKey(ctx, p.id) || p.noKey) && (!vision || p.hasVision)
