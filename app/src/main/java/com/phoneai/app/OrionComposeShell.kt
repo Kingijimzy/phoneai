@@ -80,8 +80,8 @@ import kotlin.math.sin
 private val Ink = Color(0xFF050505)
 private val Panel = Color(0xFF141414)
 private val PanelRaised = Color(0xFF202020)
-private val Mint = Color(0xFF72E6C1)
-private val MintDim = Color(0xFF17483B)
+private val Mint = Color(0xFFE0E0E0)
+private val MintDim = Color(0xFF343434)
 private val Copy = Color(0xFFF7FAF9)
 private val Muted = Color(0xFF9B9B9B)
 private val Hairline = Color(0xFF303030)
@@ -146,12 +146,7 @@ private fun HomePage(
     onOpenUtilities: () -> Unit,
     onOpenSettings: (String?) -> Unit
 ) {
-    val pulse = rememberInfiniteTransition(label = "orion-ready-pulse")
-    val glow by pulse.animateFloat(
-        initialValue = 0.18f, targetValue = 0.42f,
-        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "ready-glow"
-    )
+    val glow = 0.24f
     Column(
         Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())
             .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 14.dp),
@@ -161,7 +156,7 @@ private fun HomePage(
             Box(
                 Modifier.size(42.dp).clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF1C1C1C))
-                    .border(1.dp, Mint.copy(alpha = .55f), RoundedCornerShape(14.dp)),
+                    .border(1.dp, Color(0xFF555555), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Rounded.AutoAwesome, null, tint = Mint, modifier = Modifier.size(23.dp))
@@ -177,7 +172,7 @@ private fun HomePage(
                     .clickable { onOpenSettings(null) }.padding(horizontal = 11.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(Mint.copy(alpha = (.65f + glow).coerceIn(0f, 1f))))
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFFBDBDBD)))
                 Text(status.uppercase().take(13), color = Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
             }
         }
@@ -186,7 +181,7 @@ private fun HomePage(
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(27.dp))
                 .background(Color(0xFF111111))
-                .border(1.dp, Mint.copy(alpha = .25f + glow * .25f), RoundedCornerShape(27.dp))
+                .border(1.dp, Color(0xFF353535), RoundedCornerShape(27.dp))
                 .padding(horizontal = 19.dp, vertical = 17.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
