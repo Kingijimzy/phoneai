@@ -6,6 +6,10 @@ import org.junit.Test
 import java.io.IOException
 
 class ProviderFallbackPolicyTest {
+    @Test fun providerFanOutIsCappedAtOneBackup() {
+        assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 1)
+    }
+
     @Test fun onlyHttp429AllowsOneBackupAttempt() {
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429", 429)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503)))
