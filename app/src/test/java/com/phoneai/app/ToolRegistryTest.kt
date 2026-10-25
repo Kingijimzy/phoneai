@@ -15,6 +15,14 @@ class ToolRegistryTest {
         )))
     }
 
+
+    @Test fun coordinateToolsDocumentTheirRequiredSafetyOptIn() {
+        assertTrue(ToolRegistry.find("validate_action")!!.promptLine.contains("allow_coordinates?"))
+        assertTrue(ToolRegistry.find("tap")!!.promptLine.contains("allow_coordinates:true"))
+        assertTrue(ToolRegistry.find("long_press")!!.promptLine.contains("allow_coordinates:true"))
+        assertTrue(ToolRegistry.find("swipe")!!.promptLine.contains("allow_coordinates:true"))
+    }
+
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
         val prompt = ToolRegistry.promptSection()
         assertTrue(prompt.startsWith("Tools:\n"))
