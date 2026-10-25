@@ -72,14 +72,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         cornerRadius = dp(radius).toFloat()
         if (stroke != 0) setStroke(dp(1), stroke)
     }
-    /** Lightweight glass treatment: translucent-looking layered charcoal, a cool top sheen and a fine reflective edge. */
-    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) = GradientDrawable(
-        GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(0xF0232323.toInt(), 0xEA171717.toInt(), 0xF00C0C0C.toInt())
-    ).apply {
-        cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), stroke)
-    }
+    /** Classic opaque graphite surface: no translucent glass layers or decorative sheen. */
+    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) =
+        rounded(0xFF181818.toInt(), radius, stroke)
 
     private fun animateIn(view: View, delay: Long = 0L) {
         view.alpha = 0f
