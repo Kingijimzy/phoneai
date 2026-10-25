@@ -154,6 +154,28 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
         heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
         header.addView(heading)
+        val clearAll = historyActionButton("Clear all") {
+            AlertDialog.Builder(this@MainChatActivity)
+                .setTitle("Delete all chat history?")
+                .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete all") { _, _ ->
+                    val service = PhoneAiService.instance
+                    if (service != null) {
+                        service.deleteAllChatHistory()
+                        dialog.dismiss()
+                    } else {
+                        val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
+                        if (deleted) {
+                            composeLines.clear()
+                            dialog.dismiss()
+                        }
+                        Toast.makeText(this@MainChatActivity, if (deleted) "Chat history deleted" else "Could not delete chat history", Toast.LENGTH_SHORT).show()
+                        if (deleted) showChatHistory()
+                    }
+                }.show()
+        }
+        header.addView(clearAll)
         val close = historyActionButton("Close") { dialog.dismiss() }
         header.addView(close)
         root.addView(header)
