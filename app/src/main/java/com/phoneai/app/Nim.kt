@@ -192,17 +192,11 @@ class Nim(private val ctx: Context) {
     @Volatile
     private var active: HttpURLConnection? = null
 
-    private val requestBudgetLock = Any()
-    @Volatile private var commandHttpRequests = 0
-    private val failedRequestSignatures = HashMap<String, Int>()
-    private val maxHttpRequestsPerCommand = 15
+    private val commandRequestBudget = CommandRequestBudget(maxRequests = 15)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     fun beginCommand() {
-        synchronized(requestBudgetLock) {
-            commandHttpRequests = 0
-            failedRequestSignatures.clear()
-        }
+        commandRequestBudget.reset()
     }
 
     fun resume() {
@@ -219,11 +213,8 @@ class Nim(private val ctx: Context) {
     }
 
     private fun request(p: Provider, method: String, url: String, body: String?, key: String, readMs0: Int = 45000): Http {
-        synchronized(requestBudgetLock) {
-            if (commandHttpRequests >= maxHttpRequestsPerCommand) {
-                throw AiException("Stopped before sending another request: this command reached Orion's $maxHttpRequestsPerCommand-request budget. No additional HTTP request was made.")
-            }
-            commandHttpRequests++
+        if (!commandRequestBudget.tryReserve()) {
+            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
         }
         // Count every network attempt here, including model catalogues and requests that fail to connect.
         noteHit(p.id)
@@ -269,11 +260,7 @@ class Nim(private val ctx: Context) {
             if (code !in 200..299) {
                 // Store only a hash signature, never request or response text, for repeat-failure detection.
                 val signature = listOf(p.id, method, url, body?.hashCode() ?: 0, code, text.hashCode()).joinToString("|")
-                val repeats = synchronized(requestBudgetLock) {
-                    val next = (failedRequestSignatures[signature] ?: 0) + 1
-                    failedRequestSignatures[signature] = next
-                    next
-                }
+                val repeats = commandRequestBudget.noteFailure(signature)
                 if (repeats >= 3) {
                     throw AiException("${p.label}: stopped after three identical HTTP failures (HTTP $code). No more identical retries will be sent.")
                 }
@@ -506,6 +493,10 @@ class Nim(private val ctx: Context) {
      */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
+        // A Nim instance may be reused. Reset once per top-level user command so
+        // the primary, its model recovery attempts, model-list calls, and one
+        // permitted 429 backup all share the same hard request ceiling.
+        beginCommand()
 
         val selected = Prefs.provider(ctx, vision)
         fun usable(p: Provider): Boolean =
