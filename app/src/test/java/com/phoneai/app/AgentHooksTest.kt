@@ -7,6 +7,20 @@ import org.junit.Test
 class AgentHooksTest {
  @Test fun blocksUnrequestedSend(){assertNotNull(AgentHooks.scopeBlockReason("Open WhatsApp and draft a message","click_text",JSONObject().put("text","Send")))}
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
+ @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
+  listOf(
+   "Do not send this message to Alex",
+   "Don't send this message to Alex",
+   "Never send this message",
+   "Draft a message to Amma without sending",
+   "Prepare a reply but do not send it"
+  ).forEach { request ->
+   assertNotNull("$request must not authorize clicking Send",
+    AgentHooks.scopeBlockReason(request,"click_text",JSONObject().put("text","Send")))
+  }
+  assertNotNull("A negated delete must not authorize deleting",
+   AgentHooks.scopeBlockReason("Do not delete the account","click_text",JSONObject().put("text","Delete account")))
+ }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun messageReplyTextAndEmailAreRecognizedAndAuthorizeRequestedSend(){
