@@ -284,7 +284,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         nim.resume()
         if (liveHistory.length() == 0) {
             val name = Prefs.userName(svc).ifBlank { "friend" }
-            val memory = MemoryStore.promptBlock(svc).take(700)
+            val memory = MemoryStore.promptBlock(svc, input).take(700)
             val prompt = "You are Orion, a calm, warm, sharp personal AI co-pilot in a hands-free voice conversation. " +
                 "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
                 "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
