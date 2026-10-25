@@ -29,7 +29,11 @@ object AgentProfiles {
             "strategy notes and journal stats, name concrete mistakes (late entry, stop too tight, chasing, no confluence, oversized risk) without " +
             "being harsh, and finish with one thing to do differently next time. When scanner results are supplied, explain the best ones in terms of " +
             "the user's strategy. You analyse; you never place orders and this is not financial advice: the user decides and manages risk. " +
-            "If the image is unclear or not a chart, say so instead of guessing. " + SHARED_RULES,
+            "If the image is unclear or not a chart, say so instead of guessing. If the image is the user's strategy (notes, diagram, screenshot of rules), extract the rules faithfully. " +
+            "MEMORY PROTOCOL: at the very end of your reply, only when worth remembering, add up to three lines exactly in this form and nothing after them: " +
+            "'MEMORY: <one short factual observation about this chart or trade>', 'MISTAKE: <a recurring mistake you noticed>', " +
+            "'RULES: <rule one> | <rule two>' (only rules the user actually stated or showed). Those lines are saved on the phone and hidden from the user. " +
+            "When market outlooks are supplied, build on them and be explicit that they are probabilities from simple rules, never certainties. " + SHARED_RULES,
             acceptsImages = true
         ),
         AgentProfile(
@@ -74,6 +78,7 @@ object AgentProfiles {
 /** Per-agent notes learned from how the user talks to it. Local only; the user can read and delete them. */
 object AgentLessons {
     private const val MAX_PER_AGENT = 30
+    private const val MAX_COACH = 60
     private val lock = Any()
     private val cue = Regex(
         "(?i)\\b(always|never|i prefer|i like|i don't like|i do not like|don't|do not|my strategy|my rule|my rules|i trade|i only|i usually|" +
@@ -111,10 +116,24 @@ object AgentLessons {
             val similar = list.indexOfFirst { MemoryRanking.similarity(it, statement) >= 0.6 }
             if (similar >= 0) list[similar] = statement else { list.add(statement); added++ }
         }
-        while (list.size > MAX_PER_AGENT) list.removeAt(0)
+        while (list.size > (if (agentId == "coach") MAX_COACH else MAX_PER_AGENT)) list.removeAt(0)
         root.put(agentId, JSONArray(list))
         save(c, root)
         added
+    }
+
+    /** Stores a tagged note ("[rule] ...") unless a near-identical one exists; the newer wording replaces it. */
+    fun addTagged(c: Context, agentId: String, tag: String, text: String): Boolean = synchronized(lock) {
+        val note = "[$tag] " + text.trim().replace(Regex("\\s+"), " ").take(240)
+        if (SafetyGate.containsSensitiveCredentialText(note)) return@synchronized false
+        val root = load(c)
+        val list = (root.optJSONArray(agentId) ?: JSONArray()).let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
+        val similar = list.indexOfFirst { MemoryRanking.similarity(it, note) >= 0.6 }
+        if (similar >= 0) list[similar] = note else list.add(note)
+        while (list.size > (if (agentId == "coach") MAX_COACH else MAX_PER_AGENT)) list.removeAt(0)
+        root.put(agentId, JSONArray(list))
+        save(c, root)
+        similar < 0
     }
 
     fun list(c: Context, agentId: String): List<String> = synchronized(lock) {

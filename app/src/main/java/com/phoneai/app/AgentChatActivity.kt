@@ -75,6 +75,18 @@ class AgentChatActivity : Activity() {
         header.addView(smallButton("Clear") { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() })
         root.addView(header, -1, -2)
 
+        if (agent.id == "coach") {
+            val chips = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
+            fun chip(label: String, click: () -> Unit) = row.addView(smallButton(label, click), LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+            chip("Find setups") { quick("Find me the best trade setups on my watchlist right now and judge them against my strategy.") }
+            chip("Market outlook") { quick("Give me your outlook for my watchlist: bias, key levels and what would invalidate it.") }
+            chip("Daily briefing") { quick("Give me my trading briefing: outlook for my watchlist, the best setups, and one risk to watch today.") }
+            chip("Review my trade") { input.setText("Review my trade: pair, side, entry, stop, exit and why I took it: "); input.setSelection(input.text.length) }
+            chip("What do you remember?") { notesDialog() }
+            chips.addView(row)
+            root.addView(chips, -1, -2)
+        }
         scroll = ScrollView(this)
         messages = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(14)) }
         scroll.addView(messages, -1, -2)
@@ -100,6 +112,8 @@ class AgentChatActivity : Activity() {
         turns.addAll(AgentChatStore.load(this, agent.id))
         if (turns.isEmpty()) greet() else turns.forEach { addBubble(it.role == "user", it.text) }
     }
+
+    private fun quick(message: String) { input.setText(message); send() }
 
     private fun smallButton(label: String, click: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; textSize = 13f; minWidth = 0; minimumWidth = 0

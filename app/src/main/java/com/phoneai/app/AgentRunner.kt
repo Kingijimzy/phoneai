@@ -15,15 +15,34 @@ object AgentRunner {
     internal fun symbolsIn(text: String): List<String> =
         text.split(Regex("[^A-Za-z0-9]+")).mapNotNull { Bybit.symbolOf(it) }.distinct().take(2)
 
+    private fun wantsOutlook(text: String): Boolean =
+        Regex("(?i)\\b(predict|prediction|forecast|outlook|bias|direction|briefing|where is .* going|which way|expect)\\b").containsMatchIn(text)
+
+    private fun outlookSymbols(c: Context, text: String): List<String> {
+        val named = symbolsIn(text)
+        if (named.isNotEmpty()) return named
+        if (!wantsOutlook(text)) return emptyList()
+        return Prefs.watchlist(c).split(",").map { it.trim().uppercase(Locale.US) }.filter { it.isNotEmpty() }.take(3)
+    }
+
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
-        val strategy = AgentLessons.promptBlock(c, "coach", 20)
+        try { PredictionLog.evaluate(c) { symbol -> Bybit.price(c, symbol) } } catch (_: Exception) { }
+        val strategy = AgentLessons.promptBlock(c, "coach", 40)
         sb.append("User's strategy and rules (their own words):\n").append(if (strategy.isBlank()) "(none saved yet; ask them to describe their strategy)" else strategy)
+        sb.append("\n\nYour own track record: ").append(try { PredictionLog.statsText(c) } catch (_: Exception) { "unavailable" })
         sb.append("\n\nJournal performance by setup type: ").append(try { Journal.statsText(c) } catch (_: Exception) { "unavailable" })
         for (symbol in symbolsIn(userText)) {
             try {
                 sb.append(String.format(Locale.US, "\nLive %s: price %s, 24h change %.2f%% (public Bybit data).", symbol, Bybit.price(c, symbol), Bybit.change24h(c, symbol)))
             } catch (_: Exception) { sb.append("\nLive $symbol: price lookup failed.") }
+        }
+        for (symbol in outlookSymbols(c, userText)) {
+            try {
+                val outlook = MarketOutlook.compute(symbol, Bybit.candles(c, symbol, "60", 200), Bybit.candles(c, symbol, "240", 200), Bybit.candles(c, symbol, "D", 200))
+                if (outlook != null) { PredictionLog.record(c, outlook); sb.append("\n\nOUTLOOK (rule-based, computed now): ").append(outlook.text) }
+                Thread.sleep(150)
+            } catch (e: Exception) { sb.append("\n\nOutlook for $symbol failed (${e.javaClass.simpleName}).") }
         }
         if (looksLikeSetupRequest(userText)) {
             try {
@@ -77,6 +96,10 @@ object AgentRunner {
         } else {
             messages.put(JSONObject().put("role", "user").put("content", userText))
         }
-        return Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        val reply = Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        if (agent.id != "coach") return reply
+        val parsed = CoachMemory.parse(reply)
+        val saved = parsed.notes.count { (tag, text) -> AgentLessons.addTagged(c, "coach", tag, text) }
+        return if (saved > 0) parsed.visible + "\n\n(Saved $saved note" + (if (saved == 1) "" else "s") + " to my trading memory.)" else parsed.visible
     }
 }
