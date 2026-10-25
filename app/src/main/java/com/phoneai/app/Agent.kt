@@ -178,6 +178,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
      * web shortcuts, or the multi-step action planner. Web research is available in Command
      * mode when the user actually asks for it.
      */
+    /** Drop conversational context after the user explicitly clears the active chat. */
+    fun resetConversationContext() {
+        while (chatHist.length() > 0) chatHist.remove(0)
+        while (liveHistory.length() > 0) liveHistory.remove(0)
+        while (history.length() > 0) history.remove(0)
+        while (ranSteps.length() > 0) ranSteps.remove(0)
+        chatCache.clear()
+        activeSkillId = null
+        activeSkillStartedAt = 0L
+        activeSkillCalls = 0
+        activeRequestScope = ""
+        lastScreenSnapshot = ""
+        lastScreenBeforeAction = ""
+        failedCallGuard.reset()
+    }
+
     fun runConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
