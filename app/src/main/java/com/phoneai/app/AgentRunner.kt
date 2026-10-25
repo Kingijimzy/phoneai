@@ -25,8 +25,21 @@ object AgentRunner {
         return Prefs.watchlist(c).split(",").map { it.trim().uppercase(Locale.US) }.filter { it.isNotEmpty() }.take(3)
     }
 
+    private fun accountBlock(c: Context): String {
+        val sb = StringBuilder("ACCOUNT AWARENESS: mode ").append(Bybit.modeText(c))
+            .append("; max order ").append(Prefs.maxOrderUsd(c).toInt()).append(" USDT; max risk ").append(Prefs.maxRiskPct(c)).append("% of account")
+            .append("; session now: ").append(TradeProposals.sessionAt(java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).get(java.util.Calendar.HOUR_OF_DAY)))
+            .append("; watchlist ").append(Prefs.watchlist(c)).append(".")
+        if (Bybit.hasKeys(c)) {
+            try { sb.append("\nBalance: ").append(Bybit.balance(c)) } catch (_: Exception) { sb.append("\nBalance: unavailable right now.") }
+            try { sb.append("\nOpen positions: ").append(Bybit.positions(c)) } catch (_: Exception) { sb.append("\nOpen positions: unavailable right now.") }
+        } else sb.append("\nBybit keys are not saved, so account balance and positions are unknown; ask for them before sizing.")
+        return sb.toString()
+    }
+
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
+        sb.append(accountBlock(c)).append("\n\n")
         try { PredictionLog.evaluate(c) { symbol -> Bybit.price(c, symbol) } } catch (_: Exception) { }
         val strategy = AgentLessons.promptBlock(c, "coach", 40)
         sb.append("User's strategy and rules (their own words):\n").append(if (strategy.isBlank()) "(none saved yet; ask them to describe their strategy)" else strategy)
@@ -36,6 +49,10 @@ object AgentRunner {
             try {
                 sb.append(String.format(Locale.US, "\nLive %s: price %s, 24h change %.2f%% (public Bybit data).", symbol, Bybit.price(c, symbol), Bybit.change24h(c, symbol)))
             } catch (_: Exception) { sb.append("\nLive $symbol: price lookup failed.") }
+        }
+        if (wantsOutlook(userText) || Regex("(?i)\\b(news|why|catalyst|headline)").containsMatchIn(userText)) {
+            val topic = symbolsIn(userText).firstOrNull()?.removeSuffix("USDT")?.let { "$it crypto" } ?: "crypto market bitcoin"
+            LiveNews.rss(topic)?.let { sb.append("\n\nNEWS (untrusted web data): ").append(it.take(1200)) }
         }
         MarketQuotes.contextFor(userText).takeIf { it.isNotBlank() }?.let { sb.append(it).append(" (public quote feed; use for levels, no candle outlook available for non-crypto).") }
         for (symbol in outlookSymbols(c, userText)) {
@@ -95,10 +112,15 @@ object AgentRunner {
     }
 
     /** [imageJpegBase64] is only used by agents that accept images. */
-    fun run(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): String {
+    class Result(val text: String, val trades: List<TradeProposals.Trade>)
+
+    fun run(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): String =
+        runFull(c, agent, history, userText, imageJpegBase64).text
+
+    fun runFull(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): Result {
         AgentLessons.learnFrom(c, agent.id, userText)
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt(c, agent, userText)))
-        history.takeLast(10).forEach { messages.put(JSONObject().put("role", it.role).put("content", it.text.take(2000))) }
+        history.takeLast(20).forEach { messages.put(JSONObject().put("role", it.role).put("content", it.text.take(2000))) }
         val image = imageJpegBase64?.takeIf { agent.acceptsImages && it.isNotBlank() }
         if (image != null) {
             val content = JSONArray()
@@ -109,9 +131,14 @@ object AgentRunner {
             messages.put(JSONObject().put("role", "user").put("content", userText))
         }
         val reply = Nim(c).chat(messages, image != null, 900, 0.4).trim()
-        if (agent.id != "coach") return reply
-        val parsed = CoachMemory.parse(reply)
+        if (agent.id != "coach") return Result(reply, emptyList())
+        val actions = TradeProposals.parse(reply)
+        val parsed = CoachMemory.parse(actions.visible)
+        val alertsSet = try { TradeProposals.saveAlerts(c, actions.alerts) } catch (_: Exception) { 0 }
         val saved = parsed.notes.count { (tag, text) -> AgentLessons.addTagged(c, "coach", tag, text) }
-        return if (saved > 0) parsed.visible + "\n\n(Saved $saved note" + (if (saved == 1) "" else "s") + " to my trading memory.)" else parsed.visible
+        val extras = StringBuilder()
+        if (alertsSet > 0) extras.append("\n\n(Set $alertsSet price alert").append(if (alertsSet == 1) "" else "s").append(".)")
+        if (saved > 0) extras.append("\n\n(Saved $saved note").append(if (saved == 1) "" else "s").append(" to my trading memory.)")
+        return Result(parsed.visible + extras, actions.trades)
     }
 }

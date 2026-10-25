@@ -209,6 +209,40 @@ class AgentChatActivity : Activity() {
         return bubble
     }
 
+    /** A proposal only. Nothing is sent to Bybit until the user taps Place and confirms the final risk summary. */
+    private fun addTradeCard(t: TradeProposals.Trade) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.CYAN) }
+        }
+        card.addView(TextView(this).apply { text = "TRADE PROPOSAL · " + Bybit.modeText(this@AgentChatActivity); textSize = 11f; setTextColor(Theme.CYAN); typeface = Typeface.DEFAULT_BOLD })
+        card.addView(TextView(this).apply { text = t.summary() + (if (t.note.isNotBlank()) "\n" + t.note else ""); textSize = 14f; setTextColor(Theme.TEXT); setPadding(0, dp(4), 0, dp(8)) })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val status = TextView(this).apply { textSize = 13f; setTextColor(Theme.MUTED); visibility = android.view.View.GONE }
+        row.addView(smallButton("Place order") {
+            status.visibility = android.view.View.VISIBLE; status.text = "Checking limits…"
+            Thread {
+                val result = Trading.placeProposal(this, t) { question ->
+                    val latch = java.util.concurrent.CountDownLatch(1); var ok = false
+                    runOnUiThread {
+                        AlertDialog.Builder(this).setTitle("Confirm order").setMessage(question)
+                            .setPositiveButton("Place") { _, _ -> ok = true; latch.countDown() }
+                            .setNegativeButton("Cancel") { _, _ -> latch.countDown() }
+                            .setOnCancelListener { latch.countDown() }.show()
+                    }
+                    latch.await(120, java.util.concurrent.TimeUnit.SECONDS); ok
+                }
+                if (result.startsWith("Order placed")) AgentLessons.addTagged(this, "coach", "trade", result.take(200))
+                runOnUiThread { status.text = result }
+            }.start()
+        }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+        row.addView(smallButton("Dismiss") { messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
+        card.addView(row)
+        card.addView(status)
+        messages.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        Motion.enter(card)
+    }
+
     private fun pickImage() {
         val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
         try { startActivityForResult(pick, REQUEST_IMAGE) } catch (_: Exception) { Toast.makeText(this, "No image picker is available.", Toast.LENGTH_LONG).show() }
@@ -266,9 +300,11 @@ class AgentChatActivity : Activity() {
         busy = true
         val history = turns.toList()
         Thread {
-            val reply = try { AgentRunner.run(this, agent, history, text, image) }
+            var trades: List<TradeProposals.Trade> = emptyList()
+            val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades }.text }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
+                trades.forEach { addTradeCard(it) }
                 waiting.text = Markdown.render(reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
