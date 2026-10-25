@@ -20,9 +20,7 @@ internal object AgentDispatchPolicy {
         currentLabel: String? = null,
         stopped: Boolean = false
     ): String? {
-        if (stopped) {
-            return "Task was stopped before '$tool' could start; no new action was dispatched."
-        }
+        cancellationBlockReason(tool, stopped)?.let { return it }
 
         TaskScopePolicy.blockReason(request, tool)?.let {
             return "task scope guard blocked tool. $it"
@@ -45,4 +43,8 @@ internal object AgentDispatchPolicy {
 
         return null
     }
+
+    /** Rechecked after any approval prompt, immediately before the side effect starts. */
+    fun cancellationBlockReason(tool: String, stopped: Boolean): String? =
+        if (stopped) "Task was stopped before '$tool' could start; no new action was dispatched." else null
 }
