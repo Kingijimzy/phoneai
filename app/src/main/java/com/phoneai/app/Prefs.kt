@@ -114,6 +114,13 @@ object Prefs {
     fun hasAnyKey(c: Context): Boolean = Providers.all.any { hasKey(c, it.id) }
 
     /** Live Gemini mode is opt-in; the existing local live-call path remains the default. */
+    val GEMINI_VOICES = listOf("Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr")
+    fun geminiVoice(c: Context): String = sp(c).getString("gemini_voice", "Aoede")?.takeIf { it in GEMINI_VOICES } ?: "Aoede"
+    fun setGeminiVoice(c: Context, v: String) = sp(c).edit().putString("gemini_voice", if (v in GEMINI_VOICES) v else "Aoede").apply()
+    /** low | medium | high: how readily Gemini Live decides that you started or finished speaking. */
+    fun geminiMicSensitivity(c: Context): String = sp(c).getString("gemini_mic_sensitivity", "medium")?.takeIf { it in setOf("low", "medium", "high") } ?: "medium"
+    fun setGeminiMicSensitivity(c: Context, v: String) = sp(c).edit().putString("gemini_mic_sensitivity", if (v in setOf("low", "medium", "high")) v else "medium").apply()
+
     fun geminiLiveEnabled(c: Context): Boolean = sp(c).getBoolean("gemini_live_enabled", false)
     fun setGeminiLiveEnabled(c: Context, enabled: Boolean) {
         sp(c).edit().putBoolean("gemini_live_enabled", enabled).apply()

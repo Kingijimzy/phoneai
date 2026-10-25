@@ -194,6 +194,8 @@ object MemoryStore {
     fun search(c: Context, query: String): List<Memory> {
         val memories = all(c)
         if (MemoryRanking.tokens(query).isEmpty()) return memories.sortedByDescending { it.updated }.take(10)
+        val hybrid = MemoryRanking.hybridRank(memories, { it.text + " " + it.category }, query, 15)
+        if (hybrid.isNotEmpty()) return hybrid
         return memories.map { it to MemoryRanking.score(it, query) }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<Memory, Int>> { it.second }.thenByDescending { it.first.updated })

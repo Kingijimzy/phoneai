@@ -162,6 +162,15 @@ internal class GeminiLiveSession(
         // onClosed/onFailure dispose it when a socket was already established.
     }
 
+    private fun activityDetectionConfig(): JSONObject {
+        val (start, end) = GeminiLivePolicy.activityDetection(Prefs.geminiMicSensitivity(appContext))
+        val config = JSONObject()
+        if (!start.endsWith("UNSPECIFIED")) config.put("startOfSpeechSensitivity", start).put("endOfSpeechSensitivity", end)
+        return config
+    }
+
+    @Volatile private var lastActivityAtMs = System.currentTimeMillis()
+
     private fun buildSetup(): JSONObject {
         val instructions = buildString {
             append("You are Orion in optional conversation-only Gemini Live mode. ")
@@ -185,7 +194,7 @@ internal class GeminiLiveSession(
                     "voiceConfig",
                     JSONObject().put(
                         "prebuiltVoiceConfig",
-                        JSONObject().put("voiceName", "Aoede")
+                        JSONObject().put("voiceName", Prefs.geminiVoice(appContext))
                     )
                 )
             )
@@ -193,7 +202,7 @@ internal class GeminiLiveSession(
             .put("model", GeminiLivePolicy.MODEL)
             .put("generationConfig", generationConfig)
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instructions))))
-            .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject()))
+            .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", activityDetectionConfig()))
             .put("inputAudioTranscription", JSONObject())
             .put("outputAudioTranscription", JSONObject())
             .put("sessionResumption", JSONObject())
@@ -440,6 +449,12 @@ internal class GeminiLiveSession(
                 }
                 val rms = sqrt(power / count).toFloat().coerceIn(0f, 1f)
                 listener.onInputLevel(rms)
+                val nowMs = System.currentTimeMillis()
+                if (rms >= GeminiLivePolicy.SPEECH_RMS || playbackQueue.isNotEmpty()) lastActivityAtMs = nowMs
+                if (microphoneEnabled && GeminiLivePolicy.silenceExceeded(nowMs, lastActivityAtMs)) {
+                    fail("Gemini Live ended after two minutes of silence to save quota. Start the microphone again when you are ready.")
+                    break
+                }
                 val payload = JSONObject()
                     .put(
                         "realtimeInput",

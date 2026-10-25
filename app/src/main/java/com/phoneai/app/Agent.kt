@@ -1012,6 +1012,7 @@ Rules:
                 result
             }
             "recall" -> tools.recall(a.optString("query"))
+            "knowledge_search" -> tools.knowledgeSearch(a.optString("query"))
             "skills_list" -> {
                 val skills = SkillRegistry.list(svc)
                 if (skills.isEmpty()) "No skills are registered yet. Open Skills Studio to create a reviewed skill." else skills.joinToString("\\n") { skill ->
