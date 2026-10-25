@@ -9,8 +9,16 @@ internal object CheckpointTransitionPolicy {
 
     fun canBeginStep(hasInFlightAction: Boolean): Boolean = !hasInFlightAction
 
-    fun canRecordResult(inFlightTool: String?, resultTool: String): Boolean =
-        !inFlightTool.isNullOrBlank() && inFlightTool == resultTool
+    fun canRecordResult(
+        inFlightTool: String?,
+        resultTool: String,
+        inFlightArgs: String?,
+        resultArgs: String
+    ): Boolean =
+        !inFlightTool.isNullOrBlank() &&
+            inFlightTool == resultTool &&
+            !inFlightArgs.isNullOrBlank() &&
+            inFlightArgs == resultArgs
 
     fun canComplete(hasInFlightAction: Boolean): Boolean = !hasInFlightAction
 }
