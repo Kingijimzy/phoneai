@@ -144,7 +144,7 @@ object Prefs {
 
     /** Active task preset changes planning emphasis, never the underlying safety gates. */
     fun taskPreset(c: Context): String = sp(c).getString("task_preset", "GENERAL")?.uppercase()?.takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL"
-    fun setTaskPreset(c: Context, preset: String) = sp(c).edit().putString("task_preset", preset.uppercase().takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL")
+    fun setTaskPreset(c: Context, preset: String) = sp(c).edit().putString("task_preset", preset.uppercase().takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL").apply()
 
     /** PLAN blocks write tools; ACT uses normal scoped controls; FULL still keeps safety and confirmation gates. */
     fun executionMode(c: Context): String = sp(c).getString("execution_mode", "ACT")?.uppercase()?.takeIf { it in setOf("PLAN", "ACT", "FULL") } ?: "ACT"
