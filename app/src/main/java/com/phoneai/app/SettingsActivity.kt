@@ -891,8 +891,11 @@ class SettingsActivity : Activity() {
     }
 
     private fun refresh() {
-        val accessibilityEnabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            ?.contains(packageName, ignoreCase = true) == true
+        val accessibilityEnabled = runCatching {
+            Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                ?.split(':')
+                ?.any { it.substringBefore('/').equals(packageName, ignoreCase = true) } == true
+        }.getOrDefault(false)
         val acc = if (accessibilityEnabled) "enabled" else "disabled"
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
         val notifications = if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 33) "allowed" else "not allowed"
@@ -910,8 +913,11 @@ class SettingsActivity : Activity() {
                 ?.substringBefore('/')
                 ?.equals(packageName, ignoreCase = true) == true
         }.getOrDefault(false)
-        val notificationListener = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-            ?.contains(packageName, ignoreCase = true) == true
+        val notificationListener = runCatching {
+            Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                ?.split(':')
+                ?.any { it.substringBefore('/').equals(packageName, ignoreCase = true) } == true
+        }.getOrDefault(false)
         val overlayAllowed = if (Build.VERSION.SDK_INT >= 23) Settings.canDrawOverlays(this) else true
         val batteryExempt = runCatching {
             getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
