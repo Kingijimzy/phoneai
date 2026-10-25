@@ -1123,12 +1123,6 @@ class SettingsActivity : Activity() {
             background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(12).toFloat(); setStroke(dp(1), Theme.LINE) }
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
-        val approvalBox = android.widget.CheckBox(this).apply {
-            text = "Require approval for every run"
-            isChecked = true
-            setTextColor(Theme.TEXT)
-            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
-        }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
@@ -1544,6 +1538,12 @@ class SettingsActivity : Activity() {
             setText("web_search,fetch_url,recall")
             minLines = 2
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        val approvalBox = android.widget.CheckBox(this).apply {
+            text = "Require approval for every run"
+            isChecked = true
+            setTextColor(Theme.TEXT)
+            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
         }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
