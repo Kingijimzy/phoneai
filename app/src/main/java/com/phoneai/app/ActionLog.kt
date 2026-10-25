@@ -69,7 +69,7 @@ object ActionLogStore {
             .distinctBy { it.tool }
             .take(limit.coerceIn(1, 8))
         if (failures.isEmpty()) return@synchronized ""
-        failures.joinToString("\\n") { "- ${it.tool}: a previous attempt returned an error; re-check current state and choose a meaningfully different approach instead of repeating the same call." }
+        failures.joinToString("\n") { "- ${it.tool}: a previous attempt returned an error; re-check current state and choose a meaningfully different approach instead of repeating the same call." }
     }
 
     fun all(c: Context): List<OrionActionEvent> = synchronized(lock) { load(c).toList().reversed() }
