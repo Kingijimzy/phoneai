@@ -58,6 +58,20 @@ object ActionLogStore {
         save(c)
     }
 
+    /**
+     * Privacy-minimal failure feedback for the planner. Only tool names and the generic
+     * outcome label are exposed; arguments, screen text, and user content never enter prompts.
+     * These are warnings to inspect/re-plan, not proof a tool is permanently broken.
+     */
+    fun recentFailureHints(c: Context, limit: Int = 4): String = synchronized(lock) {
+        val failures = load(c).asReversed()
+            .filter { it.outcome == "error returned" }
+            .distinctBy { it.tool }
+            .take(limit.coerceIn(1, 8))
+        if (failures.isEmpty()) return@synchronized ""
+        failures.joinToString("\\n") { "- ${it.tool}: a previous attempt returned an error; re-check current state and choose a meaningfully different approach instead of repeating the same call." }
+    }
+
     fun all(c: Context): List<OrionActionEvent> = synchronized(lock) { load(c).toList().reversed() }
 
     fun clear(c: Context) = synchronized(lock) {
