@@ -1231,7 +1231,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             Regex("\\b(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\b"),
             Regex("\\b(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\b")
         )
-        return patterns.any { it.containsMatchIn(text) }
+        return patterns.any { it.containsMatchIn(text) } ||
+            FastIntents.parse(text) != null ||
+            LiveSports.isScoreRequest(text) || WeatherService.isWeatherRequest(text) ||
+            LiveNews.isNewsRequest(text) || LiveWebSearch.isLiveInfoRequest(text) || LiveWebSearch.isSearchRequest(text)
     }
 
     private fun submit(
@@ -1704,7 +1707,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             ?: return "error: cannot launch $bestLabel"
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(launch)
-        Thread.sleep(1800)
+        // Return as soon as the target app is in front instead of always waiting 1.8 s.
+        val target = best.activityInfo.packageName
+        var waited = 0
+        while (waited < 1800) {
+            Thread.sleep(150); waited += 150
+            if (try { currentPackageName() == target } catch (_: Exception) { false }) { Thread.sleep(250); break }
+        }
         return "opened $bestLabel"
     }
 
