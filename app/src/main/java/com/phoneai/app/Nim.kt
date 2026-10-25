@@ -12,7 +12,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
     val rateLimited: Boolean get() = httpStatus == 429
 }
 
-/** Talks to the chosen AI service. If it fails, Orion tries the other services you saved keys for. */
+/** Talks to the selected AI service. Cross-provider fallback is restricted to HTTP 429 and one backup per command. */
 class Nim(private val ctx: Context) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
@@ -404,7 +404,17 @@ class Nim(private val ctx: Context) {
                 out.addAll(if (vision) free.filter { isVision(it) } else free)
                 out.addAll(if (vision) fb.second else fb.first)
             }
-            "anthropic", "openai", "github", "mistral", "deepseek", "cerebras" -> {
+            "groq", "cerebras", "mistral", "sambanova", "together", "fireworks", "huggingface" -> {
+                // Prefer models actually advertised by this key's live catalogue. Static IDs
+                // are only bounded recovery candidates when discovery is unavailable (e.g. quota saver).
+                val compatible = if (vision) ok.filter { isVision(it) } else ok.filter { !isVision(it) }
+                for (pref in preferred) {
+                    compatible.filter { it.contains(pref, ignoreCase = true) }.forEach { if (it !in out) out.add(it) }
+                }
+                compatible.forEach { if (it !in out) out.add(it) }
+                out.addAll(if (vision) fb.second else fb.first)
+            }
+            "anthropic", "openai", "deepseek" -> {
                 out.addAll(if (vision) fb.second else fb.first)
             }
             else -> {
@@ -509,10 +519,11 @@ class Nim(private val ctx: Context) {
             ?: throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
 
         val now = System.currentTimeMillis()
-        val maxBackups = if (Prefs.quotaSaver(ctx)) 1 else 3
+        // A single backup is deliberate: a rate limit must not fan one user command
+        // across a chain of providers and burn several free-tier quotas in seconds.
         val backups = Providers.all
             .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
-            .take(maxBackups)
+            .take(1)
         val mode = if (vision) "vision" else "chat"
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
