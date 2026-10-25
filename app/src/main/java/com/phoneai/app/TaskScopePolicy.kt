@@ -14,15 +14,22 @@ internal object TaskScopePolicy {
         "(?i)\\b(research|browse the web|search the web|look up online|online sources|website|webpage|internet|news articles|compare online|weather|forecast)\\b"
     )
     private val phoneIntent = Regex(
-        "(?i)\\b(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|whatsapp|telegram|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|remind|task|todo|remember|forget|update memory|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
+        "(?i)\\b(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|remind|task|todo|remember|forget|update memory|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
+    )
+    private val explicitAppAction = Regex(
+        "(?i)\\b(open|launch|close|install|uninstall)\\s+(whatsapp|telegram|chrome|settings|camera|youtube)\\b|\\b(send|message|text|reply|call)\\b.*\\b(whatsapp|telegram|sms|message|text)\\b"
     )
 
     fun modeFor(request: String): TaskMode {
         val text = request.trim()
         if (text.isEmpty()) return TaskMode.CHAT
+        // Informational questions about apps/services must not become device actions merely because
+        // the app name appears. Explicit action verbs below still route to phone automation.
+        val informationalAppQuestion = Regex("(?i)^(what|why|how|when|where|who|explain|describe|tell me about|compare|list the advantages of)\\b.*\\b(whatsapp|telegram|chrome|youtube|instagram|facebook)\\b.*$|^(what|why|how|when|where|who|explain|describe|tell me about|compare)\\b.*\\b(advantages|features|purpose|used for|difference)\\b.*$" )
+        if (informationalAppQuestion.containsMatchIn(text) && !Regex("(?i)\\b(open|launch|close|send|message|text|reply|call|tap|click|type|install|uninstall)\\b").containsMatchIn(text)) return TaskMode.CHAT
         if (readOnlyIntent.containsMatchIn(text)) return TaskMode.READ_ONLY
         // Explicit phone/device intent takes precedence over incidental mentions of websites.
-        if (phoneIntent.containsMatchIn(text)) return TaskMode.PHONE_AUTOMATION
+        if (phoneIntent.containsMatchIn(text) || explicitAppAction.containsMatchIn(text)) return TaskMode.PHONE_AUTOMATION
         if (researchIntent.containsMatchIn(text)) return TaskMode.RESEARCH
         return if (AgentHooks.isPhoneActionRequest(text)) TaskMode.PHONE_AUTOMATION else TaskMode.CHAT
     }

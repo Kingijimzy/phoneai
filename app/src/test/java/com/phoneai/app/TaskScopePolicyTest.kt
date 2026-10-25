@@ -13,6 +13,12 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
     }
 
+    @Test fun mentioningAnAppInAQuestionDoesNotTriggerPhoneAutomation() {
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("Explain what WhatsApp is used for"))
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("What are the advantages of Telegram?"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Open WhatsApp and send good morning"))
+    }
+
     @Test fun chatCannotInvokeToolsEvenIfModelRequestsOne() {
         assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "read_screen"))
         assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "open_app"))
