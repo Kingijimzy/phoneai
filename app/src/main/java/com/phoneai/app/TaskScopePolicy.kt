@@ -11,10 +11,10 @@ internal object TaskScopePolicy {
         "(?i)\\b(read[- ]only|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
     private val researchIntent = Regex(
-        "(?i)\\b(research|browse the web|search the web|look up online|online sources|website|webpage|internet|news articles|compare online)\\b"
+        "(?i)\\b(research|browse the web|search the web|look up online|online sources|website|webpage|internet|news articles|compare online|weather|forecast)\\b"
     )
     private val phoneIntent = Regex(
-        "(?i)\\b(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|whatsapp|telegram|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|remind|task|todo|remember|forget|update memory|undo)\\b"
+        "(?i)\\b(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|whatsapp|telegram|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|remind|task|todo|remember|forget|update memory|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
     )
 
     fun modeFor(request: String): TaskMode {
