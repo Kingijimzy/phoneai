@@ -66,24 +66,32 @@ class AgentChatActivity : Activity() {
         agent = AgentProfiles.find(intent.getStringExtra(EXTRA_AGENT)) ?: AgentProfiles.all.first()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG) }
 
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), dp(36), dp(12), dp(10)) }
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), statusBarPad(), dp(84), dp(10)) }
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(TextView(this).apply { text = agent.name; textSize = 20f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD })
         titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
-        header.addView(smallButton("Learned") { notesDialog() })
-        header.addView(smallButton("Clear") { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() })
         root.addView(header, -1, -2)
 
-        if (agent.id == "coach") {
+        run {
             val chips = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
             fun chip(label: String, click: () -> Unit) = row.addView(smallButton(label, click), LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+            if (agent.id == "coach") {
             chip("Find setups") { quick("Find me the best trade setups on my watchlist right now and judge them against my strategy.") }
             chip("Market outlook") { quick("Give me your outlook for my watchlist: bias, key levels and what would invalidate it.") }
             chip("Daily briefing") { quick("Give me my trading briefing: outlook for my watchlist, the best setups, and one risk to watch today.") }
             chip("Review my trade") { input.setText("Review my trade: pair, side, entry, stop, exit and why I took it: "); input.setSelection(input.text.length) }
-            chip("What do you remember?") { notesDialog() }
+            chip("Risk calculator") { riskDialog() }
+            chip("Weekly review") { quick("Review my week: use my journal stats and track record, name my best and worst habits, and give me one rule to add.") }
+            chip("Quote") { quoteDialog() }
+            }
+            if (agent.id == "research") {
+                chip("Market news") { quick("What is the latest market news today and what is moving crypto, gold and the dollar?") }
+                chip("Quote") { quoteDialog() }
+            }
+            chip("Learned") { notesDialog() }
+            chip("Clear") { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() }
             chips.addView(row)
             root.addView(chips, -1, -2)
         }
@@ -113,6 +121,54 @@ class AgentChatActivity : Activity() {
         if (turns.isEmpty()) greet() else turns.forEach { addBubble(it.role == "user", it.text) }
     }
 
+    private fun statusBarPad(): Int {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return (if (id > 0) resources.getDimensionPixelSize(id) else dp(24)) + dp(12)
+    }
+
+    private fun field(hint: String) = EditText(this).apply {
+        this.hint = hint; inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED)
+    }
+
+    private fun riskDialog() {
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val bal = field("Account balance"); val risk = field("Risk % per trade (e.g. 1)")
+        val entry = field("Entry price"); val stop = field("Stop price"); val target = field("Target price (optional)")
+        listOf(bal, risk, entry, stop, target).forEach { col.addView(it) }
+        AlertDialog.Builder(this).setTitle("Position size").setView(col)
+            .setPositiveButton("Calculate") { _, _ ->
+                fun n(e: EditText) = e.text.toString().trim().toDoubleOrNull()
+                val r = RiskCalc.compute(n(bal) ?: 0.0, n(risk) ?: 0.0, n(entry) ?: 0.0, n(stop) ?: 0.0, n(target))
+                val msg = if (r == null) "Enter a balance, a risk % and different entry and stop prices." else String.format(java.util.Locale.US,
+                    "Size: %.6g units\nRisk: %.2f (%.2f%% stop distance)\nPosition value: %.2f%s",
+                    r.units, r.riskAmount, r.stopPct, r.notional, r.rrAtTarget?.let { String.format(java.util.Locale.US, "\nReward:risk %.2f", it) } ?: "")
+                AlertDialog.Builder(this).setTitle("Result").setMessage(msg)
+                    .setPositiveButton("Ask coach to review") { _, _ -> quick("Check this position plan against my rules:\n$msg") }
+                    .setNegativeButton("Close", null).show()
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun quoteDialog() {
+        val box = EditText(this).apply { hint = "BTCUSDT, USDJPY, XAUUSD, SPX…"; setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); setPadding(dp(20), dp(12), dp(20), dp(12)) }
+        AlertDialog.Builder(this).setTitle("Live quote").setView(box)
+            .setPositiveButton("Get") { _, _ ->
+                val sym = box.text.toString().trim()
+                Thread {
+                    val out = try {
+                        val cryptoSym = Bybit.symbolOf(sym)
+                        val fx = MarketQuotes.resolve(sym)
+                        when {
+                            cryptoSym != null -> String.format(java.util.Locale.US, "%s: %s (24h %+.2f%%, Bybit)", cryptoSym, Bybit.price(this, cryptoSym), Bybit.change24h(this, cryptoSym))
+                            fx != null -> MarketQuotes.quote(fx.first, fx.second).text()
+                            else -> "I don't recognise \"$sym\". Try a Bybit symbol, a forex pair such as EURUSD, or gold, oil, SPX."
+                        }
+                    } catch (e: Exception) { "Quote failed: " + (e.message ?: e.javaClass.simpleName).take(120) }
+                    runOnUiThread { AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show() }
+                }.start()
+            }.setNegativeButton("Cancel", null).show()
+    }
+
     private fun quick(message: String) { input.setText(message); send() }
 
     private fun smallButton(label: String, click: () -> Unit) = Button(this).apply {
@@ -137,7 +193,7 @@ class AgentChatActivity : Activity() {
 
     private fun addBubble(user: Boolean, text: String): TextView {
         val bubble = TextView(this).apply {
-            this.text = text; textSize = 15f
+            this.text = if (user) text else Markdown.render(text); textSize = 15f
             setTextColor(if (user) Theme.ON_ACCENT else Theme.TEXT)
             setTextIsSelectable(true)
             setPadding(dp(14), dp(10), dp(14), dp(10))
@@ -213,10 +269,10 @@ class AgentChatActivity : Activity() {
             val reply = try { AgentRunner.run(this, agent, history, text, image) }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
-                waiting.text = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
+                waiting.text = Markdown.render(reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
-                turns.add(AgentRunner.Turn("assistant", waiting.text.toString()))
+                turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))
                 AgentChatStore.save(this, agent.id, turns)
                 busy = false
                 scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
