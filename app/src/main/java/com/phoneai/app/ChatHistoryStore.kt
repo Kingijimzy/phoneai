@@ -83,6 +83,31 @@ object ChatHistoryStore {
         } catch (_: Exception) { emptyList() }
     }
 
+    /** Delete one archived conversation using its stable timestamp/title identity. */
+    @Synchronized
+    fun deleteArchived(context: Context, timestamp: Long, title: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(ARCHIVE, "[]") ?: "[]"
+        val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+        val kept = JSONArray()
+        var removed = false
+        for (i in 0 until arr.length()) {
+            val item = arr.optJSONObject(i) ?: continue
+            if (!removed && item.optLong("timestamp") == timestamp && item.optString("title") == title) {
+                removed = true
+            } else {
+                kept.put(item)
+            }
+        }
+        val saved = prefs.edit().putString(ARCHIVE, kept.toString()).commit()
+        return removed && saved
+    }
+
+    /** Delete all archived conversations without affecting the active transcript. */
+    @Synchronized
+    fun clearArchived(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(ARCHIVE, "[]").commit()
+
     @Synchronized
     fun restoreActive(context: Context, transcript: List<Pair<String, String>>) {
         save(context, transcript)
