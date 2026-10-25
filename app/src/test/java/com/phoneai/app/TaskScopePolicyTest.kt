@@ -9,6 +9,8 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Open WhatsApp and read my last chat"))
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Research recent Android accessibility changes online"))
         assertEquals(TaskMode.READ_ONLY, TaskScopePolicy.modeFor("Read-only: inspect my notifications without changing anything"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("What time is it"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
     }
 
     @Test fun chatCannotInvokeToolsEvenIfModelRequestsOne() {
