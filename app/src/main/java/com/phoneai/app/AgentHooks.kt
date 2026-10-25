@@ -88,8 +88,12 @@ internal object AgentHooks {
   // A negated or draft-only request must never authorize a consequential click, even if it contains the word "send".
   val refusal = Regex("(?i)\\b(don't|do not|never|avoid|not to)\\b.{0,48}\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|call)\\b").containsMatchIn(request)
   val draftWithoutSend = Regex("(?i)\\b(draft|prepare|compose|write)\\b.{0,100}\\b(without sending|do not send|don't send|never send|not send)\\b|\\b(without sending|do not send|don't send|never send|not send)\\b.{0,100}\\b(draft|prepare|compose|write)\\b").containsMatchIn(request)
-  val explicitlyWithheld = refusal || draftWithoutSend
-  val explicitSendIntent=!explicitlyWithheld && (explicit.containsMatchIn(request)||(target.equals("Send",true)&&messagingIntent.containsMatchIn(request)))
+  // A draft/prepare/compose/write request alone is not authorization to send.
+  // Explicit positive send language overrides draft verbs ("write and send", "prepare and send").
+  val hasExplicitSendVerb = Regex("(?i)\\\\b(send|submit|post|publish)\\\\b").containsMatchIn(request)
+  val draftOnly = Regex("(?i)\\\\b(draft|prepare|compose|write)\\\\b").containsMatchIn(request) && !hasExplicitSendVerb
+  val explicitlyWithheld = refusal || draftWithoutSend || draftOnly
+  val explicitSendIntent = !explicitlyWithheld && (explicit.containsMatchIn(request) || (target.equals("Send", true) && messagingIntent.containsMatchIn(request)))
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
