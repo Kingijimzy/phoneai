@@ -484,10 +484,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return true
     }
 
-    /** A snapshot of only user/assistant turns for restoring agent context. */
-    fun conversationContext(): List<Pair<String, String>> =
-        transcript.toList().filter { it.first == "me" || it.first == "ai" }.takeLast(80)
-
     fun sendFromMainChat(
         text: String,
         conversationOnly: Boolean = false,

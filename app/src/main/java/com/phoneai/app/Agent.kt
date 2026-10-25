@@ -51,13 +51,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
         return nim.chat(msgs, false, 450, 0.3).trim()
     }
-    private val chatHist = JSONArray().apply {
-        // Conversation context is provider-neutral. Seed it from the local transcript so
-        // switching providers or recreating the service does not make Orion forget the chat.
-        svc.conversationContext().takeLast(12).forEach { (kind, text) ->
-            if (text.isNotBlank()) put(msg(if (kind == "me") "user" else "assistant", text.take(6000)))
-        }
-    }
+    private val chatHist = JSONArray()
     private val liveHistory = JSONArray()
     // Must be initialized before init restores persisted conversation context.
     private val chatCache = HashMap<String, Pair<Long, String>>()
@@ -264,16 +258,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
      * mode when the user actually asks for it.
      */
     /** Drop conversational context after the user explicitly clears the active chat. */
-    /** Rebuild the provider-neutral conversational context from saved user/assistant turns. */
-    fun restoreConversationContext(messages: List<Pair<String, String>>) {
-        // Keep the system/tool-planner prompt intact; replace only conversational turns.
-        while (chatHist.length() > 0) chatHist.remove(0)
-        chatCache.clear()
-        messages.filter { it.first == "me" || it.first == "ai" }.takeLast(12).forEach { (kind, text) ->
-            if (text.isNotBlank()) chatHist.put(msg(if (kind == "me") "user" else "assistant", text.take(6000)))
-        }
-    }
-
     fun resetConversationContext() {
         while (chatHist.length() > 0) chatHist.remove(0)
         while (liveHistory.length() > 0) liveHistory.remove(0)
