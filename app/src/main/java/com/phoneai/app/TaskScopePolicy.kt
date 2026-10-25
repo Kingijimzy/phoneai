@@ -18,7 +18,7 @@ internal object TaskScopePolicy {
     )
     private val commandLead = "(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*"
     private val phoneIntent = Regex(
-        "(?i)^\\s*" + commandLead + "(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
+        "(?i)^\\s*" + commandLead + "(use (the )?(browser|app|phone|device)|open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
     )
     private val contentActionIntent = Regex(
         "(?i)^\\s*" + commandLead + "(write|compose|draft|prepare)\\b.*\\b(message|email|reply|text|whatsapp|telegram)\\b"
