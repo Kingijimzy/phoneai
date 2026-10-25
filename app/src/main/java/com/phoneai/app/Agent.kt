@@ -548,6 +548,24 @@ Rules:
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
+        // One-intent commands (play music, Google it in Chrome) skip the model entirely.
+        if (!resumeRequest && !browserActionTask) {
+            val fast = FastIntents.parse(command)
+            if (fast != null) {
+                ui.phase("acting")
+                val r = when (fast) {
+                    is FastIntents.Intent.PlayMedia -> tools.playMedia(fast.query, fast.app)
+                    is FastIntents.Intent.ChromeSearch -> tools.chromeSearch(fast.query)
+                }
+                if (!r.startsWith("error")) {
+                    val say = r.replaceFirstChar { it.uppercase() } + "."
+                    logShortcut("fast_intent", say)
+                    history.put(msg("assistant", JSONObject().put("say", say).put("tool", "done").toString()))
+                    ui.say(say)
+                    return
+                }
+            }
+        }
         // Chart analysis is a deliberate vision fallback: send a screenshot only when the user
         // explicitly asks Orion to inspect a chart, rather than sending screenshots on every turn.
         val chartCommand = command.lowercase()
@@ -604,7 +622,8 @@ Rules:
             "(?i)\\b(search in|search on|inside|within)\\s+(youtube|whatsapp|telegram|instagram|tiktok|facebook|spotify)\\b"
         ).containsMatchIn(command)
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isSearchRequest(command)) {
+        if (!resumeRequest && !browserActionTask && !explicitAppAction &&
+            !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = summarizeSearch(command, LiveWebSearch.search(LiveWebSearch.queryFrom(command)))
             logShortcut("web_search", answer)
@@ -683,10 +702,11 @@ Rules:
             return
         }
         val requestBudget = AgentHooks.RequestBudget(MAX_STEPS)
+        var damagedReplies = 0
         while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
             val raw = try {
-                nim.chat(history, false)
+                nim.chat(history, false, 800)
             } catch (e: Exception) {
                 if (stopped) break
                 AgentCheckpointStore.pause(svc)
@@ -701,8 +721,22 @@ Rules:
                 ui.say("Stopped before the next action could start. I saved the task progress locally.")
                 return
             }
+            val parsedStep = AgentJson.parse(raw)
+            if (parsedStep.damaged) {
+                // Truncated or invalid JSON must never be shown as the answer or half-executed.
+                // Ask for one complete object again; give up politely after two bad replies.
+                damagedReplies++
+                if (damagedReplies > 2) {
+                    AgentCheckpointStore.pause(svc)
+                    ui.say("The AI model keeps returning incomplete replies, so I stopped before acting. Try again, or pick a different chat model in Settings.")
+                    return
+                }
+                history.put(msg("assistant", AgentJson.sayFromDamaged(raw).ifBlank { "(incomplete reply)" }))
+                history.put(msg("user", "Your last reply was cut off or was not valid JSON. Reply again with ONE complete, valid JSON object only, no extra text."))
+                continue
+            }
             history.put(msg("assistant", raw))
-            val step = parseJson(raw)
+            val step = parsedStep.obj
             val say = step.optString("say")
             if (say.isNotBlank()) ui.say(say)
             val batch = step.optJSONArray("steps")
