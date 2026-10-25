@@ -88,6 +88,16 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
+    override fun onModeSwitch(commandMode: Boolean) {
+        runOnUiThread {
+            if (this.commandMode == commandMode) return@runOnUiThread
+            this.commandMode = commandMode
+            composeCommandMode.value = commandMode
+            refreshModeSelector()
+            Toast.makeText(this, if (commandMode) "Switched to Command mode for this task" else "Back to Talk mode", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun refreshModeSelector() {
         if (!::talkModeChip.isInitialized || !::commandModeChip.isInitialized) return
         val talkSelected = !commandMode
@@ -493,6 +503,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     Toast.makeText(this@MainChatActivity, "Let Orion finish or stop the current task first.", Toast.LENGTH_SHORT).show()
                 } else {
                     commandMode = false
+                    composeCommandMode.value = false
                     refreshModeSelector()
                     messages.removeAllViews()
                     restoreWelcome()

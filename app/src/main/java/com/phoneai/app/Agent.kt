@@ -47,6 +47,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val failedCallGuard = AgentHooks.FailedCallGuard()
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var activeRequestScope: String = ""
+    @Volatile private var lastActionScope: String = ""
+    @Volatile private var lastActionScopeAt: Long = 0L
+
+    /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
+    private fun setRequestScope(command: String) {
+        val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
+        activeRequestScope = scope
+        if (TaskScopePolicy.modeFor(scope) != TaskMode.CHAT) { lastActionScope = scope; lastActionScopeAt = System.currentTimeMillis() }
+    }
     // Last locally perceived screen, used for post-action comparison without another model call.
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
@@ -183,13 +192,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (command.isEmpty()) return
         nim.beginCommand()
         stopped = false
-        activeRequestScope = command
+        setRequestScope(command)
         taskProofs.clear()
         researchCancelled.set(false)
         nim.resume()
         val safeSystem = chatSystem().replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
-            "TALK MODE: This is conversation only. Do not call tools, search the web, or operate the phone in this mode. Respond directly to greetings, conversation starters, and ordinary questions. If the user wants Orion to perform a phone action or research the web, briefly tell them to switch to Command mode."
+            "TALK MODE: You are Orion and you know your own modes: Talk (conversation) and Command (phone actions, web research, trading tools). Orion switches modes automatically, so never tell the user to switch. Answer greetings, ideas and ordinary questions directly. If the user wants something done on the phone (open or use an app, send a message, set alarms, change settings), needs live web/news/prices/weather, or asks to save or recall memories or tasks, reply with exactly the single word ACTION and nothing else."
         )
         val messages = JSONArray().put(msg("system", safeSystem))
         val from = maxOf(0, chatHist.length() - 8)
@@ -203,7 +212,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return
         }
         if (stopped) return
-        val safeAnswer = answer.takeIf { it.isNotBlank() && !it.equals("ACTION", true) }
+        if (answer.trim().trim('.', '!').equals("ACTION", true)) {
+            // The model judged this needs tools: switch to Command mode and run the guarded agent now.
+            svc.notifyModeSwitch(true)
+            run(command)
+            return
+        }
+        val safeAnswer = answer.takeIf { it.isNotBlank() }
             ?: "I'm here. What would you like to talk about?"
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", safeAnswer))
@@ -351,6 +366,7 @@ Rules:
         while (chatHist.length() > 0) chatHist.remove(0)
         while (liveHistory.length() > 0) liveHistory.remove(0)
         chatCache.clear()
+        activeRequestScope = ""; lastActionScope = ""; lastActionScopeAt = 0L
         history.put(msg("system", systemPrompt(svc)))
     }
 
@@ -463,6 +479,7 @@ Rules:
             return
         }
         stopped = false
+        setRequestScope(command)
         researchCancelled.set(false)
         nim.resume()
         refreshSystem(command)

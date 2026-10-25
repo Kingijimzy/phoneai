@@ -104,6 +104,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         fun onAudioAmplitude(amplitude: Float) {}
         fun onSpeechWord() {}
         fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
+        /** Orion decided the request needs (or no longer needs) the tool agent; the UI should follow. */
+        fun onModeSwitch(commandMode: Boolean) {}
+    }
+
+    fun notifyModeSwitch(commandMode: Boolean) {
+        main.post { mainChatListener?.onModeSwitch(commandMode) }
     }
 
     @Volatile
@@ -1255,6 +1261,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
 
         val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
+        if (routeToAgent && conversationOnly) notifyModeSwitch(true)
         if ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent)) {
             wakeGen++
             appendTranscript("me", t)
