@@ -20,7 +20,7 @@ import kotlin.math.sqrt
  * Dot Matrix / Eyes visualizer. Idle draws once, while active modes animate only as needed.
  */
 class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : View(c, a) {
-    enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING, WAITING_APPROVAL }
+    enum class Mode { IDLE, LISTENING, THINKING, SPEAKING, ACTING, WAITING_APPROVAL, ERROR }
 
     companion object {
         // Kept as a compatibility constant for existing callers; the visual system is neutral silver.
@@ -41,6 +41,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
                 Mode.SPEAKING -> "Orion speaking"
                 Mode.ACTING -> "Orion performing a task"
                 Mode.WAITING_APPROVAL -> "Orion waiting for approval"
+                Mode.ERROR -> "Orion task paused after an error"
             }
             postInvalidateOnAnimation()
         }
@@ -153,6 +154,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             Mode.SPEAKING -> .30f + .30f * (.5f + .5f * sin(time * 4.2f))
             Mode.ACTING -> .34f
             Mode.WAITING_APPROVAL -> .12f
+            Mode.ERROR -> .05f
         }
         smoothLevel += (energyTarget - smoothLevel) * .22f
         touchEnergy *= .86f
@@ -174,6 +176,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
             Mode.SPEAKING -> 3.5f
             Mode.ACTING -> 2.6f
             Mode.WAITING_APPROVAL -> .4f
+            Mode.ERROR -> .2f
         }
 
         for (row in 0 until rows) {
@@ -192,7 +195,8 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
                     .coerceIn(.35f, 1.28f)
                 val radius = baseRadius * scale
                 val alpha = (65f + centerWeight * 150f + energy * 35f).coerceIn(45f, 255f).toInt()
-                paint.color = if (mode == Mode.WAITING_APPROVAL && row == 0 && column == columns - 1) warning
+                paint.color = if (mode == Mode.ERROR) warning
+                    else if (mode == Mode.WAITING_APPROVAL && row == 0 && column == columns - 1) warning
                     else if (centerWeight > .60f || abs(wave) * energy > .25f) silver
                     else softSilver
                 paint.alpha = alpha
