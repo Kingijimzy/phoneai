@@ -27,6 +27,15 @@ class AgentHooksTest {
  }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
+
+ @Test fun clearingProofsPreventsPriorTaskSuccessFromAuthorizingNewTask() {
+  val proofs = AgentHooks.ProofRecorder()
+  proofs.record("open_app", "WhatsApp opened")
+  assertTrue(AgentHooks.completionDecision("Open WhatsApp", proofs.snapshot()).allowed)
+  proofs.clear()
+  assertTrue(proofs.snapshot().isEmpty())
+  assertFalse(AgentHooks.completionDecision("Open Settings", proofs.snapshot()).allowed)
+ }
  @Test fun messageReplyTextAndEmailAreRecognizedAndAuthorizeRequestedSend(){
   listOf("message Amma on WhatsApp","reply to Amma","text Amma","email Amma").forEach { request ->
    assertTrue("$request should route to the phone action agent",AgentHooks.isPhoneActionRequest(request))
