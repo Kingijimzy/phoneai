@@ -10,6 +10,10 @@ class ActionLearningPolicyTest {
         assertEquals("rate limit/quota; wait or use the explicitly configured backup", ActionLearningPolicy.label("rate_limited"))
     }
 
+    @Test fun classifiesRateLimitedTextEvenWithoutAnHttpCode() {
+        assertEquals("rate_limited", ActionLearningPolicy.classifyFailure("error: provider rate limited this request"))
+    }
+
     @Test fun classifiesPermissionAndTimeoutFailures() {
         assertEquals("permission_or_accessibility", ActionLearningPolicy.classifyFailure("error: accessibility service permission required"))
         assertEquals("network_or_timeout", ActionLearningPolicy.classifyFailure("error: connection timed out"))

@@ -1,5 +1,13 @@
 # PhoneAI acceptance checklist
 
+## Current user-approved visual direction
+This section supersedes the older teal-black visual pass below wherever they conflict.
+- Use opaque black/graphite surfaces with silver and white text/icons. Do not reintroduce teal accents, liquid-glass/translucent cards, or the old spherical orb in the main chat.
+- Main chat uses a restrained wordmark and small monochrome status waveform; the live-call screen uses the saved Dot Matrix default or Eyes style.
+- Keep controls compact, native-looking, and readable on the Redmi A3 Pro. Validate spacing, keyboard behavior, animation load, and touch targets on-device before marking visual acceptance complete.
+- Current code-level style cleanup is implemented in main chat, Teach Mode, and Settings quick-jump surfaces; screenshot comparison and device performance remain unverified.
+
+
 This checklist distinguishes source changes from device-verified behavior. A successful GitHub Actions build proves the project compiles; it does not prove that every screen is stable on the Redmi device.
 
 ## Current app architecture

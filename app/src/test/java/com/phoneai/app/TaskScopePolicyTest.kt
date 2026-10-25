@@ -68,7 +68,9 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Find me a restaurant near me"))
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("I want to search the web for Android accessibility changes"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Search for restaurants near me"))
         assertNull(TaskScopePolicy.blockReason("Find me a restaurant near me", "web_search"))
+        assertNull(TaskScopePolicy.blockReason("Search for restaurants near me", "web_search"))
     }
 
     @Test fun ordinaryMentionsOfMemoryAndTasksStayInChat() {

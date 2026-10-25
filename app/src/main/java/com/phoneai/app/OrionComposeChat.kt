@@ -165,19 +165,6 @@ fun OrionComposeChatScreen(
 ) {
     var draft by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    val welcomeTransition = rememberInfiniteTransition(label = "orion-welcome-motion")
-    val corePulse by welcomeTransition.animateFloat(
-        initialValue = 0.965f,
-        targetValue = 1.035f,
-        animationSpec = infiniteRepeatable(animation = tween(1700), repeatMode = RepeatMode.Reverse),
-        label = "orion-core-breath"
-    )
-    val ringPulse by welcomeTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(animation = tween(2300), repeatMode = RepeatMode.Reverse),
-        label = "orion-ring-breath"
-    )
     val statusDotColor by animateColorAsState(
         targetValue = when {
             status.contains("listen", true) || status.contains("speak", true) -> ChatMint
@@ -258,34 +245,31 @@ fun OrionComposeChatScreen(
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
-                Box(
-                    Modifier.fillMaxWidth().height(205.dp).clip(RoundedCornerShape(26.dp))
-                        .background(Brush.verticalGradient(listOf(Color(0xFF202020), Color(0xFF0D0D0D))))
-                        .border(1.dp, Color(0xFF383838), RoundedCornerShape(26.dp)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().scale(ringPulse)) {
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            for (i in 0..4) drawCircle(
-                                color = ChatMint.copy(alpha = .10f - i * .015f),
-                                radius = size.minDimension * (.20f + i * .075f),
-                                center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("ORION", color = ChatCopy, fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                        Text("PERSONAL AI  /  READY WHEN YOU ARE", color = ChatMuted,
+                            fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.1.sp)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        listOf(7, 12, 17, 11, 6).forEachIndexed { index, barHeight ->
+                            Box(
+                                Modifier.width(3.dp).height(barHeight.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (index == 2) ChatCopy else ChatHairline)
                             )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Box(Modifier.size(94.dp).scale(corePulse).clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(Color(0xFF555555), Color(0xFF242424), Color(0xFF141414))))
-                                .border(1.dp, Color(0xFF8A8A8A).copy(alpha = .7f), CircleShape),
-                                contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(39.dp))
-                            }
-                            Text(if (commandMode) "YOUR AI, READY WHEN YOU ARE" else "YOUR AI, READY WHEN YOU ARE", color = Color(0xFFD8D8D8),
-                                fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
                         }
                     }
                 }
-                Spacer(Modifier.height(27.dp))
+                Spacer(Modifier.height(18.dp))
                 Text(if (commandMode) "What can I take\noff your hands?" else "What’s on your\nmind today?",
                     color = ChatCopy, fontSize = 31.sp, lineHeight = 35.sp,
                     fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
