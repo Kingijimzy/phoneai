@@ -410,7 +410,7 @@ class SettingsActivity : Activity() {
             8
         )
         add(s1, button("Open Accessibility settings", true) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            AccessibilityDisclosure.requestSettings(this)
         }, 8)
         add(s1, button("Enable Orion Private Keyboard", false) {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))

@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(composeRoot)
         showPreviousCrashIfPresent()
+        AccessibilityDisclosure.showFirstRun(this)
     }
 
     /**
@@ -565,32 +566,11 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, MainChatActivity::class.java))
         })
         gap(page, action("Open Android accessibility settings", "Required for on-screen phone control") {
-            showAccessibilityDisclosure()
+            AccessibilityDisclosure.requestSettings(this)
         })
         page.addView(label("Orion asks before consequential actions. API keys stay on-device and are not shown in chat.", 12f, Theme.MUTED).apply {
             setPadding(0, dp(20), 0, 0)
         })
-    }
-
-    /**
-     * Explain on-screen access before sending the user to Android's accessibility settings.
-     * This is a privacy disclosure, not a claim that the service is required for ordinary chat.
-     */
-    private fun showAccessibilityDisclosure() {
-        AlertDialog.Builder(this)
-            .setTitle("Enable on-screen control?")
-            .setMessage(
-                "When enabled, Orion can read visible screen text and controls, observe app/window changes, " +
-                    "and tap, type, or scroll in apps for tasks you request. For AI-backed tasks, relevant " +
-                    "screen text or screenshots may be sent to the AI provider selected in Settings. " +
-                    "Sensitive actions still require confirmation, but you should review each action. " +
-                    "You can disable this service at any time in Android Accessibility settings."
-            )
-            .setNegativeButton("Not now", null)
-            .setPositiveButton("Continue to settings") { _, _ ->
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            }
-            .show()
     }
 
     private fun buildStatusText(): String {

@@ -44,6 +44,11 @@ Reference target: Abdullah Arshad's ChatAI mobile assistant concept. This is a d
 - [ ] Verify animation frame rate, thermal impact, and touch responsiveness on the Redmi A3 Pro.
 - [ ] Pixel-level matching remains unverified until the reference screenshot and built-app screenshots are compared side by side.
 
+## Accessibility API distribution gate
+- Orion uses Android AccessibilityService for screen inspection and AI-directed phone automation. A separate in-app disclosure and affirmative consent flow is implemented, but disclosure alone does not make autonomous actions eligible for Google Play.
+- Google's current policy prohibits Accessibility API use that lets a general app autonomously initiate, plan, and execute actions unless the app genuinely qualifies as a disability-support accessibility tool. Do not set `isAccessibilityTool=true` for a general-purpose assistant. Before any Play Store release, the product must be redesigned for permitted deterministic user-defined automation or reviewed against the current policy. The GitHub debug APK/sideload path is a separate distribution route.
+- Policy reference: https://support.google.com/googleplay/android-developer/answer/10964491
+
 ## Stability and behavior checks
 
 - [x] Agent tasks checkpoint their original request and bounded tool results in a local file so a step cap, network failure, or user stop can preserve progress.

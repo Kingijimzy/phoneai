@@ -311,6 +311,15 @@ object Prefs {
     fun autoMemory(c: Context): Boolean = sp(c).getBoolean("automemory", true)
     fun setAutoMemory(c: Context, v: Boolean) = sp(c).edit().putBoolean("automemory", v).apply()
 
+    /** A separate in-app disclosure is shown before the AccessibilityService can be enabled. */
+    fun accessibilityDisclosureSeen(c: Context): Boolean = sp(c).getBoolean("accessibility_disclosure_seen", false)
+    fun setAccessibilityDisclosureSeen(c: Context, v: Boolean) = sp(c).edit().putBoolean("accessibility_disclosure_seen", v).apply()
+    fun accessibilityDisclosureAccepted(c: Context): Boolean = sp(c).getBoolean("accessibility_disclosure_accepted", false)
+    fun setAccessibilityDisclosureAccepted(c: Context, v: Boolean) {
+        sp(c).edit().putBoolean("accessibility_disclosure_accepted", v)
+            .putBoolean("accessibility_disclosure_seen", true).apply()
+    }
+
     fun voiceName(c: Context): String = sp(c).getString("voicename", "") ?: ""
     fun setVoiceName(c: Context, v: String) = sp(c).edit().putString("voicename", v).apply()
 

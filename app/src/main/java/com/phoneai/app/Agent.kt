@@ -259,7 +259,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (answer.trim().trim('.', '!').equals("ACTION", true)) {
             // The model judged this needs tools: switch to Command mode and run the guarded agent now.
             svc.notifyModeSwitch(true)
-            run(command)
+            runInternal(command, reuseCommandBudget = true)
             return
         }
         val safeAnswer = answer.takeIf { it.isNotBlank() }
@@ -469,7 +469,11 @@ Rules:
     }
 
     fun run(inputCommand: String) {
-        nim.beginCommand()
+        runInternal(inputCommand, reuseCommandBudget = false)
+    }
+
+    private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
+        if (!reuseCommandBudget) nim.beginCommand()
         var command = inputCommand.trim()
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
         if (!resumeRequest) failedCallGuard.clear()
@@ -517,7 +521,7 @@ Rules:
             activeSkillStartedAt = System.currentTimeMillis()
             activeSkillCalls = 0
             try {
-                run(skillMatch.groupValues[2].trim())
+                runInternal(skillMatch.groupValues[2].trim(), reuseCommandBudget = true)
             } finally {
                 activeSkillId = null
                 activeSkillStartedAt = 0L
