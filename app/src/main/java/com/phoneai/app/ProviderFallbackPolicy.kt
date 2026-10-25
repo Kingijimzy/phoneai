@@ -1,16 +1,20 @@
 package com.phoneai.app
 
 /**
- * Provider rotation rules. Any provider-side failure (rate limit, timeout, empty reply,
- * overload, retired model, rejected key, no connection) rotates to the next saved provider.
- * A user cancel or the per-command request budget never rotates. Quota-saver mode limits
- * how many backups Nim.chat tries.
+ * Keep one selected provider as the default. Only an explicit HTTP 429 rate-limit response
+ * permits a backup provider for this command. Authentication errors, unsupported models,
+ * timeouts, network errors, empty responses, cancellations, and budget stops must not fan
+ * out into more provider requests.
  */
 internal object ProviderFallbackPolicy {
     fun shouldTryBackup(error: Throwable): Boolean {
-        val msg = error.message.orEmpty()
-        if (msg == "Stopped." || msg.startsWith("Stopped before sending") || msg.contains("identical HTTP failures")) return false
         if (error is InterruptedException) return false
-        return error is AiException || error is java.io.IOException
+        if (error.message.orEmpty().let {
+                it == "Stopped." ||
+                    it.startsWith("Stopped before sending") ||
+                    it.contains("identical HTTP failures")
+            }) return false
+
+        return (error as? AiException)?.httpStatus == 429
     }
 }
