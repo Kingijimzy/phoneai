@@ -53,6 +53,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
     private val chatHist = JSONArray()
     private val liveHistory = JSONArray()
+    // Must be initialized before init restores persisted conversation context.
+    private val chatCache = HashMap<String, Pair<Long, String>>()
 
     init {
         // Restore the same local transcript for every provider; provider choice must not own memory.
@@ -67,7 +69,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             chatHist.put(msg(role, content))
         }
     }
-    private val chatCache = HashMap<String, Pair<Long, String>>()
     @Volatile private var activeSkillId: String? = null
     private var activeSkillStartedAt: Long = 0L
     private var activeSkillCalls: Int = 0
