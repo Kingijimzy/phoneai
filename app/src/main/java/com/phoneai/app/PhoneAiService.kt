@@ -673,6 +673,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         else -> OrbView.Mode.IDLE
     }
 
+    /** Snapshot of the persisted conversation for Agent restoration; UI notes/status never enter AI context. */
+    fun conversationContext(): List<Pair<String, String>> =
+        transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
+
     private fun appendTranscript(kind: String, text: String) {
         transcript.add(Pair(kind, text))
         if (kind == "me" || kind == "ai") ChatHistoryStore.save(this, transcript)

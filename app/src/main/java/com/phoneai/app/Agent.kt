@@ -20,6 +20,22 @@ interface AgentUi {
         if (ask(question)) options.firstOrNull().orEmpty() else ""
 }
 
+/** Converts persisted UI transcript rows into compact, provider-neutral model turns. */
+internal object ConversationContextPolicy {
+    fun recent(messages: List<Pair<String, String>>, maxTurns: Int = 12, maxChars: Int = 4000): List<Pair<String, String>> {
+        val eligible = messages.mapNotNull { (kind, text) ->
+            val role = when (kind.lowercase()) {
+                "me", "user" -> "user"
+                "ai", "assistant" -> "assistant"
+                else -> return@mapNotNull null
+            }
+            val clean = text.trim()
+            if (clean.isEmpty()) null else role to clean.take(maxChars)
+        }
+        return eligible.takeLast(maxTurns)
+    }
+}
+
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val nim = Nim(svc).also { n -> n.onStatus = { s -> ui.status(s) } }
@@ -37,6 +53,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
     private val chatHist = JSONArray()
     private val liveHistory = JSONArray()
+
+    init {
+        // Restore the same local transcript for every provider; provider choice must not own memory.
+        restoreConversationContext(svc.conversationContext())
+    }
+
+    /** Rebuild conversational turns without resetting the agent's system/tool planner prompt. */
+    fun restoreConversationContext(messages: List<Pair<String, String>>) {
+        while (chatHist.length() > 0) chatHist.remove(0)
+        chatCache.clear()
+        ConversationContextPolicy.recent(messages).forEach { (role, content) ->
+            chatHist.put(msg(role, content))
+        }
+    }
     private val chatCache = HashMap<String, Pair<Long, String>>()
     @Volatile private var activeSkillId: String? = null
     private var activeSkillStartedAt: Long = 0L
