@@ -83,6 +83,32 @@ class TradingActivity : Activity() {
         host.addView(acc, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
+        val modeCard = card()
+        modeCard.addView(label("TRADING EXECUTION", 12f, Theme.MUTED, true))
+        modeCard.addView(label(if (Prefs.tradingReadOnly(this)) "READ-ONLY · analysis and alerts" else "ORDER PLACEMENT ENABLED", 16f, Theme.TEXT, true).apply { setPadding(0, dp(5), 0, dp(4)) })
+        modeCard.addView(label("Read-only is the default. Enabling orders does not automate trading: each order still requires a fresh confirmation and existing limits.", 12f, Theme.MUTED))
+        val readOnlySwitch = Switch(this).apply {
+            text = "Block all order placement"
+            setTextColor(Theme.TEXT)
+            isChecked = Prefs.tradingReadOnly(this@TradingActivity)
+            setOnCheckedChangeListener { _, enabled ->
+                if (enabled) {
+                    Prefs.setTradingReadOnly(this@TradingActivity, true)
+                    render()
+                } else {
+                    AlertDialog.Builder(this@TradingActivity)
+                        .setTitle("Enable confirmed order placement?")
+                        .setMessage("This permits order proposals to reach the existing confirmation and risk-limit checks. It does not enable automatic trading. Never use an API key with withdrawal permission.")
+                        .setNegativeButton("Keep read-only") { _, _ -> render() }
+                        .setPositiveButton("Enable orders") { _, _ -> Prefs.setTradingReadOnly(this@TradingActivity, false); render() }
+                        .show()
+                }
+            }
+        }
+        modeCard.addView(readOnlySwitch)
+        host.addView(modeCard, LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+
         val watch = card()
         val sw = Switch(this).apply {
             text = "Market watch (works with screen off)"; setTextColor(Theme.TEXT)
