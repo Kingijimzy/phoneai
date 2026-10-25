@@ -49,3 +49,19 @@ class ToolRegistryTest {
         ))
     }
 }
+
+class ToolRegistryPromptTrimTest {
+    @Test fun plainDeviceRequestOmitsSpecialistToolDetailsButKeepsSignatures() {
+        val trimmed = ToolRegistry.promptSection("open whatsapp and read my last chat")
+        assertFalse(trimmed.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
+        assertTrue(trimmed.contains("bybit_public_ticker {symbol}"))
+        assertTrue(trimmed.contains("- read_screen {}"))
+        assertTrue(trimmed.length < ToolRegistry.promptSection().length)
+    }
+
+    @Test fun matchingRequestKeepsTheFullContract() {
+        val trimmed = ToolRegistry.promptSection("what is the bitcoin price on bybit")
+        assertTrue(trimmed.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
+        assertEquals(ToolRegistry.promptSection(), ToolRegistry.promptSection(null))
+    }
+}

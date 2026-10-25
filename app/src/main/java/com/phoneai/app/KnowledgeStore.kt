@@ -92,4 +92,12 @@ object KnowledgeStore {
         val chunks = list(c).flatMap { d -> d.chunks.map { d.title to it } }
         return MemoryRanking.hybridRank(chunks, { it.second }, query, limit).map { "[" + it.first + "] " + it.second }
     }
+
+    /** Up to two matching passages for the current request, or null so nothing is added when nothing matches. */
+    fun promptBlock(c: Context, request: String?, maxChars: Int = 700): String? {
+        if (request.isNullOrBlank()) return null
+        val hits = search(c, request, 2)
+        if (hits.isEmpty()) return null
+        return hits.joinToString("\n").take(maxChars)
+    }
 }
