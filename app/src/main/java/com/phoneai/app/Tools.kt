@@ -319,7 +319,10 @@ class Tools(private val svc: PhoneAiService) {
 
     /** Only a fixed allowlist is accepted; arbitrary component/action names are never launched. */
     fun systemIntent(actionName: String, query: String = "", uriText: String = ""): String {
-        val action = actionName.trim().lowercase().replace('-', '_').replace(' ', '_')
+        val action = SystemIntentPolicy.normalize(actionName)
+        if (!SystemIntentPolicy.isAllowed(action)) {
+            return "error: unsupported system intent. Allowed: " + SystemIntentPolicy.actions().sorted().joinToString(", ")
+        }
         val i: Intent = when (action) {
             "settings" -> Intent(Settings.ACTION_SETTINGS)
             "wifi_settings" -> Intent(Settings.ACTION_WIFI_SETTINGS)
