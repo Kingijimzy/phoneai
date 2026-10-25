@@ -744,9 +744,11 @@ Rules:
                 else "INVALID: malformed, unsupported, financial, or credential-bearing deep link."
             }
             "system_intent" -> {
-                val allowed = setOf("settings", "wifi_settings", "bluetooth_settings", "display_settings", "app_settings", "location_settings", "accessibility_settings", "notification_settings", "dial", "maps_search", "camera", "calendar", "clock", "open_url")
-                if (a.optString("action").trim().lowercase().replace('-', '_').replace(' ', '_') in allowed) "VALID: system route is allowlisted."
-                else "INVALID: system intent action is not in the local allowlist."
+                if (SystemIntentPolicy.isAllowed(a.optString("action"))) {
+                    "VALID: system route is allowlisted."
+                } else {
+                    "INVALID: system intent action is not in the local allowlist."
+                }
             }
             "resolve_contact" -> if (a.optString("name").isNotBlank()) "VALID: contact query supplied; permission and results are checked locally." else "INVALID: contact name is required."
             "find_files" -> if (a.optString("query").isNotBlank()) "VALID: file search query supplied." else "INVALID: file search query is required."
