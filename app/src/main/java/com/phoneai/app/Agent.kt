@@ -60,15 +60,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "type" -> svc.currentAppLabel()
             else -> ""
         }
-        val taskScopeBlock = TaskScopePolicy.blockReason(activeRequestScope, tool)
-        if (taskScopeBlock != null) {
-            val blocked = "error: task scope guard blocked tool. " + taskScopeBlock
-            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-            return blocked
-        }
-        val scopeBlock = AgentHooks.scopeBlockReason(activeRequestScope, tool, args, targetLabel)
-        if (scopeBlock != null) {
-            val blocked = "error: scope guard blocked action. " + scopeBlock
+        val dispatchBlock = AgentDispatchPolicy.blockReason(
+            request = activeRequestScope,
+            tool = tool,
+            args = args,
+            targetLabel = targetLabel,
+            currentPackage = svc.currentPackageName(),
+            currentLabel = svc.currentAppLabel(),
+            stopped = stopped
+        )
+        if (dispatchBlock != null) {
+            val blocked = "error: " + dispatchBlock
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
@@ -86,22 +88,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
-        val safetyBlock = SafetyGate.blockReason(
-            tool,
-            when (tool) {
-                "open_app" -> args.optString("name")
-                "browser_type" -> args.optString("target")
-                "open_deep_link" -> args.optString("uri")
-                else -> null
-            },
-            if (tool == "type" || tool == "browser_type") args.optString("text") else null,
-            svc.currentPackageName(),
-            svc.currentAppLabel()
-        )
-        if (safetyBlock != null) {
-            val blocked = "error: safety gate blocked action. $safetyBlock"
-            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-            return blocked
+        // Stop may be tapped while the approval dialog is open. Recheck immediately
+        // before execution so an approved-but-now-cancelled action cannot start afterward.
+        AgentDispatchPolicy.cancellationBlockReason(tool, stopped)?.let { reason ->
+            val cancelled = "error: " + reason
+            taskProofs.record(tool, cancelled)
+            try { ActionLogStore.record(svc, tool, cancelled) } catch (_: Exception) { }
+            return cancelled
         }
         val result = try {
             if (tool in nativeUiActions) {
@@ -606,6 +599,14 @@ Rules:
                 if (stopped) break
                 AgentCheckpointStore.pause(svc)
                 ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
+                return
+            }
+            // A Stop tap can race with an in-flight model request. Discard any late plan
+            // before it can be checkpointed or dispatched; the dispatch gate below also
+            // rechecks cancellation to close the next small race window.
+            if (stopped) {
+                AgentCheckpointStore.pause(svc)
+                ui.say("Stopped before the next action could start. I saved the task progress locally.")
                 return
             }
             history.put(msg("assistant", raw))
