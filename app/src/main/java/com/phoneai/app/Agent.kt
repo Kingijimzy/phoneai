@@ -88,6 +88,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
+        // Stop may be tapped while the approval dialog is open. Recheck immediately
+        // before execution so an approved-but-now-cancelled action cannot start afterward.
+        AgentDispatchPolicy.cancellationBlockReason(tool, stopped)?.let { reason ->
+            val cancelled = "error: " + reason
+            taskProofs.record(tool, cancelled)
+            try { ActionLogStore.record(svc, tool, cancelled) } catch (_: Exception) { }
+            return cancelled
+        }
         val result = try {
             if (tool in nativeUiActions) {
                 val validationArgs = JSONObject(args.toString()).put("tool", tool)
