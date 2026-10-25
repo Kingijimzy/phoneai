@@ -317,6 +317,9 @@ class Nim(private val ctx: Context) {
      * Returns an empty string only when a real chat completion returns usable text.
      */
     fun testModel(p: Provider, model: String, vision: Boolean): String {
+        // A model-picker probe is its own user command and must not inherit the
+        // previous probe's request count when the same Nim instance is reused.
+        beginCommand()
         if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
         val probePrefs = ctx.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         val probeKey = "nvidia_probe_${if (vision) "vision" else "chat"}_${model.hashCode()}"
