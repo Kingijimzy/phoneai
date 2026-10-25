@@ -55,7 +55,7 @@ object AgentCheckpointStore {
         try {
             val f = file(c)
             if (!f.exists()) return@synchronized false
-            JSONObject(f.readText()).optJSONObject("inFlight") != null
+            CheckpointTransitionPolicy.needsUserConfirmation(JSONObject(f.readText()).optJSONObject("inFlight") != null)
         } catch (_: Exception) {
             true
         }
@@ -128,7 +128,7 @@ object AgentCheckpointStore {
             val f = file(c)
             if (f.exists()) JSONObject(f.readText()) else null
         } catch (_: Exception) { null } ?: return@synchronized false
-        if (existing.optJSONObject("inFlight") != null) return@synchronized false
+        if (!CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
         update(c) { o ->
             o.put("inFlight", JSONObject()
                 .put("tool", tool.take(80))
@@ -145,7 +145,7 @@ object AgentCheckpointStore {
             if (f.exists()) JSONObject(f.readText()) else null
         } catch (_: Exception) { null } ?: return@synchronized false
         val inFlight = existing.optJSONObject("inFlight") ?: return@synchronized false
-        if (inFlight.optString("tool") != tool) return@synchronized false
+        if (!CheckpointTransitionPolicy.canRecordResult(inFlight.optString("tool"), tool)) return@synchronized false
         update(c) { o ->
             val steps = o.optJSONArray("steps") ?: JSONArray().also { o.put("steps", it) }
             steps.put(
@@ -165,7 +165,7 @@ object AgentCheckpointStore {
 
     fun complete(c: Context): Boolean {
         // Never mark a task complete while an action's outcome is still uncertain.
-        if (needsRecoveryConfirmation(c)) return false
+        if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return false
         val saved = update(c) {
             it.put("status", "completed")
             it.remove("inFlight")
