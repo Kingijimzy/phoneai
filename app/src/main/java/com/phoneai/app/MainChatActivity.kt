@@ -144,6 +144,20 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
         heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
         header.addView(heading)
+        val clearActive = historyActionButton("Clear active") {
+            AlertDialog.Builder(this@MainChatActivity)
+                .setTitle("Clear current conversation?")
+                .setMessage("This clears the active transcript on this device. Archived conversations remain unchanged.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Clear") { _, _ ->
+                    ChatHistoryStore.clear(this@MainChatActivity)
+                    composeLines.clear()
+                    dialog.dismiss()
+                    Toast.makeText(this@MainChatActivity, "Current conversation cleared", Toast.LENGTH_SHORT).show()
+                    recreate()
+                }.show()
+        }
+        header.addView(clearActive)
         val close = historyActionButton("Close") { dialog.dismiss() }
         header.addView(close)
         root.addView(header)
