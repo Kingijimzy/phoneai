@@ -530,6 +530,17 @@ class SettingsActivity : Activity() {
             )
         }, 8)
         add(s2, text("PLAN blocks write tools at the dispatch boundary. ACT is the default. FULL does not bypass confirmation, sensitive-screen, or task-scope protections.", 12f, Theme.MUTED), 4)
+        add(s2, button("Task preset · " + Prefs.taskPreset(this), false) {
+            showChoiceDialog(
+                "Task preset",
+                "Presets change Orion's planning emphasis only. They do not grant extra permissions or bypass approvals.",
+                listOf("GENERAL · everyday companion", "TRADING · evidence-first, read-only bias", "GAMING · bounded visual steps", "RESEARCH · sources and uncertainty"),
+                { index ->
+                    Prefs.setTaskPreset(this, listOf("GENERAL", "TRADING", "GAMING", "RESEARCH")[index])
+                    recreate()
+                }
+            )
+        }, 8)
         switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
             Prefs.setAllowPaidProviders(this, it)
         }
