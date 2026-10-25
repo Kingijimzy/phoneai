@@ -1298,15 +1298,15 @@ class SettingsActivity : Activity() {
         val body = if (events.isEmpty()) {
             "No recorded tool actions yet."
         } else {
-            events.joinToString("\\n\\n") { event ->
+            events.joinToString("\n\n") { event ->
                 val state = if (event.outcome.contains("error", true)) "FAILED / UNVERIFIED" else "RESULT RETURNED"
-                formatter.format(Date(event.at)) + "  ·  " + state + "\\nTool: " + event.tool +
-                    if (event.failureCategory.isNotBlank()) "\\nCategory: " + event.failureCategory else ""
+                formatter.format(Date(event.at)) + "  ·  " + state + "\nTool: " + event.tool +
+                    if (event.failureCategory.isNotBlank()) "\nCategory: " + event.failureCategory else ""
             }
         }
         AlertDialog.Builder(this)
             .setTitle("Recent tool actions")
-            .setMessage(body + "\\n\\nPrivacy: this local log stores tool names and generic outcomes only, not arguments, message contents, or screen text. A returned result is not proof that the overall task completed.")
+            .setMessage(body + "\n\nPrivacy: this local log stores tool names and generic outcomes only, not arguments, message contents, or screen text. A returned result is not proof that the overall task completed.")
             .setPositiveButton("Close", null)
             .setNeutralButton("Clear log") { _, _ ->
                 AlertDialog.Builder(this)
