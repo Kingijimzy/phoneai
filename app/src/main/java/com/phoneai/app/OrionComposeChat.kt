@@ -80,6 +80,36 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Lightweight Markdown presentation for model replies; copy still uses the original source. */
+private fun formatOrionMarkdown(source: String): AnnotatedString {
+    val out = AnnotatedString.Builder()
+    source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
+        val line = raw.trimEnd()
+        if (index > 0) out.append("\n")
+        val heading = Regex("^\\s{0,3}(#{1,3})\\s+(.+)$").find(line)
+        val bullet = Regex("^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+)$").find(line)
+        val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
+        val start = out.length
+        out.append(content)
+        val end = out.length
+        if (heading != null) {
+            val size = when (heading.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp }
+            out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = size), start, end)
+        }
+        val ticks = 96.toChar().toString()
+        val emphasis = Regex("\\*\\*(.+?)\\*\\*").findAll(content).toList() + Regex(ticks + "([^" + ticks + "]+)" + ticks).findAll(content).toList()
+        emphasis.forEach { match ->
+            val isBold = match.value.startsWith("**")
+            val inner = if (isBold) match.groupValues[1] else match.groupValues[1]
+            val from = start + match.range.first + match.value.indexOf(inner)
+            val to = from + inner.length
+            if (from >= start && to <= end && inner.isNotEmpty()) out.addStyle(
+                androidx.compose.ui.text.SpanStyle(fontWeight = if (isBold) FontWeight.Bold else FontWeight.Medium, background = if (isBold) Color.Transparent else Color(0xFF242424)), from, to
+            )
+        }
+    }
+    return out.toAnnotatedString()
+}
 private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
@@ -444,7 +474,7 @@ private fun ChatBubble(item: OrionChatLine) {
                     Spacer(Modifier.height(4.dp))
                 }
                 Text(
-                    item.text,
+                    text = if (!mine && !note) formatOrionMarkdown(item.text) else AnnotatedString(item.text),
                     color = if (note) ChatMuted else ChatCopy,
                     fontSize = 14.sp,
                     lineHeight = 22.sp,
