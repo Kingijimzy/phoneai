@@ -96,7 +96,8 @@ fun OrionComposeShell(
     onOpenSettings: (String?) -> Unit,
     onOpenUtilities: () -> Unit,
     onOpenTrading: () -> Unit = {},
-    onOpenMemory: () -> Unit = {}
+    onOpenMemory: () -> Unit = {},
+    onOpenAgents: () -> Unit = {}
 ) {
     var selected by remember { mutableStateOf("Home") }
     val scheme = darkColorScheme(
@@ -123,7 +124,7 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
-                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory)
+                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents)
                         else -> SettingsPage(onOpenSettings)
                     }
                 }
@@ -286,7 +287,8 @@ private fun ToolsPage(
     onOpenUtilities: () -> Unit,
     onOpenSettings: (String?) -> Unit,
     onOpenTrading: () -> Unit,
-    onOpenMemory: () -> Unit
+    onOpenMemory: () -> Unit,
+    onOpenAgents: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -295,6 +297,7 @@ private fun ToolsPage(
         PageHeading("Tools & skills", "Your capabilities, one clear workspace.")
         ActionRow("Orion Browser", "Web navigation and assisted research", Icons.Rounded.Public, onOpenBrowser)
         ActionRow("Task centre", "Saved tasks and routines", Icons.Rounded.TaskAlt, onOpenTasks)
+        ActionRow("Agents", "Trading Coach, Research, Code, Planner, Writer", Icons.Rounded.SmartToy, onOpenAgents)
         ActionRow("Trading desk", "Bybit market scanner, journal and watchlist", Icons.Rounded.TaskAlt, onOpenTrading)
         ActionRow("Memory", "What Orion remembers; pin, edit or delete", Icons.Rounded.Memory, onOpenMemory)
         ActionRow("Teach mode", "Record a workflow for Orion to repeat", Icons.Rounded.SmartToy, onOpenUtilities)

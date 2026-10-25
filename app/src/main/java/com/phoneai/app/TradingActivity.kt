@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -66,6 +67,10 @@ class TradingActivity : Activity() {
         val test = Prefs.bybitTestnet(this)
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
         host.addView(label("Control room", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
+        host.addView(pill("Trading Coach · upload a chart, find setups, review mistakes", true) {
+            startActivity(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach"))
+        })
+        host.addView(gap(12))
 
         val acc = card()
         acc.addView(label("Account", 12f, Theme.MUTED))

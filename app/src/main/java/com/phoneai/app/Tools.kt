@@ -705,6 +705,15 @@ class Tools(private val svc: PhoneAiService) {
         if (MemoryStore.delete(svc, id)) "forgot memory $id"
         else "error: memory $id was not deleted; it may not exist or device storage may be unavailable"
 
+    fun askAgent(agentName: String, task: String): String {
+        val agent = AgentProfiles.resolve(agentName)
+            ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.all.joinToString(", ") { it.id }
+        if (task.isBlank()) return "error: task is required"
+        return try {
+            "AGENT ${agent.name} ANSWER (relay faithfully; it is analysis, not an action taken):\n" + AgentRunner.run(svc, agent, emptyList(), task)
+        } catch (e: Exception) { "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")" }
+    }
+
     fun knowledgeSearch(query: String): String {
         if (query.isBlank()) return "error: query is required"
         val hits = KnowledgeStore.search(svc, query)
