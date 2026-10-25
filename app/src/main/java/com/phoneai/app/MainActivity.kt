@@ -179,7 +179,9 @@ class MainActivity : ComponentActivity() {
                         if (section != null) intent.putExtra("open_section", section)
                         startActivity(intent)
                     },
-                    onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) }
+                    onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) },
+                    onOpenTrading = { startActivity(Intent(this@MainActivity, TradingActivity::class.java)) },
+                    onOpenMemory = { startActivity(Intent(this@MainActivity, MemoryActivity::class.java)) }
                 )
             }
         }

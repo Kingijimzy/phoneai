@@ -44,6 +44,7 @@ import java.net.URL
 
 /** Orion's control room: turn things on, save keys, tune the voice, manage memory, test recording. */
 class SettingsActivity : Activity() {
+    private companion object { const val REQUEST_KNOWLEDGE_IMPORT = 7421 }
     private lateinit var status: TextView
     private lateinit var chatBtn: Button
     private lateinit var visionBtn: Button
@@ -230,6 +231,7 @@ class SettingsActivity : Activity() {
         b.elevation = 0f
         b.stateListAnimator = null
         b.setOnClickListener { onClick() }
+        Motion.pressFeedback(b)
         return b
     }
 
@@ -250,6 +252,7 @@ class SettingsActivity : Activity() {
         c.background = g
         c.setPadding(dp(16), dp(15), dp(16), dp(16))
         c.elevation = dp(1).toFloat()
+        Motion.enter(c, parent.childCount)
         val heading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -522,18 +525,29 @@ class SettingsActivity : Activity() {
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
 
+        // ---- knowledge base
+        val sk = card(col, "Knowledge base", "Documents stay on this phone. Orion searches them when you ask about their contents.")
+        add(sk, button("Import text document (.txt, .md, .csv, .json)", false) {
+            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                .putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/*", "application/json"))
+            try { startActivityForResult(pick, REQUEST_KNOWLEDGE_IMPORT) }
+            catch (_: Exception) { Toast.makeText(this, "No file picker is available.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(sk, button("Documents · " + KnowledgeStore.list(this).size + " saved (tap to remove)", false) { knowledgeDialog() }, 6)
         // ---- 3. voice
         val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
-        add(s3, button("Live-call visual · " + if (Prefs.liveCallStyle(this) == "eyes") "Eyes" else "Dot matrix", false) {
-            val choices = arrayOf("Dot matrix (default)", "Eyes")
-            val selected = if (Prefs.liveCallStyle(this) == "eyes") 1 else 0
+        val liveStyleKeys = arrayOf("dot_matrix", "eyes", "orb", "wave")
+        val liveStyleNames = arrayOf("Dot matrix", "Eyes", "Orb", "Waveform")
+        add(s3, button("Live-call visual · " + liveStyleNames[liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)], false) {
+            val selected = liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)
             AlertDialog.Builder(this)
                 .setTitle("Live-call visual")
-                .setSingleChoiceItems(choices, selected) { dialog, which ->
-                    Prefs.setLiveCallStyle(this, if (which == 1) "eyes" else "dot_matrix")
+                .setSingleChoiceItems(liveStyleNames, selected) { dialog, which ->
+                    Prefs.setLiveCallStyle(this, liveStyleKeys[which])
                     dialog.dismiss()
-                    Toast.makeText(this, choices[which] + " selected for your next live call.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, liveStyleNames[which] + " selected for your next live call.", Toast.LENGTH_SHORT).show()
+                    refresh()
                 }
                 .setNegativeButton("Cancel", null)
                 .show()
@@ -547,6 +561,24 @@ class SettingsActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+        add(s3, button("Gemini Live voice · " + Prefs.geminiVoice(this), false) {
+            val voices = Prefs.GEMINI_VOICES.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle("Gemini Live voice")
+                .setSingleChoiceItems(voices, voices.indexOf(Prefs.geminiVoice(this)).coerceAtLeast(0)) { dialog, which ->
+                    Prefs.setGeminiVoice(this, voices[which]); dialog.dismiss(); refresh()
+                }
+                .setNegativeButton("Cancel", null).show()
+        }, 6)
+        add(s3, button("Gemini Live mic sensitivity · " + Prefs.geminiMicSensitivity(this), false) {
+            val levels = arrayOf("low", "medium", "high")
+            AlertDialog.Builder(this)
+                .setTitle("How readily Gemini detects that you are speaking")
+                .setSingleChoiceItems(levels, levels.indexOf(Prefs.geminiMicSensitivity(this)).coerceAtLeast(0)) { dialog, which ->
+                    Prefs.setGeminiMicSensitivity(this, levels[which]); dialog.dismiss(); refresh()
+                }
+                .setNegativeButton("Cancel", null).show()
+        }, 6)
         add(s3, TextView(this).apply {
             text = "Gemini Live streams microphone audio to Google and uses usage-based quota. Each session is capped at five minutes; account limits and costs vary."
             textSize = 12f
@@ -1335,6 +1367,50 @@ class SettingsActivity : Activity() {
                 showInfoDialog("AI connection test", sb.toString().trim().ifBlank { "Test cancelled before a result was returned." })
                 refresh()
             }
+        }.start()
+    }
+
+    private fun readAtMost(input: java.io.InputStream, max: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (out.size() < max) {
+            val n = input.read(buffer, 0, minOf(buffer.size, max - out.size()))
+            if (n < 0) break
+            out.write(buffer, 0, n)
+        }
+        return out.toByteArray()
+    }
+
+    private fun knowledgeDialog() {
+        val docs = KnowledgeStore.list(this)
+        if (docs.isEmpty()) { showInfoDialog("No documents yet", "Import a text document. PDF and Word files are not supported yet; paste their text into a .txt file first."); return }
+        showChoiceDialog("Knowledge base (${docs.size})", "Choose a document to remove.", docs.map { it.title + " · " + it.chunks.size + " passages" },
+            { which ->
+                AlertDialog.Builder(this)
+                    .setTitle("Remove \"" + docs[which].title + "\"?")
+                    .setPositiveButton("Remove") { _, _ -> KnowledgeStore.delete(this, docs[which].id); refresh() }
+                    .setNegativeButton("Cancel", null).show()
+            })
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_KNOWLEDGE_IMPORT || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        Thread {
+            val message = try {
+                val bytes = contentResolver.openInputStream(uri)?.use { readAtMost(it, 400_000) } ?: ByteArray(0)
+                val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Imported document"
+                val text = String(bytes, Charsets.UTF_8)
+                if (text.count { it == '\u0000' } > 0) "That file is not plain text."
+                else when (val n = KnowledgeStore.add(this, name, text)) {
+                    -2 -> "Knowledge base is full; remove a document first."
+                    in Int.MIN_VALUE..0 -> "Could not save that document."
+                    else -> "Saved \"$name\" as $n passages."
+                }
+            } catch (e: Exception) { "Could not read that file (" + e.javaClass.simpleName + ")." }
+            runOnUiThread { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); refresh() }
         }.start()
     }
 

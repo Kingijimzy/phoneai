@@ -94,6 +94,20 @@ object MemoryStore {
             }
             return@synchronized copyOf(dup)
         }
+        // A changed fact replaces the old note instead of sitting beside its contradiction.
+        val replaced = MemoryRanking.findSuperseded(list, cat(category), t)
+        if (replaced != null) {
+            val oldText = replaced.text
+            val oldUpdated = replaced.updated
+            replaced.text = t
+            replaced.updated = now
+            if (!save(c)) {
+                replaced.text = oldText
+                replaced.updated = oldUpdated
+                return@synchronized null
+            }
+            return@synchronized copyOf(replaced)
+        }
         val id = (list.maxOfOrNull { it.id } ?: 0) + 1
         val m = Memory(id, cat(category), t, now, now)
         list.add(m)
@@ -178,29 +192,20 @@ object MemoryStore {
 
     /** Rank relevant memories first, rather than returning the first loose substring match. */
     fun search(c: Context, query: String): List<Memory> {
-        val normalized = query.trim().lowercase()
-        val words = normalized.split(Regex("[^a-z0-9]+")).filter { it.length > 2 }.distinct()
         val memories = all(c)
-        if (words.isEmpty()) return memories.sortedByDescending { it.updated }.take(10)
-        return memories.mapNotNull { m ->
-            val body = m.text.lowercase()
-            val category = m.category.lowercase()
-            val matched = words.count { body.contains(it) || category.contains(it) }
-            if (matched == 0) null else {
-                val score = matched * 10 +
-                    (if (body.contains(normalized)) 20 else 0) +
-                    (if (category == normalized) 5 else 0)
-                Triple(m, score, m.updated)
-            }
-        }.sortedWith(compareByDescending<Triple<Memory, Int, Long>> { it.second }
-            .thenByDescending { it.third })
+        if (MemoryRanking.tokens(query).isEmpty()) return memories.sortedByDescending { it.updated }.take(10)
+        val hybrid = MemoryRanking.hybridRank(memories, { it.text + " " + it.category }, query, 15)
+        if (hybrid.isNotEmpty()) return hybrid
+        return memories.map { it to MemoryRanking.score(it, query) }
+            .filter { it.second > 0 }
+            .sortedWith(compareByDescending<Pair<Memory, Int>> { it.second }.thenByDescending { it.first.updated })
             .map { it.first }
     }
 
-    /** Text added to the AI's instructions so it "remembers". */
-    fun promptBlock(c: Context): String {
-        val items = all(c).sortedBy { it.updated }.takeLast(25)
+    /** Text added to the AI's instructions: pinned and request-relevant memories first, then recent ones. */
+    fun promptBlock(c: Context, query: String? = null): String {
+        val items = MemoryRanking.select(all(c), query)
         if (items.isEmpty()) return "(nothing saved yet)"
-        return items.joinToString("\n") { "[${it.id}] (${it.category}) ${it.text}" }
+        return items.joinToString("\n") { (if (it.pinned) "[${it.id}] (${it.category}, pinned) " else "[${it.id}] (${it.category}) ") + it.text }
     }
 }

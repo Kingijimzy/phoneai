@@ -162,6 +162,15 @@ internal class GeminiLiveSession(
         // onClosed/onFailure dispose it when a socket was already established.
     }
 
+    private fun activityDetectionConfig(): JSONObject {
+        val (start, end) = GeminiLivePolicy.activityDetection(Prefs.geminiMicSensitivity(appContext))
+        val config = JSONObject()
+        if (!start.endsWith("UNSPECIFIED")) config.put("startOfSpeechSensitivity", start).put("endOfSpeechSensitivity", end)
+        return config
+    }
+
+    @Volatile private var lastActivityAtMs = System.currentTimeMillis()
+
     private fun buildSetup(): JSONObject {
         val instructions = buildString {
             append("You are Orion in optional conversation-only Gemini Live mode. ")
@@ -185,7 +194,7 @@ internal class GeminiLiveSession(
                     "voiceConfig",
                     JSONObject().put(
                         "prebuiltVoiceConfig",
-                        JSONObject().put("voiceName", "Aoede")
+                        JSONObject().put("voiceName", Prefs.geminiVoice(appContext))
                     )
                 )
             )
@@ -193,7 +202,7 @@ internal class GeminiLiveSession(
             .put("model", GeminiLivePolicy.MODEL)
             .put("generationConfig", generationConfig)
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instructions))))
-            .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", JSONObject()))
+            .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", activityDetectionConfig()))
             .put("inputAudioTranscription", JSONObject())
             .put("outputAudioTranscription", JSONObject())
             .put("sessionResumption", JSONObject())
@@ -207,19 +216,55 @@ internal class GeminiLiveSession(
 
     private fun requestEphemeralToken(): String {
         if (apiKey.isBlank()) throw IOException("No Gemini API key is saved.")
-        val now = Instant.now()
-        // The Live API uses liveConnectConstraints for ephemeral-token setup restrictions.
-        // Lock the model and AUDIO output modality, while keeping token TTLs short.
-        val constrainedConfig = JSONObject()
-            .put("responseModalities", JSONArray().put("AUDIO"))
-            .put("sessionResumption", JSONObject())
+        // Constraints lock the token to the model/modality, but a rejected constraint must not
+        // make Live unusable: on HTTP 400 retry once with a plain short-lived single-use token.
+        val first = postTokenRequest(constrained = true)
+        if (first.code == 400) {
+            val second = postTokenRequest(constrained = false)
+            if (second.code in 200..299) return parseToken(second.body)
+            throw IOException(describeTokenFailure(second))
+        }
+        if (first.code !in 200..299) throw IOException(describeTokenFailure(first))
+        return parseToken(first.body)
+    }
+
+    private class TokenResponse(val code: Int, val body: String)
+
+    private fun parseToken(body: String): String {
+        val token = JSONObject(body).optString("name").trim()
+        if (token.isBlank()) throw IOException("Google returned an empty Gemini Live token.")
+        return token
+    }
+
+    /** Google's own error text (never the key) so a 400 says what was actually wrong. */
+    private fun describeTokenFailure(response: TokenResponse): String {
+        val text = response.body
+        if (response.code == 429 || text.contains("RESOURCE_EXHAUSTED", true) || text.contains("quota", true)) {
+            return "Gemini Live quota/rate limit was rejected (HTTP ${response.code}). Check AI Studio quota and billing; no cost estimate is available."
+        }
+        val detail = try { JSONObject(text).optJSONObject("error")?.optString("message").orEmpty() } catch (_: Exception) { "" }
+            .replace(apiKey, "***").take(220)
+        val hint = when (response.code) {
+            400 -> "Google rejected the request. If the message mentions an API key, create a new Gemini key in AI Studio; ephemeral Live tokens may also be unavailable for this key or region."
+            401, 403 -> "The saved Gemini key was refused. Check the key and that the Generative Language API is enabled."
+            else -> "Check that the saved Gemini key is valid and Live API access is enabled."
+        }
+        return "Gemini Live token request failed (HTTP ${response.code}). " + (if (detail.isNotBlank()) "Google says: $detail. " else "") + hint
+    }
+
+    private fun postTokenRequest(constrained: Boolean): TokenResponse {
+        val now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
         val body = JSONObject()
             .put("uses", 1)
             .put("expireTime", now.plusMillis(GeminiLivePolicy.TOKEN_EXPIRE_AFTER_MS).toString())
             .put("newSessionExpireTime", now.plusMillis(GeminiLivePolicy.TOKEN_NEW_SESSION_WINDOW_MS).toString())
-            .put("liveConnectConstraints", JSONObject()
+        if (constrained) {
+            body.put("liveConnectConstraints", JSONObject()
                 .put("model", GeminiLivePolicy.MODEL)
-                .put("config", constrainedConfig))
+                .put("config", JSONObject()
+                    .put("responseModalities", JSONArray().put("AUDIO"))
+                    .put("sessionResumption", JSONObject())))
+        }
         val connection = (URL("https://generativelanguage.googleapis.com/v1beta/auth_tokens").openConnection() as HttpURLConnection)
         try {
             connection.requestMethod = "POST"
@@ -233,17 +278,7 @@ internal class GeminiLiveSession(
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(16_000) }.orEmpty()
-            if (code !in 200..299) {
-                val kind = if (code == 429 || responseText.contains("RESOURCE_EXHAUSTED", true) || responseText.contains("quota", true)) {
-                    "Gemini Live quota/rate limit was rejected (HTTP $code). Check AI Studio quota and billing; no cost estimate is available."
-                } else {
-                    "Gemini Live token request failed (HTTP $code). Check that the saved Gemini key is valid and Live API access is enabled."
-                }
-                throw IOException(kind)
-            }
-            val token = JSONObject(responseText).optString("name").trim()
-            if (token.isBlank()) throw IOException("Google returned an empty Gemini Live token.")
-            return token
+            return TokenResponse(code, responseText)
         } finally {
             connection.disconnect()
         }
@@ -414,6 +449,12 @@ internal class GeminiLiveSession(
                 }
                 val rms = sqrt(power / count).toFloat().coerceIn(0f, 1f)
                 listener.onInputLevel(rms)
+                val nowMs = System.currentTimeMillis()
+                if (rms >= GeminiLivePolicy.SPEECH_RMS || playbackQueue.isNotEmpty()) lastActivityAtMs = nowMs
+                if (microphoneEnabled && GeminiLivePolicy.silenceExceeded(nowMs, lastActivityAtMs)) {
+                    fail("Gemini Live ended after two minutes of silence to save quota. Start the microphone again when you are ready.")
+                    break
+                }
                 val payload = JSONObject()
                     .put(
                         "realtimeInput",

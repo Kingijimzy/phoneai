@@ -80,8 +80,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(status, LinearLayout.LayoutParams(-1, dp(28)))
 
         visual = LiveCallVisualView(this).apply {
-            style = if (Prefs.liveCallStyle(this@LiveConversationActivity) == "eyes")
-                LiveCallVisualView.Style.EYES else LiveCallVisualView.Style.DOT_MATRIX
+            style = LiveCallVisualView.Style.fromPref(Prefs.liveCallStyle(this@LiveConversationActivity))
             onVisualTap = { handleVisualTap() }
         }
         root.addView(visual, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -272,8 +271,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             service.attachMainChat(this)
         }
         // Apply a Settings change immediately whenever this live screen resumes.
-        visual.style = if (Prefs.liveCallStyle(this) == "eyes")
-            LiveCallVisualView.Style.EYES else LiveCallVisualView.Style.DOT_MATRIX
+        visual.style = LiveCallVisualView.Style.fromPref(Prefs.liveCallStyle(this))
         if (!autoStarted && Prefs.hands(this)) {
             autoStarted = true
             visual.post { startVoiceInput() }

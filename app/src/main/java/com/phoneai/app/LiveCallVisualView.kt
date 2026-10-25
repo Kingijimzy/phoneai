@@ -22,7 +22,17 @@ import kotlin.math.sin
  * per-frame allocations, synthetic audio meter, or network assets.
  */
 class LiveCallVisualView(context: Context) : View(context) {
-    enum class Style { DOT_MATRIX, EYES }
+    enum class Style {
+        DOT_MATRIX, EYES, ORB, WAVE;
+        companion object {
+            fun fromPref(value: String?): Style = when (value) {
+                "eyes" -> EYES
+                "orb" -> ORB
+                "wave" -> WAVE
+                else -> DOT_MATRIX
+            }
+        }
+    }
 
     @Volatile var style: Style = Style.DOT_MATRIX
         set(value) { field = value; invalidate() }
@@ -135,8 +145,12 @@ class LiveCallVisualView(context: Context) : View(context) {
         updatePowerPolicy()
         paint.color = android.graphics.Color.BLACK
         canvas.drawColor(android.graphics.Color.BLACK)
-        if (style == Style.DOT_MATRIX) drawDots(canvas, w, h, t, now)
-        else drawEyes(canvas, w, h, t, now)
+        when (style) {
+            Style.DOT_MATRIX -> drawDots(canvas, w, h, t, now)
+            Style.EYES -> drawEyes(canvas, w, h, t, now)
+            Style.ORB -> drawOrb(canvas, w, h, t)
+            Style.WAVE -> drawWave(canvas, w, h, t)
+        }
         if (errorState) { paint.color = android.graphics.Color.BLACK; paint.alpha = 125; canvas.drawRect(0f, 0f, w, h, paint) }
         if (wordPulse > 0f) wordPulse = max(0f, wordPulse - if (reducedMotion) 1f else 0.11f)
         if (speechAmplitude > 0f && mode != OrbView.Mode.SPEAKING) speechAmplitude = 0f
@@ -274,6 +288,76 @@ class LiveCallVisualView(context: Context) : View(context) {
             paint.color = mint
             paint.alpha = 170
             canvas.drawCircle(cx, cy + unit * 1.15f, max(2f, unit * .06f), paint)
+        }
+    }
+
+    /** 0..1 energy shared by the orb and waveform: real mic RMS, real Piper RMS, or a gentle state idle level. */
+    private fun voiceEnergy(): Float = when (mode) {
+        OrbView.Mode.IDLE -> .08f
+        OrbView.Mode.LISTENING -> .14f + micLevel * .86f
+        OrbView.Mode.THINKING -> .34f
+        OrbView.Mode.ACTING -> .3f
+        OrbView.Mode.SPEAKING -> if (speechAmplitude > 0f) .18f + speechAmplitude * 1.4f else .14f + wordPulse * .7f
+        OrbView.Mode.WAITING_APPROVAL -> .22f
+    }.coerceIn(0f, 1f)
+
+    private fun drawOrb(canvas: Canvas, w: Float, h: Float, t: Float) {
+        val cx = w * .5f
+        val cy = h * .46f
+        val unit = min(w, h) * .18f
+        val energy = voiceEnergy()
+        val breathe = if (reducedMotion) 0f else sin(t * 1.6f) * .035f
+        val core = unit * (1f + breathe + energy * .38f)
+        // Soft glow: stacked translucent discs, no gradient objects allocated per frame.
+        for (i in 6 downTo 1) {
+            paint.color = mint
+            paint.alpha = (10 + (7 - i) * 6 + energy * 18f).toInt().coerceIn(0, 255)
+            canvas.drawCircle(cx, cy, core * (1f + i * .17f), paint)
+        }
+        paint.color = dimMint
+        paint.alpha = 255
+        canvas.drawCircle(cx, cy, core, paint)
+        paint.color = mint
+        paint.alpha = (150 + energy * 100f).toInt().coerceIn(0, 255)
+        canvas.drawCircle(cx, cy, core * .72f, paint)
+        // Rings expand outward while listening or speaking and tighten while thinking.
+        linePaint.color = mint
+        for (i in 0 until 3) {
+            val phase = if (reducedMotion) i / 3f else ((t * (if (mode == OrbView.Mode.THINKING) .5f else .35f) + i / 3f) % 1f)
+            val r = core * (1.15f + phase * (.6f + energy))
+            linePaint.alpha = ((1f - phase) * (60f + energy * 150f)).toInt().coerceIn(0, 255)
+            linePaint.strokeWidth = max(1.5f, unit * .035f)
+            canvas.drawCircle(cx, cy, r, linePaint)
+        }
+        // Orbiting particles quicken while acting or thinking.
+        val speed = if (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING) 2.4f else .7f
+        val count = 8
+        for (i in 0 until count) {
+            val angle = (if (reducedMotion) 0f else t * speed) + i * (6.2831855f / count)
+            val orbit = core * (1.55f + .12f * sin(t * 1.3f + i))
+            paint.color = mint
+            paint.alpha = (110 + energy * 130f).toInt().coerceIn(0, 255)
+            canvas.drawCircle(cx + kotlin.math.cos(angle) * orbit, cy + sin(angle) * orbit, max(2f, unit * .045f), paint)
+        }
+    }
+
+    private fun drawWave(canvas: Canvas, w: Float, h: Float, t: Float) {
+        val bars = 31
+        val cy = h * .46f
+        val gap = w * .86f / bars
+        val barW = gap * .55f
+        val maxH = min(h * .34f, w * .5f)
+        val energy = voiceEnergy()
+        val left = w * .07f + gap * .5f
+        for (i in 0 until bars) {
+            val x = left + i * gap
+            val centre = 1f - abs(i - (bars - 1) / 2f) / ((bars - 1) / 2f) // taller in the middle
+            val wobble = if (reducedMotion) .5f else .5f + .5f * sin(t * (2.2f + (i % 5) * .35f) + i * .7f)
+            val barH = max(barW, maxH * (.06f + energy * (.25f + .75f * wobble) * (.35f + .65f * centre)))
+            paint.color = if (energy > .45f) mint else dimMint
+            paint.alpha = (90 + energy * 165f).toInt().coerceIn(0, 255)
+            eyeRect.set(x - barW / 2f, cy - barH / 2f, x + barW / 2f, cy + barH / 2f)
+            canvas.drawRoundRect(eyeRect, barW / 2f, barW / 2f, paint)
         }
     }
 }

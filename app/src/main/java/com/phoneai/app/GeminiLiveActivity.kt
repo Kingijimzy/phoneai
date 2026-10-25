@@ -105,8 +105,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         root.addView(statusView, LinearLayout.LayoutParams(-1, dp(28)))
 
         visual = LiveCallVisualView(this).apply {
-            style = if (Prefs.liveCallStyle(this@GeminiLiveActivity) == "eyes")
-                LiveCallVisualView.Style.EYES else LiveCallVisualView.Style.DOT_MATRIX
+            style = LiveCallVisualView.Style.fromPref(Prefs.liveCallStyle(this@GeminiLiveActivity))
             mode = OrbView.Mode.IDLE
             contentDescription = "Gemini Live voice visualization"
             onVisualTap = { toggleMicrophone() }
