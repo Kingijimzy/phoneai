@@ -26,8 +26,13 @@ internal object SystemIntentPolicy {
         "open_url"
     )
 
-    fun normalize(action: String): String =
-        action.trim().lowercase().replace('-', '_').replace(' ', '_')
+    fun normalize(action: String): String {
+        val normalized = action.trim().lowercase().replace('-', '_').replace(' ', '_')
+        return when (normalized) {
+            "wi_fi_settings" -> "wifi_settings"
+            else -> normalized
+        }
+    }
 
     fun isAllowed(action: String): Boolean = normalize(action) in allowedActions
 
