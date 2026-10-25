@@ -491,10 +491,10 @@ class Nim(private val ctx: Context) {
     }
 
     /**
-     * Uses the selected compatible provider as primary. If it fails for any provider-side
-     * reason (rate limit, timeout, empty reply, overload, bad model, bad key, no connection)
-     * Orion rotates through the other saved providers, skipping any that are cooling down.
-     * Quota-saver mode allows one backup; otherwise up to three.
+     * Uses the selected compatible provider as primary. A backup provider is considered only
+     * after an explicit HTTP 429 rate-limit response; timeouts, empty replies, bad models,
+     * authentication failures, network errors, and other HTTP statuses stop provider rotation.
+     * Per-command request budgeting still bounds all model probes and retries.
      */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
