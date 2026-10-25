@@ -185,6 +185,20 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
+                top.addView(historyActionButton("Delete") {
+                    AlertDialog.Builder(this@MainChatActivity)
+                        .setTitle("Delete this conversation?")
+                        .setMessage("This permanently removes this archived transcript from this device.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Delete") { _, _ ->
+                            val deleted = ChatHistoryStore.deleteArchived(this@MainChatActivity, chat.timestamp)
+                            Toast.makeText(this@MainChatActivity, if (deleted) "Conversation deleted" else "Could not delete conversation", Toast.LENGTH_SHORT).show()
+                            if (deleted) {
+                                dialog.dismiss()
+                                showChatHistory()
+                            }
+                        }.show()
+                })
                 top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
                 card.addView(top)
                 card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
