@@ -175,7 +175,22 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
-                top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
+                top.addView(historyActionButton("Delete") {
+                    AlertDialog.Builder(this@MainChatActivity)
+                        .setTitle("Delete conversation?")
+                        .setMessage("This permanently removes this archived conversation from this device.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Delete") { _, _ ->
+                            val deleted = ChatHistoryStore.deleteArchived(this@MainChatActivity, chat.timestamp, chat.title)
+                            if (deleted) {
+                                dialog.dismiss()
+                                showChatHistory()
+                                Toast.makeText(this@MainChatActivity, "Conversation deleted", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(this@MainChatActivity, "Could not delete conversation. Please try again.", Toast.LENGTH_LONG).show()
+                            }
+                        }.show()
+                })
                 card.addView(top)
                 card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
                 card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
