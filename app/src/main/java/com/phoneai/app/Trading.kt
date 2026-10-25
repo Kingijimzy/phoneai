@@ -112,6 +112,7 @@ object Trading {
     private fun placeOrder(
         c: Context, side: String, usd: Double, sym: String, stop: Double, target: Double?, confirm: (String) -> Boolean
     ): String {
+        if (Prefs.tradingReadOnly(c)) return "Trading is in READ-ONLY analysis mode. No order was placed. Open Trading settings and explicitly disable read-only mode if you want to enable confirmed order placement."
         needKeys(c)?.let { return it }
         if (usd > Prefs.maxOrderUsd(c)) {
             return "That is above your max order of " + Prefs.maxOrderUsd(c).toInt() + " dollars. Say: set max order to a bigger number, if you really want that."
