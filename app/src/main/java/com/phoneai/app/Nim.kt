@@ -523,7 +523,7 @@ class Nim(private val ctx: Context) {
         // across a chain of providers and burn several free-tier quotas in seconds.
         val backups = Providers.all
             .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
-            .take(1)
+            .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
         val mode = if (vision) "vision" else "chat"
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
