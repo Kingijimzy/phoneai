@@ -21,6 +21,13 @@ class SystemIntentPolicyTest {
         }
     }
 
+    @Test fun registryContractDocumentsEveryAllowedRoute() {
+        val contract = ToolRegistry.find("system_intent")!!.promptLine
+        SystemIntentPolicy.actions().forEach { action ->
+            assertTrue("Tool contract is missing route $action", contract.contains(action))
+        }
+    }
+
     @Test fun normalizesHumanReadableAliases() {
         assertEquals("wifi_settings", SystemIntentPolicy.normalize(" Wi-Fi Settings "))
         assertEquals("notification_settings", SystemIntentPolicy.normalize("Notification Settings"))
