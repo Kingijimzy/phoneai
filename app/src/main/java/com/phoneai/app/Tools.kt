@@ -30,11 +30,11 @@ import org.json.JSONObject
 /** The extra abilities the agent can use besides touching the screen. All run on the worker thread. */
 class Tools(private val svc: PhoneAiService) {
 
-    private fun launch(i: Intent): String {
+    private fun launch(i: Intent, settleMs: Long = 1200): String {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             svc.startActivity(i)
-            Thread.sleep(1200)
+            if (settleMs > 0) Thread.sleep(settleMs)
             "ok"
         } catch (e: Exception) {
             "error: ${e.message}"
@@ -558,6 +558,42 @@ class Tools(private val svc: PhoneAiService) {
         if (n.length < 7) return "error: need a full phone number with country code"
         val r = launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$n?text=" + Uri.encode(text))))
         return if (r == "ok") "WhatsApp draft ready (not sent)" else r
+    }
+
+    private fun installed(pkg: String): Boolean = try { svc.packageManager.getLaunchIntentForPackage(pkg) != null } catch (_: Exception) { false }
+
+    /**
+     * Starts playback with one intent. Media apps that support "play from search" (YouTube Music, Spotify)
+     * begin playing directly; otherwise YouTube search results open in the YouTube app.
+     */
+    fun playMedia(query: String, app: String?): String {
+        val wanted = when (app) {
+            "spotify" -> "com.spotify.music"
+            "youtube music" -> "com.google.android.apps.youtube.music"
+            "youtube" -> null
+            else -> listOf("com.google.android.apps.youtube.music", "com.spotify.music").firstOrNull { installed(it) }
+        }
+        if (wanted != null && installed(wanted)) {
+            val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                .putExtra(android.app.SearchManager.QUERY, query)
+                .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                .setPackage(wanted)
+            val r = launch(i, 300)
+            if (r == "ok") return "playing $query in " + (if (wanted.contains("spotify")) "Spotify" else "YouTube Music")
+        }
+        val v = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
+        if (installed("com.google.android.youtube")) v.setPackage("com.google.android.youtube")
+        val r = launch(v, 300)
+        return if (r == "ok") "opened YouTube results for $query" else r
+    }
+
+    /** Opens a search in the real Chrome app (or the default browser), never Orion's internal browser. */
+    fun chromeSearch(query: String): String {
+        val uri = Uri.parse("https://www.google.com/search?q=" + URLEncoder.encode(query, "UTF-8"))
+        val chrome = Intent(Intent.ACTION_VIEW, uri)
+        if (installed("com.android.chrome")) chrome.setPackage("com.android.chrome")
+        val r = launch(chrome, 300)
+        return if (r == "ok") "searching Google in Chrome for $query" else r
     }
 
     fun youtube(query: String): String {

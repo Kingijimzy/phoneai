@@ -72,20 +72,25 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         cornerRadius = dp(radius).toFloat()
         if (stroke != 0) setStroke(dp(1), stroke)
     }
-    /** Lightweight glass treatment: translucent-looking layered charcoal, a cool top sheen and a fine reflective edge. */
-    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) = GradientDrawable(
-        GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(0xF0232323.toInt(), 0xEA171717.toInt(), 0xF00C0C0C.toInt())
-    ).apply {
-        cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), stroke)
-    }
+    /** Classic opaque graphite surface: no translucent glass layers or decorative sheen. */
+    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) =
+        rounded(0xFF181818.toInt(), radius, stroke)
 
     private fun animateIn(view: View, delay: Long = 0L) {
         view.alpha = 0f
         view.translationY = dp(8).toFloat()
         view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(260)
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    }
+
+    override fun onModeSwitch(commandMode: Boolean) {
+        runOnUiThread {
+            if (this.commandMode == commandMode) return@runOnUiThread
+            this.commandMode = commandMode
+            composeCommandMode.value = commandMode
+            refreshModeSelector()
+            Toast.makeText(this, if (commandMode) "Switched to Command mode for this task" else "Back to Talk mode", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun refreshModeSelector() {
@@ -144,27 +149,34 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
         heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
         header.addView(heading)
-        val clearActive = historyActionButton("Clear active") {
+        val clearAll = historyActionButton("Clear all") {
             AlertDialog.Builder(this@MainChatActivity)
-                .setTitle("Clear current conversation?")
-                .setMessage("This clears the active transcript on this device. Archived conversations remain unchanged.")
+                .setTitle("Delete all chat history?")
+                .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
                 .setNegativeButton("Cancel", null)
-                .setPositiveButton("Clear") { _, _ ->
-                    val cleared = PhoneAiService.instance?.clearActiveConversation() ?: run {
-                        ChatHistoryStore.clear(this@MainChatActivity)
-                        true
+                .setPositiveButton("Delete all") { _, _ ->
+                    val service = PhoneAiService.instance
+                    if (service != null) {
+                        service.deleteAllChatHistory { deleted, message ->
+                            if (deleted) {
+                                composeLines.clear()
+                                dialog.dismiss()
+                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
+                        if (deleted) {
+                            composeLines.clear()
+                            dialog.dismiss()
+                        }
+                        Toast.makeText(this@MainChatActivity, if (deleted) "Chat history deleted" else "Could not delete chat history", Toast.LENGTH_SHORT).show()
                     }
-                    if (!cleared) {
-                        Toast.makeText(this@MainChatActivity, "Could not clear the active conversation. Please try again.", Toast.LENGTH_LONG).show()
-                        return@setPositiveButton
-                    }
-                    composeLines.clear()
-                    dialog.dismiss()
-                    Toast.makeText(this@MainChatActivity, "Current conversation cleared", Toast.LENGTH_SHORT).show()
-                    recreate()
                 }.show()
         }
-        header.addView(clearActive)
+        header.addView(clearAll)
         val close = historyActionButton("Close") { dialog.dismiss() }
         header.addView(close)
         root.addView(header)
@@ -198,20 +210,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
                 top.addView(historyActionButton("Delete") {
                     AlertDialog.Builder(this@MainChatActivity)
-                        .setTitle("Delete conversation?")
-                        .setMessage("This permanently removes this archived conversation from this device.")
+                        .setTitle("Delete this conversation?")
+                        .setMessage("This permanently removes this archived transcript from this device.")
                         .setNegativeButton("Cancel", null)
                         .setPositiveButton("Delete") { _, _ ->
-                            val deleted = ChatHistoryStore.deleteArchived(this@MainChatActivity, chat.timestamp, chat.title)
+                            val deleted = ChatHistoryStore.deleteArchived(this@MainChatActivity, chat.timestamp)
+                            Toast.makeText(this@MainChatActivity, if (deleted) "Conversation deleted" else "Could not delete conversation", Toast.LENGTH_SHORT).show()
                             if (deleted) {
                                 dialog.dismiss()
                                 showChatHistory()
-                                Toast.makeText(this@MainChatActivity, "Conversation deleted", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(this@MainChatActivity, "Could not delete conversation. Please try again.", Toast.LENGTH_LONG).show()
                             }
                         }.show()
                 })
+                top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
                 card.addView(top)
                 card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
                 card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
@@ -529,6 +540,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     Toast.makeText(this@MainChatActivity, "Let Orion finish or stop the current task first.", Toast.LENGTH_SHORT).show()
                 } else {
                     commandMode = false
+                    composeCommandMode.value = false
                     refreshModeSelector()
                     messages.removeAllViews()
                     restoreWelcome()
@@ -1033,7 +1045,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             service.sendFromMainChat(
                 value,
                 conversationOnly = !commandMode,
-                autoRoute = commandMode
+                autoRoute = !commandMode
             )
         }
     }

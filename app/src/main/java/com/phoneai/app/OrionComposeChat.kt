@@ -80,10 +80,60 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Lightweight Markdown presentation for model replies; copy still uses the original source. */
+private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
+private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\*\*(.+?)\*\*|`([^`]+)`""")
+
+private fun formatOrionMarkdown(source: String): AnnotatedString {
+    val out = AnnotatedString.Builder()
+    source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
+        val line = raw.trimEnd()
+        if (index > 0) out.append("\n")
+        val heading = ORION_HEADING_PATTERN.find(line)
+        val bullet = ORION_BULLET_PATTERN.find(line)
+        val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
+        val headingSize = heading?.let {
+            when (it.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp }
+        }
+
+        fun appendPlain(value: String) {
+            if (value.isEmpty()) return
+            val start = out.length
+            out.append(value)
+            if (headingSize != null) {
+                out.addStyle(
+                    androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = headingSize),
+                    start, out.length
+                )
+            }
+        }
+
+        var cursor = 0
+        ORION_INLINE_TOKEN_PATTERN.findAll(content).forEach { match ->
+            appendPlain(content.substring(cursor, match.range.first))
+            val isBold = match.value.startsWith("**")
+            val inner = match.groupValues[if (isBold) 1 else 2]
+            val start = out.length
+            out.append(inner)
+            out.addStyle(
+                androidx.compose.ui.text.SpanStyle(
+                    fontWeight = if (isBold || headingSize != null) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = headingSize ?: 14.sp,
+                    background = if (isBold) Color.Transparent else Color(0xFF242424)
+                ),
+                start, out.length
+            )
+            cursor = match.range.last + 1
+        }
+        appendPlain(content.substring(cursor))
+    }
+    return out.toAnnotatedString()
+}
 private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
-private val ChatMint = Color(0xFFE0E0E0)
+private val ChatMint = Color(0xFFE5E5E5)
 private val ChatCopy = Color(0xFFF7FAF9)
 private val ChatMuted = Color(0xFF9B9B9B)
 private val ChatHairline = Color(0xFF303030)
@@ -115,7 +165,6 @@ fun OrionComposeChatScreen(
 ) {
     var draft by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-
     val statusDotColor by animateColorAsState(
         targetValue = when {
             status.contains("listen", true) || status.contains("speak", true) -> ChatMint
@@ -196,34 +245,31 @@ fun OrionComposeChatScreen(
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
-                Box(
-                    Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF101010))
-                        .border(1.dp, ChatHairline, RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            for (i in 0..4) drawCircle(
-                                color = ChatMint.copy(alpha = .10f - i * .015f),
-                                radius = size.minDimension * (.20f + i * .075f),
-                                center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("ORION", color = ChatCopy, fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                        Text("PERSONAL AI  /  READY WHEN YOU ARE", color = ChatMuted,
+                            fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.1.sp)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        listOf(7, 12, 17, 11, 6).forEachIndexed { index, barHeight ->
+                            Box(
+                                Modifier.width(3.dp).height(barHeight.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (index == 2) ChatCopy else ChatHairline)
                             )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Box(Modifier.size(78.dp).clip(CircleShape)
-                                .background(Color(0xFF202020))
-                                .border(1.dp, Color(0xFF555555), CircleShape),
-                                contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(39.dp))
-                            }
-                            Text(if (commandMode) "YOUR AI, READY WHEN YOU ARE" else "YOUR AI, READY WHEN YOU ARE", color = Color(0xFFD8D8D8),
-                                fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.7.sp)
                         }
                     }
                 }
-                Spacer(Modifier.height(27.dp))
+                Spacer(Modifier.height(18.dp))
                 Text(if (commandMode) "What can I take\noff your hands?" else "What’s on your\nmind today?",
                     color = ChatCopy, fontSize = 31.sp, lineHeight = 35.sp,
                     fontWeight = FontWeight.SemiBold, letterSpacing = (-.9).sp)
@@ -288,9 +334,9 @@ fun OrionComposeChatScreen(
         // Composer is the primary surface; actions remain reachable without a second oversized dock.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF171717))
-                    .border(1.dp, Color(0xFF383838), RoundedCornerShape(14.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF222222), Color(0xFF101010))))
+                    .border(1.dp, Color(0xFF444444), RoundedCornerShape(19.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -432,7 +478,7 @@ private fun ChatBubble(item: OrionChatLine) {
                     Spacer(Modifier.height(4.dp))
                 }
                 Text(
-                    item.text,
+                    text = if (!mine && !note) formatOrionMarkdown(item.text) else AnnotatedString(item.text),
                     color = if (note) ChatMuted else ChatCopy,
                     fontSize = 14.sp,
                     lineHeight = 22.sp,

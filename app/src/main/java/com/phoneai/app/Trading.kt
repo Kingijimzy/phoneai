@@ -139,6 +139,10 @@ object Trading {
         return Bybit.order(c, sym, side, usd, stop, target)
     }
 
+    /** Entry point for coach-proposed trades: same max-order and max-risk guards plus an explicit confirmation. */
+    internal fun placeProposal(c: Context, p: TradeProposals.Trade, confirm: (String) -> Boolean): String =
+        try { placeOrder(c, p.side, p.usd, p.symbol, p.stop, p.target, confirm) } catch (e: Exception) { fail(e) }
+
     /** Returns a spoken answer, or null when the sentence is not a trading command. */
     fun handle(c: Context, t: String, confirm: (String) -> Boolean, ai: (String, String) -> String): String? {
         if (!Regex("balance|wallet|position|trades|price|analy|study|scan|opportunit|setup|buy|long|sell|short|close|cancel|kill|panic|emergency|hunt|watch|alert|journal|bybit|testnet|real money|live|lesson|stats|limit|risk|max").containsMatchIn(t)) return null

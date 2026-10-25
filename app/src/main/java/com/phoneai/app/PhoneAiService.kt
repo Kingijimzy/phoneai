@@ -104,6 +104,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         fun onAudioAmplitude(amplitude: Float) {}
         fun onSpeechWord() {}
         fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
+        /** Orion decided the request needs (or no longer needs) the tool agent; the UI should follow. */
+        fun onModeSwitch(commandMode: Boolean) {}
+    }
+
+    fun notifyModeSwitch(commandMode: Boolean) {
+        main.post { mainChatListener?.onModeSwitch(commandMode) }
     }
 
     @Volatile
@@ -668,6 +674,31 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Permanently clear the active transcript and archived chats after the user confirms in the UI. */
+    fun deleteAllChatHistory(onResult: ((deleted: Boolean, message: String) -> Unit)? = null) {
+        main.post {
+            if (running) {
+                val message = "Stop or finish the current task before deleting chat history."
+                mainChatListener?.onMessage("ai", message)
+                onResult?.invoke(false, message)
+                return@post
+            }
+            if (!ChatHistoryStore.clearAll(this)) {
+                val message = "Chat history could not be cleared from storage. No deletion was confirmed."
+                mainChatListener?.onMessage("note", message)
+                onResult?.invoke(false, message)
+                return@post
+            }
+            transcript.clear()
+            agent.reset()
+            mainChatListener?.onTranscriptRestored(emptyList())
+            mainChatListener?.onStatus("Chat history deleted", OrbView.Mode.IDLE)
+            val message = "Chat history deleted"
+            mainChatListener?.onMessage("note", "Active and archived chat history deleted from this device.")
+            onResult?.invoke(true, message)
+        }
+    }
+
     fun resetMainChat() {
         main.post {
             if (!running) {
@@ -688,6 +719,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
         else -> OrbView.Mode.IDLE
     }
+
+    /** Snapshot of the persisted conversation for Agent restoration; UI notes/status never enter AI context. */
+    fun conversationContext(): List<Pair<String, String>> =
+        transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
 
     private fun appendTranscript(kind: String, text: String) {
         transcript.add(Pair(kind, text))
@@ -1221,7 +1256,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             Regex("^(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\b"),
             Regex("^(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\b")
         )
-        return patterns.any { it.containsMatchIn(text) }
+        return patterns.any { it.containsMatchIn(text) } ||
+            FastIntents.parse(text) != null ||
+            LiveSports.isScoreRequest(text) || WeatherService.isWeatherRequest(text) ||
+            LiveNews.isNewsRequest(text) || LiveWebSearch.isLiveInfoRequest(text) || LiveWebSearch.isSearchRequest(text)
     }
 
     private fun submit(
@@ -1280,6 +1318,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
 
         val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
+        if (routeToAgent && conversationOnly) notifyModeSwitch(true)
         if ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent)) {
             wakeGen++
             appendTranscript("me", t)
@@ -1593,7 +1632,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             if (panel != null) {
                 panelStatus?.text = text
             } else if (running) {
-                showStrip(text)
+                // While the user is looking at Orion's own chat, its header already shows status;
+                // a floating strip would just cover the title and Stop controls.
+                val inOwnChat = mainChatActive && try { currentPackageName() == packageName } catch (_: Exception) { false }
+                if (inOwnChat) mainChatListener?.onStatus(text, OrbView.Mode.THINKING) else showStrip(text)
             }
         }
     }
@@ -1690,7 +1732,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             ?: return "error: cannot launch $bestLabel"
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(launch)
-        Thread.sleep(1800)
+        // Return as soon as the target app is in front instead of always waiting 1.8 s.
+        val target = best.activityInfo.packageName
+        var waited = 0
+        while (waited < 1800) {
+            Thread.sleep(150); waited += 150
+            if (try { currentPackageName() == target } catch (_: Exception) { false }) { Thread.sleep(250); break }
+        }
         return "opened $bestLabel"
     }
 

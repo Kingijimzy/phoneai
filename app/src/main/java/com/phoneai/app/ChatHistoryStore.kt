@@ -113,8 +113,41 @@ object ChatHistoryStore {
         save(context, transcript)
     }
 
+    /** Delete one archived conversation by its persisted timestamp; commit before reporting success. */
+    @Synchronized
+    fun deleteArchived(context: Context, timestamp: Long): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(ARCHIVE, "[]") ?: "[]"
+        val updated = removeArchivedEntry(raw, timestamp) ?: return false
+        return prefs.edit().putString(ARCHIVE, updated).commit()
+    }
+
+    /** Remove active and archived transcripts together. Memory notes are stored separately. */
+    @Synchronized
+    fun clearAll(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().remove(KEY).remove(ARCHIVE).commit()
+
     @Synchronized
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY).apply()
+    }
+
+    /** Pure archive filter so timestamp deletion can be regression-tested without Android storage. */
+    internal fun removeArchivedEntry(raw: String, timestamp: Long): String? = try {
+        val source = JSONArray(raw)
+        val kept = JSONArray()
+        var removed = false
+        for (i in 0 until source.length()) {
+            val item = source.optJSONObject(i) ?: continue
+            if (!removed && item.optLong("timestamp", Long.MIN_VALUE) == timestamp) {
+                removed = true
+            } else {
+                kept.put(item)
+            }
+        }
+        if (removed) kept.toString() else null
+    } catch (_: Exception) {
+        null
     }
 }

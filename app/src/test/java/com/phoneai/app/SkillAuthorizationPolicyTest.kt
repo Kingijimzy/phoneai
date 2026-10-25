@@ -36,6 +36,38 @@ class SkillAuthorizationPolicyTest {
         skill, tool, calls, elapsed, approved, supported, consequential
     )
 
+    @Test fun skillAllowlistTracksTheRealToolRegistryWithoutAllowingArbitraryCode() {
+        assertTrue(SkillRegistry.isSupportedTool("browser_snapshot"))
+        assertTrue(SkillRegistry.isSupportedTool("browser_click"))
+        assertTrue(SkillRegistry.isSupportedTool("notification_action"))
+        assertFalse(SkillRegistry.isSupportedTool("run_shell"))
+        assertFalse(SkillRegistry.isSupportedTool("execute_python"))
+    }
+
+    @Test fun allWriteToolsRequireApprovalWhenUsedBySkills() {
+        listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember")
+            .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
+        assertFalse(SkillRegistry.requiresApprovalForTool("web_search"))
+    }
+
+    @Test fun browserOperatorTemplateValidatesAgainstTheLiveToolRegistry() {
+        val template = PhoneAiSkill(
+            id = "browser_operator",
+            version = "1.0.0",
+            description = "Navigate public websites with Orion's built-in browser and inspect results.",
+            allowedTools = setOf(
+                "browser_snapshot", "browser_click", "browser_type", "browser_scroll",
+                "browser_navigate", "browser_back", "read_screen", "click_text", "scroll",
+                "wait_for", "research_web"
+            ),
+            maxCalls = 8,
+            maxDurationMs = 45_000L,
+            requiresApproval = true,
+            enabled = false
+        )
+        assertTrue(SkillRegistry.validate(template).allowed)
+    }
+
     @Test fun missingOrDisabledSkillIsDenied() {
         assertEquals("Skill is not registered.", check(skill = null).reason)
         assertEquals("Skill is disabled.", check(skill = skill(enabled = false)).reason)
