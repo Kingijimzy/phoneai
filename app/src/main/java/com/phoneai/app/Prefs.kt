@@ -138,6 +138,13 @@ object Prefs {
 
     // ---- trading (Orion Trading)
     // ---- trading
+    /** Analysis-first trading is enabled by default; order placement needs an explicit opt-in. */
+    fun tradingReadOnly(c: Context): Boolean = sp(c).getBoolean("trading_read_only", true)
+    fun setTradingReadOnly(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("trading_read_only", enabled).apply()
+
+    /** PLAN blocks write tools; ACT uses normal scoped controls; FULL still keeps safety and confirmation gates. */
+    fun executionMode(c: Context): String = sp(c).getString("execution_mode", "ACT")?.uppercase()?.takeIf { it in setOf("PLAN", "ACT", "FULL") } ?: "ACT"
+    fun setExecutionMode(c: Context, mode: String) = sp(c).edit().putString("execution_mode", mode.uppercase().takeIf { it in setOf("PLAN", "ACT", "FULL") } ?: "ACT").apply()
     fun bybitKey(c: Context): String =
         ApiKeyVault.read(c, "enc_bybit_key", "bybit_key")
     fun bybitSecret(c: Context): String =
