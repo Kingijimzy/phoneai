@@ -44,3 +44,28 @@ class MarketToolsTest {
         assertEquals("• one\n• two", Markdown.normalizeLines("- one\n* two"))
     }
 }
+
+class TradeProposalsTest {
+    private val resolve: (String) -> String? = { it.uppercase().let { s -> if (s.endsWith("USDT")) s else s + "USDT" } }
+
+    @Test fun parsesTradeAndAlertLinesAndHidesThem() {
+        val reply = "Setup looks fine.\nTRADE: long btc 200 stop=60000 target=65000 | breakout retest\nALERT: ETH below 3000\nMEMORY: x"
+        val p = TradeProposals.parse(reply, resolve)
+        assertEquals(1, p.trades.size)
+        assertEquals("BTCUSDT", p.trades[0].symbol)
+        assertEquals(60000.0, p.trades[0].stop, 0.0)
+        assertEquals(65000.0, p.trades[0].target!!, 0.0)
+        assertEquals(1, p.alerts.size)
+        assertEquals(false, p.alerts[0].above)
+        assertTrue(!p.visible.contains("TRADE:") && !p.visible.contains("ALERT:") && p.visible.contains("MEMORY"))
+    }
+
+    @Test fun tradeWithoutStopIsIgnored() {
+        assertEquals(0, TradeProposals.parse("TRADE: long BTC 200 target=65000", resolve).trades.size)
+    }
+
+    @Test fun sessionsOverlap() {
+        assertTrue(TradeProposals.sessionAt(13).contains("London + New York"))
+        assertTrue(TradeProposals.sessionAt(22).contains("quiet"))
+    }
+}
