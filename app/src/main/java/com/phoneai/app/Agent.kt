@@ -378,6 +378,13 @@ Rules:
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
+            val presetInstruction = when (Prefs.taskPreset(svc)) {
+                "TRADING" -> "TASK PRESET — TRADING: Treat all market analysis as evidence-first and read-only. State symbol, timeframe, source/data freshness, bias, invalidation, and uncertainty when available. Never place, close, or cancel orders automatically. Trading writes remain blocked by the trading read-only preference unless the user explicitly changes that setting; existing confirmations and risk limits still apply."
+                "GAMING" -> "TASK PRESET — GAMING: Prioritize visible-screen evidence, concise stepwise controls, and low-latency local actions. Use bounded play steps, inspect after meaningful screen changes, stop on purchase/payment/login/security prompts, and never spend currency or confirm purchases without explicit approval."
+                "RESEARCH" -> "TASK PRESET — RESEARCH: Prefer read-only sources, compare evidence, identify freshness and uncertainty, preserve source URLs, and do not take phone or external write actions unless the user separately asks for that action."
+                else -> "TASK PRESET — GENERAL: Match the user's goal, use the narrowest suitable tools, and keep all existing task-scope, safety, and approval checks."
+            }
+            sb.append("\n\n").append(presetInstruction)
             sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc, request).take(if (request.isNullOrBlank()) 1400 else 900))
             if (!request.isNullOrBlank()) AgentLessons.learnFrom(svc, "orion", request)
             sb.append("\n\nYour specialist team (delegate with ask_agent when the user wants that specialty; they also have their own screen under Tools → Agents):\n").append(AgentProfiles.rosterBlock())
