@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 class MainActivity : ComponentActivity() {
     private lateinit var content: FrameLayout
     private lateinit var statusLabel: TextView
-    private var homeOrb: OrbView? = null
     private var selectedTab = "Home"
     private var composeStatus: MutableState<String>? = null
 
@@ -376,21 +375,32 @@ class MainActivity : ComponentActivity() {
             }
             elevation = dp(2).toFloat()
         }
-        val avatar = OrbView(this).apply {
-            contentDescription = "Orion animated energy core. Tap to open chat."
+        val avatar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            contentDescription = "Orion monochrome status waveform. Tap to open chat."
             isClickable = true
             isFocusable = true
-            setOnTouchListener { v, e ->
-                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.animate().scaleX(.97f).scaleY(.97f).setDuration(90).start()
-                else if (e.actionMasked == android.view.MotionEvent.ACTION_UP || e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
-                false
+            val heights = intArrayOf(8, 12, 17, 11, 22, 15, 19, 10, 7)
+            heights.forEachIndexed { index, height ->
+                val bar = View(this@MainActivity).apply {
+                    background = GradientDrawable().apply {
+                        setColor(if (index == 4) Theme.TEXT else Theme.LINE)
+                        cornerRadius = dp(2).toFloat()
+                    }
+                }
+                addView(bar, LinearLayout.LayoutParams(dp(3), dp(height)).apply {
+                    leftMargin = dp(3)
+                    rightMargin = dp(3)
+                })
             }
             setOnClickListener { showTab("Chat") }
         }
-        homeOrb = avatar
-        val heroOrbSize = if (resources.configuration.screenHeightDp < 700) 132 else 150
-        hero.addView(avatar, LinearLayout.LayoutParams(dp(heroOrbSize), dp(heroOrbSize)).apply { gravity = Gravity.CENTER; bottomMargin = dp(5) })
-        hero.addView(label("ORION  /  ONLINE", 10f, Theme.CYAN, true).apply { gravity = Gravity.CENTER; letterSpacing = .13f })
+        hero.addView(avatar, LinearLayout.LayoutParams(-1, dp(34)).apply {
+            gravity = Gravity.CENTER
+            bottomMargin = dp(10)
+        })
+        hero.addView(label("ORION  /  ONLINE", 10f, Theme.TEXT, true).apply { gravity = Gravity.CENTER; letterSpacing = .13f })
         hero.addView(label("Ready when you are.", 18f, Theme.TEXT, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, dp(4)) })
         hero.addView(label("Talk naturally, explore an idea, or ask for help with a task.", 12f, Theme.MUTED).apply {
             gravity = Gravity.CENTER; setLineSpacing(dp(2).toFloat(), 1f)
@@ -551,15 +561,36 @@ class MainActivity : ComponentActivity() {
         gap(page, action("Permissions & diagnostics", "Accessibility, microphone, network and device tools") {
             startActivity(Intent(this, SettingsActivity::class.java))
         })
-        gap(page, action("Open full-screen chat", "A separate conversation from the floating command orb") {
+        gap(page, action("Open full-screen chat", "A separate conversation from the quick-command panel") {
             startActivity(Intent(this, MainChatActivity::class.java))
         })
         gap(page, action("Open Android accessibility settings", "Required for on-screen phone control") {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            showAccessibilityDisclosure()
         })
         page.addView(label("Orion asks before consequential actions. API keys stay on-device and are not shown in chat.", 12f, Theme.MUTED).apply {
             setPadding(0, dp(20), 0, 0)
         })
+    }
+
+    /**
+     * Explain on-screen access before sending the user to Android's accessibility settings.
+     * This is a privacy disclosure, not a claim that the service is required for ordinary chat.
+     */
+    private fun showAccessibilityDisclosure() {
+        AlertDialog.Builder(this)
+            .setTitle("Enable on-screen control?")
+            .setMessage(
+                "When enabled, Orion can read visible screen text and controls, observe app/window changes, " +
+                    "and tap, type, or scroll in apps for tasks you request. For AI-backed tasks, relevant " +
+                    "screen text or screenshots may be sent to the AI provider selected in Settings. " +
+                    "Sensitive actions still require confirmation, but you should review each action. " +
+                    "You can disable this service at any time in Android Accessibility settings."
+            )
+            .setNegativeButton("Not now", null)
+            .setPositiveButton("Continue to settings") { _, _ ->
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            .show()
     }
 
     private fun buildStatusText(): String {
@@ -571,8 +602,6 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshStatus() {
         composeStatus?.value = buildStatusText()
-        val service = PhoneAiService.instance
-        homeOrb?.mode = service?.displayMode() ?: OrbView.Mode.IDLE
         if (::statusLabel.isInitialized) statusLabel.text = "●  " + buildStatusText()
     }
 
