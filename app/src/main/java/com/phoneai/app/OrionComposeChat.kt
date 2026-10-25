@@ -81,6 +81,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
+private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
+private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
+
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
     val ticks = 96.toChar().toString()
