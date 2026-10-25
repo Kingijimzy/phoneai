@@ -48,7 +48,35 @@ object AgentCheckpointStore {
 
     fun markRunning(c: Context): Boolean = update(c) {
         it.put("status", "running")
-        it.remove("recoveryNotice")
+        // Keep recovery evidence until the user has explicitly acknowledged it.
+    }
+
+    fun needsRecoveryConfirmation(c: Context): Boolean = synchronized(lock) {
+        try {
+            val f = file(c)
+            if (!f.exists()) return@synchronized false
+            JSONObject(f.readText()).optJSONObject("inFlight") != null
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    /** Clear an uncertain action only after the user confirms they inspected its outcome. */
+    fun acknowledgeRecovery(c: Context, confirmation: String): Boolean {
+        if (confirmation.isBlank()) return false
+        return synchronized(lock) {
+            val o = try {
+                val f = file(c)
+                if (f.exists()) JSONObject(f.readText()) else null
+            } catch (_: Exception) { null } ?: return@synchronized false
+            val inFlight = o.optJSONObject("inFlight") ?: return@synchronized false
+            val tool = inFlight.optString("tool", "unknown").take(80)
+            o.remove("inFlight")
+            o.put("recoveryNotice", "User confirmed checking the outcome of interrupted action '$tool'. Confirmation: " + confirmation.take(240))
+            o.put("status", "paused")
+            o.put("updatedAt", System.currentTimeMillis())
+            save(c, o)
+        }
     }
 
     /**
@@ -95,7 +123,13 @@ object AgentCheckpointStore {
     }
 
     /** Persist intent before executing any tool, so a process death cannot erase the uncertain action. */
-    fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = update(c) { o ->
+    fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = synchronized(lock) {
+        val existing = try {
+            val f = file(c)
+            if (f.exists()) JSONObject(f.readText()) else null
+        } catch (_: Exception) { null } ?: return@synchronized false
+        if (existing.optJSONObject("inFlight") != null) return@synchronized false
+        update(c) { o ->
         o.put("inFlight", JSONObject()
             .put("tool", tool.take(80))
             .put("args", safeArgs(args))
@@ -116,11 +150,14 @@ object AgentCheckpointStore {
         while (steps.length() > MAX_RECORDED_STEPS) steps.remove(0)
         o.put("steps", steps)
         o.remove("inFlight")
+        }
     }
 
     fun pause(c: Context): Boolean = update(c) { it.put("status", "paused") }
 
     fun complete(c: Context): Boolean {
+        // Never mark a task complete while an action's outcome is still uncertain.
+        if (needsRecoveryConfirmation(c)) return false
         val saved = update(c) {
             it.put("status", "completed")
             it.remove("inFlight")
