@@ -1228,51 +1228,35 @@ class SettingsActivity : Activity() {
                     vision -> eligible.sortedBy { if (nim.isVision(it)) 0 else 1 }
                     else -> eligible
                 }
-                // A /models catalogue only proves that an ID is listed, not that this key can
-                // call it. Probe every eligible candidate with the provider's real chat endpoint
-                // before exposing it in the picker. Keep failures hidden from normal selection.
+                // Show the catalogue immediately. Probing every model burned quota and made the
+                // picker appear frozen; the chosen model is live-tested once, on selection.
                 val candidates = if (p.id == "nvidia" && vision) ordered.filter { nim.isVision(it) } else ordered
                 runOnUiThread {
-                    Toast.makeText(this, "Live-testing ${candidates.size} models from ${p.label}. This may take a moment.", Toast.LENGTH_LONG).show()
-                }
-                val working = ArrayList<String>()
-                val failures = ArrayList<String>()
-                candidates.forEachIndexed { index, model ->
-                    runOnUiThread {
-                        Toast.makeText(this, "Testing model ${index + 1}/${candidates.size}: ${model.substringAfterLast('/')}", Toast.LENGTH_SHORT).show()
-                    }
-                    val problem = try { nim.testModel(p, model, vision) } catch (e: Exception) { e.message ?: "Probe failed" }
-                    if (problem.isBlank()) working.add(model)
-                    else failures.add(model.substringAfterLast('/') + ": " + problem.take(120))
-                }
-                runOnUiThread {
-                    if (working.isEmpty()) {
-                        val details = failures.take(8).joinToString("\n")
-                        showInfoDialog(
-                            "No verified models",
-                            "None of the ${candidates.size} listed candidates passed a live API test. Your current model setting was not changed. Check the API key, provider model access, credits, and rate limits.\n\n" + details
-                        )
+                    if (candidates.isEmpty()) {
+                        showInfoDialog("No models found", "${p.label} returned no usable chat models for this key.")
                     } else {
                         showChoiceDialog(
-                            p.label + (if (vision) " verified vision models" else " verified chat models"),
-                            "${working.size} of ${candidates.size} models passed a live request using your saved API key. Only verified models are shown. Vision probes check endpoint acceptance; confirm image understanding with a real photo.",
-                            working,
+                            p.label + (if (vision) " vision models" else " chat models"),
+                            "${candidates.size} models available. Tap one; Orion tests it with a real request before saving.",
+                            candidates,
                             { which ->
-                                val selected = working[which]
-                                // Verify again immediately before saving to catch a model that
-                                // became unavailable between catalogue scan and selection.
-                                Toast.makeText(this, "Rechecking " + selected + "...", Toast.LENGTH_SHORT).show()
+                                val selected = candidates[which]
+                                Toast.makeText(this, "Testing " + selected + "...", Toast.LENGTH_SHORT).show()
                                 Thread {
-                                    val problem = nim.testModel(p, selected, vision)
+                                    val problem = try { nim.testModel(p, selected, vision) } catch (e: Exception) { e.message ?: "Probe failed" }
                                     runOnUiThread {
                                         if (problem.isBlank()) {
                                             Prefs.setModel(this, p, vision, selected)
-                                            Toast.makeText(this, "Live-tested and saved: " + selected, Toast.LENGTH_LONG).show()
+                                            Toast.makeText(this, "Saved: " + selected, Toast.LENGTH_LONG).show()
                                         } else {
                                             AlertDialog.Builder(this)
-                                                .setTitle("Model is no longer available")
-                                                .setMessage(selected + " failed its final live test. Your current model has not changed.\n\n" + problem)
-                                                .setPositiveButton("OK", null)
+                                                .setTitle("Model test failed")
+                                                .setMessage(selected + " did not pass a live test.\n\n" + problem)
+                                                .setPositiveButton("Use anyway") { _, _ ->
+                                                    Prefs.setModel(this, p, vision, selected)
+                                                    Toast.makeText(this, "Saved (untested): " + selected, Toast.LENGTH_LONG).show()
+                                                }
+                                                .setNegativeButton("Cancel", null)
                                                 .show()
                                         }
                                     }

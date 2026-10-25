@@ -491,10 +491,10 @@ class Nim(private val ctx: Context) {
     }
 
     /**
-     * Uses the explicitly selected compatible provider as primary.
-     * Provider-level fallback is permitted only after an HTTP 429, and at most one
-     * alternate provider is tried. Other failures are surfaced instead of silently
-     * rotating through saved keys and burning their quotas.
+     * Uses the selected compatible provider as primary. If it fails for any provider-side
+     * reason (rate limit, timeout, empty reply, overload, bad model, bad key, no connection)
+     * Orion rotates through the other saved providers, skipping any that are cooling down.
+     * Quota-saver mode allows one backup; otherwise up to three.
      */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
@@ -508,48 +508,42 @@ class Nim(private val ctx: Context) {
         val primary = if (usable(selected)) selected else Providers.all.firstOrNull { usable(it) }
             ?: throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
 
-        val backup = Providers.all.firstOrNull { it.id != primary.id && Prefs.hasKey(ctx, it.id) && (!vision || it.hasVision) }
+        val now = System.currentTimeMillis()
+        val maxBackups = if (Prefs.quotaSaver(ctx)) 1 else 3
+        val backups = Providers.all
+            .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
+            .take(maxBackups)
         val mode = if (vision) "vision" else "chat"
 
-        fun attempt(p: Provider): String {
+        fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
-            val answer = chatOne(p, messages, vision, maxTokens, temperature, false, fastResponse)
+            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
             lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
             lastFailure.remove(p.id)
             return answer
         }
 
-        try {
-            return attempt(primary)
-        } catch (e: Exception) {
-            if (cancelled) throw RuntimeException("Stopped.")
-            lastFailure[primary.id] = (e.message ?: "Unknown provider error").take(220)
-
-            // Only a confirmed HTTP 429 permits one backup attempt.
-            if (!ProviderFallbackPolicy.shouldTryBackup(e)) {
-                throw RuntimeException("${primary.label} failed; no provider rotation was performed because the failure was not HTTP 429. ${e.message ?: "Unknown provider error"}", e)
-            }
-
-            if (backup == null) {
-                throw RuntimeException("${primary.label} is rate-limited (HTTP 429), and no other compatible saved provider is available.", e)
-            }
-            if ((cooldown[backup.id] ?: 0L) > System.currentTimeMillis()) {
-                throw RuntimeException("${primary.label} is rate-limited (HTTP 429), but the eligible backup is cooling down. No further provider was tried.", e)
-            }
-
-            onStatus?.invoke("${primary.label} returned HTTP 429; trying one backup provider: ${backup.label}...")
+        val failures = ArrayList<String>()
+        val order = listOf(primary) + backups
+        for ((i, p) in order.withIndex()) {
             try {
-                return attempt(backup)
-            } catch (backupError: Exception) {
+                return attempt(p, i < order.size - 1)
+            } catch (e: Exception) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                lastFailure[backup.id] = (backupError.message ?: "Unknown provider error").take(220)
-                throw RuntimeException(
-                    "Primary ${primary.label} was rate-limited (HTTP 429). The single backup ${backup.label} also failed: ${backupError.message ?: "Unknown provider error"}. No additional providers were tried.",
-                    backupError
-                )
+                val msg = (e.message ?: "Unknown provider error").take(220)
+                lastFailure[p.id] = msg
+                failures.add(msg)
+                if (!ProviderFallbackPolicy.shouldTryBackup(e) || i == order.size - 1) {
+                    val tried = if (order.size > 1) " Tried ${i + 1} provider(s): ${order.take(i + 1).joinToString { it.label }}." else
+                        " No other compatible saved provider is available to rotate to; add a second key in Settings."
+                    throw RuntimeException(failures.joinToString(" | ") + tried, e)
+                }
+                val next = order[i + 1]
+                onStatus?.invoke("${p.label} failed (${msg.take(60)}); switching to ${next.label}...")
             }
         }
+        throw RuntimeException(failures.joinToString(" | "))
     }
 
     private fun chatOne(
