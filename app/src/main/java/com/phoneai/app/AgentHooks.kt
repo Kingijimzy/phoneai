@@ -85,7 +85,9 @@ internal object AgentHooks {
   val writeAction = definition.access == ToolAccess.WRITE
   val riskyTarget = writeAction && risky.containsMatchIn(label)
   val riskyTool = writeAction && (tool in setOf("task_delete","forget","update_memory","undo_last")||(tool=="notification_action"&&args.optString("action").equals("reply",true)))
-  val explicitSendIntent=explicit.containsMatchIn(request)||(target.equals("Send",true)&&messagingIntent.containsMatchIn(request)&&!draftOnlyIntent.containsMatchIn(request))
+  // A negated or draft-only request must never authorize a consequential click, even if it contains the word "send".
+  val explicitlyWithheld = Regex("(?i)\\b(don't|do not|never|without|avoid|not to)\\b.{0,48}\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|call)\\b").containsMatchIn(request) || draftOnlyIntent.containsMatchIn(request)
+  val explicitSendIntent=!explicitlyWithheld && (explicit.containsMatchIn(request)||(target.equals("Send",true)&&messagingIntent.containsMatchIn(request)))
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
