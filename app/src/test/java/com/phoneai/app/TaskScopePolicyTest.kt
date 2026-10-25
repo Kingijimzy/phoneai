@@ -35,4 +35,22 @@ class TaskScopePolicyTest {
     @Test fun unknownToolsAreAlwaysDenied() {
         assertNotNull(TaskScopePolicy.blockReason("Open WhatsApp", "run_shell"))
     }
+
+    @Test fun shortFollowUpInheritsRecentActionScope() {
+        val prev = "open WhatsApp and send kingi jimzy good morning"
+        val scope = TaskScopePolicy.scopeFor("yes go ahead", prev, 30_000)
+        assertNull(TaskScopePolicy.blockReason(scope, "open_app"))
+        assertNotNull(TaskScopePolicy.blockReason("yes go ahead", "open_app"))
+    }
+
+    @Test fun staleOrLongFollowUpDoesNotInherit() {
+        val prev = "open WhatsApp and send kingi jimzy good morning"
+        assertEquals("yes go ahead", TaskScopePolicy.scopeFor("yes go ahead", prev, 11 * 60 * 1000L))
+        val long = "tell me a long story about the history of the roman empire please now"
+        assertEquals(long, TaskScopePolicy.scopeFor(long, prev, 1000))
+    }
+
+    @Test fun openWhatsAppRequestIsPhoneAutomation() {
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("open WhatsApp and send kingi jimzy this message good morning chams"))
+    }
 }

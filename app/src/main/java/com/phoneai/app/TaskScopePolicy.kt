@@ -27,6 +27,21 @@ internal object TaskScopePolicy {
         return if (AgentHooks.isPhoneActionRequest(text)) TaskMode.PHONE_AUTOMATION else TaskMode.CHAT
     }
 
+    /**
+     * The scope a command runs under. A short follow-up ("yes", "go ahead", "continue", "the second one")
+     * inherits the previous actionable request's scope for a few minutes, so confirmations are not
+     * misread as plain chat and blocked.
+     */
+    fun scopeFor(command: String, previousScope: String, previousAgeMs: Long): String {
+        val text = command.trim()
+        val words = text.split(Regex("\\s+")).size
+        if (modeFor(text) == TaskMode.CHAT && words <= 8 && previousScope.isNotBlank() &&
+            previousAgeMs in 0..(10 * 60 * 1000L) && modeFor(previousScope) != TaskMode.CHAT) {
+            return previousScope + "\n" + text
+        }
+        return text
+    }
+
     fun blockReason(request: String, toolName: String): String? {
         val definition = ToolRegistry.find(toolName)
             ?: return "Tool '$toolName' is not registered."
