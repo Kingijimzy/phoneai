@@ -652,6 +652,25 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Permanently clear the active transcript and archived chats after the user confirms in the UI. */
+    fun deleteAllChatHistory() {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop or finish the current task before deleting chat history.")
+                return@post
+            }
+            if (!ChatHistoryStore.clearAll(this)) {
+                mainChatListener?.onMessage("note", "Chat history could not be cleared from storage. No deletion was confirmed.")
+                return@post
+            }
+            transcript.clear()
+            agent.reset()
+            mainChatListener?.onTranscriptRestored(emptyList())
+            mainChatListener?.onStatus("Chat history deleted", OrbView.Mode.IDLE)
+            mainChatListener?.onMessage("note", "Active and archived chat history deleted from this device.")
+        }
+    }
+
     fun resetMainChat() {
         main.post {
             if (!running) {
