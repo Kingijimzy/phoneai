@@ -91,6 +91,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenBeforeAction: String = ""
 
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        // Consent is checked before querying the current screen or resolving a target.
+        if (ToolRegistry.requiresAccessibility(tool) && !Prefs.accessibilityDisclosureAccepted(svc)) {
+            val blocked = "error: screen access has not been accepted. Open Orion Settings > Permissions and accept the screen-access disclosure before using app-control or screen-reading tools."
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
         if (failedCallGuard.isBlocked(tool, args)) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
