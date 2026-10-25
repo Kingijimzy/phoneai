@@ -8,7 +8,9 @@ import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 
 /** A failure of one AI service. The next service can still be tried. */
-class AiException(message: String, val rateLimited: Boolean = false) : RuntimeException(message)
+class AiException(message: String, val httpStatus: Int? = null) : RuntimeException(message) {
+    val rateLimited: Boolean get() = httpStatus == 429
+}
 
 /** Talks to the chosen AI service. If it fails, Orion tries the other services you saved keys for. */
 class Nim(private val ctx: Context) {
@@ -646,7 +648,7 @@ class Nim(private val ctx: Context) {
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
-                throw AiException("${p.label}: free limit reached (429).", true)
+                throw AiException("${p.label}: free limit reached (429).", 429)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
