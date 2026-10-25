@@ -21,6 +21,10 @@ class AgentHooksTest {
   assertNotNull("A negated delete must not authorize deleting",
    AgentHooks.scopeBlockReason("Do not delete the account","click_text",JSONObject().put("text","Delete account")))
  }
+ @Test fun positiveSendRequestIsNotBlockedByDraftVerbAlone(){
+  assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
+  assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
+ }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun messageReplyTextAndEmailAreRecognizedAndAuthorizeRequestedSend(){
