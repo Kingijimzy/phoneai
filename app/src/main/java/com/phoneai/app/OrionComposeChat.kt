@@ -83,7 +83,7 @@ import kotlinx.coroutines.withContext
 private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
-private val ChatMint = Color(0xFFE5E5E5)
+private val ChatMint = Color(0xFFE0E0E0)
 private val ChatCopy = Color(0xFFF7FAF9)
 private val ChatMuted = Color(0xFF9B9B9B)
 private val ChatHairline = Color(0xFF303030)
@@ -115,19 +115,7 @@ fun OrionComposeChatScreen(
 ) {
     var draft by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    val welcomeTransition = rememberInfiniteTransition(label = "orion-welcome-motion")
-    val corePulse by welcomeTransition.animateFloat(
-        initialValue = 0.965f,
-        targetValue = 1.035f,
-        animationSpec = infiniteRepeatable(animation = tween(1700), repeatMode = RepeatMode.Reverse),
-        label = "orion-core-breath"
-    )
-    val ringPulse by welcomeTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(animation = tween(2300), repeatMode = RepeatMode.Reverse),
-        label = "orion-ring-breath"
-    )
+
     val statusDotColor by animateColorAsState(
         targetValue = when {
             status.contains("listen", true) || status.contains("speak", true) -> ChatMint
@@ -209,13 +197,13 @@ fun OrionComposeChatScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    Modifier.fillMaxWidth().height(205.dp).clip(RoundedCornerShape(26.dp))
-                        .background(Brush.verticalGradient(listOf(Color(0xFF202020), Color(0xFF0D0D0D))))
-                        .border(1.dp, Color(0xFF383838), RoundedCornerShape(26.dp)),
+                    Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF101010))
+                        .border(1.dp, ChatHairline, RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize().scale(ringPulse)) {
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                             val center = Offset(size.width / 2f, size.height / 2f)
                             for (i in 0..4) drawCircle(
                                 color = ChatMint.copy(alpha = .10f - i * .015f),
@@ -224,9 +212,9 @@ fun OrionComposeChatScreen(
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Box(Modifier.size(94.dp).scale(corePulse).clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(Color(0xFF555555), Color(0xFF242424), Color(0xFF141414))))
-                                .border(1.dp, Color(0xFF8A8A8A).copy(alpha = .7f), CircleShape),
+                            Box(Modifier.size(78.dp).clip(CircleShape)
+                                .background(Color(0xFF202020))
+                                .border(1.dp, Color(0xFF555555), CircleShape),
                                 contentAlignment = Alignment.Center) {
                                 Icon(Icons.Rounded.Waves, null, tint = ChatMint, modifier = Modifier.size(39.dp))
                             }
@@ -300,9 +288,9 @@ fun OrionComposeChatScreen(
         // Composer is the primary surface; actions remain reachable without a second oversized dock.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF222222), Color(0xFF101010))))
-                    .border(1.dp, Color(0xFF444444), RoundedCornerShape(19.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF171717))
+                    .border(1.dp, Color(0xFF383838), RoundedCornerShape(14.dp))
                     .padding(start = 16.dp, end = 7.dp, top = 7.dp, bottom = 7.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
