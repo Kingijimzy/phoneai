@@ -148,6 +148,13 @@ object Trading {
     fun handle(c: Context, t: String, confirm: (String) -> Boolean, ai: (String, String) -> String): String? {
         if (!Regex("balance|wallet|position|trades|price|analy|study|scan|opportunit|setup|buy|long|sell|short|close|cancel|kill|panic|emergency|hunt|watch|alert|journal|bybit|testnet|real money|live|lesson|stats|limit|risk|max").containsMatchIn(t)) return null
         try {
+            val mutatingTradingCommand = Regex(
+                "^(buy|long|sell|short)(\\s|$)|^(close|exit|flatten)\\s|^(kill switch|panic|emergency stop)$|^cancel (all )?orders$|^(use|switch to|go) (real|live) (money|trading|account|mode)$",
+                RegexOption.IGNORE_CASE
+            ).containsMatchIn(t.trim())
+            if (Prefs.tradingReadOnly(c) && mutatingTradingCommand) {
+                return "Trading is in READ-ONLY analysis mode. No order, cancellation, position close, or live-mode change was made. Explicitly disable read-only mode in Trading settings to allow confirmed order actions."
+            }
             // ---- account
             if (Regex("^(my |bybit )?(balance|wallet|account balance|bybit balance|how much (money )?do i have)$").matches(t)) {
                 needKeys(c)?.let { return it }
