@@ -7,6 +7,8 @@ package com.phoneai.app
  * out into more provider requests.
  */
 internal object ProviderFallbackPolicy {
+    /** Never fan one command across a chain of saved providers. */
+    const val MAX_BACKUP_PROVIDERS = 1
     fun shouldTryBackup(error: Throwable): Boolean {
         if (error is InterruptedException) return false
         if (error.message.orEmpty().let {
