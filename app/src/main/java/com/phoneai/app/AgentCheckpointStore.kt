@@ -122,7 +122,7 @@ object AgentCheckpointStore {
             .take(900)
     }
 
-    /** Persist intent before executing any tool, so a process death cannot erase the uncertain action. */
+    /** Persist intent before executing any tool; never overwrite an unresolved action marker. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = synchronized(lock) {
         val existing = try {
             val f = file(c)
@@ -130,26 +130,34 @@ object AgentCheckpointStore {
         } catch (_: Exception) { null } ?: return@synchronized false
         if (existing.optJSONObject("inFlight") != null) return@synchronized false
         update(c) { o ->
-        o.put("inFlight", JSONObject()
-            .put("tool", tool.take(80))
-            .put("args", safeArgs(args))
-            .put("startedAt", System.currentTimeMillis()))
-        o.put("status", "running")
-    }
-
-    /** Only clear inFlight after the tool result is durably recorded. */
-    fun record(c: Context, tool: String, args: JSONObject, result: String): Boolean = update(c) { o ->
-        val steps = o.optJSONArray("steps") ?: JSONArray().also { o.put("steps", it) }
-        steps.put(
-            JSONObject()
+            o.put("inFlight", JSONObject()
                 .put("tool", tool.take(80))
                 .put("args", safeArgs(args))
-                .put("result", safeResult(tool, result))
-                .put("at", System.currentTimeMillis())
-        )
-        while (steps.length() > MAX_RECORDED_STEPS) steps.remove(0)
-        o.put("steps", steps)
-        o.remove("inFlight")
+                .put("startedAt", System.currentTimeMillis()))
+            o.put("status", "running")
+        }
+    }
+
+    /** A result may clear only the matching durable in-flight action. */
+    fun record(c: Context, tool: String, args: JSONObject, result: String): Boolean = synchronized(lock) {
+        val existing = try {
+            val f = file(c)
+            if (f.exists()) JSONObject(f.readText()) else null
+        } catch (_: Exception) { null } ?: return@synchronized false
+        val inFlight = existing.optJSONObject("inFlight") ?: return@synchronized false
+        if (inFlight.optString("tool") != tool) return@synchronized false
+        update(c) { o ->
+            val steps = o.optJSONArray("steps") ?: JSONArray().also { o.put("steps", it) }
+            steps.put(
+                JSONObject()
+                    .put("tool", tool.take(80))
+                    .put("args", safeArgs(args))
+                    .put("result", safeResult(tool, result))
+                    .put("at", System.currentTimeMillis())
+            )
+            while (steps.length() > MAX_RECORDED_STEPS) steps.remove(0)
+            o.put("steps", steps)
+            o.remove("inFlight")
         }
     }
 
