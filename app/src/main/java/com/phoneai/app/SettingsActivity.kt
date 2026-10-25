@@ -539,8 +539,8 @@ class SettingsActivity : Activity() {
         // ---- 3. voice
         val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
-        val liveStyleKeys = arrayOf("dot_matrix", "eyes", "orb", "wave")
-        val liveStyleNames = arrayOf("Dot matrix", "Eyes", "Orb", "Waveform")
+        val liveStyleKeys = arrayOf("dot_matrix", "eyes")
+        val liveStyleNames = arrayOf("Dot matrix", "Eyes")
         add(s3, button("Live-call visual · " + liveStyleNames[liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)], false) {
             val selected = liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)
             AlertDialog.Builder(this)

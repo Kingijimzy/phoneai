@@ -265,10 +265,10 @@ object Prefs {
             ". Do not switch to another language unless the user changes this setting."
     }
 
-    /** Live-call renderer preference: dot_matrix (default) or eyes. */
-    fun liveCallStyle(c: Context): String = sp(c).getString("live_call_style", "dot_matrix") ?: "dot_matrix"
+    /** Only the two user-approved live-call visuals are valid; old orb/wave values migrate to dots. */
+    fun liveCallStyle(c: Context): String = LiveCallStylePolicy.normalize(sp(c).getString("live_call_style", "dot_matrix"))
     fun setLiveCallStyle(c: Context, v: String) = sp(c).edit()
-        .putString("live_call_style", if (v in setOf("eyes", "orb", "wave")) v else "dot_matrix").apply()
+        .putString("live_call_style", LiveCallStylePolicy.normalize(v)).apply()
 
     fun voice(c: Context): Boolean = sp(c).getBoolean("voice", true)
     fun setVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("voice", v).apply()
