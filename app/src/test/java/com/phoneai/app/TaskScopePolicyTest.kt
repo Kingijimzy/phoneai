@@ -56,6 +56,39 @@ class TaskScopePolicyTest {
         assertEquals(long, TaskScopePolicy.scopeFor(long, prev, 1000))
     }
 
+    @Test fun ordinaryActionVerbsInsideExplanationsDoNotTriggerAutomation() {
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("I want to write a poem"))
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("Explain how to open a file"))
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("Show me how computer memory works"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Can you please open WhatsApp"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Write a message to Amma on WhatsApp"))
+    }
+
+    @Test fun localSearchRequestsRouteToReadOnlyResearchTools() {
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Find me a restaurant near me"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("I want to search the web for Android accessibility changes"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Search for restaurants near me"))
+        assertNull(TaskScopePolicy.blockReason("Find me a restaurant near me", "web_search"))
+        assertNull(TaskScopePolicy.blockReason("Search for restaurants near me", "web_search"))
+    }
+
+    @Test fun ordinaryMentionsOfMemoryAndTasksStayInChat() {
+        listOf(
+            "I remember when we first talked",
+            "I have a task about learning how memory works",
+            "I forgot my card at home",
+            "Tell me how computer memory works"
+        ).forEach { assertEquals("$it should stay in chat", TaskMode.CHAT, TaskScopePolicy.modeFor(it)) }
+    }
+
+    @Test fun explicitMemoryAndTaskCommandsRouteToAutomation() {
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Remember that I prefer solid graphite UI"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Create a task to call Amma tomorrow"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Show my tasks"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Forget the note about my old project"))
+    }
+
     @Test fun openWhatsAppRequestIsPhoneAutomation() {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("open WhatsApp and send kingi jimzy this message good morning chams"))
     }

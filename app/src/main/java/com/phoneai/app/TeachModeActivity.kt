@@ -23,11 +23,9 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
         text = s; textSize = size; setTextColor(color)
         if (bold) typeface = Typeface.DEFAULT_BOLD
     }
-    /** Subtle top-lit glass surface shared by Teach Mode controls. */
-    private fun shape(fill: Int, stroke: Int = Theme.LINE) = GradientDrawable(
-        GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(fill, 0xE8131313.toInt())
-    ).apply {
+    /** Opaque graphite surface shared by Teach Mode controls. */
+    private fun shape(fill: Int, stroke: Int = Theme.LINE) = GradientDrawable().apply {
+        setColor(fill)
         cornerRadius = dp(14).toFloat()
         setStroke(dp(1), if (stroke == Theme.LINE) 0x555F5F5F else stroke)
     }

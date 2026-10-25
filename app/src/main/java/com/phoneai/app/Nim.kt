@@ -12,7 +12,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
     val rateLimited: Boolean get() = httpStatus == 429
 }
 
-/** Talks to the chosen AI service. If it fails, Orion tries the other services you saved keys for. */
+/** Talks to the selected AI service. Cross-provider fallback is restricted to HTTP 429 and one backup per command. */
 class Nim(private val ctx: Context) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
@@ -282,13 +282,20 @@ class Nim(private val ctx: Context) {
     fun allModels(p: Provider): List<String> {
         val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
+        if (!Prefs.allowPaidProviders(ctx) && p.requiresPaidOptIn) {
+            throw IllegalStateException("Model discovery for ${p.label} is blocked until you explicitly allow paid/metered providers in Settings.")
+        }
         val keyFingerprint = java.security.MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         val cacheKey = p.id + ":" + keyFingerprint
         val cached = modelCatalogCache[cacheKey]
         val now = System.currentTimeMillis()
-        if (cached != null && now - cached.first < MODEL_CATALOG_TTL_MS) return cached.second
+        if (cached != null && now - cached.first < MODEL_CATALOG_TTL_MS) {
+            return cached.second.filter { id ->
+                ProviderBillingPolicy.isAllowed(p.id, id, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
+            }
+        }
         val url = p.listUrl ?: (p.base + "/models")
         val r = try {
             request(p, "GET", url, null, key, 25000)
@@ -310,7 +317,9 @@ class Nim(private val ctx: Context) {
         }
         val result = ids.filter { it.isNotBlank() }.distinct().sorted()
         modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
-        return result
+        return result.filter { id ->
+            ProviderBillingPolicy.isAllowed(p.id, id, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
+        }
     }
 
     /**
@@ -322,6 +331,9 @@ class Nim(private val ctx: Context) {
         // A model-picker probe is its own user command and must not inherit the
         // previous probe's request count when the same Nim instance is reused.
         beginCommand()
+        if (!ProviderBillingPolicy.isAllowed(p.id, model, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))) {
+            return "Blocked: ${p.label} / $model may incur paid or metered usage. Enable the explicit paid-provider setting in Settings only if you accept possible charges."
+        }
         if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
         val probePrefs = ctx.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         val probeKey = "nvidia_probe_${if (vision) "vision" else "chat"}_${model.hashCode()}"
@@ -404,7 +416,17 @@ class Nim(private val ctx: Context) {
                 out.addAll(if (vision) free.filter { isVision(it) } else free)
                 out.addAll(if (vision) fb.second else fb.first)
             }
-            "anthropic", "openai", "github", "mistral", "deepseek", "cerebras" -> {
+            "groq", "cerebras", "mistral", "sambanova", "together", "fireworks", "huggingface" -> {
+                // Prefer models actually advertised by this key's live catalogue. Static IDs
+                // are only bounded recovery candidates when discovery is unavailable (e.g. quota saver).
+                val compatible = if (vision) ok.filter { isVision(it) } else ok.filter { !isVision(it) }
+                for (pref in preferred) {
+                    compatible.filter { it.contains(pref, ignoreCase = true) }.forEach { if (it !in out) out.add(it) }
+                }
+                compatible.forEach { if (it !in out) out.add(it) }
+                out.addAll(if (vision) fb.second else fb.first)
+            }
+            "anthropic", "openai", "deepseek" -> {
                 out.addAll(if (vision) fb.second else fb.first)
             }
             else -> {
@@ -425,7 +447,9 @@ class Nim(private val ctx: Context) {
                 out.addAll(if (vision) fb.second else fb.first)
             }
         }
-        return out.distinct()
+        return out.distinct().filter { model ->
+            ProviderBillingPolicy.isAllowed(p.id, model, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
+        }
     }
 
     /** Converts OpenAI-style messages to Anthropic's format. */
@@ -491,10 +515,10 @@ class Nim(private val ctx: Context) {
     }
 
     /**
-     * Uses the selected compatible provider as primary. If it fails for any provider-side
-     * reason (rate limit, timeout, empty reply, overload, bad model, bad key, no connection)
-     * Orion rotates through the other saved providers, skipping any that are cooling down.
-     * Quota-saver mode allows one backup; otherwise up to three.
+     * Uses the selected compatible provider as primary. A backup provider is considered only
+     * after an explicit HTTP 429 rate-limit response; timeouts, empty replies, bad models,
+     * authentication failures, network errors, and other HTTP statuses stop provider rotation.
+     * Per-command request budgeting still bounds all model probes and retries.
      */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
@@ -502,17 +526,34 @@ class Nim(private val ctx: Context) {
         // multi-step user command. Its explicit beginCommand() must cover the
         // entire run, including every model retry and any permitted 429 backup.
         val selected = Prefs.provider(ctx, vision)
-        fun usable(p: Provider): Boolean =
+        fun configured(p: Provider): Boolean =
             (Prefs.hasKey(ctx, p.id) || p.noKey) && (!vision || p.hasVision)
+        fun modelAllowed(p: Provider): Boolean = ProviderBillingPolicy.isAllowed(
+            p.id, Prefs.model(ctx, p, vision), p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx)
+        )
+        if (configured(selected) && !modelAllowed(selected)) {
+            throw IllegalStateException(
+                "${selected.label} / ${Prefs.model(ctx, selected, vision)} may incur paid or metered usage. " +
+                    "Orion blocked the request because paid-provider use is off. Enable the explicit paid-provider setting in Settings only if you accept possible charges."
+            )
+        }
+        fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        val primary = if (usable(selected)) selected else Providers.all.firstOrNull { usable(it) }
-            ?: throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+        val primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
+            ?: if (Providers.all.any { configured(it) }) {
+                throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
+            } else {
+                throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
+            }
 
         val now = System.currentTimeMillis()
-        val maxBackups = if (Prefs.quotaSaver(ctx)) 1 else 3
-        val backups = Providers.all
-            .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
-            .take(maxBackups)
+        // A single backup is deliberate: a rate limit must not fan one user command
+        // across a chain of providers and burn several free-tier quotas in seconds.
+        val backups = if (Prefs.autoSwitch(ctx)) {
+            Providers.all
+                .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
+                .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
+        } else emptyList()
         val mode = if (vision) "vision" else "chat"
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
@@ -534,7 +575,7 @@ class Nim(private val ctx: Context) {
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 failures.add(msg)
-                if (!ProviderFallbackPolicy.shouldTryBackup(e) || i == order.size - 1) {
+                if (!ProviderFallbackPolicy.shouldTryBackup(e, Prefs.autoSwitch(ctx)) || i == order.size - 1) {
                     val tried = if (order.size > 1) " Tried ${i + 1} provider(s): ${order.take(i + 1).joinToString { it.label }}." else
                         " No other compatible saved provider is available to rotate to; add a second key in Settings."
                     throw RuntimeException(failures.joinToString(" | ") + tried, e)

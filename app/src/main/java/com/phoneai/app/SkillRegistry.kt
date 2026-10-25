@@ -37,19 +37,17 @@ object SkillRegistry {
     )
 
     // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
-    private val supportedTools = setOf(
-        "time", "battery", "device_info", "list_apps", "read_screen",
-        "web_search", "fetch_url", "research_web", "github_public", "bybit_public_ticker", "integration_status", "telegram_status", "mcp_status", "mcp_list_tools", "open_url", "recall", "remember",
-        "wait", "wait_for", "click_text", "scroll", "open_app", "lookup_app",
-        "open_deep_link", "list_app_deeplinks", "system_intent", "type", "ask_user",
-        "task_list", "task_add", "task_update", "task_delete"
-    )
+    // One source of truth: skills may reference any real registered tool, never arbitrary code.
+    private val supportedTools = ToolRegistry.names()
+
 
     // Consequential tools always require approval, regardless of a skill's manifest setting.
-    private val consequentialTools = setOf(
-        "type", "sms", "dial", "copy", "record_screen", "settings",
-        "forget", "update_memory", "open_url", "task_delete", "system_intent"
-    )
+    // Every write-capable tool requires approval when invoked through a skill.
+    private val consequentialTools = ToolRegistry.all
+        .filter { it.access == ToolAccess.WRITE }
+        .map { it.name }
+        .toSet()
+
 
     private val idPattern = Regex("^[a-z0-9][a-z0-9._-]{1,47}$")
     private val versionPattern = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+$")
@@ -128,6 +126,9 @@ object SkillRegistry {
      * Must be checked before each tool call. callsUsed is the count already made by this skill
      * in the current run; elapsedMs is the elapsed time for that run.
      */
+    internal fun isSupportedTool(name: String): Boolean = name in supportedTools
+    internal fun requiresApprovalForTool(name: String): Boolean = name in consequentialTools
+
     fun authorize(
         context: Context,
         skillId: String,
@@ -147,7 +148,7 @@ object SkillRegistry {
             consequentialTools = consequentialTools
         )
     }
-    private fun validate(skill: PhoneAiSkill): SkillDecision {
+    internal fun validate(skill: PhoneAiSkill): SkillDecision {
         if (!idPattern.matches(skill.id)) return SkillDecision(false, "Skill ID must be 2–48 lowercase letters, numbers, dots, underscores, or hyphens.")
         if (!versionPattern.matches(skill.version)) return SkillDecision(false, "Version must use MAJOR.MINOR.PATCH format.")
         if (skill.description.isBlank() || skill.description.length > 500) return SkillDecision(false, "Description must be 1–500 characters.")

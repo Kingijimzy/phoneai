@@ -14,6 +14,7 @@ object Markdown {
         val t = line.trimStart()
         when {
             t.startsWith("- ") || t.startsWith("* ") -> "• " + t.drop(2)
+            Regex("^\\d+[.)]\\s+").containsMatchIn(t) -> "• " + t.replaceFirst(Regex("^\\d+[.)]\\s+"), "")
             else -> line
         }
     }

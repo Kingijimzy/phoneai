@@ -16,6 +16,14 @@ class ToolRegistryTest {
     }
 
 
+    @Test fun screenInspectionAndAppControlRequireExplicitDisclosure() {
+        listOf("read_screen", "click", "click_text", "type", "tap", "verify_action", "look", "play", "open_app")
+            .forEach { assertTrue("$it must require screen-access consent", ToolRegistry.requiresAccessibility(it)) }
+        assertFalse(ToolRegistry.requiresAccessibility("browser_snapshot"))
+        assertFalse(ToolRegistry.requiresAccessibility("bybit_public_ticker"))
+        assertFalse(ToolRegistry.requiresAccessibility("weather"))
+    }
+
     @Test fun coordinateToolsDocumentTheirRequiredSafetyOptIn() {
         assertTrue(ToolRegistry.find("validate_action")!!.promptLine.contains("allow_coordinates?"))
         assertTrue(ToolRegistry.find("tap")!!.promptLine.contains("allow_coordinates:true"))

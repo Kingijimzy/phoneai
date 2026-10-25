@@ -72,14 +72,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         cornerRadius = dp(radius).toFloat()
         if (stroke != 0) setStroke(dp(1), stroke)
     }
-    /** Lightweight glass treatment: translucent-looking layered charcoal, a cool top sheen and a fine reflective edge. */
-    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) = GradientDrawable(
-        GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(0xF0232323.toInt(), 0xEA171717.toInt(), 0xF00C0C0C.toInt())
-    ).apply {
-        cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), stroke)
-    }
+    /** Classic opaque graphite surface: no translucent glass layers or decorative sheen. */
+    private fun glass(radius: Int, stroke: Int = 0x555F5F5F) =
+        rounded(0xFF181818.toInt(), radius, stroke)
 
     private fun animateIn(view: View, delay: Long = 0L) {
         view.alpha = 0f
@@ -154,6 +149,34 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         heading.addView(label("Your conversations", 25f, 0xFFF4F4F4.toInt(), true).apply { setPadding(0, dp(4), 0, dp(3)) })
         heading.addView(label("${chats.size} saved chats · stored on this device", 12f, 0xFF8B8B8B.toInt()))
         header.addView(heading)
+        val clearAll = historyActionButton("Clear all") {
+            AlertDialog.Builder(this@MainChatActivity)
+                .setTitle("Delete all chat history?")
+                .setMessage("This permanently deletes the active transcript and every archived conversation on this device. Saved Orion memory notes are not affected.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete all") { _, _ ->
+                    val service = PhoneAiService.instance
+                    if (service != null) {
+                        service.deleteAllChatHistory { deleted, message ->
+                            if (deleted) {
+                                composeLines.clear()
+                                dialog.dismiss()
+                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
+                        if (deleted) {
+                            composeLines.clear()
+                            dialog.dismiss()
+                        }
+                        Toast.makeText(this@MainChatActivity, if (deleted) "Chat history deleted" else "Could not delete chat history", Toast.LENGTH_SHORT).show()
+                    }
+                }.show()
+        }
+        header.addView(clearAll)
         val close = historyActionButton("Close") { dialog.dismiss() }
         header.addView(close)
         root.addView(header)
@@ -185,6 +208,20 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
+                top.addView(historyActionButton("Delete") {
+                    AlertDialog.Builder(this@MainChatActivity)
+                        .setTitle("Delete this conversation?")
+                        .setMessage("This permanently removes this archived transcript from this device.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Delete") { _, _ ->
+                            val deleted = ChatHistoryStore.deleteArchived(this@MainChatActivity, chat.timestamp)
+                            Toast.makeText(this@MainChatActivity, if (deleted) "Conversation deleted" else "Could not delete conversation", Toast.LENGTH_SHORT).show()
+                            if (deleted) {
+                                dialog.dismiss()
+                                showChatHistory()
+                            }
+                        }.show()
+                })
                 top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
                 card.addView(top)
                 card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })

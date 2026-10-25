@@ -55,10 +55,33 @@ internal object AgentHooks {
  fun screenChanged(before: String, after: String): Boolean =
   screenFingerprint(before) != screenFingerprint(after)
  private val phoneActionWords=Regex(
-  "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|whatsapp|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b",
+  "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|record|turn|switch|screenshot|install|download|close|look at my|check my|fill|login|log in|sign in|research|browse|post|share|buy|order|book|delete|mark as done|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
  )
- fun isPhoneActionRequest(request:String):Boolean=phoneActionWords.containsMatchIn(request)
+ private val memoryActionWords = Regex(
+  "(?i)^\\s*(please\\s+)?(can you\\s+)?(remember|recall|forget|save|store|update|pin|unpin|delete|clear)\\s+(that|this|my|me|i prefer|i like|i do not like|i don't like|to|for me|the note|the memory|memory|memories|note|notes)\\b"
+ )
+ private val taskActionWords = Regex(
+  "(?i)^\\s*(please\\s+)?(create|add|list|show|update|complete|finish|delete|remove|cancel|clear|schedule|mark)\\b.*\\b(tasks?|to-?dos?|reminders?)\\b|^\\s*(please\\s+)?(remind me|set (a )?reminder)\\b"
+ )
+ private val contentActionWords = Regex(
+  "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(write|compose|draft|prepare)\\b.*\\b(message|email|reply|text|whatsapp|telegram)\\b"
+ )
+ private val liveLookupIntent = Regex(
+  "(?i)^\\s*(?:(?:please|can you|could you|would you|will you)\\s+)*(what(?:'s| is)(?: the)?|give me|tell me|check|look up|fetch|get|find|current|latest|how much is|price of)\\b.*\\b(price|ticker|quote|market|bybit|btc|bitcoin|eth|ethereum|sol|xrp|bnb|doge|ada|ton)\\b"
+ )
+ private val compactAssetQuoteIntent = Regex(
+  "(?i)^\\s*(btc|bitcoin|eth|ethereum|sol|xrp|bnb|doge|ada|ton)\\s+(price|ticker|quote)\\b"
+ )
+ fun isPhoneActionRequest(request:String):Boolean {
+  val text = request.trim()
+  return phoneActionWords.containsMatchIn(text) ||
+   memoryActionWords.containsMatchIn(text) ||
+   taskActionWords.containsMatchIn(text) ||
+   contentActionWords.containsMatchIn(text) ||
+   liveLookupIntent.containsMatchIn(text) ||
+   compactAssetQuoteIntent.containsMatchIn(text)
+ }
  fun verifySendEvidence(contact:String,message:String,screen:String):String {
   val target=contact.trim(); val body=message.trim()
   if(target.isBlank()||body.isBlank()) return "error: contact and exact message text are required."

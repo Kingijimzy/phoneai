@@ -114,6 +114,18 @@ internal object ToolRegistry {
 
     fun find(name: String): ToolDefinition? = byName[name]
     fun access(name: String): ToolAccess? = find(name)?.access
+
+    /**
+     * Tools that inspect the visible screen or control apps through Android's accessibility
+     * path must not run until the user has accepted Orion's separate screen-access disclosure.
+     */
+    private val accessibilityRequired = setOf(
+        "open_app", "open_deep_link", "read_screen", "validate_action", "verify_action", "verify_send",
+        "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll",
+        "type", "key", "look", "play"
+    )
+
+    fun requiresAccessibility(name: String): Boolean = name in accessibilityRequired
     fun names(): Set<String> = byName.keys
 
     private val groupKeywords: Map<String, Regex> = mapOf(
