@@ -503,7 +503,7 @@ class SettingsActivity : Activity() {
         // ---- 3. AI services
         val s2 = card(
             col, "AI providers & models",
-            "Orion uses your selected primary provider first and only falls back when a request is rate-limited or the provider is unavailable. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
+            "Orion uses your selected primary provider first. It may try at most one backup provider only after an explicit HTTP 429 rate-limit response; other failures stop fallback. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
         )
         add(s2, button("Get a free Gemini key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))

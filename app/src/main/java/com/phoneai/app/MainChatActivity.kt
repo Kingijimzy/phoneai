@@ -162,8 +162,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setPositiveButton("Delete all") { _, _ ->
                     val service = PhoneAiService.instance
                     if (service != null) {
-                        service.deleteAllChatHistory()
-                        dialog.dismiss()
+                        service.deleteAllChatHistory { deleted, message ->
+                            if (deleted) {
+                                composeLines.clear()
+                                dialog.dismiss()
+                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(this@MainChatActivity, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
                     } else {
                         val deleted = ChatHistoryStore.clearAll(this@MainChatActivity)
                         if (deleted) {
