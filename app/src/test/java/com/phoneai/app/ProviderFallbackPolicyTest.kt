@@ -30,4 +30,13 @@ class ProviderFallbackPolicyTest {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("Stopped before sending another request: budget")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("stopped after three identical HTTP failures (HTTP 429)", 429)))
     }
+    @Test fun disabledAutoSwitchBlocksEvenRateLimitFallback() {
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("rate limited", 429), false))
+    }
+
+    @Test fun enabledAutoSwitchAllowsOnlyExplicit429Fallback() {
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("rate limited", 429), true))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("bad request", 400), true))
+    }
+
 }

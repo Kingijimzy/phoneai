@@ -537,9 +537,11 @@ class Nim(private val ctx: Context) {
         val now = System.currentTimeMillis()
         // A single backup is deliberate: a rate limit must not fan one user command
         // across a chain of providers and burn several free-tier quotas in seconds.
-        val backups = Providers.all
-            .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
-            .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
+        val backups = if (Prefs.autoSwitch(ctx)) {
+            Providers.all
+                .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
+                .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
+        } else emptyList()
         val mode = if (vision) "vision" else "chat"
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
@@ -561,7 +563,7 @@ class Nim(private val ctx: Context) {
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 failures.add(msg)
-                if (!ProviderFallbackPolicy.shouldTryBackup(e) || i == order.size - 1) {
+                if (!ProviderFallbackPolicy.shouldTryBackup(e, Prefs.autoSwitch(ctx)) || i == order.size - 1) {
                     val tried = if (order.size > 1) " Tried ${i + 1} provider(s): ${order.take(i + 1).joinToString { it.label }}." else
                         " No other compatible saved provider is available to rotate to; add a second key in Settings."
                     throw RuntimeException(failures.joinToString(" | ") + tried, e)

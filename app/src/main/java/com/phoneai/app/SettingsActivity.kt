@@ -516,7 +516,7 @@ class SettingsActivity : Activity() {
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
         add(s2, visionBtn, 8)
-        switchRow(s2, "Auto-switch to another service if one fails", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
+        switchRow(s2, "Auto-switch to one backup only on HTTP 429", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
