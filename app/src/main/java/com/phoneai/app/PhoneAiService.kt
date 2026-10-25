@@ -461,6 +461,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Clears the active transcript and the in-memory agent chat context. */
+    fun clearActiveConversation(): Boolean {
+        if (running || imageAnalysisRunning) return false
+        val persisted = try {
+            getSharedPreferences("orion_chat_history", MODE_PRIVATE)
+                .edit().remove("active_transcript").commit()
+        } catch (_: Exception) { false }
+        if (!persisted) return false
+        transcript.clear()
+        try { agent.resetConversationContext() } catch (_: Exception) { }
+        main.post {
+            mainChatListener?.onTranscriptRestored(emptyList())
+            mainChatListener?.onStatus("Conversation cleared", currentMode())
+        }
+        return true
+    }
+
     fun sendFromMainChat(
         text: String,
         conversationOnly: Boolean = false,
