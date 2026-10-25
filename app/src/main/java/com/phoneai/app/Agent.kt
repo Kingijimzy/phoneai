@@ -180,9 +180,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return verifiedResult
     }
 
-    private fun chatSystem(): String {
+    private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
-        val mem = MemoryStore.promptBlock(svc).take(900)
+        // Select memories relevant to this request instead of injecting the same recent notes into every chat turn.
+        val mem = MemoryStore.promptBlock(svc, query).take(900)
         return "You are Orion: a capable, warm, sharp personal AI with the calm competence of a cinematic AI co-pilot. You are conversational, curious, practical, and occasionally witty without forcing jokes. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Consequential actions require approval through the app interface; never treat model-generated confirmation arguments as user approval. " +
@@ -239,7 +240,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         taskProofs.clear()
         researchCancelled.set(false)
         nim.resume()
-        val safeSystem = chatSystem().replace(
+        val safeSystem = chatSystem(command).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and you know your own modes: Talk (conversation) and Command (phone actions, web research, trading tools). Orion switches modes automatically, so never tell the user to switch. Answer greetings, ideas and ordinary questions directly. If the user wants something done on the phone (open or use an app, send a message, set alarms, change settings), needs live web/news/prices/weather, or asks to save or recall memories or tasks, reply with exactly the single word ACTION and nothing else."
         )
