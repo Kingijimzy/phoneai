@@ -83,29 +83,35 @@ import kotlinx.coroutines.withContext
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
+    val ticks = 96.toChar().toString()
     source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
         val line = raw.trimEnd()
         if (index > 0) out.append("\n")
         val heading = Regex("^\\s{0,3}(#{1,3})\\s+(.+)$").find(line)
         val bullet = Regex("^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+)$").find(line)
         val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
-        val start = out.length
-        out.append(content)
-        val end = out.length
-        if (heading != null) {
-            val size = when (heading.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp }
-            out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = size), start, end)
+        val size = heading?.let { when (it.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp } }
+        val token = Regex("\\*\\*(.+?)\\*\\*|" + ticks + "([^" + ticks + "]+)" + ticks)
+        var cursor = 0
+        token.findAll(content).forEach { match ->
+            if (match.range.first > cursor) out.append(content.substring(cursor, match.range.first))
+            val bold = match.value.startsWith("**")
+            val inner = match.groupValues[if (bold) 1 else 2]
+            val start = out.length
+            out.append(inner)
+            out.addStyle(androidx.compose.ui.text.SpanStyle(
+                fontWeight = if (bold || size != null) FontWeight.Bold else FontWeight.Medium,
+                fontSize = size ?: 14.sp,
+                background = if (bold) Color.Transparent else Color(0xFF242424)
+            ), start, out.length)
+            cursor = match.range.last + 1
         }
-        val ticks = 96.toChar().toString()
-        val emphasis = Regex("\\*\\*(.+?)\\*\\*").findAll(content).toList() + Regex(ticks + "([^" + ticks + "]+)" + ticks).findAll(content).toList()
-        emphasis.forEach { match ->
-            val isBold = match.value.startsWith("**")
-            val inner = if (isBold) match.groupValues[1] else match.groupValues[1]
-            val from = start + match.range.first + match.value.indexOf(inner)
-            val to = from + inner.length
-            if (from >= start && to <= end && inner.isNotEmpty()) out.addStyle(
-                androidx.compose.ui.text.SpanStyle(fontWeight = if (isBold) FontWeight.Bold else FontWeight.Medium, background = if (isBold) Color.Transparent else Color(0xFF242424)), from, to
-            )
+        if (cursor < content.length) {
+            val start = out.length
+            out.append(content.substring(cursor))
+            if (size != null) out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = size), start, out.length)
+        } else if (content.isEmpty() && size != null) {
+            out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontSize = size), out.length, out.length)
         }
     }
     return out.toAnnotatedString()
