@@ -55,6 +55,15 @@ class AgentHooksTest {
  }
  @Test fun settlesScreen(){val a=listOf("Loading","Loaded","Loaded");var i=0;assertEquals("Loaded",AgentHooks.awaitStableSnapshot({a[minOf(i++,a.lastIndex)]},4,2,0))}
 
+ @Test fun actionWordsInsideNormalSentencesDoNotBecomeCommands() {
+  assertFalse(AgentHooks.isPhoneActionRequest("I want to write a poem"))
+  assertFalse(AgentHooks.isPhoneActionRequest("Explain how to open a file"))
+  assertFalse(AgentHooks.isPhoneActionRequest("Show me how computer memory works"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Can you please open WhatsApp"))
+  assertTrue(AgentHooks.isPhoneActionRequest("What is the BTC price on Bybit"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Write a message to Amma on WhatsApp"))
+ }
+
  @Test fun ordinaryMemoryAndTaskMentionsDoNotBecomeCommands() {
   assertFalse(AgentHooks.isPhoneActionRequest("I remember when we first talked"))
   assertFalse(AgentHooks.isPhoneActionRequest("I have a task about learning memory"))

@@ -56,6 +56,19 @@ class TaskScopePolicyTest {
         assertEquals(long, TaskScopePolicy.scopeFor(long, prev, 1000))
     }
 
+    @Test fun ordinaryActionVerbsInsideExplanationsDoNotTriggerAutomation() {
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("I want to write a poem"))
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("Explain how to open a file"))
+        assertEquals(TaskMode.CHAT, TaskScopePolicy.modeFor("Show me how computer memory works"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Can you please open WhatsApp"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Write a message to Amma on WhatsApp"))
+    }
+
+    @Test fun localSearchRequestsRouteToResearch() {
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Find me a restaurant near me"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
+    }
+
     @Test fun ordinaryMentionsOfMemoryAndTasksStayInChat() {
         listOf(
             "I remember when we first talked",

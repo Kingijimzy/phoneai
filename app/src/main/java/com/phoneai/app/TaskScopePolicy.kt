@@ -8,13 +8,20 @@ internal enum class TaskMode { CHAT, PHONE_AUTOMATION, RESEARCH, READ_ONLY }
 
 internal object TaskScopePolicy {
     private val readOnlyIntent = Regex(
-        "(?i)\\b(read[- ]only|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
+        "(?i)^\\s*(?:(?:please|can you|could you)\\s+)*(read[- ]only|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
     private val researchIntent = Regex(
-        "(?i)\\b(research|browse the web|search the web|look up online|online sources|website|webpage|internet|news articles|compare online|weather|forecast)\\b"
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
     )
+    private val localSearchIntent = Regex(
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you)\\s+)*(find me|recommend|look for)\\b.*\\b(restaurant|hotel|store|shop|cafe|service|nearby|near me)\\b"
+    )
+    private val commandLead = "(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*"
     private val phoneIntent = Regex(
-        "(?i)\\b(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
+        "(?i)^\\s*" + commandLead + "(open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
+    )
+    private val contentActionIntent = Regex(
+        "(?i)^\\s*" + commandLead + "(write|compose|draft|prepare)\\b.*\\b(message|email|reply|text|whatsapp|telegram)\\b"
     )
     private val memoryActionIntent = Regex(
         "(?i)^\\s*(please\\s+)?(can you\\s+)?(remember|recall|forget|save|store|update|pin|unpin|delete|clear)\\s+(that|this|my|me|i prefer|i like|i do not like|i don't like|to|for me|the note|the memory|memory|memories|note|notes)\\b"
@@ -23,7 +30,7 @@ internal object TaskScopePolicy {
         "(?i)^\\s*(please\\s+)?(create|add|list|show|update|complete|finish|delete|remove|cancel|clear|schedule|mark)\\b.*\\b(tasks?|to-?dos?|reminders?)\\b|^\\s*(please\\s+)?(remind me|set (a )?reminder)\\b"
     )
     private val explicitAppAction = Regex(
-        "(?i)\\b(open|launch|close|install|uninstall)\\s+(whatsapp|telegram|chrome|settings|camera|youtube)\\b|\\b(send|message|text|reply|call)\\b.*\\b(whatsapp|telegram|sms|message|text)\\b"
+        "(?i)^\\s*" + commandLead + "(open|launch|close|install|uninstall)\\s+(whatsapp|telegram|chrome|settings|camera|youtube)\\b|^\\s*" + commandLead + "(send|message|text|reply|call)\\b.*\\b(whatsapp|telegram|sms|message|text)\\b"
     )
 
     fun modeFor(request: String): TaskMode {
@@ -36,8 +43,9 @@ internal object TaskScopePolicy {
         if (readOnlyIntent.containsMatchIn(text)) return TaskMode.READ_ONLY
         // Explicit phone/device intent takes precedence over incidental mentions of websites.
         if (phoneIntent.containsMatchIn(text) || explicitAppAction.containsMatchIn(text) ||
-            memoryActionIntent.containsMatchIn(text) || taskActionIntent.containsMatchIn(text)) return TaskMode.PHONE_AUTOMATION
-        if (researchIntent.containsMatchIn(text)) return TaskMode.RESEARCH
+            memoryActionIntent.containsMatchIn(text) || taskActionIntent.containsMatchIn(text) ||
+            contentActionIntent.containsMatchIn(text)) return TaskMode.PHONE_AUTOMATION
+        if (researchIntent.containsMatchIn(text) || localSearchIntent.containsMatchIn(text)) return TaskMode.RESEARCH
         return if (AgentHooks.isPhoneActionRequest(text)) TaskMode.PHONE_AUTOMATION else TaskMode.CHAT
     }
 
