@@ -148,7 +148,7 @@ object SkillRegistry {
             consequentialTools = consequentialTools
         )
     }
-    private fun validate(skill: PhoneAiSkill): SkillDecision {
+    internal fun validate(skill: PhoneAiSkill): SkillDecision {
         if (!idPattern.matches(skill.id)) return SkillDecision(false, "Skill ID must be 2–48 lowercase letters, numbers, dots, underscores, or hyphens.")
         if (!versionPattern.matches(skill.version)) return SkillDecision(false, "Version must use MAJOR.MINOR.PATCH format.")
         if (skill.description.isBlank() || skill.description.length > 500) return SkillDecision(false, "Description must be 1–500 characters.")
