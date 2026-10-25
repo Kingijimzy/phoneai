@@ -150,7 +150,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setMessage("This clears the active transcript on this device. Archived conversations remain unchanged.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Clear") { _, _ ->
-                    ChatHistoryStore.clear(this@MainChatActivity)
+                    val cleared = PhoneAiService.instance?.clearActiveConversation() ?: run {
+                        ChatHistoryStore.clear(this@MainChatActivity)
+                        true
+                    }
+                    if (!cleared) {
+                        Toast.makeText(this@MainChatActivity, "Could not clear the active conversation. Please try again.", Toast.LENGTH_LONG).show()
+                        return@setPositiveButton
+                    }
                     composeLines.clear()
                     dialog.dismiss()
                     Toast.makeText(this@MainChatActivity, "Current conversation cleared", Toast.LENGTH_SHORT).show()
@@ -1026,7 +1033,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             service.sendFromMainChat(
                 value,
                 conversationOnly = !commandMode,
-                autoRoute = !commandMode
+                autoRoute = commandMode
             )
         }
     }
