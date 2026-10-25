@@ -145,7 +145,7 @@ object AgentCheckpointStore {
             if (f.exists()) JSONObject(f.readText()) else null
         } catch (_: Exception) { null } ?: return@synchronized false
         val inFlight = existing.optJSONObject("inFlight") ?: return@synchronized false
-        if (!CheckpointTransitionPolicy.canRecordResult(inFlight.optString("tool"), tool)) return@synchronized false
+        if (!CheckpointTransitionPolicy.canRecordResult(inFlight.optString("tool"), tool, inFlight.optString("args"), safeArgs(args))) return@synchronized false
         update(c) { o ->
             val steps = o.optJSONArray("steps") ?: JSONArray().also { o.put("steps", it) }
             steps.put(
