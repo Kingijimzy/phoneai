@@ -498,6 +498,24 @@ Rules:
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
+        // One-intent commands (play music, Google it in Chrome) skip the model entirely.
+        if (!resumeRequest && !browserActionTask) {
+            val fast = FastIntents.parse(command)
+            if (fast != null) {
+                ui.phase("acting")
+                val r = when (fast) {
+                    is FastIntents.Intent.PlayMedia -> tools.playMedia(fast.query, fast.app)
+                    is FastIntents.Intent.ChromeSearch -> tools.chromeSearch(fast.query)
+                }
+                if (!r.startsWith("error")) {
+                    val say = r.replaceFirstChar { it.uppercase() } + "."
+                    logShortcut("fast_intent", say)
+                    history.put(msg("assistant", JSONObject().put("say", say).put("tool", "done").toString()))
+                    ui.say(say)
+                    return
+                }
+            }
+        }
         // Chart analysis is a deliberate vision fallback: send a screenshot only when the user
         // explicitly asks Orion to inspect a chart, rather than sending screenshots on every turn.
         val chartCommand = command.lowercase()
@@ -554,7 +572,8 @@ Rules:
             "(?i)\\b(search in|search on|inside|within)\\s+(youtube|whatsapp|telegram|instagram|tiktok|facebook|spotify)\\b"
         ).containsMatchIn(command)
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isSearchRequest(command)) {
+        if (!resumeRequest && !browserActionTask && !explicitAppAction &&
+            !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
             val answer = summarizeSearch(command, LiveWebSearch.search(LiveWebSearch.queryFrom(command)))
             logShortcut("web_search", answer)
