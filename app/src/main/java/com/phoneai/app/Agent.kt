@@ -60,13 +60,21 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "type" -> svc.currentAppLabel()
             else -> ""
         }
-        val scopeBlock = AgentHooks.scopeBlockReason(activeRequestScope, tool, args, targetLabel)
-        if (scopeBlock != null) {
-            val blocked = "error: scope guard blocked action. " + scopeBlock
+        val dispatchBlock = AgentDispatchPolicy.blockReason(
+            request = activeRequestScope,
+            tool = tool,
+            args = args,
+            targetLabel = targetLabel,
+            currentPackage = svc.currentPackageName(),
+            currentLabel = svc.currentAppLabel(),
+            stopped = stopped
+        )
+        if (dispatchBlock != null) {
+            val blocked = "error: " + dispatchBlock
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        if (AgentHooks.requiresConfirmation(tool, args, targetLabel) && activeSkillId == null) {
+        if (AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
             val description = when (tool) {
                 "forget" -> "Forget saved memory #" + args.optInt("id", -1)
                 "update_memory" -> "Change saved memory #" + args.optInt("id", -1)
@@ -80,22 +88,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
-        val safetyBlock = SafetyGate.blockReason(
-            tool,
-            when (tool) {
-                "open_app" -> args.optString("name")
-                "browser_type" -> args.optString("target")
-                "open_deep_link" -> args.optString("uri")
-                else -> null
-            },
-            if (tool == "type" || tool == "browser_type") args.optString("text") else null,
-            svc.currentPackageName(),
-            svc.currentAppLabel()
-        )
-        if (safetyBlock != null) {
-            val blocked = "error: safety gate blocked action. $safetyBlock"
-            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-            return blocked
+        // Stop may be tapped while the approval dialog is open. Recheck immediately
+        // before execution so an approved-but-now-cancelled action cannot start afterward.
+        AgentDispatchPolicy.cancellationBlockReason(tool, stopped)?.let { reason ->
+            val cancelled = "error: " + reason
+            taskProofs.record(tool, cancelled)
+            try { ActionLogStore.record(svc, tool, cancelled) } catch (_: Exception) { }
+            return cancelled
         }
         val result = try {
             if (tool in nativeUiActions) {
@@ -415,9 +414,26 @@ Rules:
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
         if (resumeRequest) {
+            if (AgentCheckpointStore.pending(svc) == null) {
+                ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
+                return
+            }
+            if (AgentCheckpointStore.needsRecoveryConfirmation(svc)) {
+                val confirmed = ui.ask(
+                    "The app stopped while an action was in progress, so it may already have happened. Please inspect the phone screen or relevant app state first. Have you checked what happened? Select yes only after checking; otherwise choose no and I will leave the task paused."
+                )
+                if (!confirmed) {
+                    ui.say("I left the task paused. Check the previous action's outcome, then say continue when you are ready.")
+                    return
+                }
+                if (!AgentCheckpointStore.acknowledgeRecovery(svc, "User confirmed they inspected the current phone/app state before resuming.")) {
+                    ui.say("I could not safely record the recovery confirmation. The task remains paused and no new action was started.")
+                    return
+                }
+            }
             val instruction = AgentCheckpointStore.resumeInstruction(svc)
             if (instruction == null) {
-                ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
+                ui.say("I could not read the saved task safely. No actions were resumed.")
                 return
             }
             command = instruction
@@ -585,6 +601,14 @@ Rules:
                 ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
                 return
             }
+            // A Stop tap can race with an in-flight model request. Discard any late plan
+            // before it can be checkpointed or dispatched; the dispatch gate below also
+            // rechecks cancellation to close the next small race window.
+            if (stopped) {
+                AgentCheckpointStore.pause(svc)
+                ui.say("Stopped before the next action could start. I saved the task progress locally.")
+                return
+            }
             history.put(msg("assistant", raw))
             val step = parseJson(raw)
             val say = step.optString("say")
@@ -744,9 +768,11 @@ Rules:
                 else "INVALID: malformed, unsupported, financial, or credential-bearing deep link."
             }
             "system_intent" -> {
-                val allowed = setOf("settings", "wifi_settings", "bluetooth_settings", "display_settings", "app_settings", "location_settings", "accessibility_settings", "notification_settings", "dial", "maps_search", "camera", "calendar", "clock", "open_url")
-                if (a.optString("action").trim().lowercase().replace('-', '_').replace(' ', '_') in allowed) "VALID: system route is allowlisted."
-                else "INVALID: system intent action is not in the local allowlist."
+                if (SystemIntentPolicy.isAllowed(a.optString("action"))) {
+                    "VALID: system route is allowlisted."
+                } else {
+                    "INVALID: system intent action is not in the local allowlist."
+                }
             }
             "resolve_contact" -> if (a.optString("name").isNotBlank()) "VALID: contact query supplied; permission and results are checked locally." else "INVALID: contact name is required."
             "find_files" -> if (a.optString("query").isNotBlank()) "VALID: file search query supplied." else "INVALID: file search query is required."
