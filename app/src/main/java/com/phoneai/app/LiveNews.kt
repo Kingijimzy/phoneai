@@ -24,9 +24,42 @@ object LiveNews {
         return cleaned.replace(Regex("(?i)^(in|for|from)\\s+"), "").take(120).ifBlank { "world news" }
     }
 
+    /** Google News RSS: real headlines with source and publish time; no key. Returns null on any failure. */
+    fun rss(q: String): String? = try {
+        val url = "https://news.google.com/rss/search?q=" + URLEncoder.encode("$q when:2d", "UTF-8") + "&hl=en-US&gl=US&ceid=US:en"
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000; readTimeout = 10_000
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Android) Orion")
+        }
+        val xml = try {
+            if (conn.responseCode !in 200..299) throw IllegalStateException("HTTP ${conn.responseCode}")
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText().take(500_000) }
+        } finally { conn.disconnect() }
+        val items = parseRss(xml, 8)
+        if (items.isEmpty()) null
+        else "Latest headlines for \"$q\" (Google News RSS):\n" + items.mapIndexed { i, it -> "${i + 1}. $it" }.joinToString("\n")
+    } catch (_: Exception) { null }
+
+    internal fun parseRss(xml: String, max: Int): List<String> {
+        fun unesc(t: String) = t.replace("<![CDATA[", "").replace("]]>", "").replace("&amp;", "&").replace("&quot;", "\"")
+            .replace("&#39;", "'").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">").trim()
+        val out = ArrayList<String>()
+        for (m in Regex("(?s)<item>(.*?)</item>").findAll(xml)) {
+            val block = m.groupValues[1]
+            val title = Regex("(?s)<title>(.*?)</title>").find(block)?.groupValues?.get(1)?.let(::unesc).orEmpty()
+            val source = Regex("(?s)<source[^>]*>(.*?)</source>").find(block)?.groupValues?.get(1)?.let(::unesc).orEmpty()
+            val date = Regex("(?s)<pubDate>(.*?)</pubDate>").find(block)?.groupValues?.get(1)?.trim().orEmpty()
+            if (title.isBlank()) continue
+            out.add(title.take(220) + (if (source.isNotBlank()) " — $source" else "") + (if (date.isNotBlank()) " ($date)" else ""))
+            if (out.size >= max) break
+        }
+        return out
+    }
+
     fun search(query: String): String {
         val q = query.trim().take(120)
         if (q.isBlank()) return "What topic should I search for in recent news?"
+        rss(q)?.let { return it }
         return try {
             val encoded = URLEncoder.encode(q, "UTF-8")
             val url = "https://api.gdeltproject.org/api/v2/doc/doc?query=$encoded&mode=ArtList&format=json&sort=DateDesc&timespan=1week&maxrecords=5"

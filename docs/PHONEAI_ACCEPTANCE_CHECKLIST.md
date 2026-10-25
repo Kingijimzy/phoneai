@@ -1,5 +1,13 @@
 # PhoneAI acceptance checklist
 
+## Current user-approved visual direction
+This section supersedes the older teal-black visual pass below wherever they conflict.
+- Use opaque black/graphite surfaces with silver and white text/icons. Do not reintroduce teal accents, liquid-glass/translucent cards, or the old spherical orb in the main chat.
+- Main chat uses a restrained wordmark and small monochrome status waveform; the live-call screen uses the saved Dot Matrix default or Eyes style.
+- Keep controls compact, native-looking, and readable on the Redmi A3 Pro. Validate spacing, keyboard behavior, animation load, and touch targets on-device before marking visual acceptance complete.
+- Current code-level style cleanup is implemented in main chat, Teach Mode, and Settings quick-jump surfaces; screenshot comparison and device performance remain unverified.
+
+
 This checklist distinguishes source changes from device-verified behavior. A successful GitHub Actions build proves the project compiles; it does not prove that every screen is stable on the Redmi device.
 
 ## Current app architecture
@@ -35,6 +43,21 @@ Reference target: Abdullah Arshad's ChatAI mobile assistant concept. This is a d
 - [ ] Capture screenshots of Home, empty Chat, active Chat, floating command panel, Tools, Settings, Task Centre, Browser, and Device Utilities on the Redmi; refine any visible mismatches.
 - [ ] Verify animation frame rate, thermal impact, and touch responsiveness on the Redmi A3 Pro.
 - [ ] Pixel-level matching remains unverified until the reference screenshot and built-app screenshots are compared side by side.
+
+## Regression invariants — do not revert
+- A user's 15-request budget resets only at the top-level user command. Talk-mode classification, the subsequent ACTION plan, and skill recursion share the same budget.
+- Use one selected primary provider. Only an explicit HTTP 429 may trigger the single configured backup, and only when automatic fallback is enabled. No paid-model request is allowed without opt-in. Model catalogs stay cached and model-list HTTP attempts count against the command budget.
+- The screen-access disclosure must appear in normal app usage. Screen inspection and app-control tools must check affirmative consent before reading the current screen. Ordinary chat and in-app web research remain usable without accessibility consent.
+- Skills may reference only names in `ToolRegistry`; they are declarative metadata, never downloaded executable code. Every write-capable tool requires approval when called through a skill. Keep template-validation tests aligned with the live registry.
+- Live-call visuals are only Dot Matrix (default, 24×11 mint dots) and Eyes. Legacy `orb`/`wave` preferences normalize to Dot Matrix. The home/chat and floating control must not reintroduce the rejected glossy sphere, teal accent theme, or liquid-glass cards.
+- Clear-all history UI reports success and dismisses only after the service confirms deletion. Android secure-setting reads remain guarded on newer SDKs.
+- Learning stores bounded preferences, route outcomes, and generic failure categories/hints—not raw screenshots, typed text, or raw tool arguments. Task checkpoints and action proof remain separate from long-term memory.
+- Device-only checks are still required for voice input/output, Android 15/16 settings stability, accessibility actions, permission prompts, and low-memory/thermal behavior. Do not label these passed based on CI alone.
+
+## Accessibility API distribution gate
+- Orion uses Android AccessibilityService for screen inspection and AI-directed phone automation. A separate in-app disclosure and affirmative consent flow is implemented, but disclosure alone does not make autonomous actions eligible for Google Play.
+- Google's current policy prohibits Accessibility API use that lets a general app autonomously initiate, plan, and execute actions unless the app genuinely qualifies as a disability-support accessibility tool. Do not set `isAccessibilityTool=true` for a general-purpose assistant. Before any Play Store release, the product must be redesigned for permitted deterministic user-defined automation or reviewed against the current policy. The GitHub debug APK/sideload path is a separate distribution route.
+- Policy reference: https://support.google.com/googleplay/android-developer/answer/10964491
 
 ## Stability and behavior checks
 

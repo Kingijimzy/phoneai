@@ -27,6 +27,15 @@ class AgentHooksTest {
  }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
+
+ @Test fun clearingProofsPreventsPriorTaskSuccessFromAuthorizingNewTask() {
+  val proofs = AgentHooks.ProofRecorder()
+  proofs.record("open_app", "WhatsApp opened")
+  assertTrue(AgentHooks.completionDecision("Open WhatsApp", proofs.snapshot()).allowed)
+  proofs.clear()
+  assertTrue(proofs.snapshot().isEmpty())
+  assertFalse(AgentHooks.completionDecision("Open Settings", proofs.snapshot()).allowed)
+ }
  @Test fun messageReplyTextAndEmailAreRecognizedAndAuthorizeRequestedSend(){
   listOf("message Amma on WhatsApp","reply to Amma","text Amma","email Amma").forEach { request ->
    assertTrue("$request should route to the phone action agent",AgentHooks.isPhoneActionRequest(request))
@@ -54,6 +63,23 @@ class AgentHooksTest {
   assertTrue(AgentHooks.verifySendEvidence("Amma","Hi Amma, I am on my way.",wrong).startsWith("error:"))
  }
  @Test fun settlesScreen(){val a=listOf("Loading","Loaded","Loaded");var i=0;assertEquals("Loaded",AgentHooks.awaitStableSnapshot({a[minOf(i++,a.lastIndex)]},4,2,0))}
+
+ @Test fun actionWordsInsideNormalSentencesDoNotBecomeCommands() {
+  assertFalse(AgentHooks.isPhoneActionRequest("I want to write a poem"))
+  assertFalse(AgentHooks.isPhoneActionRequest("Explain how to open a file"))
+  assertFalse(AgentHooks.isPhoneActionRequest("Show me how computer memory works"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Can you please open WhatsApp"))
+  assertTrue(AgentHooks.isPhoneActionRequest("What is the BTC price on Bybit"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Write a message to Amma on WhatsApp"))
+ }
+
+ @Test fun ordinaryMemoryAndTaskMentionsDoNotBecomeCommands() {
+  assertFalse(AgentHooks.isPhoneActionRequest("I remember when we first talked"))
+  assertFalse(AgentHooks.isPhoneActionRequest("I have a task about learning memory"))
+  assertFalse(AgentHooks.isPhoneActionRequest("Tell me how computer memory works"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Remember that I prefer solid graphite UI"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Create a task to call Amma tomorrow"))
+ }
 
  @Test fun requestBudgetStopsAtConfiguredLimit() {
   val budget = AgentHooks.RequestBudget(2)

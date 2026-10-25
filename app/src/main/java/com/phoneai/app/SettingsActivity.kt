@@ -321,10 +321,8 @@ class SettingsActivity : Activity() {
             gravity = Gravity.CENTER
             letterSpacing = .06f
             setPadding(dp(14), dp(11), dp(14), dp(11))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF0202020.toInt(), 0xF0141414.toInt())
-            ).apply {
+            background = GradientDrawable().apply {
+                setColor(0xFF181818.toInt())
                 cornerRadius = dp(11).toFloat()
                 setStroke(dp(1), 0x55484848)
             }
@@ -412,7 +410,7 @@ class SettingsActivity : Activity() {
             8
         )
         add(s1, button("Open Accessibility settings", true) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            AccessibilityDisclosure.requestSettings(this)
         }, 8)
         add(s1, button("Enable Orion Private Keyboard", false) {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
@@ -503,7 +501,7 @@ class SettingsActivity : Activity() {
         // ---- 3. AI services
         val s2 = card(
             col, "AI providers & models",
-            "Orion uses your selected primary provider first and only falls back when a request is rate-limited or the provider is unavailable. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
+            "Orion uses your selected primary provider first. It may try at most one backup provider only after an explicit HTTP 429 rate-limit response; other failures stop fallback. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
         )
         add(s2, button("Get a free Gemini key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
@@ -516,10 +514,14 @@ class SettingsActivity : Activity() {
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
         add(s2, visionBtn, 8)
-        switchRow(s2, "Auto-switch to another service if one fails", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
+        switchRow(s2, "Auto-switch to one backup only on HTTP 429", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
+        switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
+            Prefs.setAllowPaidProviders(this, it)
+        }
+        add(s2, text("When enabled, providers or models marked paid/metered may consume paid credits. With this off, Orion blocks those requests and will not use them as a fallback.", 12f, Theme.MUTED), 4)
         add(s2, button("AI health, provider status & quota", false) { showAiHealth() }, 10)
         add(s2, button("Test the AI", false) { testAi() }, 10)
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
@@ -537,8 +539,8 @@ class SettingsActivity : Activity() {
         // ---- 3. voice
         val s3 = card(col, "Voice & response style")
         switchRow(s3, "Speak the answers", Prefs.voice(this)) { Prefs.setVoice(this, it) }
-        val liveStyleKeys = arrayOf("dot_matrix", "eyes", "orb", "wave")
-        val liveStyleNames = arrayOf("Dot matrix", "Eyes", "Orb", "Waveform")
+        val liveStyleKeys = arrayOf("dot_matrix", "eyes")
+        val liveStyleNames = arrayOf("Dot matrix", "Eyes")
         add(s3, button("Live-call visual · " + liveStyleNames[liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)], false) {
             val selected = liveStyleKeys.indexOf(Prefs.liveCallStyle(this)).coerceAtLeast(0)
             AlertDialog.Builder(this)
@@ -891,8 +893,11 @@ class SettingsActivity : Activity() {
     }
 
     private fun refresh() {
-        val accessibilityEnabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            ?.contains(packageName, ignoreCase = true) == true
+        val accessibilityEnabled = runCatching {
+            Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                ?.split(':')
+                ?.any { it.substringBefore('/').equals(packageName, ignoreCase = true) } == true
+        }.getOrDefault(false)
         val acc = if (accessibilityEnabled) "enabled" else "disabled"
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
         val notifications = if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 33) "allowed" else "not allowed"
@@ -910,8 +915,11 @@ class SettingsActivity : Activity() {
                 ?.substringBefore('/')
                 ?.equals(packageName, ignoreCase = true) == true
         }.getOrDefault(false)
-        val notificationListener = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-            ?.contains(packageName, ignoreCase = true) == true
+        val notificationListener = runCatching {
+            Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                ?.split(':')
+                ?.any { it.substringBefore('/').equals(packageName, ignoreCase = true) } == true
+        }.getOrDefault(false)
         val overlayAllowed = if (Build.VERSION.SDK_INT >= 23) Settings.canDrawOverlays(this) else true
         val batteryExempt = runCatching {
             getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
@@ -1228,51 +1236,35 @@ class SettingsActivity : Activity() {
                     vision -> eligible.sortedBy { if (nim.isVision(it)) 0 else 1 }
                     else -> eligible
                 }
-                // A /models catalogue only proves that an ID is listed, not that this key can
-                // call it. Probe every eligible candidate with the provider's real chat endpoint
-                // before exposing it in the picker. Keep failures hidden from normal selection.
+                // Show the catalogue immediately. Probing every model burned quota and made the
+                // picker appear frozen; the chosen model is live-tested once, on selection.
                 val candidates = if (p.id == "nvidia" && vision) ordered.filter { nim.isVision(it) } else ordered
                 runOnUiThread {
-                    Toast.makeText(this, "Live-testing ${candidates.size} models from ${p.label}. This may take a moment.", Toast.LENGTH_LONG).show()
-                }
-                val working = ArrayList<String>()
-                val failures = ArrayList<String>()
-                candidates.forEachIndexed { index, model ->
-                    runOnUiThread {
-                        Toast.makeText(this, "Testing model ${index + 1}/${candidates.size}: ${model.substringAfterLast('/')}", Toast.LENGTH_SHORT).show()
-                    }
-                    val problem = try { nim.testModel(p, model, vision) } catch (e: Exception) { e.message ?: "Probe failed" }
-                    if (problem.isBlank()) working.add(model)
-                    else failures.add(model.substringAfterLast('/') + ": " + problem.take(120))
-                }
-                runOnUiThread {
-                    if (working.isEmpty()) {
-                        val details = failures.take(8).joinToString("\n")
-                        showInfoDialog(
-                            "No verified models",
-                            "None of the ${candidates.size} listed candidates passed a live API test. Your current model setting was not changed. Check the API key, provider model access, credits, and rate limits.\n\n" + details
-                        )
+                    if (candidates.isEmpty()) {
+                        showInfoDialog("No models found", "${p.label} returned no usable chat models for this key.")
                     } else {
                         showChoiceDialog(
-                            p.label + (if (vision) " verified vision models" else " verified chat models"),
-                            "${working.size} of ${candidates.size} models passed a live request using your saved API key. Only verified models are shown. Vision probes check endpoint acceptance; confirm image understanding with a real photo.",
-                            working,
+                            p.label + (if (vision) " vision models" else " chat models"),
+                            "${candidates.size} models available. Tap one; Orion tests it with a real request before saving.",
+                            candidates,
                             { which ->
-                                val selected = working[which]
-                                // Verify again immediately before saving to catch a model that
-                                // became unavailable between catalogue scan and selection.
-                                Toast.makeText(this, "Rechecking " + selected + "...", Toast.LENGTH_SHORT).show()
+                                val selected = candidates[which]
+                                Toast.makeText(this, "Testing " + selected + "...", Toast.LENGTH_SHORT).show()
                                 Thread {
-                                    val problem = nim.testModel(p, selected, vision)
+                                    val problem = try { nim.testModel(p, selected, vision) } catch (e: Exception) { e.message ?: "Probe failed" }
                                     runOnUiThread {
                                         if (problem.isBlank()) {
                                             Prefs.setModel(this, p, vision, selected)
-                                            Toast.makeText(this, "Live-tested and saved: " + selected, Toast.LENGTH_LONG).show()
+                                            Toast.makeText(this, "Saved: " + selected, Toast.LENGTH_LONG).show()
                                         } else {
                                             AlertDialog.Builder(this)
-                                                .setTitle("Model is no longer available")
-                                                .setMessage(selected + " failed its final live test. Your current model has not changed.\n\n" + problem)
-                                                .setPositiveButton("OK", null)
+                                                .setTitle("Model test failed")
+                                                .setMessage(selected + " did not pass a live test.\n\n" + problem)
+                                                .setPositiveButton("Use anyway") { _, _ ->
+                                                    Prefs.setModel(this, p, vision, selected)
+                                                    Toast.makeText(this, "Saved (untested): " + selected, Toast.LENGTH_LONG).show()
+                                                }
+                                                .setNegativeButton("Cancel", null)
                                                 .show()
                                         }
                                     }
@@ -1513,7 +1505,8 @@ class SettingsActivity : Activity() {
     private fun skillOptions(skill: PhoneAiSkill) {
         showChoiceDialog(skill.id + " · v" + skill.version,
             skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
-                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds",
+                "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds" +
+                "\nApproval: " + (if (skill.requiresApproval) "required before every run" else "write-capable tools still require approval"),
             listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Delete skill · Remove its local definition"),
             { which ->
                 if (which == 0) {
@@ -1546,17 +1539,27 @@ class SettingsActivity : Activity() {
             minLines = 2
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
+        val approvalBox = android.widget.CheckBox(this).apply {
+            text = "Require approval for every run"
+            isChecked = true
+            setTextColor(Theme.TEXT)
+            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
+        }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
             addView(idBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(descBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(toolsBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(text("Supported tools include: time, battery, device_info, list_apps, read_screen, web_search, fetch_url, research_web, github_public, bybit_public_ticker, integration_status, telegram_status, mcp_status, mcp_list_tools, open_url, recall, remember, wait, wait_for, click_text, scroll, open_app, task_list, task_add, task_update, task_delete. Only existing tools can be used; skills cannot add code or bypass approvals.", 11f, Theme.MUTED))
+            addView(approvalBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            val examples = listOf("web_search", "browser_snapshot", "browser_click", "read_screen", "open_app", "task_add", "remember", "ask_user")
+                .filter { ToolRegistry.find(it) != null }
+                .joinToString(", ")
+            addView(text("Tool names are validated against the live registry. Examples: $examples. Skills cannot add code or bypass approvals.", 11f, Theme.MUTED))
         }
         AlertDialog.Builder(this)
             .setTitle("Create a declarative skill")
-            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled.")
+            .setMessage("Use a short ID and only supported tool names. New skills are saved disabled. Write-capable tools always require explicit approval.")
             .setView(wrap)
             .setPositiveButton("Save skill") { _, _ ->
                 val allowed = toolsBox.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -1567,7 +1570,7 @@ class SettingsActivity : Activity() {
                     allowedTools = allowed,
                     maxCalls = 6,
                     maxDurationMs = 30_000L,
-                    requiresApproval = false,
+                    requiresApproval = approvalBox.isChecked,
                     enabled = false
                 )
                 val result = SkillRegistry.register(this, candidate)
