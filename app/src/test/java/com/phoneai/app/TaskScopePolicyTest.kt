@@ -92,4 +92,35 @@ class TaskScopePolicyTest {
     @Test fun openWhatsAppRequestIsPhoneAutomation() {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("open WhatsApp and send kingi jimzy this message good morning chams"))
     }
+    @Test fun planModeBlocksWriteToolsAtDispatchBoundary() {
+        val blocked = AgentDispatchPolicy.blockReason(
+            request = "Open WhatsApp",
+            tool = "open_app",
+            args = org.json.JSONObject().put("name", "WhatsApp"),
+            executionMode = "PLAN"
+        )
+        assertNotNull(blocked)
+        assertTrue(blocked!!.contains("Plan mode"))
+    }
+
+    @Test fun planModeStillAllowsReadOnlyToolsWithinScope() {
+        val result = AgentDispatchPolicy.blockReason(
+            request = "Open WhatsApp and read my last chat",
+            tool = "read_screen",
+            args = org.json.JSONObject(),
+            executionMode = "PLAN"
+        )
+        assertNull(result)
+    }
+
+    @Test fun fullModeDoesNotBypassTaskScope() {
+        val result = AgentDispatchPolicy.blockReason(
+            request = "Explain how Bluetooth works",
+            tool = "open_app",
+            args = org.json.JSONObject().put("name", "WhatsApp"),
+            executionMode = "FULL"
+        )
+        assertNotNull(result)
+    }
+
 }
