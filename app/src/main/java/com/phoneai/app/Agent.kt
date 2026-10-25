@@ -206,7 +206,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Drop conversational context after the user explicitly clears the active chat. */
     /** Rebuild the provider-neutral conversational context from saved user/assistant turns. */
     fun restoreConversationContext(messages: List<Pair<String, String>>) {
-        resetConversationContext()
+        // Keep the system/tool-planner prompt intact; replace only conversational turns.
+        while (chatHist.length() > 0) chatHist.remove(0)
+        chatCache.clear()
         messages.filter { it.first == "me" || it.first == "ai" }.takeLast(12).forEach { (kind, text) ->
             if (text.isNotBlank()) chatHist.put(msg(if (kind == "me") "user" else "assistant", text.take(6000)))
         }
