@@ -181,7 +181,8 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) },
                     onOpenTrading = { startActivity(Intent(this@MainActivity, TradingActivity::class.java)) },
-                    onOpenMemory = { startActivity(Intent(this@MainActivity, MemoryActivity::class.java)) }
+                    onOpenMemory = { startActivity(Intent(this@MainActivity, MemoryActivity::class.java)) },
+                    onOpenAgents = { startActivity(Intent(this@MainActivity, AgentsActivity::class.java)) }
                 )
             }
         }

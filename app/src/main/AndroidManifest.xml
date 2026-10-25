@@ -57,6 +57,8 @@
         <activity android:name=".DeviceUtilitiesActivity" android:exported="false" />
         <activity android:name=".RecordRequestActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity android:name=".TradingActivity" android:exported="false" />
+        <activity android:name=".AgentsActivity" android:exported="false" />
+        <activity android:name=".AgentChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".OrionNotificationListener"
