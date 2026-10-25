@@ -1204,8 +1204,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Only route clear, user-directed action phrasing. Do not trigger merely because
             // an action verb appears somewhere in an ordinary sentence (e.g. "I want to
             // talk about opening apps" or "what happens when I click this?").
-            Regex("^(\\\\s*(please\\\\s+)?(can you|could you|would you|will you|please)?\\\\s*(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\\\b)"),
-            Regex("^(\\\\s*(please\\\\s+)?(i want you to|i need you to|help me)\\\\s+(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\\\b)"),
+            Regex("^(\\s*(please\\s+)?(can you|could you|would you|will you|please)?\\s*(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b)"),
+            Regex("^(\\s*(please\\s+)?(can you|could you|would you|will you|please)?\\s*(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b)"),
             Regex("\\b(search (the )?web|look up|google|browse to|visit (the )?website|go to (the )?website|find (online|on the web)|research (online|the latest))\\b"),
             Regex("\\b(current|latest|today'?s|right now|live)\\b.*\\b(weather|news|price|rate|score|forecast|exchange rate|market|time in|model|release|version)\\b"),
             Regex("\\b(what is|what's|check|find|show me|look at|compare)\\b.*\\b(current price|price of|price|weather|news|exchange rate|market price|latest update|live score|forecast)\\b"),
