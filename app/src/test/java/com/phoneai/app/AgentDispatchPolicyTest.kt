@@ -80,7 +80,7 @@ class AgentDispatchPolicyTest {
 
     @Test fun sensitiveEntryIsBlockedEvenWhenTheTaskScopeAllowsPhoneAutomation() {
         val reason = block(
-            "Type this into the login form",
+            "Use the browser to type this into the login form",
             "browser_type",
             JSONObject().put("target", "email").put("text", "4111 1111 1111 1111"),
             currentPackage = "com.example.browser",
