@@ -421,9 +421,26 @@ Rules:
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
         if (resumeRequest) {
+            if (AgentCheckpointStore.pending(svc) == null) {
+                ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
+                return
+            }
+            if (AgentCheckpointStore.needsRecoveryConfirmation(svc)) {
+                val confirmed = ui.ask(
+                    "The app stopped while an action was in progress, so it may already have happened. Please inspect the phone screen or relevant app state first. Have you checked what happened? Select yes only after checking; otherwise choose no and I will leave the task paused."
+                )
+                if (!confirmed) {
+                    ui.say("I left the task paused. Check the previous action's outcome, then say continue when you are ready.")
+                    return
+                }
+                if (!AgentCheckpointStore.acknowledgeRecovery(svc, "User confirmed they inspected the current phone/app state before resuming.")) {
+                    ui.say("I could not safely record the recovery confirmation. The task remains paused and no new action was started.")
+                    return
+                }
+            }
             val instruction = AgentCheckpointStore.resumeInstruction(svc)
             if (instruction == null) {
-                ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
+                ui.say("I could not read the saved task safely. No actions were resumed.")
                 return
             }
             command = instruction
