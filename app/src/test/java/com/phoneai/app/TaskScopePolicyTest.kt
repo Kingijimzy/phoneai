@@ -56,6 +56,22 @@ class TaskScopePolicyTest {
         assertEquals(long, TaskScopePolicy.scopeFor(long, prev, 1000))
     }
 
+    @Test fun ordinaryMentionsOfMemoryAndTasksStayInChat() {
+        listOf(
+            "I remember when we first talked",
+            "I have a task about learning how memory works",
+            "I forgot my card at home",
+            "Tell me how computer memory works"
+        ).forEach { assertEquals("$it should stay in chat", TaskMode.CHAT, TaskScopePolicy.modeFor(it)) }
+    }
+
+    @Test fun explicitMemoryAndTaskCommandsRouteToAutomation() {
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Remember that I prefer solid graphite UI"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Create a task to call Amma tomorrow"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Show my tasks"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Forget the note about my old project"))
+    }
+
     @Test fun openWhatsAppRequestIsPhoneAutomation() {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("open WhatsApp and send kingi jimzy this message good morning chams"))
     }

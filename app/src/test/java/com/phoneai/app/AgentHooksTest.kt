@@ -55,6 +55,14 @@ class AgentHooksTest {
  }
  @Test fun settlesScreen(){val a=listOf("Loading","Loaded","Loaded");var i=0;assertEquals("Loaded",AgentHooks.awaitStableSnapshot({a[minOf(i++,a.lastIndex)]},4,2,0))}
 
+ @Test fun ordinaryMemoryAndTaskMentionsDoNotBecomeCommands() {
+  assertFalse(AgentHooks.isPhoneActionRequest("I remember when we first talked"))
+  assertFalse(AgentHooks.isPhoneActionRequest("I have a task about learning memory"))
+  assertFalse(AgentHooks.isPhoneActionRequest("Tell me how computer memory works"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Remember that I prefer solid graphite UI"))
+  assertTrue(AgentHooks.isPhoneActionRequest("Create a task to call Amma tomorrow"))
+ }
+
  @Test fun requestBudgetStopsAtConfiguredLimit() {
   val budget = AgentHooks.RequestBudget(2)
   assertEquals(0, budget.consumed)

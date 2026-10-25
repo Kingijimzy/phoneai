@@ -55,10 +55,19 @@ internal object AgentHooks {
  fun screenChanged(before: String, after: String): Boolean =
   screenFingerprint(before) != screenFingerprint(after)
  private val phoneActionWords=Regex(
-  "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|whatsapp|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|task|tasks|remind|reminder|todo|to-do|mark as done|remember|recall|forget|memory|memories|update memory|save this|undo|reverse last|undo that)\\b",
+  "\\b(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|whatsapp|telegram|bot|integration|integrations|mcp|workflow|workflows|price|crypto|bybit|market|record|turn|switch|screenshot|install|download|close|look|screen|fill|login|log in|sign in|research|browse|website|webpage|github|repository|repositories|release|issues|post|share|buy|order|book|find me|show me|check my|delete|write|compose|mark as done|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
  )
- fun isPhoneActionRequest(request:String):Boolean=phoneActionWords.containsMatchIn(request)
+ private val memoryActionWords = Regex(
+  "(?i)^\\s*(please\\s+)?(can you\\s+)?(remember|recall|forget|save|store|update|pin|unpin|delete|clear)\\s+(that|this|my|me|i prefer|i like|i do not like|i don't like|to|for me|the note|the memory|memory|memories|note|notes)\\b"
+ )
+ private val taskActionWords = Regex(
+  "(?i)^\\s*(please\\s+)?(create|add|list|show|update|complete|finish|delete|remove|cancel|clear|schedule|mark)\\b.*\\b(tasks?|to-?dos?|reminders?)\\b|^\\s*(please\\s+)?(remind me|set (a )?reminder)\\b"
+ )
+ fun isPhoneActionRequest(request:String):Boolean =
+  phoneActionWords.containsMatchIn(request) ||
+   memoryActionWords.containsMatchIn(request.trim()) ||
+   taskActionWords.containsMatchIn(request.trim())
  fun verifySendEvidence(contact:String,message:String,screen:String):String {
   val target=contact.trim(); val body=message.trim()
   if(target.isBlank()||body.isBlank()) return "error: contact and exact message text are required."
