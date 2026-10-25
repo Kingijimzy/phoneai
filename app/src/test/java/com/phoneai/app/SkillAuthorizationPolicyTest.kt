@@ -36,6 +36,14 @@ class SkillAuthorizationPolicyTest {
         skill, tool, calls, elapsed, approved, supported, consequential
     )
 
+    @Test fun skillAllowlistTracksTheRealToolRegistryWithoutAllowingArbitraryCode() {
+        assertTrue(SkillRegistry.isSupportedTool("browser_snapshot"))
+        assertTrue(SkillRegistry.isSupportedTool("browser_click"))
+        assertTrue(SkillRegistry.isSupportedTool("notification_action"))
+        assertFalse(SkillRegistry.isSupportedTool("run_shell"))
+        assertFalse(SkillRegistry.isSupportedTool("execute_python"))
+    }
+
     @Test fun missingOrDisabledSkillIsDenied() {
         assertEquals("Skill is not registered.", check(skill = null).reason)
         assertEquals("Skill is disabled.", check(skill = skill(enabled = false)).reason)

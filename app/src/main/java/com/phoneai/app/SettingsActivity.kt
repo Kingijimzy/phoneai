@@ -1544,7 +1544,10 @@ class SettingsActivity : Activity() {
             addView(idBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(descBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(toolsBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(text("Supported tools include: time, battery, device_info, list_apps, read_screen, web_search, fetch_url, research_web, github_public, bybit_public_ticker, integration_status, telegram_status, mcp_status, mcp_list_tools, open_url, recall, remember, wait, wait_for, click_text, scroll, open_app, task_list, task_add, task_update, task_delete. Only existing tools can be used; skills cannot add code or bypass approvals.", 11f, Theme.MUTED))
+            val examples = listOf("web_search", "browser_snapshot", "browser_click", "read_screen", "open_app", "task_add", "remember", "ask_user")
+                .filter { ToolRegistry.find(it) != null }
+                .joinToString(", ")
+            addView(text("Tool names are validated against the live registry. Examples: $examples. Skills cannot add code or bypass approvals.", 11f, Theme.MUTED))
         }
         AlertDialog.Builder(this)
             .setTitle("Create a declarative skill")
