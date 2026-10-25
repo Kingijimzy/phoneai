@@ -64,9 +64,11 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Write a message to Amma on WhatsApp"))
     }
 
-    @Test fun localSearchRequestsRouteToResearch() {
+    @Test fun localSearchRequestsRouteToReadOnlyResearchTools() {
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Find me a restaurant near me"))
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("I want to search the web for Android accessibility changes"))
+        assertNull(TaskScopePolicy.blockReason("Find me a restaurant near me", "web_search"))
     }
 
     @Test fun ordinaryMentionsOfMemoryAndTasksStayInChat() {

@@ -11,7 +11,7 @@ internal object TaskScopePolicy {
         "(?i)^\\s*(?:(?:please|can you|could you)\\s+)*(read[- ]only|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
     private val researchIntent = Regex(
-        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
     )
     private val localSearchIntent = Regex(
         "(?i)^\\s*(?:(?:please|can you|could you|would you|will you)\\s+)*(find me|recommend|look for)\\b.*\\b(restaurant|hotel|store|shop|cafe|service|nearby|near me)\\b"
@@ -78,7 +78,7 @@ internal object TaskScopePolicy {
 
         val category = categoryOf(toolName) ?: return null
         val matchingIntent = when (category) {
-            "browser" -> Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|online|internet|news|weather|research|chrome|download|source|article)\\b")
+            "browser" -> Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|online|internet|news|weather|research|chrome|download|source|article|restaurant|hotel|store|shop|cafe|service|nearby|local|recommend)\\b")
             "trading" -> Regex("(?i)\\b(bybit|trade|trading|crypto|bitcoin|btc|eth|coin|price|ticker|chart|market)\\b")
             "telegram" -> Regex("(?i)\\btelegram\\b")
             "mcp" -> Regex("(?i)\\b(mcp|connector|integration|server)\\b")

@@ -173,7 +173,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                             dialog.dismiss()
                         }
                         Toast.makeText(this@MainChatActivity, if (deleted) "Chat history deleted" else "Could not delete chat history", Toast.LENGTH_SHORT).show()
-                        if (deleted) showChatHistory()
                     }
                 }.show()
         }

@@ -282,13 +282,20 @@ class Nim(private val ctx: Context) {
     fun allModels(p: Provider): List<String> {
         val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
+        if (!Prefs.allowPaidProviders(ctx) && p.requiresPaidOptIn) {
+            throw IllegalStateException("Model discovery for ${p.label} is blocked until you explicitly allow paid/metered providers in Settings.")
+        }
         val keyFingerprint = java.security.MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         val cacheKey = p.id + ":" + keyFingerprint
         val cached = modelCatalogCache[cacheKey]
         val now = System.currentTimeMillis()
-        if (cached != null && now - cached.first < MODEL_CATALOG_TTL_MS) return cached.second
+        if (cached != null && now - cached.first < MODEL_CATALOG_TTL_MS) {
+            return cached.second.filter { id ->
+                ProviderBillingPolicy.isAllowed(p.id, id, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
+            }
+        }
         val url = p.listUrl ?: (p.base + "/models")
         val r = try {
             request(p, "GET", url, null, key, 25000)
@@ -310,7 +317,9 @@ class Nim(private val ctx: Context) {
         }
         val result = ids.filter { it.isNotBlank() }.distinct().sorted()
         modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
-        return result
+        return result.filter { id ->
+            ProviderBillingPolicy.isAllowed(p.id, id, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
+        }
     }
 
     /**
@@ -322,6 +331,9 @@ class Nim(private val ctx: Context) {
         // A model-picker probe is its own user command and must not inherit the
         // previous probe's request count when the same Nim instance is reused.
         beginCommand()
+        if (!ProviderBillingPolicy.isAllowed(p.id, model, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))) {
+            return "Blocked: ${p.label} / $model may incur paid or metered usage. Enable the explicit paid-provider setting in Settings only if you accept possible charges."
+        }
         if (Prefs.key(ctx, p.id).isEmpty()) return "No ${p.label} API key is saved."
         val probePrefs = ctx.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         val probeKey = "nvidia_probe_${if (vision) "vision" else "chat"}_${model.hashCode()}"

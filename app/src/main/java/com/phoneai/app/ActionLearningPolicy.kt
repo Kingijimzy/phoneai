@@ -9,7 +9,7 @@ internal data class ActionLearningRecord(
 
 internal object ActionLearningPolicy {
     private val rules = listOf(
-        Regex("(?i)\\b(429|rate.?limit|quota exceeded|resource exhausted)\\b") to "rate_limited",
+        Regex("(?i)\\b(429|rate.?limit\\w*|quota( exceeded| exhausted)?|resource exhausted)\\b") to "rate_limited",
         Regex("(?i)\\b(permission denied|not permitted|accessibility service|permission required|not granted)\\b") to "permission_or_accessibility",
         Regex("(?i)\\b(timeout|timed out|offline|network|connection refused|unable to resolve|unknown host)\\b") to "network_or_timeout",
         Regex("(?i)\\b(function not found|unsupported|not supported|capability unavailable|model.*unavailable)\\b") to "unsupported_capability",

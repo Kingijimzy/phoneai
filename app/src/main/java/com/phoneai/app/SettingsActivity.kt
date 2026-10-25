@@ -321,10 +321,8 @@ class SettingsActivity : Activity() {
             gravity = Gravity.CENTER
             letterSpacing = .06f
             setPadding(dp(14), dp(11), dp(14), dp(11))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xF0202020.toInt(), 0xF0141414.toInt())
-            ).apply {
+            background = GradientDrawable().apply {
+                setColor(0xFF181818.toInt())
                 cornerRadius = dp(11).toFloat()
                 setStroke(dp(1), 0x55484848)
             }
