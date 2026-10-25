@@ -235,7 +235,8 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             OrbView.Mode.SPEAKING -> startVoiceInput()
             OrbView.Mode.THINKING, OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL ->
                 Toast.makeText(this, "Orion is handling the current step.", Toast.LENGTH_SHORT).show()
-                OrbView.Mode.ERROR -> "Task paused — check the last step"
+            OrbView.Mode.ERROR ->
+                Toast.makeText(this, "Task paused — check the last step.", Toast.LENGTH_SHORT).show()
             else -> startVoiceInput()
         }
     }
@@ -248,10 +249,11 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 listeningRequested = false
             }
             OrbView.Mode.THINKING, OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL -> {
-                OrbView.Mode.ERROR -> "Task paused — check the last step"
                 PhoneAiService.instance?.endLiveConversation()
                 Toast.makeText(this, "Requested interruption. A running phone action may need to finish safely.", Toast.LENGTH_SHORT).show()
             }
+            OrbView.Mode.ERROR ->
+                Toast.makeText(this, "Task paused — check the last step.", Toast.LENGTH_SHORT).show()
             else -> startVoiceInput()
         }
     }
@@ -336,7 +338,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.SPEAKING -> "SPEAKING"
                 OrbView.Mode.ACTING -> "WORKING"
                 OrbView.Mode.WAITING_APPROVAL -> "APPROVAL"
-                OrbView.Mode.ERROR -> "Task paused — check the last step"
+                OrbView.Mode.ERROR -> "ERROR"
             }
             status.setTextColor(if (mode == OrbView.Mode.WAITING_APPROVAL) 0xFFFFD49B.toInt() else 0xFF8CFFD0.toInt())
             micIcon.icon = if (mode == OrbView.Mode.LISTENING) "pause" else if (mode == OrbView.Mode.SPEAKING) "mic" else "mic"
