@@ -31,8 +31,8 @@ class ConversationContextPolicyTest {
         val recent = ConversationContextPolicy.recent(rows, maxTurns = 12, maxChars = 6)
 
         assertEquals(12, recent.size)
-        assertEquals("message-5", recent.first().second)
-        assertEquals("message", recent.last().second)
+        assertEquals("messag", recent.first().second)
+        assertEquals("messag", recent.last().second)
     }
 
     @Test fun ignoresEmptyMessagesAndUnknownEventKinds() {
