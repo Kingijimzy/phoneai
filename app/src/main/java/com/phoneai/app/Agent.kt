@@ -218,7 +218,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val key = MacroStore.norm(command)
         val hit = chatCache[key]
         if (hit != null && System.currentTimeMillis() - hit.first < 600000L) return hit.second
-        val msgs = JSONArray().put(msg("system", chatSystem()))
+        val msgs = JSONArray().put(msg("system", chatSystem(command)))
         val from = maxOf(0, chatHist.length() - 6)
         for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
         msgs.put(msg("user", command))
@@ -295,7 +295,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val prompt = "You are Orion, a calm, warm, sharp personal AI co-pilot in a hands-free voice conversation. " +
                 "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
                 "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
-                "If the person mentions an action, discuss it naturally. If they clearly ask Orion to perform a phone action, route it to the guarded command flow automatically; never tell them to switch modes manually and never bypass real in-app approval for consequential actions. " +
+                "If they clearly ask Orion to perform a phone action, explain briefly that hands-free conversation cannot execute it yet and that the main chat can handle it. Do not claim or imply that an action was routed or performed from this live-call path. Never bypass real in-app approval for consequential actions. " +
                 "Respond like a thoughtful human conversational partner: concise, direct, natural spoken language, usually 1-3 sentences. " +
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
                 "Never pretend an action happened. User name: $name. " +
