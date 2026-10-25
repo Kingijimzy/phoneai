@@ -132,6 +132,25 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
+            // Failure is not a reason to blindly repeat or immediately abandon the task.
+            // Re-read the live UI once so the next planning turn can distinguish a failed
+            // action from a delayed/partially completed action. Never treat the snapshot
+            // itself as proof that the user's goal was completed.
+            try {
+                val observed = if (tool.startsWith("browser_")) {
+                    BrowserAutomation.snapshot().take(6000)
+                } else {
+                    svc.readScreen().take(6000)
+                }
+                if (observed.isNotBlank()) {
+                    lastScreenSnapshot = observed
+                    verifiedResult += "\nPOST-FAILURE STATE INSPECTION (observed after the error; not proof of completion):\n" + observed
+                } else {
+                    verifiedResult += "\nPOST-FAILURE STATE INSPECTION: no readable screen state was available; do not assume the action succeeded."
+                }
+            } catch (e: Exception) {
+                verifiedResult += "\nPOST-FAILURE STATE INSPECTION unavailable: " + (e.message ?: e.javaClass.simpleName)
+            }
             failedCallGuard.recordFailure(tool, args)
         }
         taskProofs.record(tool, verifiedResult)
@@ -191,7 +210,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         activeRequestScope = ""
         lastScreenSnapshot = ""
         lastScreenBeforeAction = ""
-        failedCallGuard.reset()
+        failedCallGuard.clear()
     }
 
     fun runConversation(input: String) {
