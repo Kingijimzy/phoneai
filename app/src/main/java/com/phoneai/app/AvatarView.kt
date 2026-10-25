@@ -88,7 +88,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
         OrbView.Mode.LISTENING -> Theme.OK
         OrbView.Mode.THINKING -> Theme.VIOLET
         OrbView.Mode.SPEAKING -> Theme.CYAN
-        OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL -> Theme.WARN
+        OrbView.Mode.ACTING, OrbView.Mode.WAITING_APPROVAL, OrbView.Mode.ERROR -> Theme.WARN
     }
 
     private fun alpha(color: Int, a: Int): Int = (color and 0x00FFFFFF) or (a.coerceIn(0, 255) shl 24)
@@ -124,6 +124,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             OrbView.Mode.LISTENING -> sin(t * 1.1f) * 2.5f
             OrbView.Mode.THINKING -> -4f
             OrbView.Mode.WAITING_APPROVAL -> sin(t * 1.5f) * 1.2f
+            OrbView.Mode.ERROR -> 0f
             else -> 0f
         }
         var gazeX = 0f
@@ -144,6 +145,7 @@ class AvatarView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) 
             OrbView.Mode.LISTENING -> gazeY = 0.05f
             OrbView.Mode.SPEAKING -> gazeX = sin(t * 0.9f) * 0.25f
             OrbView.Mode.WAITING_APPROVAL -> gazeY = 0.2f
+            OrbView.Mode.ERROR -> gazeY = -0.1f
         }
         // Ease expression/gaze changes so state changes feel intentional instead of snapping.
         smoothTilt += (targetTilt - smoothTilt) * 0.18f
