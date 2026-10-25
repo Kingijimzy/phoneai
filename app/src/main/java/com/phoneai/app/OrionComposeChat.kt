@@ -90,8 +90,8 @@ private fun formatOrionMarkdown(source: String): AnnotatedString {
     source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
         val line = raw.trimEnd()
         if (index > 0) out.append("\n")
-        val heading = Regex("^\\s{0,3}(#{1,3})\\s+(.+)$").find(line)
-        val bullet = Regex("^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+)$").find(line)
+        val heading = ORION_HEADING_PATTERN.find(line)
+        val bullet = ORION_BULLET_PATTERN.find(line)
         val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
         val size = heading?.let { when (it.groupValues[1].length) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp } }
         val token = Regex("\\*\\*(.+?)\\*\\*|" + ticks + "([^" + ticks + "]+)" + ticks)
