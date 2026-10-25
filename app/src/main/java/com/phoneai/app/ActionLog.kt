@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.io.File
 
 /** Minimal privacy-preserving action history: tool names and outcome only, never arguments or screen text. */
-data class OrionActionEvent(val at: Long, val tool: String, val outcome: String)
+data class OrionActionEvent(val at: Long, val tool: String, val outcome: String, val failureCategory: String = "")
 
 object ActionLogStore {
     private val lock = Any()
@@ -25,7 +25,8 @@ object ActionLogStore {
                     items.add(OrionActionEvent(
                         o.optLong("at", 0L),
                         o.optString("tool", "unknown").take(48),
-                        o.optString("outcome", "result returned").take(32)
+                        o.optString("outcome", "result returned").take(32),
+                        o.optString("failureCategory", "").take(40)
                     ))
                 }
             }
@@ -37,7 +38,8 @@ object ActionLogStore {
     private fun save(c: Context) {
         val arr = JSONArray()
         load(c).forEach { e ->
-            arr.put(JSONObject().put("at", e.at).put("tool", e.tool).put("outcome", e.outcome))
+            arr.put(JSONObject().put("at", e.at).put("tool", e.tool).put("outcome", e.outcome)
+                .put("failureCategory", e.failureCategory))
         }
         try {
             val target = file(c)
@@ -52,8 +54,9 @@ object ActionLogStore {
 
     fun record(c: Context, tool: String, result: String) = synchronized(lock) {
         val outcome = if (result.trimStart().startsWith("error:", true)) "error returned" else "result returned"
+        val category = if (outcome == "error returned") ActionLearningPolicy.classifyFailure(result) else ""
         val items = load(c)
-        items.add(OrionActionEvent(System.currentTimeMillis(), tool.take(48), outcome))
+        items.add(OrionActionEvent(System.currentTimeMillis(), tool.take(48), outcome, category))
         while (items.size > 200) items.removeAt(0)
         save(c)
     }
@@ -64,12 +67,16 @@ object ActionLogStore {
      * These are warnings to inspect/re-plan, not proof a tool is permanently broken.
      */
     fun recentFailureHints(c: Context, limit: Int = 4): String = synchronized(lock) {
-        val failures = load(c).asReversed()
-            .filter { it.outcome == "error returned" }
-            .distinctBy { it.tool }
-            .take(limit.coerceIn(1, 8))
+        // The latest outcome for a tool supersedes older outcomes: a later success must
+        // clear an old failure hint instead of teaching Orion that the tool is still broken.
+        val failures = ActionLearningPolicy.recentFailures(
+            load(c).map { ActionLearningRecord(it.tool, it.outcome, it.failureCategory) },
+            limit
+        )
         if (failures.isEmpty()) return@synchronized ""
-        failures.joinToString("\n") { "- ${it.tool}: a previous attempt returned an error; re-check current state and choose a meaningfully different approach instead of repeating the same call." }
+        failures.joinToString("\n") { failure ->
+            "- ${failure.tool}: last recorded attempt failed (${ActionLearningPolicy.label(failure.failureCategory)}); inspect current state and choose a meaningfully different safe approach. This is a hint, not proof the tool is still broken."
+        }
     }
 
     fun all(c: Context): List<OrionActionEvent> = synchronized(lock) { load(c).toList().reversed() }
