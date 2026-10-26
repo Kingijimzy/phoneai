@@ -9,17 +9,25 @@ import android.content.Context
  */
 internal object OrionSoulEngine {
     fun contextFor(context: Context, request: String): String {
-        val tools = try { ToolRegistry.names().toSet() } catch (_: Exception) { emptySet() }
+        val registeredTools = try { ToolRegistry.names().toSet() } catch (_: Exception) { emptySet() }
+        val enabledTools = registeredTools.filter { name ->
+            val pack = AgentPolicy.packForTool(name)
+            pack != null && AgentPolicy.enabled(context, pack)
+        }.toSet()
+        val termuxReady = runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)
         val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
         val enabledSkills = skills.filter { it.enabled }
         val planner = try {
-            OrionIntegrationPlanner.planFor(context, request, OrionIntegrationCapabilityPolicy.capabilities(tools, runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false)))
+            OrionIntegrationPlanner.planFor(
+                context, request,
+                OrionIntegrationCapabilityPolicy.capabilities(enabledTools, termuxReady)
+            )
         } catch (_: Exception) { null }
 
         val lines = mutableListOf<String>()
         lines += "ORION SOUL ENGINE — LIVE LOCAL CONTEXT"
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
-        lines += "Registered tool count: ${tools.size}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
+        lines += "Registered tools: ${registeredTools.size}; tools available under enabled capability packs: ${enabledTools.size}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
         lines += "Never pretend a provider is connected because its name is recognized. Never ask for passwords, PINs, one-time codes, or raw tokens in chat. Use official authorization screens and store only provider-issued credentials in the encrypted vault. Keep the task context and resume after authorization returns."
         lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permissions, account access, installs, external writes, and destructive actions require the relevant user approval."
