@@ -151,6 +151,11 @@ fun OrionComposeChatScreen(
     status: String,
     commandMode: Boolean,
     selectedImage: Uri?,
+    providerLabel: String,
+    modelLabel: String,
+    providerReady: Boolean,
+    onProviderClick: () -> Unit,
+    onModelClick: () -> Unit,
     onBack: () -> Unit,
     onHistory: () -> Unit,
     onNewChat: () -> Unit,
@@ -331,8 +336,46 @@ fun OrionComposeChatScreen(
             }
         }
 
-        // Composer is the primary surface; actions remain reachable without a second oversized dock.
+        // Composer is the primary surface; provider and model switching stay beside the input.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF171717))
+                        .border(1.dp, if (providerReady) Color(0xFF414141) else Color(0xFF8A5D42), RoundedCornerShape(10.dp))
+                        .clickable(onClick = onProviderClick)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (providerReady) Color(0xFFDADADA) else Color(0xFFE2A16F)))
+                    Column(Modifier.weight(1f)) {
+                        Text("PROVIDER", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
+                        Text(providerLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                    }
+                    Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
+                }
+                Row(
+                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF171717))
+                        .border(1.dp, ChatHairline, RoundedCornerShape(10.dp))
+                        .clickable(onClick = onModelClick)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Rounded.Tune, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("MODEL", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
+                        Text(modelLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                    }
+                    Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
+                }
+            }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp))
                     .background(Brush.verticalGradient(listOf(Color(0xFF222222), Color(0xFF101010))))
