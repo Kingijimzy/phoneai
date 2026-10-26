@@ -113,6 +113,21 @@ object AgentProfiles {
         } catch (_: Exception) { "error: could not save the agent" }
     }
 
+    /** Remove only a user-created specialist; built-in agents are immutable. */
+    fun deleteCustom(c: Context, id: String): Boolean = synchronized(customLock) {
+        val key = id.trim().lowercase()
+        if (all.any { it.id == key }) return@synchronized false
+        val file = customFile(c)
+        val existing = try { if (file.exists()) JSONArray(file.readText()) else JSONArray() } catch (_: Exception) { return@synchronized false }
+        val kept = (0 until existing.length()).map { existing.getJSONObject(it) }
+            .filter { it.optString("id").trim().lowercase() != key }
+        if (kept.size == existing.length()) return@synchronized false
+        try {
+            file.writeText(JSONArray(kept).toString())
+            true
+        } catch (_: Exception) { false }
+    }
+
     fun resolveFor(c: Context, text: String?): AgentProfile? {
         resolve(text)?.let { return it }
         val t = text.orEmpty().trim().lowercase(); if (t.isEmpty()) return null
