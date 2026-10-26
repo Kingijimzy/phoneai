@@ -1280,7 +1280,7 @@ Rules:
             "copy" -> tools.copy(a.optString("text"))
             "battery" -> tools.battery()
             "time" -> tools.time()
-            "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command"))
+            "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command")) { stopped }
             "device_info" -> tools.deviceInfo()
             "record_screen" -> {
                 val act = a.optString("action", "start").lowercase()
