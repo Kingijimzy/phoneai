@@ -74,6 +74,11 @@ object ProactiveBriefing {
                 NotificationChannel(CHANNEL, "Orion proactive briefing", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            AgentPolicy.log(context, "proactive_briefing", "notification", false, "notification permission missing; no notification posted")
+            return
+        }
         val now = System.currentTimeMillis()
         val active = TaskStore.all(context).filter { it.status !in setOf("completed", "done", "failed", "cancelled") }
         val overdue = active.count { it.dueAt != null && it.dueAt!! <= now }
