@@ -95,7 +95,6 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     }
 
     override fun onDetachedFromWindow() {
-        removeCallbacks(null)
         animate().cancel()
         super.onDetachedFromWindow()
     }
@@ -103,7 +102,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
         if (visibility == VISIBLE) postInvalidateOnAnimation()
-        else removeCallbacks(null)
+        else Unit
     }
 
     override fun onWindowVisibilityChanged(visibility: Int) {
