@@ -21,8 +21,11 @@ class ProviderFallbackPolicyTest {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400", 400)))
     }
 
-    @Test fun networkTimeoutAndAuthenticationFailuresDoNotRotate() {
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("Groq: request timed out.")))
+    @Test fun providerResponseTimeoutRotatesButNetworkAndAuthenticationFailuresDoNot() {
+        // A response timeout from one API should move to a different provider, not strand the turn.
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("Google Gemini: request timed out.")))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("no response before timeout")))
+        // A device/network connectivity failure is not evidence that another API will be reachable.
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(IOException("network unavailable")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(IllegalStateException("invalid model")))
