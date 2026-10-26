@@ -194,7 +194,7 @@ object TradeHistoryStore {
         var skipped = 0
         val source = sourceName.substringAfterLast('/').replace(Regex("\\s+"), " ").trim().take(100).ifBlank { "imported CSV" }
         for (r in rows.drop(headerRow + 1)) {
-            if (records.size + imported >= MAX_RECORDS) { skipped++; continue }
+            if (records.size >= MAX_RECORDS) { skipped++; continue }
             if (symbolIdx !in r.indices) { skipped++; continue }
             val symbol = r[symbolIdx].uppercase(Locale.US).replace(Regex("[^A-Z0-9._/-]"), "")
             if (symbol.length !in 3..30) { skipped++; continue }
