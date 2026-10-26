@@ -84,7 +84,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Local command shortcuts may not bypass the selected approval mode or enabled capability packs. */
     private fun requiresToolPolicy(command: String): Boolean =
         AgentHooks.isPhoneActionRequest(command) ||
-            Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|price alert|set alert|buy|sell|place order|trade now|send (a )?(message|sms|email)|telegram)\\b").containsMatchIn(command)
+            Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|trading|trade|bybit|watchlist|portfolio|position|balance|alert|market|crypto|forex|symbol|buy|sell|place order|trade now|send (a )?(message|sms|email)|telegram)\\b").containsMatchIn(command)
 
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
@@ -244,8 +244,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         taskProofs.record(tool, verifiedResult)
         AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true),
-            if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified: " + verifiedResult.take(160)
-            else "tool returned; outcome: " + verifiedResult.take(160))
+            if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified; details remain in the task transcript"
+            else "tool returned; details remain in the task transcript")
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
         try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
