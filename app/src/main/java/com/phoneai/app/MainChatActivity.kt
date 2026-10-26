@@ -214,12 +214,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             return
         }
         val keyInput = EditText(this).apply {
-            hint = "Paste ${p.label} API key"
+            hint = if (Prefs.hasKey(this@MainChatActivity, p.id)) "Paste a new key to replace saved key (optional)" else "Paste ${p.label} API key"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             setSingleLine(true)
             setTextColor(Theme.TEXT)
             setHintTextColor(Theme.MUTED)
-            if (Prefs.hasKey(this@MainChatActivity, p.id)) setText(Prefs.key(this@MainChatActivity, p.id))
         }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -232,8 +231,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setView(wrap)
             .setPositiveButton("SAVE & USE") { _, _ ->
                 val value = keyInput.text.toString().trim()
-                if (value.isBlank()) {
-                    Toast.makeText(this, "No key entered; existing connection was not changed.", Toast.LENGTH_LONG).show()
+                if (value.isBlank() && Prefs.hasKey(this, p.id)) {
+                    // Selecting an already-connected provider must not require re-entering its secret.
+                    Prefs.setProvider(this, false, p.id)
+                    refreshProviderModelChip()
+                    Toast.makeText(this, "${p.label} connection selected.", Toast.LENGTH_SHORT).show()
+                    showChatModelPicker()
+                } else if (value.isBlank()) {
+                    Toast.makeText(this, "Enter an API key to connect ${p.label}.", Toast.LENGTH_LONG).show()
                 } else if (!Prefs.setKey(this, p.id, value)) {
                     Toast.makeText(this, "Could not securely save this key on this device.", Toast.LENGTH_LONG).show()
                 } else {
