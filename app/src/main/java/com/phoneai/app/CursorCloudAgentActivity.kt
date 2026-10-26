@@ -213,6 +213,17 @@ class CursorCloudAgentActivity : Activity() {
             task.requestFocus()
             return
         }
+        if (!AgentPolicy.enabled(this, "remote_computer")) {
+            Toast.makeText(this, "Enable the Remote computer capability pack in Orion Agent Control first.", Toast.LENGTH_LONG).show()
+            AgentPolicy.log(this, "cursor_cloud_agents", "start-task", false, "remote_computer pack disabled")
+            return
+        }
+        val decision = AgentPolicy.evaluate(this, "remote_computer", "cursor_cloud_agents", dangerous = true)
+        if (decision.decision == AgentPolicy.Decision.DENY || decision.decision == AgentPolicy.Decision.PLAN_ONLY) {
+            Toast.makeText(this, "Cursor task not started: ${decision.reason}", Toast.LENGTH_LONG).show()
+            AgentPolicy.log(this, "cursor_cloud_agents", "start-task", false, decision.reason)
+            return
+        }
         val shouldCreatePr = autoPr.isChecked
         AlertDialog.Builder(this)
             .setTitle("Approve remote coding task?")
