@@ -7,6 +7,10 @@ internal object OrionRuntimePolicy {
     const val BASE_BACKOFF_MS = 30_000L
     const val MAX_BACKOFF_MS = 15 * 60_000L
 
+    /** New real work may recover a degraded queue, but must not unpause a stopped service. */
+    fun stateAfterEnqueue(current: OrionRuntime.State, queueHasWork: Boolean): OrionRuntime.State =
+        if (queueHasWork && current == OrionRuntime.State.DEGRADED) OrionRuntime.State.ACTIVE else current
+
     /** Attempts are one-based failures already observed. */
     fun retryDelayMs(attempt: Int): Long {
         if (attempt <= 0) return 0L
