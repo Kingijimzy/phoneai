@@ -204,7 +204,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (candidates.isEmpty()) {
-                    showInfoDialog("No models available", "Could not load models for ${p.label}. The saved model remains ${saved}.")
+                    AlertDialog.Builder(this)
+                        .setTitle("No models available")
+                        .setMessage("Could not load models for ${p.label}. The saved model remains ${saved}.")
+                        .setPositiveButton("OK", null)
+                        .show()
                     return@runOnUiThread
                 }
                 val labels = candidates.map { model ->
@@ -569,11 +573,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        refreshProviderModelChip()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1031,6 +1030,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onResume() {
         super.onResume()
+        refreshProviderModelChip()
         if (livePulse?.isStarted != true) livePulse?.start()
         val service = PhoneAiService.instance
         if (service == null) {
