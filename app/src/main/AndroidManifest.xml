@@ -42,6 +42,7 @@
         <activity android:name=".TaskCenterActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".RuntimeAgentsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".TermuxBridgeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ProactiveActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
