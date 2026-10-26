@@ -1062,25 +1062,31 @@ class SettingsActivity : Activity() {
 
     private fun cliRuntimeSetupDialog(id: String) {
         val name = cliRuntimeLabel(id)
+        if (id == "cursor-agent") {
+            startActivity(Intent(this, CursorCloudAgentActivity::class.java))
+            return
+        }
         if (id == "opencode") {
-            // @opencode/cli explicitly rejects Android (EBADPLATFORM). Do not send phone users
-            // into a guaranteed-failing Termux install command; offer Orion's in-app Code Agent.
             AlertDialog.Builder(this)
-                .setTitle("OpenCode CLI isn't supported on Android")
+                .setTitle("Connect OpenCode without a broken CLI install")
                 .setMessage(
-                    "The package you tried to install excludes Android as a platform, so Termux reports EBADPLATFORM even on ARM64. " +
-                    "Orion cannot turn that CLI's browser login into an authenticated OpenCode session. " +
-                    "Use Orion's built-in Code Agent inside the app instead; it uses your selected, connected AI provider and does not require Termux."
+                    "OpenCode does not provide one universal OAuth login that turns any app into the OpenCode coding agent. " +
+                    "OpenCode Zen sign-in creates an API key for its hosted models; Orion can use that key for chat. " +
+                    "The full OpenCode coding agent requires an OpenCode runtime/server, and the npm package you tried rejects Android (EBADPLATFORM). " +
+                    "This flow will not send you to Orion's own Code Agent or attempt another Termux install."
                 )
-                .setPositiveButton("OPEN ORION CODE AGENT") { _, _ ->
-                    startActivity(Intent(this, AgentChatActivity::class.java)
-                        .putExtra(AgentChatActivity.EXTRA_AGENT, "coder"))
+                .setPositiveButton("SIGN IN TO OPENCODE ZEN") { _, _ ->
+                    try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://opencode.ai/auth"))) }
+                    catch (_: Exception) { Toast.makeText(this, "Could not open the browser.", Toast.LENGTH_LONG).show() }
                 }
-                .setNeutralButton("MANAGE AI CONNECTIONS") { _, _ ->
-                    startActivity(Intent(this, SettingsActivity::class.java)
-                        .putExtra("open_section", "providers"))
+                .setNeutralButton("CONNECT ZEN KEY IN ORION") { _, _ ->
+                    startActivity(Intent(this, MainChatActivity::class.java)
+                        .putExtra("open_provider_connection", "opencode-zen"))
                 }
-                .setNegativeButton("CLOSE", null)
+                .setNegativeButton("OFFICIAL OPENCODE DOCS") { _, _ ->
+                    try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://opencode.ai/docs/providers"))) }
+                    catch (_: Exception) { Toast.makeText(this, "Could not open the browser.", Toast.LENGTH_LONG).show() }
+                }
                 .show()
             return
         }
