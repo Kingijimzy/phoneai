@@ -57,7 +57,7 @@ class OpenRouterOAuthActivity : Activity() {
                 OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(body) }
                 val status = connection.responseCode
                 val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-                val response = stream?.bufferedReader(Charsets.UTF_8)?.use(BufferedReader::readText).orEmpty()
+                val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 if (status !in 200..299) {
                     message = "OpenRouter authorization exchange failed (HTTP $status). You can retry or enter an API key."
                 } else {
