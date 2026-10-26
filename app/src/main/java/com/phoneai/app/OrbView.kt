@@ -73,14 +73,21 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     }
 
     private fun nextFrameDelayMs(): Long {
-        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 40L
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 66L
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val thermal = power.currentThermalStatus
-            if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return 120L
-            if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) return 66L
+            when (power.currentThermalStatus) {
+                PowerManager.THERMAL_STATUS_CRITICAL,
+                PowerManager.THERMAL_STATUS_EMERGENCY,
+                PowerManager.THERMAL_STATUS_SHUTDOWN,
+                PowerManager.THERMAL_STATUS_SEVERE -> return 160L
+                PowerManager.THERMAL_STATUS_MODERATE -> return 90L
+            }
         }
-        return if (power.isPowerSaveMode) 80L else 33L
+        return if (power.isPowerSaveMode) 100L else 50L
     }
+
+    private fun shouldAnimate(): Boolean =
+        isAttachedToWindow && isShown && visibility == VISIBLE && windowVisibility == VISIBLE
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -88,6 +95,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     }
 
     override fun onDetachedFromWindow() {
+        removeCallbacks(null)
         animate().cancel()
         super.onDetachedFromWindow()
     }
@@ -95,6 +103,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
         if (visibility == VISIBLE) postInvalidateOnAnimation()
+        else removeCallbacks(null)
     }
 
     override fun onWindowVisibilityChanged(visibility: Int) {
@@ -208,7 +217,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         paint.alpha = 255
 
         val stillAnimating = mode != Mode.IDLE || smoothLevel > .02f || touchEnergy > .02f || wordPulse > .02f
-        if (isShown && windowVisibility == VISIBLE && stillAnimating) {
+        if (shouldAnimate() && stillAnimating) {
             postInvalidateDelayed(nextFrameDelayMs())
         }
     }
