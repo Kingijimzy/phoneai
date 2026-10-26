@@ -76,7 +76,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var decisionScheduler: OrionDecisionScheduler? = null
     @Volatile private var runtimeDrainScheduled = false
     @Volatile private var runtimeDrainRequested = false
-    @Volatile private var runtimeRetryScheduled = false
+    @Volatile private var runtimeRetryRunnable: Runnable? = null
+    @Volatile private var runtimeRetryAtElapsed = 0L
     @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
@@ -183,6 +184,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (event == null || orionRuntime == null) return
         // Window transitions are meaningful state changes; ignore noisy text/content events.
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            // Android may interrupt and later resume an accessibility service without recreating it.
+            // Resume the bounded local queue only when a fresh real window event arrives.
+            if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
             decisionScheduler?.onWindowChanged(event.packageName?.toString())
             scheduleRuntimeDrain()
         }
@@ -222,7 +226,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     screenDisclosureAccepted = Prefs.accessibilityDisclosureAccepted(this),
                                     // The local screen reader combines accessibility nodes, OCR and visual regions;
                                     // this is availability, not a claim that every screen is readable.
-                                    screenPerceptionReady = serviceInfo != null
+                                    screenPerceptionReady = serviceInfo != null && rootInActiveWindow != null
                                 )
                                 lastCapabilityReport = report
                                 if (report.status == OrionCapabilityAudit.Status.BLOCKED) {
@@ -256,24 +260,45 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     runtimeDrainRequested = false
                     scheduleRuntimeDrain()
                 } else {
-                    // A single delayed wake resumes backoff work when it becomes eligible.
-                    // This is event-driven retry scheduling, not a polling loop.
-                    val delay = orionRuntime?.nextEligibleDelayMs()
-                    if (delay != null && !runtimeRetryScheduled) {
-                        runtimeRetryScheduled = true
-                        main.postDelayed({
-                            runtimeRetryScheduled = false
-                            scheduleRuntimeDrain()
-                        }, delay.coerceAtLeast(1L))
-                    }
+                    scheduleRuntimeRetry(orionRuntime?.nextEligibleDelayMs())
                 }
             }
         }
     }
 
+    /** Keep exactly one monotonic wake-up, replacing it if a newly queued retry is due sooner. */
+    private fun scheduleRuntimeRetry(delayMs: Long?) {
+        main.post {
+            if (delayMs == null) {
+                runtimeRetryRunnable?.let { main.removeCallbacks(it) }
+                runtimeRetryRunnable = null
+                runtimeRetryAtElapsed = 0L
+                return@post
+            }
+            val delay = delayMs.coerceAtLeast(1L)
+            val deadline = SystemClock.uptimeMillis() + delay
+            val existing = runtimeRetryRunnable
+            if (existing != null && runtimeRetryAtElapsed <= deadline) return@post
+            existing?.let { main.removeCallbacks(it) }
+            lateinit var next: Runnable
+            next = Runnable {
+                if (runtimeRetryRunnable === next) {
+                    runtimeRetryRunnable = null
+                    runtimeRetryAtElapsed = 0L
+                    scheduleRuntimeDrain()
+                }
+            }
+            runtimeRetryRunnable = next
+            runtimeRetryAtElapsed = deadline
+            main.postDelayed(next, delay)
+        }
+    }
+
     override fun onUnbind(intent: Intent?): Boolean {
         orionRuntime?.stop()
-        runtimeRetryScheduled = false
+        runtimeRetryRunnable?.let { main.removeCallbacks(it) }
+        runtimeRetryRunnable = null
+        runtimeRetryAtElapsed = 0L
         orionRuntime = null
         decisionScheduler = null
         instance = null
