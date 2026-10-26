@@ -795,6 +795,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun conversationContext(): List<Pair<String, String>> =
         transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
 
+    internal fun onAgentTaskFinished(task: String, success: Boolean) {
+        decisionScheduler?.onTaskFinished(task, success)
+        scheduleRuntimeDrain()
+    }
+
     private fun appendTranscript(kind: String, text: String) {
         transcript.add(Pair(kind, text))
         if (kind == "me" || kind == "ai") ChatHistoryStore.save(this, transcript)
