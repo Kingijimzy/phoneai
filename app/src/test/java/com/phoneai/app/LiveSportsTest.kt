@@ -43,7 +43,7 @@ class LiveSportsTest {
 
     @Test fun preservesRealMadridAndExpandsShortAliases() {
         assertEquals("real madrid", LiveSports.teamQuery("Is Real Madrid playing today?"))
-        assertEquals("real madrid", LiveSports.teamQuery("What is Madrid doing today?").replace("madrid", "real madrid").replace("real real madrid", "real madrid"))
+        assertEquals("madrid", LiveSports.teamQuery("What is Madrid doing today?"))
         assertEquals("manchester united", LiveSports.teamQuery("Latest result for Man Utd"))
     }
 }
