@@ -525,6 +525,7 @@ Rules:
         fun systemPrompt(svc: PhoneAiService, request: String? = null): String {
             val name = Prefs.userName(svc)
             val sb = StringBuilder(BASE.trim().replace("{{TOOL_REGISTRY}}", ToolRegistry.promptSection(request)))
+            try { sb.append("\n\n").append(OrionSoulEngine.contextFor(svc, request.orEmpty())) } catch (_: Exception) { }
             sb.append("\n\nLanguage policy:\n").append(Prefs.languagePolicy(svc))
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
