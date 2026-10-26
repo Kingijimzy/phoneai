@@ -23,6 +23,36 @@ internal object OrionIntegrationPlanner {
         val explanation: String
     )
 
+    /**
+     * Resolve against saved connection metadata and granted scopes. This is the runtime-facing
+     * entry point: unknown or missing state is never treated as connected.
+     */
+    fun planFor(
+        context: android.content.Context,
+        request: String,
+        registeredCapabilities: Set<String>
+    ): Plan {
+        val provider = providerFor(request)
+        if (provider == Provider.UNKNOWN) {
+            return plan(provider, State.UNKNOWN, request, registeredCapabilities)
+        }
+        val (id, scope) = when (provider) {
+            Provider.GITHUB -> "github" to "repo"
+            Provider.GMAIL -> "gmail" to "https://www.googleapis.com/auth/gmail.readonly"
+            Provider.GOOGLE_DRIVE -> "google_drive" to "https://www.googleapis.com/auth/drive.readonly"
+            Provider.TELEGRAM -> "telegram" to "telegram.messages"
+            Provider.TERMUX -> "termux" to "shell.execute"
+            Provider.UNKNOWN -> "" to ""
+        }
+        val connection = OrionConnectionStore.get(context, id)
+        val state = when {
+            connection != null && connection.secretAvailable && scope in connection.scopes -> State.CONNECTED
+            connection != null -> State.CAPABILITY_MISSING
+            else -> State.AVAILABLE_NOT_CONNECTED
+        }
+        return plan(provider, state, request, registeredCapabilities)
+    }
+
     /** Resolve a natural-language request to a known provider without treating credentials as input. */
     fun providerFor(request: String): Provider {
         val q = request.lowercase()
