@@ -65,7 +65,14 @@ class AgentControlActivity : Activity() {
                 setTextColor(Theme.TEXT)
                 isChecked = AgentPolicy.enabled(this@AgentControlActivity, pack.id)
                 isEnabled = pack.implemented
-                setOnCheckedChangeListener { _, checked -> AgentPolicy.setEnabled(this@AgentControlActivity, pack.id, checked); refresh() }
+                setOnCheckedChangeListener { _, checked ->
+                    AgentPolicy.setEnabled(this@AgentControlActivity, pack.id, checked)
+                    if (pack.id == "termux_bridge") {
+                        getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
+                            .putBoolean("termux_bridge_enabled", checked).apply()
+                    }
+                    refresh()
+                }
             }
             row.addView(sw)
             row.addView(TextView(this).apply { text = pack.description; textSize = 12f; setTextColor(Theme.MUTED); setPadding(0, dp(3), 0, 0) })
@@ -90,6 +97,14 @@ class AgentControlActivity : Activity() {
 
         section("SELF-TEST")
         testReport = addText("Not run yet.", 12f, Theme.MUTED, false, 4)
+        val termuxInstalled = try {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo("com.termux", 0).packageName == "com.termux"
+        } catch (_: Exception) { false }
+        addText("Termux bridge: ${if (termuxInstalled && AgentPolicy.enabled(this, "termux_bridge") && getSharedPreferences("phoneai", Context.MODE_PRIVATE).getBoolean("termux_bridge_enabled", false)) "enabled · permissions checked per command" else if (termuxInstalled) "installed but bridge is off" else "not installed / off"}", 12f, Theme.MUTED, false, 4)
+        addButton("OPEN TERMUX BRIDGE") { startActivity(Intent(this, TermuxBridgeActivity::class.java)) }
+        addText("Remote computer: ${if (Prefs.hasKey(this, "cursor_cloud_agents")) "Cursor API key saved · live status checked when opened" else "off · no Cursor API key saved"}", 12f, Theme.MUTED, false, 4)
+        addButton("OPEN REMOTE COMPUTER / CURSOR CLOUD AGENT") { startActivity(Intent(this, CursorCloudAgentActivity::class.java)) }
         addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, WorkspaceShellActivity::class.java)) }
         addButton("RUN SELF-TEST", true) { runSelfTest() }
         addButton("Open Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
