@@ -26,6 +26,7 @@ class AgentControlActivity : Activity() {
     private lateinit var modeStatus: TextView
     private lateinit var testReport: TextView
     private lateinit var packStatus: TextView
+    private lateinit var commandModelStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,7 +79,7 @@ class AgentControlActivity : Activity() {
         addButton("Propose a new skill") { proposeSkill() }
         addButton("Review / revoke skills") { reviewSkills() }
         addText("Talk and live voice use your normal chat provider. Command planning and screen-control reasoning can use a separate saved text provider/model. No model-list or test request is made when saving this setting.", 12f, Theme.MUTED, false, 4)
-        addText(commandModelSummary(), 12f, Theme.TEXT, false, 4)
+        commandModelStatus = addText(commandModelSummary(), 12f, Theme.TEXT, false, 4)
         addButton("Configure Command provider / model") { configureCommandModel() }
         addButton("Use normal chat model for Command") {
             Prefs.clearCommandProvider(this)
@@ -435,5 +436,6 @@ class AgentControlActivity : Activity() {
     private fun refresh() {
         modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Ask\nTrusted until: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
         packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
+        commandModelStatus.text = commandModelSummary()
     }
 }
