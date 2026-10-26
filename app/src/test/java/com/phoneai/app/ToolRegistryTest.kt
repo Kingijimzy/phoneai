@@ -11,7 +11,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary"
+            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
@@ -60,6 +60,12 @@ class ToolRegistryTest {
         assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
         assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("gaming_session_summary"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("gaming_session_note_add"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("gaming_focus_preset"))
+        assertEquals("gaming_hobby", AgentPolicy.packForTool("gaming_session_summary"))
+        assertEquals("gaming_hobby", AgentPolicy.packForTool("gaming_session_note_add"))
+        assertEquals("gaming_hobby", AgentPolicy.packForTool("gaming_focus_preset"))
         assertNull(ToolRegistry.find("made_up_tool"))
 
         assertNull(AgentHooks.scopeBlockReason(
