@@ -56,6 +56,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var promptRail: View? = null
     private var livePulse: android.animation.AnimatorSet? = null
     private val composeLines = mutableStateListOf<OrionChatLine>()
+    private val composeProviderLabel = mutableStateOf("Choose provider")
+    private val composeModelLabel = mutableStateOf("Choose model")
+    private val composeProviderReady = mutableStateOf(false)
     private val composeStatus = mutableStateOf("READY")
     private val composeCommandMode = mutableStateOf(false)
     private val composeSelectedImage = mutableStateOf<Uri?>(null)
@@ -138,6 +141,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         val p = Prefs.provider(this, false)
         val model = Prefs.model(this, p, false)
         val ready = p.noKey || Prefs.hasKey(this, p.id)
+        composeProviderLabel.value = p.label
+        composeModelLabel.value = model
+        composeProviderReady.value = ready
         providerModelChip.text = "AI MODEL  ·  ${p.label}  ·  ${model}" + if (ready) "" else "  ·  NOT CONNECTED"
         providerModelChip.setTextColor(if (ready) Theme.TEXT else Theme.WARN)
     }
@@ -998,6 +1004,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     status = composeStatus.value,
                     commandMode = composeCommandMode.value,
                     selectedImage = composeSelectedImage.value,
+                    providerLabel = composeProviderLabel.value,
+                    modelLabel = composeModelLabel.value,
+                    providerReady = composeProviderReady.value,
+                    onProviderClick = { showChatProviderPicker() },
+                    onModelClick = { showChatModelPicker() },
                     onBack = { finish() },
                     onHistory = { showChatHistory() },
                     onNewChat = {
