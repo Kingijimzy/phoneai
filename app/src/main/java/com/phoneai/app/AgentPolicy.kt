@@ -83,6 +83,10 @@ object AgentPolicy {
         val a = JSONArray(p(c).getString("allowlist_$pack", "[]") ?: "[]")
         (0 until a.length()).any { a.optString(it) == tool }
     }.getOrDefault(false)
+    fun allowlist(c: Context, pack: String): List<String> = runCatching {
+        val a = JSONArray(p(c).getString("allowlist_$pack", "[]") ?: "[]")
+        (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.distinct()
+    }.getOrDefault(emptyList())
     fun setAllowlist(c: Context, pack: String, tools: List<String>) {
         val a = JSONArray()
         tools.filter { it.matches(Regex("[a-zA-Z0-9_.:-]{1,80}")) }.distinct().take(100).forEach { a.put(it) }
