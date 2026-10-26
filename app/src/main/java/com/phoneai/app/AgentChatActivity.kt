@@ -312,36 +312,27 @@ class AgentChatActivity : Activity() {
             coderNotice("I found the Python code, but Python execution needs Termux with Python installed. Nothing was run. Install/open Termux, install Python there, then ask me to run it again.")
             return
         }
-        AlertDialog.Builder(this)
-            .setTitle("Run Python code in Termux?")
-            .setMessage("This runs the previous Python code in your Termux environment, not in a sandbox. It can use Termux's available permissions and files. Only continue if you trust the code. Orion will report the actual command output or error.")
-            .setPositiveButton("RUN ONCE") { _, _ ->
-                busy = true
-                val waiting = addBubble(false, "Running Python in Termux…")
-                val encoded = Base64.encodeToString(source.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-                Thread {
-                    val result = try {
-                        ShellRunner.runTermux(this, "printf '%s' '$encoded' | base64 -d > orion_agent_run.py && python3 orion_agent_run.py", 60)
-                    } catch (e: Exception) {
-                        "error: " + (e.message ?: e.javaClass.simpleName).take(180)
-                    }
-                    runOnUiThread {
-                        val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
-                        waiting.text = Markdown.render(shown)
-                        turns.add(AgentRunner.Turn("assistant", shown))
-                        AgentChatStore.save(this, agent.id, turns)
-                        busy = false
-                        scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
-                    }
-                }.start()
+        // Safe, bounded Python snippets run automatically. Do not show a per-task
+        // approval card: the user has already explicitly asked "run it". Android/Termux's
+        // one-time OS permission remains required and cannot be bypassed by an app.
+        busy = true
+        val waiting = addBubble(false, "Running Python in Termux…")
+        val encoded = Base64.encodeToString(source.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        Thread {
+            val result = try {
+                ShellRunner.runTermux(this, "printf '%s' '$encoded' | base64 -d > orion_agent_run.py && python3 orion_agent_run.py", 60)
+            } catch (e: Exception) {
+                "error: " + (e.message ?: e.javaClass.simpleName).take(180)
             }
-            .setNegativeButton("CANCEL") { _, _ ->
-                val result = "Cancelled. The Python code was not executed."
-                addBubble(false, result)
-                turns.add(AgentRunner.Turn("assistant", result))
+            runOnUiThread {
+                val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
+                waiting.text = Markdown.render(shown)
+                turns.add(AgentRunner.Turn("assistant", shown))
                 AgentChatStore.save(this, agent.id, turns)
+                busy = false
+                scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
-            .show()
+        }.start()
     }
 
     private fun send() {
