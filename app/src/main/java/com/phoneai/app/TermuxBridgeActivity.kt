@@ -315,7 +315,7 @@ class TermuxBridgeResultReceiver : android.content.BroadcastReceiver() {
             ?: extras?.keySet()?.mapNotNull { key -> extras?.get(key) as? Bundle }
                 ?.firstOrNull { it.containsKey("stdout") || it.containsKey("exitCode") || it.containsKey("errmsg") }
         if (bundle == null) {
-            val message = "UNVERIFIED: Termux sent a callback without a readable result bundle."
+            val message = "error: UNVERIFIED: Termux sent a callback without a readable result bundle."
             TermuxBridgeResultStore.lastResult = message
             AgentPolicy.log(context, "termux_command", "result", false, "callback received without result bundle")
             if (requestId >= 0) TermuxBridgeRunner.deliver(requestId, message)
@@ -328,7 +328,7 @@ class TermuxBridgeResultReceiver : android.content.BroadcastReceiver() {
         val errMsg = bundle.getString("errmsg", "")
         TermuxBridgeResultStore.lastExitCode = exitCode.takeIf { it != Int.MIN_VALUE }
         val resultText = buildString {
-            append(if (err != -1) "TERMUX SERVICE ERROR" else if (exitCode == 0) "EXIT 0 · SUCCESS" else if (exitCode != Int.MIN_VALUE) "EXIT $exitCode · FAILED" else "UNVERIFIED · EXIT STATUS MISSING")
+            append(if (err != -1) "error: TERMUX SERVICE ERROR" else if (exitCode == 0) "EXIT 0 · SUCCESS" else if (exitCode != Int.MIN_VALUE) "error: EXIT $exitCode · FAILED" else "error: UNVERIFIED · EXIT STATUS MISSING")
             if (errMsg.isNotBlank()) append("\n").append(errMsg.take(1000))
             if (stdout.isNotBlank()) append("\n\nSTDOUT\n").append(stdout.take(8000))
             if (stderr.isNotBlank()) append("\n\nSTDERR\n").append(stderr.take(3000))
