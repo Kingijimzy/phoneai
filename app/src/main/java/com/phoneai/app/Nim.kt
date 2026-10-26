@@ -515,11 +515,30 @@ class Nim(private val ctx: Context) {
     }
 
     /**
-     * Uses the selected compatible provider as primary. A backup provider is considered only
-     * after an explicit HTTP 429 rate-limit response; timeouts, empty replies, bad models,
-     * authentication failures, network errors, and other HTTP statuses stop provider rotation.
-     * Per-command request budgeting still bounds all model probes and retries.
+     * Uses the selected compatible provider first, then rotates through eligible saved providers
+     * for recoverable provider/model failures (including HTTP 429, stale/unsupported models,
+     * empty HTTP-200 replies, credit exhaustion, and temporary 5xx errors). Authentication,
+     * connectivity, timeout, cancellation, and request-budget failures are not blindly replayed
+     * across providers. The per-command 15-request budget bounds all model probes and retries.
      */
+    private fun shouldRotateProvider(error: Exception, enabled: Boolean): Boolean {
+        if (!enabled || cancelled) return false
+        if (error is AiException && error.httpStatus == 429) return true
+        val message = (error.message ?: "").lowercase()
+        if (message.isBlank()) return false
+        // Do not fan out requests when the device/network is disconnected or a credential is bad.
+        if (listOf("key rejected", "invalid api key", "unauthorized", "authentication",
+                "cannot connect", "check internet", "sockettimeout", "timed out",
+                "request timed out", "no response before timeout", "reached orion's 15-request budget",
+                "stopped.", "paid-provider use is off", "blocked the request").any { message.contains(it) }) {
+            return false
+        }
+        return listOf("empty response", "empty content", "no chat model worked",
+            "no vision model worked", "model access", "not found", "unsupported model",
+            "retired", "out of credit", "temporarily busy", "http 400", "http 404",
+            "http 410", "http 422", "http 500", "http 502", "http 503", "http 504",
+            "error 402", "error 404", "error 410", "error 422").any { message.contains(it) }
+    }
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
         // Do not reset here: Agent.run() can call chat() several times for one
@@ -552,7 +571,7 @@ class Nim(private val ctx: Context) {
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
                 .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
-                .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
+                .toList()
         } else emptyList()
         val mode = if (vision) "vision" else "chat"
 
@@ -575,7 +594,7 @@ class Nim(private val ctx: Context) {
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 failures.add(msg)
-                if (!ProviderFallbackPolicy.shouldTryBackup(e, Prefs.autoSwitch(ctx)) || i == order.size - 1) {
+                if (!shouldRotateProvider(e, Prefs.autoSwitch(ctx)) || i == order.size - 1) {
                     val tried = if (order.size > 1) " Tried ${i + 1} provider(s): ${order.take(i + 1).joinToString { it.label }}." else
                         " No other compatible saved provider is available to rotate to; add a second key in Settings."
                     throw RuntimeException(failures.joinToString(" | ") + tried, e)
@@ -731,7 +750,7 @@ class Nim(private val ctx: Context) {
                         continue
                     }
                 }
-                throw AiException(p.label + ": model returned an empty response. Try another model or check that model's NVIDIA API access.")
+                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.")
             }
             Prefs.setModel(ctx, p, vision, model)
             return content
