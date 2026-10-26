@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -204,7 +206,7 @@ class TermuxBridgeActivity : Activity() {
             }
             AgentPolicy.Decision.NEED_APPROVAL -> AlertDialog.Builder(this)
                 .setTitle("Approve Termux command?")
-                .setMessage("Command will run in Termux's user context, not root.\n\n${text.take(1800)}\n\nApproval mode: ${AgentPolicy.mode(this).label}. Proceed once?")
+                .setMessage("Command will run in Termux's user context, not root.\n\n${text}\n\nApproval mode: ${AgentPolicy.mode(this).label}. Proceed once?")
                 .setNegativeButton("CANCEL") { _, _ ->
                     AgentPolicy.log(this, "termux_command", "dispatch", false, "user declined; command not sent")
                 }
@@ -234,6 +236,15 @@ class TermuxBridgeActivity : Activity() {
             if (result.startsWith("error:", ignoreCase = true)) false else null,
             if (result.startsWith("error:", ignoreCase = true)) "dispatch failed; details shown in bridge" else "dispatch accepted; awaiting Termux result callback"
         )
+        if (!result.startsWith("error:", ignoreCase = true)) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (TermuxBridgeResultStore.lastResult == result) {
+                    TermuxBridgeResultStore.lastResult = "UNVERIFIED: no Termux result callback arrived within 30 seconds. Check the RUN_COMMAND permission and allow-external-apps setting. No successful execution is claimed."
+                    AgentPolicy.log(this, "termux_command", "result-timeout", false, "no callback within 30 seconds; outcome remains unverified")
+                    refreshOutput()
+                }
+            }, 30_000L)
+        }
     }
 
     private fun refreshOutput() {
