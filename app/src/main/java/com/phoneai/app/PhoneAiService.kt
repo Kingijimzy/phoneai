@@ -79,6 +79,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var runtimeRetryRunnable: Runnable? = null
     @Volatile private var runtimeRetryAtElapsed = 0L
     @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
+    @Volatile private var approvedRoutineReplayName = ""
+    @Volatile private var approvedRoutineReplayAt = 0L
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
@@ -336,6 +338,60 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     fun replayScreenSize(): Pair<Int, Int> = screenSize()
+
+    /** Called only after the saved-routine preview dialog's explicit Replay confirmation. */
+    fun replayConfirmedRoutineFromUi(name: String) {
+        approvedRoutineReplayName = MacroStore.norm(name)
+        approvedRoutineReplayAt = SystemClock.uptimeMillis()
+        sendFromMainChat("run routine $name")
+    }
+
+    internal fun consumeRoutineReplayApproval(name: String): Boolean {
+        val accepted = approvedRoutineReplayName == MacroStore.norm(name) &&
+            SystemClock.uptimeMillis() - approvedRoutineReplayAt in 0L..30_000L
+        approvedRoutineReplayName = ""
+        approvedRoutineReplayAt = 0L
+        return accepted
+    }
+
+    /** Bring the exact recorded target package forward; caller still verifies its screen before tapping. */
+    fun openRoutineTarget(packageName: String): String {
+        val target = packageName.trim()
+        if (!Regex("^[A-Za-z0-9_.]{3,255}$").matches(target)) return "error: saved routine has no valid target app package"
+        if (currentPackageName().equals(target, true)) return "ok"
+        return try {
+            val intent = packageManager.getLaunchIntentForPackage(target)
+                ?: return "error: the recorded target app is not installed or has no launchable activity"
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            "ok"
+        } catch (e: Exception) {
+            "error: could not open the recorded target app (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
+    fun waitForRoutinePackage(packageName: String, timeoutMs: Long = 6_000L, stopped: () -> Boolean): Boolean {
+        val end = SystemClock.uptimeMillis() + timeoutMs.coerceIn(0L, 15_000L)
+        while (SystemClock.uptimeMillis() < end) {
+            if (stopped()) return false
+            if (currentPackageName().equals(packageName, true)) return true
+            Thread.sleep(100L)
+        }
+        return currentPackageName().equals(packageName, true)
+    }
+
+    /** One immediate local comparison used to disambiguate an interrupted recorded gesture. */
+    fun checkRecordedSignature(x: Int, y: Int, expected: IntArray): String {
+        if (expected.size != 108) return "invalid"
+        val bitmap = grabBitmap() ?: return "unavailable"
+        return try {
+            if (sigDistance(signature(bitmap, x, y), expected) <= 32.0) "match" else "mismatch"
+        } catch (_: Exception) {
+            "unavailable"
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
 
     private fun screenSize(): Pair<Int, Int> {
         val b = wm.maximumWindowMetrics.bounds
@@ -2321,6 +2377,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var tDownY = 0f
     private var tDownUp = 0L
     private var tDownWall = 0L
+    private var tDownPackage = ""
     private var tSig: java.util.concurrent.Future<IntArray?>? = null
     private val teachPathPoints = ArrayList<Pair<Float, Float>>()
 
@@ -2387,6 +2444,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 tDownY = e.rawY
                 tDownUp = SystemClock.uptimeMillis()
                 tDownWall = System.currentTimeMillis()
+                tDownPackage = rootInActiveWindow?.packageName?.toString().orEmpty()
                 teachPathPoints.clear()
                 teachPathPoints.add(Pair(e.rawX, e.rawY))
                 val x = e.rawX.toInt()
@@ -2455,7 +2513,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         val dist = Math.hypot((x2 - x1).toDouble(), (y2 - y1).toDouble())
         val size = screenSize()
-        val step = JSONObject().put("screenW", size.first).put("screenH", size.second)
+        val step = JSONObject().put("screenW", size.first).put("screenH", size.second).put("targetPackage", tDownPackage)
         val path = Path()
         path.moveTo(x1, y1)
         val ms: Long
@@ -2492,6 +2550,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val arr = JSONArray()
                 for (v in sig) arr.put(v)
                 step.put("sig", arr).put("sx", x1.toInt()).put("sy", y1.toInt())
+                // Save a distinct post-gesture fingerprint when the gesture visibly changed this region.
+                // It lets resume distinguish an unexecuted touch from one that probably already happened.
+                val afterBitmap = grabBitmap()
+                if (afterBitmap != null) {
+                    try {
+                        val after = signature(afterBitmap, x2.toInt(), y2.toInt())
+                        if (sigDistance(sig, after) >= 8.0) {
+                            val afterArr = JSONArray()
+                            for (v in after) afterArr.put(v)
+                            step.put("afterSig", afterArr).put("afterSx", x2.toInt()).put("afterSy", y2.toInt())
+                        }
+                    } catch (_: Exception) {
+                    } finally {
+                        if (!afterBitmap.isRecycled) afterBitmap.recycle()
+                    }
+                }
             }
             val count = synchronized(teachSteps) { teachSteps.put(step); teachSteps.length() }
             main.post { teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE" }
