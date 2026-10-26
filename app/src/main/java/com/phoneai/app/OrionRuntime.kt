@@ -17,8 +17,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     private val appContext = context.applicationContext
     private val lock = Any()
     private val file get() = File(appContext.filesDir, "orion_runtime.json")
-    private val maxQueue = 40
-    private val maxAttempts = 4
+    private val maxQueue = OrionRuntimePolicy.MAX_QUEUE
     private var state = State.STOPPED
     private var lastEvent = "created"
     private var lastChangedAt = clock()
@@ -69,13 +68,14 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     fun fail(item: WorkItem): Boolean = synchronized(lock) {
         if (inflight?.id == item.id) inflight = null
         val attempts = item.attempts + 1
-        if (attempts >= maxAttempts) {
-            state = State.DEGRADED
+        if (!OrionRuntimePolicy.shouldRetry(attempts)) {
+            // One exhausted item must not strand unrelated queued work.
+            state = if (queue.isNotEmpty()) State.ACTIVE else State.DEGRADED
             eventLocked("work_abandoned:" + item.type.name.lowercase())
             persistLocked()
             return@synchronized false
         }
-        val delay = (30_000L * (1L shl (attempts - 1))).coerceAtMost(15 * 60_000L)
+        val delay = OrionRuntimePolicy.retryDelayMs(attempts)
         queue.removeAll { it.id == item.id }
         queue.add(item.copy(attempts = attempts, notBefore = clock() + delay))
         queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
@@ -90,8 +90,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     /** Delay until the next queued item is eligible; null means there is no pending retry. */
     fun nextEligibleDelayMs(): Long? = synchronized(lock) {
         if (queue.isEmpty() || state == State.STOPPED || state == State.PAUSED || state == State.DEGRADED) return@synchronized null
-        val nextAt = queue.minOfOrNull { it.notBefore } ?: return@synchronized null
-        (nextAt - clock()).coerceAtLeast(0L)
+        OrionRuntimePolicy.nextEligibleDelayMs(clock(), queue.map { it.notBefore })
     }
 
     private fun eventLocked(event: String) { lastEvent = event.take(80); lastChangedAt = clock() }
@@ -111,7 +110,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 if (key.isBlank()) return@mapNotNull null
                 WorkItem(o.optString("id").ifBlank { UUID.randomUUID().toString() }, key, type,
                     o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
-                    o.optInt("attempts").coerceIn(0, maxAttempts), o.optLong("notBefore", 0L))
+                    o.optInt("attempts").coerceIn(0, OrionRuntimePolicy.MAX_ATTEMPTS), o.optLong("notBefore", 0L))
             }.distinctBy { it.type.name + ":" + it.key }.take(maxQueue).toMutableList()
             // Recover work claimed immediately before process death.
             val active = root.optJSONObject("inflight")
