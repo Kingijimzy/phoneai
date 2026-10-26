@@ -83,7 +83,7 @@ import kotlinx.coroutines.withContext
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
 private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
-private val ORION_INLINE_TOKEN_PATTERN = Regex("""\*\*(.+?)\*\*|`([^`]+)`""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\*\*(.+?)\*\*|`([^`]+)`|(?<![*\\w])\*([^*\\n]+)\*(?!\\w)""")
 
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
@@ -112,15 +112,21 @@ private fun formatOrionMarkdown(source: String): AnnotatedString {
         var cursor = 0
         ORION_INLINE_TOKEN_PATTERN.findAll(content).forEach { match ->
             appendPlain(content.substring(cursor, match.range.first))
-            val isBold = match.value.startsWith("**")
-            val inner = match.groupValues[if (isBold) 1 else 2]
+            val isBold = match.groups[1] != null
+            val isCode = match.groups[2] != null
+            val inner = when {
+                isBold -> match.groupValues[1]
+                isCode -> match.groupValues[2]
+                else -> match.groupValues[3]
+            }
             val start = out.length
             out.append(inner)
             out.addStyle(
                 androidx.compose.ui.text.SpanStyle(
-                    fontWeight = if (isBold || headingSize != null) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isBold || headingSize != null) FontWeight.Bold else FontWeight.Normal,
+                    fontStyle = if (!isBold && !isCode) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
                     fontSize = headingSize ?: 14.sp,
-                    background = if (isBold) Color.Transparent else Color(0xFF242424)
+                    background = if (isCode) Color(0xFF242424) else Color.Transparent
                 ),
                 start, out.length
             )
