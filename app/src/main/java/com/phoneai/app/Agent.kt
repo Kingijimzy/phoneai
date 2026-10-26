@@ -700,6 +700,10 @@ Rules:
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
         if (!resumeRequest && !browserActionTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
+            if (!authorizeDirectTool("web_search", "trading_research")) {
+                ui.say("Web search was not run. Enable the Trading research pack and approve the action, or change the approval mode.")
+                return
+            }
             ui.phase("acting")
             val answer = summarizeSearch(command, LiveWebSearch.search(LiveWebSearch.queryFrom(command)))
             logShortcut("web_search", answer)
@@ -709,6 +713,10 @@ Rules:
         }
         // Freshness-dependent questions should use live web results, not a model's stale training data.
         if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
+            if (!authorizeDirectTool("live_web_search", "trading_research")) {
+                ui.say("Live lookup was not run. Enable the Trading research pack and approve the action, or change the approval mode.")
+                return
+            }
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val raw = LiveWebSearch.search(query)
@@ -722,6 +730,10 @@ Rules:
         val quoteIntent = Regex("(?i)\\b(price|quote|ticker|trading at|current value)\\b").containsMatchIn(command)
         val quoteMatch = Regex("(?i)\\b(BTC|BITCOIN|ETH|ETHEREUM|SOL|SOLANA|XRP|RIPPLE|BNB|DOGE|ADA|AVAX|DOT|LINK|LTC|TRX|TON)(USDT)?\\b").find(command)
         if (!resumeRequest && !browserActionTask && quoteIntent && quoteMatch != null) {
+            if (!authorizeDirectTool("bybit_public_ticker", "trading_research")) {
+                ui.say("The quote was not fetched. Enable the Trading research pack and approve the lookup, or change the approval mode.")
+                return
+            }
             ui.phase("acting")
             val rawSymbol = quoteMatch.groupValues[1].uppercase()
             val baseSymbol = when (rawSymbol) {
@@ -741,7 +753,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (!resumeRequest && !browserActionTask && activeSkillId == null) local.tryRun(command) else null
+            if (!resumeRequest && !browserActionTask && activeSkillId == null && !AgentHooks.isPhoneActionRequest(command)) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
@@ -908,6 +920,26 @@ Rules:
         AgentCheckpointStore.pause(svc)
         if (stopped) ui.say("Stopped. I saved the task progress locally; say \"continue\" when you want me to resume.")
         else ui.say("I paused at the step limit and saved the task progress locally. Say \"continue\" to resume from the recorded results.")
+    }
+
+    /** Apply the same enabled-pack and approval policy to direct no-LLM shortcuts. */
+    private fun authorizeDirectTool(tool: String, pack: String): Boolean {
+        val decision = AgentPolicy.evaluate(svc, pack, tool, dangerous = false)
+        return when (decision.decision) {
+            AgentPolicy.Decision.ALLOW -> {
+                AgentPolicy.log(svc, tool, "direct-dispatch", null, decision.reason)
+                true
+            }
+            AgentPolicy.Decision.NEED_APPROVAL -> {
+                val approved = ui.ask("Approve live tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\nRun this lookup once?")
+                AgentPolicy.log(svc, tool, "direct-dispatch", approved, if (approved) "user approved lookup" else "user declined lookup")
+                approved
+            }
+            AgentPolicy.Decision.PLAN_ONLY, AgentPolicy.Decision.DENY -> {
+                AgentPolicy.log(svc, tool, "direct-dispatch", false, decision.reason)
+                false
+            }
+        }
     }
 
     /** Record deterministic shortcuts too, so activity history covers more than model-planned tools. */
