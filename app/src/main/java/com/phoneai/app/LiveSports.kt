@@ -21,18 +21,27 @@ object LiveSports {
         "bayern" to "bayern munich", "wolves" to "wolverhampton", "the lakers" to "lakers", "the warriors" to "warriors")
 
     fun isScoreRequest(text: String): Boolean {
-        val s = text.lowercase()
-        return Regex("\\b(score|scoreline|score line|result|results|final score|who won|did .+ win|fixture|playing today|match today|game today|live score)\\b").containsMatchIn(s) &&
-            !Regex("\\b(credit|test|exam|bmi|score my|my score)\\b").containsMatchIn(s)
+        val s = text.lowercase().replace(Regex("[^a-z0-9' ]"), " ")
+        if (Regex("\\b(credit|test|exam|bmi|score my|my score)\\b").containsMatchIn(s)) return false
+        val scoreLanguage = Regex("\\b(score|scoreline|score line|result|results|final score|who won|did .+ win|fixture|playing today|match today|game today|live score|won|winning)\\b").containsMatchIn(s)
+        val fixtureLanguage = Regex("\\b(when|what|which|is|are|next|upcoming|latest|last|today|tonight|playing|play|plays|match|matches|game|games|fixture|fixtures|kick ?off)\\b").containsMatchIn(s)
+        val teamOrLeague = Regex("\\b(real madrid|madrid|barcelona|barca|manchester united|man united|man utd|manchester city|man city|arsenal|chelsea|liverpool|tottenham|spurs|bayern|juventus|juve|psg|paris saint germain|inter milan|ac milan|atletico|atlético|premier league|la liga|champions league|europa league|bundesliga|serie a|ligue 1|nba|nfl|nhl|mlb|lakers|warriors|celtics|chiefs|yankees)\\b").containsMatchIn(s)
+        return scoreLanguage || (teamOrLeague && fixtureLanguage)
     }
 
     /** The team/club words in the question, with filler removed. */
     fun teamQuery(text: String): String {
         var s = text.lowercase().replace(Regex("[^a-z0-9' .-]"), " ")
-        s = s.replace(Regex("\\b(what|whats|what's|is|the|score|scoreline|score line|line|result|results|final|of|for|on|in|today|tonight|yesterday|now|live|latest|current|did|win|who|won|game|match|fixture|playing|please|tell|me|how|are|doing|vs|against|and|a)\\b"), " ")
+        s = s.replace(Regex("\\b(what|whats|what's|is|are|the|score|scoreline|score line|line|result|results|final|of|for|on|in|today|tonight|yesterday|now|live|latest|current|last|next|upcoming|when|do|does|they|their|play|plays|playing|kickoff|kick off|please|tell|me|how|doing|vs|against|and|a|match|matches|game|games|fixture|fixtures|win|won|who)\\b"), " ")
         s = s.replace(Regex("\\s+"), " ").trim()
-        for ((k, v) in aliases) if (s.contains(k)) s = s.replace(k, v)
-        return s
+        // Keep the full club name intact; only expand standalone aliases.
+        for ((k, v) in aliases.entries.sortedByDescending { it.key.length }) {
+            if (k == "real") continue
+            s = s.replace(Regex("\\b" + Regex.escape(k) + "\\b"), v)
+        }
+        if (Regex("\\breal\\s+madrid\\b").containsMatchIn(s)) s = s.replace(Regex("\\breal\\s+madrid\\b"), "real madrid")
+        else s = s.replace(Regex("\\breal\\b"), "real madrid")
+        return s.replace(Regex("\\s+"), " ").trim()
     }
 
     /** Pure formatter over one ESPN scoreboard payload; returns lines for games involving [team] (any game if blank). */
@@ -69,7 +78,20 @@ object LiveSports {
         val team = teamQuery(question)
         val fmt = SimpleDateFormat("yyyyMMdd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        val to = fmt.format(cal.time); cal.add(Calendar.DAY_OF_YEAR, -1); val from = fmt.format(cal.time)
+        val upcoming = Regex("\\b(next|upcoming|when|future)\\b").containsMatchIn(question.lowercase()) &&
+            Regex("\\b(play|plays|playing|match|matches|game|games|fixture|fixtures|kick ?off)\\b").containsMatchIn(question.lowercase())
+        val today = fmt.format(cal.time)
+        val from: String
+        val to: String
+        if (upcoming) {
+            from = today
+            cal.add(Calendar.DAY_OF_YEAR, 7)
+            to = fmt.format(cal.time)
+        } else {
+            to = today
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+            from = fmt.format(cal.time)
+        }
         val found = ArrayList<String>()
         for ((path, name) in leagues) {
             val body = get("https://site.api.espn.com/apis/site/v2/sports/$path/scoreboard?dates=$from-$to&limit=100") ?: continue
