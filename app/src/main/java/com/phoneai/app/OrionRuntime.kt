@@ -1,0 +1,120 @@
+package com.phoneai.app
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.util.UUID
+
+/** Event-driven coordinator: persists bounded work, but never calls providers or executes actions itself. */
+internal class OrionRuntime(context: Context, private val clock: () -> Long = { System.currentTimeMillis() }) {
+    enum class State { STOPPED, ACTIVE, BUSY, PAUSED, DEGRADED }
+    enum class WorkType { LEARN_FROM_RESULT, CAPABILITY_RECHECK, ROUTINE_CANDIDATE, RESTORE_PENDING }
+    data class WorkItem(val id: String, val key: String, val type: WorkType, val priority: Int,
+                        val createdAt: Long, val attempts: Int = 0, val notBefore: Long = 0L)
+    data class Snapshot(val state: State, val queued: Int, val lastEvent: String, val lastChangedAt: Long)
+
+    private val appContext = context.applicationContext
+    private val lock = Any()
+    private val file get() = File(appContext.filesDir, "orion_runtime.json")
+    private val maxQueue = 40
+    private val maxAttempts = 4
+    private var state = State.STOPPED
+    private var lastEvent = "created"
+    private var lastChangedAt = clock()
+    private var queue = mutableListOf<WorkItem>()
+
+    init { synchronized(lock) { loadLocked() } }
+
+    fun start() = synchronized(lock) { state = State.ACTIVE; eventLocked("service_connected"); persistLocked() }
+    fun stop() = synchronized(lock) { state = State.STOPPED; eventLocked("service_disconnected"); persistLocked() }
+    fun pause(reason: String = "paused") = synchronized(lock) { state = State.PAUSED; eventLocked(reason); persistLocked() }
+    fun resume() = synchronized(lock) { state = State.ACTIVE; eventLocked("resumed"); persistLocked() }
+
+    fun enqueue(type: WorkType, key: String, priority: Int = 0): Boolean = synchronized(lock) {
+        val safeKey = key.trim().take(100)
+        if (safeKey.isBlank() || queue.any { it.type == type && it.key == safeKey }) return@synchronized false
+        if (queue.size >= maxQueue) {
+            val lowest = queue.indices.minByOrNull { queue[it].priority } ?: return@synchronized false
+            if (queue[lowest].priority >= priority) return@synchronized false
+            queue.removeAt(lowest)
+        }
+        queue.add(WorkItem(UUID.randomUUID().toString(), safeKey, type, priority.coerceIn(-10, 10), clock()))
+        queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
+        eventLocked("work_queued:" + type.name.lowercase())
+        persistLocked()
+        true
+    }
+
+    fun claimNext(): WorkItem? = synchronized(lock) {
+        if (state != State.ACTIVE) return@synchronized null
+        val index = queue.indexOfFirst { it.notBefore <= clock() }
+        if (index < 0) return@synchronized null
+        val item = queue.removeAt(index)
+        state = State.BUSY
+        eventLocked("work_claimed:" + item.type.name.lowercase())
+        persistLocked()
+        item
+    }
+
+    fun complete(item: WorkItem) = synchronized(lock) {
+        state = if (state == State.BUSY) State.ACTIVE else state
+        eventLocked("work_completed:" + item.type.name.lowercase())
+        persistLocked()
+    }
+
+    fun fail(item: WorkItem): Boolean = synchronized(lock) {
+        val attempts = item.attempts + 1
+        if (attempts >= maxAttempts) {
+            state = State.DEGRADED
+            eventLocked("work_abandoned:" + item.type.name.lowercase())
+            persistLocked()
+            return@synchronized false
+        }
+        val delay = (30_000L * (1L shl (attempts - 1))).coerceAtMost(15 * 60_000L)
+        queue.removeAll { it.id == item.id }
+        queue.add(item.copy(attempts = attempts, notBefore = clock() + delay))
+        queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
+        state = State.ACTIVE
+        eventLocked("work_backoff:" + attempts)
+        persistLocked()
+        true
+    }
+
+    fun snapshot(): Snapshot = synchronized(lock) { Snapshot(state, queue.size, lastEvent, lastChangedAt) }
+
+    private fun eventLocked(event: String) { lastEvent = event.take(80); lastChangedAt = clock() }
+
+    private fun loadLocked() {
+        try {
+            if (!file.isFile) return
+            val root = JSONObject(file.readText())
+            state = State.STOPPED
+            lastEvent = root.optString("lastEvent", "recovered").take(80)
+            lastChangedAt = root.optLong("lastChangedAt", clock())
+            val items = root.optJSONArray("queue") ?: JSONArray()
+            queue = (0 until items.length()).mapNotNull { i ->
+                val o = items.optJSONObject(i) ?: return@mapNotNull null
+                val type = runCatching { WorkType.valueOf(o.optString("type")) }.getOrNull() ?: return@mapNotNull null
+                val key = o.optString("key").trim().take(100)
+                if (key.isBlank()) return@mapNotNull null
+                WorkItem(o.optString("id").ifBlank { UUID.randomUUID().toString() }, key, type,
+                    o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
+                    o.optInt("attempts").coerceIn(0, maxAttempts), o.optLong("notBefore", 0L))
+            }.distinctBy { it.type.name + ":" + it.key }.take(maxQueue).toMutableList()
+        } catch (_: Exception) { queue = mutableListOf(); state = State.STOPPED }
+    }
+
+    private fun persistLocked() {
+        try {
+            val items = JSONArray()
+            queue.forEach { w -> items.put(JSONObject().put("id", w.id).put("key", w.key).put("type", w.type.name)
+                .put("priority", w.priority).put("createdAt", w.createdAt).put("attempts", w.attempts).put("notBefore", w.notBefore)) }
+            val root = JSONObject().put("state", state.name).put("lastEvent", lastEvent)
+                .put("lastChangedAt", lastChangedAt).put("queue", items)
+            val tmp = File(file.parentFile, file.name + ".tmp")
+            tmp.writeText(root.toString())
+            if (!tmp.renameTo(file)) { file.writeText(root.toString()); tmp.delete() }
+        } catch (_: Exception) { /* Persistence must never crash the accessibility service. */ }
+    }
+}
