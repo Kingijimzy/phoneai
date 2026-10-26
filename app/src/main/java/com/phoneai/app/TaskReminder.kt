@@ -88,6 +88,9 @@ class TaskReminderReceiver : BroadcastReceiver() {
 
 class TaskReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) TaskReminder.restoreAll(context)
+        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+            TaskReminder.restoreAll(context)
+            ProactiveBriefing.schedule(context)
+        }
     }
 }
