@@ -482,7 +482,7 @@ private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     val text = item.text
     val lower = text.lowercase()
     if (Regex("(?s)```(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text) ||
-        (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class "))) {
+        (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class ")))) {
         return OrionReplyType.CODE
     }
     if (lower.contains("research summary") || lower.contains("sources:") || lower.contains("source list") ||
