@@ -75,8 +75,11 @@ object StandingOrders {
         save(c, list.filter { it.kind != kind }); "removed standing order '$kind'"
     }
 
-    fun describe(c: Context): String = all(c).ifEmpty { return "no standing orders yet" }
-        .joinToString("\n") { "- ${it.kind}: every ${it.everyMinutes} min" }
+    fun describe(c: Context): String {
+        val list = all(c)
+        if (list.isEmpty()) return "no standing orders yet"
+        return list.joinToString("\n") { "- ${it.kind}: every ${it.everyMinutes} min" }
+    }
 
     internal fun update(c: Context, kind: String, digest: String) = synchronized(lock) {
         save(c, all(c).map { if (it.kind == kind) it.copy(lastRunAt = System.currentTimeMillis(), lastDigest = digest) else it })
@@ -114,7 +117,8 @@ object LifeLoop {
         val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "Orion standing orders", NotificationManager.IMPORTANCE_DEFAULT))
         val open = PendingIntent.getActivity(c, 84021, c.packageManager.getLaunchIntentForPackage(c.packageName) ?: Intent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, CHANNEL) else @Suppress("DEPRECATION") android.app.Notification.Builder(c)
+        @Suppress("DEPRECATION")
+        val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, CHANNEL) else android.app.Notification.Builder(c)
         nm.notify(84100 + kind.hashCode().and(0xff), b.setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Orion: " + (StandingOrderPolicy.kinds[kind] ?: kind))
             .setContentText(text.lineSequence().first()).setStyle(android.app.Notification.BigTextStyle().bigText(text.take(900)))
