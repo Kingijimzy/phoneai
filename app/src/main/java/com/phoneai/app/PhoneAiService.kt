@@ -76,6 +76,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var decisionScheduler: OrionDecisionScheduler? = null
     @Volatile private var runtimeDrainScheduled = false
     @Volatile private var runtimeDrainRequested = false
+    @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
@@ -209,10 +210,25 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 else throw IllegalStateException("agent_not_ready")
                             }
                             OrionRuntime.WorkType.CAPABILITY_RECHECK -> {
-                                if (!::agent.isInitialized || serviceInfo == null) {
-                                    throw IllegalStateException("service_capability_not_ready")
+                                if (!::agent.isInitialized) {
+                                    throw IllegalStateException("agent_not_ready")
                                 }
-                                // Recheck local service readiness only; never infer user consent or execute actions.
+                                val report = OrionCapabilityAudit.evaluate(
+                                    registeredTools = ToolRegistry.all.size,
+                                    implementedPacks = AgentPolicy.packs.count { it.implemented },
+                                    enabledPacks = AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) },
+                                    accessibilityReady = serviceInfo != null,
+                                    screenDisclosureAccepted = Prefs.accessibilityDisclosureAccepted(this),
+                                    // The local screen reader combines accessibility nodes, OCR and visual regions;
+                                    // this is availability, not a claim that every screen is readable.
+                                    screenPerceptionReady = serviceInfo != null
+                                )
+                                lastCapabilityReport = report
+                                if (report.status == OrionCapabilityAudit.Status.BLOCKED) {
+                                    throw IllegalStateException("capability_audit_blocked:" + report.limitations.joinToString(","))
+                                }
+                                // LIMITED is a valid, honest state: the user may not have accepted screen access
+                                // or enabled a pack. Never auto-enable either to make the audit look healthy.
                             }
                             OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
                                 // Agent has already persisted detailed success/failure evidence to ExperienceStore.
