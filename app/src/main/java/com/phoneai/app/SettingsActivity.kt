@@ -1720,22 +1720,37 @@ class SettingsActivity : Activity() {
 
     private fun skillsDialog() {
         val skills = SkillRegistry.list(this)
-        val message = if (skills.isEmpty()) {
-            "Create a small declarative skill using existing tools. Skills are disabled until you enable them and cannot download or execute code."
-        } else {
-            "Choose a skill to inspect, enable, disable, or remove. Each tool call is checked against its allowlist and budget."
-        }
+        val message = "Install portable JSON skill packages, create a local skill, or browse reviewed templates. Imported skills start disabled, can only reference tools already in this app, and cannot install executable code."
+        val actions = listOf(
+            "Import skill package · Install a .json skill",
+            "Create skill · Define a skill using supported tools",
+            "Skill templates · Browse reviewed starters"
+        )
         if (skills.isEmpty()) {
-            showChoiceDialog("Skill studio · 0 skills", message, listOf("Create skill · Define a skill using supported tools", "Skill templates · Start from a reviewed template"),
-                { which -> if (which == 0) addSkillDialog() else skillTemplateDialog() })
+            showChoiceDialog("Skill studio · 0 skills", message, actions,
+                { which -> when (which) { 0 -> importSkillPackage(); 1 -> addSkillDialog(); else -> skillTemplateDialog() } })
             return
         }
-        showChoiceDialog("Skill studio · ${skills.size} skills", message,
-            skills.map { it.id + " · " + if (it.enabled) "ENABLED" else "DISABLED" } + listOf("Create skill · Add a custom skill", "Skill templates · Browse reviewed starters"),
+        showChoiceDialog("Skill studio · " + skills.size + " skills", message,
+            skills.map { it.id + " · " + if (it.enabled) "ENABLED" else "DISABLED" } + actions,
             { which ->
                 if (which < skills.size) skillOptions(skills[which])
-                else if (which == skills.size) addSkillDialog() else skillTemplateDialog()
+                else when (which - skills.size) { 0 -> importSkillPackage(); 1 -> addSkillDialog(); else -> skillTemplateDialog() }
             })
+    }
+
+    private fun importSkillPackage() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
+        try { startActivityForResult(pick, REQUEST_SKILL_IMPORT) }
+        catch (_: Exception) { showInfoDialog("Cannot open file picker", "Choose a JSON skill package from device storage.") }
+    }
+
+    private fun exportSkillPackage(skill: PhoneAiSkill) {
+        pendingSkillExport = skill
+        val create = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/json").putExtra(Intent.EXTRA_TITLE, skill.id + ".phoneai-skill.json")
+        try { startActivityForResult(create, REQUEST_SKILL_EXPORT) }
+        catch (_: Exception) { pendingSkillExport = null; showInfoDialog("Cannot open file picker", "Choose a folder where Orion can save the package.") }
     }
 
     /** Creates reviewed starter skills from existing tools only; every generated skill starts disabled. */
@@ -1777,13 +1792,15 @@ class SettingsActivity : Activity() {
             skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
                 "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds" +
                 "\nApproval: " + (if (skill.requiresApproval) "required before every run" else "write-capable tools still require approval"),
-            listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Delete skill · Remove its local definition"),
+            listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Export skill package · Save portable JSON", "Delete skill · Remove its local definition"),
             { which ->
                 if (which == 0) {
                     val result = SkillRegistry.setEnabled(this, skill.id, !skill.enabled)
                     Toast.makeText(this, result.reason, Toast.LENGTH_SHORT).show()
                     refresh()
                     skillsDialog()
+                } else if (which == 1) {
+                    exportSkillPackage(skill)
                 } else {
                     AlertDialog.Builder(this)
                         .setTitle("Delete skill " + skill.id + "?")
