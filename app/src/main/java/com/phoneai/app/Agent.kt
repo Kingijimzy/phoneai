@@ -1281,6 +1281,7 @@ Rules:
             "battery" -> tools.battery()
             "time" -> tools.time()
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command")) { stopped }
+            "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\\n\\nRecent imported records:\\n" + TradeHistoryStore.recentText(svc, 15) else ""
             "device_info" -> tools.deviceInfo()
             "record_screen" -> {
                 val act = a.optString("action", "start").lowercase()
