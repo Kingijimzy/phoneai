@@ -325,15 +325,26 @@ class AgentControlActivity : Activity() {
                 val skill = skills[index]
                 val details = "ID: ${skill.id}\nVersion: ${skill.version}\nPurpose: ${skill.description}\nTools: ${skill.allowedTools.sorted().joinToString(", ")}\nBudget: ${skill.maxCalls} calls / ${skill.maxDurationMs / 1000}s\nApproval required: ${skill.requiresApproval}\nEnabled: ${skill.enabled}"
                 val builder = AlertDialog.Builder(this).setTitle(skill.id).setMessage(details).setNegativeButton("CLOSE", null)
-                if (skill.enabled) builder.setPositiveButton("REVOKE / DISABLE") { _, _ ->
-                    val result = SkillRegistry.setEnabled(this, skill.id, false)
-                    AgentPolicy.log(this, "skill:${skill.id}", "revoke", result.allowed, if (result.allowed) "user revoked skill" else result.reason)
-                    Toast.makeText(this, if (result.allowed) "Skill disabled." else result.reason, Toast.LENGTH_SHORT).show()
-                } else if (!skill.id.startsWith("whatsapp_draft") && !skill.id.startsWith("email_draft")) {
-                    builder.setPositiveButton("REMOVE") { _, _ ->
-                        val result = SkillRegistry.remove(this, skill.id)
-                        AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
-                        Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                if (skill.enabled) {
+                    builder.setPositiveButton("REVOKE / DISABLE") { _, _ ->
+                        val result = SkillRegistry.setEnabled(this, skill.id, false)
+                        AgentPolicy.log(this, "skill:${skill.id}", "revoke", result.allowed, if (result.allowed) "user revoked skill" else result.reason)
+                        Toast.makeText(this, if (result.allowed) "Skill disabled." else result.reason, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    if (AgentPolicy.enabled(this, "self_evolution")) {
+                        builder.setPositiveButton("APPROVE & ENABLE") { _, _ ->
+                            val result = SkillRegistry.setEnabled(this, skill.id, true)
+                            AgentPolicy.log(this, "skill:${skill.id}", "enable", result.allowed, if (result.allowed) "user approved skill enablement" else result.reason)
+                            Toast.makeText(this, if (result.allowed) "Skill enabled." else result.reason, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    if (!skill.id.startsWith("whatsapp_draft") && !skill.id.startsWith("email_draft")) {
+                        builder.setNeutralButton("REMOVE") { _, _ ->
+                            val result = SkillRegistry.remove(this, skill.id)
+                            AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
+                            Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
                 builder.show()
