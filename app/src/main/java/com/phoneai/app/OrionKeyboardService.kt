@@ -40,8 +40,7 @@ class OrionKeyboardService : InputMethodService() {
          * it opens Android's system picker and waits for the user to select it.
          */
         fun typeIntoFocusedField(context: android.content.Context, text: String, targetPackage: String?): String {
-            if (text.isEmpty()) return "error: refusing to type empty text"
-            if (text.length > 4000) return "error: text exceeds the 4000 character limit"
+            OrionKeyboardPolicy.validateRequest(text)?.let { return it }
             val service = active
             val selectedIme = try {
                 android.provider.Settings.Secure.getString(
@@ -164,19 +163,22 @@ class OrionKeyboardService : InputMethodService() {
     private fun commitAgentText(text: String, targetPackage: String?): String {
         val info = currentInputEditorInfo
             ?: return "error: no active editor connection; focus the text field and retry"
-        if (isPasswordInput(info)) return "error: refusing to type into a password field"
-        if (!targetPackage.isNullOrBlank() && info.packageName != targetPackage) {
-            return "error: focused editor changed while switching keyboards; text was not entered"
-        }
         val connection = currentInputConnection
+        OrionKeyboardPolicy.validateFocusedEditor(
+            targetPackage = targetPackage,
+            focusedPackage = info.packageName,
+            isPassword = isPasswordInput(info),
+            hasConnection = connection != null
+        )?.let { return it }
+        val activeConnection = connection
             ?: return "error: Android has not provided an input connection for the focused field"
         // Select the existing field contents first so agent text replaces rather than appends.
         // If the editor does not support select-all, fail safely instead of duplicating text.
-        val selectedAll = try { connection.performContextMenuAction(android.R.id.selectAll) } catch (_: Exception) { false }
-        if (!selectedAll) {
+        val selectedAll = try { activeConnection.performContextMenuAction(android.R.id.selectAll) } catch (_: Exception) { false }
+        if (!OrionKeyboardPolicy.canReplaceField(selectedAll)) {
             return "error: this field did not support select-all, so Orion did not type to avoid appending duplicate text. Select the field contents manually and retry."
         }
-        val accepted = connection.commitText(text, 1)
+        val accepted = activeConnection.commitText(text, 1)
         if (!accepted) return "error: the focused app rejected replacement text from the active input connection"
         // Return to the IME the user had selected before Orion was temporarily activated.
         // InputMethodService requires this switch on its main thread, after commitText completes.
