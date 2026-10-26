@@ -130,6 +130,15 @@ object Prefs {
     fun openRouterOAuthVerifier(c: Context): String =
         ApiKeyVault.read(c, "enc_openrouter_oauth_verifier", "openrouter_oauth_verifier")
 
+    /** Selected external coding-agent CLI runtime. Selection does not imply installation or authentication. */
+    fun cliRuntime(c: Context): String = sp(c).getString("cli_runtime", "opencode")?.takeIf {
+        it in setOf("muse-code", "cursor-agent", "opencode")
+    } ?: "opencode"
+    fun setCliRuntime(c: Context, id: String) {
+        val safe = id.takeIf { it in setOf("muse-code", "cursor-agent", "opencode") } ?: "opencode"
+        sp(c).edit().putString("cli_runtime", safe).apply()
+    }
+
     /** Live Gemini mode is opt-in; the existing local live-call path remains the default. */
     val GEMINI_VOICES = listOf("Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr")
     fun geminiVoice(c: Context): String = sp(c).getString("gemini_voice", "Aoede")?.takeIf { it in GEMINI_VOICES } ?: "Aoede"
