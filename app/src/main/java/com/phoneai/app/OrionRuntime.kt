@@ -41,6 +41,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         }
         queue.add(WorkItem(UUID.randomUUID().toString(), safeKey, type, priority.coerceIn(-10, 10), clock()))
         queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
+        if (state == State.DEGRADED) state = State.ACTIVE
         eventLocked("work_queued:" + type.name.lowercase())
         persistLocked()
         true
