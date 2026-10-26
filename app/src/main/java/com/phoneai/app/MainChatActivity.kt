@@ -162,11 +162,24 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setItems(labels) { _, which ->
                 val p = providers[which]
                 if (!p.noKey && !Prefs.hasKey(this, p.id)) {
+                    val connectIntent = Intent(this, SettingsActivity::class.java)
+                    if (p.id == "openrouter") {
+                        // OpenRouter has a supported OAuth flow: go straight to browser authorization.
+                        connectIntent.putExtra("start_openrouter_signin", true)
+                    } else {
+                        // Other providers need their own supported OAuth integration or an API key.
+                        connectIntent.putExtra("open_section", "providers")
+                    }
                     AlertDialog.Builder(this)
                         .setTitle("Connect ${p.label}")
-                        .setMessage("This provider has no saved API key or sign-in yet. Connect it in Settings, then return here to select its model.")
-                        .setPositiveButton("OPEN SETTINGS") { _, _ ->
-                            startActivity(Intent(this, SettingsActivity::class.java))
+                        .setMessage(
+                            if (p.id == "openrouter")
+                                "Orion will open OpenRouter's official authorization page. Approve access there; Orion will exchange the callback, save the credential securely, and return to chat."
+                            else
+                                "This provider does not currently have a verified one-tap sign-in flow in Orion. Open connection settings to add its API key."
+                        )
+                        .setPositiveButton(if (p.id == "openrouter") "SIGN IN" else "CONNECTION SETTINGS") { _, _ ->
+                            startActivity(connectIntent)
                         }
                         .setNegativeButton("CANCEL", null)
                         .show()
