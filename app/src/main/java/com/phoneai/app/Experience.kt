@@ -26,6 +26,10 @@ internal object ExperiencePolicy {
     const val MAX = 60
     private const val DAY = 86_400_000L
 
+    /** Only clean, successful task traces may reinforce reusable routines. */
+    fun hasCleanSuccessEvidence(successFlags: List<Boolean>, recordedFailures: Int): Boolean =
+        recordedFailures == 0 && successFlags.isNotEmpty() && successFlags.all { it }
+
     fun gist(request: String): String =
         MemoryRanking.tokens(request).take(8).sorted().joinToString(" ")
 
