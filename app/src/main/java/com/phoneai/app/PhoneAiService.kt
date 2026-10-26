@@ -214,12 +214,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 }
                                 // Recheck local service readiness only; never infer user consent or execute actions.
                             }
-                            // These require explicit outcome/candidate producers and are deliberately
-                            // retained for the later scheduler integration instead of silently discarded.
-                            OrionRuntime.WorkType.LEARN_FROM_RESULT,
+                            OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
+                                // Agent has already persisted detailed success/failure evidence to ExperienceStore.
+                                // This queue item records the outcome event and is acknowledged only when its key is valid.
+                                if (!item.key.endsWith(":success") && !item.key.endsWith(":failure")) {
+                                    throw IllegalArgumentException("invalid_task_outcome_event")
+                                }
+                            }
                             OrionRuntime.WorkType.ROUTINE_CANDIDATE -> {
-                                runtime.fail(item)
-                                return@repeat
+                                // Routine promotion must remain explicit-user-confirmation only.
+                                throw IllegalStateException("routine_candidate_requires_explicit_user_confirmation")
                             }
                         }
                         runtime.complete(item)
