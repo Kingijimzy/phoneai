@@ -37,7 +37,7 @@ class TermuxBridgeActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
-        sessionStartedAt = System.currentTimeMillis()
+        loadBudgetWindow()
         val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(Theme.BG) }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -118,6 +118,30 @@ class TermuxBridgeActivity : Activity() {
         super.onPause()
     }
 
+    private fun loadBudgetWindow() {
+        val now = System.currentTimeMillis()
+        val storedStart = prefs.getLong("termux_session_started_at", 0L)
+        val windowMs = AgentPolicy.maxMinutes(this) * 60_000L
+        if (storedStart <= 0L || now < storedStart || now - storedStart >= windowMs) {
+            sessionStartedAt = now
+            commandsThisSession = 0
+            prefs.edit().putLong("termux_session_started_at", now).putInt("termux_session_commands", 0).apply()
+        } else {
+            sessionStartedAt = storedStart
+            commandsThisSession = prefs.getInt("termux_session_commands", 0).coerceAtLeast(0)
+        }
+    }
+
+    private fun refreshBudgetWindow() {
+        val now = System.currentTimeMillis()
+        val windowMs = AgentPolicy.maxMinutes(this) * 60_000L
+        if (now < sessionStartedAt || now - sessionStartedAt >= windowMs) {
+            sessionStartedAt = now
+            commandsThisSession = 0
+            prefs.edit().putLong("termux_session_started_at", now).putInt("termux_session_commands", 0).apply()
+        }
+    }
+
     private fun isInstalled(): Boolean = try {
         @Suppress("DEPRECATION")
         val info = packageManager.getPackageInfo("com.termux", 0)
@@ -148,6 +172,7 @@ class TermuxBridgeActivity : Activity() {
     }
 
     private fun requestCommand() {
+        refreshBudgetWindow()
         val text = command.text.toString().trim()
         if (text.isBlank()) { toast("Enter a command first."); return }
         if (text.length > 2048) { toast("Command is too long (maximum 2,048 characters)."); return }
@@ -165,10 +190,10 @@ class TermuxBridgeActivity : Activity() {
         }
         val maxCommands = minOf(AgentPolicy.maxCalls(this), AgentPolicy.maxSteps(this))
         if (commandsThisSession >= maxCommands) {
-            toast("Termux bridge session budget reached. Close and reopen the bridge for a new session."); return
+            toast("Termux bridge session command budget reached. It resets when the current policy window expires."); return
         }
         if (System.currentTimeMillis() - sessionStartedAt >= AgentPolicy.maxMinutes(this) * 60_000L) {
-            toast("Termux bridge session time budget reached. Close and reopen the bridge for a new session."); return
+            toast("Termux bridge session time budget reached. Wait for the policy window to reset."); return
         }
         val decision = AgentPolicy.evaluate(
             this, "termux_bridge", "termux_command",
@@ -218,6 +243,7 @@ class TermuxBridgeActivity : Activity() {
             putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", resultPendingIntent)
         }
         commandsThisSession++
+        prefs.edit().putInt("termux_session_commands", commandsThisSession).apply()
         TermuxBridgeResultStore.lastResult = "Command dispatched to Termux. Waiting for Termux's result callback; execution is not confirmed yet."
         TermuxBridgeResultStore.lastExitCode = null
         refreshOutput()
