@@ -217,6 +217,24 @@ object Prefs {
     fun alerts(c: Context): String = sp(c).getString("alerts", "[]") ?: "[]"
     fun setAlerts(c: Context, v: String) = sp(c).edit().putString("alerts", v).apply()
 
+    /** Optional command/agent provider override. Empty means inherit the normal chat provider. */
+    fun commandProviderId(c: Context): String? = sp(c).getString("command_provider_id", null)
+        ?.takeIf { it.isNotBlank() && Providers.find(it) != null }
+
+    fun commandModelId(c: Context): String? = sp(c).getString("command_model_id", null)
+        ?.takeIf { it.isNotBlank() }
+
+    fun setCommandProvider(c: Context, providerId: String, modelId: String) {
+        val provider = Providers.find(providerId) ?: return
+        val model = modelId.trim().take(180).ifBlank { provider.textModel }
+        sp(c).edit().putString("command_provider_id", provider.id)
+            .putString("command_model_id", model).apply()
+    }
+
+    fun clearCommandProvider(c: Context) {
+        sp(c).edit().remove("command_provider_id").remove("command_model_id").apply()
+    }
+
     /** Which service answers chat (vision=false) or reads the screen (vision=true). */
     fun provider(c: Context, vision: Boolean): Provider {
         val stored = sp(c).getString(if (vision) "provider_vision" else "provider_text", null)
