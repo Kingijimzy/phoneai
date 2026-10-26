@@ -204,7 +204,7 @@ class CursorCloudAgentActivity : Activity() {
             Toast.makeText(this, "Sign in on Cursor, create an API key, and save it here first.", Toast.LENGTH_LONG).show()
             return
         }
-        if (!repo.startsWith("https://") || !repo.contains("github.com/") && !repo.contains("gitlab.") && !repo.contains("bitbucket.org/") && !repo.contains("dev.azure.com/")) {
+        if (!repo.startsWith("https://") || (!repo.contains("github.com/") && !repo.contains("gitlab.") && !repo.contains("bitbucket.org/") && !repo.contains("dev.azure.com/"))) {
             Toast.makeText(this, "Enter a valid HTTPS repository URL supported by Cursor.", Toast.LENGTH_LONG).show()
             return
         }
@@ -213,11 +213,25 @@ class CursorCloudAgentActivity : Activity() {
             task.requestFocus()
             return
         }
+        val shouldCreatePr = autoPr.isChecked
+        AlertDialog.Builder(this)
+            .setTitle("Approve remote coding task?")
+            .setMessage("Cursor Cloud Agent will receive your task and can change code in this repository. This request goes to Cursor's service, not a local shell.\n\nRepository: $repo\nStarting branch: $branch\nCreate pull request: ${if (shouldCreatePr) "yes" else "no"}\n\nContinue only if you approve sending this task to Cursor.")
+            .setNegativeButton("CANCEL") { _, _ ->
+                AgentPolicy.log(this, "cursor_cloud_agents", "start-task", false, "user declined confirmation")
+            }
+            .setPositiveButton("APPROVE & START") { _, _ ->
+                AgentPolicy.log(this, "cursor_cloud_agents", "start-task", true, "user approved remote task for repository")
+                submitApprovedAgent(key, repo, branch, prompt, shouldCreatePr)
+            }
+            .show()
+    }
+
+    private fun submitApprovedAgent(key: String, repo: String, branch: String, prompt: String, shouldCreatePr: Boolean) {
         getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
             .putString("cursor_agent_repo", repo).putString("cursor_agent_branch", branch).apply()
         hideKeyboard()
-        status.text = "Sending one request to Cursor Cloud Agents…"
-        val shouldCreatePr = autoPr.isChecked
+        status.text = "Sending one approved request to Cursor Cloud Agents…"
         setBusy(true)
         Thread {
             var code = -1
@@ -244,10 +258,11 @@ class CursorCloudAgentActivity : Activity() {
                         obj.optJSONObject("agent")?.optString("url", "")
                             ?.takeIf { it.startsWith("https://") } ?: "https://cursor.com/agents"
                     } catch (_: Exception) { "https://cursor.com/agents" }
+                    AgentPolicy.log(this, "cursor_cloud_agents", "start-task", true, "Cursor API accepted task; remote execution confirmed by HTTP $code")
                     status.text = "Cursor accepted the task. The agent is running remotely; Orion did not run this task locally."
                     AlertDialog.Builder(this)
                         .setTitle("Cursor agent started")
-                        .setMessage("Cursor accepted your task and queued a cloud run. You can monitor it in Cursor.\\n\\n$agentUrl")
+                        .setMessage("Cursor accepted your task and queued a cloud run. You can monitor it in Cursor.\n\n$agentUrl")
                         .setPositiveButton("OPEN AGENT") { _, _ -> openUrl(agentUrl) }
                         .setNeutralButton("COPY LINK") { _, _ ->
                             val cb = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
@@ -257,9 +272,10 @@ class CursorCloudAgentActivity : Activity() {
                         .setNegativeButton("CLOSE", null).show()
                 } else {
                     val detail = if (error.isNotBlank()) error else "HTTP $code: " + body.replace("\\s+".toRegex(), " ").take(350)
+                    AgentPolicy.log(this, "cursor_cloud_agents", "start-task", false, "request failed; HTTP $code; ${error.take(100)}")
                     status.text = "Cursor request failed. Your task was not confirmed as started."
                     AlertDialog.Builder(this).setTitle("Cursor agent not started")
-                        .setMessage(detail + "\\n\\nCheck the API key, Cursor plan/API access, and that the repository is connected to Cursor.")
+                        .setMessage(detail + "\n\nCheck the API key, Cursor plan/API access, and that the repository is connected to Cursor.")
                         .setPositiveButton("OK", null).show()
                 }
             }
