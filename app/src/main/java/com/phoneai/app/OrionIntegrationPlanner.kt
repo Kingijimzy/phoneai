@@ -48,8 +48,6 @@ internal object OrionIntegrationPlanner {
         val state = when (provider) {
             // Telegram uses a locally configured bot bridge, not Orion's OAuth connection registry.
             Provider.TELEGRAM -> when {
-                "telegram.messages" !in registeredCapabilities && runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false) ->
-                    State.CAPABILITY_MISSING
                 "telegram.messages" !in registeredCapabilities -> State.CAPABILITY_MISSING
                 runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false) -> State.CONNECTED
                 else -> State.AVAILABLE_NOT_CONNECTED
