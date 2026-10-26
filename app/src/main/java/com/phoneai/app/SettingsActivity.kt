@@ -509,7 +509,9 @@ class SettingsActivity : Activity() {
         add(s2, button("Get an NVIDIA API key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://build.nvidia.com/settings")))
         }, 8)
-        add(s2, button("Add or change an API key", true) { keyDialog() }, 8)
+        add(s2, button("Sign in with OpenRouter", true) { startOpenRouterSignIn() }, 8)
+        add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
+        add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
@@ -989,6 +991,44 @@ class SettingsActivity : Activity() {
     // ------------------------------------------------------------ keys and providers
 
     /** Pick a service using the same dark, card-based selector language as Orion's main UI. */
+    private fun startOpenRouterSignIn() {
+        try {
+            val verifierBytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(verifierBytes)
+            val verifier = android.util.Base64.encodeToString(
+                verifierBytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+            )
+            val challengeBytes = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(verifier.toByteArray(Charsets.US_ASCII))
+            val challenge = android.util.Base64.encodeToString(
+                challengeBytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+            )
+            if (!Prefs.setOpenRouterOAuthVerifier(this, verifier)) {
+                Toast.makeText(this, "Secure storage unavailable. Sign-in was not started.", Toast.LENGTH_LONG).show()
+                return
+            }
+            val callback = "phoneai://oauth/openrouter"
+            val authUrl = "https://openrouter.ai/auth?callback_url=" +
+                android.net.Uri.encode(callback) +
+                "&code_challenge=" + android.net.Uri.encode(challenge) +
+                "&code_challenge_method=S256"
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(authUrl)))
+        } catch (e: Exception) {
+            Prefs.setOpenRouterOAuthVerifier(this, "")
+            Toast.makeText(this, "Could not start OpenRouter sign-in: " + (e.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openRouterConnectionChoice() {
+        AlertDialog.Builder(this)
+            .setTitle("Connect OpenRouter")
+            .setMessage("Choose how to connect. Sign-in uses OpenRouter's PKCE authorization flow; API key entry remains available.")
+            .setPositiveButton("SIGN IN") { _, _ -> startOpenRouterSignIn() }
+            .setNeutralButton("ENTER API KEY") { _, _ -> pasteKey(Providers.get("openrouter")) }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
     private fun keyDialog() {
         providerPickerDialog(
             title = "Add an AI provider",
@@ -1184,9 +1224,12 @@ class SettingsActivity : Activity() {
         ) { provider ->
             Prefs.setProvider(this, vision, provider.id)
             if (!Prefs.hasKey(this, provider.id)) {
-                Toast.makeText(this, "Add a " + provider.label + " key first.", Toast.LENGTH_LONG).show()
-                if (!provider.noKey) pasteKey(provider)
-                else localDialog(provider)
+                if (provider.id == "openrouter") {
+                    openRouterConnectionChoice()
+                } else {
+                    Toast.makeText(this, "Add a " + provider.label + " key first.", Toast.LENGTH_LONG).show()
+                    if (!provider.noKey) pasteKey(provider) else localDialog(provider)
+                }
             }
             refresh()
         }
