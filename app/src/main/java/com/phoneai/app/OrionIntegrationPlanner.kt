@@ -45,10 +45,19 @@ internal object OrionIntegrationPlanner {
             Provider.UNKNOWN -> "" to ""
         }
         val connection = OrionConnectionStore.get(context, id)
-        val state = when {
-            connection != null && connection.secretAvailable && scope in connection.scopes -> State.CONNECTED
-            connection != null -> State.CAPABILITY_MISSING
-            else -> State.AVAILABLE_NOT_CONNECTED
+        val state = when (provider) {
+            // Telegram uses a locally configured bot bridge, not Orion's OAuth connection registry.
+            Provider.TELEGRAM -> if (runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false)) {
+                State.CONNECTED
+            } else {
+                State.AVAILABLE_NOT_CONNECTED
+            }
+            // Other providers are connected only when a real provider token and its required scope exist.
+            else -> when {
+                connection != null && connection.secretAvailable && scope in connection.scopes -> State.CONNECTED
+                connection != null -> State.CAPABILITY_MISSING
+                else -> State.AVAILABLE_NOT_CONNECTED
+            }
         }
         return plan(provider, state, request, registeredCapabilities)
     }
