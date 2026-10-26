@@ -2554,11 +2554,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val afterBitmap = grabBitmap()
                 if (afterBitmap != null) {
                     try {
-                        val after = signature(afterBitmap, x2.toInt(), y2.toInt())
+                        // Compare pre/post captures at the same anchor. Comparing a swipe's
+                        // start point to its end point would confuse spatial differences with a state change.
+                        val after = signature(afterBitmap, x1.toInt(), y1.toInt())
                         if (sigDistance(sig, after) >= 8.0) {
                             val afterArr = JSONArray()
                             for (v in after) afterArr.put(v)
-                            step.put("afterSig", afterArr).put("afterSx", x2.toInt()).put("afterSy", y2.toInt())
+                            step.put("afterSig", afterArr).put("afterSx", x1.toInt()).put("afterSy", y1.toInt())
                         }
                     } catch (_: Exception) {
                     } finally {
