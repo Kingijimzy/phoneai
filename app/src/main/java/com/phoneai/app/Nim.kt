@@ -317,6 +317,7 @@ class Nim(private val ctx: Context) {
         }
         val result = ids.filter { it.isNotBlank() }.distinct().sorted()
         modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
+        Prefs.saveCachedModels(ctx, p.id, result)
         return result.filter { id ->
             ProviderBillingPolicy.isAllowed(p.id, id, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
         }
