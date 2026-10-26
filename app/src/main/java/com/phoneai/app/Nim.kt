@@ -369,8 +369,21 @@ class Nim(private val ctx: Context) {
             body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
         val response = try {
-            request(p, "POST", p.base + "/chat/completions", body.toString(),
-                Prefs.key(ctx, p.id), readMs0 = 60000)
+            if (p.id == "opencode-zen") {
+                val input = JSONArray()
+                for (i in 0 until messages.length()) {
+                    val message = messages.optJSONObject(i) ?: continue
+                    input.put(JSONObject().put("role", message.optString("role", "user"))
+                        .put("content", message.opt("content") ?: ""))
+                }
+                val responsesBody = JSONObject().put("model", model).put("input", input)
+                    .put("max_output_tokens", 32).put("temperature", 0)
+                request(p, "POST", p.base + "/responses", responsesBody.toString(),
+                    Prefs.key(ctx, p.id), readMs0 = 60000)
+            } else {
+                request(p, "POST", p.base + "/chat/completions", body.toString(),
+                    Prefs.key(ctx, p.id), readMs0 = 60000)
+            }
         } catch (e: Exception) {
             return rememberFailure("Connection test failed (${e.javaClass.simpleName}). Check internet and model access.")
         }
@@ -502,7 +515,25 @@ class Nim(private val ctx: Context) {
     }
 
     private fun extract(p: Provider, body: String): String = try {
-        if (p.anthropicStyle) {
+        if (p.id == "opencode-zen") {
+            val root = JSONObject(body)
+            val direct = root.optString("output_text", "")
+            if (direct.isNotBlank()) direct else {
+                val output = root.optJSONArray("output") ?: JSONArray()
+                val text = StringBuilder()
+                for (i in 0 until output.length()) {
+                    val item = output.optJSONObject(i) ?: continue
+                    val content = item.optJSONArray("content") ?: continue
+                    for (j in 0 until content.length()) {
+                        val part = content.optJSONObject(j) ?: continue
+                        if (part.optString("type") == "output_text" || part.has("text")) {
+                            text.append(part.optString("text", ""))
+                        }
+                    }
+                }
+                text.toString()
+            }
+        } else if (p.anthropicStyle) {
             val arr = JSONObject(body).getJSONArray("content")
             val sb = StringBuilder()
             for (i in 0 until arr.length()) sb.append(arr.getJSONObject(i).optString("text", ""))
@@ -621,6 +652,16 @@ class Nim(private val ctx: Context) {
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
                 payload = anthropicBody(model, messages, tokens, temperature)
+            } else if (p.id == "opencode-zen") {
+                url = p.base + "/responses"
+                val input = JSONArray()
+                for (i in 0 until messages.length()) {
+                    val message = messages.optJSONObject(i) ?: continue
+                    input.put(JSONObject().put("role", message.optString("role", "user"))
+                        .put("content", message.opt("content") ?: ""))
+                }
+                payload = JSONObject().put("model", model).put("input", input)
+                    .put("max_output_tokens", tokens).put("temperature", temperature).toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
@@ -629,11 +670,8 @@ class Nim(private val ctx: Context) {
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
-                    // This template flag is documented for Nemotron 3.5 Super VL only.
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
-                    // NVIDIA's DeepSeek V4 model examples use this flag to disable thinking.
-                    // Keep this separate from Nemotron's enable_thinking option.
                     requestBody.put("chat_template_kwargs", JSONObject().put("thinking", false))
                 }
                 payload = requestBody.toString()
