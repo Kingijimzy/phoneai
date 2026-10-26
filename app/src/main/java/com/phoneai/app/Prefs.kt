@@ -224,6 +224,13 @@ object Prefs {
     fun commandModelId(c: Context): String? = sp(c).getString("command_model_id", null)
         ?.takeIf { it.isNotBlank() }
 
+    /** Prefer configured fast/free command providers; otherwise inherit the user's chat provider. */
+    fun defaultCommandProvider(c: Context): Provider {
+        val fast = listOf("groq", "cerebras").mapNotNull { Providers.find(it) }
+            .firstOrNull { hasKey(c, it.id) && (!it.requiresPaidOptIn || allowPaidProviders(c)) }
+        return fast ?: provider(c, false)
+    }
+
     fun setCommandProvider(c: Context, providerId: String, modelId: String) {
         val provider = Providers.find(providerId) ?: return
         val model = modelId.trim().take(180).ifBlank { provider.textModel }
