@@ -13,7 +13,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
 }
 
 /** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
-class Nim(private val ctx: Context) {
+class Nim(private val ctx: Context, private val commandMode: Boolean = false) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
@@ -84,6 +84,21 @@ class Nim(private val ctx: Context) {
                 "No AI keys saved yet. Add a provider key in Settings."
             } else sb.toString().trim()
         }
+    }
+
+    /** Command mode may use its own saved text provider/model; vision and Talk stay unchanged. */
+    private fun selectedProvider(vision: Boolean): Provider {
+        if (commandMode && !vision) {
+            Prefs.commandProviderId(ctx)?.let { Providers.find(it) }?.let { return it }
+        }
+        return Prefs.provider(ctx, vision)
+    }
+
+    private fun selectedModel(p: Provider, vision: Boolean): String {
+        if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
+            Prefs.commandModelId(ctx)?.let { return it }
+        }
+        return Prefs.model(ctx, p, vision)
     }
 
     private val bad = listOf(
@@ -552,15 +567,15 @@ class Nim(private val ctx: Context) {
         // Do not reset here: Agent.run() can call chat() several times for one
         // multi-step user command. Its explicit beginCommand() must cover the
         // entire run, including every model retry and any permitted 429 backup.
-        val selected = Prefs.provider(ctx, vision)
+        val selected = selectedProvider(vision)
         fun configured(p: Provider): Boolean =
             (Prefs.hasKey(ctx, p.id) || p.noKey) && (!vision || p.hasVision)
         fun modelAllowed(p: Provider): Boolean = ProviderBillingPolicy.isAllowed(
-            p.id, Prefs.model(ctx, p, vision), p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx)
+            p.id, selectedModel(p, vision), p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx)
         )
         if (configured(selected) && !modelAllowed(selected)) {
             throw IllegalStateException(
-                "${selected.label} / ${Prefs.model(ctx, selected, vision)} may incur paid or metered usage. " +
+                "${selected.label} / ${selectedModel(selected, vision)} may incur paid or metered usage. " +
                     "Orion blocked the request because paid-provider use is off. Enable the explicit paid-provider setting in Settings only if you accept possible charges."
             )
         }
@@ -587,7 +602,7 @@ class Nim(private val ctx: Context) {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
             val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
-            lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
+            lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             return answer
         }
@@ -627,7 +642,7 @@ class Nim(private val ctx: Context) {
             "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
             else -> maxTokens
         }
-        val queue = mutableListOf(Prefs.model(ctx, p, vision))
+        val queue = mutableListOf(selectedModel(p, vision))
         val tried = HashSet<String>()
         var refilled = false
         var lastNote = ""
