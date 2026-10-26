@@ -77,6 +77,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     // A different tool/argument set may still be attempted after inspecting the failure.
     private val failedCallGuard = AgentHooks.FailedCallGuard()
     private val taskProofs = AgentHooks.ProofRecorder()
+    @Volatile private var currentTask = ""
     @Volatile private var activeRequestScope: String = ""
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
@@ -198,6 +199,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 verifiedResult += "\nPOST-FAILURE STATE INSPECTION unavailable: " + (e.message ?: e.javaClass.simpleName)
             }
             failedCallGuard.recordFailure(tool, args)
+            try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
         taskProofs.record(tool, verifiedResult)
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
@@ -418,6 +420,9 @@ Rules:
             AgentLessons.promptBlock(svc, "orion", 8).takeIf { it.isNotBlank() }?.let {
                 sb.append("\n\nThings you have learned about how this user likes to work (their own words):\n").append(it)
             }
+            ExperienceStore.promptBlock(svc, request).takeIf { it.isNotBlank() }?.let {
+                sb.append("\n\nLessons from your own past runs on similar tasks (check them before acting; do not repeat a failed approach):\n").append(it)
+            }
             ActionLogStore.recentFailureHints(svc).takeIf { it.isNotBlank() }?.let {
                 sb.append("\n\nRecent tool failure lessons (privacy-minimal; re-check state and change approach, do not blindly retry):\n").append(it)
             }
@@ -517,6 +522,7 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) nim.beginCommand()
         var command = inputCommand.trim()
+        if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) currentTask = command
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
         if (!resumeRequest) {
             failedCallGuard.clear()
@@ -812,6 +818,7 @@ Rules:
                     ui.say("I stopped before marking this task complete: " + completion.reason + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
+                try { ExperienceStore.recordSuccess(svc, currentTask, taskProofs.snapshot().filter { it.success }.map { it.tool }) } catch (_: Exception) { }
                 if (!AgentCheckpointStore.complete(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
                 }
