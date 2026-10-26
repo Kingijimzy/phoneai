@@ -27,6 +27,8 @@ class AgentControlActivity : Activity() {
     private lateinit var testReport: TextView
     private lateinit var packStatus: TextView
     private lateinit var commandModelStatus: TextView
+    private lateinit var termuxBridgeStatus: TextView
+    private lateinit var remoteComputerStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,13 +99,9 @@ class AgentControlActivity : Activity() {
 
         section("SELF-TEST")
         testReport = addText("Not run yet.", 12f, Theme.MUTED, false, 4)
-        val termuxInstalled = try {
-            @Suppress("DEPRECATION")
-            packageManager.getPackageInfo("com.termux", 0).packageName == "com.termux"
-        } catch (_: Exception) { false }
-        addText("Termux bridge: ${if (termuxInstalled && AgentPolicy.enabled(this, "termux_bridge") && getSharedPreferences("phoneai", Context.MODE_PRIVATE).getBoolean("termux_bridge_enabled", false)) "enabled · permissions checked per command" else if (termuxInstalled) "installed but bridge is off" else "not installed / off"}", 12f, Theme.MUTED, false, 4)
+        termuxBridgeStatus = addText("", 12f, Theme.MUTED, false, 4)
         addButton("OPEN TERMUX BRIDGE") { startActivity(Intent(this, TermuxBridgeActivity::class.java)) }
-        addText("Remote computer: ${if (Prefs.hasKey(this, "cursor_cloud_agents")) "Cursor API key saved · live status checked when opened" else "off · no Cursor API key saved"}", 12f, Theme.MUTED, false, 4)
+        remoteComputerStatus = addText("", 12f, Theme.MUTED, false, 4)
         addButton("OPEN REMOTE COMPUTER / CURSOR CLOUD AGENT") { startActivity(Intent(this, CursorCloudAgentActivity::class.java)) }
         addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, WorkspaceShellActivity::class.java)) }
         addButton("RUN SELF-TEST", true) { runSelfTest() }
@@ -465,9 +463,33 @@ class AgentControlActivity : Activity() {
         val text = AgentPolicy.recentLogs(this).ifEmpty { listOf("No events logged yet.") }.joinToString("\n\n")
         AlertDialog.Builder(this).setTitle("Recent action log").setMessage(text).setPositiveButton("CLOSE", null).show()
     }
+    private fun termuxInstalled(): Boolean = try {
+        @Suppress("DEPRECATION")
+        val info = packageManager.getPackageInfo("com.termux", 0)
+        info.packageName == "com.termux"
+    } catch (_: Exception) { false }
+
+    override fun onResume() {
+        super.onResume()
+        if (::modeStatus.isInitialized) refresh()
+    }
+
     private fun refresh() {
         modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Ask\nTrusted until: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
         packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
+        val installed = termuxInstalled()
+        val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge") &&
+            getSharedPreferences("phoneai", Context.MODE_PRIVATE).getBoolean("termux_bridge_enabled", false)
+        termuxBridgeStatus.text = "Termux bridge: " + when {
+            termuxOn -> "enabled · permissions checked per command"
+            installed -> "installed but bridge is off"
+            else -> "not installed / off"
+        }
+        remoteComputerStatus.text = "Remote computer: " + if (Prefs.hasKey(this, "cursor_cloud_agents")) {
+            "Cursor API key saved · live status checked when opened"
+        } else {
+            "off · no Cursor API key saved"
+        }
     }
 }
