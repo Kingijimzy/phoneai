@@ -197,6 +197,9 @@ class Nim(private val ctx: Context) {
     private val commandRequestBudget = CommandRequestBudget(maxRequests = 15)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
+    /** AI requests used by the current command (for the cost line). */
+    fun requestsUsed(): Int = commandRequestBudget.used()
+
     fun beginCommand() {
         commandRequestBudget.reset()
     }

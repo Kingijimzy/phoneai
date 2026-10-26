@@ -443,6 +443,7 @@ class SettingsActivity : Activity() {
         val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
+        add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
         add(updateCard, button("Run Orion self-test", true) {
             Toast.makeText(this, "Testing… this takes a few seconds.", Toast.LENGTH_SHORT).show()
             Thread {

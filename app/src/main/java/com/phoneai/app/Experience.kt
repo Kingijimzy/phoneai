@@ -71,13 +71,19 @@ internal object ExperiencePolicy {
         }.filter { it.second >= 0.12 }.sortedByDescending { it.second }.take(limit).map { it.first }
     }
 
+    private val correction = Regex("(?i)^(no[,.!]?|nope|wrong|that'?s (wrong|not (right|what i))|that is (wrong|not (right|what i))|not that|don'?t do that|do not do that|stop doing|you (got|did) (it|that) wrong|you keep)\\b")
+    private val praise = Regex("(?i)^(perfect|great job|good job|well done|exactly|that'?s (right|correct|perfect)|nice one|thank you|thanks)\\b")
+    fun isCorrection(text: String) = text.length in 3..220 && correction.containsMatchIn(text.trim())
+    fun isPraise(text: String) = text.length in 3..120 && praise.containsMatchIn(text.trim())
+
     fun age(now: Long, at: Long): String {
         val d = ((now - at) / DAY).coerceAtLeast(0)
         return if (d == 0L) "today" else "${d}d ago"
     }
 
     fun block(items: List<Experience>, now: Long): String = items.joinToString("\n") { e ->
-        if (e.kind == "worked") "- WORKED (${e.count}x, ${age(now, e.lastAt)}): for a similar task this sequence succeeded: ${e.steps.replace(">", " → ")}. Re-verify before reusing."
+        if (e.kind == "correction") "- USER CORRECTION (${e.count}x, ${age(now, e.lastAt)}): ${e.tip}"
+        else if (e.kind == "worked") "- WORKED (${e.count}x, ${age(now, e.lastAt)}): for a similar task this sequence succeeded: ${e.steps.replace(">", " → ")}. Re-verify before reusing."
         else "- AVOID (${e.count}x, ${age(now, e.lastAt)}): ${e.tip}"
     }
 }
@@ -121,6 +127,33 @@ object ExperienceStore {
         if (seq.isEmpty() || task.isBlank()) return@synchronized
         save(c, ExperiencePolicy.merge(load(c), Experience(task, seq.first(), "worked", "", "", 1,
             System.currentTimeMillis(), seq.joinToString(">"))))
+    }
+
+    /** The user pushed back on the previous task: remember it against that kind of task, in their own words. */
+    fun recordCorrection(c: Context, previousTask: String, userText: String) = synchronized(lock) {
+        val task = ExperiencePolicy.gist(previousTask).ifBlank { return@synchronized }
+        if (SafetyGate.containsSensitiveCredentialText(userText)) return@synchronized
+        val tip = "User corrected this kind of task: \"" + userText.trim().replace(Regex("\\s+"), " ").take(140) + "\" - do it the way they asked."
+        save(c, ExperiencePolicy.merge(load(c), Experience(task, "user", "correction", "correction", tip, 1, System.currentTimeMillis())))
+    }
+
+    /** Positive feedback strengthens the proven routine for the previous task. */
+    fun recordPraise(c: Context, previousTask: String) = synchronized(lock) {
+        val task = ExperiencePolicy.gist(previousTask).ifBlank { return@synchronized }
+        val list = load(c)
+        val i = list.indexOfFirst { it.kind == "worked" && MemoryRanking.similarity(it.task, task) >= 0.5 }
+        if (i < 0) return@synchronized
+        save(c, list.toMutableList().also { it[i] = it[i].copy(count = it[i].count + 1, lastAt = System.currentTimeMillis()) })
+    }
+
+    /** True once a routine has succeeded 3+ times and has not yet been offered to the user as a saved routine. */
+    fun routineReady(c: Context, request: String): Boolean = synchronized(lock) {
+        val task = ExperiencePolicy.gist(request)
+        val e = load(c).firstOrNull { it.kind == "worked" && it.count >= 3 && MemoryRanking.similarity(it.task, task) >= 0.5 } ?: return@synchronized false
+        val sp = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
+        val offered = sp.getStringSet("offered_routines", emptySet()) ?: emptySet()
+        if (e.task in offered) return@synchronized false
+        sp.edit().putStringSet("offered_routines", offered + e.task).apply(); true
     }
 
     fun promptBlock(c: Context, request: String?, limit: Int = 5): String = synchronized(lock) {

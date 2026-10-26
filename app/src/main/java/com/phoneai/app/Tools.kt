@@ -745,12 +745,31 @@ class Tools(private val svc: PhoneAiService) {
         else "error: memory $id was not deleted; it may not exist or device storage may be unavailable"
 
     fun askAgent(agentName: String, task: String): String {
-        val agent = AgentProfiles.resolve(agentName)
-            ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.all.joinToString(", ") { it.id }
+        val agent = AgentProfiles.resolveFor(svc, agentName)
+            ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
         return try {
             "AGENT ${agent.name} ANSWER (relay faithfully; it is analysis, not an action taken):\n" + AgentRunner.run(svc, agent, emptyList(), task)
         } catch (e: Exception) { "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")" }
+    }
+
+    fun createAgent(id: String, name: String, tagline: String, persona: String): String =
+        AgentProfiles.createCustom(svc, id, name, tagline, persona)
+
+    fun graphLink(a: String, rel: String, b: String): String =
+        if (a.isBlank() || rel.isBlank() || b.isBlank()) "error: a, relation and b are required"
+        else if (KnowledgeGraph.link(svc, a, rel, b)) "linked: ${a.trim()} —${rel.trim()}→ ${b.trim()}" else "error: could not link those (empty, same entity, or looks like a secret)"
+
+    fun graphQuery(entity: String): String = if (entity.isBlank()) "error: entity is required" else KnowledgeGraph.query(svc, entity)
+
+    /** Orion reads its own lessons and failures so it can explain, and fix, how it behaves. */
+    fun selfReview(): String {
+        val exp = ExperienceStore.all(svc)
+        val avoid = exp.filter { it.kind != "worked" }.take(8).joinToString("\n") { "- " + it.tip.ifBlank { it.task } + " (x${it.count})" }
+        val worked = exp.filter { it.kind == "worked" }.take(6).joinToString("\n") { "- ${it.steps.replace(">", " → ")} (x${it.count})" }
+        return "SELF REVIEW\nThings to avoid / corrections:\n" + avoid.ifBlank { "(none recorded yet)" } +
+            "\nProven routines:\n" + worked.ifBlank { "(none yet)" } +
+            "\nGraph facts known: " + KnowledgeGraph.all(svc).size + "; custom agents: " + AgentProfiles.custom(svc).size
     }
 
     fun knowledgeSearch(query: String): String {

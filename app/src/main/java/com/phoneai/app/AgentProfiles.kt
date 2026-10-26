@@ -74,6 +74,53 @@ object AgentProfiles {
     /** One compact block so Orion's brain knows its team. */
     fun rosterBlock(): String =
         all.joinToString("\n") { "- ${it.id}: ${it.name}; ${it.tagline}" }
+
+    // ---- Custom sub-agents: the user (or Orion, with approval) can add specialists of their own. ----
+    private const val MAX_CUSTOM = 6
+    private val customLock = Any()
+    private fun customFile(c: Context) = File(c.filesDir, "orion_custom_agents.json")
+
+    fun custom(c: Context): List<AgentProfile> = synchronized(customLock) {
+        try {
+            val f = customFile(c); if (!f.exists()) return@synchronized emptyList()
+            val a = JSONArray(f.readText())
+            (0 until a.length()).map { val o = a.getJSONObject(it)
+                AgentProfile(o.optString("id"), o.optString("name"), o.optString("tagline"), o.optString("persona") + " " + SHARED_RULES) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun everyone(c: Context): List<AgentProfile> = all + custom(c)
+
+    internal fun validateCustom(id: String, name: String, persona: String): String? {
+        if (!Regex("[a-z][a-z0-9_]{2,19}").matches(id)) return "id must be 3-20 lowercase letters, digits or underscores"
+        if (all.any { it.id == id }) return "id '$id' is a built-in agent"
+        if (name.isBlank() || name.length > 40) return "name is required (max 40 characters)"
+        if (persona.length < 20 || persona.length > 700) return "persona must be 20-700 characters describing how this agent behaves"
+        if (SafetyGate.containsSensitiveCredentialText("$name $persona")) return "persona must not contain secrets"
+        if (Regex("(?i)ignore (all |any )?(previous|prior|safety)|disable (the )?(safety|confirmation)|bypass").containsMatchIn(persona)) return "persona must not try to weaken Orion's safety rules"
+        return null
+    }
+
+    fun createCustom(c: Context, id: String, name: String, tagline: String, persona: String): String = synchronized(customLock) {
+        val key = id.trim().lowercase()
+        validateCustom(key, name.trim(), persona.trim())?.let { return@synchronized "error: $it" }
+        val existing = try { if (customFile(c).exists()) JSONArray(customFile(c).readText()) else JSONArray() } catch (_: Exception) { JSONArray() }
+        val kept = (0 until existing.length()).map { existing.getJSONObject(it) }.filter { it.optString("id") != key }
+        if (kept.size >= MAX_CUSTOM) return@synchronized "error: at most $MAX_CUSTOM custom agents; ask the user which to replace"
+        val o = JSONObject().put("id", key).put("name", name.trim()).put("tagline", tagline.trim().take(80)).put("persona", persona.trim())
+        return@synchronized try {
+            customFile(c).writeText(JSONArray(kept + o).toString()); "created agent '$key' (${name.trim()}); call it with ask_agent"
+        } catch (_: Exception) { "error: could not save the agent" }
+    }
+
+    fun resolveFor(c: Context, text: String?): AgentProfile? {
+        resolve(text)?.let { return it }
+        val t = text.orEmpty().trim().lowercase(); if (t.isEmpty()) return null
+        return custom(c).firstOrNull { t == it.id || t == it.name.lowercase() || it.id in t }
+    }
+
+    fun rosterBlock(c: Context): String =
+        everyone(c).joinToString("\n") { "- ${it.id}: ${it.name}; ${it.tagline}" }
 }
 
 /** Per-agent notes learned from how the user talks to it. Local only; the user can read and delete them. */
