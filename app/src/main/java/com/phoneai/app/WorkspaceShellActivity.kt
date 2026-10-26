@@ -131,7 +131,17 @@ class WorkspaceShellActivity : Activity() {
                 "rm" -> removeFile(arg.trim())
                 else -> "ERROR: command not implemented."
             }
-            AgentPolicy.log(this, "workspace:$verb", "result", !result.startsWith("ERROR:"), if (result.startsWith("ERROR:")) "operation failed; details shown in terminal" else "completed; output shown in terminal")
+            val pendingConfirmation = verb == "rm" && result.startsWith("Deletion requires a second explicit confirmation")
+            val failed = result.startsWith("ERROR:")
+            AgentPolicy.log(
+                this, "workspace:$verb", "result",
+                if (pendingConfirmation) null else !failed,
+                when {
+                    pendingConfirmation -> "awaiting second confirmation; deletion has not happened"
+                    failed -> "operation failed; details shown in terminal"
+                    else -> "completed; output shown in terminal"
+                }
+            )
             append(result)
         } catch (e: Exception) { AgentPolicy.log(this, "workspace:$verb", "result", false, "workspace operation failed"); append("ERROR: ${e.message ?: e.javaClass.simpleName}") }
     }
