@@ -939,8 +939,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             cornerRadius = dp(22).toFloat()
             setStroke(dp(1), 0xFF414141.toInt())
         }
-        input.setPadding(dp(15), dp(12), dp(15), dp(12))
-        input.minHeight = dp(48)
+        input.setPadding(dp(15), dp(10), dp(15), dp(10))
+        input.minHeight = dp(46)
+        input.setSingleLine(true)
+        input.maxLines = 1
+        input.ellipsize = android.text.TextUtils.TruncateAt.END
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         input.imeOptions = EditorInfo.IME_ACTION_SEND
         input.setOnEditorActionListener { _, _, _ ->
@@ -949,7 +952,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             submit(t)
             true
         }
-        row.addView(input, LinearLayout.LayoutParams(0, WRAP, 1f))
+        row.addView(input, LinearLayout.LayoutParams(0, dp(46), 1f))
         lateinit var micBtn: TextView
         micBtn = pill("Mic", Theme.PANEL2, Theme.CYAN) {
             if (listening) {
@@ -964,7 +967,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        val micLp = LinearLayout.LayoutParams(WRAP, WRAP)
+        val micLp = LinearLayout.LayoutParams(dp(52), dp(46))
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
@@ -981,7 +984,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             input.setText("")
             submit(t)
         }
-        val sendLp = LinearLayout.LayoutParams(WRAP, WRAP)
+        val sendLp = LinearLayout.LayoutParams(dp(66), dp(46))
         sendLp.setMargins(dp(8), 0, 0, 0)
         row.addView(send, sendLp)
         root.addView(row)
