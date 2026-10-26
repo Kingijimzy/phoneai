@@ -76,6 +76,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var decisionScheduler: OrionDecisionScheduler? = null
     @Volatile private var runtimeDrainScheduled = false
     @Volatile private var runtimeDrainRequested = false
+    @Volatile private var runtimeRetryScheduled = false
     @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
@@ -254,6 +255,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 if (runtimeDrainRequested) {
                     runtimeDrainRequested = false
                     scheduleRuntimeDrain()
+                } else {
+                    // A single delayed wake resumes backoff work when it becomes eligible.
+                    // This is event-driven retry scheduling, not a polling loop.
+                    val delay = orionRuntime?.nextEligibleDelayMs()
+                    if (delay != null && !runtimeRetryScheduled) {
+                        runtimeRetryScheduled = true
+                        main.postDelayed({
+                            runtimeRetryScheduled = false
+                            scheduleRuntimeDrain()
+                        }, delay.coerceAtLeast(1L))
+                    }
                 }
             }
         }
@@ -261,6 +273,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onUnbind(intent: Intent?): Boolean {
         orionRuntime?.stop()
+        runtimeRetryScheduled = false
         orionRuntime = null
         decisionScheduler = null
         instance = null
