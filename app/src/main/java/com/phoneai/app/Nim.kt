@@ -12,7 +12,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
     val rateLimited: Boolean get() = httpStatus == 429
 }
 
-/** Talks to the selected AI service. Cross-provider fallback is restricted to HTTP 429 and one backup per command. */
+/** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
 class Nim(private val ctx: Context) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
@@ -542,8 +542,8 @@ class Nim(private val ctx: Context) {
             }
 
         val now = System.currentTimeMillis()
-        // A single backup is deliberate: a rate limit must not fan one user command
-        // across a chain of providers and burn several free-tier quotas in seconds.
+        // Auto-switch may try eligible saved providers in order, but the shared 15-request
+        // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
                 .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
