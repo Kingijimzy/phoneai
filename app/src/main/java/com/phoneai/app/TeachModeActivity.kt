@@ -178,8 +178,8 @@ class TeachModeActivity : Activity(), PhoneAiService.MainChatListener {
                             } else if (currentService.isTaskRunning()) {
                                 status.text = "Another task started. Stop it or wait before replaying."
                             } else {
-                                status.text = "Replaying $name locally — no AI calls."
-                                currentService.sendFromMainChat("run $name")
+                                status.text = "Replaying $name locally — checking the recorded app and screen before each step."
+                                currentService.replayConfirmedRoutineFromUi(name)
                             }
                         }.show()
                 }

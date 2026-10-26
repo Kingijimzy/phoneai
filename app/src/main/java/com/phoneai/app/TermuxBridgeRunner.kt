@@ -65,6 +65,9 @@ object TermuxBridgeRunner {
         } else "error: Termux command was not dispatched. $error"
     }
 
+    /** Returns null only when the configured Termux transport passes all local readiness checks. */
+    fun readiness(context: Context): String? = preflight(context)
+
     private fun preflight(context: Context): String? {
         val prefs = context.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("termux_bridge_enabled", false) || !AgentPolicy.enabled(context, "termux_bridge")) {

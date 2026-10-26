@@ -73,14 +73,16 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     }
 
     private fun nextFrameDelayMs(): Long {
-        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 40L
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val thermal = power.currentThermalStatus
-            if (thermal >= PowerManager.THERMAL_STATUS_SEVERE) return 120L
-            if (thermal >= PowerManager.THERMAL_STATUS_MODERATE) return 66L
-        }
-        return if (power.isPowerSaveMode) 80L else 33L
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val powerSave = power?.isPowerSaveMode ?: false
+        val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            power?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
+        } else 0
+        return OrionPerformancePolicy.orbFrameDelayMs(powerSave, thermal)
     }
+
+    private fun shouldAnimate(): Boolean =
+        isAttachedToWindow && isShown && visibility == VISIBLE && windowVisibility == VISIBLE
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -95,6 +97,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
         if (visibility == VISIBLE) postInvalidateOnAnimation()
+        else Unit
     }
 
     override fun onWindowVisibilityChanged(visibility: Int) {
@@ -208,7 +211,7 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
         paint.alpha = 255
 
         val stillAnimating = mode != Mode.IDLE || smoothLevel > .02f || touchEnergy > .02f || wordPulse > .02f
-        if (isShown && windowVisibility == VISIBLE && stillAnimating) {
+        if (shouldAnimate() && stillAnimating) {
             postInvalidateDelayed(nextFrameDelayMs())
         }
     }

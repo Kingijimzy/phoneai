@@ -72,6 +72,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private lateinit var wm: WindowManager
     private lateinit var agent: Agent
     private lateinit var voice: Voice
+    @Volatile private var orionRuntime: OrionRuntime? = null
+    @Volatile private var decisionScheduler: OrionDecisionScheduler? = null
+    @Volatile private var runtimeDrainScheduled = false
+    @Volatile private var runtimeDrainRequested = false
+    @Volatile private var runtimeRetryRunnable: Runnable? = null
+    @Volatile private var runtimeRetryAtElapsed = 0L
+    @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
+    @Volatile private var approvedRoutineReplayName = ""
+    @Volatile private var approvedRoutineReplayAt = 0L
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
@@ -162,15 +171,134 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         transcript.clear()
         transcript.addAll(ChatHistoryStore.load(this))
         agent = Agent(this, this)
+        val runtime = OrionRuntime(this)
+        orionRuntime = runtime
+        runtime.start()
+        val scheduler = OrionDecisionScheduler(runtime)
+        decisionScheduler = scheduler
+        scheduler.onServiceReady()
+        scheduleRuntimeDrain()
         showBubble()
         startWake()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || orionRuntime == null) return
+        // Window transitions are meaningful state changes; ignore noisy text/content events.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            // Android may interrupt and later resume an accessibility service without recreating it.
+            // Resume the bounded local queue only when a fresh real window event arrives.
+            if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
+            decisionScheduler?.onWindowChanged(event.packageName?.toString())
+            scheduleRuntimeDrain()
+        }
+    }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+        orionRuntime?.pause("accessibility_interrupted")
+    }
+
+    private fun scheduleRuntimeDrain() {
+        if (runtimeDrainScheduled) {
+            runtimeDrainRequested = true
+            return
+        }
+        runtimeDrainScheduled = true
+        worker.execute {
+            try {
+                // Bounded event-driven drain; no polling loop and no provider/network calls.
+                repeat(4) {
+                    val runtime = orionRuntime ?: return@repeat
+                    val item = runtime.claimNext() ?: return@repeat
+                    try {
+                        when (item.type) {
+                            OrionRuntime.WorkType.RESTORE_PENDING -> {
+                                if (::agent.isInitialized) agent.restoreConversationContext(ChatHistoryStore.load(this))
+                                else throw IllegalStateException("agent_not_ready")
+                            }
+                            OrionRuntime.WorkType.CAPABILITY_RECHECK -> {
+                                if (!::agent.isInitialized) {
+                                    throw IllegalStateException("agent_not_ready")
+                                }
+                                val report = OrionCapabilityAudit.evaluate(
+                                    registeredTools = ToolRegistry.all.size,
+                                    implementedPacks = AgentPolicy.packs.count { it.implemented },
+                                    enabledPacks = AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) },
+                                    accessibilityReady = serviceInfo != null,
+                                    screenDisclosureAccepted = Prefs.accessibilityDisclosureAccepted(this),
+                                    // The local screen reader combines accessibility nodes, OCR and visual regions;
+                                    // this is availability, not a claim that every screen is readable.
+                                    screenPerceptionReady = serviceInfo != null && rootInActiveWindow != null
+                                )
+                                lastCapabilityReport = report
+                                if (report.status == OrionCapabilityAudit.Status.BLOCKED) {
+                                    throw IllegalStateException("capability_audit_blocked:" + report.limitations.joinToString(","))
+                                }
+                                // LIMITED is a valid, honest state: the user may not have accepted screen access
+                                // or enabled a pack. Never auto-enable either to make the audit look healthy.
+                            }
+                            OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
+                                // Agent has already persisted detailed success/failure evidence to ExperienceStore.
+                                // This queue item records the outcome event and is acknowledged only when its key is valid.
+                                if (!item.key.endsWith(":success") && !item.key.endsWith(":failure")) {
+                                    throw IllegalArgumentException("invalid_task_outcome_event")
+                                }
+                            }
+                        }
+                        runtime.complete(item)
+                    } catch (_: Exception) {
+                        runtime.fail(item)
+                    }
+                }
+            } finally {
+                runtimeDrainScheduled = false
+                // Only schedule again when a real event arrived during processing. A delayed
+                // retry must wait for a future event, never spin in a tight retry loop.
+                if (runtimeDrainRequested) {
+                    runtimeDrainRequested = false
+                    scheduleRuntimeDrain()
+                } else {
+                    scheduleRuntimeRetry(orionRuntime?.nextEligibleDelayMs())
+                }
+            }
+        }
+    }
+
+    /** Keep exactly one monotonic wake-up, replacing it if a newly queued retry is due sooner. */
+    private fun scheduleRuntimeRetry(delayMs: Long?) {
+        main.post {
+            if (delayMs == null) {
+                runtimeRetryRunnable?.let { main.removeCallbacks(it) }
+                runtimeRetryRunnable = null
+                runtimeRetryAtElapsed = 0L
+                return@post
+            }
+            val delay = delayMs.coerceAtLeast(1L)
+            val deadline = SystemClock.uptimeMillis() + delay
+            val existing = runtimeRetryRunnable
+            if (existing != null && runtimeRetryAtElapsed <= deadline) return@post
+            existing?.let { main.removeCallbacks(it) }
+            lateinit var next: Runnable
+            next = Runnable {
+                if (runtimeRetryRunnable === next) {
+                    runtimeRetryRunnable = null
+                    runtimeRetryAtElapsed = 0L
+                    scheduleRuntimeDrain()
+                }
+            }
+            runtimeRetryRunnable = next
+            runtimeRetryAtElapsed = deadline
+            main.postDelayed(next, delay)
+        }
+    }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        orionRuntime?.stop()
+        runtimeRetryRunnable?.let { main.removeCallbacks(it) }
+        runtimeRetryRunnable = null
+        runtimeRetryAtElapsed = 0L
+        orionRuntime = null
+        decisionScheduler = null
         instance = null
         wakeGen++
         stopOfflineWakeDetector()
@@ -206,6 +334,60 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     fun replayScreenSize(): Pair<Int, Int> = screenSize()
+
+    /** Called only after the saved-routine preview dialog's explicit Replay confirmation. */
+    fun replayConfirmedRoutineFromUi(name: String) {
+        approvedRoutineReplayName = MacroStore.norm(name)
+        approvedRoutineReplayAt = SystemClock.uptimeMillis()
+        sendFromMainChat("run routine $name")
+    }
+
+    internal fun consumeRoutineReplayApproval(name: String): Boolean {
+        val accepted = approvedRoutineReplayName == MacroStore.norm(name) &&
+            SystemClock.uptimeMillis() - approvedRoutineReplayAt in 0L..30_000L
+        approvedRoutineReplayName = ""
+        approvedRoutineReplayAt = 0L
+        return accepted
+    }
+
+    /** Bring the exact recorded target package forward; caller still verifies its screen before tapping. */
+    fun openRoutineTarget(packageName: String): String {
+        val target = packageName.trim()
+        if (!Regex("^[A-Za-z0-9_.]{3,255}$").matches(target)) return "error: saved routine has no valid target app package"
+        if (currentPackageName().equals(target, true)) return "ok"
+        return try {
+            val intent = packageManager.getLaunchIntentForPackage(target)
+                ?: return "error: the recorded target app is not installed or has no launchable activity"
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            "ok"
+        } catch (e: Exception) {
+            "error: could not open the recorded target app (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
+    fun waitForRoutinePackage(packageName: String, timeoutMs: Long = 6_000L, stopped: () -> Boolean): Boolean {
+        val end = SystemClock.uptimeMillis() + timeoutMs.coerceIn(0L, 15_000L)
+        while (SystemClock.uptimeMillis() < end) {
+            if (stopped()) return false
+            if (currentPackageName().equals(packageName, true)) return true
+            Thread.sleep(100L)
+        }
+        return currentPackageName().equals(packageName, true)
+    }
+
+    /** One immediate local comparison used to disambiguate an interrupted recorded gesture. */
+    fun checkRecordedSignature(x: Int, y: Int, expected: IntArray): String {
+        if (expected.size != 108) return "invalid"
+        val bitmap = grabBitmap() ?: return "unavailable"
+        return try {
+            if (sigDistance(signature(bitmap, x, y), expected) <= 32.0) "match" else "mismatch"
+        } catch (_: Exception) {
+            "unavailable"
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
 
     private fun screenSize(): Pair<Int, Int> {
         val b = wm.maximumWindowMetrics.bounds
@@ -722,6 +904,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     /** Snapshot of the persisted conversation for Agent restoration; UI notes/status never enter AI context. */
     fun conversationContext(): List<Pair<String, String>> =
         transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
+
+    internal fun onAgentTaskFinished(task: String, success: Boolean) {
+        decisionScheduler?.onTaskFinished(task, success)
+        scheduleRuntimeDrain()
+    }
 
     private fun appendTranscript(kind: String, text: String) {
         transcript.add(Pair(kind, text))
@@ -1319,9 +1506,13 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             return
         }
 
+        val savedRoutineCommand = RoutineReplayPolicy.parseRequest(t)?.let { request ->
+            RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null ||
+                RoutineReplayPolicy.isExplicitRoutineCommand(t)
+        } == true
         val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
         if (routeToAgent && conversationOnly) notifyModeSwitch(true)
-        if ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent)) {
+        if (!savedRoutineCommand && ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent))) {
             wakeGen++
             appendTranscript("me", t)
             mainChatListener?.onMessage("me", t)
@@ -1358,7 +1549,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Keep ordinary conversation inside the chat surface. Hide it only when Orion
         // needs to see or operate another app, otherwise the user sees a disappearing strip
         // instead of a continuous chatbot conversation.
-        val needsPhoneControl = AgentHooks.isPhoneActionRequest(t)
+        val needsPhoneControl = AgentHooks.isPhoneActionRequest(t) || savedRoutineCommand
         if (needsPhoneControl) closePanel(false)
         if (mainChatActive) mainChatListener?.onMessage("me", t)
         hideBubble()
@@ -2186,6 +2377,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private var tDownY = 0f
     private var tDownUp = 0L
     private var tDownWall = 0L
+    private var tDownPackage = ""
     private var tSig: java.util.concurrent.Future<IntArray?>? = null
     private val teachPathPoints = ArrayList<Pair<Float, Float>>()
 
@@ -2208,7 +2400,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun buildTeachOverlay() {
         val root = FrameLayout(this)
-        root.setBackgroundColor(0x12FF5C7A)
+        // Keep the overlay transparent: screen fingerprints must describe the target app,
+        // not a tinted recording layer that disappears during replay.
+        root.setBackgroundColor(0x00000000)
         root.setOnTouchListener { _, e ->
             onTeachTouch(e)
             true
@@ -2252,6 +2446,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 tDownY = e.rawY
                 tDownUp = SystemClock.uptimeMillis()
                 tDownWall = System.currentTimeMillis()
+                tDownPackage = rootInActiveWindow?.packageName?.toString().orEmpty()
                 teachPathPoints.clear()
                 teachPathPoints.add(Pair(e.rawX, e.rawY))
                 val x = e.rawX.toInt()
@@ -2320,7 +2515,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         val dist = Math.hypot((x2 - x1).toDouble(), (y2 - y1).toDouble())
         val size = screenSize()
-        val step = JSONObject().put("screenW", size.first).put("screenH", size.second)
+        val step = JSONObject().put("screenW", size.first).put("screenH", size.second).put("targetPackage", tDownPackage)
         val path = Path()
         path.moveTo(x1, y1)
         val ms: Long
@@ -2357,6 +2552,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 val arr = JSONArray()
                 for (v in sig) arr.put(v)
                 step.put("sig", arr).put("sx", x1.toInt()).put("sy", y1.toInt())
+                // Save a distinct post-gesture fingerprint when the gesture visibly changed this region.
+                // It lets resume distinguish an unexecuted touch from one that probably already happened.
+                val afterBitmap = grabBitmap()
+                if (afterBitmap != null) {
+                    try {
+                        // Compare pre/post captures at the same anchor. Comparing a swipe's
+                        // start point to its end point would confuse spatial differences with a state change.
+                        val after = signature(afterBitmap, x1.toInt(), y1.toInt())
+                        if (sigDistance(sig, after) >= 8.0) {
+                            val afterArr = JSONArray()
+                            for (v in after) afterArr.put(v)
+                            step.put("afterSig", afterArr).put("afterSx", x1.toInt()).put("afterSy", y1.toInt())
+                        }
+                    } catch (_: Exception) {
+                    } finally {
+                        if (!afterBitmap.isRecycled) afterBitmap.recycle()
+                    }
+                }
             }
             val count = synchronized(teachSteps) { teachSteps.put(step); teachSteps.length() }
             main.post { teachCounter?.text = "● REC  ·  $count STEPS  ·  TAP TO SAVE" }
@@ -2426,7 +2639,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 latch.await(6, TimeUnit.SECONDS)
                 val bmp = holder[0]
                 if (bmp != null) {
-                    val width = minOf(540, bmp.width)
+                    val width = OrionPerformancePolicy.screenshotWidth(bmp.width)
                     val scale = bmp.width / width.toFloat()
                     val height = (bmp.height / scale).toInt()
                     val small = Bitmap.createScaledBitmap(bmp, width, height, true)

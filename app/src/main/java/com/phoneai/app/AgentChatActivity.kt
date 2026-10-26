@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.text.method.LinkMovementMethod
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -194,6 +195,7 @@ class AgentChatActivity : Activity() {
     private fun addBubble(user: Boolean, text: String): TextView {
         val bubble = TextView(this).apply {
             this.text = if (user) text else Markdown.render(text); textSize = 15f
+            if (!user) movementMethod = LinkMovementMethod.getInstance()
             setTextColor(if (user) Theme.ON_ACCENT else Theme.TEXT)
             setTextIsSelectable(true)
             setPadding(dp(14), dp(10), dp(14), dp(10))
