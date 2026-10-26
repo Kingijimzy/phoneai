@@ -75,6 +75,8 @@ class AgentControlActivity : Activity() {
         addText("Current per-task limits: ${AgentPolicy.maxSteps(this)} steps · ${AgentPolicy.maxCalls(this)} calls · ${AgentPolicy.maxMinutes(this)} minutes.", 12f, Theme.MUTED, false, 4)
         addButton("Set task budgets") { chooseBudgets() }
         addButton("Configure tool allowlist") { configureAllowlist() }
+        addButton("Propose a new skill") { proposeSkill() }
+        addButton("Review / revoke skills") { reviewSkills() }
         addText("Talk/chat and Command/tool work are separate modes in the policy design. Model override controls are not yet connected to every chat/tool path; this screen will not claim a split is active until those call sites use it.", 12f, Theme.MUTED, false, 4)
 
         section("SELF-TEST")
@@ -188,6 +190,84 @@ class AgentControlActivity : Activity() {
                     }.show()
             }.show()
     }
+
+    private fun proposeSkill() {
+        val id = android.widget.EditText(this).apply { hint = "Skill ID (lowercase, e.g. focus_helper)" }
+        val version = android.widget.EditText(this).apply { hint = "Version (MAJOR.MINOR.PATCH)"; setText("1.0.0") }
+        val purpose = android.widget.EditText(this).apply { hint = "Purpose and expected behavior"; minLines = 2; maxLines = 4 }
+        val toolIds = android.widget.EditText(this).apply { hint = "Existing tool IDs, comma-separated"; minLines = 2; maxLines = 4 }
+        val calls = android.widget.EditText(this).apply { hint = "Maximum calls (1–20)"; setText("4"); inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        val seconds = android.widget.EditText(this).apply { hint = "Time budget in seconds (1–120)"; setText("30"); inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(4), dp(18), dp(4))
+            listOf(id, version, purpose, toolIds, calls, seconds).forEach { addView(it) }
+        }
+        AlertDialog.Builder(this).setTitle("Propose skill · not enabled")
+            .setMessage("A skill is metadata referencing existing tools only. No arbitrary code, unrestricted shell, or new Android permissions. Static checks run before saving.")
+            .setView(ScrollView(this).apply { addView(container) })
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("VALIDATE & PROPOSE") { _, _ ->
+                val candidate = PhoneAiSkill(
+                    id = id.text.toString().trim(),
+                    version = version.text.toString().trim(),
+                    description = purpose.text.toString().trim(),
+                    allowedTools = toolIds.text.toString().split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet(),
+                    maxCalls = calls.text.toString().toIntOrNull() ?: -1,
+                    maxDurationMs = (seconds.text.toString().toLongOrNull() ?: -1L) * 1000L,
+                    requiresApproval = true,
+                    enabled = false
+                )
+                val check = SkillRegistry.validate(candidate)
+                if (!check.allowed) {
+                    AgentPolicy.log(this, "skill-proposal", "static-check", false, "rejected: ${check.reason}")
+                    AlertDialog.Builder(this).setTitle("Skill rejected").setMessage(check.reason).setPositiveButton("OK", null).show()
+                    return@setPositiveButton
+                }
+                val registered = SkillRegistry.register(this, candidate)
+                AgentPolicy.log(this, "skill-proposal", "register", registered.allowed, if (registered.allowed) "validated skill saved disabled" else registered.reason)
+                if (!registered.allowed) {
+                    AlertDialog.Builder(this).setTitle("Could not save proposal").setMessage(registered.reason).setPositiveButton("OK", null).show()
+                    return@setPositiveButton
+                }
+                AlertDialog.Builder(this).setTitle("Review skill proposal")
+                    .setMessage("ID: ${candidate.id}\nVersion: ${candidate.version}\nPurpose: ${candidate.description}\nTools: ${candidate.allowedTools.sorted().joinToString(", ")}\nBudget: ${candidate.maxCalls} calls / ${candidate.maxDurationMs / 1000}s\nRisk: approval required; only registered tools; disabled by default.\n\nEnable this skill now?")
+                    .setNegativeButton("KEEP DISABLED") { _, _ -> AgentPolicy.log(this, "skill:${candidate.id}", "enable", false, "user kept proposed skill disabled") }
+                    .setPositiveButton("APPROVE & ENABLE") { _, _ ->
+                        val enabled = SkillRegistry.setEnabled(this, candidate.id, true)
+                        AgentPolicy.log(this, "skill:${candidate.id}", "enable", enabled.allowed, if (enabled.allowed) "user approved skill enablement" else enabled.reason)
+                        Toast.makeText(this, if (enabled.allowed) "Skill enabled. You can revoke it here." else enabled.reason, Toast.LENGTH_LONG).show()
+                    }.show()
+            }.show()
+    }
+
+    private fun reviewSkills() {
+        val skills = SkillRegistry.list(this)
+        if (skills.isEmpty()) {
+            AlertDialog.Builder(this).setMessage("No skills registered.").setPositiveButton("OK", null).show()
+            return
+        }
+        val labels = skills.map { "${if (it.enabled) "ON" else "OFF"} · ${it.id} · ${it.allowedTools.size} tools" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Review or revoke skills")
+            .setItems(labels) { _, index ->
+                val skill = skills[index]
+                val details = "ID: ${skill.id}\nVersion: ${skill.version}\nPurpose: ${skill.description}\nTools: ${skill.allowedTools.sorted().joinToString(", ")}\nBudget: ${skill.maxCalls} calls / ${skill.maxDurationMs / 1000}s\nApproval required: ${skill.requiresApproval}\nEnabled: ${skill.enabled}"
+                val builder = AlertDialog.Builder(this).setTitle(skill.id).setMessage(details).setNegativeButton("CLOSE", null)
+                if (skill.enabled) builder.setPositiveButton("REVOKE / DISABLE") { _, _ ->
+                    val result = SkillRegistry.setEnabled(this, skill.id, false)
+                    AgentPolicy.log(this, "skill:${skill.id}", "revoke", result.allowed, if (result.allowed) "user revoked skill" else result.reason)
+                    Toast.makeText(this, if (result.allowed) "Skill disabled." else result.reason, Toast.LENGTH_SHORT).show()
+                } else if (!skill.id.startsWith("whatsapp_draft") && !skill.id.startsWith("email_draft")) {
+                    builder.setPositiveButton("REMOVE") { _, _ ->
+                        val result = SkillRegistry.remove(this, skill.id)
+                        AgentPolicy.log(this, "skill:${skill.id}", "remove", result.allowed, if (result.allowed) "user removed skill" else result.reason)
+                        Toast.makeText(this, if (result.allowed) "Skill removed." else result.reason, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                builder.show()
+            }.show()
+    }
+
     private fun runSelfTest() {
         if (!AgentPolicy.enabled(this, "self_test")) {
             testReport.text = "BLOCKED · Enable the Self-test capability pack first."
