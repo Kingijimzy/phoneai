@@ -7,10 +7,9 @@ import org.junit.Test
 class TradeHistoryStoreTest {
     @Test fun parsesQuotedCommasAndEscapedQuotes() {
         val rows = TradeHistoryStore.parseCsv(
-            "Symbol,Side,Closed P&L,Notes\\n" +
-                "BTCUSDT,Buy,12.50,\\"closed, partial\\"\\n" +
-                "ETHUSDT,Sell,-3.25,\\"said \\"\\"done\\"\\"\\\""
-
+            "Symbol,Side,Closed P&L,Notes\n" +
+                "BTCUSDT,Buy,12.50,\"closed, partial\"\n" +
+                "ETHUSDT,Sell,-3.25,\"said \"\"done\"\"\""
         )
         assertEquals(3, rows.size)
         assertEquals("BTCUSDT", rows[1][0])
