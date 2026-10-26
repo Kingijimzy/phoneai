@@ -118,9 +118,47 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (dispatchBlock != null) {
             val blocked = "error: " + dispatchBlock
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            AgentPolicy.log(svc, tool, "dispatch", false, "blocked by safety policy: " + dispatchBlock)
             return blocked
         }
-        if (AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
+
+        // Global approval/pack policy runs at the real dispatch boundary for every built-in tool.
+        // Unknown tools fail closed; the model cannot select a capability pack for itself.
+        val pack = AgentPolicy.packForTool(tool)
+        if (pack == null) {
+            val blocked = "error: tool is not registered in an enabled capability pack."
+            AgentPolicy.log(svc, tool, "dispatch", false, "unknown tool-to-pack mapping; denied")
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
+        val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE
+        val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
+            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
+        val policy = AgentPolicy.evaluate(svc, pack, tool, dangerous = toolIsWrite || consequential)
+        var policyApproved = false
+        when (policy.decision) {
+            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
+                val blocked = "error: " + policy.reason
+                AgentPolicy.log(svc, tool, "dispatch", false, policy.reason)
+                try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+                return blocked
+            }
+            AgentPolicy.Decision.NEED_APPROVAL -> {
+                val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
+                val approved = ui.ask("Approve Orion tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\n$action\\n\\nRun this action once?")
+                AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
+                if (!approved) {
+                    val denied = "error: user did not approve this tool action."
+                    taskProofs.record(tool, denied)
+                    return denied
+                }
+                policyApproved = true
+            }
+            AgentPolicy.Decision.ALLOW -> {
+                AgentPolicy.log(svc, tool, "dispatch", null, "allowed by selected approval policy")
+            }
+        }
+        if (!policyApproved && AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
             val description = when (tool) {
                 "forget" -> "Forget saved memory #" + args.optInt("id", -1)
                 "update_memory" -> "Change saved memory #" + args.optInt("id", -1)
@@ -200,6 +238,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             failedCallGuard.recordFailure(tool, args)
         }
         taskProofs.record(tool, verifiedResult)
+        AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true),
+            if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified: " + verifiedResult.take(160)
+            else "tool returned; outcome: " + verifiedResult.take(160))
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
         try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
