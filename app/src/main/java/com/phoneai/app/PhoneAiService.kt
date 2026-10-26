@@ -2523,7 +2523,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 latch.await(6, TimeUnit.SECONDS)
                 val bmp = holder[0]
                 if (bmp != null) {
-                    val width = minOf(OrionPerformancePolicy.MAX_SCREENSHOT_WIDTH, bmp.width)
+                    val width = OrionPerformancePolicy.screenshotWidth(bmp.width)
                     val scale = bmp.width / width.toFloat()
                     val height = (bmp.height / scale).toInt()
                     val small = Bitmap.createScaledBitmap(bmp, width, height, true)
