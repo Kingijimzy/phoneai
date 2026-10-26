@@ -30,6 +30,7 @@ class AgentControlActivity : Activity() {
     private lateinit var termuxBridgeStatus: TextView
     private lateinit var remoteComputerStatus: TextView
     private lateinit var proactiveStatus: TextView
+    private lateinit var gamingStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +79,10 @@ class AgentControlActivity : Activity() {
                         if (checked) ProactiveBriefing.schedule(this@AgentControlActivity)
                         else ProactiveBriefing.cancel(this@AgentControlActivity)
                     }
+                    if (pack.id == "gaming_hobby") {
+                        if (checked) GamingFocus.schedule(this@AgentControlActivity)
+                        else GamingFocus.cancel(this@AgentControlActivity)
+                    }
                     refresh()
                 }
             }
@@ -110,6 +115,8 @@ class AgentControlActivity : Activity() {
         addButton("OPEN REMOTE COMPUTER / CURSOR CLOUD AGENT") { startActivity(Intent(this, CursorCloudAgentActivity::class.java)) }
         proactiveStatus = addText("", 12f, Theme.MUTED, false, 4)
         addButton("CONFIGURE PROACTIVE BRIEFING") { startActivity(Intent(this, ProactiveActivity::class.java)) }
+        gamingStatus = addText("", 12f, Theme.MUTED, false, 4)
+        addButton("OPEN GAMING & HOBBY COACH") { startActivity(Intent(this, GamingCoachActivity::class.java)) }
         addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, WorkspaceShellActivity::class.java)) }
         addButton("RUN SELF-TEST", true) { runSelfTest() }
         addButton("Open Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -506,5 +513,6 @@ class AgentControlActivity : Activity() {
             AgentPolicy.enabled(this, "proactive") -> "pack enabled · daily briefing opt-in is off"
             else -> "OFF"
         }
+        gamingStatus.text = "Gaming & hobbies: " + GamingFocus.status(this) + " · stored notes: " + GameCoachStore.all(this).size
     }
 }
