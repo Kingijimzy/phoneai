@@ -1510,9 +1510,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             return
         }
 
+        val savedRoutineCommand = RoutineReplayPolicy.parseRequest(t)?.let { request ->
+            RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null
+        } == true
         val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
         if (routeToAgent && conversationOnly) notifyModeSwitch(true)
-        if ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent)) {
+        if (!savedRoutineCommand && ((conversationOnly && !routeToAgent) || (isConversationStarter(t) && !LiveWebSearch.isSearchRequest(t) && !LiveNews.isNewsRequest(t) && !routeToAgent))) {
             wakeGen++
             appendTranscript("me", t)
             mainChatListener?.onMessage("me", t)
@@ -1549,7 +1552,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         // Keep ordinary conversation inside the chat surface. Hide it only when Orion
         // needs to see or operate another app, otherwise the user sees a disappearing strip
         // instead of a continuous chatbot conversation.
-        val needsPhoneControl = AgentHooks.isPhoneActionRequest(t)
+        val needsPhoneControl = AgentHooks.isPhoneActionRequest(t) || savedRoutineCommand
         if (needsPhoneControl) closePanel(false)
         if (mainChatActive) mainChatListener?.onMessage("me", t)
         hideBubble()
