@@ -11,7 +11,7 @@ object AgentPolicy {
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI"),
+        Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI", true),
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional bridge; only when Termux is installed and enabled"),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
