@@ -121,7 +121,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 if (type == null || key.isBlank()) null else WorkItem(
                     o.optString("id").ifBlank { UUID.randomUUID().toString() }, key, type,
                     o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
-                    o.optInt("attempts").coerceIn(0, maxAttempts), o.optLong("notBefore", 0L))
+                    o.optInt("attempts").coerceIn(0, OrionRuntimePolicy.MAX_ATTEMPTS), o.optLong("notBefore", 0L))
             }
             inflight?.let { activeItem ->
                 if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
