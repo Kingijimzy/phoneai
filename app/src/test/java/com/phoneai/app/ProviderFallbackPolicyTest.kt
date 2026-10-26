@@ -22,9 +22,11 @@ class ProviderFallbackPolicyTest {
     }
 
     @Test fun providerResponseTimeoutRotatesButNetworkAndAuthenticationFailuresDoNot() {
-        // A response timeout from one API should move to a different provider, not strand the turn.
+        // Provider response timeouts should move to another eligible provider.
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("Google Gemini: request timed out.")))
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("no response before timeout")))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("provider timed out")))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("response timeout")))
         // A device/network connectivity failure is not evidence that another API will be reachable.
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(IOException("network unavailable")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)")))
