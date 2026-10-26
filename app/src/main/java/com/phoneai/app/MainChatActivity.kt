@@ -36,6 +36,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private lateinit var messages: LinearLayout
     private lateinit var scroll: ScrollView
     private lateinit var status: TextView
+    private lateinit var providerModelChip: TextView
     private lateinit var input: EditText
     private lateinit var send: TextView
     private lateinit var stop: TextView
@@ -130,6 +131,122 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         isClickable = true
         isFocusable = true
         setOnClickListener { action() }
+    }
+
+    private fun refreshProviderModelChip() {
+        if (!::providerModelChip.isInitialized) return
+        val p = Prefs.provider(this, false)
+        val model = Prefs.model(this, p, false)
+        val ready = p.noKey || Prefs.hasKey(this, p.id)
+        providerModelChip.text = "AI MODEL  ·  ${p.label}  ·  ${model}" + if (ready) "" else "  ·  NOT CONNECTED"
+        providerModelChip.setTextColor(if (ready) Theme.TEXT else Theme.WARN)
+    }
+
+    /** Provider picker available directly from the chat header; it shows connection state for every provider. */
+    private fun showChatProviderPicker() {
+        val providers = Providers.all
+        val labels = providers.map { p ->
+            val connected = p.noKey || Prefs.hasKey(this, p.id)
+            val current = Prefs.provider(this, false).id == p.id
+            "${if (current) "✓ " else ""}${p.label}  ·  ${if (connected) "Connected" else "Connect required"}"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Choose chat provider")
+            .setMessage("Connected providers are ready to use. Select any provider to see its models. Providers without credentials open setup.")
+            .setItems(labels) { _, which ->
+                val p = providers[which]
+                if (!p.noKey && !Prefs.hasKey(this, p.id)) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Connect ${p.label}")
+                        .setMessage("This provider has no saved API key or sign-in yet. Connect it in Settings, then return here to select its model.")
+                        .setPositiveButton("OPEN SETTINGS") { _, _ ->
+                            startActivity(Intent(this, SettingsActivity::class.java))
+                        }
+                        .setNegativeButton("CANCEL", null)
+                        .show()
+                    return@setItems
+                }
+                Prefs.setProvider(this, false, p.id)
+                refreshProviderModelChip()
+                showChatModelPicker()
+            }
+            .setNeutralButton("MANAGE CONNECTIONS") { _, _ ->
+                startActivity(Intent(this, SettingsActivity::class.java))
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
+    /** Fetches this provider's available models off the UI thread; keeps the saved/default model visible if listing fails. */
+    private fun showChatModelPicker() {
+        val p = Prefs.provider(this, false)
+        if (!p.noKey && !Prefs.hasKey(this, p.id)) {
+            showChatProviderPicker()
+            return
+        }
+        val saved = Prefs.model(this, p, false)
+        Toast.makeText(this, "Loading ${p.label} models…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val candidates = try {
+                val all = Nim(this).allModels(p)
+                val excluded = listOf(
+                    "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
+                    "tts", "asr", "translat", "moderation", "content-safety", "nemoguard",
+                    "parse", "clip", "segment", "detect", "diffusion", "image-generation",
+                    "video-generation", "pose-estimation", "classifier", "live"
+                )
+                (listOf(saved, p.textModel) + all)
+                    .filter { it.isNotBlank() && excluded.none { token -> it.lowercase().contains(token) } }
+                    .distinct()
+            } catch (_: Exception) {
+                listOf(saved, p.textModel).filter { it.isNotBlank() }.distinct()
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (candidates.isEmpty()) {
+                    showInfoDialog("No models available", "Could not load models for ${p.label}. The saved model remains ${saved}.")
+                    return@runOnUiThread
+                }
+                val labels = candidates.map { model ->
+                    (if (model == saved) "✓ " else "") + model + if (model == p.textModel) "  · default" else ""
+                }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("${p.label} models")
+                    .setMessage("Choose the model for chat. This list is fetched from the selected provider when supported; the saved/default model remains available if listing fails.")
+                    .setItems(labels) { _, which ->
+                        val selected = candidates[which]
+                        if (selected == saved) {
+                            refreshProviderModelChip()
+                            return@setItems
+                        }
+                        Toast.makeText(this, "Testing ${selected}…", Toast.LENGTH_SHORT).show()
+                        Thread {
+                            val problem = try { Nim(this).testModel(p, selected, false) } catch (e: Exception) { e.message ?: "Model test failed" }
+                            runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
+                                if (problem.isBlank()) {
+                                    Prefs.setModel(this, p, false, selected)
+                                    refreshProviderModelChip()
+                                    Toast.makeText(this, "Saved chat model: ${selected}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    AlertDialog.Builder(this)
+                                        .setTitle("Model test failed")
+                                        .setMessage("${selected} did not pass a live chat test.\n\n${problem}")
+                                        .setPositiveButton("USE ANYWAY") { _, _ ->
+                                            Prefs.setModel(this, p, false, selected)
+                                            refreshProviderModelChip()
+                                        }
+                                        .setNegativeButton("CANCEL", null)
+                                        .show()
+                                }
+                            }
+                        }.start()
+                    }
+                    .setNeutralButton("CHANGE PROVIDER") { _, _ -> showChatProviderPicker() }
+                    .setNegativeButton("CLOSE", null)
+                    .show()
+            }
+        }.start()
     }
 
     private fun showChatHistory() {
@@ -454,6 +571,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.window?.setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(460)), -2)
     }
 
+    override fun onResume() {
+        super.onResume()
+        refreshProviderModelChip()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
@@ -552,6 +674,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
         header.addView(new)
         root.addView(header)
+        providerModelChip = label("", 11f, Theme.TEXT, true).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = rounded(0xFF1B1B1B.toInt(), 13, 0xFF444444.toInt())
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Choose AI provider and model for chat"
+            setOnClickListener { showChatProviderPicker() }
+        }
+        root.addView(providerModelChip, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(5); bottomMargin = dp(5)
+        })
+        refreshProviderModelChip()
         animateIn(header, 30)
 
         val intro = LinearLayout(this).apply {
