@@ -258,6 +258,12 @@ class AgentControlActivity : Activity() {
     }
 
     private fun proposeSkill() {
+        if (!AgentPolicy.enabled(this, "self_evolution")) {
+            AlertDialog.Builder(this).setTitle("Self-evolution is disabled")
+                .setMessage("Enable the Self-evolution capability pack first. New skills remain disabled until you separately approve them.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
         val id = android.widget.EditText(this).apply { hint = "Skill ID (lowercase, e.g. focus_helper)" }
         val version = android.widget.EditText(this).apply { hint = "Version (MAJOR.MINOR.PATCH)"; setText("1.0.0") }
         val purpose = android.widget.EditText(this).apply { hint = "Purpose and expected behavior"; minLines = 2; maxLines = 4 }
