@@ -5,6 +5,10 @@ import android.app.AlertDialog
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -120,6 +124,17 @@ class TradingActivity : Activity() {
         host.addView(watch, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
+        val history = card()
+        history.addView(label("Imported trade history", 12f, Theme.MUTED))
+        history.addView(label(TradeHistoryStore.summaryText(this), 13f, Theme.TEXT).apply { setPadding(0, dp(6), 0, dp(10)) })
+        history.addView(label("Import a CSV export from MT5, Bybit or another platform. The selected file is read locally; only normalized trade fields are saved. No provider upload or order placement occurs.", 11f, Theme.MUTED).apply { setPadding(0, 0, 0, dp(8)) })
+        history.addView(row(
+            pill("Import CSV", false) { startTradeImport() },
+            pill("Review stats", true) { reviewTradeHistory() }
+        ))
+        host.addView(history, LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+
         val lim = card()
         lim.addView(label("Safety limits", 12f, Theme.MUTED))
         lim.addView(label("Max order " + Prefs.maxOrderUsd(this).toInt() + " USD, max risk " + Prefs.maxRiskPct(this) + "% of balance", 15f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(6)) })
@@ -133,6 +148,65 @@ class TradingActivity : Activity() {
         host.addView(help, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(16))
         host.addView(label("Use a Read + Trade key. Never enable Withdraw.", 11f, Theme.MUTED))
+    }
+
+    private fun startTradeImport() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/csv", "text/plain", "application/csv", "application/vnd.ms-excel"))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivityForResult(intent, REQUEST_TRADE_IMPORT)
+        } catch (_: Exception) {
+            Toast.makeText(this, "No compatible file picker is available.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @Deprecated("Uses the platform document picker for broad Android compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_TRADE_IMPORT || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            val name = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+            } ?: "imported-trades.csv"
+            val bytes = ByteArrayOutputStream()
+            val input = contentResolver.openInputStream(uri) ?: throw IOException("Could not open selected file.")
+            input.use { stream ->
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (true) {
+                    val count = stream.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > 10 * 1024 * 1024) throw IOException("CSV exceeds the 10 MB safety limit.")
+                    bytes.write(buffer, 0, count)
+                }
+            }
+            val csv = String(bytes.toByteArray(), Charsets.UTF_8)
+            val result = TradeHistoryStore.importCsv(this, csv, name)
+            val report = if (result.error != null) {
+                result.error
+            } else {
+                "Import finished. Added: ${result.imported}. Duplicates ignored: ${result.duplicates}. Rows skipped: ${result.skipped}. Total stored records: ${result.total}.\n\n${TradeHistoryStore.summaryText(this)}"
+            }
+            AlertDialog.Builder(this).setTitle(if (result.error == null) "Trade history imported" else "Import not completed")
+                .setMessage(report).setPositiveButton("OK") { _, _ -> render() }.show()
+        } catch (e: Exception) {
+            AlertDialog.Builder(this).setTitle("Import failed")
+                .setMessage(e.message ?: "The file could not be read. No successful import is claimed.")
+                .setPositiveButton("OK") { _, _ -> render() }.show()
+        }
+    }
+
+    private fun reviewTradeHistory() {
+        val report = TradeHistoryStore.summaryText(this) + "\n\nRecent records:\n" + TradeHistoryStore.recentText(this, 20)
+        AlertDialog.Builder(this).setTitle("Imported trade history").setMessage(report)
+            .setPositiveButton("CLOSE", null).show()
     }
 
     private fun keyDialog() {
@@ -157,6 +231,10 @@ class TradingActivity : Activity() {
                 Toast.makeText(this, "Credentials saved securely.", Toast.LENGTH_SHORT).show()
                 render()
             }.setNegativeButton("Cancel", null).show()
+    }
+
+    companion object {
+        private const val REQUEST_TRADE_IMPORT = 9501
     }
 
     private fun toggleMode() {

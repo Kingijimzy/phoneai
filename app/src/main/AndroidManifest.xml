@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Optional explicit bridge to a user-installed Termux terminal; user must enable its external-command setting. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -15,6 +17,7 @@
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <queries>
+        <package android:name="com.termux" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -38,6 +41,20 @@
         <activity android:name=".TeachModeActivity" android:exported="false" />
         <activity android:name=".TaskCenterActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".TermuxBridgeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".ProactiveActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".GamingCoachActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".CursorCloudAgentActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".OpenRouterOAuthActivity" android:exported="true" android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="phoneai" android:host="oauth" android:path="/openrouter" />
+            </intent-filter>
+        </activity>
         <activity android:name=".LiveConversationActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".GeminiLiveActivity" android:exported="false" android:screenOrientation="unspecified" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".MainChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
@@ -50,6 +67,9 @@
         </activity>
 
         <receiver android:name=".TaskReminderReceiver" android:exported="false" />
+        <receiver android:name=".TermuxBridgeResultReceiver" android:exported="false" />
+        <receiver android:name=".ProactiveBriefingReceiver" android:exported="false" />
+        <receiver android:name=".GamingFocusReceiver" android:exported="false" />
         <receiver android:name=".TaskReminderBootReceiver" android:enabled="true" android:exported="true">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>

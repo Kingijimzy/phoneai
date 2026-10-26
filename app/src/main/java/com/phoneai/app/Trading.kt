@@ -166,6 +166,12 @@ object Trading {
 
     /** Returns a spoken answer, or null when the sentence is not a trading command. */
     fun handle(c: Context, t: String, confirm: (String) -> Boolean, ai: (String, String) -> String): String? {
+        if (Regex("^(my )?(trade|trading) history( summary)?$|^(imported trades|trade history stats)$").matches(t.trim())) {
+            if (!AgentPolicy.enabled(c, "trading_research")) {
+                return "Trading Research is disabled. Enable that capability pack in Agent Control to access imported trade summaries."
+            }
+            return TradeHistoryStore.summaryText(c)
+        }
         if (!Regex("balance|wallet|position|trades|price|analy|study|scan|opportunit|setup|buy|long|sell|short|close|cancel|kill|panic|emergency|hunt|watch|alert|journal|bybit|testnet|real money|live|lesson|stats|limit|risk|max").containsMatchIn(t)) return null
         try {
             if (Prefs.tradingReadOnly(c) && TradingCommandPolicy.isMutatingCommand(t)) {
