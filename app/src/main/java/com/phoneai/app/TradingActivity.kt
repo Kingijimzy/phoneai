@@ -161,7 +161,7 @@ class TradingActivity : Activity() {
                     bytes.write(buffer, 0, count)
                 }
             }
-            val csv = bytes.toByteArray().toString(Charsets.UTF_8)
+            val csv = String(bytes.toByteArray(), Charsets.UTF_8)
             val result = TradeHistoryStore.importCsv(this, csv, name)
             val report = if (result.error != null) {
                 result.error
