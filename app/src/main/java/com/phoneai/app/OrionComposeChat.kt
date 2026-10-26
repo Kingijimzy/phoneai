@@ -475,7 +475,6 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
     }
 }
 
-@Composable
 private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK }
 
 private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
