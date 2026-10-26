@@ -111,13 +111,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
+        val autonomous = ToolPermissions.level(svc) == "autonomous"
         when (ToolPermissions.mode(svc, tool)) {
             ToolMode.DENY -> {
                 val denied = ToolPermissionPolicy.denyMessage(tool)
                 try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
                 return denied
             }
-            ToolMode.ASK -> if (tool !in askApproved) {
+            // The user's explicit task command authorizes routine tools for that task
+            // in Autonomous mode. Explicit DENY and consequential-action gates remain.
+            ToolMode.ASK -> if (!autonomous && tool !in askApproved) {
                 if (!ui.ask("Allow Orion to use the tool '$tool' for this task?")) {
                     val declined = "error: user did not approve using '$tool'."
                     taskProofs.record(tool, declined)
@@ -176,7 +179,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command")))
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
-        val policy = AgentPolicy.evaluate(svc, pack, tool, dangerous = toolIsWrite || consequential)
+        // Opening apps, navigating/searching, reading screens and ordinary typing are
+        // routine task steps, not dangerous merely because their registry access is WRITE.
+        // In Autonomous mode they run without per-step approval; consequential actions
+        // still require their dedicated confirmation.
+        val routineNavigation = tool in setOf(
+            "open_app", "lookup_app", "list_apps", "click", "click_text", "tap", "long_press",
+            "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link",
+            "read_screen", "browser_snapshot", "browser_find", "browser_extract", "browser_click",
+            "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate",
+            "browser_back", "browser_tabs", "browser_wait", "wait_for", "wait", "verify_action",
+            "validate_action", "verify_send"
+        )
+        val policy = AgentPolicy.evaluate(
+            svc, pack, tool,
+            dangerous = consequential || (toolIsWrite && !(autonomous && routineNavigation))
+        )
         var policyApproved = false
         when (policy.decision) {
             AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
