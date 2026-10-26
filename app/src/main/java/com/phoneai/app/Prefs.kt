@@ -99,6 +99,12 @@ object Providers {
             null, true, requiresPaidOptIn = true
         ),
         Provider(
+            "opencode-zen", "OpenCode Zen", "https://opencode.ai/zen/v1",
+            "gpt-6-astra", null, "OpenCode Zen API key",
+            "OpenCode Zen account API access. Sign in at opencode.ai/auth and create an API key; usage may be metered.",
+            "https://opencode.ai/zen/v1/models", false, false, requiresPaidOptIn = true
+        ),
+        Provider(
             "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
             "llama3.2:3b", null, "",
             "FREE and unlimited, runs on this phone inside Termux. Slower, text only.",
