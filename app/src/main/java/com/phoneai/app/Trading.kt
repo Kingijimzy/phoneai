@@ -40,6 +40,26 @@ object Scanner {
     }
 }
 
+/**
+ * Read-only command boundary for natural-language trading commands.
+ * Keep this policy pure so wording variations can be unit-tested without a Bybit connection.
+ */
+internal object TradingCommandPolicy {
+    private val mutatingCommands = listOf(
+        Regex("^(buy|long|sell|short)\\b"),
+        Regex("^(close|exit|flatten)\\b"),
+        Regex("^(kill switch|panic|emergency stop)\\b"),
+        Regex("^cancel\\b.*\\border(s)?\\b"),
+        Regex("^(use|switch to|go|enable|turn on|set)\\b.*\\b(real|live)\\b.*\\b(money|trading|account|mode)\\b"),
+        Regex("^(enable|turn on)\\b.*\\b(order placement|live trading|real trading)\\b")
+    )
+
+    fun isMutatingCommand(command: String): Boolean {
+        val normalized = command.trim().lowercase(Locale.US).replace(Regex("\\s+"), " ")
+        return mutatingCommands.any { it.containsMatchIn(normalized) }
+    }
+}
+
 /** Trading commands: balance, prices, analysis, scanning, alerts and quick orders with safety checks. */
 object Trading {
 
@@ -148,11 +168,7 @@ object Trading {
     fun handle(c: Context, t: String, confirm: (String) -> Boolean, ai: (String, String) -> String): String? {
         if (!Regex("balance|wallet|position|trades|price|analy|study|scan|opportunit|setup|buy|long|sell|short|close|cancel|kill|panic|emergency|hunt|watch|alert|journal|bybit|testnet|real money|live|lesson|stats|limit|risk|max").containsMatchIn(t)) return null
         try {
-            val mutatingTradingCommand = Regex(
-                "^(buy|long|sell|short)(\\s|$)|^(close|exit|flatten)\\s|^(kill switch|panic|emergency stop)$|^cancel (all )?orders$|^(use|switch to|go) (real|live) (money|trading|account|mode)$",
-                RegexOption.IGNORE_CASE
-            ).containsMatchIn(t.trim())
-            if (Prefs.tradingReadOnly(c) && mutatingTradingCommand) {
+            if (Prefs.tradingReadOnly(c) && TradingCommandPolicy.isMutatingCommand(t)) {
                 return "Trading is in READ-ONLY analysis mode. No order, cancellation, position close, or live-mode change was made. Explicitly disable read-only mode in Trading settings to allow confirmed order actions."
             }
             // ---- account
