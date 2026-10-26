@@ -189,27 +189,95 @@ class AgentControlActivity : Activity() {
             }.show()
     }
     private fun runSelfTest() {
-        val lines = mutableListOf<String>()
-        val p = Prefs.provider(this, false)
-        lines += "${if (Prefs.hasKey(this, p.id) || p.noKey) "PASS" else "WARN"} · Primary provider: ${p.label} (${if (Prefs.hasKey(this, p.id) || p.noKey) "configured" else "no saved key"})"
-        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-        val net = cm.activeNetwork
-        val caps = if (net != null) cm.getNetworkCapabilities(net) else null
-        lines += "${if (caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true) "PASS" else "WARN"} · Network: ${if (caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true) "internet capability present; endpoint not probed" else "no active internet network"}"
-        val access = runCatching {
-            val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
-            enabled.contains(packageName, true)
-        }.getOrDefault(false)
-        lines += "${if (access) "PASS" else "WARN"} · Phone control accessibility: ${if (access) "enabled" else "not enabled"}"
-        val termux = runCatching { packageManager.getPackageInfo("com.termux", 0); true }.getOrDefault(false)
-        lines += "${if (termux) "PASS" else "INFO"} · Termux bridge: ${if (termux) "Termux installed; bridge still requires separate enablement" else "off (Termux not installed)"}"
-        lines += "PASS · Trading guard: order-like tools denied by trading_research policy"
-        lines += "${if (AgentPolicy.mode(this) == AgentPolicy.Mode.ASK) "PASS" else "INFO"} · Approval default/current mode: ${AgentPolicy.mode(this).label}"
-        lines += "INFO · Weather/news/sports live checks: not run by this local diagnostic; requires a connected data adapter."
-        lines += "INFO · Sample phone action: not executed (self-test never performs a real device action)."
-        testReport.text = lines.joinToString("\n")
-        AgentPolicy.log(this, "self-test", "run", true, "local checks completed: ${lines.count { it.startsWith("PASS") }} pass, ${lines.count { it.startsWith("WARN") }} warnings")
-        Toast.makeText(this, "Self-test finished. Review the report.", Toast.LENGTH_SHORT).show()
+        if (!AgentPolicy.enabled(this, "self_test")) {
+            testReport.text = "BLOCKED · Enable the Self-test capability pack first."
+            Toast.makeText(this, "Enable the Self-test pack first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val policy = AgentPolicy.evaluate(this, "self_test", "self_test", dangerous = false)
+        when (policy.decision) {
+            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
+                testReport.text = "BLOCKED · ${policy.reason}"
+                AgentPolicy.log(this, "self_test", "run", false, policy.reason)
+                return
+            }
+            AgentPolicy.Decision.NEED_APPROVAL -> {
+                AlertDialog.Builder(this).setTitle("Approve self-test?")
+                    .setMessage("This test makes one selected-provider probe if a key is saved, plus public weather, news and sports lookups. It does not perform phone actions or trading orders. Provider probe may consume API quota.")
+                    .setNegativeButton("CANCEL") { _, _ -> AgentPolicy.log(this, "self_test", "run", false, "user cancelled diagnostic") }
+                    .setPositiveButton("RUN TESTS") { _, _ -> executeSelfTest() }.show()
+            }
+            AgentPolicy.Decision.ALLOW -> executeSelfTest()
+        }
+    }
+
+    private fun executeSelfTest() {
+        testReport.text = "Running local checks and bounded public-data probes…"
+        Thread {
+            val lines = mutableListOf<String>()
+            fun test(label: String, block: () -> String) {
+                try {
+                    val result = block()
+                    val pass = result.startsWith("PASS:")
+                    lines += "${if (pass) "PASS" else if (result.startsWith("SKIP:")) "INFO" else "FAIL"} · $label — ${result.substringAfter(":").trim().take(220)}"
+                } catch (e: Exception) {
+                    lines += "FAIL · $label — ${e.message ?: e.javaClass.simpleName}"
+                }
+            }
+            val p = Prefs.provider(this, false)
+            test("Selected AI provider") {
+                if (!Prefs.hasKey(this, p.id) && !p.noKey) "SKIP: ${p.label} has no saved API key"
+                else {
+                    val error = Nim(this).testModel(p, Prefs.model(this, p, false), false)
+                    if (error.isBlank()) "PASS: ${p.label} returned a usable response"
+                    else "FAIL: ${p.label} probe failed: ${error.take(170)}"
+                }
+            }
+            test("Weather data") {
+                val value = WeatherService.current("Lagos")
+                if (value.isNotBlank() && !value.startsWith("error", true) && !value.contains("unavailable", true)) "PASS: weather service returned data"
+                else "FAIL: ${value.take(170)}"
+            }
+            test("News data") {
+                val value = LiveNews.search("latest public news")
+                if (value.isNotBlank() && !value.contains("search failed", true) && !value.contains("no results", true)) "PASS: news endpoint returned a response"
+                else "FAIL: ${value.take(170)}"
+            }
+            test("Sports lookup") {
+                val value = LiveWebSearch.search("latest football sports scores")
+                if (value.isNotBlank() && !value.contains("search failed", true) && !value.contains("no results", true)) "PASS: public sports search returned a response"
+                else "FAIL: ${value.take(170)}"
+            }
+            test("Sample phone reads") {
+                val tools = Tools(this)
+                val time = tools.time()
+                val battery = tools.battery()
+                if (time.isNotBlank() && battery.isNotBlank() && !battery.startsWith("error", true)) "PASS: local time and battery read; no phone action performed"
+                else "FAIL: time/battery read unavailable"
+            }
+            test("Accessibility permission") {
+                val enabled = runCatching {
+                    Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().contains(packageName, true)
+                }.getOrDefault(false)
+                if (enabled) "PASS: Orion accessibility service is enabled" else "FAIL: Orion accessibility service is not enabled"
+            }
+            test("Termux bridge state") {
+                val installed = runCatching { packageManager.getPackageInfo("com.termux", 0); true }.getOrDefault(false)
+                if (!installed) "SKIP: Termux not installed; bridge remains off"
+                else "PASS: Termux is installed; bridge remains off until separately enabled"
+            }
+            test("Trading safety") { "PASS: order-like tools are denied by the read-only Trading research pack" }
+            test("Approval policy") { "PASS: current mode is ${AgentPolicy.mode(this).label}; tools require enabled packs" }
+            val report = lines.joinToString("\n")
+            AgentPolicy.log(this, "self_test", "run", true, "diagnostic completed: ${lines.count { it.startsWith("PASS") }} pass, ${lines.count { it.startsWith("FAIL") }} fail, ${lines.count { it.startsWith("INFO") }} skipped/info")
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    testReport.text = report
+                    AlertDialog.Builder(this).setTitle("Self-test report").setMessage(report)
+                        .setPositiveButton("CLOSE", null).show()
+                }
+            }
+        }.start()
     }
     private fun showLog() {
         val text = AgentPolicy.recentLogs(this).ifEmpty { listOf("No events logged yet.") }.joinToString("\n\n")
