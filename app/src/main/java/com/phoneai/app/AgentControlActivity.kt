@@ -97,6 +97,8 @@ class AgentControlActivity : Activity() {
         addButton("Configure tool allowlist") { configureAllowlist() }
         addButton("Propose a new skill") { proposeSkill() }
         addButton("Review / revoke skills") { reviewSkills() }
+        addButton("Manage custom agents") { manageCustomAgents() }
+        addButton("Create custom agent") { createCustomAgent() }
         addText("Talk and live voice use your normal chat provider. Command planning and screen-control reasoning can use a separate saved text provider/model. No model-list or test request is made when saving this setting.", 12f, Theme.MUTED, false, 4)
         commandModelStatus = addText(commandModelSummary(), 12f, Theme.TEXT, false, 4)
         addButton("Configure Command provider / model") { configureCommandModel() }
@@ -486,6 +488,68 @@ class AgentControlActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::modeStatus.isInitialized) refresh()
+    }
+
+    private fun createCustomAgent() {
+        val id = android.widget.EditText(this).apply { hint = "ID (lowercase, e.g. football_coach)" }
+        val name = android.widget.EditText(this).apply { hint = "Agent name" }
+        val tagline = android.widget.EditText(this).apply { hint = "Short purpose (max 80 characters)" }
+        val persona = android.widget.EditText(this).apply {
+            hint = "Instructions and specialist behavior (20–700 characters)"
+            minLines = 3
+            maxLines = 6
+            gravity = Gravity.TOP
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(4), dp(18), dp(4))
+            listOf(id, name, tagline, persona).forEach { addView(it) }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Create custom specialist")
+            .setMessage("Custom agents use the existing AI provider and local tools; they do not get extra permissions. Safety rules remain enforced.")
+            .setView(ScrollView(this).apply { addView(form) })
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("VALIDATE & SAVE") { _, _ ->
+                val result = AgentProfiles.createCustom(
+                    this, id.text.toString(), name.text.toString(),
+                    tagline.text.toString(), persona.text.toString()
+                )
+                if (result.startsWith("error:", true)) {
+                    AlertDialog.Builder(this).setTitle("Agent not saved").setMessage(result)
+                        .setPositiveButton("OK", null).show()
+                } else {
+                    AgentPolicy.log(this, "custom-agent", "create", true, "custom agent saved")
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                }
+            }.show()
+    }
+
+    private fun manageCustomAgents() {
+        val agents = AgentProfiles.custom(this)
+        if (agents.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("Custom agents")
+                .setMessage("No custom agents yet. Create one to add a specialist to Orion's agent roster.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Custom agents")
+            .setItems(agents.map { "${it.name} · ${it.id}" }.toTypedArray()) { _, index ->
+                val agent = agents[index]
+                AlertDialog.Builder(this).setTitle(agent.name)
+                    .setMessage("ID: ${agent.id}\nPurpose: ${agent.tagline}\n\nThis specialist uses Orion's existing permissions and safety policy.")
+                    .setNegativeButton("CLOSE", null)
+                    .setPositiveButton("DELETE") { _, _ ->
+                        AlertDialog.Builder(this).setTitle("Delete ${agent.name}?")
+                            .setMessage("This removes the custom agent definition from this phone. It does not delete chat history.")
+                            .setNegativeButton("CANCEL", null)
+                            .setPositiveButton("DELETE") { _, _ ->
+                                val removed = AgentProfiles.deleteCustom(this, agent.id)
+                                AgentPolicy.log(this, "custom-agent", "delete", removed, if (removed) "custom agent deleted" else "custom agent delete failed")
+                                Toast.makeText(this, if (removed) "Custom agent deleted." else "Could not delete custom agent.", Toast.LENGTH_SHORT).show()
+                            }.show()
+                    }.show()
+            }.setNegativeButton("CLOSE", null).show()
     }
 
     private fun refresh() {
