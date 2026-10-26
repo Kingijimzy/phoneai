@@ -13,7 +13,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
 }
 
 /** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
-class Nim(private val ctx: Context, private val commandMode: Boolean = false) {
+class Nim(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
@@ -209,7 +209,7 @@ class Nim(private val ctx: Context, private val commandMode: Boolean = false) {
     @Volatile
     private var active: HttpURLConnection? = null
 
-    private val commandRequestBudget = CommandRequestBudget(maxRequests = 15)
+    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     fun beginCommand() {
