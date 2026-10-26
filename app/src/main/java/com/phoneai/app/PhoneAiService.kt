@@ -73,6 +73,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private lateinit var agent: Agent
     private lateinit var voice: Voice
     @Volatile private var orionRuntime: OrionRuntime? = null
+    @Volatile private var decisionScheduler: OrionDecisionScheduler? = null
     @Volatile private var runtimeDrainScheduled = false
     @Volatile private var runtimeDrainRequested = false
 
@@ -168,8 +169,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val runtime = OrionRuntime(this)
         orionRuntime = runtime
         runtime.start()
-        runtime.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "conversation-context", 8)
-        runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "service-connected", 6)
+        val scheduler = OrionDecisionScheduler(runtime)
+        decisionScheduler = scheduler
+        scheduler.onServiceReady()
         scheduleRuntimeDrain()
         showBubble()
         startWake()
@@ -179,8 +181,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (event == null || orionRuntime == null) return
         // Window transitions are meaningful state changes; ignore noisy text/content events.
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val packageKey = event.packageName?.toString()?.take(100).orEmpty().ifBlank { "unknown-window" }
-            orionRuntime?.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "window:$packageKey", 1)
+            decisionScheduler?.onWindowChanged(event.packageName?.toString())
             scheduleRuntimeDrain()
         }
     }
@@ -241,6 +242,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     override fun onUnbind(intent: Intent?): Boolean {
         orionRuntime?.stop()
         orionRuntime = null
+        decisionScheduler = null
         instance = null
         wakeGen++
         stopOfflineWakeDetector()
