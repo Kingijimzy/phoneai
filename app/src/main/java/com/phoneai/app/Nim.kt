@@ -547,7 +547,7 @@ class Nim(private val ctx: Context) {
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
                 .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
-                .toList()
+                .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
         } else emptyList()
         val mode = if (vision) "vision" else "chat"
 
