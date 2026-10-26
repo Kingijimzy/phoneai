@@ -203,23 +203,27 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         var verifiedResult = result
         val shouldVerifyAction = tool in actionTools &&
             (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
-        if (!result.trimStart().startsWith("error", ignoreCase = true) && shouldVerifyAction && lastScreenSnapshot.isNotBlank()) {
-            try {
-                val before = lastScreenSnapshot
-                val after = AgentHooks.awaitStableSnapshot(
-                    read = { if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen() },
-                    maxSamples = 5, stableSamples = 2, intervalMs = 120L
-                )
-                lastScreenBeforeAction = before
-                lastScreenSnapshot = after
-                val changed = AgentHooks.screenChanged(before, after)
-                if (changed) {
-                    verifiedResult += "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
-                } else {
-                    verifiedResult = "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step. Original result: " + result
+        if (!result.trimStart().startsWith("error", ignoreCase = true) && shouldVerifyAction) {
+            if (lastScreenSnapshot.isBlank()) {
+                verifiedResult = "error: verification unavailable: Orion had no pre-action screen snapshot, so '$tool' cannot be reported as confirmed. Original result: $result"
+            } else {
+                try {
+                    val before = lastScreenSnapshot
+                    val after = AgentHooks.awaitStableSnapshot(
+                        read = { if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen() },
+                        maxSamples = 5, stableSamples = 2, intervalMs = 120L
+                    )
+                    lastScreenBeforeAction = before
+                    lastScreenSnapshot = after
+                    val changed = AgentHooks.screenChanged(before, after)
+                    if (changed) {
+                        verifiedResult += "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
+                    } else {
+                        verifiedResult = "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step. Original result: " + result
+                    }
+                } catch (_: Exception) {
+                    verifiedResult = "error: verification unavailable: post-action screen comparison failed; outcome remains unverified. Original result: $result"
                 }
-            } catch (_: Exception) {
-                verifiedResult += "\\nLOCAL VERIFY: post-action screen comparison unavailable; outcome remains unverified."
             }
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
