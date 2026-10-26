@@ -38,4 +38,11 @@ class ExperiencePolicyTest {
         val b = ExperiencePolicy.block(listOf(fail("x y z", "click", "target_not_found", now - 2 * 86_400_000L)), now)
         assertTrue(b.contains("AVOID") && b.contains("2d ago"))
     }
+    @Test fun routineLearningRequiresCleanSuccessfulEvidence() {
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(emptyList(), 0))
+        assertTrue(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, true), 0))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, false), 0))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true), 1))
+    }
+
 }
