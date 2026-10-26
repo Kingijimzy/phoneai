@@ -232,6 +232,7 @@ class ProactiveActivity : Activity() {
         val hour = prefs.getInt("proactive_briefing_hour", 8).coerceIn(0, 23)
         val minute = prefs.getInt("proactive_briefing_minute", 0).coerceIn(0, 59)
         val time = "%02d:%02d".format(hour, minute)
+        briefingSwitch.isEnabled = AgentPolicy.enabled(this, "proactive")
         status.text = "Proactive pack: ${if (AgentPolicy.enabled(this, "proactive")) "enabled" else "OFF"}\n" +
             "Daily briefing opt-in: ${if (enabled) "ON" else "OFF"}\n" +
             "Scheduled local time: $time (Android may delay it)\n" +
