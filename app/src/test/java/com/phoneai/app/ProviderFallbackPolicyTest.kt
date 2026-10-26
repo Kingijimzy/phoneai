@@ -8,7 +8,7 @@ import java.io.IOException
 class ProviderFallbackPolicyTest {
     @Test fun providerFanOutUsesAllEligibleSavedProvidersWithinCommandBudget() {
         // Runtime rotation is over eligible providers; request budget is the hard upper bound.
-        assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 1)
+        assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 14)
     }
 
     @Test fun recoverableHttpAndModelFailuresAllowRotation() {
