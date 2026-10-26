@@ -13,7 +13,7 @@ internal object OrionSoulEngine {
         val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
         val enabledSkills = skills.filter { it.enabled }
         val planner = try {
-            OrionIntegrationPlanner.planFor(context, request, integrationCapabilities(tools))
+            OrionIntegrationPlanner.planFor(context, request, OrionIntegrationCapabilityPolicy.capabilities(tools, runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false)))
         } catch (_: Exception) { null }
 
         val lines = mutableListOf<String>()
@@ -41,13 +41,4 @@ internal object OrionSoulEngine {
         return lines.joinToString("\n").take(3500)
     }
 
-    private fun integrationCapabilities(tools: Set<String>): Set<String> {
-        val capabilities = mutableSetOf<String>()
-        if (tools.any { it.contains("github", true) }) capabilities += "github.account.read"
-        if (tools.any { it.contains("gmail", true) || it.contains("email", true) }) capabilities += "gmail.messages.read"
-        if (tools.any { it.contains("drive", true) }) capabilities += "google_drive.files.read"
-        if (tools.any { it.contains("telegram", true) }) capabilities += "telegram.messages"
-        if (tools.any { it.contains("termux", true) || it.contains("shell", true) }) capabilities += "shell.execute"
-        return capabilities
-    }
 }
