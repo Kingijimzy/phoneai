@@ -47,10 +47,19 @@ internal object OrionIntegrationPlanner {
         val connection = OrionConnectionStore.get(context, id)
         val state = when (provider) {
             // Telegram uses a locally configured bot bridge, not Orion's OAuth connection registry.
-            Provider.TELEGRAM -> if (runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false)) {
+            Provider.TELEGRAM -> when {
+                "telegram.messages" !in registeredCapabilities && runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false) ->
+                    State.CAPABILITY_MISSING
+                "telegram.messages" !in registeredCapabilities -> State.CAPABILITY_MISSING
+                runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false) -> State.CONNECTED
+                else -> State.AVAILABLE_NOT_CONNECTED
+            }
+            // Termux readiness includes its package, external-command permission, bridge setting and pack.
+            Provider.TERMUX -> if ("shell.execute" in registeredCapabilities &&
+                runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)) {
                 State.CONNECTED
             } else {
-                State.AVAILABLE_NOT_CONNECTED
+                State.CAPABILITY_MISSING
             }
             // Other providers are connected only when a real provider token and its required scope exist.
             else -> when {
