@@ -53,6 +53,7 @@ class SettingsActivity : Activity() {
     private lateinit var characterBtn: Button
     private lateinit var routBtn: Button
     private lateinit var skillBtn: Button
+    private lateinit var cliRuntimeBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
     private fun installNeuralVoice() {
@@ -510,9 +511,10 @@ class SettingsActivity : Activity() {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://build.nvidia.com/settings")))
         }, 8)
         add(s2, button("Sign in with OpenRouter", true) { startOpenRouterSignIn() }, 8)
-        add(s2, button("Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this)), false) {
+        cliRuntimeBtn = button("Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this)), false) {
             cliRuntimeDialog()
-        }, 8)
+        }
+        add(s2, cliRuntimeBtn, 8)
         add(s2, text("Choose Muse Code, Cursor Agent, or OpenCode for terminal-based coding sessions. Orion saves your choice and guides setup; a CLI must be installed and authenticated in a compatible terminal before it can run.", 12f, Theme.MUTED), 4)
         add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
         add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
@@ -1047,7 +1049,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun updateCliRuntimeButton() {
-        // Recreate the settings screen label on the next render; the preference is already persisted.
+        if (::cliRuntimeBtn.isInitialized) cliRuntimeBtn.text = "Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this))
         Toast.makeText(this, "Selected " + cliRuntimeLabel(Prefs.cliRuntime(this)), Toast.LENGTH_SHORT).show()
     }
 
