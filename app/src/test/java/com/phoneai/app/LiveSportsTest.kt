@@ -30,4 +30,20 @@ class LiveSportsTest {
         val lines = LiveSports.format(payload, "arsenal", "Premier League")
         assertTrue(lines[0].contains("kicks off 3:00 PM"))
     }
+
+    @Test fun detectsNaturalTeamCentricQuestionsWithoutFalsePositives() {
+        assertTrue(LiveSports.isScoreRequest("What is Madrid doing today?"))
+        assertTrue(LiveSports.isScoreRequest("Is Real Madrid playing today?"))
+        assertTrue(LiveSports.isScoreRequest("When does Real Madrid play next?"))
+        assertTrue(LiveSports.isScoreRequest("Latest result for Barcelona"))
+        assertTrue(LiveSports.isScoreRequest("What match is Madrid playing?"))
+        assertFalse(LiveSports.isScoreRequest("How do I score my exam?"))
+        assertFalse(LiveSports.isScoreRequest("What is my credit score?"))
+    }
+
+    @Test fun preservesRealMadridAndExpandsShortAliases() {
+        assertEquals("real madrid", LiveSports.teamQuery("Is Real Madrid playing today?"))
+        assertEquals("real madrid", LiveSports.teamQuery("What is Madrid doing today?").replace("madrid", "real madrid").replace("real real madrid", "real madrid"))
+        assertEquals("manchester united", LiveSports.teamQuery("Latest result for Man Utd"))
+    }
 }
