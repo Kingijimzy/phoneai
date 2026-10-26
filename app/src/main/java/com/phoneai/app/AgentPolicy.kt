@@ -19,6 +19,7 @@ object AgentPolicy {
         Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
+        Pack("connections", "Connected accounts", "Read-only checks on accounts you connected (GitHub, Gmail) and standing orders; secrets stay in the encrypted vault", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
@@ -72,6 +73,7 @@ object AgentPolicy {
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review" -> "orion_core"
+        "github_account_read", "gmail_messages_read", "open_connections", "standing_order" -> "connections"
         "trade_history_summary" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
         "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"

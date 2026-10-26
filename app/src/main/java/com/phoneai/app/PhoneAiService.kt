@@ -178,9 +178,19 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         decisionScheduler = scheduler
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
+        scheduleLifeLoop()
         showBubble()
         startWake()
     }
+
+    // The "alive" loop: every few minutes, run due standing orders (read-only, no AI calls) off the main thread.
+    private val lifeLoop = object : Runnable {
+        override fun run() {
+            Thread { try { LifeLoop.tick(applicationContext) } catch (_: Exception) { } }.start()
+            main.postDelayed(this, 5 * 60_000L)
+        }
+    }
+    private fun scheduleLifeLoop() { main.removeCallbacks(lifeLoop); main.postDelayed(lifeLoop, 60_000L) }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || orionRuntime == null) return
@@ -293,6 +303,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        main.removeCallbacks(lifeLoop)
         orionRuntime?.stop()
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
         runtimeRetryRunnable = null

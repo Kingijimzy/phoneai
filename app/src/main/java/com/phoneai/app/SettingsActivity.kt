@@ -449,6 +449,7 @@ class SettingsActivity : Activity() {
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
         add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
+        add(updateCard, button("Connected accounts (GitHub, Gmail)", false) { startActivity(android.content.Intent(this, ConnectionsActivity::class.java)) }, 8)
         add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
         add(updateCard, button("Run Orion self-test", true) {
             Toast.makeText(this, "Testing… this takes a few seconds.", Toast.LENGTH_SHORT).show()
