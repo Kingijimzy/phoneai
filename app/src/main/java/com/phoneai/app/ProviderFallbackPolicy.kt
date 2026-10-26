@@ -8,7 +8,7 @@ package com.phoneai.app
  */
 internal object ProviderFallbackPolicy {
     /** Zero means no additional provider fan-out; otherwise this is informational legacy metadata. */
-    const val MAX_BACKUP_PROVIDERS = 1
+    const val MAX_BACKUP_PROVIDERS = 14
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
         if (!autoSwitchEnabled || error is InterruptedException) return false
@@ -34,7 +34,7 @@ internal object ProviderFallbackPolicy {
         return listOf(
             "empty response", "empty content", "no chat model worked", "no vision model worked",
             "unsupported model", "retired", "out of credit", "temporarily busy",
-            "http 400", "http 404", "http 410", "http 422", "http 500", "http 502",
+            "http 404", "http 410", "http 422", "http 500", "http 502",
             "http 503", "http 504", "error 402", "error 404", "error 410", "error 422"
         ).any { message.contains(it) }
     }
