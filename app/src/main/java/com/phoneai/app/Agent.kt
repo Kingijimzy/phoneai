@@ -402,7 +402,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), reply with exactly ACTION so the built-in direct-data/search route can run and then answer using verified results and source links when available. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, reply with exactly ACTION and nothing else. Never claim an action or lookup succeeded without evidence."
         )
-        val messages = JSONArray().put(msg("system", safeSystem))
+        val responseQualityPolicy = """
+RESPONSE QUALITY AND FORMAT:
+- Answer the actual question first. For current/live facts, use successful live-tool results, not model memory. Include the relevant date and timezone, competition/event, source links, and any important context the user reasonably needs.
+- Sports result format: bold final score with home/away orientation; competition, match date and venue; goal scorers with accurate minutes; half-time score if available; concise match summary; standings/points only when verified by a current table source. Do not invent scorers, points, clean sheets, or implications. A team that conceded and later won did not keep a clean sheet.
+- Event format: event name, exact date, venue, start time with timezone, local equivalent when relevant, official viewing information only if verified, and official source links. Distinguish announced schedule from confirmed live status or completed results.
+- Use short headings and clean bullets. Avoid broken lines, duplicated details, raw markdown syntax, unfinished sentences, and dangling caveats. Include source links as readable Markdown links and explain when a detail could not be verified.
+- When sources disagree, prioritize official league/club/organizer sources and clearly state the discrepancy. Do not repeat unverified claims from the user's pasted text as facts.
+- Missing information: say what is confirmed, what is unknown, and the exact reason; do not fill gaps by guessing. Keep the answer concise but complete.
+""".trimIndent()
+        val finalSystem = safeSystem + "\\n\\n" + responseQualityPolicy
+        val messages = JSONArray().put(msg("system", finalSystem))
         val from = maxOf(0, chatHist.length() - 8)
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
