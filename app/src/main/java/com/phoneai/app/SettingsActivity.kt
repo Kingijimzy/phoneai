@@ -44,7 +44,7 @@ import java.net.URL
 
 /** Orion's control room: turn things on, save keys, tune the voice, manage memory, test recording. */
 class SettingsActivity : Activity() {
-    private companion object { const val REQUEST_KNOWLEDGE_IMPORT = 7421 }
+    private companion object { const val REQUEST_KNOWLEDGE_IMPORT = 7421; const val REQUEST_SKILL_IMPORT = 7422; const val REQUEST_SKILL_EXPORT = 7423 }
     private lateinit var status: TextView
     private lateinit var chatBtn: Button
     private lateinit var visionBtn: Button
@@ -53,6 +53,7 @@ class SettingsActivity : Activity() {
     private lateinit var characterBtn: Button
     private lateinit var routBtn: Button
     private lateinit var skillBtn: Button
+    private var pendingSkillExport: PhoneAiSkill? = null
     private lateinit var cliRuntimeBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -1617,8 +1618,47 @@ class SettingsActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_KNOWLEDGE_IMPORT || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        if (requestCode == REQUEST_SKILL_IMPORT) {
+            Thread {
+                val message = try {
+                    val raw = contentResolver.openInputStream(uri)?.use { input ->
+                        val out = ByteArrayOutputStream()
+                        val buffer = ByteArray(4096)
+                        var total = 0
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            total += n
+                            if (total > 100_000) throw IllegalArgumentException("Skill package exceeds 100 KB.")
+                            out.write(buffer, 0, n)
+                        }
+                        String(out.toByteArray(), Charsets.UTF_8)
+                    } ?: throw IllegalArgumentException("Could not open that file.")
+                    val (candidate, detail) = SkillPackageCodec.parse(raw)
+                    if (candidate == null) detail else {
+                        val result = SkillRegistry.register(this, candidate)
+                        if (result.allowed) "Installed disabled skill " + candidate.id + ". Review and enable it in Skill Studio."
+                        else result.reason
+                    }
+                } catch (e: Exception) { "Skill import failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { showInfoDialog("Skill package import", message); refresh() }
+            }.start()
+            return
+        }
+        if (requestCode == REQUEST_SKILL_EXPORT) {
+            val skill = pendingSkillExport
+            pendingSkillExport = null
+            if (skill == null) return
+            try {
+                contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(SkillPackageCodec.export(skill)) }
+                    ?: throw IllegalArgumentException("Could not write to the selected location.")
+                Toast.makeText(this, "Exported skill package: " + skill.id, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) { showInfoDialog("Skill export failed", e.message ?: e.javaClass.simpleName) }
+            return
+        }
+        if (requestCode != REQUEST_KNOWLEDGE_IMPORT) return
         Thread {
             val message = try {
                 val bytes = contentResolver.openInputStream(uri)?.use { readAtMost(it, 400_000) } ?: ByteArray(0)
@@ -1629,7 +1669,7 @@ class SettingsActivity : Activity() {
                 else when (val n = KnowledgeStore.add(this, name, text)) {
                     -2 -> "Knowledge base is full; remove a document first."
                     in Int.MIN_VALUE..0 -> "Could not save that document."
-                    else -> "Saved \"$name\" as $n passages."
+                    else -> "Saved \"" + name + "\" as " + n + " passages."
                 }
             } catch (e: Exception) { "Could not read that file (" + e.javaClass.simpleName + ")." }
             runOnUiThread { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); refresh() }
