@@ -31,6 +31,17 @@ class OrionRuntimePolicyTest {
         assertFalse(OrionRuntimePolicy.shouldRetry(OrionRuntimePolicy.MAX_ATTEMPTS))
     }
 
+    @Test fun newWorkRecoversDegradedStateButDoesNotResumePausedOrStoppedService() {
+        assertEquals(OrionRuntime.State.ACTIVE,
+            OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.DEGRADED, true))
+        assertEquals(OrionRuntime.State.PAUSED,
+            OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.PAUSED, true))
+        assertEquals(OrionRuntime.State.STOPPED,
+            OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.STOPPED, true))
+        assertEquals(OrionRuntime.State.DEGRADED,
+            OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.DEGRADED, false))
+    }
+
     @Test fun nextEligibleDelayUsesEarliestQueuedDeadline() {
         assertEquals(0L, OrionRuntimePolicy.nextEligibleDelayMs(1_000L, listOf(900L, 5_000L)))
         assertEquals(2_000L, OrionRuntimePolicy.nextEligibleDelayMs(1_000L, listOf(3_000L, 7_000L)))
