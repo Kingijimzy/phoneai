@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import org.json.JSONArray
 
 /** One AI service. Almost all of them speak the same "OpenAI-style" chat protocol. */
 class Provider(
@@ -122,6 +123,29 @@ object Prefs {
     fun hasKey(c: Context, pid: String): Boolean = key(c, pid).isNotEmpty()
 
     fun hasAnyKey(c: Context): Boolean = Providers.all.any { hasKey(c, it.id) }
+
+    /** Persist successful model catalogues so the picker can open instantly after app restarts. */
+    fun cachedModels(c: Context, pid: String): List<String> {
+        val raw = sp(c).getString("model_catalog_$pid", null) ?: return emptyList()
+        return try {
+            val a = JSONArray(raw)
+            (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.distinct()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun saveCachedModels(c: Context, pid: String, models: List<String>) {
+        try {
+            val a = JSONArray()
+            models.filter { it.isNotBlank() }.distinct().take(500).forEach { a.put(it) }
+            sp(c).edit().putString("model_catalog_$pid", a.toString())
+                .putLong("model_catalog_${pid}_at", System.currentTimeMillis()).apply()
+        } catch (_: Exception) { }
+    }
+
+    fun cachedModelsAgeMs(c: Context, pid: String): Long {
+        val at = sp(c).getLong("model_catalog_${pid}_at", 0L)
+        return if (at <= 0L) Long.MAX_VALUE else (System.currentTimeMillis() - at).coerceAtLeast(0L)
+    }
 
     /** One-time PKCE verifier for the OpenRouter browser authorization callback. */
     fun setOpenRouterOAuthVerifier(c: Context, value: String): Boolean =
