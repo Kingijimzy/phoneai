@@ -656,6 +656,256 @@ Rules:
         runInternal(inputCommand, reuseCommandBudget = false)
     }
 
+    /**
+     * Execute an explicitly named locally recorded routine without asking a model to reconstruct
+     * the gestures. Every step is gated by its recorded app/screen precondition and a durable cursor.
+     */
+    private fun runSavedRoutineCommand(command: String): Boolean {
+        val request = RoutineReplayPolicy.parseRequest(command) ?: return false
+        val names = MacroStore.names(svc)
+        val name = RoutineReplayPolicy.exactName(names, request.name)
+        val existing = RoutineReplayCheckpointStore.load(svc)
+
+        if (name == null) {
+            if (request.action == RoutineReplayPolicy.Action.RESUME) {
+                ui.say("I couldn't find that saved routine. Check its exact name in Teach Mode; no gestures were replayed.")
+                return true
+            }
+            return false
+        }
+        val found = MacroStore.find(svc, name)
+        val steps = found?.second
+        if (steps == null || steps.length() !in 1..100) {
+            ui.say("The saved routine is empty or too large to replay safely. No actions were started.")
+            return true
+        }
+        if (!Prefs.accessibilityDisclosureAccepted(svc)) {
+            ui.say("Routine replay is blocked because screen-access disclosure has not been accepted. No action was started.")
+            return true
+        }
+
+        var cursor: RoutineReplayCheckpointStore.Snapshot?
+        if (request.action == RoutineReplayPolicy.Action.RESUME) {
+            cursor = existing
+            if (cursor == null || !MacroStore.norm(cursor.routine).equals(MacroStore.norm(name), true)) {
+                ui.say("There is no interrupted replay checkpoint for '$name'. Say 'run routine $name' to start it from the beginning.")
+                return true
+            }
+            if (cursor.totalSteps != steps.length() || cursor.nextStep !in 0..steps.length()) {
+                ui.say("The saved routine changed after its checkpoint. I stopped rather than replay a mismatched sequence; start it again after checking the target app.")
+                return true
+            }
+        } else {
+            if (existing != null) {
+                ui.say("An interrupted replay of '${existing.routine}' is saved at step ${existing.nextStep + 1}. Say 'resume routine ${existing.routine}' after checking the target app; I won't restart it blindly.")
+                return true
+            }
+            val alreadyApproved = svc.consumeRoutineReplayApproval(name)
+            if (!alreadyApproved && !ui.ask("Replay '$name' (${steps.length()} recorded gestures)? It can tap buttons or submit data in the target app. I will verify screen fingerprints and stop if the screen differs.")) {
+                ui.say("Routine replay cancelled. No gestures were performed.")
+                return true
+            }
+            if (!RoutineReplayCheckpointStore.begin(svc, name, steps.length())) {
+                ui.say("I couldn't save the routine recovery checkpoint, so no gestures were started.")
+                return true
+            }
+            cursor = RoutineReplayCheckpointStore.load(svc)
+        }
+
+        var nextIndex = cursor?.nextStep ?: 0
+        val interruptedIndex = cursor?.inFlightStep ?: -1
+        if (interruptedIndex >= 0) {
+            val interrupted = steps.optJSONObject(interruptedIndex)
+            val before = interrupted?.let { RoutineReplayPolicy.signature(it, "sig") }
+            val after = interrupted?.let { RoutineReplayPolicy.signature(it, "afterSig") }
+            if (interrupted == null || before == null || after == null) {
+                ui.say("Step ${interruptedIndex + 1} may have happened before Orion stopped, but this older step has no distinct saved after-state. I won't repeat it blindly. Inspect the app and restart the routine only after confirming its state.")
+                return true
+            }
+            val size = svc.replayScreenSize()
+            val oldW = interrupted.optInt("screenW", 0)
+            val oldH = interrupted.optInt("screenH", 0)
+            val bx = RoutineReplayPolicy.scaleCoordinate(interrupted.optInt("sx", -1), oldW, size.first)
+            val by = RoutineReplayPolicy.scaleCoordinate(interrupted.optInt("sy", -1), oldH, size.second)
+            val ax = RoutineReplayPolicy.scaleCoordinate(interrupted.optInt("afterSx", -1), oldW, size.first)
+            val ay = RoutineReplayPolicy.scaleCoordinate(interrupted.optInt("afterSy", -1), oldH, size.second)
+            if (bx == null || by == null || ax == null || ay == null) {
+                ui.say("The interrupted step's screen coordinates are invalid for this display. I stopped without repeating it.")
+                return true
+            }
+            val beforeState = svc.checkRecordedSignature(bx, by, before)
+            val afterState = svc.checkRecordedSignature(ax, ay, after)
+            when (RoutineReplayPolicy.resumeDecision(beforeState == "match", afterState == "match")) {
+                RoutineReplayPolicy.ResumeDecision.RETRY_IN_FLIGHT -> {
+                    if (!RoutineReplayCheckpointStore.pauseAt(svc, name, interruptedIndex)) {
+                        ui.say("I could not save the recovery decision, so I stopped before another gesture.")
+                        return true
+                    }
+                    cursor = RoutineReplayCheckpointStore.load(svc)
+                    nextIndex = interruptedIndex
+                }
+                RoutineReplayPolicy.ResumeDecision.SKIP_IN_FLIGHT -> {
+                    if (!RoutineReplayCheckpointStore.markCompleted(svc, name, interruptedIndex)) {
+                        ui.say("I could not save the verified recovery step, so I stopped before continuing.")
+                        return true
+                    }
+                    cursor = RoutineReplayCheckpointStore.load(svc)
+                    nextIndex = interruptedIndex + 1
+                }
+                RoutineReplayPolicy.ResumeDecision.AMBIGUOUS -> {
+                    ui.say("I can't distinguish the pre-action screen from the recorded after-action screen. The routine remains paused to avoid a duplicate tap. Inspect the app and re-record this step if needed.")
+                    return true
+                }
+            }
+        }
+
+        ui.phase("acting")
+        val currentSize = svc.replayScreenSize()
+        for (index in nextIndex until steps.length()) {
+            if (stopped) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("I stopped the routine at step ${index + 1}. Its checkpoint is saved; say 'resume routine $name' when the target screen is ready.")
+                return true
+            }
+            val step = steps.optJSONObject(index)
+            if (step == null) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("Routine step ${index + 1} is unreadable. I stopped without executing it.")
+                return true
+            }
+            val tool = step.optString("tool")
+            if (tool !in setOf("tap", "long_press", "swipe_path")) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("Routine step ${index + 1} uses unsupported action '$tool'. I stopped rather than guess how to execute it.")
+                return true
+            }
+            val oldW = step.optInt("screenW", 0)
+            val oldH = step.optInt("screenH", 0)
+            if (oldW <= 0 || oldH <= 0) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("Routine step ${index + 1} has no valid recorded screen size. Re-record the routine before replaying it.")
+                return true
+            }
+            val targetPackage = step.optString("targetPackage").trim()
+            val currentPackage = svc.currentPackageName()
+            if (targetPackage.isNotBlank() && !currentPackage.equals(targetPackage, true)) {
+                if (index == 0 && request.action == RoutineReplayPolicy.Action.RUN) {
+                    val launch = svc.openRoutineTarget(targetPackage)
+                    if (launch.startsWith("error") || !svc.waitForRoutinePackage(targetPackage, 6_000L) { stopped }) {
+                        RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                        ui.say("I couldn't confirm the recorded target app was opened. " + launch + ". No gesture was performed.")
+                        return true
+                    }
+                } else {
+                    RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                    ui.say("Routine paused at step ${index + 1}: expected app $targetPackage, but the foreground app is different. Open the expected app and say 'resume routine $name'.")
+                    return true
+                }
+            } else if (targetPackage.isBlank() && index == 0 && currentPackage.equals(svc.packageName, true)) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("This older routine did not record its target app. Open the target app and re-record the routine so Orion can verify where its gestures belong.")
+                return true
+            }
+
+            val gap = step.optLong("gap", 0L).coerceIn(0L, 120_000L)
+            var remaining = gap
+            while (remaining > 0L && !stopped) {
+                val slice = minOf(remaining, 100L)
+                Thread.sleep(slice)
+                remaining -= slice
+            }
+            if (stopped) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("I stopped before step ${index + 1}. The routine checkpoint is saved.")
+                return true
+            }
+
+            val beforeSig = RoutineReplayPolicy.signature(step, "sig")
+            if (beforeSig != null) {
+                val sx = RoutineReplayPolicy.scaleCoordinate(step.optInt("sx", -1), oldW, currentSize.first)
+                val sy = RoutineReplayPolicy.scaleCoordinate(step.optInt("sy", -1), oldH, currentSize.second)
+                if (sx == null || sy == null) {
+                    RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                    ui.say("The saved screen-fingerprint point for step ${index + 1} is invalid. No gesture was performed.")
+                    return true
+                }
+                val match = svc.waitForSig(sx, sy, beforeSig, 2_500L) { stopped }
+                if (match != "ok") {
+                    RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                    ui.say("Routine paused before step ${index + 1}: the recorded screen fingerprint didn't match ($match). I did not tap. Restore the expected screen and say 'resume routine $name'.")
+                    return true
+                }
+            } else if (oldW != currentSize.first || oldH != currentSize.second) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("Step ${index + 1} has no screen fingerprint and the display size changed. I stopped rather than reuse old coordinates.")
+                return true
+            }
+
+            val args = step.optJSONObject("args") ?: JSONObject()
+            val x = RoutineReplayPolicy.scaleCoordinate(args.optInt("x", -1), oldW, currentSize.first)
+            val y = RoutineReplayPolicy.scaleCoordinate(args.optInt("y", -1), oldH, currentSize.second)
+            if (tool != "swipe_path" && (x == null || y == null)) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("Routine step ${index + 1} has coordinates outside the current display. No gesture was performed.")
+                return true
+            }
+
+            if (!RoutineReplayCheckpointStore.markInFlight(svc, name, steps.length(), index)) {
+                ui.say("I couldn't save the recovery checkpoint before step ${index + 1}; no gesture was started.")
+                return true
+            }
+            val result = when (tool) {
+                "tap" -> svc.tap(x!!.toFloat(), y!!.toFloat())
+                "long_press" -> svc.longPress(x!!.toFloat(), y!!.toFloat())
+                "swipe_path" -> {
+                    val points = args.optJSONArray("points") ?: JSONArray()
+                    val scaled = JSONArray()
+                    var valid = points.length() >= 2
+                    for (p in 0 until points.length()) {
+                        val point = points.optJSONObject(p)
+                        if (point == null) {
+                            valid = false
+                            continue
+                        }
+                        val px = RoutineReplayPolicy.scaleCoordinate(point.optInt("x", -1), oldW, currentSize.first)
+                        val py = RoutineReplayPolicy.scaleCoordinate(point.optInt("y", -1), oldH, currentSize.second)
+                        if (px == null || py == null) valid = false
+                        else scaled.put(JSONObject().put("x", px).put("y", py))
+                    }
+                    if (!valid || scaled.length() < 2) "error: recorded swipe path is invalid for this display"
+                    else svc.performRecordedPath(scaled, args.optLong("ms", 700L))
+                }
+                else -> "error: unsupported saved gesture"
+            }
+            if (result.startsWith("error", true)) {
+                ui.say("Routine paused during step ${index + 1}: $result. The step may have partly executed. Inspect the app, then say 'resume routine $name'; I will not repeat an ambiguous gesture.")
+                return true
+            }
+            val afterSig = RoutineReplayPolicy.signature(step, "afterSig")
+            if (afterSig != null) {
+                val ax = RoutineReplayPolicy.scaleCoordinate(step.optInt("afterSx", -1), oldW, currentSize.first)
+                val ay = RoutineReplayPolicy.scaleCoordinate(step.optInt("afterSy", -1), oldH, currentSize.second)
+                val afterResult = if (ax == null || ay == null) "invalid" else
+                    svc.waitForSig(ax, ay, afterSig, 2_500L) { stopped }
+                if (afterResult != "ok") {
+                    ui.say("Step ${index + 1} was dispatched, but its recorded after-state could not be verified ($afterResult). I paused before the next gesture to avoid compounding an uncertain screen.")
+                    return true
+                }
+            }
+
+            if (!RoutineReplayCheckpointStore.markCompleted(svc, name, index)) {
+                ui.say("Step ${index + 1} ran, but I couldn't persist its completion checkpoint. Inspect the app before asking me to continue.")
+                return true
+            }
+            ui.note("Routine step ${index + 1}/${steps.length()} — $tool dispatched" +
+                if (afterSig != null) " and after-state matched." else "; this step has no distinct saved after-state.")
+        }
+        val cleared = RoutineReplayCheckpointStore.clear(svc)
+        ui.say("Routine '$name' replayed ${steps.length()} recorded gestures. The overall goal is not independently confirmed, so check the target app before assuming it completed." +
+            if (cleared) "" else " I couldn't clear the final recovery checkpoint.")
+        return true
+    }
+
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
@@ -735,6 +985,7 @@ Rules:
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
+        if (!resumeRequest && !browserActionTask && runSavedRoutineCommand(command)) return
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
         if (!resumeRequest && !browserActionTask) {
             val fast = FastIntents.parse(command)
