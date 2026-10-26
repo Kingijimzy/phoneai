@@ -139,7 +139,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE
+        val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE &&
+            !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command")))
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
         val policy = AgentPolicy.evaluate(svc, pack, tool, dangerous = toolIsWrite || consequential)
@@ -1279,6 +1280,7 @@ Rules:
             "copy" -> tools.copy(a.optString("text"))
             "battery" -> tools.battery()
             "time" -> tools.time()
+            "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command"))
             "device_info" -> tools.deviceInfo()
             "record_screen" -> {
                 val act = a.optString("action", "start").lowercase()
