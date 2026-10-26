@@ -116,7 +116,7 @@ class WorkspaceShellActivity : Activity() {
         try {
             val result = when (verb) {
                 "help" -> "Allowed commands:\nhelp\npwd\nls\ncat filename\ngrep text|filename\nwrite filename|content\npatch filename|old text|new text\nrm filename (confirmation required)\n\nOnly files in the selected SAF root are addressable. No arbitrary shell commands."
-                "pwd" -> workspace?.toString() ?: "(no workspace selected)"
+                "pwd" -> workspace?.let { "SAF workspace URI: $it (not an OS filesystem path)" } ?: "(no workspace selected)"
                 "ls" -> listFiles()
                 "cat" -> readFile(arg.trim())
                 "grep" -> { val p = arg.split("|", limit = 2); if (p.size != 2) "Usage: grep text|filename" else {
