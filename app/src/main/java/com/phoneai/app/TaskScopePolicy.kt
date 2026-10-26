@@ -16,7 +16,7 @@ internal object TaskScopePolicy {
     private val localSearchIntent = Regex(
         "(?i)^\\s*(?:(?:please|can you|could you|would you|will you)\\s+)*(find me|recommend|look for)\\b.*\\b(restaurant|hotel|store|shop|cafe|service|nearby|near me)\\b"
     )
-    private val commandLead = "(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*"
+    private val commandLead = "(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|help me(?: with this)?[:,]?)\\s+)*"
     private val phoneIntent = Regex(
         "(?i)^\\s*" + commandLead + "(use (the )?(browser|app|phone|device)|open|launch|tap|click|press|scroll|swipe|type|send|call|text|message|reply|email|play|close|install|download|fill|login|log in|sign in|set alarm|set timer|change setting|turn on|turn off|read my|check my|look at my|screenshot|notification|undo|what time is it|check battery|battery level|device info|list apps|open camera)\\b"
     )
