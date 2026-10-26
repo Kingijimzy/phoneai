@@ -48,7 +48,7 @@ internal object TradingCommandPolicy {
     private val mutatingCommands = listOf(
         Regex("^(buy|long|sell|short)\\b"),
         Regex("^(close|exit|flatten)\\b"),
-        Regex("^(kill switch|panic|emergency stop)\\b"),
+        Regex("^(kill switch|panic|emergency stop|emergency close)\\b"),
         Regex("^cancel\\b.*\\border(s)?\\b"),
         Regex("^(use|switch to|go|enable|turn on|set)\\b.*\\b(real|live)\\b.*\\b(money|trading|account|mode)\\b"),
         Regex("^(enable|turn on)\\b.*\\b(order placement|live trading|real trading)\\b")
