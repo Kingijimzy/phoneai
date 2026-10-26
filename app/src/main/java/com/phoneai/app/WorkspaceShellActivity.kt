@@ -46,7 +46,7 @@ class WorkspaceShellActivity : Activity() {
         root.addView(ScrollView(this).apply { addView(output) }, LinearLayout.LayoutParams(-1, 0, 1f))
         command = EditText(this).apply {
             hint = "run_command ls | cat file.txt | write file.txt|content"
-            setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); singleLine = true; imeOptions = EditorInfo.IME_ACTION_SEND
+            setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_SEND) { val line = text.toString(); setText(""); runCommand(line); true } else false
             }
