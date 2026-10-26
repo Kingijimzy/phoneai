@@ -2400,7 +2400,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun buildTeachOverlay() {
         val root = FrameLayout(this)
-        root.setBackgroundColor(0x12FF5C7A)
+        // Keep the overlay transparent: screen fingerprints must describe the target app,
+        // not a tinted recording layer that disappears during replay.
+        root.setBackgroundColor(0x00000000)
         root.setOnTouchListener { _, e ->
             onTeachTouch(e)
             true
