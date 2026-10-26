@@ -123,4 +123,29 @@ class TaskScopePolicyTest {
         assertNotNull(result)
     }
 
+    @Test fun readOnlyTradingBlocksMutationsAcrossCommonWordings() {
+        listOf(
+            "buy 20 usdt of BTC stop 60000",
+            "CLOSE all positions",
+            "exit my trades",
+            "flatten everything",
+            "panic",
+            "cancel every open orders",
+            "switch to live account",
+            "enable real trading",
+            "set real money mode",
+            "turn on order placement"
+        ).forEach { assertTrue("Should block: $it", TradingCommandPolicy.isMutatingCommand(it)) }
+    }
+
+    @Test fun readOnlyTradingAllowsAnalysisAndOrdinaryDiscussion() {
+        listOf(
+            "analyze BTC",
+            "what is the price of ETH",
+            "show my watchlist",
+            "explain what a stop loss is",
+            "how do I learn trading"
+        ).forEach { assertFalse("Should allow: $it", TradingCommandPolicy.isMutatingCommand(it)) }
+    }
+
 }
