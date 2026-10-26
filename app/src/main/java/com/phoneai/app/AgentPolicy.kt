@@ -52,7 +52,12 @@ object AgentPolicy {
         if (pack == "trading_research" && toolId.contains("order", true)) return RuleResult(Decision.DENY, "Trading research is read-only; order execution is unavailable.")
         if (mode(c) == Mode.PLAN) return RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
         if (approvedThisAction) return RuleResult(Decision.ALLOW, "User approved this action.")
-        if (dangerous && !isTrustedFor(c, pack)) return RuleResult(Decision.NEED_APPROVAL, "Dangerous action needs clear confirmation.")
+        if (dangerous && !isTrustedFor(c, pack)) return RuleResult(Decision.NEED_APPROVAL, "Consequential action needs clear confirmation.")
+        // The explicit Autonomous setting is the user's standing instruction for routine
+        // task steps. It does not bypass pack enablement, DENY rules, Android permissions,
+        // sensitive-action checks, or the dedicated confirmations in AgentHooks.
+        if (ToolPermissions.level(c) == "autonomous" && !dangerous)
+            return RuleResult(Decision.ALLOW, "Autonomous mode: routine task step allowed.")
         return when (mode(c)) {
             Mode.PLAN -> RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
             Mode.ASK -> RuleResult(Decision.NEED_APPROVAL, "Ask mode requires approval before each action.")
