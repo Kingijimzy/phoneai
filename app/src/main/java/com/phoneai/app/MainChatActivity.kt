@@ -320,6 +320,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             builder.setPositiveButton("REFRESH MODEL LIST") { _, _ ->
                 Toast.makeText(this, "Fetching model list once…", Toast.LENGTH_SHORT).show()
                 Thread {
+                    var loadError = ""
                     val loaded = try {
                         val excluded = listOf(
                             "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
@@ -330,14 +331,17 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         Nim(this).allModels(p).filter { id ->
                             id.isNotBlank() && excluded.none { token -> id.lowercase().contains(token) }
                         }.distinct()
-                    } catch (_: Exception) { emptyList<String>() }
+                    } catch (e: Exception) {
+                        loadError = (e.message ?: e.javaClass.simpleName).take(220)
+                        emptyList<String>()
+                    }
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         val merged = (listOf(saved, p.textModel, p.visionModel ?: "") +
                             Prefs.cachedModels(this, p.id) + loaded).filter { it.isNotBlank() }.distinct()
                         if (loaded.isEmpty()) {
                             AlertDialog.Builder(this).setTitle("Could not refresh model list")
-                                .setMessage("No new catalogue was returned. Your saved/default/cached choices remain available; you can still enter a model ID manually.")
+                                .setMessage("Model discovery failed for ${p.label}. ${loadError.ifBlank { "No compatible models were returned." }}\n\nYour saved/default/cached choices remain available; you can still enter a model ID manually.")
                                 .setPositiveButton("SHOW AVAILABLE MODELS") { _, _ -> showChatModelChoices(p, merged, saved, online = false) }
                                 .setNeutralButton("CUSTOM MODEL ID") { _, _ -> showCustomModelEntry(p) }
                                 .setNegativeButton("CLOSE", null).show()
