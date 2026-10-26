@@ -1,23 +1,41 @@
 package com.phoneai.app
 
 /**
- * Keep one selected provider as the default. Only an explicit HTTP 429 rate-limit response
- * permits a backup provider for this command. Authentication errors, unsupported models,
- * timeouts, network errors, empty responses, cancellations, and budget stops must not fan
- * out into more provider requests.
+ * Rotate to the next eligible saved provider for recoverable provider/model failures.
+ * Never blindly replay requests for invalid credentials, network failures, timeouts,
+ * cancellation, or command-budget exhaustion. The caller filters provider eligibility and
+ * the shared command request budget bounds the total number of HTTP attempts.
  */
 internal object ProviderFallbackPolicy {
-    /** Never fan one command across a chain of saved providers. */
-    const val MAX_BACKUP_PROVIDERS = 1
-    fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
-        if (!autoSwitchEnabled) return false
-        if (error is InterruptedException) return false
-        if (error.message.orEmpty().let {
-                it == "Stopped." ||
-                    it.startsWith("Stopped before sending") ||
-                    it.contains("identical HTTP failures")
-            }) return false
+    /** Maximum backup providers considered after the selected primary; the shared request budget remains the hard stop. */
+    const val MAX_BACKUP_PROVIDERS = 14
 
-        return (error as? AiException)?.httpStatus == 429
+    fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
+        if (!autoSwitchEnabled || error is InterruptedException) return false
+        val message = error.message.orEmpty().lowercase()
+        if (message == "stopped." ||
+            message.startsWith("stopped before sending") ||
+            message.contains("identical http failures") ||
+            message.contains("key rejected") ||
+            message.contains("invalid api key") ||
+            message.contains("unauthorized") ||
+            message.contains("authentication") ||
+            message.contains("cannot connect") ||
+            message.contains("check internet") ||
+            message.contains("sockettimeout") ||
+            message.contains("timed out") ||
+            message.contains("request timed out") ||
+            message.contains("no response before timeout") ||
+            message.contains("reached orion's 15-request budget") ||
+            message.contains("paid-provider use is off") ||
+            message.contains("blocked the request")) return false
+
+        if (error is AiException && error.httpStatus == 429) return true
+        return listOf(
+            "empty response", "empty content", "no chat model worked", "no vision model worked",
+            "unsupported model", "retired", "out of credit", "temporarily busy",
+            "http 404", "http 410", "http 422", "http 500", "http 502",
+            "http 503", "http 504", "error 402", "error 404", "error 410", "error 422"
+        ).any { message.contains(it) }
     }
 }

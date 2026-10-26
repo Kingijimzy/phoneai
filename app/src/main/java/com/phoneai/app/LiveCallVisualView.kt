@@ -185,6 +185,7 @@ class LiveCallVisualView(context: Context) : View(context) {
             OrbView.Mode.ACTING -> .63f
             OrbView.Mode.SPEAKING -> if (speechAmplitude > 0f) .22f + speechAmplitude * 1.35f else .16f + wordPulse * .9f
             OrbView.Mode.WAITING_APPROVAL -> .48f
+            OrbView.Mode.ERROR -> .10f
         }.coerceIn(0f, 1f)
         val scanRow = if (reducedMotion) rows / 2 else ((t * 2.2f).toInt() % rows)
         val diag = if (reducedMotion) 0f else t * 3.4f
@@ -207,6 +208,7 @@ class LiveCallVisualView(context: Context) : View(context) {
                     OrbView.Mode.THINKING -> .18f + sweep * .72f
                     OrbView.Mode.ACTING -> .16f + scan * .7f
                     OrbView.Mode.WAITING_APPROVAL -> .25f + (1f - min(1f, radial / 9f)) * .38f
+            OrbView.Mode.ERROR -> .10f
                 }.coerceIn(.08f, 1f)
                 val pulse = if (mode == OrbView.Mode.IDLE && !reducedMotion) .75f + ripple * .35f else 1f
                 val radius = max(1.05f, maxR * (.34f + energy * .85f) * pulse)
@@ -293,6 +295,7 @@ class LiveCallVisualView(context: Context) : View(context) {
         OrbView.Mode.ACTING -> .3f
         OrbView.Mode.SPEAKING -> if (speechAmplitude > 0f) .18f + speechAmplitude * 1.4f else .14f + wordPulse * .7f
         OrbView.Mode.WAITING_APPROVAL -> .22f
+            OrbView.Mode.ERROR -> .10f
     }.coerceIn(0f, 1f)
 
 }

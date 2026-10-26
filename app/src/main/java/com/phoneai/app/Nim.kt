@@ -12,8 +12,8 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
     val rateLimited: Boolean get() = httpStatus == 429
 }
 
-/** Talks to the selected AI service. Cross-provider fallback is restricted to HTTP 429 and one backup per command. */
-class Nim(private val ctx: Context) {
+/** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
+class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
@@ -84,6 +84,22 @@ class Nim(private val ctx: Context) {
                 "No AI keys saved yet. Add a provider key in Settings."
             } else sb.toString().trim()
         }
+    }
+
+    /** Command mode may use its own saved text provider/model; vision and Talk stay unchanged. */
+    private fun selectedProvider(vision: Boolean): Provider {
+        if (commandMode && !vision) {
+            Prefs.commandProviderId(ctx)?.let { Providers.find(it) }?.let { return it }
+            return Prefs.defaultCommandProvider(ctx)
+        }
+        return Prefs.provider(ctx, vision)
+    }
+
+    private fun selectedModel(p: Provider, vision: Boolean): String {
+        if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
+            Prefs.commandModelId(ctx)?.let { return it }
+        }
+        return Prefs.model(ctx, p, vision)
     }
 
     private val bad = listOf(
@@ -194,9 +210,12 @@ class Nim(private val ctx: Context) {
     @Volatile
     private var active: HttpURLConnection? = null
 
-    private val commandRequestBudget = CommandRequestBudget(maxRequests = 15)
+    private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
+    /** AI requests used by the current command (for the cost line). */
+    fun requestsUsed(): Int = commandRequestBudget.used()
+
     fun beginCommand() {
         commandRequestBudget.reset()
     }
@@ -317,6 +336,7 @@ class Nim(private val ctx: Context) {
         }
         val result = ids.filter { it.isNotBlank() }.distinct().sorted()
         modelCatalogCache[cacheKey] = Pair(System.currentTimeMillis(), result)
+        Prefs.saveCachedModels(ctx, p.id, result)
         return result.filter { id ->
             ProviderBillingPolicy.isAllowed(p.id, id, p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx))
         }
@@ -368,8 +388,21 @@ class Nim(private val ctx: Context) {
             body.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
         }
         val response = try {
-            request(p, "POST", p.base + "/chat/completions", body.toString(),
-                Prefs.key(ctx, p.id), readMs0 = 60000)
+            if (p.id == "opencode-zen") {
+                val input = JSONArray()
+                for (i in 0 until messages.length()) {
+                    val message = messages.optJSONObject(i) ?: continue
+                    input.put(JSONObject().put("role", message.optString("role", "user"))
+                        .put("content", message.opt("content") ?: ""))
+                }
+                val responsesBody = JSONObject().put("model", model).put("input", input)
+                    .put("max_output_tokens", 32).put("temperature", 0)
+                request(p, "POST", p.base + "/responses", responsesBody.toString(),
+                    Prefs.key(ctx, p.id), readMs0 = 60000)
+            } else {
+                request(p, "POST", p.base + "/chat/completions", body.toString(),
+                    Prefs.key(ctx, p.id), readMs0 = 60000)
+            }
         } catch (e: Exception) {
             return rememberFailure("Connection test failed (${e.javaClass.simpleName}). Check internet and model access.")
         }
@@ -501,7 +534,25 @@ class Nim(private val ctx: Context) {
     }
 
     private fun extract(p: Provider, body: String): String = try {
-        if (p.anthropicStyle) {
+        if (p.id == "opencode-zen") {
+            val root = JSONObject(body)
+            val direct = root.optString("output_text", "")
+            if (direct.isNotBlank()) direct else {
+                val output = root.optJSONArray("output") ?: JSONArray()
+                val text = StringBuilder()
+                for (i in 0 until output.length()) {
+                    val item = output.optJSONObject(i) ?: continue
+                    val content = item.optJSONArray("content") ?: continue
+                    for (j in 0 until content.length()) {
+                        val part = content.optJSONObject(j) ?: continue
+                        if (part.optString("type") == "output_text" || part.has("text")) {
+                            text.append(part.optString("text", ""))
+                        }
+                    }
+                }
+                text.toString()
+            }
+        } else if (p.anthropicStyle) {
             val arr = JSONObject(body).getJSONArray("content")
             val sb = StringBuilder()
             for (i in 0 until arr.length()) sb.append(arr.getJSONObject(i).optString("text", ""))
@@ -514,26 +565,21 @@ class Nim(private val ctx: Context) {
         ""
     }
 
-    /**
-     * Uses the selected compatible provider as primary. A backup provider is considered only
-     * after an explicit HTTP 429 rate-limit response; timeouts, empty replies, bad models,
-     * authentication failures, network errors, and other HTTP statuses stop provider rotation.
-     * Per-command request budgeting still bounds all model probes and retries.
-     */
+    /** A command begins at its explicit caller; the shared budget covers every fallback. */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
         // Do not reset here: Agent.run() can call chat() several times for one
         // multi-step user command. Its explicit beginCommand() must cover the
         // entire run, including every model retry and any permitted 429 backup.
-        val selected = Prefs.provider(ctx, vision)
+        val selected = selectedProvider(vision)
         fun configured(p: Provider): Boolean =
             (Prefs.hasKey(ctx, p.id) || p.noKey) && (!vision || p.hasVision)
         fun modelAllowed(p: Provider): Boolean = ProviderBillingPolicy.isAllowed(
-            p.id, Prefs.model(ctx, p, vision), p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx)
+            p.id, selectedModel(p, vision), p.requiresPaidOptIn, Prefs.allowPaidProviders(ctx)
         )
         if (configured(selected) && !modelAllowed(selected)) {
             throw IllegalStateException(
-                "${selected.label} / ${Prefs.model(ctx, selected, vision)} may incur paid or metered usage. " +
+                "${selected.label} / ${selectedModel(selected, vision)} may incur paid or metered usage. " +
                     "Orion blocked the request because paid-provider use is off. Enable the explicit paid-provider setting in Settings only if you accept possible charges."
             )
         }
@@ -547,8 +593,8 @@ class Nim(private val ctx: Context) {
             }
 
         val now = System.currentTimeMillis()
-        // A single backup is deliberate: a rate limit must not fan one user command
-        // across a chain of providers and burn several free-tier quotas in seconds.
+        // Auto-switch may try eligible saved providers in order, but the shared 15-request
+        // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
                 .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
@@ -560,7 +606,7 @@ class Nim(private val ctx: Context) {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
             val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
-            lastSuccess[mode] = p.label + " / " + Prefs.model(ctx, p, vision)
+            lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             return answer
         }
@@ -600,7 +646,7 @@ class Nim(private val ctx: Context) {
             "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
             else -> maxTokens
         }
-        val queue = mutableListOf(Prefs.model(ctx, p, vision))
+        val queue = mutableListOf(selectedModel(p, vision))
         val tried = HashSet<String>()
         var refilled = false
         var lastNote = ""
@@ -625,6 +671,16 @@ class Nim(private val ctx: Context) {
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
                 payload = anthropicBody(model, messages, tokens, temperature)
+            } else if (p.id == "opencode-zen") {
+                url = p.base + "/responses"
+                val input = JSONArray()
+                for (i in 0 until messages.length()) {
+                    val message = messages.optJSONObject(i) ?: continue
+                    input.put(JSONObject().put("role", message.optString("role", "user"))
+                        .put("content", message.opt("content") ?: ""))
+                }
+                payload = JSONObject().put("model", model).put("input", input)
+                    .put("max_output_tokens", tokens).put("temperature", temperature).toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
@@ -633,11 +689,8 @@ class Nim(private val ctx: Context) {
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
-                    // This template flag is documented for Nemotron 3.5 Super VL only.
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
-                    // NVIDIA's DeepSeek V4 model examples use this flag to disable thinking.
-                    // Keep this separate from Nemotron's enable_thinking option.
                     requestBody.put("chat_template_kwargs", JSONObject().put("thinking", false))
                 }
                 payload = requestBody.toString()
@@ -681,9 +734,23 @@ class Nim(private val ctx: Context) {
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
-                val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
+                val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
+                // OpenRouter may rate-limit one model while another model on the same
+                // account remains available. Try another unattempted model before cooling
+                // down the whole provider, including models already queued after a 404/410.
+                if (p.id == "openrouter" && attempts < maxAttempts) {
+                    val alternatives = (queue + candidates(p, vision))
+                        .filter { it != model && it !in tried }
+                        .distinct()
+                    if (alternatives.isNotEmpty()) {
+                        queue.clear()
+                        queue.addAll(alternatives)
+                        onStatus?.invoke("OpenRouter rate-limited $model (429); trying another OpenRouter model...")
+                        continue
+                    }
+                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
-                throw AiException("${p.label}: free limit reached (429).", 429)
+                throw AiException("${p.label}: rate limit reached (429); retry after about ${wait.coerceIn(8, 60)} seconds.", 429)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
@@ -731,7 +798,7 @@ class Nim(private val ctx: Context) {
                         continue
                     }
                 }
-                throw AiException(p.label + ": model returned an empty response. Try another model or check that model's NVIDIA API access.")
+                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.")
             }
             Prefs.setModel(ctx, p, vision, model)
             return content

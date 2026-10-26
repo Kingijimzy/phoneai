@@ -120,7 +120,14 @@ object AgentRunner {
     fun runFull(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): Result {
         AgentLessons.learnFrom(c, agent.id, userText)
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt(c, agent, userText)))
-        history.takeLast(20).forEach { messages.put(JSONObject().put("role", it.role).put("content", it.text.take(2000))) }
+        // Keep the prompt lean on mobile/free-tier providers. Code Agent needs enough
+        // recent context to patch code, but resending twenty long turns burns token quota
+        // and can cause rate limits before a task is finished.
+        val historyLimit = if (agent.id == "coder") 8 else 10
+        val turnCharLimit = if (agent.id == "coder") 1500 else 1200
+        history.takeLast(historyLimit).forEach {
+            messages.put(JSONObject().put("role", it.role).put("content", it.text.take(turnCharLimit)))
+        }
         val image = imageJpegBase64?.takeIf { agent.acceptsImages && it.isNotBlank() }
         if (image != null) {
             val content = JSONArray()

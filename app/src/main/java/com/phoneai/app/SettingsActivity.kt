@@ -53,6 +53,7 @@ class SettingsActivity : Activity() {
     private lateinit var characterBtn: Button
     private lateinit var routBtn: Button
     private lateinit var skillBtn: Button
+    private lateinit var cliRuntimeBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
     private fun installNeuralVoice() {
@@ -394,6 +395,9 @@ class SettingsActivity : Activity() {
         }
         add(col, sectionLabel, 5)
         add(col, button("‹  Back to Orion", false) { finish() }, 8)
+        add(col, button("Agent approval & capability packs", true) {
+            startActivity(Intent(this, AgentControlActivity::class.java))
+        }, 8)
         
         // ---- 1. setup
         val s1 = card(col, "Access & permissions")
@@ -443,6 +447,15 @@ class SettingsActivity : Activity() {
         val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
+        add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
+        add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
+        add(updateCard, button("Run Orion self-test", true) {
+            Toast.makeText(this, "Testing… this takes a few seconds.", Toast.LENGTH_SHORT).show()
+            Thread {
+                val report = try { SelfTest.format(SelfTest.run(applicationContext)) } catch (e: Exception) { "Self-test crashed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { showInfoDialog("Orion self-test", report) }
+            }.start()
+        }, 8)
         add(updateCard, button("Refresh permission health", false) {
             refresh()
             Toast.makeText(this, "Permission health refreshed.", Toast.LENGTH_SHORT).show()
@@ -509,7 +522,14 @@ class SettingsActivity : Activity() {
         add(s2, button("Get an NVIDIA API key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://build.nvidia.com/settings")))
         }, 8)
-        add(s2, button("Add or change an API key", true) { keyDialog() }, 8)
+        add(s2, button("Sign in with OpenRouter", true) { startOpenRouterSignIn() }, 8)
+        cliRuntimeBtn = button("Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this)), false) {
+            cliRuntimeDialog()
+        }
+        add(s2, cliRuntimeBtn, 8)
+        add(s2, text("Choose Muse Code, Cursor Agent, or OpenCode for terminal-based coding sessions. Orion saves your choice and guides setup; a CLI must be installed and authenticated in a compatible terminal before it can run.", 12f, Theme.MUTED), 4)
+        add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
+        add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
@@ -518,11 +538,35 @@ class SettingsActivity : Activity() {
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
+        add(s2, button("Execution mode · " + Prefs.executionMode(this), false) {
+            showChoiceDialog(
+                "Execution mode",
+                "PLAN blocks write actions. ACT follows your task scope and existing approvals. FULL permits broader tool use but never bypasses safety checks, task scope, or confirmations.",
+                listOf("PLAN · plan and inspect, no write actions", "ACT · execute within the request scope", "FULL · broader tools, safety gates remain"),
+                { index ->
+                    Prefs.setExecutionMode(this, listOf("PLAN", "ACT", "FULL")[index])
+                    recreate()
+                }
+            )
+        }, 8)
+        add(s2, text("PLAN blocks write tools at the dispatch boundary. ACT is the default. FULL does not bypass confirmation, sensitive-screen, or task-scope protections.", 12f, Theme.MUTED), 4)
+        add(s2, button("Task preset · " + Prefs.taskPreset(this), false) {
+            showChoiceDialog(
+                "Task preset",
+                "Presets change Orion's planning emphasis only. They do not grant extra permissions or bypass approvals.",
+                listOf("GENERAL · everyday companion", "TRADING · evidence-first, read-only bias", "GAMING · bounded visual steps", "RESEARCH · sources and uncertainty"),
+                { index ->
+                    Prefs.setTaskPreset(this, listOf("GENERAL", "TRADING", "GAMING", "RESEARCH")[index])
+                    recreate()
+                }
+            )
+        }, 8)
         switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
             Prefs.setAllowPaidProviders(this, it)
         }
         add(s2, text("When enabled, providers or models marked paid/metered may consume paid credits. With this off, Orion blocks those requests and will not use them as a fallback.", 12f, Theme.MUTED), 4)
         add(s2, button("AI health, provider status & quota", false) { showAiHealth() }, 10)
+        add(s2, button("Recent tool actions · local privacy-safe log", false) { showActionLog() }, 8)
         add(s2, button("Test the AI", false) { testAi() }, 10)
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
@@ -876,14 +920,21 @@ class SettingsActivity : Activity() {
             bottomMargin = dp(2)
         })
 
-        when (intent.getStringExtra("open_section")) {
-            "memory" -> memoryDialog()
-            "skills" -> skillsDialog()
-            "routines" -> routinesDialog()
-            "character" -> characterDialog()
-            "voice" -> voiceDialog()
-            "providers" -> providerDialog(false)
-            "integrations" -> telegramDialog()
+        if (intent.getBooleanExtra("start_openrouter_signin", false)) {
+            // Wait until the Settings screen is attached before launching the external OAuth page.
+            window.decorView.post {
+                if (!isFinishing && !isDestroyed) startOpenRouterSignIn()
+            }
+        } else {
+            when (intent.getStringExtra("open_section")) {
+                "memory" -> memoryDialog()
+                "skills" -> skillsDialog()
+                "routines" -> routinesDialog()
+                "character" -> characterDialog()
+                "voice" -> voiceDialog()
+                "providers" -> providerDialog(false)
+                "integrations" -> telegramDialog()
+            }
         }
     }
 
@@ -989,6 +1040,155 @@ class SettingsActivity : Activity() {
     // ------------------------------------------------------------ keys and providers
 
     /** Pick a service using the same dark, card-based selector language as Orion's main UI. */
+    private fun startOpenRouterSignIn() {
+        try {
+            val verifierBytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(verifierBytes)
+            val verifier = android.util.Base64.encodeToString(
+                verifierBytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+            )
+            val challengeBytes = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(verifier.toByteArray(Charsets.US_ASCII))
+            val challenge = android.util.Base64.encodeToString(
+                challengeBytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+            )
+            if (!Prefs.setOpenRouterOAuthVerifier(this, verifier)) {
+                Toast.makeText(this, "Secure storage unavailable. Sign-in was not started.", Toast.LENGTH_LONG).show()
+                return
+            }
+            val callback = "phoneai://oauth/openrouter"
+            val authUrl = "https://openrouter.ai/auth?callback_url=" +
+                android.net.Uri.encode(callback) +
+                "&code_challenge=" + android.net.Uri.encode(challenge) +
+                "&code_challenge_method=S256"
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(authUrl)))
+        } catch (e: Exception) {
+            Prefs.setOpenRouterOAuthVerifier(this, "")
+            Toast.makeText(this, "Could not start OpenRouter sign-in: " + (e.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun cliRuntimeLabel(id: String): String = when (id) {
+        "muse-code" -> "Muse Code"
+        "cursor-agent" -> "Cursor Agent"
+        else -> "OpenCode"
+    }
+
+    private fun cliRuntimeDialog() {
+        val ids = listOf("muse-code", "cursor-agent", "opencode")
+        val labels = listOf("Muse Code", "Cursor Agent", "OpenCode")
+        val selected = ids.indexOf(Prefs.cliRuntime(this)).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Choose coding-agent runtime")
+            .setSingleChoiceItems(labels.toTypedArray(), selected) { dialog, which ->
+                Prefs.setCliRuntime(this, ids[which])
+                dialog.dismiss()
+                updateCliRuntimeButton()
+                cliRuntimeSetupDialog(ids[which])
+            }
+            .setNegativeButton("CANCEL", null)
+            .setNeutralButton("SET UP SELECTED") { _, _ -> cliRuntimeSetupDialog(Prefs.cliRuntime(this)) }
+            .show()
+    }
+
+    private fun updateCliRuntimeButton() {
+        if (::cliRuntimeBtn.isInitialized) cliRuntimeBtn.text = "Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this))
+        Toast.makeText(this, "Selected " + cliRuntimeLabel(Prefs.cliRuntime(this)), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun cliRuntimeSetupDialog(id: String) {
+        val name = cliRuntimeLabel(id)
+        if (id == "cursor-agent") {
+            startActivity(Intent(this, CursorCloudAgentActivity::class.java))
+            return
+        }
+        if (id == "opencode") {
+            AlertDialog.Builder(this)
+                .setTitle("Connect OpenCode without a broken CLI install")
+                .setMessage(
+                    "OpenCode does not provide one universal OAuth login that turns any app into the OpenCode coding agent. " +
+                    "OpenCode Zen sign-in creates an API key for its hosted models; Orion can use that key for chat. " +
+                    "The full OpenCode coding agent requires an OpenCode runtime/server, and the npm package you tried rejects Android (EBADPLATFORM). " +
+                    "This flow will not send you to Orion's own Code Agent or attempt another Termux install."
+                )
+                .setPositiveButton("SIGN IN TO OPENCODE ZEN") { _, _ ->
+                    try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://opencode.ai/auth"))) }
+                    catch (_: Exception) { Toast.makeText(this, "Could not open the browser.", Toast.LENGTH_LONG).show() }
+                }
+                .setNeutralButton("CONNECT ZEN KEY IN ORION") { _, _ ->
+                    startActivity(Intent(this, MainChatActivity::class.java)
+                        .putExtra("open_provider_connection", "opencode-zen"))
+                }
+                .setNegativeButton("OFFICIAL OPENCODE DOCS") { _, _ ->
+                    try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://opencode.ai/docs/providers"))) }
+                    catch (_: Exception) { Toast.makeText(this, "Could not open the browser.", Toast.LENGTH_LONG).show() }
+                }
+                .show()
+            return
+        }
+        val installCommand = when (id) {
+            "muse-code" -> "pkg update && pkg install -y curl && curl -fsSL https://dev.meta.ai/install.sh | sh && muse"
+            "cursor-agent" -> "pkg update && pkg install -y curl && curl https://cursor.com/install -fsS | bash && agent"
+            else -> "(pkg update || (echo 'Termux mirror may be syncing; retrying in 10 seconds…' && sleep 10 && pkg update)) && pkg install -y nodejs-lts && npm install -g @opencode/cli && opencode auth login && opencode"
+        }
+        val docs = when (id) {
+            "muse-code" -> "https://dev.meta.ai/docs/muse-code"
+            "cursor-agent" -> "https://cursor.com/docs/cli/overview"
+            else -> "https://opencode.ai/docs"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("$name setup")
+            .setMessage(
+                "Selected runtime: $name\n\n" +
+                "1. Install and authenticate it in a compatible terminal.\n" +
+                "2. Orion cannot mark it connected until the CLI is installed and signed in.\n\n" +
+                "Android note: these vendors do not guarantee native Android support. Termux compatibility may vary. If Termux's external-command bridge is enabled and PhoneAI has its RUN_COMMAND permission, Orion can open a foreground terminal session and run this selected install/sign-in command. Otherwise it copies the command and opens Termux for manual setup."
+            )
+            .setPositiveButton("RUN SETUP IN TERMUX") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("$name install", installCommand))
+                try {
+                    val run = Intent("com.termux.RUN_COMMAND").apply {
+                        setClassName("com.termux", "com.termux.app.RunCommandService")
+                        putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
+                        putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("-lc", installCommand))
+                        putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
+                        putExtra("com.termux.RUN_COMMAND_BACKGROUND", false)
+                        putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
+                        putExtra("com.termux.RUN_COMMAND_COMMAND_LABEL", "$name setup")
+                        putExtra("com.termux.RUN_COMMAND_COMMAND_DESCRIPTION", "Install and authenticate the selected coding-agent CLI")
+                    }
+                    startService(run)
+                    Toast.makeText(this, "Requested a Termux setup session for $name. Complete any prompts in Termux.", Toast.LENGTH_LONG).show()
+                } catch (_: Exception) {
+                    val termux = packageManager.getLaunchIntentForPackage("com.termux")
+                    if (termux != null) {
+                        try { startActivity(termux) } catch (_: Exception) { }
+                    }
+                    showInfoDialog(
+                        "Termux permission required",
+                        "The command has been copied. To let Orion start it directly, install/open Termux, enable allow-external-apps in ~/.termux/termux.properties, restart Termux, and grant PhoneAI the 'Run commands in Termux environment' permission in Android app settings. Then retry. For now, open Termux and paste the copied command."
+                    )
+                }
+            }
+            .setNeutralButton("OPEN OFFICIAL DOCS") { _, _ ->
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(docs))) }
+                catch (_: Exception) { Toast.makeText(this, "Could not open documentation.", Toast.LENGTH_SHORT).show() }
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
+    private fun openRouterConnectionChoice() {
+        AlertDialog.Builder(this)
+            .setTitle("Connect OpenRouter")
+            .setMessage("Choose how to connect. Sign-in uses OpenRouter's PKCE authorization flow; API key entry remains available.")
+            .setPositiveButton("SIGN IN") { _, _ -> startOpenRouterSignIn() }
+            .setNeutralButton("ENTER API KEY") { _, _ -> pasteKey(Providers.get("openrouter")) }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
     private fun keyDialog() {
         providerPickerDialog(
             title = "Add an AI provider",
@@ -1184,9 +1384,12 @@ class SettingsActivity : Activity() {
         ) { provider ->
             Prefs.setProvider(this, vision, provider.id)
             if (!Prefs.hasKey(this, provider.id)) {
-                Toast.makeText(this, "Add a " + provider.label + " key first.", Toast.LENGTH_LONG).show()
-                if (!provider.noKey) pasteKey(provider)
-                else localDialog(provider)
+                if (provider.id == "openrouter") {
+                    openRouterConnectionChoice()
+                } else {
+                    Toast.makeText(this, "Add a " + provider.label + " key first.", Toast.LENGTH_LONG).show()
+                    if (!provider.noKey) pasteKey(provider) else localDialog(provider)
+                }
             }
             refresh()
         }
@@ -1277,6 +1480,33 @@ class SettingsActivity : Activity() {
                 runOnUiThread { Toast.makeText(this, "Problem: " + e.message, Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    private fun showActionLog() {
+        val events = ActionLogStore.all(this).take(30)
+        val formatter = SimpleDateFormat("MMM d, HH:mm:ss", Locale.getDefault())
+        val body = if (events.isEmpty()) {
+            "No recorded tool actions yet."
+        } else {
+            events.joinToString("\n\n") { event ->
+                val state = if (event.outcome.contains("error", true)) "FAILED / UNVERIFIED" else "RESULT RETURNED"
+                formatter.format(Date(event.at)) + "  ·  " + state + "\nTool: " + event.tool +
+                    if (event.failureCategory.isNotBlank()) "\nCategory: " + event.failureCategory else ""
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Recent tool actions")
+            .setMessage(body + "\n\nPrivacy: this local log stores tool names and generic outcomes only, not arguments, message contents, or screen text. A returned result is not proof that the overall task completed.")
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Clear log") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Clear local action history?")
+                    .setMessage("This deletes the locally saved tool-name/outcome history.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear") { _, _ -> ActionLogStore.clear(this); Toast.makeText(this, "Action history cleared.", Toast.LENGTH_SHORT).show() }
+                    .show()
+            }
+            .show()
     }
 
     private fun showAiHealth() {

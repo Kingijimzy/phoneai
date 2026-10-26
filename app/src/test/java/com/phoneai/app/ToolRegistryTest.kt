@@ -11,7 +11,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user"
+            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
@@ -31,6 +31,16 @@ class ToolRegistryTest {
         assertTrue(ToolRegistry.find("swipe")!!.promptLine.contains("allow_coordinates:true"))
     }
 
+    @Test fun termuxAiCommandsAreRestrictedToExactReadOnlyDiagnostics() {
+        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
+        assertTrue(TermuxCommandPolicy.isReadOnly("git status --short"))
+        assertTrue(TermuxCommandPolicy.isReadOnly("python --version"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ~"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("git status; touch marker"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("apt install python"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("rm -rf /"))
+    }
+
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
         val prompt = ToolRegistry.promptSection()
         assertTrue(prompt.startsWith("Tools:\n"))
@@ -46,6 +56,16 @@ class ToolRegistryTest {
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
+        assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
+        assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("gaming_session_summary"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("gaming_session_note_add"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("gaming_focus_preset"))
+        assertEquals("gaming_hobby", AgentPolicy.packForTool("gaming_session_summary"))
+        assertEquals("gaming_hobby", AgentPolicy.packForTool("gaming_session_note_add"))
+        assertEquals("gaming_hobby", AgentPolicy.packForTool("gaming_focus_preset"))
         assertNull(ToolRegistry.find("made_up_tool"))
 
         assertNull(AgentHooks.scopeBlockReason(

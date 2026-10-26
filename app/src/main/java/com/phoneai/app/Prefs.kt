@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import org.json.JSONArray
 
 /** One AI service. Almost all of them speak the same "OpenAI-style" chat protocol. */
 class Provider(
@@ -98,6 +99,12 @@ object Providers {
             null, true, requiresPaidOptIn = true
         ),
         Provider(
+            "opencode-zen", "OpenCode Zen", "https://opencode.ai/zen/v1",
+            "gpt-6-astra", null, "OpenCode Zen API key",
+            "OpenCode Zen account API access. Sign in at opencode.ai/auth and create an API key; usage may be metered.",
+            "https://opencode.ai/zen/v1/models", false, false, requiresPaidOptIn = true
+        ),
+        Provider(
             "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
             "llama3.2:3b", null, "",
             "FREE and unlimited, runs on this phone inside Termux. Slower, text only.",
@@ -123,6 +130,45 @@ object Prefs {
 
     fun hasAnyKey(c: Context): Boolean = Providers.all.any { hasKey(c, it.id) }
 
+    /** Persist successful model catalogues so the picker can open instantly after app restarts. */
+    fun cachedModels(c: Context, pid: String): List<String> {
+        val raw = sp(c).getString("model_catalog_$pid", null) ?: return emptyList()
+        return try {
+            val a = JSONArray(raw)
+            (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.distinct()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun saveCachedModels(c: Context, pid: String, models: List<String>) {
+        try {
+            val a = JSONArray()
+            models.filter { it.isNotBlank() }.distinct().take(500).forEach { a.put(it) }
+            sp(c).edit().putString("model_catalog_$pid", a.toString())
+                .putLong("model_catalog_${pid}_at", System.currentTimeMillis()).apply()
+        } catch (_: Exception) { }
+    }
+
+    fun cachedModelsAgeMs(c: Context, pid: String): Long {
+        val at = sp(c).getLong("model_catalog_${pid}_at", 0L)
+        return if (at <= 0L) Long.MAX_VALUE else (System.currentTimeMillis() - at).coerceAtLeast(0L)
+    }
+
+    /** One-time PKCE verifier for the OpenRouter browser authorization callback. */
+    fun setOpenRouterOAuthVerifier(c: Context, value: String): Boolean =
+        ApiKeyVault.write(c, "enc_openrouter_oauth_verifier", "openrouter_oauth_verifier", value)
+
+    fun openRouterOAuthVerifier(c: Context): String =
+        ApiKeyVault.read(c, "enc_openrouter_oauth_verifier", "openrouter_oauth_verifier")
+
+    /** Selected external coding-agent CLI runtime. Selection does not imply installation or authentication. */
+    fun cliRuntime(c: Context): String = sp(c).getString("cli_runtime", "opencode")?.takeIf {
+        it in setOf("muse-code", "cursor-agent", "opencode")
+    } ?: "opencode"
+    fun setCliRuntime(c: Context, id: String) {
+        val safe = id.takeIf { it in setOf("muse-code", "cursor-agent", "opencode") } ?: "opencode"
+        sp(c).edit().putString("cli_runtime", safe).apply()
+    }
+
     /** Live Gemini mode is opt-in; the existing local live-call path remains the default. */
     val GEMINI_VOICES = listOf("Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr")
     fun geminiVoice(c: Context): String = sp(c).getString("gemini_voice", "Aoede")?.takeIf { it in GEMINI_VOICES } ?: "Aoede"
@@ -138,6 +184,17 @@ object Prefs {
 
     // ---- trading (Orion Trading)
     // ---- trading
+    /** Analysis-first trading is enabled by default; order placement needs an explicit opt-in. */
+    fun tradingReadOnly(c: Context): Boolean = sp(c).getBoolean("trading_read_only", true)
+    fun setTradingReadOnly(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("trading_read_only", enabled).apply()
+
+    /** Active task preset changes planning emphasis, never the underlying safety gates. */
+    fun taskPreset(c: Context): String = sp(c).getString("task_preset", "GENERAL")?.uppercase()?.takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL"
+    fun setTaskPreset(c: Context, preset: String) = sp(c).edit().putString("task_preset", preset.uppercase().takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL").apply()
+
+    /** PLAN blocks write tools; ACT uses normal scoped controls; FULL still keeps safety and confirmation gates. */
+    fun executionMode(c: Context): String = sp(c).getString("execution_mode", "ACT")?.uppercase()?.takeIf { it in setOf("PLAN", "ACT", "FULL") } ?: "ACT"
+    fun setExecutionMode(c: Context, mode: String) = sp(c).edit().putString("execution_mode", mode.uppercase().takeIf { it in setOf("PLAN", "ACT", "FULL") } ?: "ACT").apply()
     fun bybitKey(c: Context): String =
         ApiKeyVault.read(c, "enc_bybit_key", "bybit_key")
     fun bybitSecret(c: Context): String =
@@ -170,6 +227,31 @@ object Prefs {
     /** JSON list of price alerts: [{"symbol":"BTCUSDT","dir":"above","price":70000}] */
     fun alerts(c: Context): String = sp(c).getString("alerts", "[]") ?: "[]"
     fun setAlerts(c: Context, v: String) = sp(c).edit().putString("alerts", v).apply()
+
+    /** Optional command/agent provider override. Empty means inherit the normal chat provider. */
+    fun commandProviderId(c: Context): String? = sp(c).getString("command_provider_id", null)
+        ?.takeIf { it.isNotBlank() && Providers.find(it) != null }
+
+    fun commandModelId(c: Context): String? = sp(c).getString("command_model_id", null)
+        ?.takeIf { it.isNotBlank() }
+
+    /** Prefer configured fast/free command providers; otherwise inherit the user's chat provider. */
+    fun defaultCommandProvider(c: Context): Provider {
+        val fast = listOf("groq", "cerebras").mapNotNull { Providers.find(it) }
+            .firstOrNull { hasKey(c, it.id) && (!it.requiresPaidOptIn || allowPaidProviders(c)) }
+        return fast ?: provider(c, false)
+    }
+
+    fun setCommandProvider(c: Context, providerId: String, modelId: String) {
+        val provider = Providers.find(providerId) ?: return
+        val model = modelId.trim().take(180).ifBlank { provider.textModel }
+        sp(c).edit().putString("command_provider_id", provider.id)
+            .putString("command_model_id", model).apply()
+    }
+
+    fun clearCommandProvider(c: Context) {
+        sp(c).edit().remove("command_provider_id").remove("command_model_id").apply()
+    }
 
     /** Which service answers chat (vision=false) or reads the screen (vision=true). */
     fun provider(c: Context, vision: Boolean): Provider {
