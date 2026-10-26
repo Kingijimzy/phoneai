@@ -148,56 +148,119 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         providerModelChip.setTextColor(if (ready) Theme.TEXT else Theme.WARN)
     }
 
-    /** Provider picker available directly from the chat header; it shows connection state for every provider. */
+    /** Provider selection stays responsive; network model discovery is always optional. */
     private fun showChatProviderPicker() {
         val providers = Providers.all
+        val current = Prefs.provider(this, false)
         val labels = providers.map { p ->
             val connected = p.noKey || Prefs.hasKey(this, p.id)
-            val current = Prefs.provider(this, false).id == p.id
-            "${if (current) "✓ " else ""}${p.label}  ·  ${if (connected) "Connected" else "Connect required"}"
+            "${if (current.id == p.id) "✓ " else ""}${p.label}  ·  ${if (connected) "Connected" else "Connect required"}"
         }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Choose chat provider")
-            .setMessage("Connected providers are ready to use. Select any provider to see its models. Providers without credentials open setup.")
+            .setMessage("Choose a connected provider to switch immediately, or open Manage connections to connect one.")
             .setItems(labels) { _, which ->
                 val p = providers[which]
                 if (!p.noKey && !Prefs.hasKey(this, p.id)) {
-                    val connectIntent = Intent(this, SettingsActivity::class.java)
-                    if (p.id == "openrouter") {
-                        // OpenRouter has a supported OAuth flow: go straight to browser authorization.
-                        connectIntent.putExtra("start_openrouter_signin", true)
-                    } else {
-                        // Other providers need their own supported OAuth integration or an API key.
-                        connectIntent.putExtra("open_section", "providers")
-                    }
-                    AlertDialog.Builder(this)
-                        .setTitle("Connect ${p.label}")
-                        .setMessage(
-                            if (p.id == "openrouter")
-                                "Orion will open OpenRouter's official authorization page. Approve access there; Orion will exchange the callback, save the credential securely, and return to chat."
-                            else
-                                "This provider does not currently have a verified one-tap sign-in flow in Orion. Open connection settings to add its API key."
-                        )
-                        .setPositiveButton(if (p.id == "openrouter") "SIGN IN" else "CONNECTION SETTINGS") { _, _ ->
-                            startActivity(connectIntent)
-                        }
-                        .setNegativeButton("CANCEL", null)
-                        .show()
+                    showProviderConnection(p)
                     return@setItems
                 }
                 Prefs.setProvider(this, false, p.id)
                 refreshProviderModelChip()
                 showChatModelPicker()
             }
-            .setNeutralButton("MANAGE CONNECTIONS") { _, _ ->
-                // Open the provider connection dialog directly instead of dumping the user on Settings home.
-                startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "providers"))
-            }
+            .setNeutralButton("MANAGE CONNECTIONS") { _, _ -> showChatConnectionsPicker() }
             .setNegativeButton("CLOSE", null)
             .show()
     }
 
-    /** Fetches this provider's available models off the UI thread; keeps the saved/default model visible if listing fails. */
+    private fun showChatConnectionsPicker() {
+        val providers = Providers.all
+        val labels = providers.map { p ->
+            "${p.label}  ·  " + when {
+                p.noKey -> "Built-in / no key required"
+                Prefs.hasKey(this, p.id) -> "Connected · tap to switch or replace key"
+                else -> "Not connected · add key"
+            }
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Manage AI connections")
+            .setMessage("Connect or switch providers here without leaving chat.")
+            .setItems(labels) { _, which ->
+                val p = providers[which]
+                if (p.noKey) {
+                    Prefs.setProvider(this, false, p.id)
+                    refreshProviderModelChip()
+                    showChatModelPicker()
+                } else {
+                    showProviderConnection(p)
+                }
+            }
+            .setNegativeButton("BACK") { _, _ -> showChatProviderPicker() }
+            .setNeutralButton("CLOSE", null)
+            .show()
+    }
+
+    private fun showProviderConnection(p: Provider) {
+        if (p.id == "openrouter") {
+            AlertDialog.Builder(this)
+                .setTitle("Connect OpenRouter")
+                .setMessage("Orion will open OpenRouter's official authorization page. Approve access there, then return to chat.")
+                .setPositiveButton("SIGN IN") { _, _ ->
+                    startActivity(Intent(this, SettingsActivity::class.java).putExtra("start_openrouter_signin", true))
+                }
+                .setNegativeButton("CANCEL", null)
+                .show()
+            return
+        }
+        val keyInput = EditText(this).apply {
+            hint = "Paste ${p.label} API key"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+            setTextColor(Theme.TEXT)
+            setHintTextColor(Theme.MUTED)
+            if (Prefs.hasKey(this@MainChatActivity, p.id)) setText(Prefs.key(this@MainChatActivity, p.id))
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(keyInput, LinearLayout.LayoutParams(-1, -2))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (Prefs.hasKey(this, p.id)) "Update ${p.label} connection" else "Connect ${p.label}")
+            .setMessage("The API key is stored in Orion's encrypted local credential vault. It is not sent to Orion's chat as text.")
+            .setView(wrap)
+            .setPositiveButton("SAVE & USE") { _, _ ->
+                val value = keyInput.text.toString().trim()
+                if (value.isBlank()) {
+                    Toast.makeText(this, "No key entered; existing connection was not changed.", Toast.LENGTH_LONG).show()
+                } else if (!Prefs.setKey(this, p.id, value)) {
+                    Toast.makeText(this, "Could not securely save this key on this device.", Toast.LENGTH_LONG).show()
+                } else {
+                    Prefs.setProvider(this, false, p.id)
+                    refreshProviderModelChip()
+                    Toast.makeText(this, "${p.label} key saved. You can use the saved/default model now.", Toast.LENGTH_LONG).show()
+                    showChatModelPicker()
+                }
+            }
+            .setNeutralButton(if (Prefs.hasKey(this, p.id)) "DISCONNECT" else "CANCEL") { _, _ ->
+                if (Prefs.hasKey(this, p.id)) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Disconnect ${p.label}?")
+                        .setMessage("Remove its saved key from this phone?")
+                        .setPositiveButton("DISCONNECT") { _, _ ->
+                            Prefs.setKey(this, p.id, "")
+                            refreshProviderModelChip()
+                        }
+                        .setNegativeButton("CANCEL", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    /** The saved/default model appears immediately; fetching the online catalogue is an optional second step. */
     private fun showChatModelPicker() {
         val p = Prefs.provider(this, false)
         if (!p.noKey && !Prefs.hasKey(this, p.id)) {
@@ -205,72 +268,67 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             return
         }
         val saved = Prefs.model(this, p, false)
-        Toast.makeText(this, "Loading ${p.label} models…", Toast.LENGTH_SHORT).show()
-        Thread {
-            val candidates = try {
-                val all = Nim(this).allModels(p)
-                val excluded = listOf(
-                    "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
-                    "tts", "asr", "translat", "moderation", "content-safety", "nemoguard",
-                    "parse", "clip", "segment", "detect", "diffusion", "image-generation",
-                    "video-generation", "pose-estimation", "classifier", "live"
-                )
-                (listOf(saved, p.textModel) + all)
-                    .filter { it.isNotBlank() && excluded.none { token -> it.lowercase().contains(token) } }
-                    .distinct()
-            } catch (_: Exception) {
-                listOf(saved, p.textModel).filter { it.isNotBlank() }.distinct()
+        val immediate = (listOf(saved, p.textModel).filter { it.isNotBlank() }.distinct())
+        showChatModelChoices(p, immediate, saved, online = false)
+    }
+
+    private fun showChatModelChoices(p: Provider, candidates: List<String>, saved: String, online: Boolean) {
+        if (isFinishing || isDestroyed) return
+        if (candidates.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("No models available")
+                .setMessage("No model choices are available for ${p.label}. Your saved setting was not changed.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val labels = candidates.map { model ->
+            (if (model == saved) "✓ " else "") + model + if (model == p.textModel) "  · default" else ""
+        }.toTypedArray()
+        val builder = AlertDialog.Builder(this)
+            .setTitle("${p.label} models")
+            .setMessage(if (online)
+                "Online catalogue loaded. Tap a model to save it immediately; no test request is sent."
+                else
+                "Your saved/default model is ready now. Tap to use it, or load the online catalogue for more choices.")
+            .setItems(labels) { _, which ->
+                val selected = candidates[which]
+                Prefs.setModel(this, p, false, selected)
+                refreshProviderModelChip()
+                Toast.makeText(this, "Chat model selected: ${selected}", Toast.LENGTH_LONG).show()
             }
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (candidates.isEmpty()) {
-                    AlertDialog.Builder(this)
-                        .setTitle("No models available")
-                        .setMessage("Could not load models for ${p.label}. The saved model remains ${saved}.")
-                        .setPositiveButton("OK", null)
-                        .show()
-                    return@runOnUiThread
-                }
-                val labels = candidates.map { model ->
-                    (if (model == saved) "✓ " else "") + model + if (model == p.textModel) "  · default" else ""
-                }.toTypedArray()
-                AlertDialog.Builder(this)
-                    .setTitle("${p.label} models")
-                    .setMessage("Choose the model for chat. This list is fetched from the selected provider when supported; the saved/default model remains available if listing fails.")
-                    .setItems(labels) { _, which ->
-                        val selected = candidates[which]
-                        if (selected == saved) {
-                            refreshProviderModelChip()
-                            return@setItems
-                        }
-                        Toast.makeText(this, "Testing ${selected}…", Toast.LENGTH_SHORT).show()
-                        Thread {
-                            val problem = try { Nim(this).testModel(p, selected, false) } catch (e: Exception) { e.message ?: "Model test failed" }
-                            runOnUiThread {
-                                if (isFinishing || isDestroyed) return@runOnUiThread
-                                if (problem.isBlank()) {
-                                    Prefs.setModel(this, p, false, selected)
-                                    refreshProviderModelChip()
-                                    Toast.makeText(this, "Saved chat model: ${selected}", Toast.LENGTH_LONG).show()
-                                } else {
-                                    AlertDialog.Builder(this)
-                                        .setTitle("Model test failed")
-                                        .setMessage("${selected} did not pass a live chat test.\n\n${problem}")
-                                        .setPositiveButton("USE ANYWAY") { _, _ ->
-                                            Prefs.setModel(this, p, false, selected)
-                                            refreshProviderModelChip()
-                                        }
-                                        .setNegativeButton("CANCEL", null)
-                                        .show()
-                                }
-                            }
-                        }.start()
+            .setNegativeButton("CLOSE", null)
+        if (!online && !p.noKey && Prefs.hasKey(this, p.id)) {
+            builder.setNeutralButton("LOAD ONLINE MODELS") { _, _ ->
+                Toast.makeText(this, "Loading ${p.label} model catalogue…", Toast.LENGTH_SHORT).show()
+                Thread {
+                    val loaded = try {
+                        val excluded = listOf(
+                            "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
+                            "tts", "asr", "translat", "moderation", "content-safety", "nemoguard",
+                            "parse", "clip", "segment", "detect", "diffusion", "image-generation",
+                            "video-generation", "pose-estimation", "classifier", "live"
+                        )
+                        Nim(this).allModels(p).filter { id ->
+                            id.isNotBlank() && excluded.none { token -> id.lowercase().contains(token) }
+                        }.distinct()
+                    } catch (e: Exception) {
+                        emptyList<String>()
                     }
-                    .setNeutralButton("CHANGE PROVIDER") { _, _ -> showChatProviderPicker() }
-                    .setNegativeButton("CLOSE", null)
-                    .show()
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        val merged = (listOf(saved, p.textModel) + loaded).filter { it.isNotBlank() }.distinct()
+                        if (loaded.isEmpty()) {
+                            AlertDialog.Builder(this).setTitle("Online model list unavailable")
+                                .setMessage("You can still use the saved/default model. Check the key, provider status, or internet connection and try loading models again.")
+                                .setPositiveButton("SHOW AVAILABLE MODELS") { _, _ -> showChatModelChoices(p, merged, saved, online = false) }
+                                .setNegativeButton("CLOSE", null).show()
+                        } else {
+                            showChatModelChoices(p, merged, saved, online = true)
+                        }
+                    }
+                }.start()
             }
-        }.start()
+        }
+        builder.show()
     }
 
     private fun showChatHistory() {
