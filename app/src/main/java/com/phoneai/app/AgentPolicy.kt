@@ -12,12 +12,12 @@ object AgentPolicy {
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
         Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI"),
-        Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report"),
+        Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional bridge; only when Termux is installed and enabled"),
         Pack("remote_computer", "Remote computer", "Optional sandbox/VPS connection"),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending"),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders"),
-        Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets"),
+        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
+        Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in recap, alerts and morning briefing"),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable")
@@ -56,9 +56,26 @@ object AgentPolicy {
             Mode.PLAN -> RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
             Mode.ASK -> RuleResult(Decision.NEED_APPROVAL, "Ask mode requires approval before each action.")
             Mode.ALLOWLIST -> if (allowed(c, pack, toolId)) RuleResult(Decision.ALLOW, "Tool is allowlisted.") else RuleResult(Decision.NEED_APPROVAL, "Tool is not allowlisted.")
-            Mode.TRUSTED -> if (isTrustedFor(c, pack) && allowed(c, pack, toolId)) RuleResult(Decision.ALLOW, "Timed trust covers this pack and tool.") else RuleResult(Decision.NEED_APPROVAL, "This pack/tool is not covered by the timed trust session.")
+            Mode.TRUSTED -> if (isTrustedFor(c, pack)) RuleResult(Decision.ALLOW, "Timed trust covers this enabled pack.") else RuleResult(Decision.NEED_APPROVAL, "This pack is not covered by the timed trust session.")
         }
     }
+
+    /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
+    fun packForTool(tool: String): String? = when (tool) {
+        "play", "look" -> "gaming_hobby"
+        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
+        "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
+        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
+        "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
+        "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
+        "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
+        "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
+        "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
+        "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
+        "mcp_list_tools", "mcp_call" -> "phone_control"
+        else -> null
+    }
+
     private fun allowed(c: Context, pack: String, tool: String): Boolean = runCatching {
         val a = JSONArray(p(c).getString("allowlist_$pack", "[]") ?: "[]")
         (0 until a.length()).any { a.optString(it) == tool }
