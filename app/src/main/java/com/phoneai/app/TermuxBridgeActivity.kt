@@ -200,8 +200,11 @@ class TermuxBridgeActivity : Activity() {
         val intent = Intent().apply {
             setClassName("com.termux", "com.termux.app.RunCommandService")
             action = "com.termux.RUN_COMMAND"
-            putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
-            putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("-lc", text))
+            putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/timeout")
+            putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf(
+                "${AgentPolicy.maxMinutes(this) * 60}s",
+                "/data/data/com.termux/files/usr/bin/bash", "-lc", text
+            ))
             putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
             putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
             putExtra("com.termux.RUN_COMMAND_COMMAND_LABEL", "Orion approved command")
