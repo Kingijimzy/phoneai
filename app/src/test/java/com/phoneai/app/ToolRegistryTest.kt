@@ -31,6 +31,16 @@ class ToolRegistryTest {
         assertTrue(ToolRegistry.find("swipe")!!.promptLine.contains("allow_coordinates:true"))
     }
 
+    @Test fun termuxAiCommandsAreRestrictedToExactReadOnlyDiagnostics() {
+        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
+        assertTrue(TermuxCommandPolicy.isReadOnly("git status --short"))
+        assertTrue(TermuxCommandPolicy.isReadOnly("python --version"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ~"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("git status; touch marker"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("apt install python"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("rm -rf /"))
+    }
+
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
         val prompt = ToolRegistry.promptSection()
         assertTrue(prompt.startsWith("Tools:\n"))
