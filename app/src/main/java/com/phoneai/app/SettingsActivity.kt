@@ -395,6 +395,9 @@ class SettingsActivity : Activity() {
         }
         add(col, sectionLabel, 5)
         add(col, button("‹  Back to Orion", false) { finish() }, 8)
+        add(col, button("Agent approval & capability packs", true) {
+            startActivity(Intent(this, AgentControlActivity::class.java))
+        }, 8)
         
         // ---- 1. setup
         val s1 = card(col, "Access & permissions")
