@@ -21,6 +21,9 @@ class RoutineReplayPolicyTest {
         )
         assertNull(RoutineReplayPolicy.parseRequest("run"))
         assertNull(RoutineReplayPolicy.parseRequest("I want to run through the plan"))
+        assertTrue(RoutineReplayPolicy.isExplicitRoutineCommand("run routine FC rewards"))
+        assertTrue(RoutineReplayPolicy.isExplicitRoutineCommand("Please replay the saved macro daily coins"))
+        assertFalse(RoutineReplayPolicy.isExplicitRoutineCommand("run WhatsApp"))
     }
 
     @Test fun routineSelectionRequiresExactNormalizedName() {
@@ -48,14 +51,21 @@ class RoutineReplayPolicyTest {
         assertNull(RoutineReplayPolicy.signature(JSONObject().put("sig", invalid), "sig"))
     }
 
-    @Test fun interruptedReplayOnlyRetriesOrSkipsWhenOneDistinctStateMatches() {
+    @Test fun interruptedReplayOnlyRetriesOrSkipsWhenKnownDistinctStatesMatch() {
+        val match = RoutineReplayPolicy.SignatureState.MATCH
+        val mismatch = RoutineReplayPolicy.SignatureState.MISMATCH
+        val unavailable = RoutineReplayPolicy.SignatureState.UNAVAILABLE
         assertEquals(RoutineReplayPolicy.ResumeDecision.RETRY_IN_FLIGHT,
-            RoutineReplayPolicy.resumeDecision(beforeMatches = true, afterMatches = false))
+            RoutineReplayPolicy.resumeDecision(match, mismatch))
         assertEquals(RoutineReplayPolicy.ResumeDecision.SKIP_IN_FLIGHT,
-            RoutineReplayPolicy.resumeDecision(beforeMatches = false, afterMatches = true))
+            RoutineReplayPolicy.resumeDecision(mismatch, match))
         assertEquals(RoutineReplayPolicy.ResumeDecision.AMBIGUOUS,
-            RoutineReplayPolicy.resumeDecision(beforeMatches = true, afterMatches = true))
+            RoutineReplayPolicy.resumeDecision(match, match))
         assertEquals(RoutineReplayPolicy.ResumeDecision.AMBIGUOUS,
-            RoutineReplayPolicy.resumeDecision(beforeMatches = false, afterMatches = false))
+            RoutineReplayPolicy.resumeDecision(mismatch, mismatch))
+        assertEquals(RoutineReplayPolicy.ResumeDecision.AMBIGUOUS,
+            RoutineReplayPolicy.resumeDecision(match, unavailable))
+        assertEquals(RoutineReplayPolicy.ResumeDecision.AMBIGUOUS,
+            RoutineReplayPolicy.resumeDecision(unavailable, mismatch))
     }
 }
