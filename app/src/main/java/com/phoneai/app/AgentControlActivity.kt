@@ -107,6 +107,10 @@ class AgentControlActivity : Activity() {
             Toast.makeText(this, "Command now selects a configured fast provider when available.", Toast.LENGTH_SHORT).show()
         }
 
+        section("RUNTIME AGENT SIGN-IN")
+        addText("Connect coding-agent accounts separately from API model providers. A browser page opening is not proof that a runtime is authenticated.", 12f, Theme.MUTED, false, 4)
+        addButton("OPEN AGENT ACCOUNT / RUNTIME HUB", true) { startActivity(Intent(this, RuntimeAgentsActivity::class.java)) }
+
         section("SELF-TEST")
         testReport = addText("Not run yet.", 12f, Theme.MUTED, false, 4)
         termuxBridgeStatus = addText("", 12f, Theme.MUTED, false, 4)
