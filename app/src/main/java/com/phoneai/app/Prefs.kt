@@ -123,6 +123,13 @@ object Prefs {
 
     fun hasAnyKey(c: Context): Boolean = Providers.all.any { hasKey(c, it.id) }
 
+    /** One-time PKCE verifier for the OpenRouter browser authorization callback. */
+    fun setOpenRouterOAuthVerifier(c: Context, value: String): Boolean =
+        ApiKeyVault.write(c, "enc_openrouter_oauth_verifier", "openrouter_oauth_verifier", value)
+
+    fun openRouterOAuthVerifier(c: Context): String =
+        ApiKeyVault.read(c, "enc_openrouter_oauth_verifier", "openrouter_oauth_verifier")
+
     /** Live Gemini mode is opt-in; the existing local live-call path remains the default. */
     val GEMINI_VOICES = listOf("Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr")
     fun geminiVoice(c: Context): String = sp(c).getString("gemini_voice", "Aoede")?.takeIf { it in GEMINI_VOICES } ?: "Aoede"
