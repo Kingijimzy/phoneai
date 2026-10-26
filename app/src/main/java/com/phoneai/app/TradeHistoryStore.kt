@@ -48,8 +48,10 @@ object TradeHistoryStore {
     private fun normalizeHeader(value: String): String =
         value.trim().lowercase(Locale.US).filter { it.isLetterOrDigit() }
 
-    private fun findHeader(headers: List<String>, aliases: Set<String>): Int =
-        headers.indexOfFirst { normalizeHeader(it) in aliases.map(::normalizeHeader).toSet() }
+    private fun findHeader(headers: List<String>, aliases: Set<String>): Int {
+        val normalizedAliases = aliases.map { normalizeHeader(it) }.toSet()
+        return headers.indexOfFirst { normalizeHeader(it) in normalizedAliases }
+    }
 
     /** RFC-4180-style parser for quoted commas, escaped quotes and quoted newlines. */
     internal fun parseCsv(text: String): List<List<String>> {
@@ -190,7 +192,7 @@ object TradeHistoryStore {
         var imported = 0
         var duplicates = 0
         var skipped = 0
-        val source = sourceName.substringAfterLast('/').trim().take(100).ifBlank { "imported CSV" }
+        val source = sourceName.substringAfterLast('/').replace(Regex("\\s+"), " ").trim().take(100).ifBlank { "imported CSV" }
         for (r in rows.drop(headerRow + 1)) {
             if (records.size + imported >= MAX_RECORDS) { skipped++; continue }
             if (symbolIdx !in r.indices) { skipped++; continue }
