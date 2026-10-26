@@ -667,8 +667,9 @@ Rules:
         val existing = RoutineReplayCheckpointStore.load(svc)
 
         if (name == null) {
-            if (request.action == RoutineReplayPolicy.Action.RESUME) {
-                ui.say("I couldn't find that saved routine. Check its exact name in Teach Mode; no gestures were replayed.")
+            if (request.action == RoutineReplayPolicy.Action.RESUME ||
+                RoutineReplayPolicy.isExplicitRoutineCommand(command)) {
+                ui.say("I couldn't find a saved routine with that exact name. Check Teach Mode > Your Routines; no gestures were replayed.")
                 return true
             }
             return false
@@ -677,6 +678,46 @@ Rules:
         val steps = found?.second
         if (steps == null || steps.length() !in 1..100) {
             ui.say("The saved routine is empty or too large to replay safely. No actions were started.")
+            return true
+        }
+
+        // Reject old or malformed macros before creating a recovery checkpoint or touching the screen.
+        // Routine replay requires a known target app, display geometry, and a valid pre-step fingerprint.
+        val currentSizeForPreflight = svc.replayScreenSize()
+        val invalidStepIndex = (0 until steps.length()).firstOrNull { index ->
+            val step = steps.optJSONObject(index) ?: return@firstOrNull true
+            val tool = step.optString("tool")
+            val args = step.optJSONObject("args") ?: JSONObject()
+            val w = step.optInt("screenW", 0)
+            val h = step.optInt("screenH", 0)
+            val packageName = step.optString("targetPackage").trim()
+            if (tool !in setOf("tap", "long_press", "swipe_path") ||
+                w <= 0 || h <= 0 ||
+                !Regex("^[A-Za-z0-9_.]{3,255}$").matches(packageName) ||
+                RoutineReplayPolicy.signature(step, "sig") == null) return@firstOrNull true
+            if (tool == "swipe_path") {
+                val points = args.optJSONArray("points") ?: return@firstOrNull true
+                if (points.length() < 2) return@firstOrNull true
+                for (p in 0 until points.length()) {
+                    val point = points.optJSONObject(p) ?: return@firstOrNull true
+                    if (RoutineReplayPolicy.scaleCoordinate(point.optInt("x", -1), w, w) == null ||
+                        RoutineReplayPolicy.scaleCoordinate(point.optInt("y", -1), h, h) == null) return@firstOrNull true
+                }
+            } else {
+                if (RoutineReplayPolicy.scaleCoordinate(args.optInt("x", -1), w, w) == null ||
+                    RoutineReplayPolicy.scaleCoordinate(args.optInt("y", -1), h, h) == null) return@firstOrNull true
+            }
+            // Coordinates must still be meaningful on this display; scaleCoordinate also checks bounds.
+            if (RoutineReplayPolicy.scaleCoordinate(step.optInt("sx", -1), w, currentSizeForPreflight.first) == null ||
+                RoutineReplayPolicy.scaleCoordinate(step.optInt("sy", -1), h, currentSizeForPreflight.second) == null) return@firstOrNull true
+            false
+        }
+        if (invalidStepIndex != null) {
+            val pending = existing
+            if (pending != null && MacroStore.norm(pending.routine) == MacroStore.norm(name) && pending.inFlightStep < 0) {
+                RoutineReplayCheckpointStore.clear(svc)
+            }
+            ui.say("Routine step ${invalidStepIndex + 1} is missing a supported gesture, target app, valid screen size, or readable fingerprint. No action was started. Re-record this routine in Teach Mode before replaying it.")
             return true
         }
         if (!Prefs.accessibilityDisclosureAccepted(svc)) {
@@ -735,7 +776,12 @@ Rules:
             }
             val beforeState = svc.checkRecordedSignature(bx, by, before)
             val afterState = svc.checkRecordedSignature(ax, ay, after)
-            when (RoutineReplayPolicy.resumeDecision(beforeState == "match", afterState == "match")) {
+            fun signatureState(value: String): RoutineReplayPolicy.SignatureState = when (value) {
+                "match" -> RoutineReplayPolicy.SignatureState.MATCH
+                "mismatch" -> RoutineReplayPolicy.SignatureState.MISMATCH
+                else -> RoutineReplayPolicy.SignatureState.UNAVAILABLE
+            }
+            when (RoutineReplayPolicy.resumeDecision(signatureState(beforeState), signatureState(afterState))) {
                 RoutineReplayPolicy.ResumeDecision.RETRY_IN_FLIGHT -> {
                     if (!RoutineReplayCheckpointStore.pauseAt(svc, name, interruptedIndex)) {
                         ui.say("I could not save the recovery decision, so I stopped before another gesture.")
@@ -821,23 +867,22 @@ Rules:
             }
 
             val beforeSig = RoutineReplayPolicy.signature(step, "sig")
-            if (beforeSig != null) {
-                val sx = RoutineReplayPolicy.scaleCoordinate(step.optInt("sx", -1), oldW, currentSize.first)
-                val sy = RoutineReplayPolicy.scaleCoordinate(step.optInt("sy", -1), oldH, currentSize.second)
-                if (sx == null || sy == null) {
-                    RoutineReplayCheckpointStore.pauseAt(svc, name, index)
-                    ui.say("The saved screen-fingerprint point for step ${index + 1} is invalid. No gesture was performed.")
-                    return true
-                }
-                val match = svc.waitForSig(sx, sy, beforeSig, 2_500L) { stopped }
-                if (match != "ok") {
-                    RoutineReplayCheckpointStore.pauseAt(svc, name, index)
-                    ui.say("Routine paused before step ${index + 1}: the recorded screen fingerprint didn't match ($match). I did not tap. Restore the expected screen and say 'resume routine $name'.")
-                    return true
-                }
-            } else if (oldW != currentSize.first || oldH != currentSize.second) {
+            if (beforeSig == null) {
                 RoutineReplayCheckpointStore.pauseAt(svc, name, index)
-                ui.say("Step ${index + 1} has no screen fingerprint and the display size changed. I stopped rather than reuse old coordinates.")
+                ui.say("Step ${index + 1} has no valid pre-action screen fingerprint. I stopped without replaying it.")
+                return true
+            }
+            val sx = RoutineReplayPolicy.scaleCoordinate(step.optInt("sx", -1), oldW, currentSize.first)
+            val sy = RoutineReplayPolicy.scaleCoordinate(step.optInt("sy", -1), oldH, currentSize.second)
+            if (sx == null || sy == null) {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("The saved screen-fingerprint point for step ${index + 1} is invalid. No gesture was performed.")
+                return true
+            }
+            val match = svc.waitForSig(sx, sy, beforeSig, 2_500L) { stopped }
+            if (match != "ok") {
+                RoutineReplayCheckpointStore.pauseAt(svc, name, index)
+                ui.say("Routine paused before step ${index + 1}: the recorded screen fingerprint didn't match ($match). I did not tap. Restore the expected screen and say 'resume routine $name'.")
                 return true
             }
 
