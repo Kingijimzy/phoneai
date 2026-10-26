@@ -66,7 +66,25 @@ internal object OrionIntegrationPlanner {
                 else -> State.AVAILABLE_NOT_CONNECTED
             }
         }
-        return plan(provider, state, request, registeredCapabilities)
+        return plan(provider, capabilityAwareState(provider, state, registeredCapabilities), request, registeredCapabilities)
+    }
+
+    /** Connected account metadata alone is not a working integration if its tool is absent. */
+    fun capabilityAwareState(
+        provider: Provider,
+        accountState: State,
+        registeredCapabilities: Set<String>
+    ): State {
+        if (accountState != State.CONNECTED) return accountState
+        val required = when (provider) {
+            Provider.GITHUB -> "github.account.read"
+            Provider.GMAIL -> "gmail.messages.read"
+            Provider.GOOGLE_DRIVE -> "google_drive.files.read"
+            Provider.TELEGRAM -> "telegram.messages"
+            Provider.TERMUX -> "shell.execute"
+            Provider.UNKNOWN -> return accountState
+        }
+        return if (required in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
     }
 
     /** Resolve a natural-language request to a known provider without treating credentials as input. */
