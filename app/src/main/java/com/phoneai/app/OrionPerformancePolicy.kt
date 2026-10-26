@@ -14,6 +14,7 @@ internal object OrionPerformancePolicy {
     /** Android PowerManager thermal status values: 0 none, 1 light, 2 moderate, 3 severe, 4+ critical. */
     fun orbFrameDelayMs(powerSave: Boolean, thermalStatus: Int): Long = when {
         thermalStatus >= 3 -> 160L
+        thermalStatus == 2 && powerSave -> 100L
         thermalStatus == 2 -> 90L
         powerSave -> 100L
         else -> 50L
