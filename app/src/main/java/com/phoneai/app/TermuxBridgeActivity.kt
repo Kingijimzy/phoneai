@@ -108,8 +108,14 @@ class TermuxBridgeActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        TermuxBridgeResultStore.listener = { runOnUiThread { refreshOutput() } }
         refreshStatus()
         refreshOutput()
+    }
+
+    override fun onPause() {
+        TermuxBridgeResultStore.listener = null
+        super.onPause()
     }
 
     private fun isInstalled(): Boolean = try {
@@ -195,7 +201,7 @@ class TermuxBridgeActivity : Activity() {
         val callback = Intent(this, TermuxBridgeResultReceiver::class.java)
             .putExtra(TermuxBridgeResultReceiver.EXTRA_REQUEST_ID, requestCode)
         val pendingFlags = PendingIntent.FLAG_ONE_SHOT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
         val resultPendingIntent = PendingIntent.getBroadcast(this, requestCode, callback, pendingFlags)
         val intent = Intent().apply {
             setClassName("com.termux", "com.termux.app.RunCommandService")
@@ -298,6 +304,7 @@ object TermuxCommandPolicy {
 object TermuxBridgeResultStore {
     @Volatile var lastResult: String? = null
     @Volatile var lastExitCode: Int? = null
+    @Volatile var listener: (() -> Unit)? = null
 }
 
 class TermuxBridgeResultReceiver : android.content.BroadcastReceiver() {
@@ -308,11 +315,12 @@ class TermuxBridgeResultReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: android.content.Context, intent: Intent) {
         val extras = intent.extras
         val bundle = intent.getBundleExtra("com.termux.app.extra.PLUGIN_RESULT_BUNDLE")
-            ?: extras?.keySet()?.mapNotNull { key -> extras.get(key) as? Bundle }
+            ?: extras?.keySet()?.mapNotNull { key -> extras?.get(key) as? Bundle }
                 ?.firstOrNull { it.containsKey("stdout") || it.containsKey("exitCode") || it.containsKey("errmsg") }
         if (bundle == null) {
             TermuxBridgeResultStore.lastResult = "UNVERIFIED: Termux sent a callback without a readable result bundle."
             AgentPolicy.log(context, "termux_command", "result", false, "callback received without result bundle")
+            TermuxBridgeResultStore.listener?.invoke()
             return
         }
         val stdout = bundle.getString("stdout", "")
@@ -335,5 +343,6 @@ class TermuxBridgeResultReceiver : android.content.BroadcastReceiver() {
             if (exitCode == Int.MIN_VALUE) "Termux callback received but exit status missing; output length ${stdout.length + stderr.length}"
             else "Termux returned exit code $exitCode; output length ${stdout.length + stderr.length}; output omitted from audit log"
         )
+        TermuxBridgeResultStore.listener?.invoke()
     }
 }
