@@ -160,13 +160,38 @@ object Prefs {
     fun openRouterOAuthVerifier(c: Context): String =
         ApiKeyVault.read(c, "enc_openrouter_oauth_verifier", "openrouter_oauth_verifier")
 
+    val CLI_RUNTIMES = listOf(
+        "claude-code",
+        "command-code",
+        "codex",
+        "opencode",
+        "grok",
+        "cursor-agent",
+        "muse-code"
+    )
+
     /** Selected external coding-agent CLI runtime. Selection does not imply installation or authentication. */
     fun cliRuntime(c: Context): String = sp(c).getString("cli_runtime", "opencode")?.takeIf {
-        it in setOf("muse-code", "cursor-agent", "opencode")
+        it in CLI_RUNTIMES
     } ?: "opencode"
     fun setCliRuntime(c: Context, id: String) {
-        val safe = id.takeIf { it in setOf("muse-code", "cursor-agent", "opencode") } ?: "opencode"
+        val safe = id.takeIf { it in CLI_RUNTIMES } ?: "opencode"
         sp(c).edit().putString("cli_runtime", safe).apply()
+    }
+
+    fun isRuntimeSignedIn(c: Context, id: String): Boolean =
+        sp(c).getBoolean("runtime_signed_in_$id", false) ||
+        when (id) {
+            "opencode" -> apiKey(c, "opencode-zen").isNotBlank() || sp(c).getBoolean("runtime_signed_in_opencode", false)
+            "cursor-agent" -> apiKey(c, "cursor").isNotBlank() || sp(c).getBoolean("runtime_signed_in_cursor-agent", false)
+            "codex" -> apiKey(c, "openai").isNotBlank() || sp(c).getBoolean("runtime_signed_in_codex", false)
+            "claude-code" -> apiKey(c, "anthropic").isNotBlank() || sp(c).getBoolean("runtime_signed_in_claude-code", false)
+            "grok" -> apiKey(c, "grok").isNotBlank() || sp(c).getBoolean("runtime_signed_in_grok", false)
+            else -> false
+        }
+
+    fun setRuntimeSignedIn(c: Context, id: String, signedIn: Boolean) {
+        sp(c).edit().putBoolean("runtime_signed_in_$id", signedIn).apply()
     }
 
     /** Live Gemini mode is opt-in; the existing local live-call path remains the default. */

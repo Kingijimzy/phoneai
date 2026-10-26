@@ -515,10 +515,10 @@ class SettingsActivity : Activity() {
         }, 8)
         add(s2, button("Sign in with OpenRouter", true) { startOpenRouterSignIn() }, 8)
         cliRuntimeBtn = button("Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this)), false) {
-            cliRuntimeDialog()
+            startActivity(Intent(this, RuntimeAgentsActivity::class.java))
         }
         add(s2, cliRuntimeBtn, 8)
-        add(s2, text("Choose Muse Code, Cursor Agent, or OpenCode for terminal-based coding sessions. Orion saves your choice and guides setup; a CLI must be installed and authenticated in a compatible terminal before it can run.", 12f, Theme.MUTED), 4)
+        add(s2, text("Configure coding-agent CLI runtimes (Claude Code, Command Code, Codex, OpenCode, Grok, Cursor Agent, Muse Code) with account sign-in, workspace credentials, and API authentication.", 12f, Theme.MUTED), 4)
         add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
         add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
@@ -963,6 +963,9 @@ class SettingsActivity : Activity() {
         status.text = sb.toString()
         chatBtn.text = "Chat AI: " + Prefs.provider(this, false).label + "  (tap to change)"
         visionBtn.text = "Screen-vision AI: " + Prefs.provider(this, true).label + "  (tap to change)"
+        if (::cliRuntimeBtn.isInitialized) {
+            cliRuntimeBtn.text = "Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this))
+        }
         val n = Prefs.userName(this)
         nameBtn.text = if (n.isEmpty()) "Tell Orion your name" else "Your name: $n  (tap to change)"
         memBtn.text = "View and edit memory (" + MemoryStore.all(this).size + ")"
@@ -1036,26 +1039,18 @@ class SettingsActivity : Activity() {
     }
 
     private fun cliRuntimeLabel(id: String): String = when (id) {
-        "muse-code" -> "Muse Code"
+        "claude-code" -> "Claude Code"
+        "command-code" -> "Command Code"
+        "codex" -> "Codex"
+        "opencode" -> "OpenCode"
+        "grok" -> "Grok"
         "cursor-agent" -> "Cursor Agent"
+        "muse-code" -> "Muse Code"
         else -> "OpenCode"
     }
 
     private fun cliRuntimeDialog() {
-        val ids = listOf("muse-code", "cursor-agent", "opencode")
-        val labels = listOf("Muse Code", "Cursor Agent", "OpenCode")
-        val selected = ids.indexOf(Prefs.cliRuntime(this)).coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle("Choose coding-agent runtime")
-            .setSingleChoiceItems(labels.toTypedArray(), selected) { dialog, which ->
-                Prefs.setCliRuntime(this, ids[which])
-                dialog.dismiss()
-                updateCliRuntimeButton()
-                cliRuntimeSetupDialog(ids[which])
-            }
-            .setNegativeButton("CANCEL", null)
-            .setNeutralButton("SET UP SELECTED") { _, _ -> cliRuntimeSetupDialog(Prefs.cliRuntime(this)) }
-            .show()
+        startActivity(Intent(this, RuntimeAgentsActivity::class.java))
     }
 
     private fun updateCliRuntimeButton() {

@@ -170,6 +170,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
             }
             .setNeutralButton("MANAGE CONNECTIONS") { _, _ -> showChatConnectionsPicker() }
+            .setPositiveButton("RUNTIME") { _, _ -> startActivity(Intent(this, RuntimeAgentsActivity::class.java)) }
             .setNegativeButton("CLOSE", null)
             .show()
     }
