@@ -202,6 +202,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     private fun showProviderConnection(p: Provider) {
+        if (p.id == "opencode-zen") {
+            AlertDialog.Builder(this)
+                .setTitle("Connect OpenCode Zen")
+                .setMessage("OpenCode Zen uses an API key, not a general OAuth token. Sign in at opencode.ai/auth, create a key, return here, and paste it. This connects OpenCode Zen models to Orion; it does not install or authenticate the separate OpenCode coding-agent runtime.")
+                .setPositiveButton("OPEN OPENCODE ZEN") { _, _ ->
+                    try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://opencode.ai/auth"))) }
+                    catch (_: Exception) { Toast.makeText(this, "Could not open the browser.", Toast.LENGTH_LONG).show() }
+                }
+                .setNeutralButton("ENTER API KEY") { _, _ -> showApiKeyEntry(p) }
+                .setNegativeButton("CANCEL", null)
+                .show()
+            return
+        }
         if (p.id == "openrouter") {
             AlertDialog.Builder(this)
                 .setTitle("Connect OpenRouter")
@@ -1135,6 +1148,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
         setContentView(composeRoot)
         addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
+        if (intent.getStringExtra("open_provider_connection") == "opencode-zen") {
+            window.decorView.post { showProviderConnection(Providers.get("opencode-zen")) }
+        }
         if (intent.getBooleanExtra(EXTRA_PICK_IMAGE, false)) {
             window.decorView.postDelayed({
                 val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
