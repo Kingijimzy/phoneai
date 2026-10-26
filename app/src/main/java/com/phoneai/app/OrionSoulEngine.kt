@@ -43,7 +43,7 @@ internal object OrionSoulEngine {
 
     private fun integrationCapabilities(tools: Set<String>): Set<String> {
         val capabilities = mutableSetOf<String>()
-        if (tools.any { it.contains("github", true) || it.startsWith("mcp_") }) capabilities += "github.account.read"
+        if (tools.any { it.contains("github", true) }) capabilities += "github.account.read"
         if (tools.any { it.contains("gmail", true) || it.contains("email", true) }) capabilities += "gmail.messages.read"
         if (tools.any { it.contains("drive", true) }) capabilities += "google_drive.files.read"
         if (tools.any { it.contains("telegram", true) }) capabilities += "telegram.messages"
