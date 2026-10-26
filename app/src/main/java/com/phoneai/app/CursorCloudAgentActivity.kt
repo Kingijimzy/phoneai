@@ -159,8 +159,14 @@ class CursorCloudAgentActivity : Activity() {
             cornerRadius = dp(12).toFloat()
             setStroke(dp(1), 0xFF343434.toInt())
         }
-        inputType = if (secret) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            else android.text.InputType.TYPE_CLASS_TEXT or if (multiline) android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES else android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        inputType = if (secret) {
+            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        } else {
+            android.text.InputType.TYPE_CLASS_TEXT or (
+                if (multiline) android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                else android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            )
+        }
         isSingleLine = !multiline
         if (multiline) minLines = 4
         layoutParams = LinearLayout.LayoutParams(-1, if (multiline) dp(120) else -2).apply {
