@@ -629,6 +629,7 @@ Rules:
         setRequestScope(command)
         researchCancelled.set(false)
         commandNim.resume()
+        talkNim.resume()
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
