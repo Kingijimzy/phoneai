@@ -21,7 +21,7 @@ object AgentPolicy {
         Pack("proactive", "Proactive", "Opt-in recap, alerts and morning briefing"),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
-        Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable")
+        Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
     fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
