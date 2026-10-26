@@ -1738,6 +1738,7 @@ Rules:
             "shell" -> tools.shell(a.optString("command"), a.optString("where"))
             "workspace_write" -> ShellRunner.writeFile(svc, a.optString("path"), a.optString("content"))
             "workspace_read" -> ShellRunner.readFile(svc, a.optString("path"))
+            "morning_brief" -> tools.morningBrief()
             "create_agent" -> tools.createAgent(a.optString("id"), a.optString("name"), a.optString("tagline"), a.optString("persona"))
             "graph_link" -> tools.graphLink(a.optString("a"), a.optString("relation"), a.optString("b"))
             "graph_query" -> tools.graphQuery(a.optString("entity"))

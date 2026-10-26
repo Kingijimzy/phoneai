@@ -68,6 +68,7 @@ object ProactiveBriefing {
 
     internal fun notifyBriefing(context: Context) {
         if (!enabled(context)) return
+        val brief = try { MorningBrief.build(context) } catch (_: Exception) { "" }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(
@@ -83,7 +84,7 @@ object ProactiveBriefing {
         val active = TaskStore.all(context).filter { it.status !in setOf("completed", "done", "failed", "cancelled") }
         val overdue = active.count { it.dueAt != null && it.dueAt!! <= now }
         val urgent = active.count { it.priority == "urgent" }
-        val body = "Open tasks: ${active.size} · Overdue: $overdue · Urgent: $urgent. Tap to review your local task list."
+        val body = brief.ifBlank { "Open tasks: ${active.size} · Overdue: $overdue · Urgent: $urgent. Tap to review your local task list." }
         val open = PendingIntent.getActivity(
             context, REQUEST_CODE, Intent(context, TaskCenterActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -95,20 +96,24 @@ object ProactiveBriefing {
             android.app.Notification.Builder(context)
         }.setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Orion morning briefing")
-            .setContentText(body)
+            .setContentText(body.lineSequence().drop(1).firstOrNull() ?: body)
             .setStyle(android.app.Notification.BigTextStyle().bigText(body))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
         manager.notify(84017, notification)
-        AgentPolicy.log(context, "proactive_briefing", "notification", true, "local task-count briefing delivered; no AI/API request")
+        AgentPolicy.log(context, "proactive_briefing", "notification", true, "daily brief delivered (public weather/score/price data + local tasks; no AI request)")
     }
 }
 
 class ProactiveBriefingReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == "com.phoneai.app.PROACTIVE_BRIEFING") {
-            ProactiveBriefing.notifyBriefing(context)
+            // The brief fetches live data, so it must not block the main thread.
+            val pending = goAsync()
+            Thread {
+                try { ProactiveBriefing.notifyBriefing(context) } finally { pending.finish() }
+            }.start()
         }
     }
 }
@@ -183,8 +188,8 @@ class ProactiveActivity : Activity() {
             } else if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
             } else {
-                ProactiveBriefing.notifyBriefing(this)
-                toast("Local briefing preview posted.")
+                Thread { ProactiveBriefing.notifyBriefing(applicationContext) }.start()
+                toast("Briefing preview on its way (fetching live data).")
             }
         }
         section("STATUS")
@@ -236,7 +241,7 @@ class ProactiveActivity : Activity() {
         status.text = "Proactive pack: ${if (AgentPolicy.enabled(this, "proactive")) "enabled" else "OFF"}\n" +
             "Daily briefing opt-in: ${if (enabled) "ON" else "OFF"}\n" +
             "Scheduled local time: $time (Android may delay it)\n" +
-            "Data source: on-device task list only · no AI/API request."
+            "Data: your tasks, plus public weather, your team's score and watchlist prices when known. No AI request."
     }
 
     private fun addText(text: String, size: Float, color: Int, bold: Boolean, top: Int): TextView {
