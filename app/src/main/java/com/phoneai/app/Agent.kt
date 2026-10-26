@@ -39,8 +39,9 @@ internal object ConversationContextPolicy {
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
-    private val talkNim = Nim(svc).also { n -> n.onStatus = { s -> ui.status(s) } }
-    private val commandNim = Nim(svc, commandMode = true).also { n -> n.onStatus = { s -> ui.status(s) } }
+    private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15)
+    private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
+    private val commandNim = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val tools = Tools(svc)
     private val ranSteps = JSONArray()
     private val local = Local(
@@ -577,7 +578,7 @@ Rules:
     }
 
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
-        commandNim.beginCommand()
+        if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
         if (!resumeRequest) {
