@@ -54,6 +54,38 @@ class OrionIntegrationPlannerTest {
     }
 
     @Test
+    fun connectedAccountWithoutRegisteredConnectorIsReportedAsCapabilityMissing() {
+        assertEquals(
+            OrionIntegrationPlanner.State.CAPABILITY_MISSING,
+            OrionIntegrationPlanner.capabilityAwareState(
+                OrionIntegrationPlanner.Provider.GMAIL,
+                OrionIntegrationPlanner.State.CONNECTED,
+                emptySet()
+            )
+        )
+        assertEquals(
+            OrionIntegrationPlanner.State.CONNECTED,
+            OrionIntegrationPlanner.capabilityAwareState(
+                OrionIntegrationPlanner.Provider.GMAIL,
+                OrionIntegrationPlanner.State.CONNECTED,
+                setOf("gmail.messages.read")
+            )
+        )
+    }
+
+    @Test
+    fun unconnectedProviderIsNotRelabelledAsConnectedOrCapabilityMissing() {
+        assertEquals(
+            OrionIntegrationPlanner.State.AVAILABLE_NOT_CONNECTED,
+            OrionIntegrationPlanner.capabilityAwareState(
+                OrionIntegrationPlanner.Provider.GITHUB,
+                OrionIntegrationPlanner.State.AVAILABLE_NOT_CONNECTED,
+                emptySet()
+            )
+        )
+    }
+
+    @Test
     fun unknownServiceDoesNotAssumeAccess() {
         val plan = OrionIntegrationPlanner.plan(
             OrionIntegrationPlanner.Provider.UNKNOWN,
