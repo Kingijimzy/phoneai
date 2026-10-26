@@ -1296,7 +1296,7 @@ Rules:
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
-                    if (runTools >= 2 && cleanLearningEvidence && ExperienceStore.routineReady(svc, currentTask)) ui.note("💡 I've done this the same way 3 times. Say \"save this as a routine <name>\" and I'll repeat it instantly with no AI.")
+                    if (runTools >= 2 && cleanLearningEvidence && ExperienceStore.routineReady(svc, currentTask)) ui.note("💡 I've stored another clean example of this successful tool sequence. That is learning guidance, not an executable no-AI routine. To create a replayable gesture routine, record the exact flow in Teach Mode and save it there.")
                 } catch (_: Exception) { }
                 if (!AgentCheckpointStore.complete(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
@@ -1383,7 +1383,7 @@ Rules:
         "web_search", "settings", "wait", "wait_for", "volume", "flashlight", "record_screen", "dial", "alarm", "timer"
     )
 
-    /** Remembers what worked, so the user can say "save this as a routine". */
+    /** Keeps successful, privacy-screened steps in the current task trace; this does not create a replayable routine. */
     private fun record(tool: String, args: JSONObject, result: String) {
         if (result.startsWith("error") || tool !in recordable || ranSteps.length() >= 40) return
         var t = tool
