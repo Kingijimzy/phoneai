@@ -182,11 +182,11 @@ object Prefs {
     fun isRuntimeSignedIn(c: Context, id: String): Boolean =
         sp(c).getBoolean("runtime_signed_in_$id", false) ||
         when (id) {
-            "opencode" -> apiKey(c, "opencode-zen").isNotBlank() || sp(c).getBoolean("runtime_signed_in_opencode", false)
-            "cursor-agent" -> apiKey(c, "cursor").isNotBlank() || sp(c).getBoolean("runtime_signed_in_cursor-agent", false)
-            "codex" -> apiKey(c, "openai").isNotBlank() || sp(c).getBoolean("runtime_signed_in_codex", false)
-            "claude-code" -> apiKey(c, "anthropic").isNotBlank() || sp(c).getBoolean("runtime_signed_in_claude-code", false)
-            "grok" -> apiKey(c, "grok").isNotBlank() || sp(c).getBoolean("runtime_signed_in_grok", false)
+            "opencode" -> hasKey(c, "opencode-zen") || sp(c).getBoolean("runtime_signed_in_opencode", false)
+            "cursor-agent" -> hasKey(c, "cursor") || sp(c).getBoolean("runtime_signed_in_cursor-agent", false)
+            "codex" -> hasKey(c, "openai") || sp(c).getBoolean("runtime_signed_in_codex", false)
+            "claude-code" -> hasKey(c, "anthropic") || sp(c).getBoolean("runtime_signed_in_claude-code", false)
+            "grok" -> hasKey(c, "grok") || sp(c).getBoolean("runtime_signed_in_grok", false)
             else -> false
         }
 

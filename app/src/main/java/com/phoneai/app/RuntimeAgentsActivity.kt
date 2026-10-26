@@ -360,7 +360,7 @@ class RuntimeAgentsActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val currentKey = item.providerKeyId?.let { Prefs.apiKey(this@RuntimeAgentsActivity, it) } ?: ""
+            val currentKey = item.providerKeyId?.let { Prefs.key(this@RuntimeAgentsActivity, it) } ?: ""
             val inputKey = EditText(this).apply {
                 hint = "Paste an API key"
                 setHintTextColor(0xFF6E7681.toInt())
@@ -387,7 +387,7 @@ class RuntimeAgentsActivity : Activity() {
                 setOnClickListener {
                     val key = inputKey.text.toString().trim()
                     item.providerKeyId?.let { pid ->
-                        Prefs.setApiKey(this@RuntimeAgentsActivity, pid, key)
+                        Prefs.setKey(this@RuntimeAgentsActivity, pid, key)
                     }
                     Prefs.setRuntimeSignedIn(this@RuntimeAgentsActivity, item.id, key.isNotEmpty())
                     Toast.makeText(
@@ -417,7 +417,8 @@ class RuntimeAgentsActivity : Activity() {
             actionsRow.addView(orText)
 
             if (item.id == "opencode") {
-                val zenModel = Prefs.model(this, "opencode-zen").ifBlank { "OpenCode Zen (free models)" }
+                val zenProvider = Providers.get("opencode-zen")
+                val zenModel = Prefs.model(this, zenProvider, false).ifBlank { "OpenCode Zen (free models)" }
                 val modelPickerBtn = Button(this).apply {
                     text = "$zenModel ▾"
                     textSize = 12f
@@ -430,7 +431,7 @@ class RuntimeAgentsActivity : Activity() {
                             .setTitle("Choose OpenCode Model")
                             .setItems(models) { _, which ->
                                 val choice = models[which]
-                                Prefs.setModel(this@RuntimeAgentsActivity, "opencode-zen", choice)
+                                Prefs.setModel(this@RuntimeAgentsActivity, zenProvider, false, choice)
                                 text = "$choice ▾"
                                 Toast.makeText(this@RuntimeAgentsActivity, "Selected $choice", Toast.LENGTH_SHORT).show()
                             }
