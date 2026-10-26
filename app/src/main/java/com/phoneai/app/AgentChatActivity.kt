@@ -285,11 +285,79 @@ class AgentChatActivity : Activity() {
         return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
+    /**
+     * A direct "run it" in Code Agent must invoke a real runtime, not another text-only AI reply.
+     * Only a prior Python code block is eligible; the user must explicitly confirm execution.
+     * Termux is not a sandbox, so suspicious filesystem, network, process, and dynamic-execution
+     * APIs are refused rather than silently run.
+     */
+    private fun runPreviousPython(code: String) {
+        val source = code.trim()
+        if (source.isBlank() || source.length > 12000) {
+            addBubble(false, "I couldn't run that: the previous Python block is empty or too large.")
+            return
+        }
+        val risky = Regex("""(?i)\b(import\s+(os|sys|subprocess|socket|requests|urllib|shutil|pathlib|ctypes|pickle)|from\s+(os|sys|subprocess|socket|requests|urllib|shutil|pathlib|ctypes|pickle)\b|open\s*\(|eval\s*\(|exec\s*\(|__import__|os\.|subprocess\.|socket\.|requests\.|urllib\.|shutil\.)""")
+        if (risky.containsMatchIn(source)) {
+            addBubble(false, "I stopped before running this code because it uses file, network, process, or dynamic-execution features that need a separate security review. I haven't executed it.")
+            return
+        }
+        if (!ShellRunner.termuxInstalled(this)) {
+            addBubble(false, "I found the Python code, but Python execution needs Termux with Python installed. Nothing was run. Install/open Termux, install Python there, then ask me to run it again.")
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Run Python code in Termux?")
+            .setMessage("This runs the previous Python code in your Termux environment, not in a sandbox. It can use Termux's available permissions and files. Only continue if you trust the code. Orion will report the actual command output or error.")
+            .setPositiveButton("RUN ONCE") { _, _ ->
+                busy = true
+                val waiting = addBubble(false, "Running Python in Termux…")
+                val encoded = Base64.encodeToString(source.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                Thread {
+                    val result = try {
+                        ShellRunner.runTermux(this, "printf '%s' '$encoded' | base64 -d > orion_agent_run.py && python3 orion_agent_run.py", 60)
+                    } catch (e: Exception) {
+                        "error: " + (e.message ?: e.javaClass.simpleName).take(180)
+                    }
+                    runOnUiThread {
+                        val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
+                        waiting.text = Markdown.render(shown)
+                        turns.add(AgentRunner.Turn("assistant", shown))
+                        AgentChatStore.save(this, agent.id, turns)
+                        busy = false
+                        scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                    }
+                }.start()
+            }
+            .setNegativeButton("CANCEL") { _, _ ->
+                val result = "Cancelled. The Python code was not executed."
+                addBubble(false, result)
+                turns.add(AgentRunner.Turn("assistant", result))
+                AgentChatStore.save(this, agent.id, turns)
+            }
+            .show()
+    }
+
     private fun send() {
         if (busy) return
         val text = input.text.toString().trim()
         val image = pendingImage
         if (text.isEmpty() && image == null) return
+        if (agent.id == "coder" && image == null &&
+            Regex("""(?i)^\s*(run it|run this|execute it|execute this|test it|test this|run the code|execute the code)\s*[.!]?\s*$""").matches(text)) {
+            val previous = turns.lastOrNull { it.role == "assistant" }?.text.orEmpty()
+            val code = Regex("""(?s)\x60\x60\x60(?:python|py)\s*\n(.*?)\x60\x60\x60""", RegexOption.IGNORE_CASE)
+                .find(previous)?.groupValues?.getOrNull(1)
+            if (code != null) {
+                input.setText("")
+                (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(input.windowToken, 0)
+                addBubble(true, text)
+                turns.add(AgentRunner.Turn("user", text))
+                AgentChatStore.save(this, agent.id, turns)
+                runPreviousPython(code)
+                return
+            }
+        }
         input.setText("")
         pendingImage = null
         attachLabel.visibility = android.view.View.GONE
