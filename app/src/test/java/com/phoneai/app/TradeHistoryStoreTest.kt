@@ -9,7 +9,7 @@ class TradeHistoryStoreTest {
         val rows = TradeHistoryStore.parseCsv(
             """Symbol,Side,Closed P&L,Notes
 BTCUSDT,Buy,12.50,"closed, partial"
-ETHUSDT,Sell,-3.25,"said ""done"""
+ETHUSDT,Sell,-3.25,"said ""done""""
         )
         assertEquals(3, rows.size)
         assertEquals("BTCUSDT", rows[1][0])
