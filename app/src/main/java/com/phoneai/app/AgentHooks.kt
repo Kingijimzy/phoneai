@@ -99,20 +99,15 @@ internal object AgentHooks {
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
- private val draftOnlyIntent=Regex("\\b(draft|prepare|compose|write|without\\s+sending)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
-  val definition = ToolRegistry.find(tool)
-   ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
+  val definition = ToolRegistry.find(tool) ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"notification_action"->args.optString("action");else->""}
   val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
   val writeAction = definition.access == ToolAccess.WRITE
   val riskyTarget = writeAction && risky.containsMatchIn(label)
   val riskyTool = writeAction && (tool in setOf("task_delete","forget","update_memory","undo_last")||(tool=="notification_action"&&args.optString("action").equals("reply",true)))
-  // A negated or draft-only request must never authorize a consequential click, even if it contains the word "send".
   val refusal = Regex("(?i)\\b(don't|do not|never|avoid|not to)\\b.{0,48}\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|call)\\b").containsMatchIn(request)
   val draftWithoutSend = Regex("(?i)\\b(draft|prepare|compose|write)\\b.{0,100}\\b(without sending|do not send|don't send|never send|not send)\\b|\\b(without sending|do not send|don't send|never send|not send)\\b.{0,100}\\b(draft|prepare|compose|write)\\b").containsMatchIn(request)
-  // A draft/prepare/compose/write request alone is not authorization to send.
-  // Explicit positive send language overrides draft verbs ("write and send", "prepare and send").
   val hasExplicitSendVerb = Regex("""(?i)\b(send|submit|post|publish)\b""").containsMatchIn(request)
   val draftOnly = Regex("""(?i)\b(draft|prepare|compose|write)\b""").containsMatchIn(request) && !hasExplicitSendVerb
   val explicitlyWithheld = refusal || draftWithoutSend || draftOnly
@@ -132,11 +127,17 @@ internal object AgentHooks {
   if(risky.containsMatchIn(request)&&success.none{it.verified}) return GateDecision(false,"No post-action evidence confirms the consequential outcome.")
   return GateDecision(true,"Action evidence recorded.")
  }
+ /** Failed screen reads reset the stability streak; an exception is never a matching sample. */
  fun awaitStableSnapshot(read:()->String,maxSamples:Int=5,stableSamples:Int=2,intervalMs:Long=120L):String {
   require(maxSamples>=1&&stableSamples>=1&&intervalMs>=0L)
   var previous=""; var stable=0; var latest=""
   repeat(maxSamples){i->
-   latest=try{read()}catch(_:Exception){latest}
+   val sample = try { read() } catch (_:Exception) {
+    previous=""; stable=0
+    if(i<maxSamples-1&&intervalMs>0L)Thread.sleep(intervalMs)
+    return@repeat
+   }
+   latest=sample
    val fp=latest.lineSequence().map{it.trim().lowercase()}.filter{it.isNotBlank()}.joinToString("|")
    if(i>0&&fp==previous) stable++ else stable=1
    if(stable>=stableSamples)return latest
