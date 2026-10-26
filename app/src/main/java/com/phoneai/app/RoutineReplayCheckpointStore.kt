@@ -26,32 +26,31 @@ internal object RoutineReplayCheckpointStore {
             val total = o.optInt("totalSteps", -1)
             val next = o.optInt("nextStep", -1)
             val flight = o.optInt("inFlightStep", -1)
-            if (name.isBlank() || total <= 0 || next !in 0..total || flight !in -1 until total) return@synchronized null
+            if (!RoutineReplayCheckpointPolicy.isValid(name, total, next, flight)) return@synchronized null
             Snapshot(name, next, flight, total, o.optLong("updatedAt", 0L))
         } catch (_: Exception) { null }
     }
 
     fun begin(context: Context, routine: String, totalSteps: Int): Boolean = synchronized(lock) {
-        if (load(context) != null || routine.isBlank() || totalSteps !in 1..100) return@synchronized false
+        if (!RoutineReplayCheckpointPolicy.canBegin(load(context) != null, routine, totalSteps)) return@synchronized false
         writeLocked(context, Snapshot(routine, 0, -1, totalSteps, System.currentTimeMillis()))
     }
 
     fun markInFlight(context: Context, routine: String, totalSteps: Int, index: Int): Boolean = synchronized(lock) {
         val old = load(context)
-        if (old == null || old.routine != routine || old.totalSteps != totalSteps || index !in 0 until totalSteps ||
-            old.nextStep != index) return@synchronized false
+        if (!RoutineReplayCheckpointPolicy.canMarkInFlight(old, routine, totalSteps, index)) return@synchronized false
         writeLocked(context, old.copy(inFlightStep = index, updatedAt = System.currentTimeMillis()))
     }
 
     fun markCompleted(context: Context, routine: String, index: Int): Boolean = synchronized(lock) {
         val old = load(context)
-        if (old == null || old.routine != routine || old.inFlightStep != index) return@synchronized false
+        if (!RoutineReplayCheckpointPolicy.canMarkCompleted(old, routine, index)) return@synchronized false
         writeLocked(context, old.copy(nextStep = index + 1, inFlightStep = -1, updatedAt = System.currentTimeMillis()))
     }
 
     fun pauseAt(context: Context, routine: String, index: Int): Boolean = synchronized(lock) {
         val old = load(context)
-        if (old == null || old.routine != routine || index !in 0..old.totalSteps) return@synchronized false
+        if (!RoutineReplayCheckpointPolicy.canPause(old, routine, index)) return@synchronized false
         writeLocked(context, old.copy(nextStep = index, inFlightStep = -1, updatedAt = System.currentTimeMillis()))
     }
 
