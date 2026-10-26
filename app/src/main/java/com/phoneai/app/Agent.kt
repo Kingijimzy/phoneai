@@ -564,7 +564,7 @@ Rules:
     }
 
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
-        if (!reuseCommandBudget) commandNim.beginCommand()
+        commandNim.beginCommand()
         var command = inputCommand.trim()
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
         if (!resumeRequest) {
