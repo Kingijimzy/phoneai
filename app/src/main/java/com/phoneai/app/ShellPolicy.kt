@@ -13,7 +13,7 @@ internal object ShellPolicy {
     private val safeGit = setOf("status", "log", "diff", "branch", "show", "remote")
 
     private val blocked = listOf(
-        Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*(/|~|\\$HOME|\\*|/sdcard|/storage)(\\s|$)"),
+        Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*(/|~|\\\$HOME|\\*|/sdcard|/storage)(\\s|$)"),
         Regex(":\\(\\)\\s*\\{"),
         Regex("(?i)\\b(mkfs|fdisk|reboot|shutdown|setprop|su|sudo)\\b"),
         Regex("(?i)\\bdd\\s+.*\\bof="),
