@@ -91,6 +91,7 @@ class TaskReminderBootReceiver : BroadcastReceiver() {
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
             TaskReminder.restoreAll(context)
             ProactiveBriefing.schedule(context)
+            GamingFocus.schedule(context)
         }
     }
 }
