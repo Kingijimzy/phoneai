@@ -291,19 +291,25 @@ class AgentChatActivity : Activity() {
      * Termux is not a sandbox, so suspicious filesystem, network, process, and dynamic-execution
      * APIs are refused rather than silently run.
      */
+    private fun coderNotice(message: String) {
+        addBubble(false, message)
+        turns.add(AgentRunner.Turn("assistant", message))
+        AgentChatStore.save(this, agent.id, turns)
+    }
+
     private fun runPreviousPython(code: String) {
         val source = code.trim()
         if (source.isBlank() || source.length > 12000) {
-            addBubble(false, "I couldn't run that: the previous Python block is empty or too large.")
+            coderNotice("I couldn't run that: the previous Python block is empty or too large.")
             return
         }
         val risky = Regex("""(?i)\b(import\s+(os|sys|subprocess|socket|requests|urllib|shutil|pathlib|ctypes|pickle)|from\s+(os|sys|subprocess|socket|requests|urllib|shutil|pathlib|ctypes|pickle)\b|open\s*\(|eval\s*\(|exec\s*\(|__import__|os\.|subprocess\.|socket\.|requests\.|urllib\.|shutil\.)""")
         if (risky.containsMatchIn(source)) {
-            addBubble(false, "I stopped before running this code because it uses file, network, process, or dynamic-execution features that need a separate security review. I haven't executed it.")
+            coderNotice("I stopped before running this code because it uses file, network, process, or dynamic-execution features that need a separate security review. I haven't executed it.")
             return
         }
         if (!ShellRunner.termuxInstalled(this)) {
-            addBubble(false, "I found the Python code, but Python execution needs Termux with Python installed. Nothing was run. Install/open Termux, install Python there, then ask me to run it again.")
+            coderNotice("I found the Python code, but Python execution needs Termux with Python installed. Nothing was run. Install/open Termux, install Python there, then ask me to run it again.")
             return
         }
         AlertDialog.Builder(this)
@@ -348,15 +354,14 @@ class AgentChatActivity : Activity() {
             val previous = turns.lastOrNull { it.role == "assistant" }?.text.orEmpty()
             val code = Regex("""(?s)\x60\x60\x60(?:python|py)\s*\n(.*?)\x60\x60\x60""", RegexOption.IGNORE_CASE)
                 .find(previous)?.groupValues?.getOrNull(1)
-            if (code != null) {
-                input.setText("")
-                (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(input.windowToken, 0)
-                addBubble(true, text)
-                turns.add(AgentRunner.Turn("user", text))
-                AgentChatStore.save(this, agent.id, turns)
-                runPreviousPython(code)
-                return
-            }
+            input.setText("")
+            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(input.windowToken, 0)
+            addBubble(true, text)
+            turns.add(AgentRunner.Turn("user", text))
+            AgentChatStore.save(this, agent.id, turns)
+            if (code != null) runPreviousPython(code)
+            else coderNotice("I couldn't find a Python code block in my previous reply, so I haven't run anything. Ask me to write or correct the code first.")
+            return
         }
         input.setText("")
         pendingImage = null
