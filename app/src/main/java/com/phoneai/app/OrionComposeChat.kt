@@ -476,9 +476,29 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
 }
 
 @Composable
+private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK }
+
+private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
+    if (item.kind == "note") return OrionReplyType.TASK
+    val text = item.text
+    val lower = text.lowercase()
+    if (Regex("(?s)```(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text) ||
+        (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class "))) {
+        return OrionReplyType.CODE
+    }
+    if (lower.contains("research summary") || lower.contains("sources:") || lower.contains("source list") ||
+        (Regex("https?://").findAll(text).count() >= 2) ||
+        (lower.contains("findings") && lower.contains("source"))) return OrionReplyType.RESEARCH
+    if (lower.contains("task status") || lower.contains("execution result:") ||
+        lower.contains("steps completed") || lower.contains("verification:")) return OrionReplyType.TASK
+    return OrionReplyType.NORMAL
+}
+
+@Composable
 private fun ChatBubble(item: OrionChatLine) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
+    val replyType = if (mine) OrionReplyType.NORMAL else classifyOrionReply(item)
     val clipboard = LocalClipboardManager.current
     var actionsVisible by remember(item.id) { mutableStateOf(false) }
     AnimatedVisibility(
@@ -512,13 +532,48 @@ private fun ChatBubble(item: OrionChatLine) {
                         if (mine || note) Modifier.clip(RoundedCornerShape(17.dp))
                             .background(if (note) Color(0xFF181818) else Color(0xFF202020))
                             .border(1.dp, if (mine) Color(0xFF252525) else ChatHairline, RoundedCornerShape(17.dp))
+                        else if (replyType != OrionReplyType.NORMAL) Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(when (replyType) {
+                                OrionReplyType.RESEARCH -> Color(0xFF111820)
+                                OrionReplyType.CODE -> Color(0xFF101010)
+                                OrionReplyType.TASK -> Color(0xFF171717)
+                                else -> Color.Transparent
+                            })
+                            .border(1.dp, when (replyType) {
+                                OrionReplyType.RESEARCH -> Color(0xFF354553)
+                                OrionReplyType.CODE -> Color(0xFF383838)
+                                OrionReplyType.TASK -> Color(0xFF454545)
+                                else -> Color.Transparent
+                            }, RoundedCornerShape(16.dp))
                         else Modifier
                     )
-                    .padding(horizontal = if (mine || note) 14.dp else 0.dp, vertical = if (mine || note) 11.dp else 0.dp)
+                    .padding(
+                        horizontal = if (mine || note || replyType != OrionReplyType.NORMAL) 13.dp else 0.dp,
+                        vertical = if (mine || note || replyType != OrionReplyType.NORMAL) 12.dp else 0.dp
+                    )
             ) {
-                if (note) {
-                    Text("ACTIVITY", color = ChatMint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Spacer(Modifier.height(4.dp))
+                if (note || replyType != OrionReplyType.NORMAL) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text(
+                            when (replyType) {
+                                OrionReplyType.RESEARCH -> "RESEARCH"
+                                OrionReplyType.CODE -> "CODE OUTPUT"
+                                OrionReplyType.TASK -> "TASK UPDATE"
+                                OrionReplyType.NORMAL -> "ACTIVITY"
+                            },
+                            color = when (replyType) {
+                                OrionReplyType.RESEARCH -> Color(0xFFB6D5E8)
+                                OrionReplyType.CODE -> Color(0xFFE2E2E2)
+                                OrionReplyType.TASK -> Color(0xFFD0D0D0)
+                                OrionReplyType.NORMAL -> ChatMint
+                            },
+                            fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text("ORION", color = ChatMuted, fontSize = 8.sp, letterSpacing = 1.sp)
+                    }
+                    Spacer(Modifier.height(7.dp))
                 }
                 Text(
                     text = if (!mine && !note) formatOrionMarkdown(item.text) else AnnotatedString(item.text),
