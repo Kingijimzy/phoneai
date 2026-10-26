@@ -81,6 +81,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
+    /** Local command shortcuts may not bypass the selected approval mode or enabled capability packs. */
+    private fun requiresToolPolicy(command: String): Boolean =
+        AgentHooks.isPhoneActionRequest(command) ||
+            Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|price alert|set alert|buy|sell|place order|trade now|send (a )?(message|sms|email)|telegram)\\b").containsMatchIn(command)
+
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
     private fun setRequestScope(command: String) {
         val scope = TaskScopePolicy.scopeFor(command, lastActionScope, System.currentTimeMillis() - lastActionScopeAt)
@@ -753,7 +758,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (!resumeRequest && !browserActionTask && activeSkillId == null && !AgentHooks.isPhoneActionRequest(command)) local.tryRun(command) else null
+            if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
