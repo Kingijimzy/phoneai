@@ -1058,7 +1058,7 @@ class SettingsActivity : Activity() {
         val installCommand = when (id) {
             "muse-code" -> "pkg update && pkg install -y curl && curl -fsSL https://dev.meta.ai/install.sh | sh && muse"
             "cursor-agent" -> "pkg update && pkg install -y curl && curl https://cursor.com/install -fsS | bash && agent"
-            else -> "pkg update && pkg install -y nodejs-lts && npm install -g @opencode/cli && opencode auth login && opencode"
+            else -> "(pkg update || (echo 'Termux mirror may be syncing; retrying in 10 seconds…' && sleep 10 && pkg update)) && pkg install -y nodejs-lts && npm install -g @opencode/cli && opencode auth login && opencode"
         }
         val docs = when (id) {
             "muse-code" -> "https://dev.meta.ai/docs/muse-code"
