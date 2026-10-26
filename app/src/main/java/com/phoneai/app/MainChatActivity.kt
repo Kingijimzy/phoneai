@@ -190,7 +190,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 showChatModelPicker()
             }
             .setNeutralButton("MANAGE CONNECTIONS") { _, _ ->
-                startActivity(Intent(this, SettingsActivity::class.java))
+                // Open the provider connection dialog directly instead of dumping the user on Settings home.
+                startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "providers"))
             }
             .setNegativeButton("CLOSE", null)
             .show()
