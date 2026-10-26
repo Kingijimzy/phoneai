@@ -397,7 +397,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         taskProofs.clear()
         researchCancelled.set(false)
         talkNim.resume()
-        val safeSystem = chatSystem(command).replace(
+        val soulContext = OrionSoulEngine.contextFor(svc, command)
+        val safeSystem = (chatSystem(command) + "\n\n" + soulContext).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), reply with exactly ACTION so the built-in direct-data/search route can run and then answer using verified results and source links when available. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, reply with exactly ACTION and nothing else. Never claim an action or lookup succeeded without evidence."
         )
