@@ -1056,9 +1056,9 @@ class SettingsActivity : Activity() {
     private fun cliRuntimeSetupDialog(id: String) {
         val name = cliRuntimeLabel(id)
         val installCommand = when (id) {
-            "muse-code" -> "curl -fsSL https://dev.meta.ai/install.sh | bash && muse"
-            "cursor-agent" -> "curl https://cursor.com/install -fsS | bash && agent"
-            else -> "npm install -g @opencode/cli && opencode"
+            "muse-code" -> "pkg update && pkg install -y curl && curl -fsSL https://dev.meta.ai/install.sh | sh && muse"
+            "cursor-agent" -> "pkg update && pkg install -y curl && curl https://cursor.com/install -fsS | bash && agent"
+            else -> "pkg update && pkg install -y nodejs-lts && npm install -g @opencode/cli && opencode auth login && opencode"
         }
         val docs = when (id) {
             "muse-code" -> "https://dev.meta.ai/docs/muse-code"
