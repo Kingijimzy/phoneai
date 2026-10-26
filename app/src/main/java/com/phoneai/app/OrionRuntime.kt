@@ -23,6 +23,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     private var lastEvent = "created"
     private var lastChangedAt = clock()
     private var queue = mutableListOf<WorkItem>()
+    private var inflight: WorkItem? = null
 
     init { synchronized(lock) { loadLocked() } }
 
@@ -51,6 +52,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         val index = queue.indexOfFirst { it.notBefore <= clock() }
         if (index < 0) return@synchronized null
         val item = queue.removeAt(index)
+        inflight = item
         state = State.BUSY
         eventLocked("work_claimed:" + item.type.name.lowercase())
         persistLocked()
@@ -58,12 +60,14 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     }
 
     fun complete(item: WorkItem) = synchronized(lock) {
+        if (inflight?.id == item.id) inflight = null
         state = if (state == State.BUSY) State.ACTIVE else state
         eventLocked("work_completed:" + item.type.name.lowercase())
         persistLocked()
     }
 
     fun fail(item: WorkItem): Boolean = synchronized(lock) {
+        if (inflight?.id == item.id) inflight = null
         val attempts = item.attempts + 1
         if (attempts >= maxAttempts) {
             state = State.DEGRADED
@@ -102,7 +106,23 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                     o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
                     o.optInt("attempts").coerceIn(0, maxAttempts), o.optLong("notBefore", 0L))
             }.distinctBy { it.type.name + ":" + it.key }.take(maxQueue).toMutableList()
-        } catch (_: Exception) { queue = mutableListOf(); state = State.STOPPED }
+            // Recover work claimed immediately before process death.
+            val active = root.optJSONObject("inflight")
+            inflight = active?.let { o ->
+                val type = runCatching { WorkType.valueOf(o.optString("type")) }.getOrNull()
+                val key = o.optString("key").trim().take(100)
+                if (type == null || key.isBlank()) null else WorkItem(
+                    o.optString("id").ifBlank { UUID.randomUUID().toString() }, key, type,
+                    o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
+                    o.optInt("attempts").coerceIn(0, maxAttempts), o.optLong("notBefore", 0L))
+            }
+            inflight?.let { activeItem ->
+                if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
+                    queue.add(activeItem.copy(notBefore = 0L))
+                }
+                inflight = null
+            }
+        } catch (_: Exception) { queue = mutableListOf(); inflight = null; state = State.STOPPED }
     }
 
     private fun persistLocked() {
@@ -112,6 +132,11 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 .put("priority", w.priority).put("createdAt", w.createdAt).put("attempts", w.attempts).put("notBefore", w.notBefore)) }
             val root = JSONObject().put("state", state.name).put("lastEvent", lastEvent)
                 .put("lastChangedAt", lastChangedAt).put("queue", items)
+            inflight?.let { w ->
+                root.put("inflight", JSONObject().put("id", w.id).put("key", w.key).put("type", w.type.name)
+                    .put("priority", w.priority).put("createdAt", w.createdAt).put("attempts", w.attempts)
+                    .put("notBefore", w.notBefore))
+            }
             val tmp = File(file.parentFile, file.name + ".tmp")
             tmp.writeText(root.toString())
             if (!tmp.renameTo(file)) { file.writeText(root.toString()); tmp.delete() }
