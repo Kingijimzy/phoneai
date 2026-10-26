@@ -770,7 +770,7 @@ Rules:
         }
         while (ranSteps.length() > 0) ranSteps.remove(0)
         // Plain chat and questions: ONE small AI call (saves your free limits and is much faster).
-        if (!resumeRequest && !browserActionTask && activeSkillId == null && !AgentHooks.isPhoneActionRequest(command)) {
+        if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command)) {
             ui.phase("thinking")
             val r = try {
                 chatReply(command)
