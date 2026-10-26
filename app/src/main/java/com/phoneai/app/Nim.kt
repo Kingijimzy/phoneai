@@ -56,33 +56,35 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             hits.getOrPut(id) { java.util.concurrent.ConcurrentLinkedDeque() }.addLast(System.currentTimeMillis())
         }
 
-        /** Plain-words summary of every saved key: requests used this minute and any cool-down. */
+        /** Honest provider readiness summary; configured does not mean tested or guaranteed to work. */
+        internal fun readinessLabel(configured: Boolean, paidOptInRequired: Boolean, allowPaid: Boolean, cooldownSeconds: Long): String = when {
+            !configured -> "not connected"
+            paidOptInRequired && !allowPaid -> "connected, but blocked until paid/metered providers are enabled"
+            cooldownSeconds > 0 -> "configured, cooling down for $cooldownSeconds seconds"
+            else -> "configured; eligible to try (actual model and service availability are checked per request)"
+        }
+
         fun status(c: android.content.Context): String {
-            val sb = StringBuilder()
+            val sb = StringBuilder("Provider readiness (saved/configured does not mean live-tested):")
             val now = System.currentTimeMillis()
+            val allowPaid = Prefs.allowPaidProviders(c)
             for (p in Providers.all) {
-                if (!Prefs.hasKey(c, p.id)) continue
-                val cd = ((cooldown[p.id] ?: 0L) - now) / 1000
-                sb.append(p.label).append(": local usage counter ")
-                    .append(usedLastMinute(p.id)).append("/").append(budget(p.id)).append(" requests in the last minute (not the provider's actual quota)")
-                providerQuota[p.id]?.let { sb.append("; provider-reported quota: ").append(it) }
-                if (cd > 0) sb.append(", cooling down ").append(cd).append(" seconds")
-                sb.append(". ")
-            }
-            sb.append("\nSelected chat provider: ").append(Prefs.provider(c, false).label)
-            sb.append("\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
-            lastSuccess["chat"]?.let { sb.append("\nLast successful chat: ").append(it) }
-            lastSuccess["vision"]?.let { sb.append("\nLast successful screen-vision: ").append(it) }
-            if (lastFailure.isNotEmpty()) {
-                sb.append("\nRecent provider errors:")
-                for (p in Providers.all) lastFailure[p.id]?.let {
-                    sb.append("\n• ").append(p.label).append(": ").append(it.take(180))
+                val configured = p.noKey || Prefs.hasKey(c, p.id)
+                val cd = (((cooldown[p.id] ?: 0L) - now) / 1000).coerceAtLeast(0L)
+                sb.append("\\n• ").append(p.label).append(": ")
+                    .append(readinessLabel(configured, p.requiresPaidOptIn, allowPaid, cd))
+                if (configured) {
+                    sb.append("; local request counter ").append(usedLastMinute(p.id)).append("/").append(budget(p.id))
+                        .append(" in the last minute (not the provider's actual quota)")
+                    providerQuota[p.id]?.let { sb.append("; provider-reported quota: ").append(it) }
                 }
+                lastFailure[p.id]?.let { sb.append("; last error: ").append(it.take(140)) }
             }
-            val hasKeys = Providers.all.any { Prefs.hasKey(c, it.id) }
-            return if (!hasKeys && lastSuccess.isEmpty() && lastFailure.isEmpty()) {
-                "No AI keys saved yet. Add a provider key in Settings."
-            } else sb.toString().trim()
+            sb.append("\\nSelected chat provider: ").append(Prefs.provider(c, false).label)
+            sb.append("\\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
+            lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
+            lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
+            return sb.toString().trim()
         }
     }
 
