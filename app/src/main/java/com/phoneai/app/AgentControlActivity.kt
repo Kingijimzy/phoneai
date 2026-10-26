@@ -29,6 +29,7 @@ class AgentControlActivity : Activity() {
     private lateinit var commandModelStatus: TextView
     private lateinit var termuxBridgeStatus: TextView
     private lateinit var remoteComputerStatus: TextView
+    private lateinit var proactiveStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +74,10 @@ class AgentControlActivity : Activity() {
                         getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
                             .putBoolean("termux_bridge_enabled", checked).apply()
                     }
+                    if (pack.id == "proactive") {
+                        if (checked) ProactiveBriefing.schedule(this@AgentControlActivity)
+                        else ProactiveBriefing.cancel(this@AgentControlActivity)
+                    }
                     refresh()
                 }
             }
@@ -103,6 +108,8 @@ class AgentControlActivity : Activity() {
         addButton("OPEN TERMUX BRIDGE") { startActivity(Intent(this, TermuxBridgeActivity::class.java)) }
         remoteComputerStatus = addText("", 12f, Theme.MUTED, false, 4)
         addButton("OPEN REMOTE COMPUTER / CURSOR CLOUD AGENT") { startActivity(Intent(this, CursorCloudAgentActivity::class.java)) }
+        proactiveStatus = addText("", 12f, Theme.MUTED, false, 4)
+        addButton("CONFIGURE PROACTIVE BRIEFING") { startActivity(Intent(this, ProactiveActivity::class.java)) }
         addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, WorkspaceShellActivity::class.java)) }
         addButton("RUN SELF-TEST", true) { runSelfTest() }
         addButton("Open Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -490,6 +497,14 @@ class AgentControlActivity : Activity() {
             "Cursor API key saved · live status checked when opened"
         } else {
             "off · no Cursor API key saved"
+        }
+        val proactivePrefs = getSharedPreferences("phoneai", Context.MODE_PRIVATE)
+        val briefingHour = proactivePrefs.getInt("proactive_briefing_hour", 8).coerceIn(0, 23)
+        val briefingMinute = proactivePrefs.getInt("proactive_briefing_minute", 0).coerceIn(0, 59)
+        proactiveStatus.text = "Proactive briefing: " + when {
+            ProactiveBriefing.enabled(this) -> "ON · daily around %02d:%02d".format(briefingHour, briefingMinute)
+            AgentPolicy.enabled(this, "proactive") -> "pack enabled · daily briefing opt-in is off"
+            else -> "OFF"
         }
     }
 }
