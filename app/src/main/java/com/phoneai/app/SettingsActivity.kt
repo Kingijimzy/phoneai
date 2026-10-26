@@ -1062,6 +1062,28 @@ class SettingsActivity : Activity() {
 
     private fun cliRuntimeSetupDialog(id: String) {
         val name = cliRuntimeLabel(id)
+        if (id == "opencode") {
+            // @opencode/cli explicitly rejects Android (EBADPLATFORM). Do not send phone users
+            // into a guaranteed-failing Termux install command; offer Orion's in-app Code Agent.
+            AlertDialog.Builder(this)
+                .setTitle("OpenCode CLI isn't supported on Android")
+                .setMessage(
+                    "The package you tried to install excludes Android as a platform, so Termux reports EBADPLATFORM even on ARM64. " +
+                    "Orion cannot turn that CLI's browser login into an authenticated OpenCode session. " +
+                    "Use Orion's built-in Code Agent inside the app instead; it uses your selected, connected AI provider and does not require Termux."
+                )
+                .setPositiveButton("OPEN ORION CODE AGENT") { _, _ ->
+                    startActivity(Intent(this, AgentChatActivity::class.java)
+                        .putExtra(AgentChatActivity.EXTRA_AGENT, "coder"))
+                }
+                .setNeutralButton("MANAGE AI CONNECTIONS") { _, _ ->
+                    startActivity(Intent(this, SettingsActivity::class.java)
+                        .putExtra("open_section", "providers"))
+                }
+                .setNegativeButton("CLOSE", null)
+                .show()
+            return
+        }
         val installCommand = when (id) {
             "muse-code" -> "pkg update && pkg install -y curl && curl -fsSL https://dev.meta.ai/install.sh | sh && muse"
             "cursor-agent" -> "pkg update && pkg install -y curl && curl https://cursor.com/install -fsS | bash && agent"
