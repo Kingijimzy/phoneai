@@ -81,11 +81,11 @@ class AgentControlActivity : Activity() {
         addText("Talk and live voice use your normal chat provider. Command planning and screen-control reasoning can use a separate saved text provider/model. No model-list or test request is made when saving this setting.", 12f, Theme.MUTED, false, 4)
         commandModelStatus = addText(commandModelSummary(), 12f, Theme.TEXT, false, 4)
         addButton("Configure Command provider / model") { configureCommandModel() }
-        addButton("Use normal chat model for Command") {
+        addButton("Use automatic fast Command model") {
             Prefs.clearCommandProvider(this)
             AgentPolicy.log(this, "model-routing", "clear-command-override", true, "Command now inherits normal chat provider/model")
             refresh()
-            Toast.makeText(this, "Command now uses the normal chat model.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Command now selects a configured fast provider when available.", Toast.LENGTH_SHORT).show()
         }
 
         section("SELF-TEST")
@@ -135,8 +135,8 @@ class AgentControlActivity : Activity() {
         val id = Prefs.commandProviderId(this)
         val provider = Providers.find(id)
         return if (provider == null) {
-            val normal = Prefs.provider(this, false)
-            "Command model: inherits normal chat selection (${normal.label} / ${Prefs.model(this, normal, false)})."
+            val automatic = Prefs.defaultCommandProvider(this)
+            "Command model: automatic fast-provider selection (${automatic.label} / ${Prefs.model(this, automatic, false)}). Talk and live voice use your normal chat selection."
         } else {
             "Command model override: ${provider.label} / ${Prefs.commandModelId(this) ?: provider.textModel}. Talk and live voice remain on the normal chat selection."
         }
@@ -153,7 +153,7 @@ class AgentControlActivity : Activity() {
                 .setPositiveButton("OK", null).show()
             return
         }
-        val currentId = Prefs.commandProviderId(this) ?: Prefs.provider(this, false).id
+        val currentId = Prefs.commandProviderId(this) ?: Prefs.defaultCommandProvider(this).id
         val selectedIndex = choices.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
         AlertDialog.Builder(this).setTitle("Command text provider")
             .setSingleChoiceItems(choices.map { it.label }.toTypedArray(), selectedIndex) { dialog, index ->
