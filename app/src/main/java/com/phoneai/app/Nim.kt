@@ -12,7 +12,7 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
     val rateLimited: Boolean get() = httpStatus == 429
 }
 
-/** Talks to the selected AI service. Cross-provider fallback is restricted to HTTP 429 and one backup per command. */
+/** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
 class Nim(private val ctx: Context) {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
@@ -514,12 +514,7 @@ class Nim(private val ctx: Context) {
         ""
     }
 
-    /**
-     * Uses the selected compatible provider as primary. A backup provider is considered only
-     * after an explicit HTTP 429 rate-limit response; timeouts, empty replies, bad models,
-     * authentication failures, network errors, and other HTTP statuses stop provider rotation.
-     * Per-command request budgeting still bounds all model probes and retries.
-     */
+    /** A command begins at its explicit caller; the shared budget covers every fallback. */
     fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
         if (cancelled) throw RuntimeException("Stopped.")
         // Do not reset here: Agent.run() can call chat() several times for one
@@ -547,8 +542,8 @@ class Nim(private val ctx: Context) {
             }
 
         val now = System.currentTimeMillis()
-        // A single backup is deliberate: a rate limit must not fan one user command
-        // across a chain of providers and burn several free-tier quotas in seconds.
+        // Auto-switch may try eligible saved providers in order, but the shared 15-request
+        // command budget is the hard cap across model discovery, retries, and provider fallback.
         val backups = if (Prefs.autoSwitch(ctx)) {
             Providers.all
                 .filter { it.id != primary.id && usable(it) && (cooldown[it.id] ?: 0L) <= now }
@@ -681,9 +676,23 @@ class Nim(private val ctx: Context) {
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
-                val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
+                val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
+                // OpenRouter may rate-limit one model while another model on the same
+                // account remains available. Try another unattempted model before cooling
+                // down the whole provider, including models already queued after a 404/410.
+                if (p.id == "openrouter" && attempts < maxAttempts) {
+                    val alternatives = (queue + candidates(p, vision))
+                        .filter { it != model && it !in tried }
+                        .distinct()
+                    if (alternatives.isNotEmpty()) {
+                        queue.clear()
+                        queue.addAll(alternatives)
+                        onStatus?.invoke("OpenRouter rate-limited $model (429); trying another OpenRouter model...")
+                        continue
+                    }
+                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
-                throw AiException("${p.label}: free limit reached (429).", 429)
+                throw AiException("${p.label}: rate limit reached (429); retry after about ${wait.coerceIn(8, 60)} seconds.", 429)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
@@ -731,7 +740,7 @@ class Nim(private val ctx: Context) {
                         continue
                     }
                 }
-                throw AiException(p.label + ": model returned an empty response. Try another model or check that model's NVIDIA API access.")
+                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.")
             }
             Prefs.setModel(ctx, p, vision, model)
             return content
