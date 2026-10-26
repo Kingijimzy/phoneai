@@ -81,6 +81,7 @@ class AgentControlActivity : Activity() {
 
         section("SELF-TEST")
         testReport = addText("Not run yet.", 12f, Theme.MUTED, false, 4)
+        addButton("OPEN WORKSPACE TERMINAL") { startActivity(Intent(this, WorkspaceShellActivity::class.java)) }
         addButton("RUN SELF-TEST", true) { runSelfTest() }
         addButton("Open Android accessibility settings") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
 
