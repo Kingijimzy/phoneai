@@ -884,14 +884,21 @@ class SettingsActivity : Activity() {
             bottomMargin = dp(2)
         })
 
-        when (intent.getStringExtra("open_section")) {
-            "memory" -> memoryDialog()
-            "skills" -> skillsDialog()
-            "routines" -> routinesDialog()
-            "character" -> characterDialog()
-            "voice" -> voiceDialog()
-            "providers" -> providerDialog(false)
-            "integrations" -> telegramDialog()
+        if (intent.getBooleanExtra("start_openrouter_signin", false)) {
+            // Wait until the Settings screen is attached before launching the external OAuth page.
+            window.decorView.post {
+                if (!isFinishing && !isDestroyed) startOpenRouterSignIn()
+            }
+        } else {
+            when (intent.getStringExtra("open_section")) {
+                "memory" -> memoryDialog()
+                "skills" -> skillsDialog()
+                "routines" -> routinesDialog()
+                "character" -> characterDialog()
+                "voice" -> voiceDialog()
+                "providers" -> providerDialog(false)
+                "integrations" -> telegramDialog()
+            }
         }
     }
 
