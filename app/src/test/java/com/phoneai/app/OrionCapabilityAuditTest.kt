@@ -50,4 +50,17 @@ class OrionCapabilityAuditTest {
         assertEquals(OrionCapabilityAudit.Status.BLOCKED, report.status)
         assertEquals(report.limitations.size, report.limitations.distinct().size)
     }
+    @Test fun unavailableCurrentWindowCannotBeReportedAsReady() {
+        val report = OrionCapabilityAudit.evaluate(
+            registeredTools = 42,
+            implementedPacks = 11,
+            enabledPacks = 3,
+            accessibilityReady = true,
+            screenDisclosureAccepted = true,
+            screenPerceptionReady = false
+        )
+        assertEquals(OrionCapabilityAudit.Status.LIMITED, report.status)
+        assertTrue(report.limitations.contains("screen_perception_unavailable"))
+    }
+
 }
