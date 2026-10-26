@@ -74,6 +74,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private lateinit var voice: Voice
     @Volatile private var orionRuntime: OrionRuntime? = null
     @Volatile private var runtimeDrainScheduled = false
+    @Volatile private var runtimeDrainRequested = false
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
@@ -189,7 +190,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     private fun scheduleRuntimeDrain() {
-        if (runtimeDrainScheduled) return
+        if (runtimeDrainScheduled) {
+            runtimeDrainRequested = true
+            return
+        }
         runtimeDrainScheduled = true
         worker.execute {
             try {
@@ -224,12 +228,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 }
             } finally {
                 runtimeDrainScheduled = false
-                // If a concurrent event arrived during drain, process it without polling.
-                if ((orionRuntime?.snapshot()?.queued ?: 0) > 0) {
-                    val runtime = orionRuntime
-                    if (runtime != null && runtime.snapshot().state == OrionRuntime.State.ACTIVE) {
-                        scheduleRuntimeDrain()
-                    }
+                // Only schedule again when a real event arrived during processing. A delayed
+                // retry must wait for a future event, never spin in a tight retry loop.
+                if (runtimeDrainRequested) {
+                    runtimeDrainRequested = false
+                    scheduleRuntimeDrain()
                 }
             }
         }
