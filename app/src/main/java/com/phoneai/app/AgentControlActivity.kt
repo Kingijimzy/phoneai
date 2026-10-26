@@ -249,11 +249,15 @@ class AgentControlActivity : Activity() {
                 else "FAIL: ${value.take(170)}"
             }
             test("Sample phone reads") {
-                val tools = Tools(this)
-                val time = tools.time()
-                val battery = tools.battery()
-                if (time.isNotBlank() && battery.isNotBlank() && !battery.startsWith("error", true)) "PASS: local time and battery read; no phone action performed"
-                else "FAIL: time/battery read unavailable"
+                val service = PhoneAiService.instance
+                if (service == null) "SKIP: Orion accessibility service is not active"
+                else {
+                    val tools = Tools(service)
+                    val time = tools.time()
+                    val battery = tools.battery()
+                    if (time.isNotBlank() && battery.isNotBlank() && !battery.startsWith("error", true)) "PASS: local time and battery read; no phone action performed"
+                    else "FAIL: time/battery read unavailable"
+                }
             }
             test("Accessibility permission") {
                 val enabled = runCatching {
