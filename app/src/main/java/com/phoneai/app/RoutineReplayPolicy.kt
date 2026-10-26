@@ -26,6 +26,10 @@ internal object RoutineReplayPolicy {
         return names.firstOrNull { MacroStore.norm(it) == wanted }
     }
 
+    /** Explicit routine wording must return a clear not-found result, never an AI guess. */
+    fun isExplicitRoutineCommand(command: String): Boolean =
+        Regex("(?i)^\\s*(?:please\\s+)?(?:run|replay|play|execute|resume)\\s+(?:the\\s+)?(?:saved\\s+)?(?:routine|macro)\\s+.+$").matches(command.trim())
+
     fun signature(step: JSONObject, key: String): IntArray? {
         val a = step.optJSONArray(key) ?: return null
         if (a.length() != 108) return null
@@ -44,9 +48,12 @@ internal object RoutineReplayPolicy {
         return scaled.takeIf { it in 0 until currentSize }
     }
 
-    fun resumeDecision(beforeMatches: Boolean, afterMatches: Boolean): ResumeDecision = when {
-        beforeMatches && !afterMatches -> ResumeDecision.RETRY_IN_FLIGHT
-        afterMatches && !beforeMatches -> ResumeDecision.SKIP_IN_FLIGHT
+    enum class SignatureState { MATCH, MISMATCH, UNAVAILABLE }
+
+    /** Unknown/unreadable capture is never treated as a verified mismatch. */
+    fun resumeDecision(before: SignatureState, after: SignatureState): ResumeDecision = when {
+        before == SignatureState.MATCH && after == SignatureState.MISMATCH -> ResumeDecision.RETRY_IN_FLIGHT
+        before == SignatureState.MISMATCH && after == SignatureState.MATCH -> ResumeDecision.SKIP_IN_FLIGHT
         else -> ResumeDecision.AMBIGUOUS
     }
 
