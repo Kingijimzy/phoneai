@@ -55,8 +55,8 @@ object TradeHistoryStore {
 
     /** RFC-4180-style parser for quoted commas, escaped quotes and quoted newlines. */
     internal fun parseCsv(text: String): List<List<String>> {
-        val firstLine = text.substringBefore('\n')
-        val delimiter = if (firstLine.count { it == ';' } > firstLine.count { it == ',' }) ';' else ','
+        val sample = text.lineSequence().take(20).joinToString("\n")
+        val delimiter = if (sample.count { it == ';' } > sample.count { it == ',' }) ';' else ','
         val rows = mutableListOf<List<String>>()
         var row = mutableListOf<String>()
         val field = StringBuilder()
