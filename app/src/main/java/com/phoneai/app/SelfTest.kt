@@ -16,7 +16,7 @@ object SelfTest {
         val out = ArrayList<Result>()
         val keyed = Providers.all.filter { Prefs.hasKey(c, it.id) }
         out += Result("AI providers", keyed.isNotEmpty(),
-            if (keyed.isEmpty()) "no API key saved" else "${keyed.size} ready: " + keyed.joinToString { it.name }.take(70) +
+            if (keyed.isEmpty()) "no API key saved" else "${keyed.size} ready: " + keyed.joinToString { it.label }.take(70) +
                 if (keyed.size < 2) " (add a 2nd for automatic backup)" else " (rotation available)")
         out += Result("Accessibility (phone control)", PhoneAiService.instance != null,
             if (PhoneAiService.instance != null) "service running" else "enable Orion in Accessibility settings")
