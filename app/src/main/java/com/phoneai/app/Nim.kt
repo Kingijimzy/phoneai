@@ -90,6 +90,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     private fun selectedProvider(vision: Boolean): Provider {
         if (commandMode && !vision) {
             Prefs.commandProviderId(ctx)?.let { Providers.find(it) }?.let { return it }
+            return Prefs.defaultCommandProvider(ctx)
         }
         return Prefs.provider(ctx, vision)
     }
