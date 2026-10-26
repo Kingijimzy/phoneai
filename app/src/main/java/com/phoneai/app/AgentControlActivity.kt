@@ -77,7 +77,15 @@ class AgentControlActivity : Activity() {
         addButton("Configure tool allowlist") { configureAllowlist() }
         addButton("Propose a new skill") { proposeSkill() }
         addButton("Review / revoke skills") { reviewSkills() }
-        addText("Talk/chat and Command/tool work are separate modes in the policy design. Model override controls are not yet connected to every chat/tool path; this screen will not claim a split is active until those call sites use it.", 12f, Theme.MUTED, false, 4)
+        addText("Talk and live voice use your normal chat provider. Command planning and screen-control reasoning can use a separate saved text provider/model. No model-list or test request is made when saving this setting.", 12f, Theme.MUTED, false, 4)
+        addText(commandModelSummary(), 12f, Theme.TEXT, false, 4)
+        addButton("Configure Command provider / model") { configureCommandModel() }
+        addButton("Use normal chat model for Command") {
+            Prefs.clearCommandProvider(this)
+            AgentPolicy.log(this, "model-routing", "clear-command-override", true, "Command now inherits normal chat provider/model")
+            refresh()
+            Toast.makeText(this, "Command now uses the normal chat model.", Toast.LENGTH_SHORT).show()
+        }
 
         section("SELF-TEST")
         testReport = addText("Not run yet.", 12f, Theme.MUTED, false, 4)
@@ -122,6 +130,62 @@ class AgentControlActivity : Activity() {
         root.addView(b, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         return b
     }
+    private fun commandModelSummary(): String {
+        val id = Prefs.commandProviderId(this)
+        val provider = Providers.find(id)
+        return if (provider == null) {
+            val normal = Prefs.provider(this, false)
+            "Command model: inherits normal chat selection (${normal.label} / ${Prefs.model(this, normal, false)})."
+        } else {
+            "Command model override: ${provider.label} / ${Prefs.commandModelId(this) ?: provider.textModel}. Talk and live voice remain on the normal chat selection."
+        }
+    }
+
+    private fun configureCommandModel() {
+        val choices = Providers.all.filter { provider ->
+            (Prefs.hasKey(this, provider.id) || provider.noKey) &&
+                (!provider.requiresPaidOptIn || Prefs.allowPaidProviders(this))
+        }
+        if (choices.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("No available Command provider")
+                .setMessage("Add a provider key in Settings first. Saving a model override does not test the provider or spend an API request.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val currentId = Prefs.commandProviderId(this) ?: Prefs.provider(this, false).id
+        val selectedIndex = choices.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+        AlertDialog.Builder(this).setTitle("Command text provider")
+            .setSingleChoiceItems(choices.map { it.label }.toTypedArray(), selectedIndex) { dialog, index ->
+                val provider = choices[index]
+                val existing = if (Prefs.commandProviderId(this) == provider.id) {
+                    Prefs.commandModelId(this) ?: provider.textModel
+                } else Prefs.model(this, provider, false)
+                val modelInput = android.widget.EditText(this).apply {
+                    hint = "Model ID (provider's exact model identifier)"
+                    setText(existing)
+                    setSingleLine(true)
+                    selectAll()
+                }
+                AlertDialog.Builder(this).setTitle("Command model · ${provider.label}")
+                    .setMessage("Use an exact text-chat model ID. This is saved locally; Orion will not call /models or send a test request here. Paid/metered providers remain blocked unless explicitly enabled in Settings.")
+                    .setView(modelInput)
+                    .setNegativeButton("CANCEL", null)
+                    .setPositiveButton("SAVE") { _, _ ->
+                        val model = modelInput.text.toString().trim()
+                        if (model.isBlank()) {
+                            Toast.makeText(this, "Model ID cannot be empty.", Toast.LENGTH_LONG).show()
+                        } else {
+                            Prefs.setCommandProvider(this, provider.id, model)
+                            AgentPolicy.log(this, "model-routing", "set-command-override", true, "Command model override saved for ${provider.id}; model id stored")
+                            refresh()
+                            Toast.makeText(this, "Command model saved. No provider test request was sent.", Toast.LENGTH_LONG).show()
+                        }
+                    }.show()
+                dialog.dismiss()
+            }
+            .setNegativeButton("CANCEL", null).show()
+    }
+
     private fun chooseMode() {
         val modes = AgentPolicy.Mode.values()
         AlertDialog.Builder(this).setTitle("Approval mode")
