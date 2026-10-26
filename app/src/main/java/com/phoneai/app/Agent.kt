@@ -178,7 +178,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return denied
             }
         }
-        val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
+        val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link")
+        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
+        val shouldVerifyAction = tool in actionTools &&
+            (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
+        // Capture a real pre-action state where possible, so a later comparison can
+        // verify the change instead of merely reporting that a dispatch was accepted.
+        if (shouldVerifyAction && lastScreenSnapshot.isBlank()) {
+            try {
+                lastScreenSnapshot = if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen()
+            } catch (_: Exception) {
+                lastScreenSnapshot = ""
+            }
+        }
         // Stop may be tapped while the approval dialog is open. Recheck immediately
         // before execution so an approved-but-now-cancelled action cannot start afterward.
         AgentDispatchPolicy.cancellationBlockReason(tool, stopped)?.let { reason ->
@@ -199,10 +211,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         } catch (e: Exception) {
             "error: ${e.message ?: e.javaClass.simpleName}"
         }
-        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file", "open_deep_link")
         var verifiedResult = result
-        val shouldVerifyAction = tool in actionTools &&
-            (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
         if (!result.trimStart().startsWith("error", ignoreCase = true) && shouldVerifyAction) {
             if (lastScreenSnapshot.isBlank()) {
                 verifiedResult = "error: verification unavailable: Orion had no pre-action screen snapshot, so '$tool' cannot be reported as confirmed. Original result: $result"
