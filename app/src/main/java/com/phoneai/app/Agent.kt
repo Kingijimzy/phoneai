@@ -962,7 +962,7 @@ Rules:
                 try { ExperienceStore.recordSuccess(svc, currentTask, taskProofs.snapshot().filter { it.success }.map { it.tool }) } catch (_: Exception) { }
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
-                    ui.note("▸ Cost: ${nim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
+                    ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
                     if (runTools >= 2 && runFailed == 0 && ExperienceStore.routineReady(svc, currentTask)) ui.note("💡 I've done this the same way 3 times. Say \"save this as a routine <name>\" and I'll repeat it instantly with no AI.")
                 } catch (_: Exception) { }
                 if (!AgentCheckpointStore.complete(svc)) {
