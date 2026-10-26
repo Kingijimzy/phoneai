@@ -105,7 +105,7 @@ class CursorCloudAgentActivity : Activity() {
         })
 
         body.addView(section("REPOSITORY"))
-        repoUrl = editField("Repository URL, e.g. https://github.com/owner/repo").apply {
+        repoUrl = editField("Repository URL, e.g. https://github.com/owner/repo", secret = false).apply {
             setText(sp.getString("cursor_agent_repo", "https://github.com/Kingijimzy/phoneai"))
         }
         body.addView(repoUrl)
