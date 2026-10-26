@@ -990,7 +990,7 @@ Rules:
                     return
                 }
                 try { ExperienceStore.recordSuccess(svc, currentTask, taskProofs.snapshot().filter { it.success }.map { it.tool }) } catch (_: Exception) { }
-                try { svc.onAgentTaskFinished(currentTask, runFailed == 0) } catch (_: Exception) { }
+                try { svc.onAgentTaskFinished(currentTask, true) } catch (_: Exception) { }
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
