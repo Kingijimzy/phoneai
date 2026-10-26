@@ -60,4 +60,24 @@ class OrionIntegrationCapabilityPolicyTest {
         )
         assertEquals(OrionIntegrationPlanner.NextStep.ASK_TO_CONNECT, plan.nextStep)
     }
+
+    @Test fun disabledConnectorToolsAreReportedAsMissingEvenIfAccountIsConfigured() {
+        val plan = OrionIntegrationPlanner.plan(
+            OrionIntegrationPlanner.Provider.TELEGRAM,
+            OrionIntegrationPlanner.State.CAPABILITY_MISSING,
+            "read my Telegram inbox",
+            emptySet()
+        )
+        assertEquals(OrionIntegrationPlanner.NextStep.ASK_TO_ENABLE_OR_INSTALL, plan.nextStep)
+    }
+
+    @Test fun unavailableTermuxBridgeDoesNotPretendItCanInstallTools() {
+        val plan = OrionIntegrationPlanner.plan(
+            OrionIntegrationPlanner.Provider.TERMUX,
+            OrionIntegrationPlanner.State.CAPABILITY_MISSING,
+            "install a package in Termux",
+            emptySet()
+        )
+        assertEquals(OrionIntegrationPlanner.NextStep.ASK_TO_ENABLE_OR_INSTALL, plan.nextStep)
+    }
 }
