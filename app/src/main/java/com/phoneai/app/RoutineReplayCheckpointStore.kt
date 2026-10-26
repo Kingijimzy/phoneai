@@ -37,19 +37,19 @@ internal object RoutineReplayCheckpointStore {
     }
 
     fun markInFlight(context: Context, routine: String, totalSteps: Int, index: Int): Boolean = synchronized(lock) {
-        val old = load(context)
+        val old = load(context) ?: return@synchronized false
         if (!RoutineReplayCheckpointPolicy.canMarkInFlight(old, routine, totalSteps, index)) return@synchronized false
         writeLocked(context, old.copy(inFlightStep = index, updatedAt = System.currentTimeMillis()))
     }
 
     fun markCompleted(context: Context, routine: String, index: Int): Boolean = synchronized(lock) {
-        val old = load(context)
+        val old = load(context) ?: return@synchronized false
         if (!RoutineReplayCheckpointPolicy.canMarkCompleted(old, routine, index)) return@synchronized false
         writeLocked(context, old.copy(nextStep = index + 1, inFlightStep = -1, updatedAt = System.currentTimeMillis()))
     }
 
     fun pauseAt(context: Context, routine: String, index: Int): Boolean = synchronized(lock) {
-        val old = load(context)
+        val old = load(context) ?: return@synchronized false
         if (!RoutineReplayCheckpointPolicy.canPause(old, routine, index)) return@synchronized false
         writeLocked(context, old.copy(nextStep = index, inFlightStep = -1, updatedAt = System.currentTimeMillis()))
     }
