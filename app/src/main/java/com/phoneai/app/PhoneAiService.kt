@@ -356,6 +356,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 speaking -> OrbView.Mode.SPEAKING
                 confirmView != null -> OrbView.Mode.WAITING_APPROVAL
                 listening -> OrbView.Mode.LISTENING
+                phase == "error" -> OrbView.Mode.ERROR
                 running -> if (phase == "acting") OrbView.Mode.ACTING else OrbView.Mode.THINKING
                 else -> OrbView.Mode.IDLE
             }
@@ -368,6 +369,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     OrbView.Mode.SPEAKING -> "Speaking…"
                     OrbView.Mode.ACTING -> "Working on your request…"
                     OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
+                    OrbView.Mode.ERROR -> "Task paused — check the last step"
                 }, m
             )
             micBtnRef?.text = if (listening) "Stop" else "Mic"
@@ -379,6 +381,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 OrbView.Mode.SPEAKING -> "Speaking..."
                 OrbView.Mode.ACTING -> "Working on it..."
                 OrbView.Mode.WAITING_APPROVAL -> "Waiting for your approval"
+                OrbView.Mode.ERROR -> "Task paused — check the last step"
             }
         }
     }

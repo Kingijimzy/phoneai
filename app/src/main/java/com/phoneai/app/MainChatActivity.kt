@@ -1157,6 +1157,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.SPEAKING -> Triple("SPEAKING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
                 OrbView.Mode.ACTING -> Triple("WORKING", Theme.WARN, Pair(Theme.BG, Theme.LINE))
                 OrbView.Mode.WAITING_APPROVAL -> Triple("NEEDS APPROVAL", Theme.WARN, Pair(Theme.BG, Theme.LINE))
+                OrbView.Mode.ERROR -> Triple("ERROR", Theme.WARN, Pair(Theme.BG, Theme.LINE))
             }
             val short = state.first
             val accent = state.second

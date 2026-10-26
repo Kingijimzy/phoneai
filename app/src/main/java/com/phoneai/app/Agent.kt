@@ -113,7 +113,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             targetLabel = targetLabel,
             currentPackage = svc.currentPackageName(),
             currentLabel = svc.currentAppLabel(),
-            stopped = stopped
+            stopped = stopped,
+            executionMode = Prefs.executionMode(svc)
         )
         if (dispatchBlock != null) {
             val blocked = "error: " + dispatchBlock
@@ -412,6 +413,13 @@ Rules:
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
             sb.append("\n\n").append(CharacterProfile.systemInstruction(Prefs.characterProfile(svc)))
+            val presetInstruction = when (Prefs.taskPreset(svc)) {
+                "TRADING" -> "TASK PRESET — TRADING: Treat all market analysis as evidence-first and read-only. State symbol, timeframe, source/data freshness, bias, invalidation, and uncertainty when available. Never place, close, or cancel orders automatically. Trading writes remain blocked by the trading read-only preference unless the user explicitly changes that setting; existing confirmations and risk limits still apply."
+                "GAMING" -> "TASK PRESET — GAMING: Prioritize visible-screen evidence, concise stepwise controls, and low-latency local actions. Use bounded play steps, inspect after meaningful screen changes, stop on purchase/payment/login/security prompts, and never spend currency or confirm purchases without explicit approval."
+                "RESEARCH" -> "TASK PRESET — RESEARCH: Prefer read-only sources, compare evidence, identify freshness and uncertainty, preserve source URLs, and do not take phone or external write actions unless the user separately asks for that action."
+                else -> "TASK PRESET — GENERAL: Match the user's goal, use the narrowest suitable tools, and keep all existing task-scope, safety, and approval checks."
+            }
+            sb.append("\n\n").append(presetInstruction)
             sb.append("\n\nLong-term memory (id, category, text):\n").append(MemoryStore.promptBlock(svc, request).take(if (request.isNullOrBlank()) 1400 else 900))
             if (!request.isNullOrBlank()) AgentLessons.learnFrom(svc, "orion", request)
             sb.append("\n\nYour specialist team (delegate with ask_agent when the user wants that specialty; they also have their own screen under Tools → Agents):\n").append(AgentProfiles.rosterBlock())
@@ -839,7 +847,15 @@ Rules:
             }
             if (!AgentCheckpointStore.record(svc, tool, args, result)) {
                 AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
+                ui.phase("error")
                 ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
+                return
+            }
+            val toolFailure = ToolResultPolicy.failureReason(result)
+            if (toolFailure != null) {
+                AgentCheckpointStore.pause(svc)
+                ui.phase("error")
+                ui.say("I couldn't complete the step '$tool'. $toolFailure I paused the task and saved its progress; I have not marked the task complete. Check the current screen before asking me to continue.")
                 return
             }
             history.put(msg("user", "RESULT: " + result.take(3500)))

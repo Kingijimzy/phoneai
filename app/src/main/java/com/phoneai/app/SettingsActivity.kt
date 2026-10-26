@@ -518,11 +518,35 @@ class SettingsActivity : Activity() {
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
+        add(s2, button("Execution mode · " + Prefs.executionMode(this), false) {
+            showChoiceDialog(
+                "Execution mode",
+                "PLAN blocks write actions. ACT follows your task scope and existing approvals. FULL permits broader tool use but never bypasses safety checks, task scope, or confirmations.",
+                listOf("PLAN · plan and inspect, no write actions", "ACT · execute within the request scope", "FULL · broader tools, safety gates remain"),
+                { index ->
+                    Prefs.setExecutionMode(this, listOf("PLAN", "ACT", "FULL")[index])
+                    recreate()
+                }
+            )
+        }, 8)
+        add(s2, text("PLAN blocks write tools at the dispatch boundary. ACT is the default. FULL does not bypass confirmation, sensitive-screen, or task-scope protections.", 12f, Theme.MUTED), 4)
+        add(s2, button("Task preset · " + Prefs.taskPreset(this), false) {
+            showChoiceDialog(
+                "Task preset",
+                "Presets change Orion's planning emphasis only. They do not grant extra permissions or bypass approvals.",
+                listOf("GENERAL · everyday companion", "TRADING · evidence-first, read-only bias", "GAMING · bounded visual steps", "RESEARCH · sources and uncertainty"),
+                { index ->
+                    Prefs.setTaskPreset(this, listOf("GENERAL", "TRADING", "GAMING", "RESEARCH")[index])
+                    recreate()
+                }
+            )
+        }, 8)
         switchRow(s2, "Allow potentially paid/metered providers (off by default)", Prefs.allowPaidProviders(this)) {
             Prefs.setAllowPaidProviders(this, it)
         }
         add(s2, text("When enabled, providers or models marked paid/metered may consume paid credits. With this off, Orion blocks those requests and will not use them as a fallback.", 12f, Theme.MUTED), 4)
         add(s2, button("AI health, provider status & quota", false) { showAiHealth() }, 10)
+        add(s2, button("Recent tool actions · local privacy-safe log", false) { showActionLog() }, 8)
         add(s2, button("Test the AI", false) { testAi() }, 10)
         add(s2, button("Choose chat model", false) { pickModel(false) }, 8)
         add(s2, button("Choose vision model", false) { pickModel(true) }, 8)
@@ -1277,6 +1301,33 @@ class SettingsActivity : Activity() {
                 runOnUiThread { Toast.makeText(this, "Problem: " + e.message, Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    private fun showActionLog() {
+        val events = ActionLogStore.all(this).take(30)
+        val formatter = SimpleDateFormat("MMM d, HH:mm:ss", Locale.getDefault())
+        val body = if (events.isEmpty()) {
+            "No recorded tool actions yet."
+        } else {
+            events.joinToString("\n\n") { event ->
+                val state = if (event.outcome.contains("error", true)) "FAILED / UNVERIFIED" else "RESULT RETURNED"
+                formatter.format(Date(event.at)) + "  ·  " + state + "\nTool: " + event.tool +
+                    if (event.failureCategory.isNotBlank()) "\nCategory: " + event.failureCategory else ""
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Recent tool actions")
+            .setMessage(body + "\n\nPrivacy: this local log stores tool names and generic outcomes only, not arguments, message contents, or screen text. A returned result is not proof that the overall task completed.")
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Clear log") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Clear local action history?")
+                    .setMessage("This deletes the locally saved tool-name/outcome history.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear") { _, _ -> ActionLogStore.clear(this); Toast.makeText(this, "Action history cleared.", Toast.LENGTH_SHORT).show() }
+                    .show()
+            }
+            .show()
     }
 
     private fun showAiHealth() {
