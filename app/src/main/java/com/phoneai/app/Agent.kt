@@ -1240,12 +1240,18 @@ Rules:
                     ui.say("I stopped before marking this task complete: " + completion.reason + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
-                try { ExperienceStore.recordSuccess(svc, currentTask, taskProofs.snapshot().filter { it.success }.map { it.tool }) } catch (_: Exception) { }
+                val runEvidence = taskProofs.snapshot()
+                val cleanLearningEvidence = ExperiencePolicy.hasCleanSuccessEvidence(runEvidence.map { it.success }, runFailed)
+                if (cleanLearningEvidence) {
+                    try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success }.map { it.tool }) } catch (_: Exception) { }
+                }
+                // A task may finish after a recovered error; report that final outcome separately from
+                // routine learning, which accepts only a clean, fully successful trace.
                 try { svc.onAgentTaskFinished(currentTask, true) } catch (_: Exception) { }
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
-                    if (runTools >= 2 && runFailed == 0 && ExperienceStore.routineReady(svc, currentTask)) ui.note("💡 I've done this the same way 3 times. Say \"save this as a routine <name>\" and I'll repeat it instantly with no AI.")
+                    if (runTools >= 2 && cleanLearningEvidence && ExperienceStore.routineReady(svc, currentTask)) ui.note("💡 I've done this the same way 3 times. Say \"save this as a routine <name>\" and I'll repeat it instantly with no AI.")
                 } catch (_: Exception) { }
                 if (!AgentCheckpointStore.complete(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
