@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import org.json.JSONObject
@@ -17,15 +18,26 @@ import java.net.URL
 class OpenRouterOAuthActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val code = intent?.data?.getQueryParameter("code")
-        if (intent?.data?.scheme != "phoneai" ||
-            intent?.data?.host != "oauth" ||
-            intent?.data?.path != "/openrouter" ||
-            code.isNullOrBlank()
+        val callback = intent?.data
+        val code = callback?.getQueryParameter("code")
+        val authError = callback?.getQueryParameter("error")
+        if (callback?.scheme != "phoneai" ||
+            callback.host != "oauth" ||
+            callback.path != "/openrouter"
         ) {
             Prefs.setOpenRouterOAuthVerifier(this, "")
-            Toast.makeText(this, "OpenRouter sign-in was cancelled or returned no authorization code.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Invalid OpenRouter sign-in callback.", Toast.LENGTH_LONG).show()
             finish()
+            return
+        }
+        if (!authError.isNullOrBlank() || code.isNullOrBlank()) {
+            Prefs.setOpenRouterOAuthVerifier(this, "")
+            Toast.makeText(
+                this,
+                if (authError.isNullOrBlank()) "OpenRouter sign-in was cancelled." else "OpenRouter authorization was not approved.",
+                Toast.LENGTH_LONG
+            ).show()
+            returnToChat()
             return
         }
         val verifier = Prefs.openRouterOAuthVerifier(this)
@@ -78,13 +90,18 @@ class OpenRouterOAuthActivity : Activity() {
             }
             runOnUiThread {
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-                if (saved) {
-                    setResult(RESULT_OK)
-                } else {
-                    setResult(RESULT_CANCELED)
-                }
-                finish()
+                setResult(if (saved) RESULT_OK else RESULT_CANCELED)
+                returnToChat()
             }
         }.start()
+    }
+
+    /** Bring Orion back to the foreground after the browser authorization round-trip. */
+    private fun returnToChat() {
+        val chat = Intent(this, MainChatActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(chat)
+        finish()
     }
 }
