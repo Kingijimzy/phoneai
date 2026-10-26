@@ -158,7 +158,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Choose provider")
-            .setMessage("Provider choices open immediately. Selecting a provider does not make a network request.")
+            // Keep this picker list-first; some Android AlertDialog implementations hide rows
+            // when setMessage() and setItems() are combined.
             .setItems(labels) { _, which ->
                 val p = providers[which]
                 Prefs.setProvider(this, false, p.id)
@@ -185,7 +186,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("AI connections")
-            .setMessage("This list is local and opens without loading Settings or contacting a provider.")
             .setItems(labels) { _, which ->
                 val p = providers[which]
                 Prefs.setProvider(this, false, p.id)
@@ -306,10 +306,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }.toTypedArray()
         val builder = AlertDialog.Builder(this)
             .setTitle("${p.label} · choose model")
-            .setMessage(if (online)
-                "Cached catalogue available. Selecting a model saves it immediately; no test request is sent."
-                else
-                "Instant local choices. Cached models are shown when available; no network request is needed to select one.")
+            // Keep model IDs visible on Android variants where setMessage() + setItems()
+            // renders the message but hides selectable rows.
             .setItems(labels) { _, which ->
                 val selected = options[which]
                 Prefs.setModel(this, p, false, selected)
