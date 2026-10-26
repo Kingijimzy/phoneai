@@ -222,44 +222,20 @@ class TermuxBridgeActivity : Activity() {
     }
 
     private fun dispatchCommand(text: String) {
-        val requestCode = nextRequestCode()
-        val callback = Intent(this, TermuxBridgeResultReceiver::class.java)
-            .putExtra(TermuxBridgeResultReceiver.EXTRA_REQUEST_ID, requestCode)
-        val pendingFlags = PendingIntent.FLAG_ONE_SHOT or
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-        val resultPendingIntent = PendingIntent.getBroadcast(this, requestCode, callback, pendingFlags)
-        val intent = Intent().apply {
-            setClassName("com.termux", "com.termux.app.RunCommandService")
-            action = "com.termux.RUN_COMMAND"
-            putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/timeout")
-            putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf(
-                "${AgentPolicy.maxMinutes(this) * 60}s",
-                "/data/data/com.termux/files/usr/bin/bash", "-lc", text
-            ))
-            putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
-            putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
-            putExtra("com.termux.RUN_COMMAND_COMMAND_LABEL", "Orion approved command")
-            putExtra("com.termux.RUN_COMMAND_COMMAND_DESCRIPTION", "Command approved in Orion's Termux bridge.")
-            putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", resultPendingIntent)
+        val result = TermuxBridgeRunner.dispatch(this, text)
+        if (!result.startsWith("error:", ignoreCase = true)) {
+            commandsThisSession++
+            prefs.edit().putInt("termux_session_commands", commandsThisSession).apply()
         }
-        commandsThisSession++
-        prefs.edit().putInt("termux_session_commands", commandsThisSession).apply()
-        TermuxBridgeResultStore.lastResult = "Command dispatched to Termux. Waiting for Termux's result callback; execution is not confirmed yet."
+        TermuxBridgeResultStore.lastResult = result
         TermuxBridgeResultStore.lastExitCode = null
         refreshOutput()
         refreshStatus()
-        try {
-            startService(intent)
-            AgentPolicy.log(this, "termux_command", "dispatch-result", null, "Android accepted Termux service start; awaiting Termux result callback")
-        } catch (e: SecurityException) {
-            TermuxBridgeResultStore.lastResult = "UNVERIFIED: Termux rejected the request. Check PhoneAI's Run commands permission and Termux's allow-external-apps setting. No successful execution is claimed."
-            AgentPolicy.log(this, "termux_command", "dispatch-result", false, "Termux permission or external-app policy rejected service start")
-            refreshOutput()
-        } catch (e: Exception) {
-            TermuxBridgeResultStore.lastResult = "FAILED TO DISPATCH: ${e.javaClass.simpleName}. No command result was received."
-            AgentPolicy.log(this, "termux_command", "dispatch-result", false, "service start failed: ${e.javaClass.simpleName}")
-            refreshOutput()
-        }
+        AgentPolicy.log(
+            this, "termux_command", "dispatch-result",
+            if (result.startsWith("error:", ignoreCase = true)) false else null,
+            if (result.startsWith("error:", ignoreCase = true)) "dispatch failed; details shown in bridge" else "dispatch accepted; awaiting Termux result callback"
+        )
     }
 
     private fun refreshOutput() {
