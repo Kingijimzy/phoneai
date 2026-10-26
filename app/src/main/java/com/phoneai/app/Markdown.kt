@@ -6,6 +6,7 @@ import android.text.Spanned
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
+import android.text.style.URLSpan
 
 /** Tiny chat-bubble markdown: **bold**, *italic*, `code`, # headings, - bullets. */
 object Markdown {
@@ -35,7 +36,7 @@ object Markdown {
     }
 
     private fun appendInline(sb: SpannableStringBuilder, line: String) {
-        val pattern = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`|(?<![*\\w])\\*([^*\\n]+)\\*(?!\\w)")
+        val pattern = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`|(?<![*\\w])\\*([^*\\n]+)\\*(?!\\w)|(https?://[^\\s)]+)")
         var last = 0
         for (m in pattern.findAll(line)) {
             sb.append(line, last, m.range.first)
@@ -43,7 +44,8 @@ object Markdown {
             when {
                 m.groups[1] != null -> { sb.append(m.groupValues[1]); sb.setSpan(StyleSpan(Typeface.BOLD), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
                 m.groups[2] != null -> { sb.append(m.groupValues[2]); sb.setSpan(TypefaceSpan("monospace"), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-                else -> { sb.append(m.groupValues[3]); sb.setSpan(StyleSpan(Typeface.ITALIC), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+                m.groups[3] != null -> { sb.append(m.groupValues[3]); sb.setSpan(StyleSpan(Typeface.ITALIC), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+                else -> { sb.append(m.groupValues[4]); sb.setSpan(URLSpan(m.groupValues[4]), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
             }
             last = m.range.last + 1
         }
