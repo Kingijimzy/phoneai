@@ -64,6 +64,7 @@ object AgentPolicy {
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
         "play", "look" -> "gaming_hobby"
+        "termux_command" -> "termux_bridge"
         "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
         "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
