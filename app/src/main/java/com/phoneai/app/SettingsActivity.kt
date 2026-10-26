@@ -1071,18 +1071,33 @@ class SettingsActivity : Activity() {
                 "Selected runtime: $name\n\n" +
                 "1. Install and authenticate it in a compatible terminal.\n" +
                 "2. Orion cannot mark it connected until the CLI is installed and signed in.\n\n" +
-                "Android note: these vendors target desktop/Linux environments, not a guaranteed native Android runtime. Termux compatibility may vary; the install command can fail on Android. This action copies the command and opens Termux if installed. It does not execute shell commands automatically."
+                "Android note: these vendors do not guarantee native Android support. Termux compatibility may vary. If Termux's external-command bridge is enabled and PhoneAI has its RUN_COMMAND permission, Orion can open a foreground terminal session and run this selected install/sign-in command. Otherwise it copies the command and opens Termux for manual setup."
             )
-            .setPositiveButton("COPY COMMAND & OPEN TERMUX") { _, _ ->
+            .setPositiveButton("RUN SETUP IN TERMUX") { _, _ ->
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("$name install", installCommand))
-                val termux = packageManager.getLaunchIntentForPackage("com.termux")
-                if (termux != null) {
-                    try { startActivity(termux) } catch (_: Exception) {
-                        Toast.makeText(this, "Install command copied. Open Termux and paste it.", Toast.LENGTH_LONG).show()
+                try {
+                    val run = Intent("com.termux.RUN_COMMAND").apply {
+                        setClassName("com.termux", "com.termux.app.RunCommandService")
+                        putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
+                        putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("-lc", installCommand))
+                        putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
+                        putExtra("com.termux.RUN_COMMAND_BACKGROUND", false)
+                        putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
+                        putExtra("com.termux.RUN_COMMAND_COMMAND_LABEL", "$name setup")
+                        putExtra("com.termux.RUN_COMMAND_COMMAND_DESCRIPTION", "Install and authenticate the selected coding-agent CLI")
                     }
-                } else {
-                    Toast.makeText(this, "Install command copied. Termux is not installed; open a compatible terminal and paste it.", Toast.LENGTH_LONG).show()
+                    startService(run)
+                    Toast.makeText(this, "Requested a Termux setup session for $name. Complete any prompts in Termux.", Toast.LENGTH_LONG).show()
+                } catch (_: Exception) {
+                    val termux = packageManager.getLaunchIntentForPackage("com.termux")
+                    if (termux != null) {
+                        try { startActivity(termux) } catch (_: Exception) { }
+                    }
+                    showInfoDialog(
+                        "Termux permission required",
+                        "The command has been copied. To let Orion start it directly, install/open Termux, enable allow-external-apps in ~/.termux/termux.properties, restart Termux, and grant PhoneAI the 'Run commands in Termux environment' permission in Android app settings. Then retry. For now, open Termux and paste the copied command."
+                    )
                 }
             }
             .setNeutralButton("OPEN OFFICIAL DOCS") { _, _ ->
