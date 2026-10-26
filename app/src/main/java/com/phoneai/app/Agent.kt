@@ -777,7 +777,14 @@ Rules:
             ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
             return
         }
-        val requestBudget = AgentHooks.RequestBudget(MAX_STEPS)
+        val requestBudget = AgentHooks.RequestBudget(minOf(MAX_STEPS, AgentPolicy.maxSteps(svc)))
+        val taskStartedAt = System.currentTimeMillis()
+        var toolCalls = 0
+        fun budgetStopReason(): String? = when {
+            toolCalls >= AgentPolicy.maxCalls(svc) -> "tool-call budget reached (${AgentPolicy.maxCalls(svc)})"
+            System.currentTimeMillis() - taskStartedAt >= AgentPolicy.maxMinutes(svc) * 60_000L -> "time budget reached (${AgentPolicy.maxMinutes(svc)} minutes)"
+            else -> null
+        }
         var damagedReplies = 0
         while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
@@ -825,11 +832,17 @@ Rules:
                     val bt = one.optString("tool")
                     if (bt.isBlank() || bt == "done") continue
                     val batchArgs = one.optJSONObject("args") ?: JSONObject()
+                    budgetStopReason()?.let { reason ->
+                        AgentCheckpointStore.pause(svc)
+                        ui.say("I stopped safely because the task $reason. Progress is saved; raise the budget or continue later.")
+                        return
+                    }
                     if (!AgentCheckpointStore.beginStep(svc, bt, batchArgs)) {
                         AgentCheckpointStore.pause(svc)
                         ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
                         return
                     }
+                    toolCalls++
                     val br = executeWithRecoveryGuard(bt, batchArgs)
                     ui.note(bt + ": " + br.take(80).replace("\n", " "))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
@@ -860,11 +873,17 @@ Rules:
             }
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
+            budgetStopReason()?.let { reason ->
+                AgentCheckpointStore.pause(svc)
+                ui.say("I stopped safely because the task $reason. Progress is saved; raise the budget or continue later.")
+                return
+            }
             if (!AgentCheckpointStore.beginStep(svc, tool, args)) {
                 AgentCheckpointStore.pause(svc)
                 ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
                 return
             }
+            toolCalls++
             val result = executeWithRecoveryGuard(tool, args)
             ui.note(tool + ": " + result.take(80).replace("\n", " "))
             record(tool, args, result)
