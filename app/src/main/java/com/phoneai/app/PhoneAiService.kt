@@ -1507,7 +1507,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
 
         val savedRoutineCommand = RoutineReplayPolicy.parseRequest(t)?.let { request ->
-            RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null
+            RoutineReplayPolicy.exactName(MacroStore.names(this), request.name) != null ||
+                RoutineReplayPolicy.isExplicitRoutineCommand(t)
         } == true
         val routeToAgent = autoRoute && shouldAutoRouteToAgent(t)
         if (routeToAgent && conversationOnly) notifyModeSwitch(true)
