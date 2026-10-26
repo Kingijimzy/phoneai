@@ -6,7 +6,7 @@ internal object OrionKeyboardPolicy {
 
     fun validateRequest(text: String): String? = when {
         text.isEmpty() -> "error: refusing to type empty text"
-        text.length > MAX_TEXT_LENGTH -> "error: text exceeds the 4000 character limit"
+        text.length > MAX_TEXT_LENGTH -> "error: text exceeds the ${MAX_TEXT_LENGTH} character limit"
         else -> null
     }
 
@@ -19,7 +19,7 @@ internal object OrionKeyboardPolicy {
         isPassword -> "error: refusing to type into a password field"
         !targetPackage.isNullOrBlank() && focusedPackage != targetPackage ->
             "error: focused editor changed while switching keyboards; text was not entered"
-        !hasConnection -> "error: Android has not provided an input connection for the focused field"
+        !hasConnection -> "error: no input connection is available for the focused field"
         else -> null
     }
 
