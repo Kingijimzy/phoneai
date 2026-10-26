@@ -677,14 +677,16 @@ class Nim(private val ctx: Context) {
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
-                // OpenRouter can rate-limit a particular model while another model on the
-                // same account remains available. Try one distinct model before cooling down
-                // the whole provider; never burn a minute waiting if a sibling model can work.
-                if (p.id == "openrouter" && !refilled) {
-                    val alternatives = candidates(p, vision).filter { it != model && it !in tried }
+                // OpenRouter may rate-limit one model while another model on the same
+                // account remains available. Try another unattempted model before cooling
+                // down the whole provider, including models already queued after a 404/410.
+                if (p.id == "openrouter" && attempts < maxAttempts) {
+                    val alternatives = (queue + candidates(p, vision))
+                        .filter { it != model && it !in tried }
+                        .distinct()
                     if (alternatives.isNotEmpty()) {
-                        refilled = true
-                        queue.addAll(0, alternatives)
+                        queue.clear()
+                        queue.addAll(alternatives)
                         onStatus?.invoke("OpenRouter rate-limited $model (429); trying another OpenRouter model...")
                         continue
                     }
