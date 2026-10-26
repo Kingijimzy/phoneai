@@ -73,17 +73,12 @@ class OrbView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : V
     }
 
     private fun nextFrameDelayMs(): Long {
-        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return 66L
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            when (power.currentThermalStatus) {
-                PowerManager.THERMAL_STATUS_CRITICAL,
-                PowerManager.THERMAL_STATUS_EMERGENCY,
-                PowerManager.THERMAL_STATUS_SHUTDOWN,
-                PowerManager.THERMAL_STATUS_SEVERE -> return 160L
-                PowerManager.THERMAL_STATUS_MODERATE -> return 90L
-            }
-        }
-        return if (power.isPowerSaveMode) 100L else 50L
+        val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val powerSave = power?.isPowerSaveMode ?: false
+        val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            power?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
+        } else 0
+        return OrionPerformancePolicy.orbFrameDelayMs(powerSave, thermal)
     }
 
     private fun shouldAnimate(): Boolean =
