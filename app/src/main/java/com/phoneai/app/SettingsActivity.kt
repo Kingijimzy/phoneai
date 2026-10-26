@@ -44,7 +44,7 @@ import java.net.URL
 
 /** Orion's control room: turn things on, save keys, tune the voice, manage memory, test recording. */
 class SettingsActivity : Activity() {
-    private companion object { const val REQUEST_KNOWLEDGE_IMPORT = 7421 }
+    private companion object { const val REQUEST_KNOWLEDGE_IMPORT = 7421; const val REQUEST_SKILL_IMPORT = 7422; const val REQUEST_SKILL_EXPORT = 7423 }
     private lateinit var status: TextView
     private lateinit var chatBtn: Button
     private lateinit var visionBtn: Button
@@ -53,6 +53,7 @@ class SettingsActivity : Activity() {
     private lateinit var characterBtn: Button
     private lateinit var routBtn: Button
     private lateinit var skillBtn: Button
+    private var pendingSkillExport: PhoneAiSkill? = null
     private lateinit var cliRuntimeBtn: Button
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -1617,8 +1618,47 @@ class SettingsActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_KNOWLEDGE_IMPORT || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        if (requestCode == REQUEST_SKILL_IMPORT) {
+            Thread {
+                val message = try {
+                    val raw = contentResolver.openInputStream(uri)?.use { input ->
+                        val out = ByteArrayOutputStream()
+                        val buffer = ByteArray(4096)
+                        var total = 0
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            total += n
+                            if (total > 100_000) throw IllegalArgumentException("Skill package exceeds 100 KB.")
+                            out.write(buffer, 0, n)
+                        }
+                        String(out.toByteArray(), Charsets.UTF_8)
+                    } ?: throw IllegalArgumentException("Could not open that file.")
+                    val (candidate, detail) = SkillPackageCodec.parse(raw)
+                    if (candidate == null) detail else {
+                        val result = SkillRegistry.register(this, candidate)
+                        if (result.allowed) "Installed disabled skill " + candidate.id + ". Review and enable it in Skill Studio."
+                        else result.reason
+                    }
+                } catch (e: Exception) { "Skill import failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { showInfoDialog("Skill package import", message); refresh() }
+            }.start()
+            return
+        }
+        if (requestCode == REQUEST_SKILL_EXPORT) {
+            val skill = pendingSkillExport
+            pendingSkillExport = null
+            if (skill == null) return
+            try {
+                contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(SkillPackageCodec.export(skill)) }
+                    ?: throw IllegalArgumentException("Could not write to the selected location.")
+                Toast.makeText(this, "Exported skill package: " + skill.id, Toast.LENGTH_LONG).show()
+            } catch (e: Exception) { showInfoDialog("Skill export failed", e.message ?: e.javaClass.simpleName) }
+            return
+        }
+        if (requestCode != REQUEST_KNOWLEDGE_IMPORT) return
         Thread {
             val message = try {
                 val bytes = contentResolver.openInputStream(uri)?.use { readAtMost(it, 400_000) } ?: ByteArray(0)
@@ -1629,7 +1669,7 @@ class SettingsActivity : Activity() {
                 else when (val n = KnowledgeStore.add(this, name, text)) {
                     -2 -> "Knowledge base is full; remove a document first."
                     in Int.MIN_VALUE..0 -> "Could not save that document."
-                    else -> "Saved \"$name\" as $n passages."
+                    else -> "Saved \"" + name + "\" as " + n + " passages."
                 }
             } catch (e: Exception) { "Could not read that file (" + e.javaClass.simpleName + ")." }
             runOnUiThread { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); refresh() }
@@ -1680,22 +1720,37 @@ class SettingsActivity : Activity() {
 
     private fun skillsDialog() {
         val skills = SkillRegistry.list(this)
-        val message = if (skills.isEmpty()) {
-            "Create a small declarative skill using existing tools. Skills are disabled until you enable them and cannot download or execute code."
-        } else {
-            "Choose a skill to inspect, enable, disable, or remove. Each tool call is checked against its allowlist and budget."
-        }
+        val message = "Install portable JSON skill packages, create a local skill, or browse reviewed templates. Imported skills start disabled, can only reference tools already in this app, and cannot install executable code."
+        val actions = listOf(
+            "Import skill package · Install a .json skill",
+            "Create skill · Define a skill using supported tools",
+            "Skill templates · Browse reviewed starters"
+        )
         if (skills.isEmpty()) {
-            showChoiceDialog("Skill studio · 0 skills", message, listOf("Create skill · Define a skill using supported tools", "Skill templates · Start from a reviewed template"),
-                { which -> if (which == 0) addSkillDialog() else skillTemplateDialog() })
+            showChoiceDialog("Skill studio · 0 skills", message, actions,
+                { which -> when (which) { 0 -> importSkillPackage(); 1 -> addSkillDialog(); else -> skillTemplateDialog() } })
             return
         }
-        showChoiceDialog("Skill studio · ${skills.size} skills", message,
-            skills.map { it.id + " · " + if (it.enabled) "ENABLED" else "DISABLED" } + listOf("Create skill · Add a custom skill", "Skill templates · Browse reviewed starters"),
+        showChoiceDialog("Skill studio · " + skills.size + " skills", message,
+            skills.map { it.id + " · " + if (it.enabled) "ENABLED" else "DISABLED" } + actions,
             { which ->
                 if (which < skills.size) skillOptions(skills[which])
-                else if (which == skills.size) addSkillDialog() else skillTemplateDialog()
+                else when (which - skills.size) { 0 -> importSkillPackage(); 1 -> addSkillDialog(); else -> skillTemplateDialog() }
             })
+    }
+
+    private fun importSkillPackage() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
+        try { startActivityForResult(pick, REQUEST_SKILL_IMPORT) }
+        catch (_: Exception) { showInfoDialog("Cannot open file picker", "Choose a JSON skill package from device storage.") }
+    }
+
+    private fun exportSkillPackage(skill: PhoneAiSkill) {
+        pendingSkillExport = skill
+        val create = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/json").putExtra(Intent.EXTRA_TITLE, skill.id + ".phoneai-skill.json")
+        try { startActivityForResult(create, REQUEST_SKILL_EXPORT) }
+        catch (_: Exception) { pendingSkillExport = null; showInfoDialog("Cannot open file picker", "Choose a folder where Orion can save the package.") }
     }
 
     /** Creates reviewed starter skills from existing tools only; every generated skill starts disabled. */
@@ -1737,13 +1792,15 @@ class SettingsActivity : Activity() {
             skill.description + "\n\nAllowed tools: " + skill.allowedTools.sorted().joinToString(", ") +
                 "\nBudget: " + skill.maxCalls + " calls / " + (skill.maxDurationMs / 1000L) + " seconds" +
                 "\nApproval: " + (if (skill.requiresApproval) "required before every run" else "write-capable tools still require approval"),
-            listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Delete skill · Remove its local definition"),
+            listOf(if (skill.enabled) "Disable skill · Stop this skill from running" else "Enable skill · Allow this reviewed skill to run", "Export skill package · Save portable JSON", "Delete skill · Remove its local definition"),
             { which ->
                 if (which == 0) {
                     val result = SkillRegistry.setEnabled(this, skill.id, !skill.enabled)
                     Toast.makeText(this, result.reason, Toast.LENGTH_SHORT).show()
                     refresh()
                     skillsDialog()
+                } else if (which == 1) {
+                    exportSkillPackage(skill)
                 } else {
                     AlertDialog.Builder(this)
                         .setTitle("Delete skill " + skill.id + "?")
