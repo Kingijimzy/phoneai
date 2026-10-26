@@ -114,8 +114,8 @@ class TermuxBridgeActivity : Activity() {
 
     private fun isInstalled(): Boolean = try {
         @Suppress("DEPRECATION")
-        packageManager.getPackageInfo("com.termux", 0)
-        true
+        val info = packageManager.getPackageInfo("com.termux", 0)
+        info.packageName == "com.termux"
     } catch (_: Exception) { false }
 
     private fun hasRunCommandPermission(): Boolean =
@@ -298,6 +298,10 @@ object TermuxBridgeResultStore {
 }
 
 class TermuxBridgeResultReceiver : android.content.BroadcastReceiver() {
+    companion object {
+        const val EXTRA_REQUEST_ID = "termux_request_id"
+    }
+
     override fun onReceive(context: android.content.Context, intent: Intent) {
         val extras = intent.extras
         val bundle = intent.getBundleExtra("com.termux.app.extra.PLUGIN_RESULT_BUNDLE")
