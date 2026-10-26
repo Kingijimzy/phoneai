@@ -11,7 +11,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user", "termux_command"
+            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary"
         )))
     }
 
@@ -58,6 +58,8 @@ class ToolRegistryTest {
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
         assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
+        assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))
         assertNull(ToolRegistry.find("made_up_tool"))
 
         assertNull(AgentHooks.scopeBlockReason(
