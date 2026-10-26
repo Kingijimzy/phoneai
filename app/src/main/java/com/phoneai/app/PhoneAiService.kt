@@ -467,6 +467,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Clears the active transcript and the in-memory agent chat context. */
+    fun clearActiveConversation(): Boolean {
+        if (running || imageAnalysisRunning) return false
+        val persisted = try {
+            getSharedPreferences("orion_chat_history", MODE_PRIVATE)
+                .edit().remove("active_transcript").commit()
+        } catch (_: Exception) { false }
+        if (!persisted) return false
+        transcript.clear()
+        try { agent.resetConversationContext() } catch (_: Exception) { }
+        main.post {
+            mainChatListener?.onTranscriptRestored(emptyList())
+            mainChatListener?.onStatus("Conversation cleared", currentMode())
+        }
+        return true
+    }
+
     fun sendFromMainChat(
         text: String,
         conversationOnly: Boolean = false,
@@ -633,6 +650,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             transcript.addAll(messages.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
             ChatHistoryStore.restoreActive(this, transcript)
             agent.reset()
+            agent.restoreConversationContext(transcript.toList())
             mainChatListener?.onTranscriptRestored(transcript.toList())
             mainChatListener?.onStatus("Previous conversation restored", OrbView.Mode.IDLE)
         }
@@ -1218,18 +1236,21 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun shouldAutoRouteToAgent(message: String): Boolean {
         val text = message.trim().lowercase(java.util.Locale.ROOT)
         if (text.isBlank()) return false
+        // Routing is deliberately conservative: a request must read like an instruction
+        // or a direct question, not a sentence merely discussing an action.
         val patterns = listOf(
-            Regex("\\b(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b"),
-            Regex("\\b(search (the )?web|look up|google|browse to|visit (the )?website|go to (the )?website|find (online|on the web)|research (online|the latest))\\b"),
-            Regex("\\b(current|latest|today'?s|right now|live)\\b.*\\b(weather|news|price|rate|score|forecast|exchange rate|market|time in|model|release|version)\\b"),
-            Regex("\\b(what is|what's|check|find|show me|look at|compare)\\b.*\\b(current price|price of|price|weather|news|exchange rate|market price|latest update|live score|forecast)\\b"),
-            Regex("\\b(check|look up|find|show me)\\b.*\\b([a-z0-9]{2,}(usdt|usd|btc|eth)?|bitcoin|ethereum|btc|eth)('?s)?\\s+(price|quote|value)\\b"),
-            Regex("\\b(search|look up|find|research)\\b.*\\b(latest|newest|current|available)\\b.*\\b(model|nvidia|ai model|release|version)\\b|\\b(search|look up|find|research)\\b.*\\b(nvidia|nemotron|model catalog)\\b"),
-            Regex("\\b(save|remember|keep|store)\\b.*\\b(this preference|my preference|preference|prefer|i like|i want you to)\\b|\\b(from now on|going forward)\\b.*\\b(always|prefer|remember)\\b"),
-            Regex("\\b(remember this|save this|save to memory|remember that|recall my|search my memories|show my memories|update my memory|forget this|forget my|delete memory)\\b"),
-            Regex("\\b(list my tasks|show my tasks|create a task|add a task|update my task|complete my task|delete my task|list my skills|show my skills|run skill)\\b"),
-            Regex("\\b(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\b"),
-            Regex("\\b(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\b")
+            Regex("^(\\s*(please\\s+)?(can you|could you|would you|will you)?\\s*(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b)"),
+            Regex("^(\\s*(please\\s+)?(i want you to|i need you to|help me)\\s+(open|launch|start|close|switch to|tap|click|press|scroll|swipe|type into|enter into|navigate to)\\b)"),
+            Regex("^(\\s*(please\\s+)?(can you|could you|would you|please)?\\s*(search (the )?web|look up|google|browse to|visit (the )?website|go to (the )?website|find (online|on the web)|research (online|the latest))\\b)"),
+            Regex("^(what('?s| is)\\s+(the )?(current |latest |today'?s |live )?(weather|news|price|rate|score|forecast|exchange rate|market|time in|model|release|version)\\b)"),
+            Regex("^(what is|what's|check|find|show me|compare|look up)\\b.*\\b(current price|price of|price|weather|news|exchange rate|market price|latest update|live score|forecast)\\b"),
+            Regex("^(check|look up|find|show me)\\b.*\\b([a-z0-9]{2,}(usdt|usd|btc|eth)?|bitcoin|ethereum|btc|eth)('?s)?\\s+(price|quote|value)\\b"),
+            Regex("^(search|look up|find|research)\\b.*\\b(latest|newest|current|available)\\b.*\\b(model|nvidia|ai model|release|version)\\b|^(search|look up|find|research)\\b.*\\b(nvidia|nemotron|model catalog)\\b"),
+            Regex("^(save|remember|keep|store)\\b.*\\b(this preference|my preference|preference|prefer|i like|i want you to)\\b|^(from now on|going forward)\\b.*\\b(always|prefer|remember)\\b"),
+            Regex("^(remember this|save this|save to memory|remember that|recall my|search my memories|show my memories|update my memory|forget this|forget my|delete memory)\\b"),
+            Regex("^(list my tasks|show my tasks|create a task|add a task|update my task|complete my task|delete my task|list my skills|show my skills|run skill)\\b"),
+            Regex("^(send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|set (an )?alarm|set (a )?timer|turn (on|off) (the )?(flashlight|torch)|change (my )?volume|check my battery|read my screen|take a screenshot|record my screen)\\b"),
+            Regex("^(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\\b")
         )
         return patterns.any { it.containsMatchIn(text) } ||
             FastIntents.parse(text) != null ||
