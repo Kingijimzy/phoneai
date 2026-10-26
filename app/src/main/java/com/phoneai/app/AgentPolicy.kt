@@ -15,7 +15,7 @@ object AgentPolicy {
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional bridge; only when Termux is installed and enabled"),
         Pack("remote_computer", "Remote computer", "Optional sandbox/VPS connection"),
-        Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending"),
+        Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
         Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in recap, alerts and morning briefing"),
