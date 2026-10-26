@@ -72,6 +72,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private lateinit var wm: WindowManager
     private lateinit var agent: Agent
     private lateinit var voice: Voice
+    @Volatile private var orionRuntime: OrionRuntime? = null
+    @Volatile private var runtimeDrainScheduled = false
 
     private val transcript = CopyOnWriteArrayList<Pair<String, String>>()
     private val nodes = ArrayList<AccessibilityNodeInfo>()
@@ -162,15 +164,80 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         transcript.clear()
         transcript.addAll(ChatHistoryStore.load(this))
         agent = Agent(this, this)
+        val runtime = OrionRuntime(this)
+        orionRuntime = runtime
+        runtime.start()
+        runtime.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "conversation-context", 8)
+        runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "service-connected", 6)
+        scheduleRuntimeDrain()
         showBubble()
         startWake()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || orionRuntime == null) return
+        // Window transitions are meaningful state changes; ignore noisy text/content events.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val packageKey = event.packageName?.toString()?.take(100).orEmpty().ifBlank { "unknown-window" }
+            orionRuntime?.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "window:$packageKey", 1)
+            scheduleRuntimeDrain()
+        }
+    }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+        orionRuntime?.pause("accessibility_interrupted")
+    }
+
+    private fun scheduleRuntimeDrain() {
+        if (runtimeDrainScheduled) return
+        runtimeDrainScheduled = true
+        worker.execute {
+            try {
+                // Bounded event-driven drain; no polling loop and no provider/network calls.
+                repeat(4) {
+                    val runtime = orionRuntime ?: return@repeat
+                    val item = runtime.claimNext() ?: return@repeat
+                    try {
+                        when (item.type) {
+                            OrionRuntime.WorkType.RESTORE_PENDING -> {
+                                if (::agent.isInitialized) agent.restoreConversationContext(ChatHistoryStore.load(this))
+                                else throw IllegalStateException("agent_not_ready")
+                            }
+                            OrionRuntime.WorkType.CAPABILITY_RECHECK -> {
+                                if (!::agent.isInitialized || serviceInfo == null) {
+                                    throw IllegalStateException("service_capability_not_ready")
+                                }
+                                // Recheck local service readiness only; never infer user consent or execute actions.
+                            }
+                            // These require explicit outcome/candidate producers and are deliberately
+                            // retained for the later scheduler integration instead of silently discarded.
+                            OrionRuntime.WorkType.LEARN_FROM_RESULT,
+                            OrionRuntime.WorkType.ROUTINE_CANDIDATE -> {
+                                runtime.fail(item)
+                                return@repeat
+                            }
+                        }
+                        runtime.complete(item)
+                    } catch (_: Exception) {
+                        runtime.fail(item)
+                    }
+                }
+            } finally {
+                runtimeDrainScheduled = false
+                // If a concurrent event arrived during drain, process it without polling.
+                if ((orionRuntime?.snapshot()?.queued ?: 0) > 0) {
+                    val runtime = orionRuntime
+                    if (runtime != null && runtime.snapshot().state == OrionRuntime.State.ACTIVE) {
+                        scheduleRuntimeDrain()
+                    }
+                }
+            }
+        }
+    }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        orionRuntime?.stop()
+        orionRuntime = null
         instance = null
         wakeGen++
         stopOfflineWakeDetector()
