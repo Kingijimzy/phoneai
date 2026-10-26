@@ -38,6 +38,14 @@
         <activity android:name=".TeachModeActivity" android:exported="false" />
         <activity android:name=".TaskCenterActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".OpenRouterOAuthActivity" android:exported="true" android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="phoneai" android:host="oauth" android:path="/openrouter" />
+            </intent-filter>
+        </activity>
         <activity android:name=".LiveConversationActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".GeminiLiveActivity" android:exported="false" android:screenOrientation="unspecified" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".MainChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
