@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -428,7 +428,9 @@ private fun BottomDock(selected: String, onSelect: (String) -> Unit) {
         Triple("Settings", Icons.Rounded.Settings, "Settings")
     )
     Row(
-        Modifier.fillMaxWidth().padding(start = 13.dp, end = 13.dp, top = 5.dp, bottom = 8.dp)
+        // Keep the dock above Android's gesture/navigation area on Android 15+ edge-to-edge windows.
+        Modifier.fillMaxWidth().navigationBarsPadding()
+            .padding(start = 13.dp, end = 13.dp, top = 5.dp, bottom = 8.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(Panel)
             .border(1.dp, Color(0xFF383838), RoundedCornerShape(20.dp))
