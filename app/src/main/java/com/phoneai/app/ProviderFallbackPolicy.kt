@@ -7,7 +7,7 @@ package com.phoneai.app
  * the shared command request budget bounds the total number of HTTP attempts.
  */
 internal object ProviderFallbackPolicy {
-    /** Zero means no additional provider fan-out; otherwise this is informational legacy metadata. */
+    /** Maximum backup providers considered after the selected primary; the shared request budget remains the hard stop. */
     const val MAX_BACKUP_PROVIDERS = 14
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
