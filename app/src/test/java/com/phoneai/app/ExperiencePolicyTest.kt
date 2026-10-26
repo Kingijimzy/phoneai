@@ -17,7 +17,7 @@ class ExperiencePolicyTest {
 
     @Test fun laterSuccessRetiresOldFailure() {
         var l = ExperiencePolicy.merge(emptyList(), fail("open whatsapp chat John", "click", "target_not_found"))
-        l = ExperiencePolicy.merge(l, Experience(ExperiencePolicy.gist("open whatsapp chat John"), "open_app", "worked", "", "", 1, now, "open_app>click_text"))
+        l = ExperiencePolicy.merge(l, Experience(ExperiencePolicy.gist("open whatsapp chat John"), "open_app", "worked", "", "", 1, now, "open_app>click"))
         assertTrue(l.none { it.kind == "failure" })
         assertEquals(1, l.size)
     }
