@@ -510,6 +510,10 @@ class SettingsActivity : Activity() {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://build.nvidia.com/settings")))
         }, 8)
         add(s2, button("Sign in with OpenRouter", true) { startOpenRouterSignIn() }, 8)
+        add(s2, button("Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this)), false) {
+            cliRuntimeDialog()
+        }, 8)
+        add(s2, text("Choose Muse Code, Cursor Agent, or OpenCode for terminal-based coding sessions. Orion saves your choice and guides setup; a CLI must be installed and authenticated in a compatible terminal before it can run.", 12f, Theme.MUTED), 4)
         add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
         add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
@@ -1017,6 +1021,74 @@ class SettingsActivity : Activity() {
             Prefs.setOpenRouterOAuthVerifier(this, "")
             Toast.makeText(this, "Could not start OpenRouter sign-in: " + (e.message ?: "unknown error"), Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun cliRuntimeLabel(id: String): String = when (id) {
+        "muse-code" -> "Muse Code"
+        "cursor-agent" -> "Cursor Agent"
+        else -> "OpenCode"
+    }
+
+    private fun cliRuntimeDialog() {
+        val ids = listOf("muse-code", "cursor-agent", "opencode")
+        val labels = listOf("Muse Code", "Cursor Agent", "OpenCode")
+        val selected = ids.indexOf(Prefs.cliRuntime(this)).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Choose coding-agent runtime")
+            .setSingleChoiceItems(labels.toTypedArray(), selected) { dialog, which ->
+                Prefs.setCliRuntime(this, ids[which])
+                dialog.dismiss()
+                updateCliRuntimeButton()
+                cliRuntimeSetupDialog(ids[which])
+            }
+            .setNegativeButton("CANCEL", null)
+            .setNeutralButton("SET UP SELECTED") { _, _ -> cliRuntimeSetupDialog(Prefs.cliRuntime(this)) }
+            .show()
+    }
+
+    private fun updateCliRuntimeButton() {
+        // Recreate the settings screen label on the next render; the preference is already persisted.
+        Toast.makeText(this, "Selected " + cliRuntimeLabel(Prefs.cliRuntime(this)), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun cliRuntimeSetupDialog(id: String) {
+        val name = cliRuntimeLabel(id)
+        val installCommand = when (id) {
+            "muse-code" -> "curl -fsSL https://dev.meta.ai/install.sh | bash && muse"
+            "cursor-agent" -> "curl https://cursor.com/install -fsS | bash && agent"
+            else -> "npm install -g @opencode/cli && opencode"
+        }
+        val docs = when (id) {
+            "muse-code" -> "https://dev.meta.ai/docs/muse-code"
+            "cursor-agent" -> "https://cursor.com/docs/cli/overview"
+            else -> "https://opencode.ai/docs"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("$name setup")
+            .setMessage(
+                "Selected runtime: $name\n\n" +
+                "1. Install and authenticate it in a compatible terminal.\n" +
+                "2. Orion cannot mark it connected until the CLI is installed and signed in.\n\n" +
+                "Android note: these vendors target desktop/Linux environments, not a guaranteed native Android runtime. Termux compatibility may vary; the install command can fail on Android. This action copies the command and opens Termux if installed. It does not execute shell commands automatically."
+            )
+            .setPositiveButton("COPY COMMAND & OPEN TERMUX") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("$name install", installCommand))
+                val termux = packageManager.getLaunchIntentForPackage("com.termux")
+                if (termux != null) {
+                    try { startActivity(termux) } catch (_: Exception) {
+                        Toast.makeText(this, "Install command copied. Open Termux and paste it.", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    Toast.makeText(this, "Install command copied. Termux is not installed; open a compatible terminal and paste it.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNeutralButton("OPEN OFFICIAL DOCS") { _, _ ->
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(docs))) }
+                catch (_: Exception) { Toast.makeText(this, "Could not open documentation.", Toast.LENGTH_SHORT).show() }
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
     }
 
     private fun openRouterConnectionChoice() {
