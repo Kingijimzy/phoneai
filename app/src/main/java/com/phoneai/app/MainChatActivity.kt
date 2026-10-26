@@ -281,13 +281,43 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .show()
     }
 
-    /** Cached and default model choices render immediately; online discovery is explicit and optional. */
+    /**
+     * Show usable choices immediately, then discover the catalogue once when a connected
+     * provider has no cache. This avoids an empty-looking picker on first use while keeping
+     * provider selection itself local and avoiding repeated catalogue calls.
+     */
     private fun showChatModelPicker() {
         val p = Prefs.provider(this, false)
         val saved = Prefs.model(this, p, false)
-        val immediate = (listOf(saved, p.textModel, p.visionModel ?: "") +
-            Prefs.cachedModels(this, p.id)).filter { it.isNotBlank() }.distinct()
+        val cached = Prefs.cachedModels(this, p.id)
+        val immediate = (listOf(saved, p.textModel, p.visionModel ?: "") + cached)
+            .filter { it.isNotBlank() }.distinct()
         showChatModelChoices(p, immediate, saved, online = false)
+
+        if (p.noKey || !Prefs.hasKey(this, p.id) || cached.isNotEmpty()) return
+        // A first-use catalogue fetch happens in the background after the picker is shown.
+        Thread {
+            val loaded = try {
+                val excluded = listOf(
+                    "embed", "embedding", "rerank", "retriev", "ocr", "whisper", "parakeet",
+                    "tts", "asr", "translat", "moderation", "content-safety", "nemoguard",
+                    "parse", "clip", "segment", "detect", "diffusion", "image-generation",
+                    "video-generation", "pose-estimation", "classifier", "live"
+                )
+                Nim(this).allModels(p).filter { id ->
+                    id.isNotBlank() && excluded.none { token -> id.lowercase().contains(token) }
+                }.distinct()
+            } catch (_: Exception) { emptyList<String>() }
+            if (loaded.isNotEmpty()) Prefs.saveCachedModels(this, p.id, loaded)
+            runOnUiThread {
+                if (isFinishing || isDestroyed || loaded.isEmpty()) return@runOnUiThread
+                val selectedNow = Prefs.provider(this, false)
+                if (selectedNow.id != p.id) return@runOnUiThread
+                val merged = (listOf(saved, p.textModel, p.visionModel ?: "") +
+                    Prefs.cachedModels(this, p.id) + loaded).filter { it.isNotBlank() }.distinct()
+                showChatModelChoices(p, merged, Prefs.model(this, p, false), online = true)
+            }
+        }.start()
     }
 
     private fun showChatModelChoices(p: Provider, candidates: List<String>, saved: String, online: Boolean) {
