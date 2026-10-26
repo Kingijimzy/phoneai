@@ -74,6 +74,7 @@ class AgentControlActivity : Activity() {
         section("BUDGETS & MODEL SPLIT")
         addText("Current per-task limits: ${AgentPolicy.maxSteps(this)} steps · ${AgentPolicy.maxCalls(this)} calls · ${AgentPolicy.maxMinutes(this)} minutes.", 12f, Theme.MUTED, false, 4)
         addButton("Set task budgets") { chooseBudgets() }
+        addButton("Configure tool allowlist") { configureAllowlist() }
         addText("Talk/chat and Command/tool work are separate modes in the policy design. Model override controls are not yet connected to every chat/tool path; this screen will not claim a split is active until those call sites use it.", 12f, Theme.MUTED, false, 4)
 
         section("SELF-TEST")
@@ -160,6 +161,31 @@ class AgentControlActivity : Activity() {
                     AgentPolicy.setBudgets(this, v[0], v[1], v[2]); AgentPolicy.log(this, "budget", "update", true, "task limits updated")
                     refresh()
                 } else Toast.makeText(this, "Enter three whole numbers separated by commas.", Toast.LENGTH_LONG).show()
+            }.show()
+    }
+
+    private fun configureAllowlist() {
+        val available = AgentPolicy.packs.filter { it.implemented && AgentPolicy.enabled(this, it.id) }
+        if (available.isEmpty()) {
+            Toast.makeText(this, "Enable a supported capability pack first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Choose pack for allowlist")
+            .setItems(available.map { it.title }.toTypedArray()) { _, index ->
+                val pack = available[index]
+                val input = android.widget.EditText(this).apply {
+                    hint = "Exact tool IDs separated by commas"
+                    setText(AgentPolicy.allowlist(this@AgentControlActivity, pack.id).joinToString(", "))
+                    setSingleLine(false)
+                }
+                AlertDialog.Builder(this).setTitle("Allowlisted tools · ${pack.title}")
+                    .setMessage("Use exact registered tool IDs. Unknown tools are denied. In Allowlist mode, only these tools may run automatically; consequential actions still need approval unless a trusted session covers the pack.")
+                    .setView(input).setNegativeButton("CANCEL", null)
+                    .setPositiveButton("SAVE") { _, _ ->
+                        AgentPolicy.setAllowlist(this, pack.id, input.text.toString().split(",").map { it.trim() })
+                        AgentPolicy.log(this, "allowlist", "update", true, "allowlist updated for pack ${pack.id}")
+                        Toast.makeText(this, "Allowlist saved.", Toast.LENGTH_SHORT).show()
+                    }.show()
             }.show()
     }
     private fun runSelfTest() {
