@@ -87,6 +87,13 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
 
     fun snapshot(): Snapshot = synchronized(lock) { Snapshot(state, queue.size, lastEvent, lastChangedAt) }
 
+    /** Delay until the next queued item is eligible; null means there is no pending retry. */
+    fun nextEligibleDelayMs(): Long? = synchronized(lock) {
+        if (queue.isEmpty() || state == State.STOPPED || state == State.PAUSED || state == State.DEGRADED) return@synchronized null
+        val nextAt = queue.minOfOrNull { it.notBefore } ?: return@synchronized null
+        (nextAt - clock()).coerceAtLeast(0L)
+    }
+
     private fun eventLocked(event: String) { lastEvent = event.take(80); lastChangedAt = clock() }
 
     private fun loadLocked() {
