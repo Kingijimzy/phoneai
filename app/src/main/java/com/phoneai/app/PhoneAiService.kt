@@ -244,10 +244,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     throw IllegalArgumentException("invalid_task_outcome_event")
                                 }
                             }
-                            OrionRuntime.WorkType.ROUTINE_CANDIDATE -> {
-                                // Routine promotion must remain explicit-user-confirmation only.
-                                throw IllegalStateException("routine_candidate_requires_explicit_user_confirmation")
-                            }
                         }
                         runtime.complete(item)
                     } catch (_: Exception) {
