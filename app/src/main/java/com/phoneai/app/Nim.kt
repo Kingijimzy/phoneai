@@ -676,9 +676,21 @@ class Nim(private val ctx: Context) {
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
             if (r.code == 429) {
-                val wait = if (r.retryAfter in 1..60) r.retryAfter else 10
+                val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
+                // OpenRouter can rate-limit a particular model while another model on the
+                // same account remains available. Try one distinct model before cooling down
+                // the whole provider; never burn a minute waiting if a sibling model can work.
+                if (p.id == "openrouter" && !refilled) {
+                    val alternatives = candidates(p, vision).filter { it != model && it !in tried }
+                    if (alternatives.isNotEmpty()) {
+                        refilled = true
+                        queue.addAll(0, alternatives)
+                        onStatus?.invoke("OpenRouter rate-limited $model (429); trying another OpenRouter model...")
+                        continue
+                    }
+                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
-                throw AiException("${p.label}: free limit reached (429).", 429)
+                throw AiException("${p.label}: rate limit reached (429); retry after about ${wait.coerceIn(8, 60)} seconds.", 429)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
