@@ -11,13 +11,13 @@ object AgentPolicy {
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI", true),
-        Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
+        Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI"),
+        Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report"),
         Pack("termux_bridge", "Termux bridge", "Optional bridge; only when Termux is installed and enabled"),
         Pack("remote_computer", "Remote computer", "Optional sandbox/VPS connection"),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending"),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
-        Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
+        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders"),
+        Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets"),
         Pack("proactive", "Proactive", "Opt-in recap, alerts and morning briefing"),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable")
@@ -70,7 +70,7 @@ object AgentPolicy {
     }
     /** Bounded audit trail. Callers must never pass raw secrets. */
     fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
-        val safe = result.replace(Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+"), "$1=[redacted]").take(240)
+        val safe = Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+").replace(result) { match -> match.groupValues[1] + "=[redacted]" }.take(240)
         synchronized(this) {
             val old = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
             val next = JSONArray()
