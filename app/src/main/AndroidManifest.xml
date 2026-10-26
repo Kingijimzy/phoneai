@@ -43,6 +43,7 @@
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".TermuxBridgeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".CursorCloudAgentActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".OpenRouterOAuthActivity" android:exported="true" android:noHistory="true">
             <intent-filter>
@@ -64,6 +65,7 @@
         </activity>
 
         <receiver android:name=".TaskReminderReceiver" android:exported="false" />
+        <receiver android:name=".TermuxBridgeResultReceiver" android:exported="false" />
         <receiver android:name=".TaskReminderBootReceiver" android:enabled="true" android:exported="true">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>
