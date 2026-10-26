@@ -7,7 +7,7 @@ import java.io.IOException
 
 class ProviderFallbackPolicyTest {
     @Test fun providerFanOutUsesAllEligibleSavedProvidersWithinCommandBudget() {
-        // Runtime rotation is over eligible providers; request budget is the hard upper bound.
+        // Provider rotation is bounded by this cap and the shared per-command request budget.
         assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 14)
     }
 
