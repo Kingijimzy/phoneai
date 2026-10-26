@@ -119,6 +119,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             ToolMode.ALLOW -> {}
         }
+        if (tool == "shell") {
+            val cmd = args.optString("command"); val where = if (args.optString("where").equals("termux", true)) "Termux" else "built-in shell"
+            when (ShellPolicy.classify(cmd)) {
+                ShellRisk.BLOCKED -> return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user."
+                ShellRisk.ASK -> if (!ui.ask("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
+                    val declined = "error: user did not approve running this command."
+                    taskProofs.record(tool, declined); return declined
+                }
+                ShellRisk.SAFE -> {}
+            }
+        }
         if (failedCallGuard.isBlocked(tool, args)) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
@@ -1254,6 +1265,9 @@ Rules:
             "recall" -> tools.recall(a.optString("query"))
             "knowledge_search" -> tools.knowledgeSearch(a.optString("query"))
             "ask_agent" -> tools.askAgent(a.optString("agent"), a.optString("task"))
+            "shell" -> tools.shell(a.optString("command"), a.optString("where"))
+            "workspace_write" -> ShellRunner.writeFile(svc, a.optString("path"), a.optString("content"))
+            "workspace_read" -> ShellRunner.readFile(svc, a.optString("path"))
             "create_agent" -> tools.createAgent(a.optString("id"), a.optString("name"), a.optString("tagline"), a.optString("persona"))
             "graph_link" -> tools.graphLink(a.optString("a"), a.optString("relation"), a.optString("b"))
             "graph_query" -> tools.graphQuery(a.optString("entity"))
