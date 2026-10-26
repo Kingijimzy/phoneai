@@ -2,9 +2,10 @@ package com.phoneai.app
 
 /**
  * Rotate to the next eligible saved provider for recoverable provider/model failures.
- * Never blindly replay requests for invalid credentials, network failures, timeouts,
- * cancellation, or command-budget exhaustion. The caller filters provider eligibility and
- * the shared command request budget bounds the total number of HTTP attempts.
+ * Never replay against the same provider for invalid credentials, network failures,
+ * cancellation, or command-budget exhaustion. A provider response timeout may rotate to a
+ * different eligible provider because the request is not replayed against the timed-out host.
+ * The caller filters provider eligibility and the shared command request budget bounds attempts.
  */
 internal object ProviderFallbackPolicy {
     /** Maximum backup providers considered after the selected primary; the shared request budget remains the hard stop. */
@@ -23,9 +24,6 @@ internal object ProviderFallbackPolicy {
             message.contains("cannot connect") ||
             message.contains("check internet") ||
             message.contains("sockettimeout") ||
-            message.contains("timed out") ||
-            message.contains("request timed out") ||
-            message.contains("no response before timeout") ||
             message.contains("reached orion's 15-request budget") ||
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false
@@ -35,7 +33,8 @@ internal object ProviderFallbackPolicy {
             "empty response", "empty content", "no chat model worked", "no vision model worked",
             "unsupported model", "retired", "out of credit", "temporarily busy",
             "http 404", "http 410", "http 422", "http 500", "http 502",
-            "http 503", "http 504", "error 402", "error 404", "error 410", "error 422"
+            "http 503", "http 504", "error 402", "error 404", "error 410", "error 422",
+            "request timed out", "timed out", "no response before timeout", "response timeout"
         ).any { message.contains(it) }
     }
 }
