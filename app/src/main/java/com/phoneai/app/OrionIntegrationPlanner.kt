@@ -9,7 +9,7 @@ package com.phoneai.app
  * Authorization and installation are separate steps and always require explicit user approval.
  */
 internal object OrionIntegrationPlanner {
-    enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, BUILTIN_SHELL, TERMUX, UNKNOWN }
+    enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, BUILTIN_SHELL, UNKNOWN }
     enum class State { CONNECTED, SAVED_UNVERIFIED, AVAILABLE_NOT_CONNECTED, CAPABILITY_MISSING, UNKNOWN }
     enum class NextStep { USE_EXISTING, VERIFY_SAVED_CONNECTION, ASK_TO_CONNECT, ASK_TO_ENABLE_OR_INSTALL, RESEARCH_AND_PROPOSE, CLARIFY }
 
@@ -46,7 +46,6 @@ internal object OrionIntegrationPlanner {
             Provider.GOOGLE_DRIVE -> "google_drive" to "https://www.googleapis.com/auth/drive.readonly"
             Provider.TELEGRAM -> "telegram" to "telegram.messages"
             Provider.BUILTIN_SHELL -> "builtin_shell" to "shell.execute"
-            Provider.TERMUX -> "termux" to "termux.execute"
             Provider.UNKNOWN -> "" to ""
         }
         val connection = OrionConnectionStore.get(context, id)
@@ -86,7 +85,6 @@ internal object OrionIntegrationPlanner {
             Provider.GOOGLE_DRIVE -> "google_drive.files.read"
             Provider.TELEGRAM -> "telegram.messages"
             Provider.BUILTIN_SHELL -> "shell.execute"
-            Provider.TERMUX -> "termux.execute"
             Provider.UNKNOWN -> return accountState
         }
         return if (required in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
@@ -103,7 +101,7 @@ internal object OrionIntegrationPlanner {
             Regex("\\b(gmail|google mail|email|inbox|emails|messages)\\b").containsMatchIn(q) -> Provider.GMAIL
             Regex("\\b(google drive|drive files|drive document)\\b").containsMatchIn(q) -> Provider.GOOGLE_DRIVE
             Regex("\\b(telegram|telegram bot)\\b").containsMatchIn(q) -> Provider.TELEGRAM
-            Regex("\\b(termux)\\b").containsMatchIn(q) -> Provider.TERMUX
+            Regex("\\b(termux)\\b").containsMatchIn(q) -> Provider.BUILTIN_SHELL
             Regex("\\b(terminal|shell|command line|cli)\\b").containsMatchIn(q) -> Provider.BUILTIN_SHELL
             else -> Provider.UNKNOWN
         }
@@ -129,7 +127,6 @@ internal object OrionIntegrationPlanner {
             Provider.GOOGLE_DRIVE -> listOf("google_drive.files.read")
             Provider.TELEGRAM -> listOf("telegram.messages")
             Provider.BUILTIN_SHELL -> listOf("shell.execute")
-            Provider.TERMUX -> listOf("termux.execute")
             Provider.UNKNOWN -> emptyList()
         }
         val asksPrivateRead = Regex("(?i)\\b(read|search|check|summari[sz]e|open|view|fetch|list)\\b").containsMatchIn(request)
