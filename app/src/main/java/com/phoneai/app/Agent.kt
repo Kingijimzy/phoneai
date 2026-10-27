@@ -175,8 +175,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
+        val shellRisk = if (tool == "shell") ShellPolicy.classify(args.optString("command")) else null
+        if (shellRisk == ShellRisk.BLOCKED) {
+            val blocked = "error: Orion blocked this shell command because it is destructive, privileged, or targets sensitive paths."
+            AgentPolicy.log(svc, tool, "dispatch", false, "blocked by ShellPolicy")
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
+        val safeBuiltinShell = tool == "shell" &&
+            !args.optString("where", "builtin").equals("termux", ignoreCase = true) &&
+            shellRisk == ShellRisk.SAFE
         val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE &&
-            !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command")))
+            !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command"))) &&
+            !safeBuiltinShell
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
         // Opening apps, navigating/searching, reading screens and ordinary typing are
@@ -193,7 +204,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         )
         val policy = AgentPolicy.evaluate(
             svc, pack, tool,
-            dangerous = consequential || (toolIsWrite && !(autonomous && routineNavigation))
+            dangerous = consequential || (toolIsWrite && !(autonomous && routineNavigation) &&
+                !(autonomous && safeBuiltinShell))
         )
         var policyApproved = false
         when (policy.decision) {
