@@ -38,3 +38,38 @@ internal object ScreenPerception {
         return out
     }
 }
+
+/** Local semantic matching for visible UI targets; keeps model-generated coordinates out of the path. */
+internal object ScreenTargetMatcher {
+    fun normalize(value: String): String = value.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim().replace(Regex("\\s+"), " ")
+
+    fun aliases(request: String): List<String> {
+        val q = normalize(request)
+        val common = when {
+            Regex("\\b(search|find)\\b").containsMatchIn(q) -> listOf("search", "search apps and games", "search apps games", "search google play", "search in apps", "search button")
+            Regex("\\b(back|go back)\\b").containsMatchIn(q) -> listOf("back", "navigate up", "up")
+            Regex("\\b(close|dismiss)\\b").containsMatchIn(q) -> listOf("close", "dismiss", "cancel")
+            else -> emptyList()
+        }
+        return (listOf(q) + common).filter { it.isNotBlank() }.distinct()
+    }
+
+    fun score(request: String, visibleLabel: String, clickable: Boolean): Int {
+        val label = normalize(visibleLabel)
+        if (label.isBlank()) return 0
+        val aliases = aliases(request)
+        val best = aliases.maxOfOrNull { q ->
+            when {
+                label == q -> 100
+                label.startsWith(q) || q.startsWith(label) -> 78
+                label.contains(q) || q.contains(label) -> 62
+                else -> {
+                    val words = q.split(' ').filter { it.length > 1 }.toSet()
+                    val matched = words.count { label.split(' ').contains(it) }
+                    if (words.isNotEmpty() && matched > 0) (matched * 50 / words.size) else 0
+                }
+            }
+        } ?: 0
+        return best + if (clickable) 12 else 0
+    }
+}
