@@ -1824,7 +1824,6 @@ Rules:
             "copy" -> tools.copy(a.optString("text"))
             "battery" -> tools.battery()
             "time" -> tools.time()
-            "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command")) { stopped }
             "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
             "gaming_session_summary" -> GameCoachStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent notes:\n" + GameCoachStore.all(svc).take(12).joinToString("\n") { "${it.game} · ${it.durationMinutes} min · ${it.result} · ${it.note}" } else ""
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
@@ -1890,6 +1889,7 @@ Rules:
             "graph_link" -> tools.graphLink(a.optString("a"), a.optString("relation"), a.optString("b"))
             "graph_query" -> tools.graphQuery(a.optString("entity"))
             "self_review" -> tools.selfReview()
+            "tool_help" -> ToolRegistry.describe(a.optString("query"))
             "skills_list" -> {
                 val skills = SkillRegistry.list(svc)
                 if (skills.isEmpty()) "No skills are registered yet. Open Skills Studio to create a reviewed skill." else skills.joinToString("\\n") { skill ->
