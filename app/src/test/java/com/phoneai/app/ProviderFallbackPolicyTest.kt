@@ -6,41 +6,42 @@ import org.junit.Test
 import java.io.IOException
 
 class ProviderFallbackPolicyTest {
-    @Test fun providerFanOutUsesAllEligibleSavedProvidersWithinCommandBudget() {
-        // Provider rotation is bounded by this cap and the shared per-command request budget.
+    @Test fun backupCountRemainsBounded() {
         assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 2)
     }
 
-    @Test fun recoverableHttpAndModelFailuresAllowRotation() {
+    @Test fun onlyExplicitHttp429AllowsRotation() {
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429", 429)))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503)))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 404", 404)))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("model returned an empty response")))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).")))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("rate limit reached", 429)))
+
+        // Recoverable-looking errors must not silently consume another provider's quota.
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503)))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 404", 404)))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("model returned an empty response")))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).")))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("Google Gemini: request timed out.")))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("provider timed out")))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429 without a parsed status")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 401", 401)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400", 400)))
     }
 
-    @Test fun providerResponseTimeoutRotatesButNetworkAndAuthenticationFailuresDoNot() {
-        // Provider response timeouts should move to another eligible provider.
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("Google Gemini: request timed out.")))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("no response before timeout")))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("provider timed out")))
-        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("response timeout")))
-        // A device/network connectivity failure is not evidence that another API will be reachable.
+    @Test fun networkAuthenticationAndCancellationFailuresNeverRotate() {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(IOException("network unavailable")))
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)")))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("API key rejected (401)", 401)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(IllegalStateException("invalid model")))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(InterruptedException("cancelled")))
     }
 
-    @Test fun cancellationBudgetAndRepeatedFailureStopDoNotRotate() {
+    @Test fun cancelledBudgetAndRepeatedFailureStopDoNotRotateEvenFor429() {
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(RuntimeException("Stopped.")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("Stopped before sending another request: budget")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("stopped after three identical HTTP failures (HTTP 429)", 429)))
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429", 429), false))
     }
 
-    @Test fun disabledAutoSwitchBlocksRecoverableFallback() {
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("rate limited", 429), false))
+    @Test fun disabledAutoSwitchBlocksFallback() {
+        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429", 429), false))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("model returned an empty response"), false))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503), false))
     }
