@@ -30,6 +30,7 @@ object Markdown {
         val lines = text.replace("\r\n", "\n").replace('\r', '\n').split('\n')
         var inCode = false
         var codeStart = -1
+        var codeFirstLine = false
         var hasRenderedLine = false
 
         lines.forEach { raw ->
@@ -39,6 +40,7 @@ object Markdown {
                     if (hasRenderedLine) sb.append('\n')
                     inCode = true
                     codeStart = sb.length
+                    codeFirstLine = true
                     hasRenderedLine = true
                 } else {
                     applyCodeBlockStyle(sb, codeStart, sb.length)
