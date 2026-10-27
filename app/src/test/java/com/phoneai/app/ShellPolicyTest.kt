@@ -13,7 +13,8 @@ class ShellPolicyTest {
 
     @Test fun anythingThatChangesOrInstallsAsks() {
         listOf("rm notes.txt", "python script.py", "pip install requests", "git push", "curl https://example.com", "chmod +x run.sh",
-            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete", "ls $(whoami)", "mv a b")
+            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete", "ls $(whoami)", "mv a b",
+            "cat /sdcard/Download/readme.txt", "ls ../", "cat ~/notes.txt")
             .forEach { assertEquals(it, ShellRisk.ASK, r(it)) }
     }
 
