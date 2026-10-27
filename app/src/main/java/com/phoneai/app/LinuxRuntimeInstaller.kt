@@ -12,8 +12,7 @@ import java.util.zip.GZIPInputStream
 
 /**
  * App-private, resumable Linux runtime installation. Neither artifact is trusted until its pinned
- * length and SHA-256 match. Extraction uses the existing traversal-safe TarExtractor and a staging
- * directory; Android root access is not required.
+ * length and SHA-256 match. Extraction uses the traversal-safe TarExtractor and staging directory.
  */
 internal class LinuxRuntimeInstaller(
     context: Context,
@@ -33,33 +32,58 @@ internal class LinuxRuntimeInstaller(
     @Synchronized
     fun install(manifest: LinuxRuntimePolicy.Manifest): Result<Unit> = runCatching {
         LinuxRuntimePolicy.validate(manifest)?.let { error("Invalid Linux manifest: $it") }
-        downloads.mkdirs()
+        check(base.mkdirs() || base.isDirectory) { "Could not create Linux runtime directory." }
+        check(downloads.mkdirs() || downloads.isDirectory) { "Could not create downloads directory." }
+
         val archive = download(manifest.rootfs(), "rootfs-${manifest.version}.tar.gz", LinuxRuntimePolicy.MAX_ROOTFS_BYTES)
         val prootFile = download(manifest.proot(), "proot-${manifest.version}", LinuxRuntimePolicy.MAX_PROOT_BYTES)
         val staging = File(base, "rootfs.staging")
-        val backup = File(base, "rootfs.previous")
+        val rootfsBackup = File(base, "rootfs.previous")
+        val prootBackup = File(base, "proot.previous")
+        val markerBackup = File(base, "installed-version.previous")
+        val prootTemp = File(proot.parentFile ?: File(base, "bin").also { it.mkdirs() }, "proot.part")
+        val markerTemp = File(base, "installed-version.part")
+
         staging.deleteRecursively()
         check(staging.mkdirs()) { "Could not create staging directory." }
         try {
             GZIPInputStream(BufferedInputStream(archive.inputStream())).use { TarExtractor.extract(it, staging) }
             check(File(staging, "bin/sh").isFile) { "Verified rootfs has no /bin/sh." }
-            if (backup.exists()) check(backup.deleteRecursively()) { "Could not clear old backup." }
-            if (rootfs.exists()) check(rootfs.renameTo(backup)) { "Could not stage old rootfs." }
-            if (!staging.renameTo(rootfs)) {
-                if (backup.exists()) backup.renameTo(rootfs)
-                error("Could not activate new rootfs.")
-            }
-            proot.parentFile?.mkdirs()
-            val temp = File(proot.parentFile, "proot.part")
-            prootFile.copyTo(temp, overwrite = true)
-            check(temp.setExecutable(true, true)) { "Could not mark verified proot executable." }
-            check(temp.renameTo(proot)) { "Could not activate verified proot." }
-            val markerTemp = File(base, "installed-version.part")
+
+            // Prepare every new file before moving the active installation.
+            prootFile.copyTo(prootTemp, overwrite = true)
+            check(prootTemp.setExecutable(true, true)) { "Could not mark verified proot executable." }
             markerTemp.writeText(manifest.version)
-            check(markerTemp.renameTo(marker)) { "Could not commit install marker." }
-            backup.deleteRecursively()
+
+            rootfsBackup.deleteRecursively()
+            prootBackup.delete()
+            markerBackup.delete()
+            if (rootfs.exists()) check(rootfs.renameTo(rootfsBackup)) { "Could not back up existing rootfs." }
+            if (proot.exists()) check(proot.renameTo(prootBackup)) { "Could not back up existing proot." }
+            if (marker.exists()) check(marker.renameTo(markerBackup)) { "Could not back up install marker." }
+
+            try {
+                check(staging.renameTo(rootfs)) { "Could not activate new rootfs." }
+                check(prootTemp.renameTo(proot)) { "Could not activate verified proot." }
+                check(markerTemp.renameTo(marker)) { "Could not commit install marker." }
+                check(File(rootfs, "bin/sh").isFile && proot.canExecute()) { "Installed runtime failed readiness checks." }
+            } catch (failure: Throwable) {
+                // Roll back all active paths together; never leave a mixed-version runtime marked ready.
+                rootfs.deleteRecursively()
+                proot.delete()
+                marker.delete()
+                if (rootfsBackup.exists()) check(rootfsBackup.renameTo(rootfs)) { "Rollback failed restoring rootfs." }
+                if (prootBackup.exists()) check(prootBackup.renameTo(proot)) { "Rollback failed restoring proot." }
+                if (markerBackup.exists()) check(markerBackup.renameTo(marker)) { "Rollback failed restoring install marker." }
+                throw failure
+            }
+            rootfsBackup.deleteRecursively()
+            prootBackup.delete()
+            markerBackup.delete()
         } finally {
             staging.deleteRecursively()
+            prootTemp.delete()
+            markerTemp.delete()
         }
     }
 
@@ -74,21 +98,25 @@ internal class LinuxRuntimeInstaller(
             environment()["TERM"] = "dumb"
             environment()["LANG"] = "C.UTF-8"
         }.start()
-        // Drain output concurrently so a full pipe cannot deadlock waitFor().
         val output = StringBuilder()
         val reader = Thread {
             process.inputStream.bufferedReader().useLines { lines ->
-                lines.forEach { line -> if (output.length < 6000) synchronized(output) { output.append(line).append('\n') } }
+                lines.forEach { line ->
+                    synchronized(output) {
+                        if (output.length < 6000) output.append(line).append('\\n')
+                    }
+                }
             }
         }.apply { isDaemon = true; start() }
         val finished = process.waitFor(timeoutMs.coerceIn(250L, 60_000L), TimeUnit.MILLISECONDS)
         if (!finished) {
             process.destroy()
             if (!process.waitFor(500, TimeUnit.MILLISECONDS)) process.destroyForcibly()
+            reader.join(500)
             return "error: Linux command timed out"
         }
         reader.join(500)
-        return "exit=${process.exitValue()}\n${synchronized(output) { output.toString().take(6000) }}"
+        return "exit=${process.exitValue()}\\n${synchronized(output) { output.toString().take(6000) }}"
     }
 
     private fun download(a: LinuxRuntimePolicy.Artifact, name: String, maxBytes: Long): File {
@@ -100,7 +128,7 @@ internal class LinuxRuntimeInstaller(
         }
         val part = File(downloads, "$name.part")
         if (part.length() > a.bytes) part.delete()
-        var offset = part.length()
+        val offset = part.length()
         val connection = (URL(a.url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 20_000
             readTimeout = 45_000
@@ -111,7 +139,6 @@ internal class LinuxRuntimeInstaller(
             val status = connection.responseCode
             if (offset > 0 && status != HttpURLConnection.HTTP_PARTIAL) {
                 part.delete()
-                offset = 0L
                 connection.disconnect()
                 return download(a, name, maxBytes)
             }
@@ -136,7 +163,9 @@ internal class LinuxRuntimeInstaller(
             if (destination.exists()) check(destination.delete()) { "Could not replace stale artifact." }
             check(part.renameTo(destination)) { "Could not commit verified artifact." }
             return destination
-        } finally { connection.disconnect() }
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun sha256(file: File): String {
