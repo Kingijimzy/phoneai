@@ -143,6 +143,10 @@ internal object GmailConnector {
         return try {
             val sock = javax.net.ssl.SSLSocketFactory.getDefault().createSocket("imap.gmail.com", 993) as javax.net.ssl.SSLSocket
             sock.soTimeout = 15_000
+            // SSLSocket does not guarantee hostname verification by default. Verify the certificate
+            // is actually for imap.gmail.com before sending the account address or app password.
+            sock.sslParameters = sock.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+            sock.startHandshake()
             sock.use {
                 val r = sock.getInputStream().bufferedReader(); val w = sock.getOutputStream().bufferedWriter()
                 r.readLine()
