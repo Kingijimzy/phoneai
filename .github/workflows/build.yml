@@ -21,6 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Android SDK for pinned PRoot build
+        uses: android-actions/setup-android@v3
+
       - name: Build pinned Android PRoot and stage ABI-specific native runtime
         shell: bash
         run: |
