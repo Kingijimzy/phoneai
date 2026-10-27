@@ -10,8 +10,8 @@ package com.phoneai.app
  */
 internal object OrionIntegrationPlanner {
     enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, BUILTIN_SHELL, TERMUX, UNKNOWN }
-    enum class State { CONNECTED, AVAILABLE_NOT_CONNECTED, CAPABILITY_MISSING, UNKNOWN }
-    enum class NextStep { USE_EXISTING, ASK_TO_CONNECT, ASK_TO_ENABLE_OR_INSTALL, RESEARCH_AND_PROPOSE, CLARIFY }
+    enum class State { CONNECTED, SAVED_UNVERIFIED, AVAILABLE_NOT_CONNECTED, CAPABILITY_MISSING, UNKNOWN }
+    enum class NextStep { USE_EXISTING, VERIFY_SAVED_CONNECTION, ASK_TO_CONNECT, ASK_TO_ENABLE_OR_INSTALL, RESEARCH_AND_PROPOSE, CLARIFY }
 
     data class Plan(
         val provider: Provider,
@@ -64,7 +64,8 @@ internal object OrionIntegrationPlanner {
                 else State.CAPABILITY_MISSING
             // Other providers are connected only when a real provider token and its required scope exist.
             else -> when {
-                connection != null && connection.secretAvailable && scope in connection.scopes -> State.CONNECTED
+                connection != null && connection.secretAvailable && scope in connection.scopes && connection.verified -> State.CONNECTED
+                connection != null && connection.secretAvailable && scope in connection.scopes -> State.SAVED_UNVERIFIED
                 connection != null -> State.CAPABILITY_MISSING
                 else -> State.AVAILABLE_NOT_CONNECTED
             }
@@ -135,6 +136,7 @@ internal object OrionIntegrationPlanner {
         val missing = required.any { it !in registeredCapabilities }
         val next = when {
             state == State.CONNECTED && !missing -> NextStep.USE_EXISTING
+            state == State.SAVED_UNVERIFIED -> NextStep.VERIFY_SAVED_CONNECTION
             state == State.AVAILABLE_NOT_CONNECTED && !missing -> NextStep.ASK_TO_CONNECT
             state == State.CAPABILITY_MISSING -> NextStep.ASK_TO_ENABLE_OR_INSTALL
             state == State.UNKNOWN || missing -> NextStep.RESEARCH_AND_PROPOSE
