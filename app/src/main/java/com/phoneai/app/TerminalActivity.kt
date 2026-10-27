@@ -21,7 +21,8 @@ class TerminalActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var backendBtn: TextView
-    private enum class Backend { BUILTIN, LINUX, TERMUX }\n    private var backend = Backend.BUILTIN
+    private enum class Backend { BUILTIN, LINUX, TERMUX }
+    private var backend = Backend.BUILTIN
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun chip(caption: String, action: () -> Unit) = TextView(this).apply {
         text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFE4E4E4.toInt()); gravity = Gravity.CENTER
