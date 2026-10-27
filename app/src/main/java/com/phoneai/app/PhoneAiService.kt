@@ -146,8 +146,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val soulWatchTick = object : Runnable {
         override fun run() {
             val runtime = orionRuntime
-            if (runtime != null) {
-                runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch-periodic", 2)
+            if (runtime != null &&
+                runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch-periodic", 2)) {
+                scheduleRuntimeDrain()
             }
             main.postDelayed(this, 5 * 60_000L)
         }
