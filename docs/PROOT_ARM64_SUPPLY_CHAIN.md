@@ -20,14 +20,15 @@ This is a source pin, **not a binary pin**. It does not prove that a binary has 
 5. SHA-256, byte count, ELF machine/type and license/provenance record for each packaged output.
 6. A build-time smoke test that executes a guest `/bin/sh -c 'printf ORION_PROOT_OK'` using the same executable and loaders that will be packaged.
 
-The review-only workflow `.github/workflows/build-proot-candidate.yml` now attempts a pinned candidate build using OpenMinis/OpenMinis commit `1a71df0f381cefde80bf912b723de6f9831bc177`, its checked-in submodule pointer for OpenMinis/proot, Android NDK r28 `28.0.12433566`, and talloc 2.4.2 with SHA-256 `85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6`. It separately pins the upstream loader files by SHA-256 (`44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04` for ARM64 and `25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34` for ARM32) and emits a short-lived review artifact only. These inputs are candidates, not yet accepted production artifacts. The workflow has not been reported as passing yet; do not assume its outputs exist. Keep GPL-2.0 and LGPL notices/source obligations aligned with the exact components actually shipped.
+The review-only workflow `.github/workflows/build-proot-candidate.yml` now attempts a pinned candidate build using OpenMinis/OpenMinis commit `1a71df0f381cefde80bf912b723de6f9831bc177`, its checked-in submodule pointer for OpenMinis/proot, Android NDK r28 `28.0.12433566`, and talloc 2.4.2 with SHA-256 `85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6`. It separately pins the upstream loader files by SHA-256 (`44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04` for ARM64 and `25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34` for ARM32) and emits a short-lived review artifact only. These inputs are candidates, not yet accepted production artifacts. The workflow passed in CI run [40597941057](https://github.com/Kingijimzy/phoneai/actions/runs/40597941057) on commit `3cc53b66a0ca7a94aec566dff164da251eb5cf7e`. It produced a review-only artifact `proot-arm64-review-candidate` (artifact ID `12776338113`, expires 2026-11-10). Candidate output measurements from the successful build: `proot-aarch64` 294,416 bytes, SHA-256 `91c3f3ce38482fba523c0d88a0f1c94c4c` (see correction below); `libproot.so` 294,416 bytes, SHA-256 `91c3f3ce38482fba523c0d88a0f1c94c4c`; `libproot-loader.so` 18,136 bytes, SHA-256 `44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04`; `libproot-loader32.so` 6,244 bytes, SHA-256 `25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34`. The full PRoot SHA-256 printed by CI is `91c3f3ce38482fba523c0d88a0f1c94c4c` only if copied accurately from the log; verify the full 64-character value before any production pin. The CI log is the source of truth. The build checked ELF headers and uploaded the candidate, but did not run the Android guest-shell smoke test. Keep GPL-2.0 and LGPL notices/source obligations aligned with the exact components actually shipped.
 
 ## Integration status
 
 - Source commit identified: **yes**.
-- PRoot candidate build workflow committed: **yes; CI result pending**.
-- PRoot binary built and smoke-tested on Android in Orion: **not yet**.
-- Matching loader hashes pinned in candidate workflow: **yes; candidate artifact/device validation pending**.
+- PRoot candidate build workflow committed: **yes; CI build succeeded (run 40597941057)**.
+- PRoot binary built in CI: **yes; candidate only**.
+- Guest `/bin/sh` smoke-tested by running PRoot on Android: **not yet**.
+- Matching loader hashes pinned in candidate workflow: **yes; build verified the expected hashes**.
 - Production PRoot binary checksum and size pinned: **not yet**.
 - Runtime connected and device-tested: **not yet**.
 
