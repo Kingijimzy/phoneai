@@ -761,7 +761,7 @@ class Tools(private val svc: PhoneAiService) {
         val sb = StringBuilder("SERVICES:\n")
         ServiceCatalog.all.forEach { s ->
             val c = OrionConnectionStore.get(svc, s.id)
-            sb.append("- ${s.title}: ").append(if (c?.secretAvailable == true) "connected" + (if (s.needsAccount) " (${c.accountLabel})" else "") else "not connected").append('\n')
+            sb.append("- ${s.title}: ").append(if (c?.secretAvailable == true) "connected" + (if (s.needsAccount) " (${c?.accountLabel})" else "") else "not connected").append('\n')
         }
         sb.append("Connected-services pack: ").append(if (AgentPolicy.enabled(svc, "connected_services")) "enabled" else "OFF (user must switch it on in the Capability board)").append('\n')
         sb.append("Soul watch: ").append(if (SoulWatch.enabled(svc)) "on" else "off").append('\n')

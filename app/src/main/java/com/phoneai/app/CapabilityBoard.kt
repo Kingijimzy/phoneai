@@ -106,7 +106,8 @@ internal object SoulWatch {
             if (android.os.Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("orion_soul", "Orion soul alerts", android.app.NotificationManager.IMPORTANCE_DEFAULT))
             if (android.os.Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
             val open = android.app.PendingIntent.getActivity(c, id, android.content.Intent(c, CapabilityBoardActivity::class.java), android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
-            val b = if (android.os.Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, "orion_soul") else @Suppress("DEPRECATION") android.app.Notification.Builder(c)
+            @Suppress("DEPRECATION")
+            val b = if (android.os.Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, "orion_soul") else android.app.Notification.Builder(c)
             nm.notify(id, b.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(title).setContentText(text).setContentIntent(open).setAutoCancel(true).build())
         } catch (_: Exception) { }
     }

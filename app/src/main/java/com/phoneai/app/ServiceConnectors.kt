@@ -48,7 +48,11 @@ internal object GithubConnector {
             } else {
                 val o = JSONObject(t)
                 val items = o.optJSONArray("items") ?: o.optJSONArray("workflow_runs")
-                if (items != null) for (i in 0 until minOf(items.length(), 15)) lines += lineOf(items.getJSONObject(i)) else lines += lineOf(o)
+                if (items != null) {
+                    for (i in 0 until minOf(items.length(), 15)) lines += lineOf(items.getJSONObject(i))
+                } else {
+                    lines += lineOf(o)
+                }
             }
         } catch (_: Exception) { return t.take(max) }
         return lines.joinToString("\n").take(max).ifBlank { "(empty result)" }

@@ -73,7 +73,7 @@ class CapabilityBoardActivity : Activity() {
             val conn = OrionConnectionStore.get(this, s.id)
             val c = card()
             c.addView(text(s.title, 16f, 0xFFF2F2F2.toInt(), true))
-            c.addView(text(if (conn?.secretAvailable == true) "Connected" + (if (s.needsAccount) " as ${conn.accountLabel}" else "") else "Not connected", 12f, if (conn?.secretAvailable == true) 0xFF8FD18F.toInt() else 0xFF9A9A9A.toInt()))
+            c.addView(text(if (conn?.secretAvailable == true) "Connected" + (if (s.needsAccount) " as ${conn?.accountLabel}" else "") else "Not connected", 12f, if (conn?.secretAvailable == true) 0xFF8FD18F.toInt() else 0xFF9A9A9A.toInt()))
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             row.addView(chip(if (conn?.secretAvailable == true) "Replace token" else "Connect") { connectDialog(s) })
             if (conn != null) row.addView(chip("Disconnect") {
