@@ -79,7 +79,7 @@ object Markdown {
 
     private fun appendInline(sb: SpannableStringBuilder, line: String) {
         val pattern = Regex(
-            "\\[([^]\\n]+)]\\((https?://[^\\s)]+)\\)|\\*\\*(.+?)\\*\\*|\u0060([^\u0060]+)\u0060|(?<![*\\w])\\*([^*\\n]+)\\*(?!\\w)|(https?://[^\\s)]+)"
+            "\\[(.+?)\\]\\((https?://[^\\s)]+)\\)|\\*\\*(.+?)\\*\\*|\u0060([^\u0060]+)\u0060|(?<![*\\w])\\*([^*\\n]+)\\*(?!\\w)|(https?://[^\\s)]+)"
         )
         var last = 0
         for (m in pattern.findAll(line)) {
