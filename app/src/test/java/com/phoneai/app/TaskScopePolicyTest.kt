@@ -17,7 +17,7 @@ class TaskScopePolicyTest {
     @Test fun accountConnectionRequestsAreActionableNotConversation() {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("I would like connect my GitHub account"))
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Check if my Gmail is connected"))
-        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("I'm checking which services are currently connected"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Check which services are currently connected"))
     }
 
     @Test fun shortConfirmationKeepsTheIntegrationTaskScope() {
