@@ -27,6 +27,15 @@ internal object OrionSoulEngine {
         val contactsPermission = ContextCompat.checkSelfPermission(
             context, Manifest.permission.READ_CONTACTS
         ) == PackageManager.PERMISSION_GRANTED
+        val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
+        val enabledSkills = skills.filter { it.enabled }
+        val planner = try {
+            OrionIntegrationPlanner.planFor(
+                context, request,
+                OrionIntegrationCapabilityPolicy.capabilities(enabledTools, termuxReady)
+            )
+        } catch (_: Exception) { null }
+
         val capabilitySnapshot = OrionCapabilityDiscovery.discover(
             registeredTools = ToolRegistry.all,
             enabledPacks = enabledPacks,
@@ -37,16 +46,10 @@ internal object OrionSoulEngine {
                 "contacts" to if (contactsPermission)
                     OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
             ),
-            integrationStates = emptyMap()
+            integrationStates = planner?.let {
+                mapOf(it.provider.name.lowercase() to it.state.name.lowercase().replace('_', '-'))
+            } ?: emptyMap()
         )
-        val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
-        val enabledSkills = skills.filter { it.enabled }
-        val planner = try {
-            OrionIntegrationPlanner.planFor(
-                context, request,
-                OrionIntegrationCapabilityPolicy.capabilities(enabledTools, termuxReady)
-            )
-        } catch (_: Exception) { null }
 
         val lines = mutableListOf<String>()
         lines += "ORION SOUL ENGINE — LIVE LOCAL CONTEXT"
@@ -55,9 +58,6 @@ internal object OrionSoulEngine {
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
         lines += "Registered tools: ${registeredTools.size}; tools available under enabled capability packs: ${enabledTools.size}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
         lines += capabilitySnapshot.promptLines()
-        if (planner != null) {
-            lines += "Observed integration state for ${planner.provider.name.lowercase()}: ${planner.state.name.lowercase().replace('_', '-')}; next step: ${planner.nextStep.name.lowercase().replace('_', '-')}. This status is derived from the connector planner, not inferred from provider names."
-        }
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
         lines += "Never pretend a provider is connected because its name is recognized. Never ask for passwords, PINs, one-time codes, or raw tokens in chat. Use official authorization screens and store only provider-issued credentials in the encrypted vault. Keep the task context and resume after authorization returns."
         lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permissions, account access, installs, external writes, and destructive actions require the relevant user approval."
