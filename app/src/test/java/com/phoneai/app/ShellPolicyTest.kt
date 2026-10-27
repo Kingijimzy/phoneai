@@ -41,6 +41,14 @@ class ShellPolicyTest {
         assertTrue(c.startsWith("a") && c.endsWith("b") && c.contains("omitted") && c.length < 1200)
     }
 
+    @Test fun builtInShellContractDoesNotPromiseExternalToolchains() {
+        val contract = ToolRegistry.all.single { it.name == "shell" }.promptLine.lowercase()
+        assertTrue(contract.contains("no termux"))
+        assertTrue(contract.contains("not a full linux distribution"))
+        assertTrue(contract.contains("does not promise python"))
+        assertTrue(contract.contains("environment variables do not"))
+    }
+
     @Test fun shellToolsAreRegisteredWithCorrectAccess() {
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("shell"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("workspace_write"))
