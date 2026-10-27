@@ -17,6 +17,7 @@ class SoulEngineActivity : Activity() {
     private lateinit var statusLine: TextView
     private lateinit var summaryLine: TextView
     private lateinit var runtimeLine: TextView
+    private lateinit var loopLine: TextView
     private lateinit var selfTestLine: TextView
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -76,7 +77,8 @@ class SoulEngineActivity : Activity() {
         statusLine = label("Checking local readiness…", 17f, 0xFFE4E4E4.toInt(), true)
         summaryLine = label("", 12f, 0xFFBDBDBD.toInt())
         runtimeLine = label("", 12f, 0xFFBDBDBD.toInt())
-        hero.addView(statusLine); hero.addView(summaryLine); hero.addView(runtimeLine)
+        loopLine = label("Runtime session: checking…", 12f, 0xFFBDBDBD.toInt())
+        hero.addView(statusLine); hero.addView(summaryLine); hero.addView(runtimeLine); hero.addView(loopLine)
         hero.addView(Button(this).apply {
             text = "Refresh live status"; isAllCaps = false
             setOnClickListener { refreshSnapshot(); Toast.makeText(this@SoulEngineActivity, "Local status refreshed", Toast.LENGTH_SHORT).show() }
@@ -143,7 +145,7 @@ class SoulEngineActivity : Activity() {
         val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
         val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
         val serviceReady = PhoneAiService.instance != null
-        val shellReady = runCatching { TermuxBridgeRunner.readiness(this) == null }.getOrDefault(false)
+        val shellReady = runCatching { ShellRunner.runBuiltin(this, "pwd").startsWith("workspace/") }.getOrDefault(false)
         val status = when {
             tools == 0 || packs == 0 -> "BLOCKED · core registry unavailable"
             !serviceReady || enabled == 0 -> "LIMITED · service or capability packs need attention"
@@ -152,7 +154,13 @@ class SoulEngineActivity : Activity() {
         statusLine.text = status
         statusLine.setTextColor(if (status.startsWith("READY")) 0xFF9ED6A2.toInt() else 0xFFFFC078.toInt())
         summaryLine.text = tools.toString() + " registered tools · " + enabled + "/" + packs + " implemented packs enabled · " + providerKeys + " provider keys saved"
-        runtimeLine.text = verified.toString() + "/" + services.count { it.secretAvailable } + " saved service connections verified · " + savedTasks + " saved tasks · " + memoryCount + " memories · " + knowledgeCount + " knowledge docs · shell " + (if (shellReady) "ready" else "limited") + " · service " + (if (serviceReady) "connected" else "not connected")
+        runtimeLine.text = verified.toString() + "/" + services.count { it.secretAvailable } + " saved service connections verified · " + savedTasks + " saved tasks · " + memoryCount + " memories · " + knowledgeCount + " knowledge docs · built-in shell " + (if (shellReady) "ready" else "limited") + " · accessibility service " + (if (serviceReady) "connected" else "not connected")
+        val snapshot = PhoneAiService.instance?.soulRuntimeSnapshot()
+        loopLine.text = if (snapshot == null) {
+            "Runtime session: NOT RUNNING · enable Orion's accessibility service to start the local queue"
+        } else {
+            "Runtime session: " + snapshot.state + " · " + snapshot.queued + " queued · last event: " + snapshot.lastEvent
+        }
     }
 
     private fun runSelfTest() {
