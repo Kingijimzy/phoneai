@@ -43,6 +43,19 @@ class OrionIntegrationPlannerTest {
     }
 
     @Test
+    fun savedButUnverifiedConnectionMustBeVerifiedBeforeUse() {
+        val plan = OrionIntegrationPlanner.plan(
+            OrionIntegrationPlanner.Provider.GITHUB,
+            OrionIntegrationPlanner.State.SAVED_UNVERIFIED,
+            "read my repository",
+            setOf("github.account.read")
+        )
+        assertEquals(OrionIntegrationPlanner.NextStep.VERIFY_SAVED_CONNECTION, plan.nextStep)
+        assertTrue(plan.needsUserAuthorization)
+        assertTrue(plan.mayReadPrivateData)
+    }
+
+    @Test
     fun availableButUnconnectedServiceMustAskBeforeConnecting() {
         val plan = OrionIntegrationPlanner.plan(
             OrionIntegrationPlanner.Provider.GMAIL,
