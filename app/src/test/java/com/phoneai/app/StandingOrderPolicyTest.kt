@@ -8,8 +8,8 @@ import org.junit.Test
 
 class StandingOrderPolicyTest {
     @Test fun standingOrderIntervalsAreBoundedToSaveBatteryAndQuota() {
-        assertEquals(null, StandingOrderPolicy.validate("brief", StandingOrderPolicy.MIN_MINUTES))
-        assertEquals(null, StandingOrderPolicy.validate("brief", StandingOrderPolicy.MAX_MINUTES))
+        assertNull(StandingOrderPolicy.validate("brief", StandingOrderPolicy.MIN_MINUTES))
+        assertNull(StandingOrderPolicy.validate("brief", StandingOrderPolicy.MAX_MINUTES))
         assertTrue(StandingOrderPolicy.validate("brief", StandingOrderPolicy.MIN_MINUTES - 1) != null)
         assertTrue(StandingOrderPolicy.validate("brief", StandingOrderPolicy.MAX_MINUTES + 1) != null)
         assertTrue(StandingOrderPolicy.validate("unknown", 60) != null)
