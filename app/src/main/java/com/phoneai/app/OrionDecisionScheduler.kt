@@ -15,6 +15,7 @@ internal class OrionDecisionScheduler(
     private var lastWindowAt = 0L
     private var lastTaskKey = ""
     private var lastTaskAt = 0L
+    private var lastSoulAt = 0L
 
     data class Decision(val accepted: Boolean, val reason: String, val workType: OrionRuntime.WorkType?)
 
@@ -34,6 +35,11 @@ internal class OrionDecisionScheduler(
         }
         lastWindowKey = key
         lastWindowAt = now
+        // The soul loop rides on real window events (the phone is in use), at most once per tick window.
+        if (SoulPolicy.due(lastSoulAt, now)) {
+            lastSoulAt = now
+            runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch", 2)
+        }
         val accepted = runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "window:$key", 1)
         Decision(accepted, if (accepted) "window_recheck_queued" else "already_queued_or_capacity", OrionRuntime.WorkType.CAPABILITY_RECHECK)
     }

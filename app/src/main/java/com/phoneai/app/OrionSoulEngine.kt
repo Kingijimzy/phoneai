@@ -46,7 +46,12 @@ internal object OrionSoulEngine {
             lines += "Potential skills for discovery (not automatic permission grants): " +
                 enabledSkills.joinToString { skill -> "${skill.id} [tools=${skill.allowedTools.joinToString()}]" }
         }
-        return lines.joinToString("\n").take(3500)
+        lines += SoulProtocol.serviceLines(
+            ServiceCatalog.all.map { it.title to (OrionConnectionStore.get(context, it.id)?.secretAvailable == true) },
+            AgentPolicy.enabled(context, "connected_services"),
+            runCatching { CapabilityBoard.open(context).map { it.goal } }.getOrDefault(emptyList())
+        )
+        return lines.joinToString("\n").take(5000)
     }
 
 }

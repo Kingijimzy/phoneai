@@ -237,6 +237,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 // LIMITED is a valid, honest state: the user may not have accepted screen access
                                 // or enabled a pack. Never auto-enable either to make the audit look healthy.
                             }
+                            OrionRuntime.WorkType.SOUL_WATCH -> {
+                                // Opt-in, read-only check of connected services; no AI call. Failures back off via the runtime.
+                                SoulWatch.run(this)
+                            }
                             OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
                                 // Agent has already persisted detailed success/failure evidence to ExperienceStore.
                                 // This queue item records the outcome event and is acknowledged only when its key is valid.
