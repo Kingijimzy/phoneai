@@ -88,21 +88,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
     }
 
-    /** Command mode may use its own saved text provider/model; vision and Talk stay unchanged. */
-    private fun selectedProvider(vision: Boolean): Provider {
-        if (commandMode && !vision) {
-            Prefs.commandProviderId(ctx)?.let { Providers.find(it) }?.let { return it }
-            return Prefs.defaultCommandProvider(ctx)
-        }
-        return Prefs.provider(ctx, vision)
-    }
+    /**
+     * Every text request, including command planning, follows the provider/model selected
+     * by the user in Settings. Older builds could persist a hidden command-provider override
+     * (often Groq), silently bypassing the visible selection; ignore that stale override.
+     * Vision continues to use its separately selected vision provider.
+     */
+    private fun selectedProvider(vision: Boolean): Provider = Prefs.provider(ctx, vision)
 
-    private fun selectedModel(p: Provider, vision: Boolean): String {
-        if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
-            Prefs.commandModelId(ctx)?.let { return it }
-        }
-        return Prefs.model(ctx, p, vision)
-    }
+    private fun selectedModel(p: Provider, vision: Boolean): String = Prefs.model(ctx, p, vision)
 
     private val bad = listOf(
         "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
