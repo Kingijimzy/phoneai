@@ -249,11 +249,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
         // Capture a real pre-action state where possible, so a later comparison can
         // verify the change instead of merely reporting that a dispatch was accepted.
-        if (shouldVerifyAction && lastScreenSnapshot.isBlank()) {
+        if (shouldVerifyAction && (lastScreenSnapshot.isBlank() ||
+                (tool == "browser_navigate" && BrowserAutomation.awaitWebView(250L) == null))) {
             try {
-                lastScreenSnapshot = if (tool.startsWith("browser_")) BrowserAutomation.snapshot().take(6000) else svc.readScreen()
+                lastScreenSnapshot = if (tool == "browser_navigate") {
+                    BrowserAutomation.snapshotIfOpen().take(6000).ifBlank { "ORION_BROWSER_CLOSED_BEFORE_NAVIGATION" }
+                } else if (tool.startsWith("browser_")) {
+                    BrowserAutomation.snapshot().take(6000)
+                } else svc.readScreen()
             } catch (_: Exception) {
-                lastScreenSnapshot = ""
+                lastScreenSnapshot = if (tool == "browser_navigate") "ORION_BROWSER_CLOSED_BEFORE_NAVIGATION" else ""
             }
         }
         // Stop may be tapped while the approval dialog is open. Recheck immediately
