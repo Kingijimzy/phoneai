@@ -9,9 +9,11 @@ plugins {
     id("com.chaquo.python")
 }
 
-python {
-    // Python is bundled in the APK for ARM64 devices; no Termux bridge required.
-    version = "3.11"
+chaquopy {
+    defaultConfig {
+        // Python is bundled in the APK for ARM64 devices; no Termux bridge required.
+        version = "3.11"
+    }
 }
 
 // Official sherpa-onnx Android AAR (pinned version + verified SHA-256).
