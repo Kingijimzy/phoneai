@@ -57,7 +57,7 @@ internal object OrionGoalUnderstanding {
         "(?i)\\b(open|launch|tap|click|type|swipe|scroll|turn on|turn off|set|change|call|text|message|alarm|timer|volume|flashlight)\\b"
     )
     private val vague = Regex(
-        "(?i)^\\s*(connect my account|make it work|handle it)[!.?\\s]*$"
+        "(?i)^\\s*connect my account[!.?\\s]*$"
     )
 
     fun understand(request: String): Goal {
@@ -84,6 +84,7 @@ internal object OrionGoalUnderstanding {
         }
 
         val kind = when {
+            vague.matches(q) -> Kind.AMBIGUOUS
             connectVerb.containsMatchIn(q) && accountWords.containsMatchIn(q) -> Kind.ACCOUNT_CONNECT
             accountWords.containsMatchIn(q) && privateDataVerb.containsMatchIn(q) -> Kind.ACCOUNT_DATA
             standingWords.containsMatchIn(q) -> Kind.STANDING_ORDER
