@@ -8,8 +8,8 @@ import org.json.JSONObject
  * Persistent connection metadata for Orion integrations.
  *
  * Secrets are delegated to ApiKeyVault (Android Keystore AES-GCM); this class persists only
- * provider IDs, connection timestamps, and approved scopes. Passwords are deliberately rejected:
- * integrations must use OAuth/device authorization or provider-issued tokens, not saved passwords.
+ * provider IDs, connection timestamps, approved scopes, and whether a live read-only check passed.
+ * GitHub uses a token; Gmail uses a provider-issued app password, never the normal account password.
  */
 internal object OrionConnectionStore {
     private const val PREFS = "orion_connection_registry_v1"
@@ -22,7 +22,8 @@ internal object OrionConnectionStore {
         val accountLabel: String,
         val scopes: Set<String>,
         val connectedAtMillis: Long,
-        val secretAvailable: Boolean
+        val secretAvailable: Boolean,
+        val verified: Boolean = false
     )
 
     fun list(context: Context): List<Connection> {
@@ -46,7 +47,8 @@ internal object OrionConnectionStore {
                         accountLabel = item.optString("label", provider).take(100),
                         scopes = scopes,
                         connectedAtMillis = item.optLong("connectedAt", 0L),
-                        secretAvailable = ApiKeyVault.read(context, secretKey(provider), legacySecretKey(provider)).isNotBlank()
+                        secretAvailable = ApiKeyVault.read(context, secretKey(provider), legacySecretKey(provider)).isNotBlank(),
+                        verified = item.optBoolean("verified", false)
                     ))
                 }
             }
@@ -85,15 +87,35 @@ internal object OrionConnectionStore {
             .put("label", cleanLabel)
             .put("scopes", JSONArray(approvedScopes.sorted()))
             .put("connectedAt", connectedAtMillis)
+            .put("verified", false)
         val array = JSONArray()
         current.forEach { existing ->
             array.put(JSONObject()
                 .put("provider", existing.providerId)
                 .put("label", existing.accountLabel)
                 .put("scopes", JSONArray(existing.scopes.sorted()))
-                .put("connectedAt", existing.connectedAtMillis))
+                .put("connectedAt", existing.connectedAtMillis)
+                .put("verified", existing.verified))
         }
         array.put(item)
+        return prefs.edit().putString(REGISTRY, array.toString()).commit()
+    }
+
+    /** Record the result of a real provider read-only check; saving a secret alone is not a connection. */
+    fun markVerified(context: Context, providerId: String, verified: Boolean): Boolean {
+        if (!providerPattern.matches(providerId)) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val current = list(context)
+        if (current.none { it.providerId == providerId }) return false
+        val array = JSONArray()
+        current.forEach { item ->
+            array.put(JSONObject()
+                .put("provider", item.providerId)
+                .put("label", item.accountLabel)
+                .put("scopes", JSONArray(item.scopes.sorted()))
+                .put("connectedAt", item.connectedAtMillis)
+                .put("verified", if (item.providerId == providerId) verified else item.verified))
+        }
         return prefs.edit().putString(REGISTRY, array.toString()).commit()
     }
 
@@ -116,7 +138,8 @@ internal object OrionConnectionStore {
                 .put("provider", item.providerId)
                 .put("label", item.accountLabel)
                 .put("scopes", JSONArray(item.scopes.sorted()))
-                .put("connectedAt", item.connectedAtMillis))
+                .put("connectedAt", item.connectedAtMillis)
+                .put("verified", item.verified))
         }
         val metadataSaved = prefs.edit().putString(REGISTRY, array.toString()).commit()
         val secretCleared = ApiKeyVault.write(context, secretKey(providerId), legacySecretKey(providerId), "")

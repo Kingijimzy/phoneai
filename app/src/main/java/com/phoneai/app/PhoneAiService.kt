@@ -141,6 +141,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- lifecycle
 
+    // Keep standing orders alive even when no new window/accessibility event arrives.
+    // SoulWatch.run enforces its own persisted 20-minute due gate and all checks are read-only.
+    private val soulWatchTick = object : Runnable {
+        override fun run() {
+            val runtime = orionRuntime
+            if (runtime != null &&
+                runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch-periodic", 2)) {
+                scheduleRuntimeDrain()
+            }
+            main.postDelayed(this, 5 * 60_000L)
+        }
+    }
+
+    private fun scheduleSoulWatchTick() {
+        main.removeCallbacks(soulWatchTick)
+        main.postDelayed(soulWatchTick, 60_000L)
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -178,6 +196,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         decisionScheduler = scheduler
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
+        scheduleSoulWatchTick()
         showBubble()
         startWake()
     }
@@ -297,6 +316,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        main.removeCallbacks(soulWatchTick)
         orionRuntime?.stop()
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
         runtimeRetryRunnable = null
