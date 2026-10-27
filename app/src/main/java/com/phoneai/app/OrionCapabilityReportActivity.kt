@@ -114,6 +114,30 @@ class OrionCapabilityReportActivity : Activity() {
         addLine(integrations, "Speech recognition", if (speechAvailable) "Android reports a recognizer is available; microphone capture and transcription still need a real test." else "Android reports no speech recognizer available.", speechAvailable)
         page.addView(integrations)
 
+        val soul = card()
+        soul.addView(label("SOUL ENGINE & EXECUTION", 10f, 0xFFAAAAAA.toInt(), true))
+        val runtimeStatus = service?.runtimeDiagnostics() ?: "Runtime not connected; background queue is not active."
+        addLine(soul, "Soul/runtime coordinator", runtimeStatus, service != null)
+        val orders = runCatching { StandingOrders.all(this) }.getOrDefault(emptyList())
+        addLine(soul, "Standing orders", "${orders.size} saved. Each order keeps its own interval; the watcher only wakes the queue and checks due orders.", null)
+        val checkpoint = runCatching { AgentCheckpointStore.pending(this) }.getOrNull()
+        val checkpointStatus = checkpoint?.optString("status").orEmpty()
+        addLine(soul, "Task recovery", if (checkpointStatus.isBlank()) "No unfinished agent checkpoint detected." else "A task checkpoint needs attention (status: ${checkpointStatus}). Open Task Centre to inspect/resume it.", checkpointStatus.isBlank())
+        val tasks = runCatching { TaskStore.all(this) }.getOrDefault(emptyList())
+        val activeTasks = tasks.count { it.status in setOf("queued", "running", "paused") }
+        addLine(soul, "Task queue", "${activeTasks} active of ${tasks.size} saved tasks. Saved tasks are not proof they are executing.", null)
+        val shellReady = runCatching { TermuxBridgeRunner.readiness(this) }.getOrElse { "Readiness check failed: ${it.javaClass.simpleName}" }
+        val shellRegistered = runCatching { ToolRegistry.all.any { it.name == "shell" || it.name == "termux_command" } }.getOrDefault(false)
+        addLine(soul, "Shell / Termux", when {
+            !shellRegistered -> "No shell tool is registered."
+            shellReady == null -> "Termux bridge passes local readiness checks. Command policy and approval gates still apply."
+            else -> "Shell tool registered; Termux bridge unavailable: ${shellReady}. Built-in safe commands may still be available."
+        }, shellRegistered && shellReady == null)
+        val recentActions = runCatching { ActionLogStore.all(this).take(20) }.getOrDefault(emptyList())
+        val failures = recentActions.count { it.outcome == "error returned" }
+        addLine(soul, "Recent execution evidence", "${recentActions.size} recent tool outcomes inspected; ${failures} error outcomes in the latest 20. Orion uses this as bounded feedback, not as proof the base model retrained itself.", null)
+        page.addView(soul)
+
         val limits = card()
         limits.addView(label("WHAT NEEDS ATTENTION", 10f, 0xFFAAAAAA.toInt(), true))
         val messages = report.limitations.mapNotNull { limitationText(it) }.toMutableList()
