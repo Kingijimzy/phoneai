@@ -9,7 +9,7 @@ package com.phoneai.app
  * Authorization and installation are separate steps and always require explicit user approval.
  */
 internal object OrionIntegrationPlanner {
-    enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, TERMUX, UNKNOWN }
+    enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, ORION_SHELL, TERMUX, UNKNOWN }
     enum class State { CONNECTED, AVAILABLE_NOT_CONNECTED, CAPABILITY_MISSING, UNKNOWN }
     enum class NextStep { USE_EXISTING, ASK_TO_CONNECT, ASK_TO_ENABLE_OR_INSTALL, RESEARCH_AND_PROPOSE, CLARIFY }
 
@@ -41,6 +41,7 @@ internal object OrionIntegrationPlanner {
             Provider.GMAIL -> "gmail" to "https://www.googleapis.com/auth/gmail.readonly"
             Provider.GOOGLE_DRIVE -> "google_drive" to "https://www.googleapis.com/auth/drive.readonly"
             Provider.TELEGRAM -> "telegram" to "telegram.messages"
+            Provider.ORION_SHELL -> "orion_shell" to "shell.execute"
             Provider.TERMUX -> "termux" to "shell.execute"
             Provider.UNKNOWN -> "" to ""
         }
@@ -52,13 +53,13 @@ internal object OrionIntegrationPlanner {
                 runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false) -> State.CONNECTED
                 else -> State.AVAILABLE_NOT_CONNECTED
             }
-            // Termux readiness includes its package, external-command permission, bridge setting and pack.
+            // Orion's workspace shell is built in; its capability pack is the only prerequisite.
+            Provider.ORION_SHELL -> if ("shell.execute" in registeredCapabilities &&
+                AgentPolicy.enabled(context, "workspace_shell")) State.CONNECTED else State.CAPABILITY_MISSING
+            // Termux is an optional external backend and is checked only when explicitly requested.
             Provider.TERMUX -> if ("shell.execute" in registeredCapabilities &&
-                runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)) {
-                State.CONNECTED
-            } else {
-                State.CAPABILITY_MISSING
-            }
+                runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)) State.CONNECTED
+                else State.CAPABILITY_MISSING
             // Other providers are connected only when a real provider token and its required scope exist.
             else -> when {
                 connection != null && connection.secretAvailable && scope in connection.scopes -> State.CONNECTED
@@ -81,7 +82,7 @@ internal object OrionIntegrationPlanner {
             Provider.GMAIL -> "gmail.messages.read"
             Provider.GOOGLE_DRIVE -> "google_drive.files.read"
             Provider.TELEGRAM -> "telegram.messages"
-            Provider.TERMUX -> "shell.execute"
+            Provider.ORION_SHELL, Provider.TERMUX -> "shell.execute"
             Provider.UNKNOWN -> return accountState
         }
         return if (required in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
@@ -95,7 +96,8 @@ internal object OrionIntegrationPlanner {
             Regex("\\b(gmail|google mail|email|inbox|emails|messages)\\b").containsMatchIn(q) -> Provider.GMAIL
             Regex("\\b(google drive|drive files|drive document)\\b").containsMatchIn(q) -> Provider.GOOGLE_DRIVE
             Regex("\\b(telegram|telegram bot)\\b").containsMatchIn(q) -> Provider.TELEGRAM
-            Regex("\\b(termux|terminal|shell|command line|cli)\\b").containsMatchIn(q) -> Provider.TERMUX
+            Regex("\\btermux\\b").containsMatchIn(q) -> Provider.TERMUX
+            Regex("\\b(orion terminal|built[- ]in terminal|terminal|shell|command line|cli)\\b").containsMatchIn(q) -> Provider.ORION_SHELL
             else -> Provider.UNKNOWN
         }
     }
@@ -119,7 +121,7 @@ internal object OrionIntegrationPlanner {
             Provider.GMAIL -> listOf("gmail.messages.read")
             Provider.GOOGLE_DRIVE -> listOf("google_drive.files.read")
             Provider.TELEGRAM -> listOf("telegram.messages")
-            Provider.TERMUX -> listOf("shell.execute")
+            Provider.ORION_SHELL, Provider.TERMUX -> listOf("shell.execute")
             Provider.UNKNOWN -> emptyList()
         }
         val asksPrivateRead = Regex("(?i)\\b(read|search|check|summari[sz]e|open|view|fetch|list)\\b").containsMatchIn(request)
