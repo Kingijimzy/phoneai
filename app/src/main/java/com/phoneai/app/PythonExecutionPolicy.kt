@@ -6,8 +6,8 @@ internal object PythonExecutionPolicy {
 
     fun rejection(code: String, explicitlyApproved: Boolean): String? = when {
         !explicitlyApproved -> "Python execution requires explicit user approval."
-        code.isBlank() -> "Python code is required."
         code.length > MAX_CODE_CHARS -> "Python code exceeds $MAX_CODE_CHARS characters."
+        code.isBlank() -> "Python code is required."
         code.contains('\u0000') -> "Python code contains a forbidden NUL character."
         else -> null
     }
