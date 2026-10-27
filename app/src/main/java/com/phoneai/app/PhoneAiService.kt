@@ -257,8 +257,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 // or enabled a pack. Never auto-enable either to make the audit look healthy.
                             }
                             OrionRuntime.WorkType.SOUL_WATCH -> {
-                                // Opt-in, read-only check of connected services; no AI call. Failures back off via the runtime.
-                                LifeLoop.tick(this)
+                                // Opt-in, read-only watcher: standing orders plus connected-service checks; no AI call.
+                                // Connector failures back off via the runtime; standing orders always run.
+                                SoulWatch.run(this)
                             }
                             OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
                                 // Agent has already persisted detailed success/failure evidence to ExperienceStore.

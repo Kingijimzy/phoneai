@@ -57,8 +57,12 @@ object AgentPolicy {
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
         p(c).edit().putInt("budget_steps", steps.coerceIn(1, 100)).putInt("budget_calls", calls.coerceIn(1, 100)).putInt("budget_minutes", minutes.coerceIn(1, 30)).apply()
     }
+    /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
+    fun packOffMessage(pack: String): String =
+        "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
+
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
-        if (packs.none { it.id == pack } || !enabled(c, pack)) return RuleResult(Decision.DENY, "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (Agent control, or the Capability board for connected services) instead of saying Orion lacks it.")
+        if (packs.none { it.id == pack } || !enabled(c, pack)) return RuleResult(Decision.DENY, packOffMessage(pack))
         if (pack == "trading_research" && toolId.contains("order", true)) return RuleResult(Decision.DENY, "Trading research is read-only; order execution is unavailable.")
         if (mode(c) == Mode.PLAN) return RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
         if (approvedThisAction) return RuleResult(Decision.ALLOW, "User approved this action.")

@@ -131,12 +131,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val autonomous = ToolPermissions.level(svc) == "autonomous"
+        // One pre-flight gate for user DENY and switched-off packs, before any prompt is shown.
+        ToolGate.preflightDenial(svc, tool)?.let { denied ->
+            try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
+            AgentPolicy.log(svc, tool, "dispatch", false, "preflight: " + denied.take(120))
+            return denied
+        }
         when (ToolPermissions.mode(svc, tool)) {
-            ToolMode.DENY -> {
-                val denied = ToolPermissionPolicy.denyMessage(tool)
-                try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
-                return denied
-            }
+            ToolMode.DENY -> return ToolPermissionPolicy.denyMessage(tool)
             // The user's explicit task command authorizes routine tools for that task
             // in Autonomous mode. Explicit DENY and consequential-action gates remain.
             ToolMode.ASK -> if (!autonomous && tool !in askApproved) {
