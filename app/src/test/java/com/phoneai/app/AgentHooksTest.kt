@@ -93,6 +93,16 @@ class AgentHooksTest {
   assertFalse(AgentHooks.screenChanged(before,sameContent)); assertTrue(AgentHooks.screenChanged(before,after))
   assertEquals(AgentHooks.screenFingerprint(before),AgentHooks.screenFingerprint(sameContent))
  }
+ @Test fun safeRecoveryIsBoundedAndNeverOverridesSafetyOrApprovalStops() {
+  assertTrue(AgentHooks.shouldAttemptRecovery("read_screen", "error: screen snapshot unavailable", 0))
+  assertTrue(AgentHooks.shouldAttemptRecovery("browser_snapshot", "error: page is not ready", 0))
+  assertFalse(AgentHooks.shouldAttemptRecovery("read_screen", "error: screen snapshot unavailable", 1))
+  assertFalse(AgentHooks.shouldAttemptRecovery("click_text", "error: user cancelled", 0))
+  assertFalse(AgentHooks.shouldAttemptRecovery("click_text", "error: safety gate blocked browser action", 0))
+  assertFalse(AgentHooks.shouldAttemptRecovery("telegram_send", "error: network unavailable", 0))
+  assertTrue(AgentHooks.shouldAttemptRecovery("click_text", "error: target button not found", 0))
+ }
+
  @Test fun coordinateRetryIsBlockedOnlyWhenTheScreenStayedTheSame() {
   val screen = """screen 1080x2400
 [1] button Search apps games
