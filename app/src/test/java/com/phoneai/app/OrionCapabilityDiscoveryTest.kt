@@ -25,6 +25,16 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("not ready"))
     }
 
+    @Test fun builtInShellDoesNotDependOnTermuxReadiness() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("shell", ToolAccess.WRITE)),
+            setOf("workspace_shell"),
+            termuxReady = false
+        )
+        assertTrue(snapshot.tools.single().available)
+        assertEquals(1, snapshot.availableCount)
+    }
+
     @Test fun unmappedToolFailsClosed() {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("invented_tool")), setOf("orion_core"), true)
         assertFalse(snapshot.tools.single().available)
