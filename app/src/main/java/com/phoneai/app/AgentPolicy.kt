@@ -27,7 +27,16 @@ object AgentPolicy {
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
     fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
     fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
-    fun enabled(c: Context, id: String) = p(c).getBoolean("pack_$id", false)
+    /**
+     * Packs that are safe to have on from the first launch: they are local, read-only, or already gated by
+     * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
+     * lives in orion_core) and wrongly tells the user the feature does not exist. Risky packs stay opt-in.
+     */
+    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research")
+    internal fun defaultOn(id: String) = id in defaultOnPacks
+
+    /** An explicit user choice always wins; only a never-set pack falls back to its default. */
+    fun enabled(c: Context, id: String) = p(c).getBoolean("pack_$id", defaultOn(id))
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
@@ -49,7 +58,7 @@ object AgentPolicy {
         p(c).edit().putInt("budget_steps", steps.coerceIn(1, 100)).putInt("budget_calls", calls.coerceIn(1, 100)).putInt("budget_minutes", minutes.coerceIn(1, 30)).apply()
     }
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
-        if (packs.none { it.id == pack } || !enabled(c, pack)) return RuleResult(Decision.DENY, "Capability pack is disabled or unknown.")
+        if (packs.none { it.id == pack } || !enabled(c, pack)) return RuleResult(Decision.DENY, "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (Agent control, or the Capability board for connected services) instead of saying Orion lacks it.")
         if (pack == "trading_research" && toolId.contains("order", true)) return RuleResult(Decision.DENY, "Trading research is read-only; order execution is unavailable.")
         if (mode(c) == Mode.PLAN) return RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
         if (approvedThisAction) return RuleResult(Decision.ALLOW, "User approved this action.")
