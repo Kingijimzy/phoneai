@@ -603,11 +603,14 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
         } else emptyList()
         val mode = if (vision) "vision" else "chat"
+        // Bound text-only prompts before any provider attempt. This prevents growing
+        // tool transcripts from repeatedly triggering HTTP 413 across task-planning calls.
+        val requestMessages = if (vision) messages else RequestPayloadPolicy.bound(messages)
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
-            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
+            val answer = chatOne(p, requestMessages, vision, maxTokens, temperature, hasBackup, fastResponse)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             return answer
