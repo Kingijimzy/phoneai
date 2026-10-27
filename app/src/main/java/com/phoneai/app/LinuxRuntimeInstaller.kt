@@ -103,7 +103,7 @@ internal class LinuxRuntimeInstaller(
             process.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
                     synchronized(output) {
-                        if (output.length < 6000) output.append(line).append('\\n')
+                        if (output.length < 6000) output.append(line).append('\n')
                     }
                 }
             }
@@ -116,7 +116,7 @@ internal class LinuxRuntimeInstaller(
             return "error: Linux command timed out"
         }
         reader.join(500)
-        return "exit=${process.exitValue()}\\n${synchronized(output) { output.toString().take(6000) }}"
+        return "exit=${process.exitValue()}\n${synchronized(output) { output.toString().take(6000) }}"
     }
 
     private fun download(a: LinuxRuntimePolicy.Artifact, name: String, maxBytes: Long): File {
