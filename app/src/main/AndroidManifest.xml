@@ -39,6 +39,8 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.Orion">
 
+        <activity android:name=".SoulEngineActivity" android:exported="false" />
+        <activity android:name=".KnowledgeGraphActivity" android:exported="false" />
         <activity android:name=".MemoryActivity" android:exported="false" />
         <activity android:name=".CapabilityBoardActivity" android:exported="false" />
         <activity android:name=".OrionCapabilityReportActivity" android:exported="false" />

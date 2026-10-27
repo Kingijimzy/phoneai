@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     companion object {
         const val EXTRA_PICK_IMAGE = "com.phoneai.app.PICK_IMAGE_ON_OPEN"
+        const val EXTRA_INITIAL_PROMPT = "com.phoneai.app.EXTRA_INITIAL_PROMPT"
     }
     private lateinit var messages: LinearLayout
     private lateinit var scroll: ScrollView
@@ -1150,6 +1151,16 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
         setContentView(composeRoot)
         addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
+        if (savedInstanceState == null) {
+            intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }?.let { initialPrompt ->
+                window.decorView.postDelayed({
+                    if (!isFinishing && !isDestroyed && ::input.isInitialized) {
+                        input.setText(initialPrompt)
+                        sendMessage()
+                    }
+                }, 500L)
+            }
+        }
         if (intent.getStringExtra("open_provider_connection") == "opencode-zen") {
             window.decorView.post { showProviderConnection(Providers.get("opencode-zen")) }
         }

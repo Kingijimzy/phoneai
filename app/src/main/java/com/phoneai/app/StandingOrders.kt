@@ -22,27 +22,43 @@ internal object StandingOrderPolicy {
         "brief" to "the live brief (weather, team, prices, tasks)"
     )
     const val MIN_MINUTES = 15
+    const val MAX_MINUTES = 7 * 24 * 60
     const val MAX_ORDERS = 6
 
     fun validate(kind: String, minutes: Int): String? = when {
         kind !in kinds -> "kind must be one of: " + kinds.keys.joinToString()
         minutes < MIN_MINUTES -> "minimum interval is $MIN_MINUTES minutes (saves battery and quota)"
-        minutes > 7 * 24 * 60 -> "maximum interval is one week"
+        minutes > MAX_MINUTES -> "maximum interval is one week"
         else -> null
     }
 
     fun due(o: StandingOrder, now: Long) = now - o.lastRunAt >= o.everyMinutes * 60_000L
 
     /** Only tell the user when the result actually changed and is not an empty/error state. */
-    fun shouldNotify(previousDigest: String, result: String): Boolean {
+    fun shouldNotify(previousDigest: String, result: String, kind: String = "", dayKey: String = ""): Boolean {
         if (result.startsWith("error")) return false
         if (result.startsWith("No unread") || result.startsWith("Nothing new")) return false
         // Connector replies carry a header line; an empty list means nothing to say.
         if (result.contains("\n0 matching message(s).") || result.trimEnd().endsWith("(empty result)")) return false
-        return digest(result) != previousDigest
+        return digestFor(kind, result, dayKey) != previousDigest
     }
 
     fun digest(result: String): String = result.hashCode().toString()
+
+    /** The brief contains live prices, so it would differ on every run; alert at most once per calendar day. */
+    fun digestFor(kind: String, result: String, dayKey: String): String =
+        if (kind == "brief") "day:$dayKey" else digest(result)
+
+    /** One readable notification line without the connector's safety header. */
+    fun headline(result: String): String {
+        val lines = result.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
+            .filterNot { it.contains("untrusted") || it.contains("read-only") || it.startsWith("BRIEF") }.toList()
+        return lines.take(3).joinToString(" · ").take(160).ifBlank { "Something new" }
+    }
+
+    /** Do not consume a new-result digest when Android could not post its notification. */
+    fun digestAfterAttempt(previousDigest: String, result: String, notificationNeeded: Boolean, notificationPosted: Boolean, kind: String = "", dayKey: String = ""): String =
+        if (result.startsWith("error") || (notificationNeeded && !notificationPosted)) previousDigest else digestFor(kind, result, dayKey)
 }
 
 object StandingOrders {
@@ -106,10 +122,18 @@ object LifeLoop {
                     else -> "error: unknown order"
                 }
             } catch (e: Exception) { "error: " + (e.message ?: "failed") }
-            val notify = StandingOrderPolicy.shouldNotify(o.lastDigest, result)
-            StandingOrders.update(c, o.kind, if (result.startsWith("error")) o.lastDigest else StandingOrderPolicy.digest(result))
-            if (notify && post(c, o.kind, result)) posted++
-            AgentPolicy.log(c, "standing_order", o.kind, null, if (notify) "notified" else "nothing new or error")
+            val dayKey = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+            val notify = StandingOrderPolicy.shouldNotify(o.lastDigest, result, o.kind, dayKey)
+            val notificationPosted = notify && post(c, o.kind, result)
+            StandingOrders.update(c, o.kind, StandingOrderPolicy.digestAfterAttempt(
+                o.lastDigest, result, notify, notificationPosted, o.kind, dayKey
+            ))
+            if (notificationPosted) posted++
+            AgentPolicy.log(c, "standing_order", o.kind, null, when {
+                notificationPosted -> "notified"
+                notify -> "notification not posted; digest retained for retry"
+                else -> "nothing new or error"
+            })
         }
         return posted
     }
@@ -123,7 +147,7 @@ object LifeLoop {
         val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, CHANNEL) else android.app.Notification.Builder(c)
         nm.notify(84100 + kind.hashCode().and(0xff), b.setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Orion: " + (StandingOrderPolicy.kinds[kind] ?: kind))
-            .setContentText(text.lineSequence().first()).setStyle(android.app.Notification.BigTextStyle().bigText(text.take(900)))
+            .setContentText(StandingOrderPolicy.headline(text)).setStyle(android.app.Notification.BigTextStyle().bigText(text.take(900)))
             .setContentIntent(open).setAutoCancel(true).build())
         return true
     }

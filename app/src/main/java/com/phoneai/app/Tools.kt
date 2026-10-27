@@ -761,10 +761,19 @@ class Tools(private val svc: PhoneAiService) {
         val sb = StringBuilder("SERVICES:\n")
         ServiceCatalog.all.forEach { s ->
             val c = OrionConnectionStore.get(svc, s.id)
-            sb.append("- ${s.title}: ").append(if (c?.secretAvailable == true) "connected" + (if (s.needsAccount) " (${c?.accountLabel})" else "") else "not connected").append('\n')
+            val state = when {
+                c?.secretAvailable != true -> "not connected"
+                c.verified -> "verified/connected"
+                else -> "saved but not verified"
+            }
+            sb.append("- " + s.title + ": ").append(state)
+            if (c?.secretAvailable == true && c.verified && s.needsAccount) sb.append(" (" + c.accountLabel + ")")
+            sb.append('\n')
         }
         sb.append("Connected-services pack: ").append(if (AgentPolicy.enabled(svc, "connected_services")) "enabled" else "OFF (user must switch it on in the Capability board)").append('\n')
-        sb.append("Soul watch: ").append(if (SoulWatch.enabled(svc)) "on" else "off").append('\n')
+        val orders = StandingOrders.all(svc)
+        sb.append("Standing orders: ").append(if (orders.isEmpty()) "none configured" else orders.size.toString() + " configured")
+            .append(". Checks run when Orion's service is active and Android permits background work.").append('\n')
         val gaps = CapabilityBoard.open(svc).take(6)
         if (gaps.isNotEmpty()) sb.append("Open requests: ").append(gaps.joinToString("; ") { it.goal }).append('\n')
         return sb.toString()
@@ -777,6 +786,22 @@ class Tools(private val svc: PhoneAiService) {
             "Opened Orion's secure Capability board for ${s.title}. Tell the user: ${s.howTo} They enter it there (never in chat). Then ask them to say continue."
         } catch (e: Exception) { "error: could not open the Capability board (" + (e.message ?: "").take(80) + ")" }
     }
+
+    fun vaultList(): String = "SAVED APPS:\n" + AppVault.describe(svc)
+
+    fun vaultRequest(name: String, host: String, style: String): String {
+        if (VaultPolicy.idFor(name) == null) return "error: give the app a short name"
+        if (VaultPolicy.cleanHost(host) == null) return "error: host must be the API's domain, like api.example.com (research the official API docs first)"
+        if (VaultPolicy.cleanStyle(style) == null) return "error: style must be bearer or header:Name"
+        return try {
+            svc.startActivity(android.content.Intent(svc, CapabilityBoardActivity::class.java)
+                .putExtra("vault_name", name.trim()).putExtra("vault_host", host.trim()).putExtra("vault_style", style.trim())
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opened the secure screen for ${name.trim()} ($host). Tell the user to paste their token or API key there (never in chat), then say continue."
+        } catch (e: Exception) { "error: could not open the secure screen (" + (e.message ?: "").take(80) + ")" }
+    }
+
+    fun vaultGet(name: String, url: String): String = AppVault.get(svc, name, url)
 
     fun standingOrder(action: String, kind: String, minutes: Int): String = when (action.lowercase()) {
         "add" -> StandingOrders.add(svc, kind.lowercase().trim(), minutes)
