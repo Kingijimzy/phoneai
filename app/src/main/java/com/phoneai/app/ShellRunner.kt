@@ -116,8 +116,20 @@ object ShellRunner {
         when (ShellExecutionRouting.backend(where)) {
             ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command)
             ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command)
-            ShellExecutionRouting.Backend.LINUX ->
-                "error: the Alpine runtime has no verified, pinned proot artifact manifest configured in this build. Orion did not fall back to Android shell. Use where=builtin until the signed runtime bundle is available."
+            ShellExecutionRouting.Backend.LINUX -> {
+                val manifest = LinuxRuntimePolicy.productionManifest
+                val runtime = LinuxRuntimeInstaller(c.applicationContext)
+                if (!runtime.isReady(manifest)) {
+                    val installed = runtime.install(manifest)
+                    if (installed.isFailure) {
+                        "error: Alpine runtime is not ready: ${installed.exceptionOrNull()?.message ?: "installation failed"}. No fallback to Android shell was attempted."
+                    } else if (!runtime.isReady(manifest)) {
+                        "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
+                    } else {
+                        runtime.execute(manifest, command)
+                    }
+                } else runtime.execute(manifest, command)
+            }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
 
