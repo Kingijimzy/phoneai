@@ -1,0 +1,57 @@
+name: Verify Alpine ARM64 rootfs
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-alpine-rootfs.yml"
+      - "docs/LINUX_RUNTIME_IMPLEMENTATION_GATE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download official Alpine checksum and rootfs
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="3.22.7"
+          filename="alpine-minirootfs-${version}-aarch64.tar.gz"
+          base="https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64"
+          mkdir -p out
+          curl --fail --location --retry 3 --retry-all-errors --output "out/${filename}" "${base}/${filename}"
+          curl --fail --location --retry 3 --retry-all-errors --output "out/${filename}.sha256" "${base}/${filename}.sha256"
+          curl --fail --location --retry 3 --retry-all-errors --output "out/${filename}.sha512" "${base}/${filename}.sha512"
+
+      - name: Verify official sidecars and record exact bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          filename="alpine-minirootfs-3.22.7-aarch64.tar.gz"
+          cd out
+          # Sidecars are fetched from Alpine's official release directory, not generated from
+          # the downloaded archive. Validate their format before using sha256sum/sha512sum.
+          grep -Eq '^[0-9a-fA-F]{64}[[:space:]]+\*?'"${filename}"'$' "${filename}.sha256"
+          grep -Eq '^[0-9a-fA-F]{128}[[:space:]]+\*?'"${filename}"'$' "${filename}.sha512"
+          sha256sum --check "${filename}.sha256"
+          sha512sum --check "${filename}.sha512"
+          bytes="$(stat -c '%s' "${filename}")"
+          sha256="$(awk 'NR==1 {print tolower($1)}' "${filename}.sha256")"
+          sha512="$(awk 'NR==1 {print tolower($1)}' "${filename}.sha512")"
+          test "$bytes" -gt 1000000
+          test "$bytes" -lt 300000000
+          printf '{\n  "version": "3.22.7",\n  "architecture": "aarch64",\n  "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/%s",\n  "bytes": %s,\n  "sha256": "%s",\n  "sha512": "%s",\n  "verification": "official Alpine SHA-256 and SHA-512 sidecars checked by CI; candidate only, not a production manifest"\n}\n' "$filename" "$bytes" "$sha256" "$sha512" > alpine-rootfs-candidate.json
+          cat alpine-rootfs-candidate.json
+          mv alpine-rootfs-candidate.json ../alpine-rootfs-candidate.json
+
+      - name: Upload verified candidate metadata (not production manifest)
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-3.22.7-aarch64-verified-candidate
+          path: |
+            alpine-rootfs-candidate.json
+            out/alpine-minirootfs-3.22.7-aarch64.tar.gz.sha256
+            out/alpine-minirootfs-3.22.7-aarch64.tar.gz.sha512
