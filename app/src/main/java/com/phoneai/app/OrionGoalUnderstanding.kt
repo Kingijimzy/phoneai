@@ -105,7 +105,7 @@ internal object OrionGoalUnderstanding {
             Kind.STANDING_ORDER -> "create or inspect the requested monitored task and verify its saved state"
             Kind.RESEARCH -> "answer using relevant evidence and identify the source of current facts"
             Kind.GENERAL_TASK -> when {
-                Regex("(?i)^\\\\s*(do it|go ahead|continue|fix it|run it|try again)[!.?\\\\s]*$").matches(q) -> "continue the active task from the recent conversation context"
+                Regex("(?i)(do it|go ahead|continue|fix it|run it|try again)[!.?]*").matches(q) -> "continue the active task from the recent conversation context"
                 else -> "complete the user's stated outcome using the best supported path"
             }
             Kind.AMBIGUOUS -> "resolve the missing target or action before acting"
