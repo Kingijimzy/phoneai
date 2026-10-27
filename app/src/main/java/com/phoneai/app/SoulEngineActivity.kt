@@ -135,34 +135,46 @@ class SoulEngineActivity : Activity() {
 
     private fun refreshSnapshot() {
         if (!::statusLine.isInitialized) return
-        val tools = runCatching { ToolRegistry.all.size }.getOrDefault(0)
-        val packs = runCatching { AgentPolicy.packs.count { it.implemented } }.getOrDefault(0)
-        val enabled = runCatching { AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) } }.getOrDefault(0)
-        val providerKeys = runCatching { Providers.all.count { Prefs.hasKey(this, it.id) } }.getOrDefault(0)
-        val services = runCatching { OrionConnectionStore.list(this) }.getOrDefault(emptyList())
-        val verified = services.count { it.secretAvailable && it.verified }
-        val savedTasks = runCatching { TaskStore.all(this).size }.getOrDefault(0)
-        val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
-        val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
-        val serviceReady = PhoneAiService.instance != null
-        val shellReady = runCatching { ShellRunner.runBuiltin(this, "pwd").startsWith("workspace/") }.getOrDefault(false)
-        val status = when {
-            tools == 0 || packs == 0 -> "BLOCKED · core registry unavailable"
-            !serviceReady || enabled == 0 -> "LIMITED · service or capability packs need attention"
-            else -> "READY FOR CHECKS · live workflows still require testing"
-        }
-        statusLine.text = status
-        statusLine.setTextColor(if (status.startsWith("READY")) 0xFF9ED6A2.toInt() else 0xFFFFC078.toInt())
-        summaryLine.text = tools.toString() + " registered tools · " + enabled + "/" + packs + " implemented packs enabled · " + providerKeys + " provider keys saved"
-        runtimeLine.text = verified.toString() + "/" + services.count { it.secretAvailable } + " saved service connections verified · " + savedTasks + " saved tasks · " + memoryCount + " memories · " + knowledgeCount + " knowledge docs · built-in shell " + (if (shellReady) "ready" else "limited") + " · accessibility service " + (if (serviceReady) "connected" else "not connected")
-        val snapshot = PhoneAiService.instance?.soulRuntimeSnapshot()
-        loopLine.text = if (snapshot == null) {
-            "Runtime session: NOT RUNNING · enable Orion's accessibility service to start the local queue"
-        } else {
-            "Runtime session: " + snapshot.state + " · " + snapshot.queued + " queued · last event: " + snapshot.lastEvent
+        // Diagnostic UI must degrade visibly rather than crash on a bad preference/runtime read.
+        try {
+            val tools = runCatching { ToolRegistry.all.size }.getOrDefault(0)
+            val packs = runCatching { AgentPolicy.packs.count { it.implemented } }.getOrDefault(0)
+            val enabled = runCatching { AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) } }.getOrDefault(0)
+            val providerKeys = runCatching { Providers.all.count { Prefs.hasKey(this, it.id) } }.getOrDefault(0)
+            val services = runCatching { OrionConnectionStore.list(this) }.getOrDefault(emptyList())
+            val verified = services.count { it.secretAvailable && it.verified }
+            val savedTasks = runCatching { TaskStore.all(this).size }.getOrDefault(0)
+            val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
+            val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
+            val serviceReady = PhoneAiService.instance != null
+            val shellReady = runCatching { ShellRunner.runBuiltin(this, "pwd").startsWith("workspace/") }.getOrDefault(false)
+            val status = when {
+                tools == 0 || packs == 0 -> "BLOCKED · core registry unavailable"
+                !serviceReady || enabled == 0 -> "LIMITED · service or capability packs need attention"
+                else -> "READY FOR CHECKS · live workflows still require testing"
+            }
+            statusLine.text = status
+            statusLine.setTextColor(if (status.startsWith("READY")) 0xFF9ED6A2.toInt() else 0xFFFFC078.toInt())
+            summaryLine.text = "$tools registered tools · $enabled/$packs implemented packs enabled · $providerKeys provider keys saved"
+            runtimeLine.text = "$verified/${services.count { it.secretAvailable }} saved service connections verified · $savedTasks saved tasks · $memoryCount memories · $knowledgeCount knowledge docs · built-in shell " +
+                (if (shellReady) "ready" else "limited") + " · accessibility service " + (if (serviceReady) "connected" else "not connected")
+            val snapshot = runCatching { PhoneAiService.instance?.soulRuntimeSnapshot() }
+                .onFailure { android.util.Log.e("SoulEngineActivity", "Runtime snapshot failed", it) }
+                .getOrNull()
+            loopLine.text = if (snapshot == null) {
+                "Runtime session: NOT RUNNING or snapshot unavailable · enable/restart Orion's accessibility service; dashboard remains available"
+            } else {
+                "Runtime session: " + snapshot.state + " · " + snapshot.queued + " queued · last event: " + snapshot.lastEvent
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SoulEngineActivity", "Dashboard refresh failed", e)
+            statusLine.text = "DIAGNOSTIC ERROR · dashboard data could not be loaded"
+            statusLine.setTextColor(0xFFFFC078.toInt())
+            summaryLine.text = (e.javaClass.simpleName + ": " + (e.message ?: "no error message")).take(240)
+            runtimeLine.text = "The dashboard is still open. Retry refresh after checking app storage and service state."
+            loopLine.text = "Runtime snapshot: unavailable"
         }
     }
-
     private fun runSelfTest() {
         selfTestLine.text = "Running local self-test…"
         Thread {
