@@ -57,7 +57,7 @@ internal object OrionGoalUnderstanding {
         "(?i)\\b(open|launch|tap|click|type|swipe|scroll|turn on|turn off|set|change|call|text|message|alarm|timer|volume|flashlight)\\b"
     )
     private val vague = Regex(
-        "(?i)^\\s*(do it|go ahead|continue|fix it|make it work|handle it|connect my account|run it|try again)[!.?\\s]*$"
+        "(?i)^\\s*(connect my account|make it work|handle it)[!.?\\s]*$"
     )
 
     fun understand(request: String): Goal {
@@ -104,7 +104,10 @@ internal object OrionGoalUnderstanding {
             Kind.DEVICE_ACTION -> "perform the requested Android action and inspect its result"
             Kind.STANDING_ORDER -> "create or inspect the requested monitored task and verify its saved state"
             Kind.RESEARCH -> "answer using relevant evidence and identify the source of current facts"
-            Kind.GENERAL_TASK -> "complete the user's stated outcome using the best supported path"
+            Kind.GENERAL_TASK -> when {
+                Regex("(?i)^\\\\s*(do it|go ahead|continue|fix it|run it|try again)[!.?\\\\s]*$").matches(q) -> "continue the active task from the recent conversation context"
+                else -> "complete the user's stated outcome using the best supported path"
+            }
             Kind.AMBIGUOUS -> "resolve the missing target or action before acting"
             Kind.CONVERSATION -> "respond naturally to the greeting"
         }
