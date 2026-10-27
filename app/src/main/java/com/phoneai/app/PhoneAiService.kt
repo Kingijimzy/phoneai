@@ -142,7 +142,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- lifecycle
 
     // Keep standing orders alive even when no new window/accessibility event arrives.
-    // SoulWatch.run enforces its own persisted 20-minute due gate and all checks are read-only.
+    // StandingOrders owns each order's persisted interval; this trigger only wakes the queue.
     private val soulWatchTick = object : Runnable {
         override fun run() {
             val runtime = orionRuntime
@@ -157,6 +157,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun scheduleSoulWatchTick() {
         main.removeCallbacks(soulWatchTick)
         main.postDelayed(soulWatchTick, 60_000L)
+    }
+
+    /** Safe, local status for the in-app capability report; never exposes task contents or secrets. */
+    internal fun runtimeDiagnostics(): String {
+        val runtime = orionRuntime ?: return "Runtime not connected; background queue is not active."
+        val snapshot = runtime.snapshot()
+        val ageSeconds = ((System.currentTimeMillis() - snapshot.lastChangedAt).coerceAtLeast(0L) / 1000L)
+        return "Runtime ${snapshot.state.name.lowercase()} · ${snapshot.queued} queued · last event ${snapshot.lastEvent} · last change ${ageSeconds}s ago."
     }
 
     override fun onServiceConnected() {
@@ -258,7 +266,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                             }
                             OrionRuntime.WorkType.SOUL_WATCH -> {
                                 // Opt-in, read-only check of connected services; no AI call. Failures back off via the runtime.
-                                SoulWatch.run(this)
+                                LifeLoop.tick(this)
                             }
                             OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
                                 // Agent has already persisted detailed success/failure evidence to ExperienceStore.
