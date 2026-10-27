@@ -95,11 +95,11 @@ class AgentHooksTest {
  }
  @Test fun coordinateRetryIsBlockedOnlyWhenTheScreenStayedTheSame() {
   val screen = """screen 1080x2400
-[1] button "Search apps & games"
-[2] text "For you""""
+[1] button Search apps games
+[2] text For you"""
   val changed = """screen 1080x2400
-[1] button "Search"
-[2] text "Results""""
+[1] button Search
+[2] text Results"""
   assertTrue(AgentHooks.shouldBlockCoordinateRetry("tap", screen, screen))
   assertTrue(AgentHooks.shouldBlockCoordinateRetry("swipe", screen, screen))
   assertFalse(AgentHooks.shouldBlockCoordinateRetry("click_text", screen, screen))
