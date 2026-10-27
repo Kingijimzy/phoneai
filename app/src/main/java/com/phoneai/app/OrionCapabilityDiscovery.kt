@@ -49,7 +49,6 @@ internal object OrionCapabilityDiscovery {
     fun discover(
         registeredTools: Collection<ToolDefinition>,
         enabledPacks: Set<String>,
-        termuxReady: Boolean,
         permissionStates: Map<String, PermissionState> = emptyMap(),
         integrationStates: Map<String, String> = emptyMap()
     ): Snapshot {
@@ -59,7 +58,6 @@ internal object OrionCapabilityDiscovery {
             val reason = when {
                 pack == null -> "no capability-pack mapping; fail closed"
                 pack !in enabledPacks -> "capability pack '$pack' is disabled"
-                tool.name == "termux_command" && !termuxReady -> "Termux bridge is not ready"
                 permissionRequirements[tool.name] != null &&
                     permissionStates[permissionRequirements.getValue(tool.name)] == PermissionState.MISSING ->
                     "required Android permission '${permissionRequirements.getValue(tool.name)}' is missing"
@@ -73,7 +71,6 @@ internal object OrionCapabilityDiscovery {
         val blockers = mutableListOf<String>()
         if (unique.isEmpty()) blockers += "tool registry is empty"
         if (enabledPacks.isEmpty()) blockers += "no capability packs are enabled"
-        if (unique.any { it.name == "termux_command" } && !termuxReady) blockers += "optional Termux-only command tool unavailable; Orion built-in shell does not depend on Termux"
         if (facts.none { it.available }) blockers += "no registered tool is currently available"
         return Snapshot(
             registeredCount = unique.size,
