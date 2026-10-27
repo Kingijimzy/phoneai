@@ -686,6 +686,10 @@ Rules:
                 val registered = ToolRegistry.all
                 val names = registered.map { it.name }.toSet()
                 val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(svc, it.id) }.map { it.id }.toSet()
+                val permissionStates = mapOf(
+                    "screen_access_disclosure" to if (Prefs.accessibilityDisclosureAccepted(svc))
+                        OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+                )
                 val goal = OrionGoalUnderstanding.understand(request)
                 val integration = if (goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_CONNECT ||
                     goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_DATA) {
@@ -702,6 +706,7 @@ Rules:
                     request = request,
                     registeredTools = registered,
                     enabledPacks = enabledPacks,
+                    permissionStates = permissionStates,
                     integration = integration
                 )
                 prompt + "\\n\\n" + context.promptLines().joinToString("\\n")
