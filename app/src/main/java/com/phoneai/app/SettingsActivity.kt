@@ -452,7 +452,7 @@ class SettingsActivity : Activity() {
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
         add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
-        add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
+        add(updateCard, button("Orion Terminal (built-in)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
         add(updateCard, button("Capability board (connect GitHub / Gmail)", false) { startActivity(android.content.Intent(this, CapabilityBoardActivity::class.java)) }, 8)
         add(updateCard, button("Run Orion self-test", true) {
             Toast.makeText(this, "Testing… this takes a few seconds.", Toast.LENGTH_SHORT).show()
@@ -528,11 +528,7 @@ class SettingsActivity : Activity() {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://build.nvidia.com/settings")))
         }, 8)
         add(s2, button("Sign in with OpenRouter", true) { startOpenRouterSignIn() }, 8)
-        cliRuntimeBtn = button("Coding-agent CLI runtime · " + cliRuntimeLabel(Prefs.cliRuntime(this)), false) {
-            cliRuntimeDialog()
-        }
-        add(s2, cliRuntimeBtn, 8)
-        add(s2, text("Choose Muse Code, Cursor Agent, or OpenCode for terminal-based coding sessions. Orion saves your choice and guides setup; a CLI must be installed and authenticated in a compatible terminal before it can run.", 12f, Theme.MUTED), 4)
+        add(s2, text("Orion's native agent and built-in terminal run inside PhoneAI. External coding-agent CLIs are not required for normal Orion tasks.", 12f, Theme.MUTED), 4)
         add(s2, text("OpenRouter supports account sign-in that securely returns an API key to Orion. Other providers keep their API-key flow unless they offer a compatible authorization method.", 12f, Theme.MUTED), 4)
         add(s2, button("Add or change an API key", false) { keyDialog() }, 8)
         chatBtn = button("", false) { providerDialog(false) }
