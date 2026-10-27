@@ -6,6 +6,13 @@ on:
     paths:
       - ".github/workflows/build-proot-candidate.yml"
       - "docs/PROOT_ARM64_SUPPLY_CHAIN.md"
+      - "docs/linux-runtime-candidate-manifest.json"
+      - "docs/LINUX_RUNTIME_DEVICE_SMOKE_TEST.md"
+      - "app/src/main/java/com/phoneai/app/LinuxRuntimeInstaller.kt"
+      - "app/src/main/java/com/phoneai/app/LinuxRuntimePolicy.kt"
+      - "app/src/main/java/com/phoneai/app/ShellRunner.kt"
+      - "app/src/main/java/com/phoneai/app/ShellExecutionRouting.kt"
+      - "app/build.gradle.kts"
 
 permissions:
   contents: read
