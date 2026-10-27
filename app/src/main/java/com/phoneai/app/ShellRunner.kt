@@ -36,7 +36,7 @@ object ShellRunner {
     private fun changeDirectory(c: Context, raw: String): String {
         val root = workspace(c).canonicalFile
         val current = currentDirectory(c)
-        val arg = raw.trim().removeSurrounding("\\\"").removeSurrounding("'")
+        val arg = raw.trim().removeSurrounding("\"").removeSurrounding("'")
         if (arg.isBlank() || arg == "~") {
             c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", root.path).apply()
             return "cwd: workspace/"
