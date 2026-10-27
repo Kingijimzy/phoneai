@@ -55,7 +55,7 @@ internal object ToolRegistry {
         tool("browser_click_verify", ToolAccess.WRITE, "browser_click_verify {target, expected_text}: perform one guarded visible click then inspect URL/title/summary; not proof of overall completion"),
         tool("browser_type", ToolAccess.WRITE, "browser_type {target, text}: enter text into a visible non-password field; does not submit the form"),
         tool("browser_scroll", ToolAccess.WRITE, "browser_scroll {direction}: scroll the current browser page or main scrollable region up/down"),
-        tool("browser_navigate", ToolAccess.WRITE, "browser_navigate {url}: navigate Orion Browser to an HTTP/HTTPS URL"),
+        tool("browser_navigate", ToolAccess.WRITE, "browser_navigate {url}: navigate Orion's built-in WebView browser to an HTTP/HTTPS URL; if Orion Browser is closed, launch it in-app and wait for its WebView to become ready before reporting the result. This does not require Chrome or Termux. Inspect browser_snapshot after navigation and report login/MFA/CAPTCHA steps for the user to complete manually."),
         tool("browser_back", ToolAccess.WRITE, "browser_back {}: go back one page in Orion Browser"),
         tool("browser_handoff", ToolAccess.WRITE, "browser_handoff {reason}: hand control to the user for login, CAPTCHA, MFA, consent, or final review; never bypass challenges or request secrets"),
         tool("browser_wait", ToolAccess.READ, "browser_wait {text, seconds}: wait locally for visible text (0.5-30 seconds), without another AI request"),
