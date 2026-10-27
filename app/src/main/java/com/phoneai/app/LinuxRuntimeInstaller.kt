@@ -41,7 +41,10 @@ internal class LinuxRuntimeInstaller(
         val rootfsBackup = File(base, "rootfs.previous")
         val prootBackup = File(base, "proot.previous")
         val markerBackup = File(base, "installed-version.previous")
-        val prootTemp = File(proot.parentFile ?: File(base, "bin").also { it.mkdirs() }, "proot.part")
+        check(proot.parentFile?.mkdirs() == true || proot.parentFile?.isDirectory == true) {
+            "Could not create proot directory."
+        }
+        val prootTemp = File(proot.parentFile, "proot.part")
         val markerTemp = File(base, "installed-version.part")
 
         staging.deleteRecursively()
@@ -58,11 +61,10 @@ internal class LinuxRuntimeInstaller(
             rootfsBackup.deleteRecursively()
             prootBackup.delete()
             markerBackup.delete()
-            if (rootfs.exists()) check(rootfs.renameTo(rootfsBackup)) { "Could not back up existing rootfs." }
-            if (proot.exists()) check(proot.renameTo(prootBackup)) { "Could not back up existing proot." }
-            if (marker.exists()) check(marker.renameTo(markerBackup)) { "Could not back up install marker." }
-
             try {
+                if (rootfs.exists()) check(rootfs.renameTo(rootfsBackup)) { "Could not back up existing rootfs." }
+                if (proot.exists()) check(proot.renameTo(prootBackup)) { "Could not back up existing proot." }
+                if (marker.exists()) check(marker.renameTo(markerBackup)) { "Could not back up install marker." }
                 check(staging.renameTo(rootfs)) { "Could not activate new rootfs." }
                 check(prootTemp.renameTo(proot)) { "Could not activate verified proot." }
                 check(markerTemp.renameTo(marker)) { "Could not commit install marker." }
