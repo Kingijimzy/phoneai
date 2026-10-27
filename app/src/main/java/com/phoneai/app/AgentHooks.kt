@@ -54,6 +54,13 @@ internal object AgentHooks {
 
  fun screenChanged(before: String, after: String): Boolean =
   screenFingerprint(before) != screenFingerprint(after)
+ /** A failed coordinate gesture must not be repeated on an unchanged screen; use semantic targets or new evidence. */
+ fun shouldBlockCoordinateRetry(tool: String, currentScreen: String, failedScreen: String): Boolean {
+  if (tool !in setOf("tap", "long_press", "swipe")) return false
+  val current = screenFingerprint(currentScreen)
+  val failed = screenFingerprint(failedScreen)
+  return current.isNotBlank() && failed.isNotBlank() && current == failed
+ }
  private val phoneActionWords=Regex(
   "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|record|turn|switch|screenshot|install|download|close|look at my|check my|fill|login|log in|sign in|research|browse|post|share|buy|order|book|delete|mark as done|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
