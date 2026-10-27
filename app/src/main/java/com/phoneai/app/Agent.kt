@@ -1351,6 +1351,7 @@ Rules:
             if (batch != null && batch.length() > 0) {
                 ui.phase("acting")
                 val sb = StringBuilder()
+                var batchFailure: Pair<String, String>? = null
                 for (i in 0 until minOf(batch.length(), 4)) {
                     if (stopped) break
                     val one = batch.optJSONObject(i) ?: continue
@@ -1378,7 +1379,25 @@ Rules:
                         return
                     }
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
-                    if (br.startsWith("error")) break
+                    if (ToolResultPolicy.failureReason(br) != null) {
+                        batchFailure = bt to br
+                        break
+                    }
+                }
+                if (batchFailure != null) {
+                    val (failedTool, failedResult) = batchFailure!!
+                    if (AgentHooks.shouldAttemptRecovery(failedTool, failedResult, recoveryAttempts) && !stopped) {
+                        recoveryAttempts++
+                        history.put(msg("user", "RESULT: " + sb.toString().take(2500) +
+                            "\n\nRECOVERY DECISION: inspect fresh state/evidence, then try at most one materially different safe approach for the original goal. Never repeat the failed call. Stop if the outcome may have happened or safety/approval is involved. Goal: " + command.take(350)))
+                        compact()
+                        ui.note("[TASK:RECOVERY]\nOne bounded recovery attempt selected after batched step " + failedTool + " failed.")
+                        continue
+                    }
+                    AgentCheckpointStore.pause(svc)
+                    ui.phase("error")
+                    ui.say("A batched step failed: " + failedTool + ". " + ToolResultPolicy.failureReason(failedResult) + " I paused and saved progress; I have not marked the goal complete.")
+                    return
                 }
                 history.put(msg("user", "RESULT: " + sb.toString().take(3500)))
                 compact()
