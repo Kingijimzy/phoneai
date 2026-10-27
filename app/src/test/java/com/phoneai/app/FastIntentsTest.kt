@@ -34,4 +34,14 @@ class FastIntentsTest {
         assertNotNull(FastIntents.parse("open chrome and google arsenal fixtures"))
         assertNull(FastIntents.parse("what is the weather"))
     }
+    @Test fun playStoreSearchUsesDeterministicIntent() {
+        val r = FastIntents.parse("open play store and search for call of duty") as FastIntents.Intent.PlayStoreSearch
+        assertEquals("call of duty", r.query)
+    }
+
+    @Test fun playStoreSearchSupportsSearchFirstWording() {
+        val r = FastIntents.parse("search for call of duty in Play Store") as FastIntents.Intent.PlayStoreSearch
+        assertEquals("call of duty", r.query)
+    }
+
 }
