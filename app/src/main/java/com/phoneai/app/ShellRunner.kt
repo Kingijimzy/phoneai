@@ -41,7 +41,7 @@ object ShellRunner {
             c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", root.path).apply()
             return "cwd: workspace/"
         }
-        val candidate = runCatching { File(if (File(arg).isAbsolute) arg else File(current, arg)).canonicalFile }.getOrNull()
+        val candidate = runCatching { (if (File(arg).isAbsolute) File(arg) else File(current, arg)).canonicalFile }.getOrNull()
             ?: return "error: invalid directory"
         if (candidate.path != root.path && !candidate.path.startsWith(root.path + File.separator))
             return "error: directory must remain inside Orion's private workspace"
