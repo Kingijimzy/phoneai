@@ -20,13 +20,14 @@ This is a source pin, **not a binary pin**. It does not prove that a binary has 
 5. SHA-256, byte count, ELF machine/type and license/provenance record for each packaged output.
 6. A build-time smoke test that executes a guest `/bin/sh -c 'printf ORION_PROOT_OK'` using the same executable and loaders that will be packaged.
 
-The upstream OpenMinis build script is useful evidence for the Android W^X and loader requirements, but it must not be blindly imported as a trusted build step. In particular, review its source-download/checksum behavior and loader provenance before using it in a release pipeline. Keep GPL-2.0 and LGPL notices/source obligations aligned with the exact components actually shipped.
+The review-only workflow `.github/workflows/build-proot-candidate.yml` now attempts a pinned candidate build using OpenMinis/OpenMinis commit `1a71df0f381cefde80bf912b723de6f9831bc177`, its checked-in submodule pointer for OpenMinis/proot, Android NDK r28 `28.0.12433566`, and talloc 2.4.2 with SHA-256 `e01fb092aaed2b431be26674e2b791c77fb5984537c29b514e957582c6b31465`. It separately pins the upstream loader files by SHA-256 (`44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04` for ARM64 and `25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34` for ARM32) and emits a short-lived review artifact only. These inputs are candidates, not yet accepted production artifacts. The workflow has not been reported as passing yet; do not assume its outputs exist. Keep GPL-2.0 and LGPL notices/source obligations aligned with the exact components actually shipped.
 
 ## Integration status
 
 - Source commit identified: **yes**.
-- PRoot binary built from that source in Orion CI: **not yet**.
-- Matching loaders independently verified and packaged in Orion: **not yet**.
+- PRoot candidate build workflow committed: **yes; CI result pending**.
+- PRoot binary built and smoke-tested on Android in Orion: **not yet**.
+- Matching loader hashes pinned in candidate workflow: **yes; candidate artifact/device validation pending**.
 - Production PRoot binary checksum and size pinned: **not yet**.
 - Runtime connected and device-tested: **not yet**.
 
