@@ -23,6 +23,8 @@ jobs:
 
       - name: Set up Android SDK for pinned PRoot build
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;28.0.12433566'
 
       - name: Build pinned Android PRoot and stage ABI-specific native runtime
         shell: bash
@@ -42,7 +44,6 @@ jobs:
           echo "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so" | sha256sum --check -
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "ndk;28.0.12433566"
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.0.12433566"
           bash upstream/deps/build_proot.sh clean
           mkdir -p app/src/main/jniLibs/arm64-v8a
