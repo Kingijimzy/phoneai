@@ -11,89 +11,100 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
 /**
- * App-private, resumable Linux runtime installation. Neither artifact is trusted until its pinned
- * length and SHA-256 match. Extraction uses the traversal-safe TarExtractor and staging directory.
+ * Installs the pinned Alpine rootfs in app-private storage. PRoot is packaged as an ABI-specific
+ * native library and executed from nativeLibraryDir (never copied from downloads to filesDir).
  */
 internal class LinuxRuntimeInstaller(
     context: Context,
     private val progress: (String, Long, Long) -> Unit = { _, _, _ -> }
 ) {
-    private val base = File(context.filesDir, "orion-linux")
+    private val app = context.applicationContext
+    private val base = File(app.filesDir, "orion-linux")
     private val downloads = File(base, "downloads")
     private val rootfs = File(base, "rootfs")
-    private val proot = File(base, "bin/proot")
+    private val proot = File(app.applicationInfo.nativeLibraryDir, "libproot.so")
     private val marker = File(base, "installed-version")
 
     fun isReady(manifest: LinuxRuntimePolicy.Manifest): Boolean =
         LinuxRuntimePolicy.validate(manifest) == null &&
             LinuxRuntimePolicy.isReady(marker.takeIf { it.isFile }?.readText()?.trim(), manifest) &&
-            proot.isFile && proot.canExecute() && File(rootfs, "bin/sh").isFile
+            proot.isFile && proot.canExecute() && sha256(proot) == manifest.prootSha256 &&
+            File(rootfs, "bin/sh").isFile
 
     @Synchronized
     fun install(manifest: LinuxRuntimePolicy.Manifest): Result<Unit> = runCatching {
         LinuxRuntimePolicy.validate(manifest)?.let { error("Invalid Linux manifest: $it") }
+        check(proot.isFile && proot.canExecute()) {
+            "Bundled ARM64 PRoot is missing or not executable. Rebuild the APK with the pinned native runtime."
+        }
+        check(sha256(proot) == manifest.prootSha256) { "Bundled PRoot SHA-256 mismatch; refusing Linux runtime." }
         check(base.mkdirs() || base.isDirectory) { "Could not create Linux runtime directory." }
         check(downloads.mkdirs() || downloads.isDirectory) { "Could not create downloads directory." }
 
         val archive = download(manifest.rootfs(), "rootfs-${manifest.version}.tar.gz", LinuxRuntimePolicy.MAX_ROOTFS_BYTES)
-        val prootFile = download(manifest.proot(), "proot-${manifest.version}", LinuxRuntimePolicy.MAX_PROOT_BYTES)
         val staging = File(base, "rootfs.staging")
-        val rootfsBackup = File(base, "rootfs.previous")
-        val prootBackup = File(base, "proot.previous")
+        val backup = File(base, "rootfs.previous")
         val markerBackup = File(base, "installed-version.previous")
-        check(proot.parentFile?.mkdirs() == true || proot.parentFile?.isDirectory == true) {
-            "Could not create proot directory."
-        }
-        val prootTemp = File(proot.parentFile, "proot.part")
         val markerTemp = File(base, "installed-version.part")
-
         staging.deleteRecursively()
         check(staging.mkdirs()) { "Could not create staging directory." }
         try {
             GZIPInputStream(BufferedInputStream(archive.inputStream())).use { TarExtractor.extract(it, staging) }
             check(File(staging, "bin/sh").isFile) { "Verified rootfs has no /bin/sh." }
+            check(File(staging, "etc/alpine-release").isFile) { "Rootfs is not a valid Alpine installation." }
 
-            // Prepare every new file before moving the active installation.
-            prootFile.copyTo(prootTemp, overwrite = true)
-            check(prootTemp.setExecutable(true, true)) { "Could not mark verified proot executable." }
+            // Acceptance test runs against staging before touching the working installation.
+            val smoke = runGuest(staging, "printf ORION_PROOT_OK; uname -m; cat /etc/alpine-release", 10_000L)
+            check(smoke.exitCode == 0 && smoke.output.contains("ORION_PROOT_OK") &&
+                Regex("(?m)^aarch64\\s*$").containsMatchIn(smoke.output) &&
+                smoke.output.contains("3.22.7")) {
+                "Guest-shell acceptance test failed; previous runtime was preserved. Output: ${smoke.output.take(500)}"
+            }
             markerTemp.writeText(manifest.version)
-
-            rootfsBackup.deleteRecursively()
-            prootBackup.delete()
+            backup.deleteRecursively()
             markerBackup.delete()
             try {
-                if (rootfs.exists()) check(rootfs.renameTo(rootfsBackup)) { "Could not back up existing rootfs." }
-                if (proot.exists()) check(proot.renameTo(prootBackup)) { "Could not back up existing proot." }
+                if (rootfs.exists()) check(rootfs.renameTo(backup)) { "Could not back up existing rootfs." }
                 if (marker.exists()) check(marker.renameTo(markerBackup)) { "Could not back up install marker." }
                 check(staging.renameTo(rootfs)) { "Could not activate new rootfs." }
-                check(prootTemp.renameTo(proot)) { "Could not activate verified proot." }
                 check(markerTemp.renameTo(marker)) { "Could not commit install marker." }
-                check(File(rootfs, "bin/sh").isFile && proot.canExecute()) { "Installed runtime failed readiness checks." }
+                check(isReady(manifest)) { "Installed runtime failed readiness checks." }
             } catch (failure: Throwable) {
-                // Roll back all active paths together; never leave a mixed-version runtime marked ready.
                 rootfs.deleteRecursively()
-                proot.delete()
                 marker.delete()
-                if (rootfsBackup.exists()) check(rootfsBackup.renameTo(rootfs)) { "Rollback failed restoring rootfs." }
-                if (prootBackup.exists()) check(prootBackup.renameTo(proot)) { "Rollback failed restoring proot." }
+                if (backup.exists()) check(backup.renameTo(rootfs)) { "Rollback failed restoring rootfs." }
                 if (markerBackup.exists()) check(markerBackup.renameTo(marker)) { "Rollback failed restoring install marker." }
                 throw failure
             }
-            rootfsBackup.deleteRecursively()
-            prootBackup.delete()
+            backup.deleteRecursively()
             markerBackup.delete()
         } finally {
             staging.deleteRecursively()
-            prootTemp.delete()
             markerTemp.delete()
         }
     }
 
     fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 15_000L): String {
-        check(isReady(manifest)) { "Linux runtime is not installed for version ${manifest.version}." }
+        if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
+        if (timeoutMs !in 250L..60_000L) return "error: Linux timeout must be between 250 and 60000 ms."
+        if (command == "__orion_install__") return "error: internal command is not executable"
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command)
-            ?: error("Linux command rejected by runtime policy.")
-        val process = ProcessBuilder(args).directory(rootfs).redirectErrorStream(true).apply {
+            ?: return "error: Linux command rejected by runtime policy."
+        val result = runProcess(args, rootfs, timeoutMs)
+        return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms"
+        else "exit=${result.exitCode}\n${result.output}"
+    }
+
+    private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
+
+    private fun runGuest(root: File, command: String, timeoutMs: Long): ProcessResult {
+        val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, root.absolutePath, command)
+            ?: error("Linux acceptance command rejected by policy.")
+        return runProcess(args, root, timeoutMs)
+    }
+
+    private fun runProcess(args: List<String>, workingDir: File, timeoutMs: Long): ProcessResult {
+        val process = ProcessBuilder(args).directory(workingDir).redirectErrorStream(true).apply {
             environment().clear()
             environment()["HOME"] = "/root"
             environment()["PATH"] = "/usr/local/bin:/usr/bin:/bin"
@@ -103,11 +114,7 @@ internal class LinuxRuntimeInstaller(
         val output = StringBuilder()
         val reader = Thread {
             process.inputStream.bufferedReader().useLines { lines ->
-                lines.forEach { line ->
-                    synchronized(output) {
-                        if (output.length < 6000) output.append(line).append('\n')
-                    }
-                }
+                lines.forEach { line -> synchronized(output) { if (output.length < 6000) output.append(line).append('\n') } }
             }
         }.apply { isDaemon = true; start() }
         val finished = process.waitFor(timeoutMs.coerceIn(250L, 60_000L), TimeUnit.MILLISECONDS)
@@ -115,70 +122,57 @@ internal class LinuxRuntimeInstaller(
             process.destroy()
             if (!process.waitFor(500, TimeUnit.MILLISECONDS)) process.destroyForcibly()
             reader.join(500)
-            return "error: Linux command timed out"
+            return ProcessResult(-1, synchronized(output) { output.toString().take(6000) }, true)
         }
         reader.join(500)
-        return "exit=${process.exitValue()}\n${synchronized(output) { output.toString().take(6000) }}"
+        return ProcessResult(process.exitValue(), synchronized(output) { output.toString().take(6000) }, false)
     }
 
     private fun download(a: LinuxRuntimePolicy.Artifact, name: String, maxBytes: Long): File {
         require(a.bytes in 1..maxBytes) { "Artifact size exceeds policy." }
         val destination = File(downloads, name)
         if (destination.isFile && destination.length() == a.bytes && sha256(destination) == a.sha256) {
-            progress(name, a.bytes, a.bytes)
-            return destination
+            progress(name, a.bytes, a.bytes); return destination
         }
         val part = File(downloads, "$name.part")
         if (part.length() > a.bytes) part.delete()
         val offset = part.length()
         val connection = (URL(a.url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 20_000
-            readTimeout = 45_000
-            instanceFollowRedirects = true
+            connectTimeout = 20_000; readTimeout = 45_000; instanceFollowRedirects = true
             if (offset > 0) setRequestProperty("Range", "bytes=$offset-")
         }
         try {
             val status = connection.responseCode
             if (offset > 0 && status != HttpURLConnection.HTTP_PARTIAL) {
-                part.delete()
-                connection.disconnect()
-                return download(a, name, maxBytes)
+                part.delete(); connection.disconnect(); return download(a, name, maxBytes)
             }
-            check(status in 200..299) { "Artifact download failed: HTTP $status" }
+            check(status in 200..299) { "Rootfs download failed: HTTP $status" }
             val append = offset > 0 && status == HttpURLConnection.HTTP_PARTIAL
             var total = if (append) offset else 0L
             BufferedInputStream(connection.inputStream).use { input ->
                 FileOutputStream(part, append).use { output ->
                     val buffer = ByteArray(32 * 1024)
                     while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
+                        val n = input.read(buffer); if (n < 0) break
                         total += n
-                        check(total <= a.bytes && total <= maxBytes) { "Artifact exceeded pinned size." }
-                        output.write(buffer, 0, n)
-                        progress(name, total, a.bytes)
+                        check(total <= a.bytes && total <= maxBytes) { "Rootfs exceeded pinned size." }
+                        output.write(buffer, 0, n); progress(name, total, a.bytes)
                     }
                 }
             }
-            check(part.length() == a.bytes) { "Artifact length does not match pinned manifest." }
-            check(sha256(part) == a.sha256) { "SHA-256 mismatch; refusing artifact." }
-            if (destination.exists()) check(destination.delete()) { "Could not replace stale artifact." }
-            check(part.renameTo(destination)) { "Could not commit verified artifact." }
+            check(part.length() == a.bytes) { "Rootfs length does not match pinned manifest." }
+            check(sha256(part) == a.sha256) { "Rootfs SHA-256 mismatch; refusing archive." }
+            if (destination.exists()) check(destination.delete()) { "Could not replace stale rootfs archive." }
+            check(part.renameTo(destination)) { "Could not commit verified rootfs archive." }
             return destination
-        } finally {
-            connection.disconnect()
-        }
+        } finally { connection.disconnect() }
     }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().buffered().use { input ->
             val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-            }
+            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
         }
         return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
