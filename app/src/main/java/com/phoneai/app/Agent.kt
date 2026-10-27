@@ -1657,6 +1657,7 @@ Rules:
         return when (tool) {
             "lookup_app" -> tools.lookupApp(a.optString("name"))
             "open_app" -> svc.openApp(a.optString("name"))
+            "play_store_search" -> tools.playStoreSearch(a.optString("query"))
             "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
             "open_deep_link" -> tools.openDeepLink(a.optString("uri"))
             "read_notifications" -> OrionNotificationListener.readSafeNotifications()
