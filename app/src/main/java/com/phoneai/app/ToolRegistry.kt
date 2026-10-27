@@ -153,6 +153,10 @@ internal object ToolRegistry {
     fun names(): Set<String> = byName.keys
 
     /** On-demand capability discovery: detailed contracts are retrieved only when relevant. */
+    fun isCapabilityQuestion(query: String): Boolean = Regex(
+        """(?i)\\b(what can you do|what are your capabilities|capabilities|available tools|all tools|commands|tool list|list tools|how can you help|what can orion do)\\b"""
+    ).containsMatchIn(query)
+
     fun describe(query: String): String {
         val q = query.trim().lowercase()
         val broad = q.isBlank() || Regex(
