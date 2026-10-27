@@ -95,6 +95,9 @@ internal object OrionIntegrationPlanner {
     fun providerFor(request: String): Provider {
         val q = request.lowercase()
         return when {
+            // GitHub CLI is a local executable/runtime concern, not the saved GitHub account connector.
+            Regex("\\b(github cli|gh cli|gh command|git cli)\\b").containsMatchIn(q) ||
+                (Regex("\\bgh\\b").containsMatchIn(q) && Regex("\\b(installed|install|setup|set up|version|command)\\b").containsMatchIn(q)) -> Provider.BUILTIN_SHELL
             Regex("\\b(github|git hub|repository|repo|pull request|commit)\\b").containsMatchIn(q) -> Provider.GITHUB
             Regex("\\b(gmail|google mail|email|inbox|emails|messages)\\b").containsMatchIn(q) -> Provider.GMAIL
             Regex("\\b(google drive|drive files|drive document)\\b").containsMatchIn(q) -> Provider.GOOGLE_DRIVE
