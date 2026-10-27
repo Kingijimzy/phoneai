@@ -83,7 +83,7 @@ import kotlinx.coroutines.withContext
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
 private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
-private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^]]+)]((https?://[^s)]+))|\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^s)]+)""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^\s)]+)""")
 
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
@@ -96,7 +96,7 @@ private fun formatOrionMarkdown(source: String): AnnotatedString {
     lines.forEach { raw ->
         if (raw.trimStart().startsWith("```")) {
             if (!inCode) {
-                if (hasRenderedLine) out.append("\\n")
+                if (hasRenderedLine) out.append("\n")
                 inCode = true
                 codeFirstLine = true
                 codeStart = out.length
@@ -120,7 +120,7 @@ private fun formatOrionMarkdown(source: String): AnnotatedString {
             return@forEach
         }
 
-        if (hasRenderedLine && (!inCode || !codeFirstLine)) out.append("\\n")
+        if (hasRenderedLine && (!inCode || !codeFirstLine)) out.append("\n")
         if (inCode) {
             val lineStart = out.length
             out.append(raw)
