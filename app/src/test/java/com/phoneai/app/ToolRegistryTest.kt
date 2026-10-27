@@ -11,7 +11,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
+            "mcp_call", "remember", "task_delete", "ask_user", "tool_help", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
@@ -63,8 +63,9 @@ class ToolRegistryTest {
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
-        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
-        assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
+        assertNull("Removed Termux bridge must not be advertised as a runtime tool", ToolRegistry.access("termux_command"))
+        assertNull("Unsupported Termux bridge must not map to a capability pack", AgentPolicy.packForTool("termux_command"))
+        assertFalse(AgentPolicy.packs.any { it.id == "termux_bridge" })
         assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
         assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("gaming_session_summary"))
@@ -109,6 +110,26 @@ class ToolRegistryPromptTrimTest {
         val gmail = ToolRegistry.promptSection("connect my Gmail account and read my inbox")
         assertTrue(gmail.contains("- gmail_list_messages {query?, limit?}: read-only Gmail inbox headers"))
         assertTrue(gmail.contains("- service_status {}: list each service"))
+    }
+
+    @Test fun capabilityDiscoveryReturnsCatalogueAndFullRelevantContracts() {
+        val catalogue = ToolRegistry.describe("what can you do")
+        assertTrue(catalogue.contains("REGISTERED CAPABILITY CATALOGUE"))
+        assertTrue(catalogue.contains("browser_navigate"))
+        assertTrue(catalogue.contains("tool_help"))
+        assertFalse(catalogue.contains("termux_command"))
+
+        val browser = ToolRegistry.describe("navigate browser to a website")
+        assertTrue(browser.contains("browser_navigate {url}"))
+        assertTrue(browser.contains("browser_snapshot {}"))
+        assertTrue(browser.contains("access=write"))
+    }
+
+    @Test fun capabilityHelpIsAlwaysVisibleEvenWhenSpecialistDetailsAreTrimmed() {
+        val prompt = ToolRegistry.promptSection("open whatsapp")
+        assertTrue(prompt.contains("- tool_help {query}"))
+        assertTrue(prompt.contains("CAPABILITY DISCOVERY"))
+        assertTrue(prompt.contains("GOAL DECISION LOOP"))
     }
 
     @Test fun matchingRequestKeepsTheFullContract() {
