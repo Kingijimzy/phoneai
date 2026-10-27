@@ -58,8 +58,8 @@ class OrionExecutionReadinessTest {
 
     @Test fun unsupportedGoalReturnsConcreteGapInsteadOfSuccess() {
         val goal = OrionGoalUnderstanding.understand("help me do something unusual")
-        val plan = OrionExecutionReadiness.plan(goal, snapshot("live_web_search"))
+        val plan = OrionExecutionReadiness.plan(goal, snapshot())
         assertEquals(OrionExecutionReadiness.NextStep.RESEARCH_AND_PROPOSE, plan.nextStep)
-        assertTrue(plan.reason.contains("currently available"))
+        assertTrue(plan.reason.contains("No matching tool is currently available"))
     }
 }
