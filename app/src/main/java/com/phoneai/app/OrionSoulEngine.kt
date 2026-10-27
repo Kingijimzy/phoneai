@@ -51,6 +51,11 @@ internal object OrionSoulEngine {
             } ?: emptyMap()
         )
 
+        val executionReadiness = OrionExecutionReadiness.plan(
+            goal = OrionGoalUnderstanding.understand(request),
+            capabilities = capabilitySnapshot,
+            integration = planner
+        )
         val lines = mutableListOf<String>()
         lines += "ORION SOUL ENGINE — LIVE LOCAL CONTEXT"
         lines += OrionGoalUnderstanding.promptLine(request)
@@ -58,6 +63,7 @@ internal object OrionSoulEngine {
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
         lines += "Registered tools: ${registeredTools.size}; tools currently usable after pack, bridge, and permission checks: ${capabilitySnapshot.availableCount}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
         lines += capabilitySnapshot.promptLines()
+        lines += executionReadiness.promptLines()
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
         lines += "Never pretend a provider is connected because its name is recognized. Never ask for passwords, PINs, one-time codes, or raw tokens in chat. Use official authorization screens and store only provider-issued credentials in the encrypted vault. Keep the task context and resume after authorization returns."
         lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permissions, account access, installs, external writes, and destructive actions require the relevant user approval."

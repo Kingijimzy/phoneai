@@ -68,7 +68,25 @@ class TerminalActivity : Activity() {
 
     private fun runInput() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
-        if (ShellPolicy.classify(cmd) == ShellRisk.BLOCKED) { append("$ $cmd\nBlocked: this command is on Orion's never-run list (destructive, privileged, or touches Orion's private data).\n"); return }
+        when (ShellPolicy.classify(cmd)) {
+            ShellRisk.BLOCKED -> {
+                append("$ $cmd\nBlocked: this command is on Orion's never-run list (destructive, privileged, or touches Orion's private data).\n")
+                return
+            }
+            ShellRisk.ASK -> {
+                AlertDialog.Builder(this)
+                    .setTitle("Confirm shell command")
+                    .setMessage("This command is outside Orion's automatic safe allowlist. Review it carefully before running:\n\n$cmd\n\nRun this command once?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Run once") { _, _ -> executeCommand(cmd) }
+                    .show()
+                return
+            }
+            ShellRisk.SAFE -> executeCommand(cmd)
+        }
+    }
+
+    private fun executeCommand(cmd: String) {
         input.setText(""); append("$ $cmd\n")
         val where = if (termux) "termux" else "builtin"
         Thread { val r = ShellRunner.run(applicationContext, cmd, where); runOnUiThread { append(r + "\n") } }.start()

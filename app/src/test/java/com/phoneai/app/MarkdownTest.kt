@@ -3,6 +3,10 @@ package com.phoneai.app
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/**
+ * Pure JVM tests only: Android's Spannable implementation is exercised by the app runtime,
+ * not by the Android SDK's throwing local-test stubs.
+ */
 class MarkdownTest {
     @Test fun normalizesUnorderedListsToReadableBullets() {
         assertEquals("• first\n• second", Markdown.normalizeLines("- first\n* second"))
@@ -18,5 +22,9 @@ class MarkdownTest {
 
     @Test fun emptyLinesRemainEmpty() {
         assertEquals("one\n\ntwo", Markdown.normalizeLines("one\n\ntwo"))
+    }
+
+    @Test fun emptyInputNormalizesSafely() {
+        assertEquals("", Markdown.normalizeLines(""))
     }
 }

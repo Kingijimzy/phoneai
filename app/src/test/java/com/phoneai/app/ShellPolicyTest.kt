@@ -11,9 +11,16 @@ class ShellPolicyTest {
             .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
 
+    @Test fun persistentDirectoryChangesRequireApproval() {
+        assertEquals(ShellRisk.SAFE, r("cd"))
+        assertEquals(ShellRisk.SAFE, r("cd src"))
+        assertEquals(ShellRisk.ASK, r("cd ../outside"))
+    }
+
     @Test fun anythingThatChangesOrInstallsAsks() {
         listOf("rm notes.txt", "python script.py", "pip install requests", "git push", "curl https://example.com", "chmod +x run.sh",
-            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete", "ls $(whoami)", "mv a b")
+            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete", "ls $(whoami)", "mv a b",
+            "cat /sdcard/Download/readme.txt", "ls ../", "cat ~/notes.txt")
             .forEach { assertEquals(it, ShellRisk.ASK, r(it)) }
     }
 
@@ -32,6 +39,14 @@ class ShellPolicyTest {
         val s = "a".repeat(5000) + "b".repeat(5000)
         val c = ShellPolicy.clip(s, 1000)
         assertTrue(c.startsWith("a") && c.endsWith("b") && c.contains("omitted") && c.length < 1200)
+    }
+
+    @Test fun builtInShellContractDoesNotPromiseExternalToolchains() {
+        val contract = ToolRegistry.all.single { it.name == "shell" }.promptLine.lowercase()
+        assertTrue(contract.contains("no termux"))
+        assertTrue(contract.contains("not a full linux distribution"))
+        assertTrue(contract.contains("does not promise python"))
+        assertTrue(contract.contains("environment variables do not"))
     }
 
     @Test fun shellToolsAreRegisteredWithCorrectAccess() {
