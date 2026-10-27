@@ -16,7 +16,7 @@ object LiveWebSearch {
 
     fun isSearchRequest(text: String): Boolean {
         val s = text.lowercase()
-        return Regex("\\b(search the web|search online|web search|look up online|look this up|find online|search for|research online)\\b").containsMatchIn(s)
+        return Regex("\\b(search the web|search online|web search|look up online|look this up|find online|search for|research online|do your research|research this|look it up|google it)\\b").containsMatchIn(s)
     }
 
     /** Detects freshness-dependent questions even when the user does not say "search the web". */
@@ -42,63 +42,86 @@ object LiveWebSearch {
     fun search(query: String): String {
         val q = query.trim().take(160)
         if (q.isBlank()) return "What should I search for?"
-        return try {
-            val url = "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(q, "UTF-8")
-            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = TIMEOUT_MS
-                readTimeout = TIMEOUT_MS
-                setRequestProperty("Accept", "text/html")
-                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36")
-                instanceFollowRedirects = true
-            }
-            val html: String
+        val retrievedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date())
+        val endpoints = listOf(
+            "https://html.duckduckgo.com/html/?q=",
+            "https://lite.duckduckgo.com/lite/?q="
+        )
+        val failures = mutableListOf<String>()
+        for ((endpointIndex, endpoint) in endpoints.withIndex()) {
             try {
-                val code = connection.responseCode
-                if (code !in 200..299) throw IllegalStateException("search service returned HTTP $code")
-                html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText().take(700_000) }
-            } finally {
-                connection.disconnect()
-            }
-            val anchors = anchorPattern.matcher(html)
-            val retrievedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date())
-            val out = StringBuilder("Web search results for \"$q\" (retrieved $retrievedAt; verify sources before relying on them):")
-            var count = 0
-            while (anchors.find() && count < 5) {
-                val tag = anchors.group()
-                if (!tag.contains("result__a", ignoreCase = true)) continue
-                val href = hrefPattern.matcher(tag)
-                if (!href.find()) continue
-                var link = decodeHtml(href.group(1))
-                if (link.startsWith("//")) link = "https:$link"
-                if (link.contains("duckduckgo.com/l/?")) {
-                    val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
-                    if (target != null) link = try { URLDecoder.decode(target, "UTF-8") } catch (_: Exception) { link }
+                val url = endpoint + URLEncoder.encode(q, "UTF-8")
+                val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 4500
+                    readTimeout = 5500
+                    setRequestProperty("Accept", "text/html")
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36")
+                    setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                    instanceFollowRedirects = true
                 }
-                if (!link.startsWith("https://") || link.contains("duckduckgo.com/l/?")) continue
-                val titleMatch = titlePattern.matcher(tag)
-                if (!titleMatch.find()) continue
-                val title = decodeHtml(titleMatch.group(1).replace(Regex("(?is)<[^>]+>"), " ")).trim()
-                if (title.isBlank()) continue
-                count++
-                out.append("\n\n").append(count).append(". ").append(title.take(220)).append("\n").append(link.take(500))
-            }
-            if (count == 0) {
-                "The search provider did not return parseable results just now. Try again or open a browser search. No AI quota was used."
-            } else {
-                val snippets = snippetPattern.matcher(html)
-                var idx = 0
-                while (snippets.find() && idx < count) {
-                    val text = decodeHtml(snippets.group(1).replace(Regex("(?is)<[^>]+>"), " ")).replace(Regex("\\s+"), " ").trim()
-                    if (text.isNotBlank()) out.append("\n\nSnippet: ").append(text.take(300))
-                    idx++
+                val html: String
+                try {
+                    val code = connection.responseCode
+                    if (code !in 200..299) throw IllegalStateException("search service returned HTTP " + code)
+                    html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText().take(700_000) }
+                } finally {
+                    connection.disconnect()
                 }
-                out.append("\n\nSource: DuckDuckGo public search results. Search availability and layout can change.")
-                out.toString()
+                val anchors = anchorPattern.matcher(html)
+                val out = StringBuilder("Web search results for \"").append(q)
+                    .append("\" (retrieved ").append(retrievedAt)
+                    .append("; verify sources before relying on them):")
+                val seen = HashSet<String>()
+                var count = 0
+                while (anchors.find() && count < 5) {
+                    val tag = anchors.group()
+                    val href = hrefPattern.matcher(tag)
+                    if (!href.find()) continue
+                    var link = decodeHtml(href.group(1))
+                    if (link.startsWith("//")) link = "https:" + link
+                    if (link.contains("duckduckgo.com/l/?")) {
+                        val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
+                        if (target != null) link = try { URLDecoder.decode(target, "UTF-8") } catch (_: Exception) { link }
+                    }
+                    if (!link.startsWith("https://") || link.contains("duckduckgo.com") ||
+                        link.contains("javascript:") || link in seen) continue
+                    val titleMatch = titlePattern.matcher(tag)
+                    if (!titleMatch.find()) continue
+                    val title = decodeHtml(titleMatch.group(1).replace(Regex("(?is)<[^>]+>"), " "))
+                        .replace(Regex("\\s+"), " ").trim()
+                    if (title.isBlank() || title.equals("more", true) || title.equals("next", true)) continue
+                    // Prefer marked result links, but accept valid external anchors on the lite layout.
+                    val marked = tag.contains("result__a", ignoreCase = true) ||
+                        tag.contains("result-link", ignoreCase = true) ||
+                        tag.contains("result__url", ignoreCase = true)
+                    if (!marked && endpointIndex == 0) continue
+                    seen.add(link)
+                    count++
+                    out.append("\\n\\n").append(count).append(". ").append(title.take(220))
+                        .append("\\n").append(link.take(500))
+                }
+                if (count > 0) {
+                    val snippets = snippetPattern.matcher(html)
+                    var idx = 0
+                    while (snippets.find() && idx < count) {
+                        val snippet = decodeHtml(snippets.group(1).replace(Regex("(?is)<[^>]+>"), " "))
+                            .replace(Regex("\\s+"), " ").trim()
+                        if (snippet.isNotBlank()) out.append("\\n\\nSnippet: ").append(snippet.take(300))
+                        idx++
+                    }
+                    out.append("\\n\\nSource: DuckDuckGo public search results (")
+                        .append(if (endpointIndex == 0) "HTML" else "lite fallback")
+                        .append("). Search availability and layout can change.")
+                    return out.toString()
+                }
+                failures.add(if (endpointIndex == 0) "HTML results were not parseable" else "lite results were not parseable")
+            } catch (e: Exception) {
+                failures.add(e.message?.take(90) ?: "network error")
             }
-        } catch (e: Exception) {
-            "I couldn't retrieve web search results right now (" + (e.message?.take(100) ?: "network error") + "). No AI quota was used; try again or open a browser search."
         }
+        return "I couldn't retrieve parseable web results after trying both public search layouts. " +
+            "Details: " + failures.joinToString("; ") + ". No AI quota was used; try again or open a browser search."
     }
 
     private fun decodeHtml(value: String): String = value
