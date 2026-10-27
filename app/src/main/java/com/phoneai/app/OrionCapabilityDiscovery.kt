@@ -57,6 +57,12 @@ internal object OrionCapabilityDiscovery {
             val pack = AgentPolicy.packForTool(tool.name)
             val reason = when {
                 pack == null -> "no capability-pack mapping; fail closed"
+                ToolRegistry.requiresAccessibility(tool.name) &&
+                    permissionStates["screen_access_disclosure"] == PermissionState.MISSING ->
+                    "screen-access disclosure has not been accepted"
+                ToolRegistry.requiresAccessibility(tool.name) &&
+                    permissionStates["screen_access_disclosure"] != PermissionState.GRANTED ->
+                    "screen-access disclosure is unverified"
                 pack !in enabledPacks -> "capability pack '$pack' is disabled"
                 permissionRequirements[tool.name] != null &&
                     permissionStates[permissionRequirements.getValue(tool.name)] == PermissionState.MISSING ->
