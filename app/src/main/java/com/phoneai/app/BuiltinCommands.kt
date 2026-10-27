@@ -76,10 +76,11 @@ internal object BuiltinCommands {
         var cur: Any? = root
         if (path.isBlank() || path == ".") return cur
         for (part in Regex("[^.\\[\\]]+|\\[\\d+]").findAll(path).map { it.value }) {
+            val node = cur
             cur = when {
-                part.startsWith("[") -> (cur as? JSONArray)?.opt(part.trim('[', ']').toInt())
-                cur is JSONObject -> cur.opt(part)
-                cur is JSONArray -> part.toIntOrNull()?.let { cur.opt(it) }
+                part.startsWith("[") -> (node as? JSONArray)?.opt(part.trim('[', ']').toInt())
+                node is JSONObject -> node.opt(part)
+                node is JSONArray -> part.toIntOrNull()?.let { node.opt(it) }
                 else -> null
             } ?: return null
         }
