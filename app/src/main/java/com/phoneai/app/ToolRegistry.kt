@@ -172,8 +172,8 @@ internal object ToolRegistry {
         val tokens = q.split(Regex("[^a-z0-9_]+")).filter { it.length >= 3 }.distinct().take(12)
         val ranked = all.map { definition ->
             val haystack = (definition.name + " " + definition.promptLine + " " + definition.description).lowercase()
-            val score = tokens.sumOf { token ->
-                when {
+            val score = tokens.fold(0) { total, token ->
+                total + when {
                     definition.name == token -> 5
                     definition.name.contains(token) -> 3
                     haystack.contains(token) -> 1
