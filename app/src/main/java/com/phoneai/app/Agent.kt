@@ -196,7 +196,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command"))) &&
             !safeBuiltinShell
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
-            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
+            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms", "python_exec") || (tool == "shell" && args.optString("where").equals("linux", ignoreCase = true))
         // Opening apps, navigating/searching, reading screens and ordinary typing are
         // routine task steps, not dangerous merely because their registry access is WRITE.
         // In Autonomous mode they run without per-step approval; consequential actions
