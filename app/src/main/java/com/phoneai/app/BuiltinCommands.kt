@@ -62,22 +62,13 @@ internal object BuiltinCommands {
         val args = t.drop(1)
         return when (t[0]) {
             "help" -> ShellRisk.SAFE
-            "curl", "wget", "fetch" -> {
-                val urls = args.filter { it.startsWith("http://") || it.startsWith("https://") }
-                val files = fileArgs(args)
-                if (urls.size == 1 && urls[0].startsWith("https://") && files.all { relative(it) } && args.all { it.startsWith("-") || it in files || it in urls }) ShellRisk.SAFE else ShellRisk.ASK
-            }
+            // Network access can leak data in a URL, so downloads always need approval (or Trusted mode); never SAFE.
+            "curl", "wget", "fetch" -> ShellRisk.ASK
             "unzip" -> { val paths = args.filter { !it.startsWith("-") }; if (paths.isNotEmpty() && paths.all { relative(it) }) ShellRisk.SAFE else ShellRisk.ASK }
             "json" -> if (args.size in 1..2 && relative(args[0])) ShellRisk.SAFE else ShellRisk.ASK
             "js" -> if (args.size == 1 && (args[0].endsWith(".js") && relative(args[0]) || !args[0].endsWith(".js"))) ShellRisk.SAFE else ShellRisk.ASK
             else -> null
         }
-    }
-
-    private fun fileArgs(args: List<String>): List<String> {
-        val out = ArrayList<String>()
-        args.forEachIndexed { i, a -> if (a == "-o" && i + 1 < args.size) out += args[i + 1] }
-        return out
     }
 
     /** Dotted/indexed path like a.b[0].c over parsed JSON. */
