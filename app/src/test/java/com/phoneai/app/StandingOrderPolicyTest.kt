@@ -35,4 +35,14 @@ class StandingOrderPolicyTest {
         assertFalse(StandingOrderPolicy.shouldNotify("", "No unread messages"))
         assertNull(StandingOrderPolicy.validate("github_notifications", 60))
     }
+
+    @Test fun failedNotificationDoesNotConsumeTheNewResultDigest() {
+        val previous = "old-digest"
+        val newResult = "new GitHub notification"
+        assertEquals(previous, StandingOrderPolicy.digestAfterAttempt(previous, newResult, true, false))
+        assertEquals(StandingOrderPolicy.digest(newResult),
+            StandingOrderPolicy.digestAfterAttempt(previous, newResult, true, true))
+        assertEquals(previous,
+            StandingOrderPolicy.digestAfterAttempt(previous, "error: network unavailable", false, false))
+    }
 }
