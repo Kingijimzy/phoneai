@@ -1451,9 +1451,9 @@ Rules:
                 if (AgentHooks.shouldAttemptRecovery(tool, result, recoveryAttempts) && !stopped) {
                     recoveryAttempts++
                     history.put(msg("user", "RESULT: " + result.take(1800) +
-                        "\\n\\nRECOVERY DECISION: the previous step failed before a consequential outcome was confirmed. Inspect fresh state/evidence, then try at most one materially different safe approach. Do not repeat the failed tool/arguments. If the outcome may have happened, the failure involves approval/permissions/safety, or no safe alternative exists, stop and explain the blocker. Preserve the original goal: " + command.take(400)))
+                        "\n\nRECOVERY DECISION: the previous step failed before a consequential outcome was confirmed. Inspect fresh state/evidence, then try at most one materially different safe approach. Do not repeat the failed tool/arguments. If the outcome may have happened, the failure involves approval/permissions/safety, or no safe alternative exists, stop and explain the blocker. Preserve the original goal: " + command.take(400)))
                     compact()
-                    ui.note("[TASK:RECOVERY]\\nOne bounded recovery attempt selected after $tool failed.")
+                    ui.note("[TASK:RECOVERY]\nOne bounded recovery attempt selected after $tool failed.")
                     continue
                 }
                 AgentCheckpointStore.pause(svc)
