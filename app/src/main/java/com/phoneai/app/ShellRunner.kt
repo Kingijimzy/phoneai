@@ -77,6 +77,7 @@ object ShellRunner {
             val relative = currentDirectory(c).relativeTo(root).path
             return "workspace/" + if (relative == ".") "" else relative
         }
+        BuiltinCommands.run(c, normalized)?.let { return ShellPolicy.clip(it) }
         return try {
             val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(currentDirectory(c)).redirectErrorStream(true).start()
             val out = StringBuffer()
