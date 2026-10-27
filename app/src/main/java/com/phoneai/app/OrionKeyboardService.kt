@@ -61,12 +61,20 @@ class OrionKeyboardService : InputMethodService() {
             }
             try {
                 val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                imm.showInputMethodPicker()
+                // First show Android's keyboard picker. Also open the enable-keyboard settings
+                // page so users are not stranded when Orion has never been enabled as an IME.
+                val pickerShown = runCatching { imm.showInputMethodPicker(); true }.getOrDefault(false)
+                if (!pickerShown) {
+                    runCatching {
+                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_INPUT_METHOD_SETTINGS)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }
                 if (!request.done.await(25, java.util.concurrent.TimeUnit.SECONDS)) {
                     synchronized(OrionKeyboardService::class.java) {
                         if (pending === request) pending = null
                     }
-                    return "error: Orion Private Keyboard was not selected in Android's keyboard picker. Select it and retry the typing action."
+                    return "needs_user_action: Orion Private Keyboard is not active. Android's keyboard picker was opened; if Orion is not listed, open Settings → System/Additional settings → Languages & input → On-screen keyboard, enable Orion Private Keyboard, then select it and retry. The original text was not entered."
                 }
                 return request.result
             } catch (e: InterruptedException) {
