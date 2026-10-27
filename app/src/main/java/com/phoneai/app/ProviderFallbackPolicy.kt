@@ -1,14 +1,17 @@
 package com.phoneai.app
 
 /**
- * Rotate to the next eligible saved provider for recoverable provider/model failures.
- * Never replay against the same provider for invalid credentials, network failures,
- * cancellation, or command-budget exhaustion. A provider response timeout may rotate to a
- * different eligible provider because the request is not replayed against the timed-out host.
+ * Cross-provider fallback is deliberately rate-limit-only.
+ *
+ * Keep the selected provider as the primary. Move to a backup only when that provider
+ * explicitly returns HTTP 429 and automatic switching is enabled. Timeouts, empty replies,
+ * unsupported models, invalid credentials, network failures, and billing errors must be
+ * surfaced to the user rather than silently spending another provider's quota.
+ *
  * The caller filters provider eligibility and the shared command request budget bounds attempts.
  */
 internal object ProviderFallbackPolicy {
-    /** Maximum backup providers considered after the selected primary. Keep recovery fast; do not fan out across every configured AI. */
+    /** Maximum backup providers considered after the selected primary. */
     const val MAX_BACKUP_PROVIDERS = 2
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
@@ -28,13 +31,8 @@ internal object ProviderFallbackPolicy {
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false
 
-        if (error is AiException && error.httpStatus == 429) return true
-        return listOf(
-            "empty response", "empty content", "no chat model worked", "no vision model worked",
-            "unsupported model", "retired", "out of credit", "temporarily busy",
-            "http 404", "http 410", "http 422", "http 500", "http 502",
-            "http 503", "http 504", "error 402", "error 404", "error 410", "error 422",
-            "request timed out", "timed out", "no response before timeout", "response timeout"
-        ).any { message.contains(it) }
+        // Do not infer permission to rotate from message text. Only an explicit HTTP 429
+        // response from the current provider permits a backup attempt.
+        return error is AiException && error.httpStatus == 429
     }
 }
