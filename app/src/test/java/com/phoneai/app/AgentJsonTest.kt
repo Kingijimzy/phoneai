@@ -18,6 +18,14 @@ class AgentJsonTest {
         assertEquals("Opening WhatsApp to find kingi jimzy and send a hi message.", AgentJson.sayFromDamaged("""{"say":"Opening WhatsApp to find kingi jimzy and send a hi message.","tool":"open_app"""))
     }
 
+    @Test fun providerToolCallMarkupIsRejectedAndNeverParsedAsAnEmptyPlan() {
+        val raw = "<|tool_call>call:googleapis:gmail:service_status{}</|tool_call>"
+        val p = AgentJson.parse(raw)
+        assertTrue(p.damaged)
+        assertEquals("", p.obj.optString("say"))
+        assertEquals("", AgentJson.sayFromDamaged(raw))
+    }
+
     @Test fun plainTextIsASay() {
         val p = AgentJson.parse("All done.")
         assertFalse(p.damaged)
