@@ -23,7 +23,7 @@ object LiveWebSearch {
     fun isLiveInfoRequest(text: String): Boolean {
         val s = text.lowercase()
         if (Regex("\\b(weather|forecast|temperature|bitcoin|btc|ethereum|eth|solana|crypto price|stock price|forex price|exchange rate|time is it|what time|today's date|current time)\\b").containsMatchIn(s)) return false
-        return Regex("\\b(latest|currently|right now|as of today|today's|today|breaking|recently|this week|this month|current events|who is the current|what is happening|what happened today|latest update|new update|current status|is .+ still)\\b").containsMatchIn(s)
+        return Regex("\\b(latest|currently|right now|as of today|today's|today|breaking|recently|this week|this month|current events|who is the current|who won|winner|winners|ranking|rankings|results|ballon d'or|award winners|top 10|what is happening|what happened today|latest update|new update|current status|is .+ still)\\b").containsMatchIn(s)
     }
 
     fun liveQueryFrom(text: String): String = text.trim()
