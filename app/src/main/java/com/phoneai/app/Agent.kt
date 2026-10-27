@@ -1866,6 +1866,7 @@ Rules:
             "knowledge_search" -> tools.knowledgeSearch(a.optString("query"))
             "ask_agent" -> tools.askAgent(a.optString("agent"), a.optString("task"))
             "shell" -> tools.shell(a.optString("command"), a.optString("where"))
+            "python_exec" -> tools.pythonExec(a.optString("code"))
             "workspace_write" -> ShellRunner.writeFile(svc, a.optString("path"), a.optString("content"))
             "workspace_read" -> ShellRunner.readFile(svc, a.optString("path"))
             "service_status" -> tools.serviceStatus()
