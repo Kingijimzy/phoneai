@@ -21,6 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test constrained bundled Python policy
+        run: python3 -m unittest discover -s app/src/test/python -v
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
