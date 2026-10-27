@@ -11,7 +11,12 @@ internal object TaskScopePolicy {
         "(?i)^\\s*(?:(?:please|can you|could you)\\s+)*(read[- ]only|inspect|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
     private val researchIntent = Regex(
-        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|go do|go|do)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
+    )
+    // Account/integration work is an actionable task, not ordinary conversation. This only
+    // classifies scope; the registered-tool, consent, permission, and provider-auth checks still apply.
+    private val integrationIntent = Regex(
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|help me(?: with this)?[:,]?)\\s+)*(?:connect|link|authorize|authenticate|sign in|log in|set up|setup|check|verify|inspect|show|open|start|begin|reconnect|disconnect|unlink)\\b.*\\b(github|git hub|gmail|google mail|google drive|drive files|email|inbox|account|connected services|service status|integration|integrations|connector|connectors)\\b|^\\s*(?:is|are|was|were)\\b.*\\b(github|git hub|gmail|google mail|google drive|email|inbox|account|service|integration|connector)\\b.*\\b(connected|linked|authorized|available)\\b"
     )
     private val localSearchIntent = Regex(
         "(?i)^\\s*(?:(?:please|can you|could you|would you|will you)\\s+)*(find me|recommend|look for)\\b.*\\b(restaurant|hotel|store|shop|cafe|service|nearby|near me)\\b"
@@ -44,7 +49,9 @@ internal object TaskScopePolicy {
         // Explicit phone/device intent takes precedence over incidental mentions of websites.
         if (phoneIntent.containsMatchIn(text) || explicitAppAction.containsMatchIn(text) ||
             memoryActionIntent.containsMatchIn(text) || taskActionIntent.containsMatchIn(text) ||
-            contentActionIntent.containsMatchIn(text)) return TaskMode.PHONE_AUTOMATION
+            contentActionIntent.containsMatchIn(text) || integrationIntent.containsMatchIn(text)) {
+            return TaskMode.PHONE_AUTOMATION
+        }
         if (researchIntent.containsMatchIn(text) || localSearchIntent.containsMatchIn(text)) return TaskMode.RESEARCH
         return if (AgentHooks.isPhoneActionRequest(text)) TaskMode.PHONE_AUTOMATION else TaskMode.CHAT
     }
