@@ -50,6 +50,25 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     )
     private val history = JSONArray()
 
+    /** Structured, bounded events are rendered as in-chat activity cards; never pretend a tool succeeded. */
+    private fun activityNote(tool: String, args: JSONObject, result: String): String {
+        val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        if (tool == "shell") {
+            val command = args.optString("command").take(240)
+            return "[SHELL:${if (failed) "FAILED" else "RESULT"}]\n$ $command\n${result.take(1600)}"
+        }
+        if (tool.startsWith("browser_") || tool == "open_url" || tool == "browser_handoff" || tool == "browser_upload") {
+            val rawUrl = args.optString("url").ifBlank { args.optString("target") }
+            val safeUrl = runCatching {
+                val parsed = android.net.Uri.parse(rawUrl)
+                if (parsed.scheme in setOf("http", "https")) parsed.buildUpon().clearQuery().fragment(null).build().toString() else ""
+            }.getOrDefault("")
+            return "[BROWSER:${if (failed) "FAILED" else "RESULT"}]\n${if (safeUrl.isNotBlank()) "URL: $safeUrl\n" else ""}TOOL: $tool\nRESULT: ${result.take(900)}"
+        }
+        val detail = result.replace("\n", " ").take(220)
+        return "[TASK:${if (failed) "FAILED" else "RESULT"}]\n$tool — $detail"
+    }
+
     private fun aiOneShot(instruction: String, data: String): String {
         val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
         return commandNim.chat(msgs, false, 450, 0.3).trim()
@@ -1322,8 +1341,9 @@ Rules:
                         return
                     }
                     toolCalls++
+                    ui.note("[TASK:RUNNING]\nRunning $bt")
                     val br = executeWithRecoveryGuard(bt, batchArgs)
-                    ui.note(bt + ": " + br.take(80).replace("\n", " "))
+                    ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
                     if (!AgentCheckpointStore.record(svc, bt, batchArgs, br)) {
                         AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
@@ -1382,10 +1402,11 @@ Rules:
                 return
             }
             toolCalls++
+            ui.note("[TASK:RUNNING]\nRunning $tool")
             val result = executeWithRecoveryGuard(tool, args)
             runTools++
             if (result.startsWith("error")) runFailed++
-            ui.note((if (result.startsWith("error")) "✗ " else "✓ ") + tool + " — " + result.take(80).replace("\n", " "))
+            ui.note(activityNote(tool, args, result))
             record(tool, args, result)
             if (tool in setOf("browser_handoff", "browser_upload") && result.startsWith("BROWSER HANDOFF REQUIRED")) {
                 if (!AgentCheckpointStore.record(svc, tool, args, result)) {
