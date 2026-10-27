@@ -81,15 +81,66 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
-private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
-private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
-private val ORION_INLINE_TOKEN_PATTERN = Regex("""\*\*(.+?)\*\*|`([^`]+)`|(?<![*\\w])\*([^*\\n]+)\*(?!\\w)""")
+private val ORION_HEADING_PATTERN = Regex("""^\\s{0,3}(#{1,3})\\s+(.+)$""")
+private val ORION_BULLET_PATTERN = Regex("""^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+)$""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\\[([^\\]]+)]\\((https?://[^\\s)]+)\\)|\\*\\*(.+?)\\*\\*|`([^`]+)`|(?<![*\\w])\\*([^*\\n]+)\\*(?!\\w)|(https?://[^\\s)]+)""")
 
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
-    source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
+    val lines = source.replace("\\r\\n", "\\n").replace('\\r', '\\n').split('\\n')
+    var inCode = false
+    var codeFirstLine = false
+    var codeStart = -1
+    var hasRenderedLine = false
+
+    lines.forEach { raw ->
+        if (raw.trimStart().startsWith("```")) {
+            if (!inCode) {
+                if (hasRenderedLine) out.append("\\n")
+                inCode = true
+                codeFirstLine = true
+                codeStart = out.length
+                hasRenderedLine = true
+            } else {
+                if (codeStart >= 0 && out.length > codeStart) {
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = Color(0xFFF0F0F0),
+                            background = Color(0xFF242424)
+                        ),
+                        codeStart, out.length
+                    )
+                }
+                inCode = false
+                codeFirstLine = false
+                codeStart = -1
+            }
+            return@forEach
+        }
+
+        if (hasRenderedLine && (!inCode || !codeFirstLine)) out.append("\\n")
+        if (inCode) {
+            val lineStart = out.length
+            out.append(raw)
+            if (raw.isNotEmpty()) {
+                out.addStyle(
+                    androidx.compose.ui.text.SpanStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = Color(0xFFF0F0F0),
+                        background = Color(0xFF242424)
+                    ),
+                    lineStart, out.length
+                )
+            }
+            codeFirstLine = false
+            hasRenderedLine = true
+            return@forEach
+        }
+
         val line = raw.trimEnd()
-        if (index > 0) out.append("\n")
         val heading = ORION_HEADING_PATTERN.find(line)
         val bullet = ORION_BULLET_PATTERN.find(line)
         val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
@@ -112,27 +163,64 @@ private fun formatOrionMarkdown(source: String): AnnotatedString {
         var cursor = 0
         ORION_INLINE_TOKEN_PATTERN.findAll(content).forEach { match ->
             appendPlain(content.substring(cursor, match.range.first))
-            val isBold = match.groups[1] != null
-            val isCode = match.groups[2] != null
-            val inner = when {
-                isBold -> match.groupValues[1]
-                isCode -> match.groupValues[2]
-                else -> match.groupValues[3]
-            }
             val start = out.length
-            out.append(inner)
-            out.addStyle(
-                androidx.compose.ui.text.SpanStyle(
-                    fontWeight = if (isBold || headingSize != null) FontWeight.Bold else FontWeight.Normal,
-                    fontStyle = if (!isBold && !isCode) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
-                    fontSize = headingSize ?: 14.sp,
-                    background = if (isCode) Color(0xFF242424) else Color.Transparent
-                ),
-                start, out.length
-            )
+            when {
+                match.groups[1] != null && match.groups[2] != null -> {
+                    out.append(match.groupValues[1])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            color = Color(0xFFD2D6DA),
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        ), start, out.length
+                    )
+                }
+                match.groups[3] != null -> {
+                    out.append(match.groupValues[3])
+                    out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold), start, out.length)
+                }
+                match.groups[4] != null -> {
+                    out.append(match.groupValues[4])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            background = Color(0xFF242424)
+                        ), start, out.length
+                    )
+                }
+                match.groups[5] != null -> {
+                    out.append(match.groupValues[5])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                        start, out.length
+                    )
+                }
+                else -> {
+                    out.append(match.groupValues[6].trimEnd('.', ',', ';'))
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            color = Color(0xFFD2D6DA),
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        ), start, out.length
+                    )
+                }
+            }
             cursor = match.range.last + 1
         }
         appendPlain(content.substring(cursor))
+        hasRenderedLine = true
+    }
+
+    if (inCode && codeStart >= 0 && out.length > codeStart) {
+        out.addStyle(
+            androidx.compose.ui.text.SpanStyle(
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = Color(0xFFF0F0F0),
+                background = Color(0xFF242424)
+            ),
+            codeStart, out.length
+        )
     }
     return out.toAnnotatedString()
 }
