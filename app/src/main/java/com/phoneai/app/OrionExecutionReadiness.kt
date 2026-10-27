@@ -106,7 +106,8 @@ internal object OrionExecutionReadiness {
             OrionIntegrationPlanner.Provider.GMAIL -> listOf("gmail_list_messages")
             OrionIntegrationPlanner.Provider.GOOGLE_DRIVE -> listOf("google_drive_files_read", "google_drive_list_files")
             OrionIntegrationPlanner.Provider.TELEGRAM -> listOf("telegram_inbox", "telegram_status")
-            OrionIntegrationPlanner.Provider.TERMUX -> listOf("termux_command", "shell")
+            OrionIntegrationPlanner.Provider.BUILTIN_SHELL -> listOf("shell")
+            OrionIntegrationPlanner.Provider.TERMUX -> listOf("termux_command")
             OrionIntegrationPlanner.Provider.UNKNOWN -> emptyList()
         }
         return candidates.firstOrNull { it in available }
