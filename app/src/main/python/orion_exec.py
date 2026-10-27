@@ -69,10 +69,12 @@ def _validate(tree):
         raise Rejected("at most two for loops are allowed")
 
 def run(source):
-    if not isinstance(source, str) or not source.strip():
-        return "error: Python code is required"
+    if not isinstance(source, str):
+        return "error: Python code must be text"
     if len(source) > MAX_SOURCE:
         return "error: Python code exceeds 8000 characters"
+    if not source.strip():
+        return "error: Python code is required"
     try:
         tree = ast.parse(source, mode="exec")
         _validate(tree)
