@@ -1055,6 +1055,7 @@ Rules:
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
         if (!resumeRequest) {
             failedCallGuard.clear()
+            coordinateStallFingerprint = ""
             // Proofs belong to one task only. Reusing a previous task's success could
             // otherwise let a new task pass its completion gate without evidence.
             taskProofs.clear()
