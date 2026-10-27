@@ -16,6 +16,13 @@ class ToolRegistryTest {
     }
 
 
+    @Test fun browserNavigationUsesTheInAppBrowserWithoutExternalBrowserPrerequisites() {
+        val contract = ToolRegistry.all.single { it.name == "browser_navigate" }.promptLine.lowercase()
+        assertTrue(contract.contains("built-in webview browser"))
+        assertTrue(contract.contains("launch it in-app"))
+        assertTrue(contract.contains("does not require chrome or termux"))
+    }
+
     @Test fun screenInspectionAndAppControlRequireExplicitDisclosure() {
         listOf("read_screen", "click", "click_text", "type", "tap", "verify_action", "look", "play", "open_app")
             .forEach { assertTrue("$it must require screen-access consent", ToolRegistry.requiresAccessibility(it)) }
