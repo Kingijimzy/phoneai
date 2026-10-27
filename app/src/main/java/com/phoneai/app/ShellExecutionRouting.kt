@@ -10,4 +10,7 @@ internal object ShellExecutionRouting {
         "termux" -> Backend.TERMUX
         else -> Backend.INVALID
     }
+
+    /** Linux commands always require explicit confirmation, including the Alpine alias. */
+    fun requiresApproval(where: String?): Boolean = backend(where) == Backend.LINUX
 }
