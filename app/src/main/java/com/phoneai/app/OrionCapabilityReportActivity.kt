@@ -136,6 +136,12 @@ class OrionCapabilityReportActivity : Activity() {
         val recentActions = runCatching { ActionLogStore.all(this).take(20) }.getOrDefault(emptyList())
         val failures = recentActions.count { it.outcome == "error returned" }
         addLine(soul, "Recent execution evidence", "${recentActions.size} recent tool outcomes inspected; ${failures} error outcomes in the latest 20. Orion uses this as bounded feedback, not as proof the base model retrained itself.", null)
+        val lessons = runCatching { ExperienceStore.all(this) }.getOrDefault(emptyList())
+        val worked = lessons.filter { it.kind == "worked" }
+        val failed = lessons.filter { it.kind == "failure" }
+        val corrections = lessons.filter { it.kind == "correction" }
+        val repeatable = worked.count { it.count >= 3 && it.steps.isNotBlank() }
+        addLine(soul, "Learning from outcomes", "${worked.size} recorded successful patterns · ${failed.size} failure lessons · ${corrections.size} user corrections · ${repeatable} repeated patterns eligible for routine suggestions. These are local, reviewable hints, not base-model retraining.", null)
         page.addView(soul)
 
         val limits = card()
