@@ -70,6 +70,7 @@ internal object AgentHooks {
   val hardStop = listOf(
    "user cancelled", "user canceled", "user denied", "did not approve", "approval required",
    "safety gate", "sensitive screen", "permission denied", "blocked by safety", "user declined",
+   "screen access", "disclosure",
    "may have partly executed", "ambiguous action", "irreversible", "credentials", "mfa", "captcha"
   )
   if (hardStop.any { text.contains(it) }) return false
