@@ -24,10 +24,10 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("fail closed"))
     }
 
-    @Test fun builtInShellDoesNotDependOnTermuxReadiness() {
+    @Test fun builtInShellIsAvailableWhenItsPackIsEnabled() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("shell", ToolAccess.WRITE)),
-            setOf("workspace_shell"),
+            setOf("workspace_shell")
         )
         assertTrue(snapshot.tools.single().available)
         assertEquals(1, snapshot.availableCount)
@@ -58,7 +58,7 @@ class OrionCapabilityDiscoveryTest {
     @Test fun availableToolRequiresRegistryAndEnabledPack() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
-            setOf("trading_research"),
+            setOf("trading_research")
         )
         assertEquals(1, snapshot.availableCount)
         assertTrue(snapshot.promptLines().any { it.contains("weather(read)") })
@@ -68,7 +68,6 @@ class OrionCapabilityDiscoveryTest {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
             setOf("trading_research"),
-            termuxReady = true,
             integrationStates = mapOf("github" to "saved-unverified")
         )
         assertTrue(snapshot.promptLines().any { it.contains("github=saved-unverified") })
