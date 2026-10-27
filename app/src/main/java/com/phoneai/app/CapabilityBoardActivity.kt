@@ -67,7 +67,7 @@ class CapabilityBoardActivity : Activity() {
             setOnCheckedChangeListener { _, on -> SoulWatch.setEnabled(this@CapabilityBoardActivity, on) }
         }
         val settings = card(); settings.addView(pack); settings.addView(watch)
-        settings.addView(text("Watching is event-driven (checks about every 20 minutes while you use the phone), uses no AI, and only notifies when something is new.", 11f, 0xFF8A8A8A.toInt()))
+        settings.addView(text("Read-only checks run while Orion’s accessibility service is alive. Android battery restrictions may delay them. No AI call is used; notifications are sent only for new results.", 11f, 0xFF8A8A8A.toInt()))
         page.addView(settings)
 
         page.addView(text("SERVICES", 10f, 0xFFAAAAAA.toInt(), true).apply { setPadding(0, dp(16), 0, 0) })
@@ -82,6 +82,9 @@ class CapabilityBoardActivity : Activity() {
             }
             c.addView(text(status, 12f, if (conn?.verified == true && conn.secretAvailable) 0xFF8FD18F.toInt() else 0xFF9A9A9A.toInt()))
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            if (conn?.secretAvailable == true && conn.verified != true) {
+                row.addView(chip("Verify saved access") { verifyConnection(s) })
+            }
             row.addView(chip(if (conn?.secretAvailable == true) "Replace token" else "Connect") { connectDialog(s) })
             if (conn != null) row.addView(chip("Disconnect") {
                 OrionConnectionStore.disconnect(this, s.id); Toast.makeText(this, "${s.title} disconnected and its token erased.", Toast.LENGTH_SHORT).show(); render()
@@ -95,6 +98,34 @@ class CapabilityBoardActivity : Activity() {
         if (gaps.isEmpty()) gc.addView(text("Nothing waiting. When you ask for something Orion can't do, it is remembered here with a plan.", 12f, 0xFF9A9A9A.toInt()))
         gaps.forEach { g -> gc.addView(text("• ${g.goal}  (${g.provider.ifBlank { "general" }}, asked ${g.count}x, ${g.status})", 13f, 0xFFE4E4E4.toInt())) }
         page.addView(gc)
+    }
+
+    private fun verifyConnection(s: ServiceCatalog.Service) {
+        Thread {
+            val verified = try {
+                when (s.id) {
+                    "github" -> GithubConnector.get(applicationContext, "/user").startsWith("GITHUB DATA")
+                    "gmail" -> GmailConnector.fetch(applicationContext, "unread", 1).ok
+                    else -> false
+                }
+            } catch (_: Exception) { false }
+            OrionConnectionStore.markVerified(applicationContext, s.id, verified)
+            if (verified) CapabilityBoard.resolved(applicationContext, s.id)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val message = if (verified) {
+                    "${s.title} verified. Orion can now use its read-only tools."
+                } else {
+                    "${s.title} is saved securely, but access could not be verified. Check the token/app password and network, then retry verification or replace the credential."
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(if (verified) "Connection verified" else "Connection not verified")
+                    .setMessage(message)
+                    .setPositiveButton("OK", null)
+                    .show()
+                render()
+            }
+        }.start()
     }
 
     private fun connectDialog(s: ServiceCatalog.Service) {
@@ -119,31 +150,7 @@ class CapabilityBoardActivity : Activity() {
                 }
                 Toast.makeText(this, "Saved securely. Checking access…", Toast.LENGTH_SHORT).show()
                 render()
-                Thread {
-                    val verified = try {
-                        when (s.id) {
-                            "github" -> GithubConnector.get(applicationContext, "/user").startsWith("GITHUB DATA")
-                            "gmail" -> GmailConnector.fetch(applicationContext, "unread", 1).ok
-                            else -> false
-                        }
-                    } catch (_: Exception) { false }
-                    OrionConnectionStore.markVerified(applicationContext, s.id, verified)
-                    if (verified) CapabilityBoard.resolved(applicationContext, s.id)
-                    runOnUiThread {
-                        if (isFinishing || isDestroyed) return@runOnUiThread
-                        val message = if (verified) {
-                            "${s.title} verified. Orion can now use its read-only tools."
-                        } else {
-                            "${s.title} was saved securely, but access could not be verified. Check the token/app password and network, then replace it and retry."
-                        }
-                        AlertDialog.Builder(this)
-                            .setTitle(if (verified) "Connection verified" else "Connection not verified")
-                            .setMessage(message)
-                            .setPositiveButton("OK", null)
-                            .show()
-                        render()
-                    }
-                }.start()
+                verifyConnection(s)
             }.show()
     }
 }
