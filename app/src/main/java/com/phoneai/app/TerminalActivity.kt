@@ -59,7 +59,7 @@ class TerminalActivity : Activity() {
         root.addView(tools)
         setContentView(root)
         refreshBackend()
-        append("Orion Terminal. Built-in runs inside Orion's private workspace. Termux gives you python, git, node and more.\n")
+        append("Orion Terminal. Built-in mode runs inside Orion's app-private workspace using Android sh/toybox. Termux is optional for extra packages.\n")
     }
 
     private fun refreshBackend() { backendBtn.text = if (termux) "Termux" else "Built-in"; append("— using ${if (termux) "Termux" else "built-in shell"} —\n") }
@@ -67,11 +67,34 @@ class TerminalActivity : Activity() {
     private fun append(s: String) { out.append(s); scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) } }
 
     private fun runInput() {
-        val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
-        if (ShellPolicy.classify(cmd) == ShellRisk.BLOCKED) { append("$ $cmd\nBlocked: this command is on Orion's never-run list (destructive, privileged, or touches Orion's private data).\n"); return }
-        input.setText(""); append("$ $cmd\n")
+        val cmd = input.text.toString().trim()
+        if (cmd.isEmpty()) return
+        when (ShellPolicy.classify(cmd)) {
+            ShellRisk.BLOCKED -> {
+                append("$ $cmd\nBlocked: Orion refuses this command because it is destructive, privileged, or targets protected data.\n")
+                return
+            }
+            ShellRisk.ASK -> {
+                AlertDialog.Builder(this)
+                    .setTitle("Approve terminal command?")
+                    .setMessage("Orion cannot classify this command as routine. It will run in ${if (termux) "Termux" else "Orion's app-private workspace"} with that environment's permissions.\n\n$cmd\n\nRun once?")
+                    .setNegativeButton("Cancel") { _, _ -> append("Cancelled; command was not run.\n") }
+                    .setPositiveButton("Run once") { _, _ -> executeCommand(cmd) }
+                    .show()
+                return
+            }
+            ShellRisk.SAFE -> executeCommand(cmd)
+        }
+    }
+
+    private fun executeCommand(cmd: String) {
+        input.setText("")
+        append("$ $cmd\n")
         val where = if (termux) "termux" else "builtin"
-        Thread { val r = ShellRunner.run(applicationContext, cmd, where); runOnUiThread { append(r + "\n") } }.start()
+        Thread {
+            val result = ShellRunner.run(applicationContext, cmd, where)
+            runOnUiThread { append(result + "\n") }
+        }.apply { name = "OrionTerminalCommand"; isDaemon = true }.start()
     }
 
     private fun askAi() {
