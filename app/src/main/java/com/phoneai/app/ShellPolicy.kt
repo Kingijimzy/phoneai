@@ -38,6 +38,7 @@ internal object ShellPolicy {
         val cmd = command.trim()
         if (cmd.isEmpty() || cmd.length > 2000) return ShellRisk.BLOCKED
         if (blocked.any { it.containsMatchIn(cmd) }) return ShellRisk.BLOCKED
+        BuiltinCommands.risk(cmd)?.let { return it }
         if (cmd.contains("`") || cmd.contains("$(") || cmd.contains("<(")) return ShellRisk.ASK
         // Redirects: only to a relative path inside the workspace.
         for (m in Regex("(>>?)\\s*([^\\s;&|]+)").findAll(cmd)) {
