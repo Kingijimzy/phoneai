@@ -24,7 +24,7 @@ object WeatherService {
     /** Extracts place names case-insensitively, including "weather today in benin city Nigeria". */
     fun requestedPlace(text: String): String {
         val pattern = Regex(
-            "(?i)\\b(?:in|for|at)\\s+(.+?)(?:\\s+(?:right now|at the moment|currently|today|tonight|tomorrow|now|this weekend|please)\\b|[?.!,]|$)"
+            "(?i)\\b(?:in|for|at)\\s+(.+?)(?:\\s+(?:right now|at the moment|currently|today|tonight|tomorrow|now|this weekend|please)\\b|[?.!]|$)"
         )
         val match = pattern.find(text) ?: return ""
         val place = match.groupValues[1].trim().trimEnd('.', '?', '!', ',')
