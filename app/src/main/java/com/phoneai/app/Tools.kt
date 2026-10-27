@@ -778,6 +778,13 @@ class Tools(private val svc: PhoneAiService) {
         } catch (e: Exception) { "error: could not open the Capability board (" + (e.message ?: "").take(80) + ")" }
     }
 
+    fun standingOrder(action: String, kind: String, minutes: Int): String = when (action.lowercase()) {
+        "add" -> StandingOrders.add(svc, kind.lowercase().trim(), minutes)
+        "remove" -> StandingOrders.remove(svc, kind.lowercase().trim())
+        "list" -> "STANDING ORDERS:\n" + StandingOrders.describe(svc)
+        else -> "error: action must be add, list or remove"
+    }
+
     fun capabilityNote(goal: String, provider: String): String =
         if (CapabilityBoard.note(svc, goal, provider)) "noted on the Capability board. Now research (live_web_search/fetch_url) and propose the safest way to add it; install only after the user approves." else "error: could not note that"
     fun morningBrief(): String = "BRIEF (live data; relay faithfully):\n" + MorningBrief.build(svc)

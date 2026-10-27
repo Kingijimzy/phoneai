@@ -1742,6 +1742,7 @@ Rules:
             "connect_service" -> tools.connectService(a.optString("service"))
             "github_account_read" -> GithubConnector.get(svc, a.optString("path"))
             "gmail_list_messages" -> GmailConnector.read(svc, a.optString("query"), a.optInt("limit", 5))
+            "standing_order" -> tools.standingOrder(a.optString("action"), a.optString("kind"), a.optInt("every_minutes", 60))
             "capability_note" -> tools.capabilityNote(a.optString("goal"), a.optString("provider"))
             "morning_brief" -> tools.morningBrief()
             "create_agent" -> tools.createAgent(a.optString("id"), a.optString("name"), a.optString("tagline"), a.optString("persona"))

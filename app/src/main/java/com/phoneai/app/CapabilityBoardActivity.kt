@@ -39,6 +39,8 @@ class CapabilityBoardActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = 0xFF090909.toInt(); window.navigationBarColor = 0xFF090909.toInt()
+        // Tokens are typed here: block screenshots, screen recording and the recents thumbnail.
+        window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
         val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090909.toInt()) }
         page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(30)) }
         scroll.addView(page); setContentView(scroll)

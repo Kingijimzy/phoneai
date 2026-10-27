@@ -72,11 +72,14 @@ internal object SoulWatch {
 
     /** Returns a short log line (for tests/diagnostics); throws on hard failure so the runtime can back off. */
     fun run(c: Context): String {
-        if (!enabled(c)) return "soul_watch_off"
         val now = System.currentTimeMillis()
         if (!SoulPolicy.due(lastTick(c), now)) return "not_due"
         sp(c).edit().putLong("soul_watch_last", now).apply()
         val notes = ArrayList<String>()
+        if (!enabled(c)) {
+            try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
+            return notes.joinToString(",").ifBlank { "soul_watch_off" }
+        }
         if (OrionConnectionStore.get(c, "gmail")?.secretAvailable == true && AgentPolicy.enabled(c, "connected_services")) {
             val r = GmailConnector.fetch(c, "unread", 1)
             if (r.ok) {
@@ -97,6 +100,8 @@ internal object SoulWatch {
                 sp(c).edit().putInt("soul_gh_notes", n).apply()
             }
         }
+        // User-defined standing orders ("check my mail every 30 minutes") share the same event-driven tick.
+        try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
         return notes.joinToString(",").ifBlank { "nothing_new" }
     }
 
