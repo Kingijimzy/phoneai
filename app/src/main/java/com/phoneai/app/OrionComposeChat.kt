@@ -46,6 +46,8 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Icon
@@ -719,12 +721,12 @@ private fun ShellActivityCard(raw: String) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            Icon(Icons.Rounded.Terminal, contentDescription = null, tint = Color(0xFFD0D0D0), modifier = Modifier.size(16.dp))
+            Icon(Icons.Rounded.Tune, contentDescription = null, tint = Color(0xFFD0D0D0), modifier = Modifier.size(16.dp))
             Text("ORION SHELL", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Spacer(Modifier.weight(1f))
             Text(if (failed) "FAILED" else "OUTPUT", color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
-        Text("$ $command", color = Color(0xFFE8E8E8), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        Text("\\$ $command", color = Color(0xFFE8E8E8), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
         if (output.isNotBlank()) Text(output.take(1600), color = Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
     }
 }
