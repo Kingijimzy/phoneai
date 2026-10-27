@@ -93,4 +93,12 @@ class AgentHooksTest {
   assertFalse(AgentHooks.screenChanged(before,sameContent)); assertTrue(AgentHooks.screenChanged(before,after))
   assertEquals(AgentHooks.screenFingerprint(before),AgentHooks.screenFingerprint(sameContent))
  }
+ @Test fun coordinateRetryIsBlockedOnlyWhenTheScreenStayedTheSame() {
+  val screen = "screen 1080x2400\n[1] button \"Search apps & games\"\n[2] text \"For you\""
+  assertTrue(AgentHooks.shouldBlockCoordinateRetry("tap", screen, screen))
+  assertTrue(AgentHooks.shouldBlockCoordinateRetry("swipe", screen, screen))
+  assertFalse(AgentHooks.shouldBlockCoordinateRetry("click_text", screen, screen))
+  assertFalse(AgentHooks.shouldBlockCoordinateRetry("tap", screen, "screen 1080x2400\n[1] button \"Search\"\n[2] text \"Results\""))
+ }
+
 }
