@@ -235,12 +235,14 @@ object Prefs {
     fun commandModelId(c: Context): String? = sp(c).getString("command_model_id", null)
         ?.takeIf { it.isNotBlank() }
 
-    /** Prefer configured fast/free command providers; otherwise inherit the user's chat provider. */
-    fun defaultCommandProvider(c: Context): Provider {
-        val fast = listOf("groq", "cerebras").mapNotNull { Providers.find(it) }
-            .firstOrNull { hasKey(c, it.id) && (!it.requiresPaidOptIn || allowPaidProviders(c)) }
-        return fast ?: provider(c, false)
-    }
+    /**
+     * Command planning inherits the provider explicitly selected for chat.
+     *
+     * Do not silently prefer Groq/Cerebras here: that overrides the user's provider
+     * selection whenever an Agent creates a command-mode Nim. A separate command
+     * provider is supported only when the user explicitly saves commandProviderId.
+     */
+    fun defaultCommandProvider(c: Context): Provider = provider(c, false)
 
     fun setCommandProvider(c: Context, providerId: String, modelId: String) {
         val provider = Providers.find(providerId) ?: return

@@ -27,7 +27,6 @@ class AgentControlActivity : Activity() {
     private lateinit var testReport: TextView
     private lateinit var packStatus: TextView
     private lateinit var commandModelStatus: TextView
-    private lateinit var termuxBridgeStatus: TextView
     private lateinit var remoteComputerStatus: TextView
     private lateinit var proactiveStatus: TextView
     private lateinit var gamingStatus: TextView
@@ -71,10 +70,6 @@ class AgentControlActivity : Activity() {
                 isEnabled = pack.implemented
                 setOnCheckedChangeListener { _, checked ->
                     AgentPolicy.setEnabled(this@AgentControlActivity, pack.id, checked)
-                    if (pack.id == "termux_bridge") {
-                        getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
-                            .putBoolean("termux_bridge_enabled", checked).apply()
-                    }
                     if (pack.id == "proactive") {
                         if (checked) ProactiveBriefing.schedule(this@AgentControlActivity)
                         else ProactiveBriefing.cancel(this@AgentControlActivity)
@@ -111,8 +106,6 @@ class AgentControlActivity : Activity() {
 
         section("SELF-TEST")
         testReport = addText("Not run yet.", 12f, Theme.MUTED, false, 4)
-        termuxBridgeStatus = addText("", 12f, Theme.MUTED, false, 4)
-        addButton("OPEN TERMUX BRIDGE") { startActivity(Intent(this, TermuxBridgeActivity::class.java)) }
         remoteComputerStatus = addText("", 12f, Theme.MUTED, false, 4)
         addButton("OPEN REMOTE COMPUTER / CURSOR CLOUD AGENT") { startActivity(Intent(this, CursorCloudAgentActivity::class.java)) }
         proactiveStatus = addText("", 12f, Theme.MUTED, false, 4)
@@ -457,11 +450,6 @@ class AgentControlActivity : Activity() {
                 }.getOrDefault(false)
                 if (enabled) "PASS: Orion accessibility service is enabled" else "FAIL: Orion accessibility service is not enabled"
             }
-            test("Termux bridge state") {
-                val installed = runCatching { packageManager.getPackageInfo("com.termux", 0); true }.getOrDefault(false)
-                if (!installed) "SKIP: Termux not installed; bridge remains off"
-                else "PASS: Termux is installed; bridge remains off until separately enabled"
-            }
             test("Trading safety") { "PASS: order-like tools are denied by the read-only Trading research pack" }
             test("Approval policy") { "PASS: current mode is ${AgentPolicy.mode(this).label}; tools require enabled packs" }
             val report = lines.joinToString("\n")
@@ -479,12 +467,6 @@ class AgentControlActivity : Activity() {
         val text = AgentPolicy.recentLogs(this).ifEmpty { listOf("No events logged yet.") }.joinToString("\n\n")
         AlertDialog.Builder(this).setTitle("Recent action log").setMessage(text).setPositiveButton("CLOSE", null).show()
     }
-    private fun termuxInstalled(): Boolean = try {
-        @Suppress("DEPRECATION")
-        val info = packageManager.getPackageInfo("com.termux", 0)
-        info.packageName == "com.termux"
-    } catch (_: Exception) { false }
-
     override fun onResume() {
         super.onResume()
         if (::modeStatus.isInitialized) refresh()
@@ -556,14 +538,6 @@ class AgentControlActivity : Activity() {
         modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Ask\nTrusted until: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
         packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
-        val installed = termuxInstalled()
-        val termuxOn = installed && AgentPolicy.enabled(this, "termux_bridge") &&
-            getSharedPreferences("phoneai", Context.MODE_PRIVATE).getBoolean("termux_bridge_enabled", false)
-        termuxBridgeStatus.text = "Termux bridge: " + when {
-            termuxOn -> "enabled · permissions checked per command"
-            installed -> "installed but bridge is off"
-            else -> "not installed / off"
-        }
         remoteComputerStatus.text = "Remote computer: " + if (Prefs.hasKey(this, "cursor_cloud_agents")) {
             "Cursor API key saved · live status checked when opened"
         } else {

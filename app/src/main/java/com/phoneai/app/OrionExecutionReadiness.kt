@@ -77,15 +77,14 @@ internal object OrionExecutionReadiness {
         }
 
         if (goal.kind == OrionGoalUnderstanding.Kind.SHELL_EXECUTION) {
-            val explicitTermux = goal.target.equals("Termux", ignoreCase = true)
-            val shell = if (explicitTermux) choose("termux_command") else choose("shell")
+            val shell = choose("shell")
             if (shell != null) return Plan(NextStep.EXECUTE_SUPPORTED_TOOL,
-                if (explicitTermux) "The explicitly requested optional Termux backend is available."
+                if (goal.target.equals("Termux", ignoreCase = true))
+                    "Termux is not an Orion execution backend; use Orion's built-in workspace shell without an external terminal dependency."
                 else "Orion's built-in workspace shell is available; no external terminal app is required.",
                 shell, "Inspect command output and exit/result status; never infer task completion from dispatch alone.", true)
             return Plan(NextStep.PREPARE_SHELL_SETUP,
-                if (explicitTermux) "Termux was explicitly requested but its optional bridge is unavailable. Enable that bridge or ask Orion to use its built-in terminal."
-                else "Orion's built-in shell is unavailable. Enable the workspace-shell capability pack; Termux is not required.",
+                "Orion's built-in shell is unavailable. Enable the workspace-shell capability pack; no external terminal is required.",
                 choose("capability_note"), "Re-run discovery and verify shell readiness before executing.", true)
         }
 
@@ -115,7 +114,6 @@ internal object OrionExecutionReadiness {
             OrionIntegrationPlanner.Provider.GOOGLE_DRIVE -> listOf("google_drive_files_read", "google_drive_list_files")
             OrionIntegrationPlanner.Provider.TELEGRAM -> listOf("telegram_inbox", "telegram_status")
             OrionIntegrationPlanner.Provider.BUILTIN_SHELL -> listOf("shell")
-            OrionIntegrationPlanner.Provider.TERMUX -> listOf("termux_command")
             OrionIntegrationPlanner.Provider.UNKNOWN -> emptyList()
         }
         return candidates.firstOrNull { it in available }

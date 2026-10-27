@@ -88,21 +88,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
     }
 
-    /** Command mode may use its own saved text provider/model; vision and Talk stay unchanged. */
-    private fun selectedProvider(vision: Boolean): Provider {
-        if (commandMode && !vision) {
-            Prefs.commandProviderId(ctx)?.let { Providers.find(it) }?.let { return it }
-            return Prefs.defaultCommandProvider(ctx)
-        }
-        return Prefs.provider(ctx, vision)
-    }
+    /**
+     * Every text request, including command planning, follows the provider/model selected
+     * by the user in Settings. Older builds could persist a hidden command-provider override
+     * (often Groq), silently bypassing the visible selection; ignore that stale override.
+     * Vision continues to use its separately selected vision provider.
+     */
+    private fun selectedProvider(vision: Boolean): Provider = Prefs.provider(ctx, vision)
 
-    private fun selectedModel(p: Provider, vision: Boolean): String {
-        if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
-            Prefs.commandModelId(ctx)?.let { return it }
-        }
-        return Prefs.model(ctx, p, vision)
-    }
+    private fun selectedModel(p: Provider, vision: Boolean): String = Prefs.model(ctx, p, vision)
 
     private val bad = listOf(
         "embed", "guard", "rerank", "reward", "clip", "parse", "safety", "retriev", "bge",
@@ -587,12 +581,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        val primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
-            ?: if (Providers.all.any { configured(it) }) {
-                throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
-            } else {
-                throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
-            }
+        // Fail closed: never spend another provider's quota just because the selected
+        // provider key is missing, invalid, or incompatible with this request.
+        if (!configured(selected)) {
+            throw IllegalStateException(
+                "${selected.label} is selected for ${if (vision) "screen vision" else "chat/command planning"} but is not connected with a usable key. " +
+                    "Orion did not switch providers. Check the selected provider's saved key in Settings."
+            )
+        }
+        val primary = selected
 
         val now = System.currentTimeMillis()
         // Auto-switch may try eligible saved providers in order, but the shared 15-request
@@ -603,11 +600,14 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 .take(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS)
         } else emptyList()
         val mode = if (vision) "vision" else "chat"
+        // Bound text-only prompts before any provider attempt. This prevents growing
+        // tool transcripts from repeatedly triggering HTTP 413 across task-planning calls.
+        val requestMessages = if (vision) messages else RequestPayloadPolicy.bound(messages)
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
-            onStatus?.invoke("Using provider: ${p.label}...")
-            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
+            onStatus?.invoke("Using provider/model: ${p.label} / ${selectedModel(p, vision)}...")
+            val answer = chatOne(p, requestMessages, vision, maxTokens, temperature, hasBackup, fastResponse)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             return answer

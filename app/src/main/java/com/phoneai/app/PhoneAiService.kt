@@ -154,6 +154,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Snapshot for the Soul Engine dashboard; null means the accessibility service has no live runtime. */
+    internal fun soulRuntimeSnapshot(): OrionRuntime.Snapshot? = orionRuntime?.snapshot()
+
     private fun scheduleSoulWatchTick() {
         main.removeCallbacks(soulWatchTick)
         main.postDelayed(soulWatchTick, 60_000L)

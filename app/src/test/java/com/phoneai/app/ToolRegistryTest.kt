@@ -11,7 +11,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
+            "mcp_call", "remember", "task_delete", "ask_user", "tool_help", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
@@ -38,16 +38,6 @@ class ToolRegistryTest {
         assertTrue(ToolRegistry.find("swipe")!!.promptLine.contains("allow_coordinates:true"))
     }
 
-    @Test fun termuxAiCommandsAreRestrictedToExactReadOnlyDiagnostics() {
-        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
-        assertTrue(TermuxCommandPolicy.isReadOnly("git status --short"))
-        assertTrue(TermuxCommandPolicy.isReadOnly("python --version"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ~"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("git status; touch marker"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("apt install python"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("rm -rf /"))
-    }
-
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
         val prompt = ToolRegistry.promptSection()
         assertTrue(prompt.startsWith("Tools:\n"))
@@ -58,13 +48,21 @@ class ToolRegistryTest {
         assertTrue(prompt.contains("SCREEN TARGET RULE"))
     }
 
+    @Test fun everyRegisteredToolMapsToAnImplementedCapabilityPack() {
+        ToolRegistry.all.forEach { tool ->
+            assertNotNull("Missing capability-pack mapping for " + tool.name, AgentPolicy.packForTool(tool.name))
+        }
+        assertEquals("orion_core", AgentPolicy.packForTool("tool_help"))
+    }
+
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
         assertEquals(ToolAccess.READ, ToolRegistry.access("read_screen"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
-        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
-        assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
+        assertNull("Removed Termux bridge must not be advertised as a runtime tool", ToolRegistry.access("termux_command"))
+        assertNull("Unsupported Termux bridge must not map to a capability pack", AgentPolicy.packForTool("termux_command"))
+        assertFalse(AgentPolicy.packs.any { it.id == "termux_bridge" })
         assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
         assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("gaming_session_summary"))
@@ -100,6 +98,42 @@ class ToolRegistryPromptTrimTest {
         assertTrue(trimmed.contains("bybit_public_ticker {symbol}"))
         assertTrue(trimmed.contains("- read_screen {}"))
         assertTrue(trimmed.length < ToolRegistry.promptSection().length)
+    }
+
+    @Test fun githubAndGmailRequestsIncludeFullConnectionToolContracts() {
+        val github = ToolRegistry.promptSection("connect my GitHub account")
+        assertTrue(github.contains("- github_account_read {path}: read-only GitHub GET"))
+        assertTrue(github.contains("- connect_service {service}: open Orion's secure Capability board"))
+        val gmail = ToolRegistry.promptSection("connect my Gmail account and read my inbox")
+        assertTrue(gmail.contains("- gmail_list_messages {query?, limit?}: read-only Gmail inbox headers"))
+        assertTrue(gmail.contains("- service_status {}: list each service"))
+    }
+
+    @Test fun capabilityDiscoveryReturnsCatalogueAndFullRelevantContracts() {
+        val catalogue = ToolRegistry.describe("what can you do")
+        assertTrue(catalogue.contains("REGISTERED CAPABILITY CATALOGUE"))
+        assertTrue(catalogue.contains("browser_navigate"))
+        assertTrue(catalogue.contains("tool_help"))
+        assertFalse(catalogue.contains("termux_command"))
+
+        val browser = ToolRegistry.describe("navigate browser to a website")
+        assertTrue(browser.contains("browser_navigate {url}"))
+        assertTrue(browser.contains("browser_snapshot {}"))
+        assertTrue(browser.contains("access=write"))
+    }
+
+    @Test fun capabilityQueryRouterDoesNotStealOrdinaryShellCommands() {
+        assertTrue(ToolRegistry.isCapabilityQuestion("What can you do with commands?"))
+        assertTrue(ToolRegistry.isCapabilityQuestion("What tools can you use?"))
+        assertFalse(ToolRegistry.isCapabilityQuestion("Run these shell commands"))
+        assertFalse(ToolRegistry.isCapabilityQuestion("Open WhatsApp and search for Amma"))
+    }
+
+    @Test fun capabilityHelpIsAlwaysVisibleEvenWhenSpecialistDetailsAreTrimmed() {
+        val prompt = ToolRegistry.promptSection("open whatsapp")
+        assertTrue(prompt.contains("- tool_help {query}"))
+        assertTrue(prompt.contains("CAPABILITY DISCOVERY"))
+        assertTrue(prompt.contains("GOAL DECISION LOOP"))
     }
 
     @Test fun matchingRequestKeepsTheFullContract() {

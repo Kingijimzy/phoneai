@@ -43,7 +43,7 @@ class ShellPolicyTest {
 
     @Test fun builtInShellContractDoesNotPromiseExternalToolchains() {
         val contract = ToolRegistry.all.single { it.name == "shell" }.promptLine.lowercase()
-        assertTrue(contract.contains("no termux"))
+        assertTrue(contract.contains("external shell backends are not available"))
         assertTrue(contract.contains("not a full linux distribution"))
         assertTrue(contract.contains("does not promise python"))
         assertTrue(contract.contains("environment variables do not"))

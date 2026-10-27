@@ -77,7 +77,7 @@ object McpConnector {
         val safe = selected + "read"
         return if (c.getSharedPreferences(PREFS, 0).edit()
             .putString("allowed_scopes", safe.sorted().joinToString(",")).commit()) {
-            "MCP scopes saved. Read-only access remains enabled; every remote call still requires in-app approval."
+            "MCP scopes saved. Read-only access remains enabled; classified read-only calls do not require a per-call prompt, while write, communication, system and unclassified calls do."
         } else "Could not save MCP scopes."
     }
     fun scopeForTool(name: String): String {
@@ -90,6 +90,9 @@ object McpConnector {
             else -> "other"
         }
     }
+
+    /** Read-only remote tools can run without a per-call prompt; all other scopes require one. */
+    fun requiresUserApproval(name: String): Boolean = scopeForTool(name) != "read"
 
     fun save(c: Context, rawUrl: String, rawToken: String): String {
         val clean = rawUrl.trim()
@@ -132,7 +135,7 @@ object McpConnector {
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
             ". Local endpoint approval: " + pairing +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
-            ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
+            ". Classified read-only tools run without per-call prompts; write, communication, system and unclassified tools require approval. Unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
     }
 
     @Volatile private var sessionId: String? = null

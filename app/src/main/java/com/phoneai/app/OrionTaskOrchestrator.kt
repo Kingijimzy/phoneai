@@ -24,6 +24,8 @@ internal object OrionTaskOrchestrator {
                 "Available tool names: " + available.take(24).joinToString(", ") { it.name }.ifBlank { "none" } +
                     if (available.size > 24) " (and ${available.size - 24} more)" else "",
                 "Readiness: next_step=${readiness.nextStep}; recommended_tool=${readiness.recommendedTool ?: "none"}; reason=${readiness.reason}; verify=${readiness.verificationRequirement}",
+                "Goal loop: preserve the same requested outcome across tool results; update the next action from evidence rather than restarting the task.",
+                "Recovery rule: permit one materially different safe recovery after a recoverable failure; never repeat a failed call or retry an ambiguous consequential action.",
                 "Routing contract: use this as a planning hint, not permission. Only select tools present in the actual tool registry; dispatch policy, pack enablement, Android permissions, confirmation, cancellation, and verification remain mandatory."
             )
             if (goal.needsClarification) lines += "Required next action: ask one focused clarification; do not dispatch a tool."
@@ -43,7 +45,6 @@ internal object OrionTaskOrchestrator {
         request: String,
         registeredTools: Collection<ToolDefinition>,
         enabledPacks: Set<String>,
-        termuxReady: Boolean,
         permissionStates: Map<String, OrionCapabilityDiscovery.PermissionState> = emptyMap(),
         integration: OrionIntegrationPlanner.Plan? = null
     ): Context {
@@ -51,7 +52,6 @@ internal object OrionTaskOrchestrator {
         val capabilities = OrionCapabilityDiscovery.discover(
             registeredTools = registeredTools,
             enabledPacks = enabledPacks,
-            termuxReady = termuxReady,
             permissionStates = permissionStates,
             integrationStates = integration?.let {
                 mapOf(it.provider.name.lowercase() to it.state.name.lowercase())
