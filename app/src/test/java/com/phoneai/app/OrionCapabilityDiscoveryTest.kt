@@ -24,6 +24,20 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("fail closed"))
     }
 
+    @Test fun accessibilityToolsRequireAcceptedScreenDisclosure() {
+        val missing = OrionCapabilityDiscovery.discover(
+            listOf(tool("read_screen")),
+            setOf("phone_control"),
+            permissionStates = mapOf("screen_access_disclosure" to OrionCapabilityDiscovery.PermissionState.MISSING)
+        )
+        assertFalse(missing.tools.single().available)
+        assertTrue(missing.tools.single().reason.contains("disclosure has not been accepted"))
+
+        val unknown = OrionCapabilityDiscovery.discover(listOf(tool("read_screen")), setOf("phone_control"))
+        assertFalse(unknown.tools.single().available)
+        assertTrue(unknown.tools.single().reason.contains("unverified"))
+    }
+
     @Test fun builtInShellIsAvailableWhenItsPackIsEnabled() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("shell", ToolAccess.WRITE)),
