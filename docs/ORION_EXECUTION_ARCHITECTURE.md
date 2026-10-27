@@ -39,7 +39,7 @@ The runtime is an event queue and retry coordinator. It does not itself call the
 | Area | Current implementation | Honest limitation |
 |---|---|---|
 | Soul context | `OrionSoulEngine.contextFor` is called from Agent planning/chat paths and builds capability-aware context. | It is contextual reasoning input, not a second model, consciousness, or self-modifying code. |
-| Integration planning | `OrionIntegrationPlanner` checks provider identity, saved connection metadata, scopes, and registered capabilities. | Metadata alone does not prove remote service availability; use a provider read-only verification. |
+| Integration planning | `OrionIntegrationPlanner` checks provider identity, saved connection metadata, scopes, registered capabilities, and the persisted result of a real read-only verification. A saved-but-unverified credential has a separate state and must be verified before use. | Metadata alone does not prove remote service availability; use a provider read-only verification. |
 | Tool execution | `Agent` dispatches through tool registry, capability packs, scope policy, permission checks, shell classification and confirmation gates. | Android accessibility, target-app behavior and device restrictions still require device tests. |
 | Resumable tasks | `AgentCheckpointStore` writes a task and in-flight marker before tools; `TaskStore` persists user tasks. | A checkpoint is recovery evidence, not proof that an interrupted external action did or did not complete. |
 | Learning from outcomes | `ExperienceStore` records successes, failures and corrections; `ActionLogStore` exposes privacy-minimal failure hints. | This changes local evidence/guidance; it does not retrain the underlying provider model. |
@@ -55,7 +55,7 @@ The runtime is an event queue and retry coordinator. It does not itself call the
 2. `PhoneAiService` queues a watcher work item after service startup and periodically while the accessibility service is connected.
 3. The runtime drain calls `LifeLoop.tick` off the UI thread.
 4. Each order is skipped until its own persisted interval is due.
-5. The connector/brief result is classified. Errors and empty results do not update the stored digest as if they were new information.
+5. The connector/brief result is classified. Errors do not update the stored digest; empty results are suppressed. If Android cannot post a notification, the previous digest is retained so a later due check can retry the new result.
 6. Only changed, useful results produce a notification. Outcomes are recorded through `AgentPolicy.log`.
 7. Removing the order stops future checks for that order. Turning off/killing the service or Android restricting background execution can interrupt the loop.
 
@@ -109,4 +109,4 @@ The current Settings Activity is too large to refactor safely in one pass. Conti
 
 - The integrated `main` workflow at commit `6f3b1c3f189e722459ca6345607c25f8434c800a` passed unit tests, assembled the debug APK, validated the package/signature, and published an artifact.
 - This is CI evidence only. It is not a physical-device test.
-- The code audit found that the periodic watcher dispatch referenced `SoulWatch.run`, but the current source tree contains `StandingOrders.kt` with the actual `LifeLoop.tick` implementation and no `SoulWatch.kt`. This follow-up changes the dispatch to the existing implementation and adds policy tests; it must pass a fresh build before being treated as integrated.
+- The code audit found stale `SoulWatch.run` and `SoulWatch.enabled` references despite the current source tree containing no `SoulWatch.kt`; the actual implementation is `LifeLoop.tick` plus `StandingOrders`. This follow-up routes dispatch/status through those real implementations and adds regression tests. Its latest head must pass a fresh build before merge.
