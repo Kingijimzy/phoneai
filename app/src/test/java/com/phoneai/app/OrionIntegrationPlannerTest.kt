@@ -14,6 +14,10 @@ class OrionIntegrationPlannerTest {
             OrionIntegrationPlanner.providerFor("read my Gmail messages"))
         assertEquals(OrionIntegrationPlanner.Provider.TERMUX,
             OrionIntegrationPlanner.providerFor("install the missing tool in Termux"))
+        assertEquals(OrionIntegrationPlanner.Provider.ORION_SHELL,
+            OrionIntegrationPlanner.providerFor("use my built-in terminal"))
+        assertEquals(OrionIntegrationPlanner.Provider.ORION_SHELL,
+            OrionIntegrationPlanner.providerFor("run this in the shell"))
     }
 
     @Test
