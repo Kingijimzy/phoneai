@@ -35,12 +35,16 @@ object ShellRunner {
     fun termuxInstalled(c: Context): Boolean = try { c.packageManager.getPackageInfo(TERMUX_PKG, 0); true } catch (_: Exception) { false }
 
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20): String {
+        val normalized = command.trim()
+        if (normalized.isEmpty()) return "error: command is required"
+        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) return "error: Orion shell policy refused this command."
         return try {
-            val p = ProcessBuilder("/system/bin/sh", "-c", command).directory(workspace(c)).redirectErrorStream(true).start()
+            val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(workspace(c)).redirectErrorStream(true).start()
             val out = StringBuilder()
             val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(2048); while (true) { val n = r.read(buf); if (n < 0) break; if (out.length < 20000) out.append(buf, 0, n) } } } catch (_: Exception) { } }
             reader.start()
-            if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
+            if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
             (if (p.exitValue() == 0) "" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }
