@@ -30,23 +30,26 @@ object Markdown {
         val lines = text.replace("\r\n", "\n").replace('\r', '\n').split('\n')
         var inCode = false
         var codeStart = -1
+        var hasRenderedLine = false
 
-        lines.forEachIndexed { index, raw ->
-            if (index > 0) sb.append('\n')
+        lines.forEach { raw ->
             val trimmed = raw.trimStart()
             if (trimmed.startsWith("```")) {
                 if (!inCode) {
+                    if (hasRenderedLine) sb.append('\n')
                     inCode = true
                     codeStart = sb.length
+                    hasRenderedLine = true
                 } else {
                     applyCodeBlockStyle(sb, codeStart, sb.length)
                     inCode = false
                     codeStart = -1
                 }
                 // Fence markers and optional language names are presentation metadata, not content.
-                return@forEachIndexed
+                return@forEach
             }
 
+            if (hasRenderedLine) sb.append('\n')
             if (inCode) {
                 sb.append(raw)
             } else {
@@ -59,6 +62,7 @@ object Markdown {
                     sb.setSpan(RelativeSizeSpan(1.1f), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
+            hasRenderedLine = true
         }
 
         if (inCode) applyCodeBlockStyle(sb, codeStart, sb.length)
