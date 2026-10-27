@@ -287,6 +287,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 }
             }
         }
+        val verificationPassed = !shouldVerifyAction || verifiedResult.contains("LOCAL VERIFY PASS:")
+        if (!OrionExecutionLoop.completionEvidence(verifiedResult, shouldVerifyAction, verificationPassed) &&
+            !verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
+            verifiedResult = "error: execution result did not satisfy the required verification gate; outcome remains unverified. Original result: $verifiedResult"
+        }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             // Failure is not a reason to blindly repeat or immediately abandon the task.
             // Re-read the live UI once so the next planning turn can distinguish a failed
