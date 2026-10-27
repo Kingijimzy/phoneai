@@ -102,7 +102,7 @@ class Tools(private val svc: PhoneAiService) {
             if (close <= 1) continue
             val id = line.substring(1, close).toIntOrNull() ?: continue
             var label = line.substring(close + 1).trim()
-            label = label.replaceFirst(Regex("^(button|text|field|checked|unchecked|OCR|visual target)\\s*", RegexOption.IGNORE_CASE))
+            label = label.replaceFirst(Regex("^(button|text|field|checked|unchecked|OCR|visual target)\\s*", RegexOption.IGNORE_CASE), "")
                 .trim().trim('"')
             val score = ScreenTargetMatcher.score(query, label, line.contains("button", true))
             if (score > mappedScore && svc.nodeInfo(id) != null) {
