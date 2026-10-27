@@ -144,7 +144,10 @@ class OrionCapabilityReportActivity : Activity() {
         if (providerKeys == 0) messages += "No AI provider key is saved; online model responses may be unavailable."
         if (savedServices == 0) messages += "No external-service credentials are saved."
         if (!speechAvailable) messages += "Install or enable a speech-recognition service before testing voice input."
-        if (messages.isEmpty()) messages += "No core blocker was detected. Run real chat, voice, screen-action, and provider tests before treating the app as fully verified."
+        if (service == null) messages += "The service-driven Soul runtime is not connected; periodic standing orders cannot run now."
+        if (checkpointStatus.isNotBlank()) messages += "An unfinished task checkpoint exists and needs recovery review."
+        if (shellRegistered && shellReady != null) messages += "Termux is not ready: $shellReady"
+        if (messages.isEmpty()) messages += "No core blocker was detected. Run real chat, voice, screen-action, provider and standing-order tests before treating the app as fully verified."
         messages.distinct().forEach { limits.addView(label("• " + it, 12f, 0xFFE0E0E0.toInt())) }
         page.addView(limits)
 
