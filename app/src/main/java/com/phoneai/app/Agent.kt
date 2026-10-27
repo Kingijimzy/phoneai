@@ -175,8 +175,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
+        val shellRisk = if (tool == "shell") ShellPolicy.classify(args.optString("command")) else null
+        if (shellRisk == ShellRisk.BLOCKED) {
+            val blocked = "error: Orion shell policy refused this command."
+            AgentPolicy.log(svc, tool, "dispatch", false, "shell policy blocked command")
+            return blocked
+        }
         val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE &&
-            !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command")))
+            !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command"))) &&
+            !(tool == "shell" && shellRisk == ShellRisk.SAFE)
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
         // Opening apps, navigating/searching, reading screens and ordinary typing are
@@ -642,7 +649,7 @@ Rules:
                         if ("gmail_list_messages" in names) add("gmail.messages.read")
                         if (("google_drive_files_read" in names) || ("google_drive_list_files" in names)) add("google_drive.files.read")
                         if (("telegram_inbox" in names) || ("telegram_send" in names) || ("telegram_status" in names)) add("telegram.messages")
-                        if ("termux_command" in names) add("shell.execute")
+                        if (("shell" in names) || ("termux_command" in names)) add("shell.execute")
                     }
                     runCatching { OrionIntegrationPlanner.planFor(svc, request, capabilities) }.getOrNull()
                 } else null
