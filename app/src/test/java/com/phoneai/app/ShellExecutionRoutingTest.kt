@@ -15,4 +15,11 @@ class ShellExecutionRoutingTest {
     @Test fun unknownBackendIsNotSilentlyDowngraded() {
         assertEquals(ShellExecutionRouting.Backend.INVALID, ShellExecutionRouting.backend("docker"))
     }
+
+    @Test fun everyLinuxAliasRequiresApproval() {
+        assertTrue(ShellExecutionRouting.requiresApproval("linux"))
+        assertTrue(ShellExecutionRouting.requiresApproval("Alpine"))
+        assertFalse(ShellExecutionRouting.requiresApproval("builtin"))
+        assertFalse(ShellExecutionRouting.requiresApproval("termux"))
+    }
 }
