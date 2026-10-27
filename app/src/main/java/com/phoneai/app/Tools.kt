@@ -787,6 +787,22 @@ class Tools(private val svc: PhoneAiService) {
         } catch (e: Exception) { "error: could not open the Capability board (" + (e.message ?: "").take(80) + ")" }
     }
 
+    fun vaultList(): String = "SAVED APPS:\n" + AppVault.describe(svc)
+
+    fun vaultRequest(name: String, host: String, style: String): String {
+        if (VaultPolicy.idFor(name) == null) return "error: give the app a short name"
+        if (VaultPolicy.cleanHost(host) == null) return "error: host must be the API's domain, like api.example.com (research the official API docs first)"
+        if (VaultPolicy.cleanStyle(style) == null) return "error: style must be bearer or header:Name"
+        return try {
+            svc.startActivity(android.content.Intent(svc, CapabilityBoardActivity::class.java)
+                .putExtra("vault_name", name.trim()).putExtra("vault_host", host.trim()).putExtra("vault_style", style.trim())
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opened the secure screen for ${name.trim()} ($host). Tell the user to paste their token or API key there (never in chat), then say continue."
+        } catch (e: Exception) { "error: could not open the secure screen (" + (e.message ?: "").take(80) + ")" }
+    }
+
+    fun vaultGet(name: String, url: String): String = AppVault.get(svc, name, url)
+
     fun standingOrder(action: String, kind: String, minutes: Int): String = when (action.lowercase()) {
         "add" -> StandingOrders.add(svc, kind.lowercase().trim(), minutes)
         "remove" -> StandingOrders.remove(svc, kind.lowercase().trim())
