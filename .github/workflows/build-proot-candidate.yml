@@ -36,7 +36,7 @@ jobs:
           curl --fail --location --retry 3 --retry-all-errors \
             https://download.samba.org/pub/talloc/talloc-2.4.2.tar.gz \
             -o upstream/deps/build/proot-android/talloc-2.4.2.tar.gz
-          echo "e01fb092aaed2b431be26674e2b791c77fb5984537c29b514e957582c6b31465  upstream/deps/build/proot-android/talloc-2.4.2.tar.gz" | sha256sum --check -
+          echo "85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6  upstream/deps/build/proot-android/talloc-2.4.2.tar.gz" | sha256sum --check -
           # Restore only the exact loader files from the pinned upstream tree; the
           # upstream build recipe explicitly warns that rebuilding these from its fork
           # is incompatible on some devices. Their hashes are checked again below.
