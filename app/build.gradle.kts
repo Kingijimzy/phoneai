@@ -6,9 +6,10 @@ import java.security.MessageDigest
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.chaquo.python")
 }
 
-// Official sherpa-onnx Android AAR (pinned version + verified SHA-256).
+python {\n    // Python is bundled in the APK for ARM64 devices; no Termux bridge required.\n    version = "3.11"\n}\n\n// Official sherpa-onnx Android AAR (pinned version + verified SHA-256).
 // Downloaded during builds rather than checked into this repository as a binary.
 val sherpaTtsAar = layout.buildDirectory.file("downloads/sherpa-onnx-1.13.8.aar")
 val sherpaTtsAarSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
