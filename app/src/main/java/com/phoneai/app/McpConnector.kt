@@ -91,6 +91,9 @@ object McpConnector {
         }
     }
 
+    /** Read-only remote tools can run without a per-call prompt; all other scopes require one. */
+    fun requiresUserApproval(name: String): Boolean = scopeForTool(name) != "read"
+
     fun save(c: Context, rawUrl: String, rawToken: String): String {
         val clean = rawUrl.trim()
         val uri = try { java.net.URI(clean) } catch (_: Exception) { return "Invalid MCP endpoint URL." }
