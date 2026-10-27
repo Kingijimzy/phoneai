@@ -81,13 +81,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
-private val ORION_HEADING_PATTERN = Regex("""^\\s{0,3}(#{1,3})\\s+(.+)$""")
-private val ORION_BULLET_PATTERN = Regex("""^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)(.+)$""")
-private val ORION_INLINE_TOKEN_PATTERN = Regex("""\\[([^\\]]+)]\\((https?://[^\\s)]+)\\)|\\*\\*(.+?)\\*\\*|`([^`]+)`|(?<![*\\w])\\*([^*\\n]+)\\*(?!\\w)|(https?://[^\\s)]+)""")
+private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
+private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^]]+)]((https?://[^s)]+))|\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^s)]+)""")
 
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
-    val lines = source.replace("\\r\\n", "\\n").replace('\\r', '\\n').split('\\n')
+    val lines = source.replace("\r\n", "\n").replace('\r', '\n').split('\n')
     var inCode = false
     var codeFirstLine = false
     var codeStart = -1
