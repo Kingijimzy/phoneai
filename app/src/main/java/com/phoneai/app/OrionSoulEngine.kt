@@ -26,6 +26,8 @@ internal object OrionSoulEngine {
 
         val lines = mutableListOf<String>()
         lines += "ORION SOUL ENGINE — LIVE LOCAL CONTEXT"
+        lines += OrionGoalUnderstanding.promptLine(request)
+        lines += "GOAL UNDERSTANDING RULES: treat short follow-ups such as continue, go ahead, do it, and try again as referring to the active conversation task when context exists. Keep greetings and small talk conversational without tool calls. For real tasks, identify the outcome and target, inspect available capabilities, execute only through registered tools, then verify observable results. Ask one focused question only when a necessary target is genuinely ambiguous. A recognized goal never grants account access or approval."
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
         lines += "Registered tools: ${registeredTools.size}; tools available under enabled capability packs: ${enabledTools.size}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
