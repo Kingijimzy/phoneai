@@ -252,7 +252,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, cancelled) } catch (_: Exception) { }
             return cancelled
         }
-        val result = try {
+        val dispatch = OrionExecutionLoop.dispatch(tool, stopped) {
             if (tool in nativeUiActions) {
                 val validationArgs = JSONObject(args.toString()).put("tool", tool)
                 val validation = validateAction(validationArgs)
@@ -261,9 +261,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             } else {
                 exec(tool, args)
             }
-        } catch (e: Exception) {
-            "error: ${e.message ?: e.javaClass.simpleName}"
         }
+        val result = dispatch.value
         var verifiedResult = result
         if (!result.trimStart().startsWith("error", ignoreCase = true) && shouldVerifyAction) {
             if (lastScreenSnapshot.isBlank()) {
