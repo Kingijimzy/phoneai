@@ -2,51 +2,44 @@ package com.phoneai.app
 
 import java.security.MessageDigest
 
-/**
- * Security policy for Orion's no-root Linux runtime.
- * Artifact metadata must be pinned by a reviewed release manifest; never compute a checksum from
- * an untrusted download and then treat that checksum as a trust anchor.
- */
+/** Pinned release inputs for Orion's no-root ARM64 Alpine runtime. */
 internal object LinuxRuntimePolicy {
     enum class State { NOT_INSTALLED, DOWNLOADING, VERIFYING, EXTRACTING, READY, FAILED }
-
-    data class Artifact(
-        val url: String,
-        val sha256: String,
-        val bytes: Long
-    )
-
+    data class Artifact(val url: String, val sha256: String, val bytes: Long)
     data class Manifest(
         val version: String,
         val rootfsUrl: String,
         val rootfsSha256: String,
         val rootfsBytes: Long,
-        /** Separate executable artifact; a rootfs checksum does not authenticate proot. */
-        val prootUrl: String = "",
-        val prootSha256: String = "",
-        val prootBytes: Long = 0L
+        /** Hash of APK-packaged lib/arm64-v8a/libproot.so (the Android PIE executable). */
+        val prootSha256: String,
+        val prootBytes: Long
     ) {
         fun rootfs() = Artifact(rootfsUrl, rootfsSha256, rootfsBytes)
-        fun proot() = Artifact(prootUrl, prootSha256, prootBytes)
     }
 
+    val productionManifest = Manifest(
+        version = "alpine-3.22.7-proot-1a71df0",
+        rootfsUrl = "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.7-aarch64.tar.gz",
+        rootfsSha256 = "7e9b34ff3304381909e566e2c93de450664ccc724191261423974fc121c11623",
+        rootfsBytes = 3971679L,
+        prootSha256 = "91c3f3ce38482fba523c0dcbfa5eb883e8aae063236bff3d091da6a58f1c94c4",
+        prootBytes = 294416L
+    )
     const val MAX_ROOTFS_BYTES = 300_000_000L
-    const val MAX_PROOT_BYTES = 30_000_000L
     const val MAX_COMMAND = 4000
     private val sha256Pattern = Regex("^[0-9a-f]{64}$")
-    private val versionPattern = Regex("^[A-Za-z0-9._-]{1,32}$")
+    private val versionPattern = Regex("^[A-Za-z0-9._-]{1,48}$")
 
     private fun validArtifact(a: Artifact, maxBytes: Long): Boolean =
-        a.url.startsWith("https://") &&
-            a.url.none { it.isWhitespace() } &&
-            sha256Pattern.matches(a.sha256) &&
-            a.bytes in 1..maxBytes
+        a.url.startsWith("https://") && a.url.none { it.isWhitespace() } &&
+            sha256Pattern.matches(a.sha256) && a.bytes in 1..maxBytes
 
-    /** Null means both artifacts have pinned HTTPS URLs, byte lengths and independent SHA-256 values. */
     fun validate(m: Manifest): String? = when {
-        !versionPattern.matches(m.version) -> "version must be 1-32 letters, digits, dots, dashes or underscores"
+        !versionPattern.matches(m.version) -> "invalid runtime version"
         !validArtifact(m.rootfs(), MAX_ROOTFS_BYTES) -> "rootfs URL, checksum or size is invalid"
-        !validArtifact(m.proot(), MAX_PROOT_BYTES) -> "proot URL, checksum or size is invalid"
+        !sha256Pattern.matches(m.prootSha256) || m.prootBytes !in 1..30_000_000L ->
+            "bundled PRoot checksum or size is invalid"
         else -> null
     }
 
@@ -59,10 +52,7 @@ internal object LinuxRuntimePolicy {
     fun isReady(installedVersion: String?, m: Manifest): Boolean =
         installedVersion != null && installedVersion == m.version
 
-    /**
-     * Arguments are fixed by Orion, not supplied by a model. The only model-controlled value is the
-     * bounded shell command, which is passed as one argument to /bin/sh after the execution policy.
-     */
+    /** Fixed argv shape; model text is passed as one /bin/sh -c argument, never host-shell interpolation. */
     fun prootArgs(prootPath: String, rootfsDir: String, command: String): List<String>? {
         if (command.isBlank() || command.length > MAX_COMMAND || command.contains('\u0000')) return null
         if (!prootPath.startsWith("/") || prootPath.contains("..") ||
