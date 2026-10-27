@@ -579,7 +579,6 @@ private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK }
 private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
     val text = item.text
-    val lower = text.lowercase()
     // Keep ordinary prose in the normal chat surface. Broad keyword/URL heuristics
     // turned unrelated answers into oversized cards and hid the natural chat flow.
     if (Regex("(?s)\\x60\\x60\\x60(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text)) {
