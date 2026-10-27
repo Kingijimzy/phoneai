@@ -139,14 +139,27 @@ class Tools(private val svc: PhoneAiService) {
         val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$encoded&c=apps"))
             .setPackage("com.android.vending")
         val nativeResult = launch(market, 1400)
-        if (nativeResult == "ok") return "Opened Google Play search results for \"$clean\". Verify that the results are visible."
+        if (nativeResult == "ok") return verifyPlayStoreSearch(clean, "native market route")
         val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=$encoded&c=apps"))
             .setPackage("com.android.vending")
         val fallback = launch(web, 1400)
         return if (fallback == "ok") {
-            "Opened Google Play search results for \"$clean\" using the HTTPS fallback. Verify that the results are visible."
+            verifyPlayStoreSearch(clean, "HTTPS fallback")
         } else {
             "error: Could not open Google Play search results. Native route: $nativeResult; HTTPS fallback: $fallback"
+        }
+    }
+
+    private fun verifyPlayStoreSearch(query: String, route: String): String {
+        val packageName = svc.currentPackageName()
+        val screen = runCatching { svc.readScreen() }.getOrDefault("")
+        val normalizedScreen = ScreenTargetMatcher.normalize(screen)
+        val queryWords = ScreenTargetMatcher.normalize(query).split(' ').filter { it.isNotBlank() }
+        val queryVisible = queryWords.isNotEmpty() && queryWords.all { normalizedScreen.contains(it) }
+        return if (packageName == "com.android.vending" && queryVisible) {
+            "Verified Google Play is showing the search query \"$query\" ($route)."
+        } else {
+            "Google Play search was launched via the $route, but I could not verify that the search results for \"$query\" are visible. I will not claim the search is complete."
         }
     }
 
