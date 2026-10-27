@@ -606,7 +606,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
 
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
-            onStatus?.invoke("Using provider: ${p.label}...")
+            onStatus?.invoke("Using provider/model: ${p.label} / ${selectedModel(p, vision)}...")
             val answer = chatOne(p, requestMessages, vision, maxTokens, temperature, hasBackup, fastResponse)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
