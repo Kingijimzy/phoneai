@@ -48,6 +48,11 @@ internal object ShellPolicy {
         for (seg in segments(cmd)) {
             val w = firstWord(seg)
             val args = seg.split(Regex("\\s+")).drop(1)
+            // Automatic shell access is confined to relative workspace paths. Absolute paths,
+            // home expansion, and parent traversal require a deliberate one-time approval.
+            if (Regex("(?:^|\\\\s)(?:/[^\\\\s]*|~(?:/[^\\\\s]*)?|\\.\\.?/[^\\\\s]*)(?:\\\\s|$)").containsMatchIn(seg)) {
+                return ShellRisk.ASK
+            }
             when {
                 w in readOnly -> if (w == "find" && Regex("-(exec|delete|ok)\\b").containsMatchIn(seg)) return ShellRisk.ASK
                 w in workspaceWrite -> if (!args.filter { !it.startsWith("-") }.all { relativeInside(it) }) return ShellRisk.ASK
