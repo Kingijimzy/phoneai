@@ -1709,7 +1709,34 @@ Rules:
             }
             "browser_type" -> BrowserAutomation.type(a.optString("target"), a.optString("text"))
             "browser_scroll" -> BrowserAutomation.scroll(a.optString("direction", "down"))
-            "browser_navigate" -> BrowserAutomation.navigate(a.optString("url"))
+            "browser_navigate" -> {
+                val requestedUrl = a.optString("url").trim()
+                val existingBrowser = BrowserAutomation.awaitWebView(250L)
+                if (existingBrowser != null) {
+                    BrowserAutomation.navigate(requestedUrl)
+                } else {
+                    val candidate = if (requestedUrl.startsWith("https://", true) ||
+                        requestedUrl.startsWith("http://", true)) requestedUrl else "https://$requestedUrl"
+                    val uri = runCatching { android.net.Uri.parse(candidate) }.getOrNull()
+                    if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() ||
+                        !uri.userInfo.isNullOrBlank() || uri.host.orEmpty().any { it.isWhitespace() }) {
+                        "error: provide a valid HTTP or HTTPS URL without embedded credentials"
+                    } else {
+                        try {
+                            svc.startActivity(android.content.Intent(svc, BrowserActivity::class.java)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                .putExtra(BrowserActivity.EXTRA_URL, candidate))
+                            if (BrowserAutomation.awaitWebView(8000L) == null) {
+                                "error: Orion Browser launch was requested but its WebView did not become ready; open Orion Browser manually and retry"
+                            } else {
+                                "Orion Browser opened at ${uri.host}; inspect browser_snapshot to verify the page before acting."
+                            }
+                        } catch (e: Exception) {
+                            "error: could not open Orion Browser (${e.javaClass.simpleName}); open it manually and retry"
+                        }
+                    }
+                }
+            }
             "browser_back" -> BrowserAutomation.back()
             "browser_wait" -> BrowserAutomation.waitFor(a.optString("text"), a.optDouble("seconds", 8.0))
             "browser_tabs" -> BrowserActivity.manageTabs(a.optString("action", "list"), a.optInt("index", 0), a.optString("url"))
