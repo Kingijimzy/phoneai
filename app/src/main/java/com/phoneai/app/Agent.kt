@@ -688,7 +688,18 @@ Rules:
                 val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(svc, it.id) }.map { it.id }.toSet()
                 val permissionStates = mapOf(
                     "screen_access_disclosure" to if (Prefs.accessibilityDisclosureAccepted(svc))
-                        OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+                        OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
+                    "notification_access" to if (runCatching {
+                        android.provider.Settings.Secure.getString(svc.contentResolver, "enabled_notification_listeners")
+                            ?.contains(svc.packageName) == true
+                    }.getOrDefault(false)) OrionCapabilityDiscovery.PermissionState.GRANTED
+                        else OrionCapabilityDiscovery.PermissionState.MISSING,
+                    "contacts" to if (runCatching {
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            svc, android.Manifest.permission.READ_CONTACTS
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    }.getOrDefault(false)) OrionCapabilityDiscovery.PermissionState.GRANTED
+                        else OrionCapabilityDiscovery.PermissionState.MISSING
                 )
                 val goal = OrionGoalUnderstanding.understand(request)
                 val integration = if (goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_CONNECT ||
