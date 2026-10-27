@@ -204,11 +204,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val safeBuiltinShell = tool == "shell" &&
             !args.optString("where", "builtin").equals("termux", ignoreCase = true) &&
             shellRisk == ShellRisk.SAFE
+        val readOnlyMcpCall = tool == "mcp_call" && !McpConnector.requiresUserApproval(args.optString("name"))
         val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE &&
             !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command"))) &&
-            !safeBuiltinShell
+            !safeBuiltinShell && !readOnlyMcpCall
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
-            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
+            tool in setOf("telegram_send", "notification_action", "sms") ||
+            (tool == "mcp_call" && McpConnector.requiresUserApproval(args.optString("name")))
         // Opening apps, navigating/searching, reading screens and ordinary typing are
         // routine task steps, not dangerous merely because their registry access is WRITE.
         // In Autonomous mode they run without per-step approval; consequential actions
@@ -1787,8 +1789,14 @@ Rules:
                 val args = a.optJSONObject("arguments") ?: JSONObject()
                 val host = try { java.net.URI(McpConnector.endpoint(svc)).host ?: "unknown host" } catch (_: Exception) { "unknown host" }
                 val catalogue = tools.mcpListTools()
-                if (catalogue.startsWith("error:") || catalogue.startsWith("MCP discovery failed")) catalogue else
-                    if (ui.ask("Remote MCP server: " + host + ". Tool: " + name + ". Advertised catalogue (untrusted): " + catalogue.take(900) + ". Arguments to send: " + args.toString().take(600) + ". Approve this exact remote call?")) tools.mcpCall(name, args) else "error: user cancelled MCP tool call"
+                if (catalogue.startsWith("error:") || catalogue.startsWith("MCP discovery failed")) catalogue
+                else if (!McpConnector.requiresUserApproval(name)) {
+                    // Read-only MCP tools remain subject to endpoint pairing and the read scope,
+                    // but do not interrupt every harmless lookup with a redundant approval dialog.
+                    tools.mcpCall(name, args)
+                } else if (ui.ask("Remote MCP server: " + host + ". Tool: " + name + ". Advertised catalogue (untrusted): " + catalogue.take(900) + ". Arguments to send: " + args.toString().take(600) + ". This tool is classified as " + McpConnector.scopeForTool(name) + ". Approve this exact remote call?")) {
+                    tools.mcpCall(name, args)
+                } else "error: user cancelled MCP tool call"
             }
             "settings" -> tools.settings(a.optString("page", "main"))
             "dial" -> tools.dial(a.optString("number"))
