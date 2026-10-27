@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git -C upstream rev-parse HEAD)" = "1a71df0f381cefde80bf912b723de6f9831bc177"
-          test "$(git -C upstream/deps/proot rev-parse HEAD)" = "$(git -C upstream/.git/modules/deps/proot 2>/dev/null >/dev/null; git -C upstream/deps/proot rev-parse HEAD)"
+          test -n "$(git -C upstream/deps/proot rev-parse HEAD)"
           # Independently pin talloc archive before the upstream script can consume it.
           mkdir -p upstream/deps/build/proot-android
           curl --fail --location --retry 3 --retry-all-errors \
@@ -45,6 +45,10 @@ jobs:
             https://raw.githubusercontent.com/OpenMinis/OpenMinis/1a71df0f381cefde80bf912b723de6f9831bc177/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so \
             -o upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so
           echo "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so" | sha256sum --check -
+          curl --fail --location --retry 3 --retry-all-errors \
+            https://raw.githubusercontent.com/OpenMinis/OpenMinis/1a71df0f381cefde80bf912b723de6f9831bc177/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so \
+            -o upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
+          echo "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so" | sha256sum --check -
 
       - name: Install pinned Android NDK
         uses: android-actions/setup-android@v3
@@ -65,9 +69,11 @@ jobs:
           install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so candidate/libproot-loader.so
           install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot.so candidate/libproot.so
           file candidate/*
-          llvm-readelf --file-header candidate/proot-aarch64
-          llvm-readelf --file-header candidate/libproot.so
-          llvm-readelf --file-header candidate/libproot-loader.so
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/proot-aarch64
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/libproot.so
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/libproot-loader.so
+          install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so candidate/libproot-loader32.so
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/libproot-loader32.so
           sha256sum candidate/* | tee candidate/SHA256SUMS
           stat -c '%n %s bytes' candidate/* | tee candidate/SIZES.txt
 
