@@ -34,7 +34,7 @@ object LiveWebSearch {
         .take(160)
 
     fun queryFrom(text: String): String = text.trim()
-        .replace(Regex("(?i)\\b(search the web for|search online for|web search for|search for|look up online|look this up|find online|research online|please|on the internet|online)\\b"), " ")
+        .replace(Regex("(?i)\\b(search the web for|search online for|web search for|search for|look up online|look this up|look it up|find online|research online|do your research|research this|google it|please|on the internet|online)\\b"), " ")
         .replace(Regex("\\s+"), " ")
         .trim(' ', '.', '?', '!', ',')
         .take(160)
@@ -95,7 +95,7 @@ object LiveWebSearch {
                     val marked = tag.contains("result__a", ignoreCase = true) ||
                         tag.contains("result-link", ignoreCase = true) ||
                         tag.contains("result__url", ignoreCase = true)
-                    if (!marked && endpointIndex == 0) continue
+                    if (!marked) continue
                     seen.add(link)
                     count++
                     out.append("\\n\\n").append(count).append(". ").append(title.take(220))
