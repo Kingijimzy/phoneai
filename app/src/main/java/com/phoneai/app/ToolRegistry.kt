@@ -154,7 +154,7 @@ internal object ToolRegistry {
 
     /** On-demand capability discovery: detailed contracts are retrieved only when relevant. */
     fun isCapabilityQuestion(query: String): Boolean = Regex(
-        """(?i)\b(what can you do|what are your capabilities|capabilities|available tools|all tools|what tools|list (all )?(available )?(tools|commands)|tool list|list tools|how can you help|what can orion do)\b"""
+        """(?i)\b(what can you do|what can (orion|you|he) do (with|by|through) commands|what are your capabilities|capabilities|available tools|all tools|what tools|what commands can you execute|what tools can you use|list (all )?(available )?(tools|commands)|tool list|list tools|how can you help|what can orion do)\b"""
     ).containsMatchIn(query)
 
     fun describe(query: String): String {
