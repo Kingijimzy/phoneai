@@ -761,10 +761,19 @@ class Tools(private val svc: PhoneAiService) {
         val sb = StringBuilder("SERVICES:\n")
         ServiceCatalog.all.forEach { s ->
             val c = OrionConnectionStore.get(svc, s.id)
-            sb.append("- ${s.title}: ").append(if (c?.secretAvailable == true) "connected" + (if (s.needsAccount) " (${c?.accountLabel})" else "") else "not connected").append('\n')
+            val state = when {
+                c?.secretAvailable != true -> "not connected"
+                c.verified -> "verified/connected"
+                else -> "saved but not verified"
+            }
+            sb.append("- " + s.title + ": ").append(state)
+            if (c?.secretAvailable == true && c.verified && s.needsAccount) sb.append(" (" + c.accountLabel + ")")
+            sb.append('\n')
         }
         sb.append("Connected-services pack: ").append(if (AgentPolicy.enabled(svc, "connected_services")) "enabled" else "OFF (user must switch it on in the Capability board)").append('\n')
-        sb.append("Soul watch: ").append(if (SoulWatch.enabled(svc)) "on" else "off").append('\n')
+        val orders = StandingOrders.all(svc)
+        sb.append("Standing orders: ").append(if (orders.isEmpty()) "none configured" else orders.size.toString() + " configured")
+            .append(". Checks run when Orion's service is active and Android permits background work.").append('\n')
         val gaps = CapabilityBoard.open(svc).take(6)
         if (gaps.isNotEmpty()) sb.append("Open requests: ").append(gaps.joinToString("; ") { it.goal }).append('\n')
         return sb.toString()
