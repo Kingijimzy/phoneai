@@ -122,6 +122,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     // Last locally perceived screen, used for post-action comparison without another model call.
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
+    // Prevent repeated coordinate gestures when the previous one left the screen unchanged.
+    @Volatile private var coordinateStallFingerprint: String = ""
 
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         // Consent is checked before querying the current screen or resolving a target.
@@ -162,6 +164,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         if (failedCallGuard.isBlocked(tool, args)) {
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
+        }
+        if (tool in setOf("tap", "long_press", "swipe") && coordinateStallFingerprint.isNotBlank()) {
+            val current = if (lastScreenSnapshot.isBlank()) svc.readScreen().also { lastScreenSnapshot = it } else lastScreenSnapshot
+            if (AgentHooks.shouldBlockCoordinateRetry(tool, current, coordinateStallFingerprint)) {
+                return "error: coordinate action blocked because the previous gesture did not change the screen. Use read_screen and click/click_text on a semantic target, or obtain genuinely new visual evidence; do not keep guessing coordinates."
+            }
+            coordinateStallFingerprint = ""
         }
         val targetLabel = when (tool) {
             "click" -> svc.nodeInfo(args.optInt("id", -1))?.first.orEmpty()
@@ -316,8 +325,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     lastScreenSnapshot = after
                     val changed = AgentHooks.screenChanged(before, after)
                     if (changed) {
+                        coordinateStallFingerprint = ""
                         verifiedResult += "\\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
                     } else {
+                        if (tool in setOf("tap", "long_press", "swipe")) coordinateStallFingerprint = AgentHooks.screenFingerprint(after)
                         verifiedResult = "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step. Original result: " + result
                     }
                 } catch (_: Exception) {
@@ -343,6 +354,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 }
                 if (observed.isNotBlank()) {
                     lastScreenSnapshot = observed
+                    if (tool in setOf("tap", "long_press", "swipe")) coordinateStallFingerprint = AgentHooks.screenFingerprint(observed)
                     verifiedResult += "\nPOST-FAILURE STATE INSPECTION (observed after the error; not proof of completion):\n" + observed
                 } else {
                     verifiedResult += "\nPOST-FAILURE STATE INSPECTION: no readable screen state was available; do not assume the action succeeded."
@@ -430,6 +442,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         activeRequestScope = ""
         lastScreenSnapshot = ""
         lastScreenBeforeAction = ""
+        coordinateStallFingerprint = ""
         failedCallGuard.clear()
     }
 
