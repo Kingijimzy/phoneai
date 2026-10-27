@@ -94,7 +94,7 @@ object AgentPolicy {
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "record_screen" -> "phone_control"
         "remember", "update_memory", "forget", "recall", "knowledge_search", "ask_agent", "undo_last", "undo_status",
-        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
+        "tool_help", "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
         else -> null
     }
 
