@@ -312,6 +312,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             } catch (e: Exception) {
                 verifiedResult += "\nPOST-FAILURE STATE INSPECTION unavailable: " + (e.message ?: e.javaClass.simpleName)
             }
+            // Give the next planning turn a bounded, evidence-based recovery strategy.
+            // This is advisory only: all dispatch, approval, capability, and safety gates still run.
+            verifiedResult += "\\n" + OrionRecoveryPlanner.forFailure(tool, verifiedResult).promptLine()
             failedCallGuard.recordFailure(tool, args)
             try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
