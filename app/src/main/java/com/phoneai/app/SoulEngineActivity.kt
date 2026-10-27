@@ -116,7 +116,7 @@ class SoulEngineActivity : Activity() {
         addRow("Task Centre" to { startActivity(Intent(this, TaskCenterActivity::class.java)) },
                "Memory" to { startActivity(Intent(this, MemoryActivity::class.java)) })
         addRow("Knowledge base" to { openSettings("knowledge") },
-               "Knowledge graph" to { openChat("Inspect my local knowledge graph and knowledge documents. Search existing local facts relevant to the request and state clearly if there is no matching evidence.") })
+               "Knowledge graph" to { startActivity(Intent(this, KnowledgeGraphActivity::class.java)) })
         addRow("Trading Desk" to { startActivity(Intent(this, TradingActivity::class.java)) },
                "Terminal / shell" to { startActivity(Intent(this, TerminalActivity::class.java)) })
         addRow("Capability board" to { startActivity(Intent(this, CapabilityBoardActivity::class.java)) },
