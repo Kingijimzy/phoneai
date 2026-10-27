@@ -1371,6 +1371,8 @@ Rules:
                     toolCalls++
                     ui.note("[TASK:RUNNING]\nRunning $bt")
                     val br = executeWithRecoveryGuard(bt, batchArgs)
+                    runTools++
+                    if (ToolResultPolicy.failureReason(br) != null) runFailed++
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
                     if (!AgentCheckpointStore.record(svc, bt, batchArgs, br)) {
