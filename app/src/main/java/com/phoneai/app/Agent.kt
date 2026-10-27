@@ -1291,13 +1291,19 @@ Rules:
             }
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") {
-                val completion = AgentHooks.completionDecision(command, taskProofs.snapshot())
+                val runEvidence = taskProofs.snapshot()
+                val completion = AgentHooks.completionDecision(command, runEvidence)
+                val outcome = OrionTaskOutcome.reconcile(completion.allowed, runEvidence, runFailed)
                 if (!completion.allowed) {
                     AgentCheckpointStore.pause(svc)
-                    ui.say("I stopped before marking this task complete: " + completion.reason + " I saved the task progress; please verify the current screen or state before continuing.")
+                    ui.say("I stopped before marking this task complete: " + completion.reason + " " + outcome.message + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
-                val runEvidence = taskProofs.snapshot()
+                if (outcome.status == OrionTaskOutcome.Status.COMPLETE_WITH_RECOVERED_FAILURES) {
+                    ui.note("⚠️ " + outcome.message + " Evidence: ${outcome.successfulSteps} successful result(s), ${outcome.failedSteps} failed result(s), ${outcome.verifiedSteps} explicitly verified result(s).")
+                } else {
+                    ui.note("✓ Completion gate passed: ${outcome.successfulSteps} successful result(s), ${outcome.verifiedSteps} explicitly verified result(s).")
+                }
                 val cleanLearningEvidence = ExperiencePolicy.hasCleanSuccessEvidence(runEvidence.map { it.success }, runFailed)
                 if (cleanLearningEvidence) {
                     try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success }.map { it.tool }) } catch (_: Exception) { }
