@@ -10,13 +10,9 @@ import com.chaquo.python.android.AndroidPlatform
  * rejected by the bundled AST policy. Caller must obtain explicit action approval first.
  */
 internal object OrionPythonRuntime {
-    private const val MAX_CODE_CHARS = 8_000
-
     @Synchronized
     fun execute(context: Context, code: String, explicitlyApproved: Boolean): String {
-        if (!explicitlyApproved) return "error: Python execution requires explicit user approval."
-        if (code.isBlank()) return "error: Python code is required."
-        if (code.length > MAX_CODE_CHARS) return "error: Python code exceeds $MAX_CODE_CHARS characters."
+        PythonExecutionPolicy.rejection(code, explicitlyApproved)?.let { return "error: $it" }
         return try {
             if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
             Python.getInstance().getModule("orion_exec").callAttr("run", code).toString().take(5_200)
