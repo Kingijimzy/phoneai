@@ -8,8 +8,8 @@ package com.phoneai.app
  * The caller filters provider eligibility and the shared command request budget bounds attempts.
  */
 internal object ProviderFallbackPolicy {
-    /** Maximum backup providers considered after the selected primary; the shared request budget remains the hard stop. */
-    const val MAX_BACKUP_PROVIDERS = 14
+    /** Maximum backup providers considered after the selected primary. Keep recovery fast; do not fan out across every configured AI. */
+    const val MAX_BACKUP_PROVIDERS = 2
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
         if (!autoSwitchEnabled || error is InterruptedException) return false
