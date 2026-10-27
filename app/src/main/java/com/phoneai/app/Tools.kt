@@ -130,6 +130,26 @@ class Tools(private val svc: PhoneAiService) {
         return "not found: \"$text\" did not appear"
     }
 
+    /** Opens Google Play's native search results instead of attempting fragile coordinate-based navigation. */
+    fun playStoreSearch(query: String): String {
+        val clean = query.trim()
+        if (clean.isBlank()) return "error: Play Store search query is empty."
+        if (clean.length > 160) return "error: Play Store search query is too long."
+        val encoded = Uri.encode(clean)
+        val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$encoded&c=apps"))
+            .setPackage("com.android.vending")
+        val nativeResult = launch(market, 1400)
+        if (nativeResult == "ok") return "Opened Google Play search results for \"$clean\". Verify that the results are visible."
+        val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=$encoded&c=apps"))
+            .setPackage("com.android.vending")
+        val fallback = launch(web, 1400)
+        return if (fallback == "ok") {
+            "Opened Google Play search results for \"$clean\" using the HTTPS fallback. Verify that the results are visible."
+        } else {
+            "error: Could not open Google Play search results. Native route: $nativeResult; HTTPS fallback: $fallback"
+        }
+    }
+
     fun listApps(): String {
         val pm = svc.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
