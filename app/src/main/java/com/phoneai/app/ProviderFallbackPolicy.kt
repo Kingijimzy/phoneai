@@ -24,12 +24,14 @@ internal object ProviderFallbackPolicy {
             message.contains("check internet") ||
             message.contains("unknownhost") ||
             message.contains("sockettimeout") ||
+            message.contains("network unavailable") ||
             message.contains("reached orion's 15-request budget") ||
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false
 
-        // 409 is provider-specific; rotate only when its response is transient/conflict-like.
-        if (error is AiException) {
+        // A parsed HTTP status takes precedence; only known transient statuses rotate.
+        // Without a parsed status, use a narrow message allowlist for timeout/empty replies.
+        if (error is AiException && error.httpStatus != null) {
             val status = error.httpStatus
             return status == 429 || status == 408 || status == 425 ||
                 status == 500 || status == 502 || status == 503 || status == 504 ||
