@@ -2,8 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Optional explicit bridge to a user-installed Termux terminal; user must enable its external-command setting. -->
-    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -51,7 +49,6 @@
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".TermuxBridgeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ProactiveActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".GamingCoachActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".CursorCloudAgentActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
