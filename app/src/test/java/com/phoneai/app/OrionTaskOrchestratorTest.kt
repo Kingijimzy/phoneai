@@ -10,29 +10,38 @@ class OrionTaskOrchestratorTest {
         ToolDefinition(name, "$name {}", "test", access)
 
     private val packs = setOf(
-        "orion_core", "workspace_shell", "termux_bridge", "connected_services",
+        "orion_core", "workspace_shell", "connected_services",
         "trading_research", "phone_control", "messaging"
     )
 
     @Test fun ordinaryConversationDoesNotInventAnAction() {
-        val context = OrionTaskOrchestrator.build("hey", listOf(tool("weather")), packs, true)
+        val context = OrionTaskOrchestrator.build("hey", listOf(tool("weather")), packs)
         assertEquals(OrionGoalUnderstanding.Kind.CONVERSATION, context.goal.kind)
         assertEquals(OrionExecutionReadiness.NextStep.RESPOND, context.readiness.nextStep)
         assertEquals(null, context.readiness.recommendedTool)
     }
 
-    @Test fun unavailableCapabilityProducesGapNotFalsePromise() {
+    @Test fun shellGoalUsesBuiltInShellWithoutExternalTerminalDependency() {
         val context = OrionTaskOrchestrator.build(
-            "run a command in Termux", listOf(tool("live_web_search")), packs, termuxReady = false
+            "run a shell command", listOf(tool("shell", ToolAccess.WRITE)), packs
         )
-        assertEquals(OrionExecutionReadiness.NextStep.PREPARE_SHELL_SETUP, context.readiness.nextStep)
-        assertFalse(context.promptLines().any { it.contains("Task completed") })
+        assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, context.readiness.nextStep)
+        assertEquals("shell", context.readiness.recommendedTool)
         assertTrue(context.promptLines().any { it.contains("registered; 1 available") })
+    }
+
+    @Test fun explicitTermuxRequestIsRoutedToBuiltInShellWhenAvailable() {
+        val context = OrionTaskOrchestrator.build(
+            "run a command in Termux", listOf(tool("shell", ToolAccess.WRITE)), packs
+        )
+        assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, context.readiness.nextStep)
+        assertEquals("shell", context.readiness.recommendedTool)
+        assertTrue(context.promptLines().any { it.contains("built-in workspace shell") })
     }
 
     @Test fun missingPackCannotBeAdvertisedAsAvailable() {
         val context = OrionTaskOrchestrator.build(
-            "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
+            "check current weather", listOf(tool("weather")), emptySet()
         )
         assertEquals(0, context.capabilities.availableCount)
         assertTrue(context.promptLines().any { it.contains("weather: capability pack") })
@@ -47,7 +56,7 @@ class OrionTaskOrchestratorTest {
         )
         val context = OrionTaskOrchestrator.build(
             "connect my GitHub account", listOf(tool("connect_service", ToolAccess.WRITE)),
-            packs, termuxReady = true, integration = integration
+            packs, integration = integration
         )
         assertEquals(OrionExecutionReadiness.NextStep.OPEN_CONNECTION_SETUP, context.readiness.nextStep)
         assertTrue(context.promptLines().any { it.contains("state=AVAILABLE_NOT_CONNECTED") })
@@ -55,7 +64,7 @@ class OrionTaskOrchestratorTest {
     }
 
     @Test fun clarificationMustPrecedeDispatch() {
-        val context = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
+        val context = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs)
         assertTrue(context.goal.needsClarification)
         assertTrue(context.promptLines().any { it.contains("ask one focused clarification") })
     }
