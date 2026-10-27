@@ -115,6 +115,13 @@ class ToolRegistryPromptTrimTest {
         assertTrue(browser.contains("access=write"))
     }
 
+    @Test fun capabilityQueryRouterDoesNotStealOrdinaryShellCommands() {
+        assertTrue(ToolRegistry.isCapabilityQuestion("What can you do with commands?"))
+        assertTrue(ToolRegistry.isCapabilityQuestion("What tools can you use?"))
+        assertFalse(ToolRegistry.isCapabilityQuestion("Run these shell commands"))
+        assertFalse(ToolRegistry.isCapabilityQuestion("Open WhatsApp and search for Amma"))
+    }
+
     @Test fun capabilityHelpIsAlwaysVisibleEvenWhenSpecialistDetailsAreTrimmed() {
         val prompt = ToolRegistry.promptSection("open whatsapp")
         assertTrue(prompt.contains("- tool_help {query}"))
