@@ -216,7 +216,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // In Autonomous mode they run without per-step approval; consequential actions
         // still require their dedicated confirmation.
         val routineNavigation = tool in setOf(
-            "open_app", "lookup_app", "list_apps", "click", "click_text", "tap", "long_press",
+            "open_app", "play_store_search", "lookup_app", "list_apps", "click", "click_text", "tap", "long_press",
             "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link",
             "read_screen", "browser_snapshot", "browser_find", "browser_extract", "browser_click",
             "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate",
