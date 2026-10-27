@@ -113,7 +113,13 @@ object ShellRunner {
     }
 
     fun run(c: Context, command: String, where: String): String =
-        if (where.equals("termux", true)) runTermux(c, command) else runBuiltin(c, command)
+        when (ShellExecutionRouting.backend(where)) {
+            ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command)
+            ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command)
+            ShellExecutionRouting.Backend.LINUX ->
+                "error: the Alpine runtime has no verified, pinned proot artifact manifest configured in this build. Orion did not fall back to Android shell. Use where=builtin until the signed runtime bundle is available."
+            ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
+        }
 
     fun writeFile(c: Context, rel: String, content: String): String {
         val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
