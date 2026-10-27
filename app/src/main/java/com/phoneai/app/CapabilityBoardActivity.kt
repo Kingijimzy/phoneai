@@ -45,6 +45,7 @@ class CapabilityBoardActivity : Activity() {
         page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(30)) }
         scroll.addView(page); setContentView(scroll)
         render()
+        intent.getStringExtra("vault_name")?.let { vaultDialog(it, intent.getStringExtra("vault_host").orEmpty(), intent.getStringExtra("vault_style").orEmpty()) }
         intent.getStringExtra("connect")?.let { ServiceCatalog.find(it)?.let { s -> connectDialog(s) } }
     }
 
@@ -91,6 +92,21 @@ class CapabilityBoardActivity : Activity() {
             }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
             c.addView(row); page.addView(c)
         }
+
+        page.addView(text("OTHER APPS AND SITES", 10f, 0xFFAAAAAA.toInt(), true).apply { setPadding(0, dp(16), 0, 0) })
+        val vc = card()
+        val entries = AppVault.list(this)
+        if (entries.isEmpty()) vc.addView(text("Nothing saved. Ask Orion to connect an app, or add one here. Each token is locked to the one site you name.", 12f, 0xFF9A9A9A.toInt()))
+        entries.forEach { e ->
+            vc.addView(text(e.name, 15f, 0xFFF2F2F2.toInt(), true))
+            vc.addView(text("${e.host} · " + if (AppVault.hasSecret(this, e)) "token saved" else "no token", 12f, 0xFF9A9A9A.toInt()))
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            r.addView(chip("Replace token") { vaultDialog(e.name, e.host, e.style) })
+            r.addView(chip("Remove") { AppVault.remove(this, e); render() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) })
+            vc.addView(r)
+        }
+        vc.addView(chip("Add app or site") { vaultDialog("", "", "") })
+        page.addView(vc)
 
         page.addView(text("THINGS YOU ASKED FOR THAT ORION COULD NOT DO YET", 10f, 0xFFAAAAAA.toInt(), true).apply { setPadding(0, dp(16), 0, 0) })
         val gaps = CapabilityBoard.open(this)
@@ -151,6 +167,22 @@ class CapabilityBoardActivity : Activity() {
                 Toast.makeText(this, "Saved securely. Checking access…", Toast.LENGTH_SHORT).show()
                 render()
                 verifyConnection(s)
+            }.show()
+    }
+
+    private fun vaultDialog(name0: String, host0: String, style0: String) {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), 0) }
+        box.addView(text("Save a token or API key for an app or site. It is locked to the site address you enter and only used for read-only requests. Raw account passwords are not accepted: create an API token or app password in that app.", 12f, 0xFF444444.toInt()))
+        val name = EditText(this).apply { hint = "Name (e.g. Notion)"; setText(name0) }
+        val host = EditText(this).apply { hint = "API address (e.g. api.notion.com)"; setText(host0) }
+        val style = EditText(this).apply { hint = "bearer  or  header:X-Api-Key"; setText(style0.ifBlank { "bearer" }) }
+        val secret = EditText(this).apply { hint = "Token / API key"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS }
+        listOf(name, host, style, secret).forEach { box.addView(it) }
+        AlertDialog.Builder(this).setTitle("Add app or site").setView(box).setNegativeButton("Cancel", null)
+            .setPositiveButton("Save securely") { _, _ ->
+                val err = AppVault.save(this, name.text.toString(), host.text.toString(), style.text.toString(), secret.text.toString())
+                Toast.makeText(this, err ?: "Saved securely. Tell Orion to continue.", Toast.LENGTH_LONG).show()
+                render()
             }.show()
     }
 }
