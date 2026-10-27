@@ -634,6 +634,8 @@ Rules:
             val coordinatedPrompt = if (request.isNullOrBlank()) prompt else {
                 val registered = ToolRegistry.all
                 val names = registered.map { it.name }.toSet()
+                val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(svc, it.id) }.map { it.id }.toSet()
+                val termuxReady = runCatching { TermuxBridgeRunner.readiness(svc) == null }.getOrDefault(false)
                 val goal = OrionGoalUnderstanding.understand(request)
                 val integration = if (goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_CONNECT ||
                     goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_DATA) {
@@ -642,12 +644,11 @@ Rules:
                         if ("gmail_list_messages" in names) add("gmail.messages.read")
                         if (("google_drive_files_read" in names) || ("google_drive_list_files" in names)) add("google_drive.files.read")
                         if (("telegram_inbox" in names) || ("telegram_send" in names) || ("telegram_status" in names)) add("telegram.messages")
-                        if ("termux_command" in names) add("shell.execute")
+                        if ("shell" in names && "workspace_shell" in enabledPacks) add("shell.execute")
+                        if ("termux_command" in names && "termux_bridge" in enabledPacks && termuxReady) add("termux.execute")
                     }
                     runCatching { OrionIntegrationPlanner.planFor(svc, request, capabilities) }.getOrNull()
                 } else null
-                val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(svc, it.id) }.map { it.id }.toSet()
-                val termuxReady = runCatching { TermuxBridgeRunner.readiness(svc) == null }.getOrDefault(false)
                 val context = OrionTaskOrchestrator.build(
                     request = request,
                     registeredTools = registered,
