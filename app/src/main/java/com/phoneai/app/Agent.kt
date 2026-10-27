@@ -137,20 +137,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             AgentPolicy.log(svc, tool, "dispatch", false, "preflight: " + denied.take(120))
             return denied
         }
-        when (ToolPermissions.mode(svc, tool)) {
-            ToolMode.DENY -> return ToolPermissionPolicy.denyMessage(tool)
-            // The user's explicit task command authorizes routine tools for that task
-            // in Autonomous mode. Explicit DENY and consequential-action gates remain.
-            ToolMode.ASK -> if (!autonomous && tool !in askApproved) {
-                if (!ui.ask("Allow Orion to use the tool '$tool' for this task?")) {
-                    val declined = "error: user did not approve using '$tool'."
-                    taskProofs.record(tool, declined)
-                    return declined
-                }
-                askApproved.add(tool)
-            }
-            ToolMode.ALLOW -> {}
-        }
         if (tool == "shell") {
             val cmd = args.optString("command"); val where = if (args.optString("where").equals("termux", true)) "Termux" else "built-in shell"
             when (ShellPolicy.classify(cmd)) {
@@ -223,20 +209,30 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "browser_back", "browser_tabs", "browser_wait", "wait_for", "wait", "verify_action",
             "validate_action", "verify_send"
         )
-        val policy = AgentPolicy.evaluate(
+        val gate = AgentPolicy.gate(
             svc, pack, tool,
             dangerous = consequential || (toolIsWrite && !(autonomous && routineNavigation) &&
-                !(autonomous && safeBuiltinShell))
+                !(autonomous && safeBuiltinShell)),
+            toolMode = ToolPermissions.mode(svc, tool),
+            askedThisTask = tool in askApproved
         )
         var policyApproved = false
-        when (policy.decision) {
-            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
-                val blocked = "error: " + policy.reason
-                AgentPolicy.log(svc, tool, "dispatch", false, policy.reason)
+        when (gate.verdict) {
+            GatePolicy.Verdict.DENY, GatePolicy.Verdict.PLAN_ONLY -> {
+                val blocked = "error: " + gate.reason
+                AgentPolicy.log(svc, tool, "dispatch", false, gate.reason)
                 try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
                 return blocked
             }
-            AgentPolicy.Decision.NEED_APPROVAL -> {
+            GatePolicy.Verdict.ASK_TOOL -> {
+                if (!ui.ask("Allow Orion to use the tool '$tool' for this task?")) {
+                    val declined = "error: user did not approve using '$tool'."
+                    taskProofs.record(tool, declined)
+                    return declined
+                }
+                askApproved.add(tool)
+            }
+            GatePolicy.Verdict.NEED_APPROVAL -> {
                 val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
                 val approved = ui.ask("Approve Orion tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\n$action\\n\\nRun this action once?")
                 AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
@@ -247,7 +243,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 }
                 policyApproved = true
             }
-            AgentPolicy.Decision.ALLOW -> {
+            GatePolicy.Verdict.ALLOW -> {
                 AgentPolicy.log(svc, tool, "dispatch", null, "allowed by selected approval policy")
             }
         }
