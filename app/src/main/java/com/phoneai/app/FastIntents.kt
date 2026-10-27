@@ -5,6 +5,7 @@ internal object FastIntents {
     sealed class Intent {
         class PlayMedia(val query: String, val app: String?) : Intent()
         class ChromeSearch(val query: String) : Intent()
+        class PlayStoreSearch(val query: String) : Intent()
     }
 
     private val polite = Regex("^(?:hey orion[, ]*|orion[, ]*|please |pls |can you |could you |would you |i want you to |i want to |go ahead and )+")
@@ -32,6 +33,13 @@ internal object FastIntents {
         Regex("^(?:search|google|look up|find)\\s+(?:for\\s+)?(.+?)\\s+(?:on|in|using|with)\\s+(?:google chrome|chrome|google)$").find(t)?.let {
             return Intent.ChromeSearch(it.groupValues[1].trim())
         }
+        Regex("^(?:open|launch|go to|start)\\s+(?:the\\s+)?(?:google play(?: store)?|play store)(?:\\s+(?:and|then)\\s+)?(?:search(?:\\s+for)?|find)\\s+(.+)$").find(t)?.let {
+            return Intent.PlayStoreSearch(it.groupValues[1].trim())
+        }
+        Regex("^(?:search|find)\\s+(?:for\\s+)?(.+?)\\s+(?:in|on|using)\\s+(?:the\\s+)?(?:google play(?: store)?|play store)$").find(t)?.let {
+            return Intent.PlayStoreSearch(it.groupValues[1].trim())
+        }
+
         Regex("^google\\s+(.+)$").find(t)?.let { return Intent.ChromeSearch(it.groupValues[1].trim()) }
         return null
     }
