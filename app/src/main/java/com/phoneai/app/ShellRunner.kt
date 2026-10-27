@@ -24,6 +24,33 @@ object ShellRunner {
 
     fun workspace(c: Context): File = File(c.filesDir, "workspace").also { it.mkdirs() }
 
+    private fun currentDirectory(c: Context): File {
+        val root = workspace(c).canonicalFile
+        val saved = c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE)
+            .getString("cwd", root.path) ?: root.path
+        val candidate = runCatching { File(saved).canonicalFile }.getOrNull()
+        return if (candidate != null && candidate.isDirectory &&
+            (candidate.path == root.path || candidate.path.startsWith(root.path + File.separator))) candidate else root
+    }
+
+    private fun changeDirectory(c: Context, raw: String): String {
+        val root = workspace(c).canonicalFile
+        val current = currentDirectory(c)
+        val arg = raw.trim().removeSurrounding("\"").removeSurrounding("'")
+        if (arg.isBlank() || arg == "~") {
+            c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", root.path).apply()
+            return "cwd: workspace/"
+        }
+        val candidate = runCatching { (if (File(arg).isAbsolute) File(arg) else File(current, arg)).canonicalFile }.getOrNull()
+            ?: return "error: invalid directory"
+        if (candidate.path != root.path && !candidate.path.startsWith(root.path + File.separator))
+            return "error: directory must remain inside Orion's private workspace"
+        if (!candidate.isDirectory) return "error: no such workspace directory"
+        c.getSharedPreferences("orion_builtin_shell", Context.MODE_PRIVATE).edit().putString("cwd", candidate.path).apply()
+        val relative = candidate.relativeTo(root).path
+        return "cwd: workspace/" + if (relative == ".") "" else relative
+    }
+
     /** Resolves a path inside the workspace, refusing anything that escapes it. */
     fun safePath(c: Context, rel: String): File? {
         if (rel.isBlank() || rel.startsWith("/") || rel.contains("\u0000")) return null
@@ -35,12 +62,27 @@ object ShellRunner {
     fun termuxInstalled(c: Context): Boolean = try { c.packageManager.getPackageInfo(TERMUX_PKG, 0); true } catch (_: Exception) { false }
 
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20): String {
+        val normalized = command.trim()
+        if (normalized.isEmpty()) return "error: command is required"
+        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        // Defense in depth: callers must still obtain approval for ASK-class commands.
+        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
+            return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
+        }
+        if (normalized == "cd" || normalized.startsWith("cd ")) {
+            return changeDirectory(c, normalized.removePrefix("cd").trim())
+        }
+        if (normalized == "pwd") {
+            val root = workspace(c).canonicalFile
+            val relative = currentDirectory(c).relativeTo(root).path
+            return "workspace/" + if (relative == ".") "" else relative
+        }
         return try {
-            val p = ProcessBuilder("/system/bin/sh", "-c", command).directory(workspace(c)).redirectErrorStream(true).start()
-            val out = StringBuilder()
-            val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(2048); while (true) { val n = r.read(buf); if (n < 0) break; if (out.length < 20000) out.append(buf, 0, n) } } } catch (_: Exception) { } }
+            val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(currentDirectory(c)).redirectErrorStream(true).start()
+            val out = StringBuffer()
+            val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(2048); while (true) { val n = r.read(buf); if (n < 0) break; synchronized(out) { if (out.length < 20000) out.append(buf, 0, n) } } } } catch (_: Exception) { } }
             reader.start()
-            if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
+            if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
             (if (p.exitValue() == 0) "" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }

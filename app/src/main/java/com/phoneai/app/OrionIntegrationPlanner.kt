@@ -9,7 +9,7 @@ package com.phoneai.app
  * Authorization and installation are separate steps and always require explicit user approval.
  */
 internal object OrionIntegrationPlanner {
-    enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, TERMUX, UNKNOWN }
+    enum class Provider { GITHUB, GMAIL, GOOGLE_DRIVE, TELEGRAM, BUILTIN_SHELL, TERMUX, UNKNOWN }
     enum class State { CONNECTED, AVAILABLE_NOT_CONNECTED, CAPABILITY_MISSING, UNKNOWN }
     enum class NextStep { USE_EXISTING, ASK_TO_CONNECT, ASK_TO_ENABLE_OR_INSTALL, RESEARCH_AND_PROPOSE, CLARIFY }
 
@@ -33,6 +33,10 @@ internal object OrionIntegrationPlanner {
         registeredCapabilities: Set<String>
     ): Plan {
         val provider = providerFor(request)
+        if (provider == Provider.BUILTIN_SHELL) {
+            val state = if ("shell.execute" in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
+            return plan(provider, state, request, registeredCapabilities)
+        }
         if (provider == Provider.UNKNOWN) {
             return plan(provider, State.UNKNOWN, request, registeredCapabilities)
         }
@@ -41,7 +45,8 @@ internal object OrionIntegrationPlanner {
             Provider.GMAIL -> "gmail" to "https://www.googleapis.com/auth/gmail.readonly"
             Provider.GOOGLE_DRIVE -> "google_drive" to "https://www.googleapis.com/auth/drive.readonly"
             Provider.TELEGRAM -> "telegram" to "telegram.messages"
-            Provider.TERMUX -> "termux" to "shell.execute"
+            Provider.BUILTIN_SHELL -> "builtin_shell" to "shell.execute"
+            Provider.TERMUX -> "termux" to "termux.execute"
             Provider.UNKNOWN -> "" to ""
         }
         val connection = OrionConnectionStore.get(context, id)
@@ -53,12 +58,10 @@ internal object OrionIntegrationPlanner {
                 else -> State.AVAILABLE_NOT_CONNECTED
             }
             // Termux readiness includes its package, external-command permission, bridge setting and pack.
-            Provider.TERMUX -> if ("shell.execute" in registeredCapabilities &&
-                runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)) {
-                State.CONNECTED
-            } else {
-                State.CAPABILITY_MISSING
-            }
+            Provider.BUILTIN_SHELL -> if ("shell.execute" in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
+            Provider.TERMUX -> if ("termux.execute" in registeredCapabilities &&
+                runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)) State.CONNECTED
+                else State.CAPABILITY_MISSING
             // Other providers are connected only when a real provider token and its required scope exist.
             else -> when {
                 connection != null && connection.secretAvailable && scope in connection.scopes -> State.CONNECTED
@@ -81,7 +84,8 @@ internal object OrionIntegrationPlanner {
             Provider.GMAIL -> "gmail.messages.read"
             Provider.GOOGLE_DRIVE -> "google_drive.files.read"
             Provider.TELEGRAM -> "telegram.messages"
-            Provider.TERMUX -> "shell.execute"
+            Provider.BUILTIN_SHELL -> "shell.execute"
+            Provider.TERMUX -> "termux.execute"
             Provider.UNKNOWN -> return accountState
         }
         return if (required in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
@@ -91,11 +95,15 @@ internal object OrionIntegrationPlanner {
     fun providerFor(request: String): Provider {
         val q = request.lowercase()
         return when {
+            // GitHub CLI is a local executable/runtime concern, not the saved GitHub account connector.
+            Regex("\\b(github cli|gh cli|gh command|git cli)\\b").containsMatchIn(q) ||
+                (Regex("\\bgh\\b").containsMatchIn(q) && Regex("\\b(installed|install|setup|set up|version|command)\\b").containsMatchIn(q)) -> Provider.BUILTIN_SHELL
             Regex("\\b(github|git hub|repository|repo|pull request|commit)\\b").containsMatchIn(q) -> Provider.GITHUB
             Regex("\\b(gmail|google mail|email|inbox|emails|messages)\\b").containsMatchIn(q) -> Provider.GMAIL
             Regex("\\b(google drive|drive files|drive document)\\b").containsMatchIn(q) -> Provider.GOOGLE_DRIVE
             Regex("\\b(telegram|telegram bot)\\b").containsMatchIn(q) -> Provider.TELEGRAM
-            Regex("\\b(termux|terminal|shell|command line|cli)\\b").containsMatchIn(q) -> Provider.TERMUX
+            Regex("\\b(termux)\\b").containsMatchIn(q) -> Provider.TERMUX
+            Regex("\\b(terminal|shell|command line|cli)\\b").containsMatchIn(q) -> Provider.BUILTIN_SHELL
             else -> Provider.UNKNOWN
         }
     }
@@ -119,7 +127,8 @@ internal object OrionIntegrationPlanner {
             Provider.GMAIL -> listOf("gmail.messages.read")
             Provider.GOOGLE_DRIVE -> listOf("google_drive.files.read")
             Provider.TELEGRAM -> listOf("telegram.messages")
-            Provider.TERMUX -> listOf("shell.execute")
+            Provider.BUILTIN_SHELL -> listOf("shell.execute")
+            Provider.TERMUX -> listOf("termux.execute")
             Provider.UNKNOWN -> emptyList()
         }
         val asksPrivateRead = Regex("(?i)\\b(read|search|check|summari[sz]e|open|view|fetch|list)\\b").containsMatchIn(request)
@@ -132,7 +141,9 @@ internal object OrionIntegrationPlanner {
             else -> NextStep.RESEARCH_AND_PROPOSE
         }
         val explanation = when (next) {
-            NextStep.USE_EXISTING -> "Use only the already-connected capability and its granted scope."
+            NextStep.USE_EXISTING -> if (provider == Provider.BUILTIN_SHELL)
+                "Use Orion's built-in Android shell in its private workspace; do not require Termux. This is a sandboxed Android shell, not a full Linux distribution."
+                else "Use only the already-connected capability and its granted scope."
             NextStep.ASK_TO_CONNECT -> "Explain the requested access and ask the user to authorize the provider."
             NextStep.ASK_TO_ENABLE_OR_INSTALL -> "Explain the missing capability, research a safe supported implementation, and ask before installing or enabling it."
             NextStep.RESEARCH_AND_PROPOSE -> "Verify the live tool registry and connection state, research official integration documentation, then present the concrete missing prerequisite and ask before changing the app or installing anything."

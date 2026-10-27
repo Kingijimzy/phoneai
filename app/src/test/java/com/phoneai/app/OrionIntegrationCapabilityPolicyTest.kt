@@ -39,16 +39,22 @@ class OrionIntegrationCapabilityPolicyTest {
         ).contains("telegram.messages"))
     }
 
-    @Test fun termuxNeedsBothToolEntrypointsAndReadyBridge() {
-        assertFalse(OrionIntegrationCapabilityPolicy.capabilities(
-            setOf("shell", "termux_command"), termuxReady = false
-        ).contains("shell.execute"))
+    @Test fun builtInShellDoesNotDependOnTermux() {
         assertEquals(setOf("shell.execute"), OrionIntegrationCapabilityPolicy.capabilities(
+            setOf("shell"), termuxReady = false
+        ))
+        assertTrue(OrionIntegrationCapabilityPolicy.capabilities(
+            setOf("shell", "github_public"), termuxReady = false
+        ).contains("shell.execute"))
+    }
+
+    @Test fun termuxIsASeparateOptionalBackend() {
+        assertFalse(OrionIntegrationCapabilityPolicy.capabilities(
+            setOf("termux_command"), termuxReady = false
+        ).contains("termux.execute"))
+        assertEquals(setOf("shell.execute", "termux.execute"), OrionIntegrationCapabilityPolicy.capabilities(
             setOf("shell", "termux_command"), termuxReady = true
         ))
-        assertFalse(OrionIntegrationCapabilityPolicy.capabilities(
-            setOf("shell", "termux_command", "github_public"), termuxReady = false
-        ).contains("shell.execute"))
     }
 
     @Test fun unconnectedTelegramPlansConnectionInsteadOfResearchingMissingCode() {

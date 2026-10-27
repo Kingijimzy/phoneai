@@ -13,6 +13,24 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("What is the weather forecast in Lagos"))
     }
 
+
+    @Test fun accountConnectionRequestsAreActionableNotConversation() {
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("I would like connect my GitHub account"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Check if my Gmail is connected"))
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Check which services are currently connected"))
+    }
+
+    @Test fun shortConfirmationKeepsTheIntegrationTaskScope() {
+        val previous = "I would like connect my GitHub account"
+        assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor(TaskScopePolicy.scopeFor("Yes", previous, 1_000)))
+    }
+
+    @Test fun naturalResearchFollowUpsAreClassifiedAsResearch() {
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Go do research about it"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Do research about GitHub connection options"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Go research official Gmail authorization docs"))
+    }
+
     @Test fun explicitWhatsAppSendRequestAllowsPhoneToolScope() {
         val request = "open WhatsApp and send kingi jimzy this message good morning chams"
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor(request))

@@ -16,12 +16,14 @@ internal object OrionIntegrationCapabilityPolicy {
         if ("google_drive_files_read" in enabledTools || "google_drive_list_files" in enabledTools) {
             caps += "google_drive.files.read"
         }
+        // Orion's own workspace shell is independent of Termux. Termux is optional.
+        if ("shell" in enabledTools) caps += "shell.execute"
         // Connection/configuration is assessed separately by the planner.
         if ("telegram_inbox" in enabledTools && "telegram_send" in enabledTools) {
             caps += "telegram.messages"
         }
-        if (termuxReady && "shell" in enabledTools && "termux_command" in enabledTools) {
-            caps += "shell.execute"
+        if (termuxReady && "termux_command" in enabledTools) {
+            caps += "termux.execute"
         }
         return caps
     }

@@ -7,7 +7,7 @@ internal object ShellPolicy {
     private val readOnly = setOf(
         "ls", "cat", "head", "tail", "wc", "grep", "egrep", "find", "echo", "printf", "pwd", "date", "whoami", "uname", "df", "du", "stat",
         "sort", "uniq", "tr", "cut", "diff", "basename", "dirname", "which", "id", "getprop", "free", "uptime", "nl", "file", "md5sum",
-        "sha256sum", "sleep", "true", "test", "["
+        "sha256sum", "sleep", "true", "test", "[", "cd"
     )
     private val workspaceWrite = setOf("mkdir", "touch", "cp", "tee")
     private val safeGit = setOf("status", "log", "diff", "branch", "show", "remote")
@@ -48,8 +48,16 @@ internal object ShellPolicy {
         for (seg in segments(cmd)) {
             val w = firstWord(seg)
             val args = seg.split(Regex("\\s+")).drop(1)
+            // Automatic shell access is confined to relative workspace paths. Absolute paths,
+            // home expansion, and parent traversal require a deliberate one-time approval.
+            if (Regex("(?:^|\\s)(?:/[^\\s]*|~(?:/[^\\s]*)?|\\.\\.?/[^\\s]*)(?:\\s|$)").containsMatchIn(seg)) {
+                return ShellRisk.ASK
+            }
             when {
-                w in readOnly -> if (w == "find" && Regex("-(exec|delete|ok)\\b").containsMatchIn(seg)) return ShellRisk.ASK
+                w in readOnly -> {
+                    if (w == "cd" && args.isNotEmpty() && !args.all { relativeInside(it) }) return ShellRisk.ASK
+                    if (w == "find" && Regex("-(exec|delete|ok)\\b").containsMatchIn(seg)) return ShellRisk.ASK
+                }
                 w in workspaceWrite -> if (!args.filter { !it.startsWith("-") }.all { relativeInside(it) }) return ShellRisk.ASK
                 w == "git" -> if (args.firstOrNull() !in safeGit) return ShellRisk.ASK
                 else -> return ShellRisk.ASK

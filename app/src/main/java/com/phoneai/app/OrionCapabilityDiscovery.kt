@@ -73,7 +73,7 @@ internal object OrionCapabilityDiscovery {
         val blockers = mutableListOf<String>()
         if (unique.isEmpty()) blockers += "tool registry is empty"
         if (enabledPacks.isEmpty()) blockers += "no capability packs are enabled"
-        if (unique.any { it.name == "termux_command" } && !termuxReady) blockers += "shell execution unavailable until the Termux bridge is ready"
+        if (unique.any { it.name == "termux_command" } && !termuxReady) blockers += "optional Termux-only command tool unavailable; Orion built-in shell does not depend on Termux"
         if (facts.none { it.available }) blockers += "no registered tool is currently available"
         return Snapshot(
             registeredCount = unique.size,

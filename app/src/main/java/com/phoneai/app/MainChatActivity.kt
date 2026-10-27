@@ -1144,7 +1144,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java)) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onStop = { if (::stop.isInitialized) stop.performClick() }
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onStop = { if (::stop.isInitialized) stop.performClick() }
                 )
             }
         }

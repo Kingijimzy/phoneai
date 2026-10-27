@@ -7,6 +7,12 @@ internal object AgentJson {
     class Parsed(val obj: JSONObject, val damaged: Boolean)
 
     fun parse(raw: String): Parsed {
+        // Some providers leak their private tool-call serialization as ordinary assistant text.
+        // Never accept the embedded "{}" as a valid empty plan or show raw control markup to users.
+        if (raw.contains("<|tool_call>") || raw.contains("</|tool_call>") ||
+            raw.contains("<|tool_call|>") || raw.contains("</tool_call>")) {
+            return Parsed(JSONObject(), true)
+        }
         val s = raw.indexOf('{')
         if (s < 0) return Parsed(JSONObject().put("say", raw.trim()), false)
         val e = raw.lastIndexOf('}')

@@ -45,6 +45,12 @@ object BrowserAutomation {
         return result.get().orEmpty()
     }
 
+    /** Snapshot only an already-attached browser; never waits several seconds when the browser is closed. */
+    fun snapshotIfOpen(): String {
+        if (current?.get() == null) return ""
+        return snapshot()
+    }
+
     fun snapshot(): String = evaluate("""
         (function(){
           const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&Number(s.opacity)!==0;};

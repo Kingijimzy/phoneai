@@ -46,6 +46,8 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Icon
@@ -72,6 +74,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -83,13 +88,64 @@ import kotlinx.coroutines.withContext
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
 private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
-private val ORION_INLINE_TOKEN_PATTERN = Regex("""\*\*(.+?)\*\*|`([^`]+)`|(?<![*\\w])\*([^*\\n]+)\*(?!\\w)""")
+private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^\s)]+)""")
 
 private fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
-    source.replace("\r\n", "\n").split("\n").forEachIndexed { index, raw ->
+    val lines = source.replace("\r\n", "\n").replace('\r', '\n').split('\n')
+    var inCode = false
+    var codeFirstLine = false
+    var codeStart = -1
+    var hasRenderedLine = false
+
+    lines.forEach { raw ->
+        if (raw.trimStart().startsWith("```")) {
+            if (!inCode) {
+                if (hasRenderedLine) out.append("\n")
+                inCode = true
+                codeFirstLine = true
+                codeStart = out.length
+                hasRenderedLine = true
+            } else {
+                if (codeStart >= 0 && out.length > codeStart) {
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = Color(0xFFF0F0F0),
+                            background = Color(0xFF242424)
+                        ),
+                        codeStart, out.length
+                    )
+                }
+                inCode = false
+                codeFirstLine = false
+                codeStart = -1
+            }
+            return@forEach
+        }
+
+        if (hasRenderedLine && (!inCode || !codeFirstLine)) out.append("\n")
+        if (inCode) {
+            val lineStart = out.length
+            out.append(raw)
+            if (raw.isNotEmpty()) {
+                out.addStyle(
+                    androidx.compose.ui.text.SpanStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = Color(0xFFF0F0F0),
+                        background = Color(0xFF242424)
+                    ),
+                    lineStart, out.length
+                )
+            }
+            codeFirstLine = false
+            hasRenderedLine = true
+            return@forEach
+        }
+
         val line = raw.trimEnd()
-        if (index > 0) out.append("\n")
         val heading = ORION_HEADING_PATTERN.find(line)
         val bullet = ORION_BULLET_PATTERN.find(line)
         val content = heading?.groupValues?.get(2) ?: bullet?.let { "•  " + it.groupValues[1] } ?: line
@@ -112,27 +168,64 @@ private fun formatOrionMarkdown(source: String): AnnotatedString {
         var cursor = 0
         ORION_INLINE_TOKEN_PATTERN.findAll(content).forEach { match ->
             appendPlain(content.substring(cursor, match.range.first))
-            val isBold = match.groups[1] != null
-            val isCode = match.groups[2] != null
-            val inner = when {
-                isBold -> match.groupValues[1]
-                isCode -> match.groupValues[2]
-                else -> match.groupValues[3]
-            }
             val start = out.length
-            out.append(inner)
-            out.addStyle(
-                androidx.compose.ui.text.SpanStyle(
-                    fontWeight = if (isBold || headingSize != null) FontWeight.Bold else FontWeight.Normal,
-                    fontStyle = if (!isBold && !isCode) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
-                    fontSize = headingSize ?: 14.sp,
-                    background = if (isCode) Color(0xFF242424) else Color.Transparent
-                ),
-                start, out.length
-            )
+            when {
+                match.groups[1] != null && match.groups[2] != null -> {
+                    out.append(match.groupValues[1])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            color = Color(0xFFD2D6DA),
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        ), start, out.length
+                    )
+                }
+                match.groups[3] != null -> {
+                    out.append(match.groupValues[3])
+                    out.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold), start, out.length)
+                }
+                match.groups[4] != null -> {
+                    out.append(match.groupValues[4])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            background = Color(0xFF242424)
+                        ), start, out.length
+                    )
+                }
+                match.groups[5] != null -> {
+                    out.append(match.groupValues[5])
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                        start, out.length
+                    )
+                }
+                else -> {
+                    out.append(match.groupValues[6].trimEnd('.', ',', ';'))
+                    out.addStyle(
+                        androidx.compose.ui.text.SpanStyle(
+                            color = Color(0xFFD2D6DA),
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                        ), start, out.length
+                    )
+                }
+            }
             cursor = match.range.last + 1
         }
         appendPlain(content.substring(cursor))
+        hasRenderedLine = true
+    }
+
+    if (inCode && codeStart >= 0 && out.length > codeStart) {
+        out.addStyle(
+            androidx.compose.ui.text.SpanStyle(
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = Color(0xFFF0F0F0),
+                background = Color(0xFF242424)
+            ),
+            codeStart, out.length
+        )
     }
     return out.toAnnotatedString()
 }
@@ -170,7 +263,7 @@ fun OrionComposeChatScreen(
     onPickImage: () -> Unit,
     onRemoveImage: () -> Unit,
     onVoice: () -> Unit,
-    onBrowser: () -> Unit,
+    onBrowser: (String?) -> Unit,
     onTasks: () -> Unit,
     onStop: () -> Unit
 ) {
@@ -320,7 +413,7 @@ fun OrionComposeChatScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
             ) {
-                itemsIndexed(lines, key = { _, item -> item.id }) { _, item -> ChatBubble(item) }
+                itemsIndexed(lines, key = { _, item -> item.id }) { _, item -> ChatBubble(item, onBrowser) }
                 if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }
             }
         }
@@ -412,7 +505,7 @@ fun OrionComposeChatScreen(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Live voice", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onVoice))
-                    Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onBrowser))
+                    Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable { onBrowser(null) })
                     Text("Tasks", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onTasks))
                 }
                 Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Color(0xFF9B9B9B),
@@ -500,7 +593,7 @@ private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
 }
 
 @Composable
-private fun ChatBubble(item: OrionChatLine) {
+private fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
     val replyType = if (mine) OrionReplyType.NORMAL else classifyOrionReply(item)
@@ -580,13 +673,18 @@ private fun ChatBubble(item: OrionChatLine) {
                     }
                     Spacer(Modifier.height(7.dp))
                 }
-                Text(
-                    text = if (!mine && !note) formatOrionMarkdown(item.text) else AnnotatedString(item.text),
-                    color = if (note) ChatMuted else ChatCopy,
-                    fontSize = 14.sp,
-                    lineHeight = 22.sp,
-                    modifier = Modifier.clickable(enabled = !note) { actionsVisible = !actionsVisible }
-                )
+                when {
+                    note && item.text.startsWith("[SHELL:") -> ShellActivityCard(item.text)
+                    note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text, onOpenBrowser)
+                    note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
+                    else -> Text(
+                        text = if (!mine && !note) formatOrionMarkdown(item.text) else AnnotatedString(item.text),
+                        color = if (note) ChatMuted else ChatCopy,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        modifier = Modifier.clickable(enabled = !note) { actionsVisible = !actionsVisible }
+                    )
+                }
                 if (item.imageUri != null) {
                     Spacer(Modifier.height(9.dp))
                     ImageThumbnail(item.imageUri, Modifier.fillMaxWidth().height(190.dp))
@@ -607,6 +705,96 @@ private fun ChatBubble(item: OrionChatLine) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ShellActivityCard(raw: String) {
+    val failed = raw.startsWith("[SHELL:FAILED]")
+    val command = raw.lineSequence().drop(1).firstOrNull().orEmpty().removePrefix("$ ")
+    val output = raw.substringAfter("\n", "").substringAfter("\n", "").trim()
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF0B0B0B)).border(1.dp, Color(0xFF353535), RoundedCornerShape(12.dp))
+            .padding(11.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Icon(Icons.Rounded.Tune, contentDescription = null, tint = Color(0xFFD0D0D0), modifier = Modifier.size(16.dp))
+            Text("ORION SHELL", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+            Spacer(Modifier.weight(1f))
+            Text(if (failed) "FAILED" else "OUTPUT", color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        Text("\$ $command", color = Color(0xFFE8E8E8), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+        if (output.isNotBlank()) Text(output.take(1600), color = Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+    }
+}
+
+@Composable
+private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
+    val failed = raw.startsWith("[BROWSER:FAILED]")
+    val url = Regex("(?m)^URL: (https?://\\S+)").find(raw)?.groupValues?.getOrNull(1).orEmpty()
+    val result = raw.substringAfter("RESULT:", "").trim().take(700)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF111111)).border(1.dp, Color(0xFF343434), RoundedCornerShape(12.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Icon(Icons.Rounded.Public, contentDescription = null, tint = Color(0xFFBFC5CC), modifier = Modifier.size(16.dp))
+            Text("ORION BROWSER", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .7.sp)
+            Spacer(Modifier.weight(1f))
+            Text(if (failed) "FAILED" else "PAGE ACTIVITY", color = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+        if (url.startsWith("https://") || url.startsWith("http://")) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Rounded.Public, contentDescription = null, tint = ChatMuted, modifier = Modifier.size(13.dp))
+                Text(url, color = ChatMuted, fontSize = 10.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                Text("OPEN", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(Color(0xFF292929)).clickable { onOpenBrowser(url) }.padding(horizontal = 9.dp, vertical = 6.dp))
+            }
+            AndroidView(
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        webViewClient = WebViewClient()
+                        tag = url
+                        loadUrl(url)
+                    }
+                },
+                update = { view -> if (view.tag != url) { view.tag = url; view.loadUrl(url) } },
+                modifier = Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(8.dp))
+            )
+        }
+        if (result.isNotBlank()) Text(result, color = ChatMuted, fontSize = 11.sp, lineHeight = 16.sp)
+        Text("Preview uses Orion's in-chat WebView. Use OPEN for full browser controls or sign-in flows.", color = Color(0xFF858585), fontSize = 9.sp, lineHeight = 13.sp)
+    }
+}
+
+@Composable
+private fun TaskActivityCard(raw: String) {
+    val failed = raw.startsWith("[TASK:FAILED]")
+    val running = raw.startsWith("[TASK:RUNNING]")
+    val detail = raw.substringAfter("\n", raw).trim()
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF171717)).border(1.dp, Color(0xFF343434), RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Icon(
+            if (failed) Icons.Rounded.Stop else if (running) Icons.Rounded.Bolt else Icons.Rounded.TaskAlt,
+            contentDescription = null, tint = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), modifier = Modifier.size(16.dp)
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(if (running) "STEP RUNNING" else if (failed) "STEP FAILED" else "STEP RESULT", color = ChatCopy, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+            Text(detail.take(300), color = ChatMuted, fontSize = 11.sp, lineHeight = 15.sp)
         }
     }
 }
