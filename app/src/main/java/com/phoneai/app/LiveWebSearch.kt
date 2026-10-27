@@ -98,8 +98,8 @@ object LiveWebSearch {
                     if (!marked) continue
                     seen.add(link)
                     count++
-                    out.append("\\n\\n").append(count).append(". ").append(title.take(220))
-                        .append("\\n").append(link.take(500))
+                    out.append("\n\n").append(count).append(". ").append(title.take(220))
+                        .append("\n").append(link.take(500))
                 }
                 if (count > 0) {
                     val snippets = snippetPattern.matcher(html)
@@ -107,10 +107,10 @@ object LiveWebSearch {
                     while (snippets.find() && idx < count) {
                         val snippet = decodeHtml(snippets.group(1).replace(Regex("(?is)<[^>]+>"), " "))
                             .replace(Regex("\\s+"), " ").trim()
-                        if (snippet.isNotBlank()) out.append("\\n\\nSnippet: ").append(snippet.take(300))
+                        if (snippet.isNotBlank()) out.append("\n\nSnippet: ").append(snippet.take(300))
                         idx++
                     }
-                    out.append("\\n\\nSource: DuckDuckGo public search results (")
+                    out.append("\n\nSource: DuckDuckGo public search results (")
                         .append(if (endpointIndex == 0) "HTML" else "lite fallback")
                         .append("). Search availability and layout can change.")
                     return out.toString()
