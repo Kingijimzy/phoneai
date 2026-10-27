@@ -1284,6 +1284,7 @@ Rules:
             else -> null
         }
         var damagedReplies = 0
+        val stall = SessionStall()
         while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
             val raw = try {
@@ -1332,7 +1333,7 @@ Rules:
                     val batchArgs = one.optJSONObject("args") ?: JSONObject()
                     budgetStopReason()?.let { reason ->
                         AgentCheckpointStore.pause(svc)
-                        ui.say("I stopped safely because the task $reason. Progress is saved; raise the budget or continue later.")
+                        ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                         return
                     }
                     if (!AgentCheckpointStore.beginStep(svc, bt, batchArgs)) {
@@ -1351,6 +1352,11 @@ Rules:
                         return
                     }
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
+                    stall.add(bt, batchArgs.toString(), br)?.let { reason ->
+                        AgentCheckpointStore.pause(svc)
+                        ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
+                        return
+                    }
                     if (br.startsWith("error")) break
                 }
                 history.put(msg("user", "RESULT: " + sb.toString().take(3500)))
@@ -1393,7 +1399,7 @@ Rules:
             ui.phase("acting")
             budgetStopReason()?.let { reason ->
                 AgentCheckpointStore.pause(svc)
-                ui.say("I stopped safely because the task $reason. Progress is saved; raise the budget or continue later.")
+                ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                 return
             }
             if (!AgentCheckpointStore.beginStep(svc, tool, args)) {
@@ -1408,6 +1414,11 @@ Rules:
             if (result.startsWith("error")) runFailed++
             ui.note(activityNote(tool, args, result))
             record(tool, args, result)
+            stall.add(tool, args.toString(), result)?.let { reason ->
+                AgentCheckpointStore.pause(svc)
+                ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
+                return
+            }
             if (tool in setOf("browser_handoff", "browser_upload") && result.startsWith("BROWSER HANDOFF REQUIRED")) {
                 if (!AgentCheckpointStore.record(svc, tool, args, result)) {
                     AgentCheckpointStore.recoveryRequired(svc, "The browser handed control to the user, but the handoff result could not be saved. Verify the page before resuming.")
