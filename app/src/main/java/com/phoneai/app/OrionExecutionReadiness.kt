@@ -114,7 +114,6 @@ internal object OrionExecutionReadiness {
             OrionIntegrationPlanner.Provider.GOOGLE_DRIVE -> listOf("google_drive_files_read", "google_drive_list_files")
             OrionIntegrationPlanner.Provider.TELEGRAM -> listOf("telegram_inbox", "telegram_status")
             OrionIntegrationPlanner.Provider.BUILTIN_SHELL -> listOf("shell")
-            OrionIntegrationPlanner.Provider.TERMUX -> emptyList()
             OrionIntegrationPlanner.Provider.UNKNOWN -> emptyList()
         }
         return candidates.firstOrNull { it in available }
