@@ -51,3 +51,12 @@ class ToolGateTest {
         assertTrue(s.contains("and 3 more"))
     }
 }
+
+class PreflightMessageTest {
+    @Test fun packOffMessageNamesThePackAndTheFixAndSaysItExists() {
+        val m = AgentPolicy.packOffMessage("workspace_shell")
+        assertTrue(m.contains("workspace_shell"))
+        assertTrue(m.contains("Agent control > Packs > Workspace shell"))
+        assertTrue(m.contains("The feature exists"))
+    }
+}
