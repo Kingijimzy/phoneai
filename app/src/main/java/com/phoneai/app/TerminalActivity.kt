@@ -62,7 +62,7 @@ class TerminalActivity : Activity() {
         append("Orion Terminal. Built-in runs inside Orion's private workspace. Termux gives you python, git, node and more.\n")
     }
 
-    private fun refreshBackend() { backendBtn.text = when (backend) { Backend.BUILTIN -> "Built-in"; Backend.LINUX -> "Linux"; Backend.TERMUX -> "Termux" }; append("— using ${when (backend) { Backend.BUILTIN -> "built-in shell"; Backend.LINUX -> "Alpine Linux"; Backend.TERMUX -> "Termux" }} —\\n") }
+    private fun refreshBackend() { backendBtn.text = when (backend) { Backend.BUILTIN -> "Built-in"; Backend.LINUX -> "Linux"; Backend.TERMUX -> "Termux" }; append("— using ${when (backend) { Backend.BUILTIN -> "built-in shell"; Backend.LINUX -> "Alpine Linux"; Backend.TERMUX -> "Termux" }} —\n") }
 
     private fun append(s: String) { out.append(s); scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) } }
 
