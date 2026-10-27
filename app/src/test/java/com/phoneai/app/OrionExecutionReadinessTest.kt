@@ -43,17 +43,25 @@ class OrionExecutionReadinessTest {
     }
 
     @Test fun unavailableShellNeverPromisesExecution() {
-        val goal = OrionGoalUnderstanding.understand("run a command in Termux")
+        val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
         val plan = OrionExecutionReadiness.plan(goal, snapshot("live_web_search"))
         assertEquals(OrionExecutionReadiness.NextStep.PREPARE_SHELL_SETUP, plan.nextStep)
         assertFalse(plan.nextStep == OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL)
     }
 
-    @Test fun supportedShellRequiresOutputVerification() {
-        val goal = OrionGoalUnderstanding.understand("run a command in Termux")
-        val plan = OrionExecutionReadiness.plan(goal, snapshot("termux_command"))
+    @Test fun supportedBuiltInShellRequiresOutputVerification() {
+        val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
+        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell"))
         assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, plan.nextStep)
+        assertEquals("shell", plan.recommendedTool)
         assertTrue(plan.verificationRequirement.contains("exit/result status"))
+    }
+
+    @Test fun builtInShellIsPreferredWhenBothBackendsExist() {
+        val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
+        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell", "termux_command"))
+        assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, plan.nextStep)
+        assertEquals("shell", plan.recommendedTool)
     }
 
     @Test fun unsupportedGoalReturnsConcreteGapInsteadOfSuccess() {
