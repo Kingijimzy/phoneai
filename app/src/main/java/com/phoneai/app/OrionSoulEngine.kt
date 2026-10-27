@@ -19,7 +19,6 @@ internal object OrionSoulEngine {
             val pack = AgentPolicy.packForTool(name)
             pack != null && pack in enabledPacks
         }.toSet()
-        val termuxReady = runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)
         val notificationAccess = runCatching {
             Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
                 ?.contains(context.packageName) == true
@@ -32,15 +31,16 @@ internal object OrionSoulEngine {
         val planner = try {
             OrionIntegrationPlanner.planFor(
                 context, request,
-                OrionIntegrationCapabilityPolicy.capabilities(enabledTools, termuxReady)
+                OrionIntegrationCapabilityPolicy.capabilities(enabledTools)
             )
         } catch (_: Exception) { null }
 
         val capabilitySnapshot = OrionCapabilityDiscovery.discover(
             registeredTools = ToolRegistry.all,
             enabledPacks = enabledPacks,
-            termuxReady = termuxReady,
             permissionStates = mapOf(
+                "screen_access_disclosure" to if (Prefs.accessibilityDisclosureAccepted(context))
+                    OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
                 "notification_access" to if (notificationAccess)
                     OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
                 "contacts" to if (contactsPermission)
@@ -61,7 +61,7 @@ internal object OrionSoulEngine {
         lines += OrionGoalUnderstanding.promptLine(request)
         lines += "GOAL UNDERSTANDING RULES: treat short follow-ups such as continue, go ahead, do it, and try again as referring to the active conversation task when context exists. Keep greetings and small talk conversational without tool calls. For real tasks, identify the outcome and target, inspect available capabilities, execute only through registered tools, then verify observable results. Ask one focused question only when a necessary target is genuinely ambiguous. A recognized goal never grants account access or approval."
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
-        lines += "Registered tools: ${registeredTools.size}; tools currently usable after pack, bridge, and permission checks: ${capabilitySnapshot.availableCount}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
+        lines += "Registered tools: ${registeredTools.size}; tools currently usable after pack and permission checks: ${capabilitySnapshot.availableCount}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
         lines += capabilitySnapshot.promptLines()
         lines += executionReadiness.promptLines()
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
