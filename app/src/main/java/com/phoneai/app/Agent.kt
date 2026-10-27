@@ -1249,6 +1249,14 @@ Rules:
             ui.say(answer)
             return
         }
+        // Capability questions are answered from the live local registry, not model memory.
+        if (!resumeRequest && !browserActionTask && ToolRegistry.isCapabilityQuestion(command)) {
+            val answer = ToolRegistry.describe(command)
+            logShortcut("capability_catalogue", answer)
+            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+            ui.say(answer)
+            return
+        }
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
