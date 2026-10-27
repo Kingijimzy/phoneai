@@ -50,7 +50,7 @@ internal object ShellPolicy {
             val args = seg.split(Regex("\\s+")).drop(1)
             // Automatic shell access is confined to relative workspace paths. Absolute paths,
             // home expansion, and parent traversal require a deliberate one-time approval.
-            if (Regex("(?:^|\\\\s)(?:/[^\\\\s]*|~(?:/[^\\\\s]*)?|\\.\\.?/[^\\\\s]*)(?:\\\\s|$)").containsMatchIn(seg)) {
+            if (Regex("(?:^|\\s)(?:/[^\\s]*|~(?:/[^\\s]*)?|\\.\\.?/[^\\s]*)(?:\\s|$)").containsMatchIn(seg)) {
                 return ShellRisk.ASK
             }
             when {
