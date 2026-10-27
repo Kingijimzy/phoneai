@@ -580,15 +580,15 @@ private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
     val text = item.text
     val lower = text.lowercase()
-    if (Regex("(?s)```(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text) ||
-        (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class ")))) {
+    // Keep ordinary prose in the normal chat surface. Broad keyword/URL heuristics
+    // turned unrelated answers into oversized cards and hid the natural chat flow.
+    if (Regex("(?s)\\x60\\x60\\x60(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text)) {
         return OrionReplyType.CODE
     }
-    if (lower.contains("research summary") || lower.contains("sources:") || lower.contains("source list") ||
-        (Regex("https?://").findAll(text).count() >= 2) ||
-        (lower.contains("findings") && lower.contains("source"))) return OrionReplyType.RESEARCH
-    if (lower.contains("task status") || lower.contains("execution result:") ||
-        lower.contains("steps completed") || lower.contains("verification:")) return OrionReplyType.TASK
+    if (Regex("(?im)^\\s*(?:research summary|sources|source list|findings and sources)\\s*:?[ \\t]*$").containsMatchIn(text)) {
+        return OrionReplyType.RESEARCH
+    }
+    if (Regex("(?im)^\\s*(?:task status|execution result|steps completed|verification)\\s*:").containsMatchIn(text)) return OrionReplyType.TASK
     return OrionReplyType.NORMAL
 }
 
