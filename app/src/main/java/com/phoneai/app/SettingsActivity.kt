@@ -399,6 +399,21 @@ class SettingsActivity : Activity() {
         add(col, button("Agent approval & capability packs", true) {
             startActivity(Intent(this, AgentControlActivity::class.java))
         }, 8)
+
+        val agentOps = card(
+            col,
+            "Soul Engine & task execution",
+            "Inspect live readiness, saved work, shell access, and the evidence Orion records after actions."
+        )
+        add(agentOps, button("Capability & Soul report", true) {
+            startActivity(Intent(this, OrionCapabilityReportActivity::class.java))
+        }, 8)
+        add(agentOps, button("Task centre & recovery", false) {
+            startActivity(Intent(this, TaskCenterActivity::class.java))
+        }, 8)
+        add(agentOps, button("Terminal / shell workspace", false) {
+            startActivity(Intent(this, TerminalActivity::class.java))
+        }, 8)
         
         // ---- 1. setup
         val s1 = card(col, "Access & permissions")
