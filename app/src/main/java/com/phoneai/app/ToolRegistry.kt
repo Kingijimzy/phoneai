@@ -19,6 +19,7 @@ internal object ToolRegistry {
     val all: List<ToolDefinition> = listOf(
         tool("lookup_app", ToolAccess.READ, "lookup_app {name}: resolve a launchable installed app to its exact label and package before opening it"),
         tool("open_app", ToolAccess.WRITE, "open_app {name}: open an installed app by name (for example WhatsApp or FC Mobile) or package"),
+        tool("play_store_search", ToolAccess.WRITE, "play_store_search {query}: open Google Play native app search results directly for a query; verify the results screen instead of tapping guessed coordinates"),
         tool("system_intent", ToolAccess.WRITE, "system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, sms, alarm, timer, share, open_url. Never use arbitrary action/component strings."),
         tool("open_deep_link", ToolAccess.WRITE, "open_deep_link {uri}: launch only allowlisted tel/geo/mailto/sms/smsto/whatsapp/tg/youtube/spotify deep links; never use arbitrary intent:// links or banking/payment/credential links"),
         tool("read_notifications", ToolAccess.READ, "read_notifications {}: list recent safe notification summaries held in memory; banking/payment and authentication/security notifications are filtered; requires Android Notification access"),
