@@ -399,6 +399,9 @@ class SettingsActivity : Activity() {
         add(col, button("Agent approval & capability packs", true) {
             startActivity(Intent(this, AgentControlActivity::class.java))
         }, 8)
+        add(col, button("Soul Engine · live system dashboard", true) {
+            startActivity(Intent(this, SoulEngineActivity::class.java))
+        }, 8)
         
         // ---- 1. setup
         val s1 = card(col, "Access & permissions")
@@ -929,6 +932,7 @@ class SettingsActivity : Activity() {
             }
         } else {
             when (intent.getStringExtra("open_section")) {
+                "knowledge" -> knowledgeDialog()
                 "memory" -> memoryDialog()
                 "skills" -> skillsDialog()
                 "routines" -> routinesDialog()

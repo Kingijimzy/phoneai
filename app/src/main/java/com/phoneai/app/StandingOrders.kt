@@ -22,12 +22,13 @@ internal object StandingOrderPolicy {
         "brief" to "the live brief (weather, team, prices, tasks)"
     )
     const val MIN_MINUTES = 15
+    const val MAX_MINUTES = 7 * 24 * 60
     const val MAX_ORDERS = 6
 
     fun validate(kind: String, minutes: Int): String? = when {
         kind !in kinds -> "kind must be one of: " + kinds.keys.joinToString()
         minutes < MIN_MINUTES -> "minimum interval is $MIN_MINUTES minutes (saves battery and quota)"
-        minutes > 7 * 24 * 60 -> "maximum interval is one week"
+        minutes > MAX_MINUTES -> "maximum interval is one week"
         else -> null
     }
 
@@ -43,6 +44,10 @@ internal object StandingOrderPolicy {
     }
 
     fun digest(result: String): String = result.hashCode().toString()
+
+    /** Do not consume a new-result digest when Android could not post its notification. */
+    fun digestAfterAttempt(previousDigest: String, result: String, notificationNeeded: Boolean, notificationPosted: Boolean): String =
+        if (result.startsWith("error") || (notificationNeeded && !notificationPosted)) previousDigest else digest(result)
 }
 
 object StandingOrders {
@@ -107,9 +112,16 @@ object LifeLoop {
                 }
             } catch (e: Exception) { "error: " + (e.message ?: "failed") }
             val notify = StandingOrderPolicy.shouldNotify(o.lastDigest, result)
-            StandingOrders.update(c, o.kind, if (result.startsWith("error")) o.lastDigest else StandingOrderPolicy.digest(result))
-            if (notify && post(c, o.kind, result)) posted++
-            AgentPolicy.log(c, "standing_order", o.kind, null, if (notify) "notified" else "nothing new or error")
+            val notificationPosted = notify && post(c, o.kind, result)
+            StandingOrders.update(c, o.kind, StandingOrderPolicy.digestAfterAttempt(
+                o.lastDigest, result, notify, notificationPosted
+            ))
+            if (notificationPosted) posted++
+            AgentPolicy.log(c, "standing_order", o.kind, null, when {
+                notificationPosted -> "notified"
+                notify -> "notification not posted; digest retained for retry"
+                else -> "nothing new or error"
+            })
         }
         return posted
     }

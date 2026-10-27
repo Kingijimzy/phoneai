@@ -49,6 +49,11 @@ internal object OrionExecutionReadiness {
                     return Plan(NextStep.EXECUTE_SUPPORTED_TOOL,
                         "The integration planner reports a connected state and required capability; choose only a matching available tool.",
                         integrationTool(integration.provider, available), goal.verification, integration.needsUserAuthorization)
+                OrionIntegrationPlanner.NextStep.VERIFY_SAVED_CONNECTION ->
+                    return Plan(NextStep.ENABLE_OR_INSTALL_CAPABILITY,
+                        "A saved credential has not passed a live read-only verification check; do not treat it as connected.",
+                        choose("service_status", "capability_note"),
+                        "Run the secure Capability Board verification, then rediscover the provider state before accessing private data.", true)
                 OrionIntegrationPlanner.NextStep.ASK_TO_CONNECT -> {
                     val tool = choose("connect_service")
                     return if (tool != null) Plan(NextStep.OPEN_CONNECTION_SETUP,
