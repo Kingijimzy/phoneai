@@ -48,6 +48,13 @@ class ToolRegistryTest {
         assertTrue(prompt.contains("SCREEN TARGET RULE"))
     }
 
+    @Test fun everyRegisteredToolMapsToAnImplementedCapabilityPack() {
+        ToolRegistry.all.forEach { tool ->
+            assertNotNull("Missing capability-pack mapping for " + tool.name, AgentPolicy.packForTool(tool.name))
+        }
+        assertEquals("orion_core", AgentPolicy.packForTool("tool_help"))
+    }
+
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
         assertEquals(ToolAccess.READ, ToolRegistry.access("read_screen"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
