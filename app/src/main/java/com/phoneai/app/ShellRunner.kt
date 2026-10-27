@@ -112,8 +112,13 @@ object ShellRunner {
         finally { pending.remove(id) }
     }
 
-    fun run(c: Context, command: String, where: String): String =
-        if (where.equals("termux", true)) runTermux(c, command) else runBuiltin(c, command)
+    /**
+     * Public app shell entry point is always the built-in runtime. The legacy backend
+     * argument is retained for source compatibility, but it can no longer route a
+     * model-generated command into an external Termux installation.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun run(c: Context, command: String, where: String): String = runBuiltin(c, command)
 
     fun writeFile(c: Context, rel: String, content: String): String {
         val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
