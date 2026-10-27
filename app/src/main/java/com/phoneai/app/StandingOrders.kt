@@ -44,6 +44,10 @@ internal object StandingOrderPolicy {
     }
 
     fun digest(result: String): String = result.hashCode().toString()
+
+    /** Do not consume a new-result digest when Android could not post its notification. */
+    fun digestAfterAttempt(previousDigest: String, result: String, notificationNeeded: Boolean, notificationPosted: Boolean): String =
+        if (result.startsWith("error") || (notificationNeeded && !notificationPosted)) previousDigest else digest(result)
 }
 
 object StandingOrders {
@@ -108,9 +112,16 @@ object LifeLoop {
                 }
             } catch (e: Exception) { "error: " + (e.message ?: "failed") }
             val notify = StandingOrderPolicy.shouldNotify(o.lastDigest, result)
-            StandingOrders.update(c, o.kind, if (result.startsWith("error")) o.lastDigest else StandingOrderPolicy.digest(result))
-            if (notify && post(c, o.kind, result)) posted++
-            AgentPolicy.log(c, "standing_order", o.kind, null, if (notify) "notified" else "nothing new or error")
+            val notificationPosted = notify && post(c, o.kind, result)
+            StandingOrders.update(c, o.kind, StandingOrderPolicy.digestAfterAttempt(
+                o.lastDigest, result, notify, notificationPosted
+            ))
+            if (notificationPosted) posted++
+            AgentPolicy.log(c, "standing_order", o.kind, null, when {
+                notificationPosted -> "notified"
+                notify -> "notification not posted; digest retained for retry"
+                else -> "nothing new or error"
+            })
         }
         return posted
     }
