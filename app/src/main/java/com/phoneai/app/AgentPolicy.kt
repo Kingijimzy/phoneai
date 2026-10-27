@@ -15,6 +15,7 @@ object AgentPolicy {
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
+        Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
         Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
@@ -71,7 +72,8 @@ object AgentPolicy {
         "play", "look" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read" -> "workspace_shell"
-        "graph_link", "graph_query", "create_agent", "self_review" -> "orion_core"
+        "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order" -> "orion_core"
+        "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
         "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"

@@ -9,7 +9,7 @@ import org.junit.Test
 class OrionRuntimePolicyTest {
     @Test fun priorityIsClampedAndWorkTypesAreExplicit() {
         assertEquals(
-            listOf("LEARN_FROM_RESULT", "CAPABILITY_RECHECK", "RESTORE_PENDING"),
+            listOf("LEARN_FROM_RESULT", "CAPABILITY_RECHECK", "RESTORE_PENDING", "SOUL_WATCH"),
             OrionRuntime.WorkType.values().map { it.name }
         )
         assertEquals(-10, (-100).coerceIn(-10, 10))
