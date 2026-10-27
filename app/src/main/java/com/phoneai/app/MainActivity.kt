@@ -439,6 +439,9 @@ class MainActivity : ComponentActivity() {
         gap(workspace, action("Task centre", "Running tasks, saved sessions, and progress", true) {
             startActivity(Intent(this, TaskCenterActivity::class.java))
         }, 8)
+        gap(workspace, action("Capability report", "See what is ready, limited, blocked, or still unverified", true) {
+            startActivity(Intent(this, OrionCapabilityReportActivity::class.java))
+        }, 8)
         gap(workspace, action("Memory & routines", "Search and manage Orion’s saved local memories") {
             startActivity(Intent(this, MemoryActivity::class.java))
         }, 8)
@@ -469,6 +472,9 @@ class MainActivity : ComponentActivity() {
         page.addView(label("TOOLS", 11f, Theme.CYAN, true))
         page.addView(label("A workspace for getting things done.", 25f, Theme.TEXT, true).apply { setPadding(0, dp(8), 0, dp(5)) })
         page.addView(label("Tools are separated from chat so the conversation stays focused.", 13f, Theme.MUTED))
+        gap(page, action("Capability report", "Live local checks for agent, screen access, tools, packs, providers and voice", true) {
+            startActivity(Intent(this, OrionCapabilityReportActivity::class.java))
+        }, 12)
         gap(page, action("Ask Orion to do it", "Describe your goal; Orion can choose the right available tools", true) {
             startActivity(Intent(this, MainChatActivity::class.java))
         }, 15)
