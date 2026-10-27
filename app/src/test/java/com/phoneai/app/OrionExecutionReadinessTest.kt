@@ -10,9 +10,8 @@ class OrionExecutionReadinessTest {
         ToolDefinition(name, "$name {}", "test", access)
 
     private fun snapshot(vararg names: String) = OrionCapabilityDiscovery.discover(
-        names.map { tool(it, if (it in setOf("connect_service", "shell", "termux_command")) ToolAccess.WRITE else ToolAccess.READ) },
-        setOf("orion_core", "workspace_shell", "termux_bridge", "connected_services", "trading_research", "phone_control"),
-        termuxReady = true
+        names.map { tool(it, if (it in setOf("connect_service", "shell")) ToolAccess.WRITE else ToolAccess.READ) },
+        setOf("orion_core", "workspace_shell", "connected_services", "trading_research", "phone_control")
     )
 
     @Test fun greetingNeverSelectsTool() {
@@ -57,11 +56,19 @@ class OrionExecutionReadinessTest {
         assertTrue(plan.verificationRequirement.contains("exit/result status"))
     }
 
-    @Test fun builtInShellIsPreferredWhenBothBackendsExist() {
+    @Test fun builtInShellIsTheOnlyRegisteredShellBackend() {
         val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
-        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell", "termux_command"))
+        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell"))
         assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, plan.nextStep)
         assertEquals("shell", plan.recommendedTool)
+    }
+
+    @Test fun explicitTermuxWordingStillUsesBuiltInShellWhenAvailable() {
+        val goal = OrionGoalUnderstanding.understand("run a command in Termux")
+        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell"))
+        assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, plan.nextStep)
+        assertEquals("shell", plan.recommendedTool)
+        assertTrue(plan.reason.contains("built-in workspace shell"))
     }
 
     @Test fun unsupportedGoalReturnsConcreteGapInsteadOfSuccess() {
