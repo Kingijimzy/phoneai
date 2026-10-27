@@ -628,7 +628,36 @@ Rules:
                     } +
                     "\nIf one of these enabled skills clearly fits the request, you may tell the user they can explicitly run it with \"run skill <id>: <task>\". Do not claim a skill ran unless the user explicitly invoked it. Normal built-in tools remain available."
             }
-            history.put(0, msg("system", prompt))
+            // Join goal framing, live registry/pack discovery, integration state, and
+            // readiness into the actual planner context for this request. These are hints only;
+            // the real dispatch boundary still enforces permissions, approvals, and verification.
+            val coordinatedPrompt = if (request.isNullOrBlank()) prompt else {
+                val registered = ToolRegistry.all
+                val names = registered.map { it.name }.toSet()
+                val goal = OrionGoalUnderstanding.understand(request)
+                val integration = if (goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_CONNECT ||
+                    goal.kind == OrionGoalUnderstanding.Kind.ACCOUNT_DATA) {
+                    val capabilities = buildSet {
+                        if ("github_account_read" in names) add("github.account.read")
+                        if ("gmail_list_messages" in names) add("gmail.messages.read")
+                        if (("google_drive_files_read" in names) || ("google_drive_list_files" in names)) add("google_drive.files.read")
+                        if (("telegram_inbox" in names) || ("telegram_send" in names) || ("telegram_status" in names)) add("telegram.messages")
+                        if ("termux_command" in names) add("shell.execute")
+                    }
+                    runCatching { OrionIntegrationPlanner.planFor(svc, request, capabilities) }.getOrNull()
+                } else null
+                val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(svc, it.id) }.map { it.id }.toSet()
+                val termuxReady = runCatching { TermuxBridgeRunner.readiness(svc) == null }.getOrDefault(false)
+                val context = OrionTaskOrchestrator.build(
+                    request = request,
+                    registeredTools = registered,
+                    enabledPacks = enabledPacks,
+                    termuxReady = termuxReady,
+                    integration = integration
+                )
+                prompt + "\\n\\n" + context.promptLines().joinToString("\\n")
+            }
+            history.put(0, msg("system", coordinatedPrompt))
         }
     }
 
