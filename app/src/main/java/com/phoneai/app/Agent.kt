@@ -709,7 +709,7 @@ Rules:
                     permissionStates = permissionStates,
                     integration = integration
                 )
-                prompt + "\\n\\n" + context.promptLines().joinToString("\\n")
+                prompt + "\n\n" + context.promptLines().joinToString("\n")
             }
             history.put(0, msg("system", coordinatedPrompt))
         }
