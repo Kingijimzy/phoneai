@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -46,7 +47,7 @@ class SoulEngineActivity : Activity() {
             isClickable = true; isFocusable = true; contentDescription = caption
             addView(label(caption, 14f, 0xFFF0F0F0.toInt(), true))
             if (!detail.isNullOrBlank()) addView(label(detail, 11f, 0xFFAAAAAA.toInt()))
-            setOnClickListener { onClick() }
+            setOnClickListener { runCatching { onClick() }.onFailure { showActionFailure(caption, it) } }
         }
     private fun openChat(prompt: String) {
         startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt))
@@ -62,9 +63,54 @@ class SoulEngineActivity : Activity() {
         val scroll = ScrollView(this).apply { setBackgroundColor(0xFF090909.toInt()); isFillViewport = true; clipToPadding = false }
         page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(22), dp(18), dp(30)) }
         scroll.addView(page); setContentView(scroll)
-        buildPage(); refreshSnapshot()
+        try {
+            buildPage()
+            refreshSnapshot()
+        } catch (e: Exception) {
+            Log.e(TAG, "Soul Engine dashboard failed to render", e)
+            showDashboardFailure(e)
+        }
     }
-    override fun onResume() { super.onResume(); if (::page.isInitialized) refreshSnapshot() }
+    override fun onResume() {
+        super.onResume()
+        if (::page.isInitialized) runCatching { refreshSnapshot() }
+            .onFailure { Log.e(TAG, "Soul Engine dashboard refresh failed", it); showRefreshFailure(it) }
+    }
+
+    /** Keep the dashboard reachable if an optional registry/service fails during rendering. */
+    private fun showDashboardFailure(error: Throwable) {
+        runCatching {
+            page.removeAllViews()
+            page.addView(label("ORION / EXECUTIVE SYSTEM", 10f, 0xFFAAAAAA.toInt(), true))
+            page.addView(label("Soul Engine needs recovery", 24f, 0xFFF4F4F4.toInt(), true))
+            page.addView(label("The dashboard hit an error while loading. This screen remains open so the error can be inspected.", 14f, 0xFFD0D0D0.toInt()))
+            page.addView(label("Error: " + (error.message ?: error.javaClass.simpleName).take(500), 12f, 0xFFFFC078.toInt()))
+            page.addView(Button(this).apply {
+                text = "Retry dashboard"; isAllCaps = false
+                setOnClickListener {
+                    runCatching { buildPage(); refreshSnapshot() }
+                        .onFailure { Log.e(TAG, "Soul Engine dashboard retry failed", it); showDashboardFailure(it) }
+                }
+            })
+        }.onFailure { Log.e(TAG, "Could not render Soul Engine recovery screen", it) }
+    }
+
+    private fun showRefreshFailure(error: Throwable) {
+        if (!::statusLine.isInitialized) {
+            showDashboardFailure(error)
+            return
+        }
+        statusLine.text = "LIMITED · live status refresh failed"
+        statusLine.setTextColor(0xFFFFC078.toInt())
+        if (::summaryLine.isInitialized) summaryLine.text = "The dashboard is open; one or more local status sources failed."
+        if (::runtimeLine.isInitialized) runtimeLine.text = "Error: " + (error.message ?: error.javaClass.simpleName).take(300)
+    }
+
+    private fun showActionFailure(action: String, error: Throwable) {
+        Log.e(TAG, "Soul Engine dashboard action failed: " + action, error)
+        Toast.makeText(this, action + " failed: " + (error.message ?: error.javaClass.simpleName).take(140), Toast.LENGTH_LONG).show()
+    }
+
 
     private fun buildPage() {
         page.removeAllViews()
@@ -133,6 +179,7 @@ class SoulEngineActivity : Activity() {
 
     private fun refreshSnapshot() {
         if (!::statusLine.isInitialized) return
+        try {
         val tools = runCatching { ToolRegistry.all.size }.getOrDefault(0)
         val packs = runCatching { AgentPolicy.packs.count { it.implemented } }.getOrDefault(0)
         val enabled = runCatching { AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) } }.getOrDefault(0)
@@ -153,6 +200,10 @@ class SoulEngineActivity : Activity() {
         statusLine.setTextColor(if (status.startsWith("READY")) 0xFF9ED6A2.toInt() else 0xFFFFC078.toInt())
         summaryLine.text = tools.toString() + " registered tools · " + enabled + "/" + packs + " implemented packs enabled · " + providerKeys + " provider keys saved"
         runtimeLine.text = verified.toString() + "/" + services.count { it.secretAvailable } + " saved service connections verified · " + savedTasks + " saved tasks · " + memoryCount + " memories · " + knowledgeCount + " knowledge docs · shell " + (if (shellReady) "ready" else "limited") + " · service " + (if (serviceReady) "connected" else "not connected")
+        } catch (e: Exception) {
+            Log.e(TAG, "Soul Engine live snapshot failed", e)
+            showRefreshFailure(e)
+        }
     }
 
     private fun runSelfTest() {
@@ -162,5 +213,8 @@ class SoulEngineActivity : Activity() {
             catch (e: Exception) { "Self-test failed: " + (e.message ?: e.javaClass.simpleName) }
             runOnUiThread { if (!isFinishing && !isDestroyed) selfTestLine.text = result.take(2600) }
         }.start()
+    }
+    companion object {
+        private const val TAG = "SoulEngineDashboard"
     }
 }
