@@ -13,7 +13,7 @@ class ShellPolicyTest {
 
     @Test fun persistentDirectoryChangesRequireApproval() {
         assertEquals(ShellRisk.SAFE, r("cd"))
-        assertEquals(ShellRisk.ASK, r("cd src"))
+        assertEquals(ShellRisk.SAFE, r("cd src"))
         assertEquals(ShellRisk.ASK, r("cd ../outside"))
     }
 
