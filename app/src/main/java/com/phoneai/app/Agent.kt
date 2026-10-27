@@ -1287,6 +1287,7 @@ Rules:
         }
         var damagedReplies = 0
         val stall = SessionStall()
+        var promiseNudged = false
         while (!stopped && requestBudget.tryConsume()) {
             ui.phase("thinking")
             val raw = try {
@@ -1367,6 +1368,12 @@ Rules:
             }
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") {
+                // The model announced a step but called no tool: give it one chance to act before the turn ends.
+                if (!promiseNudged && ActionPromise.announcesUnfinishedStep(step.optString("say"), toolCalls)) {
+                    promiseNudged = true
+                    history.put(msg("user", ActionPromise.NUDGE))
+                    continue
+                }
                 val runEvidence = taskProofs.snapshot()
                 val completion = AgentHooks.completionDecision(command, runEvidence)
                 val outcome = OrionTaskOutcome.reconcile(completion.allowed, runEvidence, runFailed)
