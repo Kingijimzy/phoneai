@@ -11,24 +11,19 @@ import org.json.JSONObject
 internal object DeclarativeSkillInstaller {
     data class Outcome(val status: OrionSkillInstallPolicy.ReviewStatus, val message: String, val skillId: String? = null)
 
-    fun installManifest(context: Context, json: String, approved: Boolean): Outcome {
+    fun installManifest(\n        context: Context,\n        json: String,\n        approved: Boolean,\n        verifiedSource: OrionSkillInstallPolicy.SourceTrust = OrionSkillInstallPolicy.SourceTrust.UNKNOWN,\n        signatureVerified: Boolean = false\n    ): Outcome {
         if (json.length !in 2..16_000) return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Manifest size is invalid.")
         val obj = try { JSONObject(json) } catch (_: Exception) {
             return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Manifest is not valid JSON.")
         }
         // Strict schema: unknown keys are rejected so a hidden code/script field cannot be ignored.
-        val allowedKeys = setOf("id", "version", "description", "allowedTools", "payloadKind", "sourceTrust", "signatureVerified")
+        val allowedKeys = setOf("id", "version", "description", "allowedTools", "payloadKind")
         val keys = obj.keys()
         while (keys.hasNext()) {
             if (keys.next() !in allowedKeys) return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Manifest contains an unsupported field.")
         }
         if (obj.optString("payloadKind") != "declarative") {
             return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "Only declarative manifests are supported; executable payloads are forbidden.")
-        }
-        val source = when (obj.optString("sourceTrust")) {
-            "official" -> OrionSkillInstallPolicy.SourceTrust.OFFICIAL_PROVIDER
-            "verified_repository" -> OrionSkillInstallPolicy.SourceTrust.VERIFIED_REPOSITORY
-            else -> OrionSkillInstallPolicy.SourceTrust.UNKNOWN
         }
         val toolsJson = obj.optJSONArray("allowedTools")
             ?: return Outcome(OrionSkillInstallPolicy.ReviewStatus.REJECTED, "allowedTools must be an array.")
@@ -38,11 +33,11 @@ internal object DeclarativeSkillInstaller {
         val manifest = OrionSkillInstallPolicy.Manifest(
             id = obj.optString("id"),
             version = obj.optString("version"),
-            sourceTrust = source,
+            sourceTrust = verifiedSource,
             payloadKind = OrionSkillInstallPolicy.PayloadKind.DECLARATIVE_MANIFEST,
             requestedCapabilities = requested,
             description = obj.optString("description"),
-            signatureVerified = obj.optBoolean("signatureVerified", false)
+            signatureVerified = signatureVerified
         )
         val review = OrionSkillInstallPolicy.review(manifest, ToolRegistry.names().toSet(), approved)
         if (review.status != OrionSkillInstallPolicy.ReviewStatus.APPROVED) {
