@@ -50,12 +50,10 @@ jobs:
             -o upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
           echo "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so" | sha256sum --check -
 
-      - name: Install pinned Android NDK
+      - name: Install Android SDK and pinned NDK r28
         uses: android-actions/setup-android@v3
-
-      - name: Install NDK r28
-        shell: bash
-        run: sdkmanager "ndk;28.0.12433566"
+        with:
+          packages: 'ndk;28.0.12433566'
 
       - name: Build pinned PRoot candidate
         shell: bash
