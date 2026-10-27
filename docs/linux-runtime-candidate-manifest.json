@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "status": "review-only",
+  "warning": "NOT A PRODUCTION MANIFEST. Do not enable where=linux from this file. The PRoot binaries are a short-lived GitHub Actions artifact and guest-shell/device validation has not passed.",
+  "source": {
+    "repository": "OpenMinis/OpenMinis",
+    "commit": "1a71df0f381cefde80bf912b723de6f9831bc177",
+    "ndk": "28.0.12433566",
+    "talloc": {
+      "version": "2.4.2",
+      "sha256": "85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6"
+    },
+    "candidateWorkflowRun": "40597941057",
+    "candidateArtifactId": "12776338113",
+    "candidateArtifactExpiresAt": "2026-11-10T22:52:11Z"
+  },
+  "rootfs": {
+    "distribution": "Alpine Linux",
+    "version": "3.22.7",
+    "architecture": "aarch64",
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.7-aarch64.tar.gz",
+    "bytes": 3971679,
+    "sha256": "7e9b34ff3304381909e566e2c93de450664ccc724191261423974fc121c11623",
+    "sha512": "b8a60e0944dcf9e5f6f2caaf9bd260429aedebf56d5aa68d96b2eeaea4448526edaad00ee71712d96dbb74f70f2c3ae59f452afa7e2fe9b0f7635c251fdb533c",
+    "officialChecksumVerification": "passed"
+  },
+  "prootCandidate": {
+    "architecture": "aarch64",
+    "file": "proot-aarch64",
+    "bytes": 294416,
+    "sha256": "91c3f3ce38482fba523c0dcbfa5eb883e8aae063236bff3d091da6a58f1c94c4",
+    "elf": "ELF64 AArch64 PIE; interpreter /system/bin/linker64",
+    "status": "built-in-CI-not-runtime-tested"
+  },
+  "packagedExecutableCandidate": {
+    "file": "libproot.so",
+    "bytes": 294416,
+    "sha256": "91c3f3ce38482fba523c0dcbfa5eb883e8aae063236bff3d091da6a58f1c94c4",
+    "elf": "ELF64 AArch64 PIE; interpreter /system/bin/linker64",
+    "status": "candidate-only"
+  },
+  "loaders": [
+    {
+      "file": "libproot-loader.so",
+      "architecture": "aarch64",
+      "bytes": 18136,
+      "sha256": "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04",
+      "provenance": "pinned upstream loader binary; hash verified in CI"
+    },
+    {
+      "file": "libproot-loader32.so",
+      "architecture": "arm",
+      "bytes": 6244,
+      "sha256": "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34",
+      "provenance": "pinned upstream loader binary; hash verified in CI; optional 32-bit guest support not enabled"
+    }
+  ],
+  "releaseGates": {
+    "apkBuildAndTests": "passed",
+    "rootfsChecksumAndSize": "passed",
+    "prootCandidateBuildAndElfInspection": "passed",
+    "guestShellSmokeTest": "pending",
+    "nativeLibraryPackagingAndExecution": "pending",
+    "licenseAndSourceOfferReview": "pending",
+    "redmiPhysicalDeviceTest": "pending",
+    "whereLinuxEnabled": false
+  }
+}
