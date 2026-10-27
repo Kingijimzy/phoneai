@@ -68,7 +68,7 @@ class SoulLiveTest {
             assertNotNull(it, ToolRegistry.find(it)); assertNotNull(it, AgentPolicy.packForTool(it))
         }
         assertEquals(ToolAccess.READ, ToolRegistry.access("gmail_list_messages"))
-        assertTrue(OrionIntegrationCapabilityPolicy.capabilities(setOf("github_account_read", "gmail_list_messages"), false).containsAll(setOf("github.account.read", "gmail.messages.read")))
+        assertTrue(OrionIntegrationCapabilityPolicy.capabilities(setOf("github_account_read", "gmail_list_messages")).containsAll(setOf("github.account.read", "gmail.messages.read")))
     }
 }
 
