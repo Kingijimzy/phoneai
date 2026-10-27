@@ -18,39 +18,77 @@ object WeatherService {
         return hasWeather && asksLive
     }
 
-    /** Only uses a place explicitly supplied by the user; never guesses precise location. */
+    fun isWeatherTopic(text: String): Boolean =
+        Regex("(?i)\\b(weather|forecast|rain|raining|temperature outside)\\b").containsMatchIn(text)
+
+    /** Extracts place names case-insensitively, including "weather today in benin city Nigeria". */
     fun requestedPlace(text: String): String {
-        val patterns = listOf(
-            Regex("(?i)\\b(?:weather|forecast)\\s+(?:in|for|at)\\s+(.+?)(?:\\s+(?:right now|at the moment|currently|today|tonight|tomorrow|now|this weekend|please)\\b|[?.!,]|$)"),
-            Regex("(?i)\\b(?:in|for|at)\\s+([A-Z][A-Za-z .'-]{1,60})(?:\\s+(?:right now|at the moment|currently|today|tonight|tomorrow|now|this weekend|please)\\b|[?.!,]|$)")
+        val pattern = Regex(
+            "(?i)\\b(?:in|for|at)\\s+(.+?)(?:\\s+(?:right now|at the moment|currently|today|tonight|tomorrow|now|this weekend|please)\\b|[?.!]|$)"
         )
-        for (pattern in patterns) {
-            val match = pattern.find(text) ?: continue
-            val place = match.groupValues[1].trim().trimEnd('.', '?', '!', ',')
-            if (place.isNotBlank() && !place.equals("my area", true) && !place.equals("here", true)) return place
-        }
-        return ""
+        val match = pattern.find(text) ?: return ""
+        val place = match.groupValues[1].trim().trimEnd('.', '?', '!', ',')
+            .replace(Regex("\\s+"), " ")
+        if (place.isBlank() || place.equals("my area", true) || place.equals("here", true)) return ""
+        return place
     }
+
+    /** Keep the last explicitly requested weather location so short follow-ups stay in context. */
+    fun rememberPlace(context: android.content.Context, place: String) {
+        val clean = place.trim().take(100)
+        if (clean.isNotBlank()) context.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE)
+            .edit().putString("last_weather_place", clean).apply()
+    }
+
+    fun lastPlace(context: android.content.Context): String =
+        context.getSharedPreferences("phoneai", android.content.Context.MODE_PRIVATE)
+            .getString("last_weather_place", "").orEmpty()
 
     fun current(place: String): String {
         val clean = place.trim().take(100)
         if (clean.isBlank()) return "Which city or town should I check? I can fetch live weather without using an AI API call."
         return try {
-            // Geocoding expects the place name, not always a combined "city, country" string.
-            // Search the city first, then use any supplied region/country to disambiguate.
-            val placeParts = clean.split(",").map { it.trim() }.filter { it.isNotBlank() }
-            val nameQuery = placeParts.first()
-            val encoded = URLEncoder.encode(nameQuery, "UTF-8")
-            val geo = getJson("https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=10&language=en&format=json")
-            val results = geo.optJSONArray("results")
-            if (results == null || results.length() == 0) return "I couldn't find \"$clean\". Try a city and country, such as \"Benin City, Nigeria\"."
-            val requestedQualifiers = placeParts.drop(1)
-            val location = if (requestedQualifiers.isEmpty()) results.getJSONObject(0) else {
-                (0 until results.length()).map { results.getJSONObject(it) }.firstOrNull { candidate ->
-                    val metadata = (candidate.optString("admin1", "") + " " + candidate.optString("country", "")).lowercase(Locale.ROOT)
-                    requestedQualifiers.all { metadata.contains(it.lowercase(Locale.ROOT)) }
-                } ?: results.getJSONObject(0)
+            // Accept both "Benin City, Nigeria" and "Benin City Nigeria". When no comma
+            // is supplied, progressively separate trailing qualifiers and match them against
+            // the geocoder's region/country metadata instead of searching the whole phrase.
+            val commaParts = clean.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            var results: org.json.JSONArray? = null
+            var requestedQualifiers: List<String> = emptyList()
+            if (commaParts.size > 1) {
+                val geo = geocode(commaParts.first())
+                results = geo.optJSONArray("results")
+                requestedQualifiers = commaParts.drop(1)
+            } else {
+                val words = clean.split(Regex("\\s+"))
+                for (keep in words.size downTo 1) {
+                    val candidate = words.take(keep).joinToString(" ")
+                    val qualifiers = words.drop(keep)
+                    val found = geocode(candidate).optJSONArray("results")
+                    if (found != null && found.length() > 0) {
+                        val matching = if (qualifiers.isEmpty()) found else org.json.JSONArray().apply {
+                            for (i in 0 until found.length()) {
+                                val item = found.getJSONObject(i)
+                                val metadata = (item.optString("admin1", "") + " " + item.optString("country", "")).lowercase(Locale.ROOT)
+                                if (qualifiers.all { metadata.contains(it.lowercase(Locale.ROOT)) }) put(item)
+                            }
+                        }
+                        if (matching.length() > 0) {
+                            results = matching
+                            requestedQualifiers = qualifiers
+                            break
+                        }
+                        if (qualifiers.isEmpty()) {
+                            results = found
+                            break
+                        }
+                    }
+                }
             }
+            if (results == null || results.length() == 0) return "I couldn't find \"$clean\". Try a city and country, such as \"Benin City, Nigeria\"."
+            val location = (0 until results.length()).map { results!!.getJSONObject(it) }.firstOrNull { candidate ->
+                val metadata = (candidate.optString("admin1", "") + " " + candidate.optString("country", "")).lowercase(Locale.ROOT)
+                requestedQualifiers.all { metadata.contains(it.lowercase(Locale.ROOT)) }
+            } ?: results!!.getJSONObject(0)
             val lat = location.optDouble("latitude", Double.NaN)
             val lon = location.optDouble("longitude", Double.NaN)
             if (lat.isNaN() || lon.isNaN()) return "The weather service returned incomplete coordinates for $clean."
@@ -88,6 +126,11 @@ object WeatherService {
         } catch (e: Exception) {
             "I couldn't retrieve live weather right now (" + (e.message?.take(100) ?: "network error") + "). No AI quota was used; please retry when the data service is reachable."
         }
+    }
+
+    private fun geocode(name: String): JSONObject {
+        val encoded = URLEncoder.encode(name, "UTF-8")
+        return getJson("https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=10&language=en&format=json")
     }
 
     private fun getJson(url: String): JSONObject {

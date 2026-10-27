@@ -1066,10 +1066,15 @@ Rules:
             ui.say(chartAnswer)
             return
         }
-        // Live weather is a deterministic data lookup, not an LLM task. This preserves AI quota.
-        if (!resumeRequest && !browserActionTask && WeatherService.isWeatherRequest(command)) {
+        // Live weather is a deterministic data lookup, not an LLM task. Preserve the last
+        // explicit place so a follow-up like "weather" does not lose the user's context.
+        val rememberedWeatherPlace = WeatherService.lastPlace(svc)
+        val weatherFollowUp = WeatherService.isWeatherTopic(command) && rememberedWeatherPlace.isNotBlank()
+        if (!resumeRequest && !browserActionTask && (WeatherService.isWeatherRequest(command) || weatherFollowUp)) {
             ui.phase("acting")
-            val place = WeatherService.requestedPlace(command)
+            val extractedPlace = WeatherService.requestedPlace(command)
+            val place = extractedPlace.ifBlank { rememberedWeatherPlace }
+            if (extractedPlace.isNotBlank()) WeatherService.rememberPlace(svc, extractedPlace)
             val answer = if (place.isBlank()) WeatherService.current("") else WeatherService.current(place)
             logShortcut("weather", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
