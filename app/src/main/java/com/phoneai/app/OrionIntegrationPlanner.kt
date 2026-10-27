@@ -56,11 +56,6 @@ internal object OrionIntegrationPlanner {
                 runCatching { TelegramBridge.isConfigured(context) }.getOrDefault(false) -> State.CONNECTED
                 else -> State.AVAILABLE_NOT_CONNECTED
             }
-            // Termux readiness includes its package, external-command permission, bridge setting and pack.
-            Provider.BUILTIN_SHELL -> if ("shell.execute" in registeredCapabilities) State.CONNECTED else State.CAPABILITY_MISSING
-            Provider.TERMUX -> if ("termux.execute" in registeredCapabilities &&
-                runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)) State.CONNECTED
-                else State.CAPABILITY_MISSING
             // Other providers are connected only when a real provider token and its required scope exist.
             else -> when {
                 connection != null && connection.secretAvailable && scope in connection.scopes && connection.verified -> State.CONNECTED
