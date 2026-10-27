@@ -74,10 +74,11 @@ internal object SoulWatch {
     fun run(c: Context): String {
         val now = System.currentTimeMillis()
         if (!SoulPolicy.due(lastTick(c), now)) return "not_due"
-        sp(c).edit().putLong("soul_watch_last", now).apply()
         val notes = ArrayList<String>()
         if (!enabled(c)) {
             try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
+            // Record the tick only after the local work finishes. A thrown failure must remain retryable.
+            sp(c).edit().putLong("soul_watch_last", now).apply()
             return notes.joinToString(",").ifBlank { "soul_watch_off" }
         }
         if (OrionConnectionStore.get(c, "gmail")?.secretAvailable == true && AgentPolicy.enabled(c, "connected_services")) {
@@ -102,6 +103,8 @@ internal object SoulWatch {
         }
         // User-defined standing orders ("check my mail every 30 minutes") share the same event-driven tick.
         try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
+        // Commit the due marker last, so failed network checks can be retried by OrionRuntime backoff.
+        sp(c).edit().putLong("soul_watch_last", now).apply()
         return notes.joinToString(",").ifBlank { "nothing_new" }
     }
 
