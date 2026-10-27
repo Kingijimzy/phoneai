@@ -78,7 +78,9 @@ class OrionCapabilityReportActivity : Activity() {
             disclosureAccepted, accessibilityReady && windowReady
         )
         val providerKeys = Providers.all.count { Prefs.hasKey(this, it.id) }
-        val savedServices = runCatching { OrionConnectionStore.list(this).count { it.secretAvailable } }.getOrDefault(0)
+        val connectionRecords = runCatching { OrionConnectionStore.list(this) }.getOrDefault(emptyList())
+        val savedServices = connectionRecords.count { it.secretAvailable }
+        val verifiedServices = connectionRecords.count { it.secretAvailable && it.verified }
         val speechAvailable = android.speech.SpeechRecognizer.isRecognitionAvailable(this)
         val now = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 
@@ -110,7 +112,7 @@ class OrionCapabilityReportActivity : Activity() {
         val integrations = card()
         integrations.addView(label("INTEGRATIONS", 10f, 0xFFAAAAAA.toInt(), true))
         addLine(integrations, "AI provider keys", providerKeys.toString() + " of " + Providers.all.size + " providers have a saved key. This does not validate the key, model, credits, quota, or network.", providerKeys > 0)
-        addLine(integrations, "Service credentials", savedServices.toString() + " credential(s) saved in the local connection store. Saved is not the same as provider-verified.", null)
+        addLine(integrations, "Service credentials", savedServices.toString() + " saved · " + verifiedServices + " passed a read-only provider check. Verification can become stale if access is revoked.", verifiedServices > 0)
         addLine(integrations, "Speech recognition", if (speechAvailable) "Android reports a recognizer is available; microphone capture and transcription still need a real test." else "Android reports no speech recognizer available.", speechAvailable)
         page.addView(integrations)
 
