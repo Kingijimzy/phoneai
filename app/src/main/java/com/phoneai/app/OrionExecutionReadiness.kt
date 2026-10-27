@@ -72,13 +72,16 @@ internal object OrionExecutionReadiness {
         }
 
         if (goal.kind == OrionGoalUnderstanding.Kind.SHELL_EXECUTION) {
-            val shell = choose("shell", "termux_command")
+            val explicitTermux = goal.target.equals("Termux", ignoreCase = true)
+            val shell = if (explicitTermux) choose("termux_command") else choose("shell")
             if (shell != null) return Plan(NextStep.EXECUTE_SUPPORTED_TOOL,
-                "A shell entry point is registered and currently available; obey its allowlist and approval rules.",
+                if (explicitTermux) "The explicitly requested optional Termux backend is available."
+                else "Orion's built-in workspace shell is available; no external terminal app is required.",
                 shell, "Inspect command output and exit/result status; never infer task completion from dispatch alone.", true)
             return Plan(NextStep.PREPARE_SHELL_SETUP,
-                "No shell tool is currently available. Enable Orion's built-in workspace-shell pack; Termux is optional and only needed when explicitly requested.",
-                choose("connect_service", "capability_note"), "Re-run discovery and verify shell readiness before executing.", true)
+                if (explicitTermux) "Termux was explicitly requested but its optional bridge is unavailable. Enable that bridge or ask Orion to use its built-in terminal."
+                else "Orion's built-in shell is unavailable. Enable the workspace-shell capability pack; Termux is not required.",
+                choose("capability_note"), "Re-run discovery and verify shell readiness before executing.", true)
         }
 
         val candidates = when (goal.kind) {
