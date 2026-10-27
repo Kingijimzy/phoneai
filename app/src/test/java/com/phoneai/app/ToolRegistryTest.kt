@@ -102,6 +102,15 @@ class ToolRegistryPromptTrimTest {
         assertTrue(trimmed.length < ToolRegistry.promptSection().length)
     }
 
+    @Test fun githubAndGmailRequestsIncludeFullConnectionToolContracts() {
+        val github = ToolRegistry.promptSection("connect my GitHub account")
+        assertTrue(github.contains("- github_account_read {path}: read-only GitHub GET"))
+        assertTrue(github.contains("- connect_service {service}: open Orion's secure Capability board"))
+        val gmail = ToolRegistry.promptSection("connect my Gmail account and read my inbox")
+        assertTrue(gmail.contains("- gmail_list_messages {query?, limit?}: read-only Gmail inbox headers"))
+        assertTrue(gmail.contains("- service_status {}: list each service"))
+    }
+
     @Test fun matchingRequestKeepsTheFullContract() {
         val trimmed = ToolRegistry.promptSection("what is the bitcoin price on bybit")
         assertTrue(trimmed.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
