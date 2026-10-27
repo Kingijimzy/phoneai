@@ -75,7 +75,12 @@ class CapabilityBoardActivity : Activity() {
             val conn = OrionConnectionStore.get(this, s.id)
             val c = card()
             c.addView(text(s.title, 16f, 0xFFF2F2F2.toInt(), true))
-            c.addView(text(if (conn?.secretAvailable == true) "Connected" + (if (s.needsAccount) " as ${conn?.accountLabel}" else "") else "Not connected", 12f, if (conn?.secretAvailable == true) 0xFF8FD18F.toInt() else 0xFF9A9A9A.toInt()))
+            val status = when {
+                conn?.verified == true && conn.secretAvailable -> "Verified" + (if (s.needsAccount) " as ${conn.accountLabel}" else "")
+                conn?.secretAvailable == true -> "Saved · not verified"
+                else -> "Not connected"
+            }
+            c.addView(text(status, 12f, if (conn?.verified == true && conn.secretAvailable) 0xFF8FD18F.toInt() else 0xFF9A9A9A.toInt()))
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             row.addView(chip(if (conn?.secretAvailable == true) "Replace token" else "Connect") { connectDialog(s) })
             if (conn != null) row.addView(chip("Disconnect") {
@@ -107,9 +112,38 @@ class CapabilityBoardActivity : Activity() {
                 val label = if (s.needsAccount) account.text.toString().trim() else s.title
                 val token = secret.text.toString().trim().replace(" ", "")
                 val ok = (!s.needsAccount || label.contains("@")) && OrionConnectionStore.saveAuthorizedToken(this, s.id, label, token, setOf(s.scope))
-                if (ok) { CapabilityBoard.resolved(this, s.id); Toast.makeText(this, "${s.title} connected. Tell Orion to continue.", Toast.LENGTH_LONG).show() }
-                else Toast.makeText(this, "Could not save. Check the address and the token.", Toast.LENGTH_LONG).show()
+                if (!ok) {
+                    Toast.makeText(this, "Could not save. Check the address and the token.", Toast.LENGTH_LONG).show()
+                    render()
+                    return@setPositiveButton
+                }
+                Toast.makeText(this, "Saved securely. Checking access…", Toast.LENGTH_SHORT).show()
                 render()
+                Thread {
+                    val verified = try {
+                        when (s.id) {
+                            "github" -> GithubConnector.get(applicationContext, "/user").startsWith("GITHUB DATA")
+                            "gmail" -> GmailConnector.fetch(applicationContext, "unread", 1).ok
+                            else -> false
+                        }
+                    } catch (_: Exception) { false }
+                    OrionConnectionStore.markVerified(applicationContext, s.id, verified)
+                    if (verified) CapabilityBoard.resolved(applicationContext, s.id)
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        val message = if (verified) {
+                            "${s.title} verified. Orion can now use its read-only tools."
+                        } else {
+                            "${s.title} was saved securely, but access could not be verified. Check the token/app password and network, then replace it and retry."
+                        }
+                        AlertDialog.Builder(this)
+                            .setTitle(if (verified) "Connection verified" else "Connection not verified")
+                            .setMessage(message)
+                            .setPositiveButton("OK", null)
+                            .show()
+                        render()
+                    }
+                }.start()
             }.show()
     }
 }
