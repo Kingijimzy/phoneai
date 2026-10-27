@@ -77,7 +77,7 @@ object McpConnector {
         val safe = selected + "read"
         return if (c.getSharedPreferences(PREFS, 0).edit()
             .putString("allowed_scopes", safe.sorted().joinToString(",")).commit()) {
-            "MCP scopes saved. Read-only access remains enabled; every remote call still requires in-app approval."
+            "MCP scopes saved. Read-only access remains enabled; classified read-only calls do not require a per-call prompt, while write, communication, system and unclassified calls do."
         } else "Could not save MCP scopes."
     }
     fun scopeForTool(name: String): String {
