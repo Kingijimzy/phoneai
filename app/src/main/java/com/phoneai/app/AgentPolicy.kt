@@ -61,23 +61,34 @@ object AgentPolicy {
     fun packOffMessage(pack: String): String =
         "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
 
+    /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
+    internal fun gate(
+        c: Context, pack: String, toolId: String, dangerous: Boolean,
+        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
+    ): GatePolicy.Result = GatePolicy.decide(GatePolicy.Input(
+        pack = pack,
+        packOn = packs.any { it.id == pack } && enabled(c, pack),
+        tool = toolId,
+        mode = mode(c),
+        toolMode = toolMode,
+        autonomous = ToolPermissions.level(c) == "autonomous",
+        dangerous = dangerous,
+        approvedThisAction = approvedThisAction,
+        trustedForPack = isTrustedFor(c, pack),
+        allowlisted = allowed(c, pack, toolId),
+        askedThisTask = askedThisTask
+    ))
+
+    /** Existing callers keep their RuleResult shape; the decision itself comes from GatePolicy. */
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
-        if (packs.none { it.id == pack } || !enabled(c, pack)) return RuleResult(Decision.DENY, packOffMessage(pack))
-        if (pack == "trading_research" && toolId.contains("order", true)) return RuleResult(Decision.DENY, "Trading research is read-only; order execution is unavailable.")
-        if (mode(c) == Mode.PLAN) return RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
-        if (approvedThisAction) return RuleResult(Decision.ALLOW, "User approved this action.")
-        if (dangerous && !isTrustedFor(c, pack)) return RuleResult(Decision.NEED_APPROVAL, "Consequential action needs clear confirmation.")
-        // The explicit Autonomous setting is the user's standing instruction for routine
-        // task steps. It does not bypass pack enablement, DENY rules, Android permissions,
-        // sensitive-action checks, or the dedicated confirmations in AgentHooks.
-        if (ToolPermissions.level(c) == "autonomous" && !dangerous)
-            return RuleResult(Decision.ALLOW, "Autonomous mode: routine task step allowed.")
-        return when (mode(c)) {
-            Mode.PLAN -> RuleResult(Decision.PLAN_ONLY, "Plan mode never executes tools.")
-            Mode.ASK -> RuleResult(Decision.NEED_APPROVAL, "Ask mode requires approval before each action.")
-            Mode.ALLOWLIST -> if (allowed(c, pack, toolId)) RuleResult(Decision.ALLOW, "Tool is allowlisted.") else RuleResult(Decision.NEED_APPROVAL, "Tool is not allowlisted.")
-            Mode.TRUSTED -> if (isTrustedFor(c, pack)) RuleResult(Decision.ALLOW, "Timed trust covers this enabled pack.") else RuleResult(Decision.NEED_APPROVAL, "This pack is not covered by the timed trust session.")
+        val r = gate(c, pack, toolId, dangerous, toolMode = ToolPermissions.mode(c, toolId), askedThisTask = true, approvedThisAction = approvedThisAction)
+        val decision = when (r.verdict) {
+            GatePolicy.Verdict.ALLOW -> Decision.ALLOW
+            GatePolicy.Verdict.DENY -> Decision.DENY
+            GatePolicy.Verdict.PLAN_ONLY -> Decision.PLAN_ONLY
+            GatePolicy.Verdict.ASK_TOOL, GatePolicy.Verdict.NEED_APPROVAL -> Decision.NEED_APPROVAL
         }
+        return RuleResult(decision, r.reason)
     }
 
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
