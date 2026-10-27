@@ -43,7 +43,6 @@ internal object OrionTaskOrchestrator {
         request: String,
         registeredTools: Collection<ToolDefinition>,
         enabledPacks: Set<String>,
-        termuxReady: Boolean,
         permissionStates: Map<String, OrionCapabilityDiscovery.PermissionState> = emptyMap(),
         integration: OrionIntegrationPlanner.Plan? = null
     ): Context {
@@ -51,7 +50,6 @@ internal object OrionTaskOrchestrator {
         val capabilities = OrionCapabilityDiscovery.discover(
             registeredTools = registeredTools,
             enabledPacks = enabledPacks,
-            termuxReady = termuxReady,
             permissionStates = permissionStates,
             integrationStates = integration?.let {
                 mapOf(it.provider.name.lowercase() to it.state.name.lowercase())
