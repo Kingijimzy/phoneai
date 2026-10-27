@@ -58,7 +58,7 @@ class SoulLiveTest {
     }
 
     @Test fun protocolNeverInvitesSecretsInChat() {
-        val text = SoulProtocol.serviceLines(listOf("GitHub" to true, "Gmail (read-only)" to false), false, listOf("book a flight")).joinToString("\n")
+        val text = SoulProtocol.serviceLines(listOf("GitHub" to "connected", "Gmail (read-only)" to "not connected"), false, listOf("book a flight")).joinToString("\n")
         assertTrue(text.contains("GitHub = connected") && text.contains("Gmail (read-only) = not connected") && text.contains("pack: OFF"))
         assertTrue(text.contains("never ask for, accept, repeat or store passwords") && text.contains("connect_service") && text.contains("book a flight"))
     }
