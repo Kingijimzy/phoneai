@@ -12,7 +12,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Runs commands in Orion's private workspace (built-in shell) or in the user's Termux (full Linux tools). */
+/** Orion-owned workspace shell; Termux is an optional backend selected explicitly by the caller. */
 object ShellRunner {
     private const val TERMUX_PKG = "com.termux"
     private const val TERMUX_HOME = "/data/data/com.termux/files/home"
@@ -73,7 +73,8 @@ object ShellRunner {
         finally { pending.remove(id) }
     }
 
-    fun run(c: Context, command: String, where: String): String =
+    /** Built-in Orion execution is the default; external execution is opt-in per call. */
+    fun run(c: Context, command: String, where: String = "builtin"): String =
         if (where.equals("termux", true)) runTermux(c, command) else runBuiltin(c, command)
 
     fun writeFile(c: Context, rel: String, content: String): String {
