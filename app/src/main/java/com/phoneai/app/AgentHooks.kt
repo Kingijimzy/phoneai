@@ -61,6 +61,31 @@ internal object AgentHooks {
   val failed = screenFingerprint(failedScreen)
   return current.isNotBlank() && failed.isNotBlank() && current == failed
  }
+
+ /** One bounded recovery is allowed only when the result indicates a safe, recoverable failure. */
+ fun shouldAttemptRecovery(tool: String, result: String, attempts: Int): Boolean {
+  if (attempts >= 1) return false
+  val text = result.trim().lowercase()
+  if (text.isBlank()) return false
+  val hardStop = listOf(
+   "user cancelled", "user canceled", "user denied", "did not approve", "approval required",
+   "safety gate", "sensitive screen", "permission denied", "blocked by safety", "user declined",
+   "may have partly executed", "ambiguous action", "irreversible", "credentials", "mfa", "captcha"
+  )
+  if (hardStop.any { text.contains(it) }) return false
+  val safeTools = setOf(
+   "tool_help", "skills_list", "service_status", "integration_status", "mcp_status", "mcp_list_tools",
+   "lookup_app", "list_apps", "list_app_deeplinks", "read_screen", "verify_action", "wait_for",
+   "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_wait",
+   "web_search", "live_web_search", "live_news", "weather", "github_public", "bybit_public_ticker",
+   "find_files", "read_notifications", "media_status", "device_info", "time", "battery"
+  )
+  if (tool in safeTools) return true
+  // A failed target lookup is safe to recover from; an action with uncertain side effects is not.
+  val targetMiss = Regex("(?i)(target|element|button|link|text).{0,60}(not found|not visible|could not find|no match|unavailable)").containsMatchIn(text) ||
+   Regex("(?i)(not found|not visible|could not find|no match).{0,60}(target|element|button|link|text)").containsMatchIn(text)
+  return targetMiss && tool in setOf("click_text", "browser_click", "click", "open_app", "browser_navigate")
+ }
  private val phoneActionWords=Regex(
   "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to)\\s+)*(browser|navigate|automation|open|launch|start|tap|click|press|scroll|swipe|type|play|go to|go back|search|send|call|text|message|reply|email|record|turn|switch|screenshot|install|download|close|look at my|check my|fill|login|log in|sign in|research|browse|post|share|buy|order|book|delete|mark as done|undo|reverse last|undo that)\\b",
   RegexOption.IGNORE_CASE
