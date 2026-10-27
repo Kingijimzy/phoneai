@@ -10,33 +10,31 @@ class OrionCapabilityDiscoveryTest {
         ToolDefinition(name, "$name {}", "test", access)
 
     @Test fun disabledPackBlocksRegisteredTool() {
-        val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("weather")), emptySet(), termuxReady = true)
+        val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("weather")), emptySet())
         assertEquals(0, snapshot.availableCount)
         assertTrue(snapshot.tools.single().reason.contains("disabled"))
     }
 
-    @Test fun enabledPackDoesNotMakeTermuxReadyByItself() {
+    @Test fun removedTermuxToolFailsClosedInsteadOfBeingAdvertised() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("termux_command", ToolAccess.WRITE)),
-            setOf("termux_bridge"),
-            termuxReady = false
+            setOf("workspace_shell")
         )
         assertFalse(snapshot.tools.single().available)
-        assertTrue(snapshot.tools.single().reason.contains("not ready"))
+        assertTrue(snapshot.tools.single().reason.contains("fail closed"))
     }
 
     @Test fun builtInShellDoesNotDependOnTermuxReadiness() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("shell", ToolAccess.WRITE)),
             setOf("workspace_shell"),
-            termuxReady = false
         )
         assertTrue(snapshot.tools.single().available)
         assertEquals(1, snapshot.availableCount)
     }
 
     @Test fun unmappedToolFailsClosed() {
-        val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("invented_tool")), setOf("orion_core"), true)
+        val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("invented_tool")), setOf("orion_core"))
         assertFalse(snapshot.tools.single().available)
         assertTrue(snapshot.tools.single().reason.contains("fail closed"))
     }
@@ -45,7 +43,6 @@ class OrionCapabilityDiscoveryTest {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("resolve_contact")),
             setOf("messaging"),
-            termuxReady = true,
             permissionStates = mapOf("contacts" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
         assertFalse(snapshot.tools.single().available)
@@ -53,7 +50,7 @@ class OrionCapabilityDiscoveryTest {
     }
 
     @Test fun unknownPermissionIsNotReportedAsGranted() {
-        val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("read_notifications")), setOf("phone_control"), true)
+        val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("read_notifications")), setOf("phone_control"))
         assertFalse(snapshot.tools.single().available)
         assertTrue(snapshot.tools.single().reason.contains("unverified"))
     }
@@ -62,7 +59,6 @@ class OrionCapabilityDiscoveryTest {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
             setOf("trading_research"),
-            termuxReady = true
         )
         assertEquals(1, snapshot.availableCount)
         assertTrue(snapshot.promptLines().any { it.contains("weather(read)") })
