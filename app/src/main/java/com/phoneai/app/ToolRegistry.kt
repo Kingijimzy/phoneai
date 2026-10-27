@@ -154,6 +154,7 @@ internal object ToolRegistry {
         "browser" to Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|page|online|internet|news|weather|research|chrome|download)\\b"),
         "trading" to Regex("(?i)\\b(bybit|trade|trading|crypto|bitcoin|btc|eth|coin|price|ticker|chart|market)\\b"),
         "telegram" to Regex("(?i)\\btelegram\\b"),
+        "connectors" to Regex("(?i)\\b(connect|connected|connectors|account|authorize|authorization|integration|integrations|gmail|email|inbox|github)\\b"),
         "mcp" to Regex("(?i)\\b(mcp|connector|server)\\b"),
         "github" to Regex("(?i)\\b(github|repo|repository|release|actions)\\b"),
         "tasks" to Regex("(?i)\\b(task|tasks|todo|remind|reminder|deadline|skill|skills)\\b"),
@@ -165,7 +166,8 @@ internal object ToolRegistry {
         name == "bybit_public_ticker" -> "trading"
         name.startsWith("telegram_") -> "telegram"
         name.startsWith("mcp_") || name == "integration_status" -> "mcp"
-        name == "github_public" -> "github"
+        name == "github_public" || name == "github_account_read" -> "github"
+        name == "gmail_list_messages" || name in setOf("connect_service", "service_status", "standing_order", "vault_list", "vault_request", "capability_note") -> "connectors"
         name.startsWith("task_") || name == "skills_list" -> "tasks"
         name in setOf("read_notifications", "notification_action", "media_status", "media_control") -> "media"
         else -> null
