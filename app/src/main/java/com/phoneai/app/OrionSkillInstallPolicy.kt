@@ -4,7 +4,7 @@ package com.phoneai.app
  * Guardrail for Orion's self-extension workflow.
  *
  * Downloaded plugins are proposals, not executable trust. Only declarative manifests that bind
- * already-registered native tools may be enabled automatically after the user's explicit approval.
+ * already-registered native tools may be enabled after explicit user approval.
  * Native code, shell scripts, APKs, browser extensions, and arbitrary URLs are never run as skills.
  */
 internal object OrionSkillInstallPolicy {
@@ -54,11 +54,26 @@ internal object OrionSkillInstallPolicy {
             reasons += "Repository package signature or pinned integrity hash is not verified."
         }
         val missing = manifest.requestedCapabilities - registeredCapabilities
-        if (missing.isNotEmpty()) reasons += "Required capabilities are not registered: " + missing.sorted().joinToString(", ")
-        if (reasons.any { it.startsWith("Invalid") || it.startsWith("Version") || it.startsWith("Executable") || it.startsWith("Skill source") || it.startsWith("Repository") }) {
-            return Review(ReviewStatus.REJECTED, missing, reasons, true, false)
+        if (missing.isNotEmpty()) {
+            // Approval cannot make an unknown capability safe or registered. Reject instead of
+            // misleading the user into thinking approval alone can grant a new tool.
+            reasons += "Required capabilities are not registered: " + missing.sorted().joinToString(", ")
         }
-        if (missing.isNotEmpty()) return Review(ReviewStatus.NEEDS_USER_APPROVAL, missing, reasons, true, false)
+
+        val permanentlyRejected = reasons.any {
+            it.startsWith("Invalid") ||
+                it.startsWith("Version") ||
+                it.startsWith("Description") ||
+                it.startsWith("Skill must") ||
+                it.startsWith("One or more") ||
+                it.startsWith("Executable") ||
+                it.startsWith("Skill source") ||
+                it.startsWith("Repository") ||
+                it.startsWith("Required capabilities")
+        }
+        if (permanentlyRejected) {
+            return Review(ReviewStatus.REJECTED, missing, reasons, false, false)
+        }
         if (!userApproved) {
             reasons += "User approval is required before enabling this skill."
             return Review(ReviewStatus.NEEDS_USER_APPROVAL, emptySet(), reasons, true, false)
