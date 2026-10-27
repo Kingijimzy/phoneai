@@ -4,13 +4,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LinuxRuntimePolicyTest {
-    private val good = LinuxRuntimePolicy.Manifest("3.20.3", "https://dl-cdn.alpinelinux.org/x.tar.gz", "a".repeat(64), 3_000_000L)
+    private val good = LinuxRuntimePolicy.Manifest(
+        version = "3.22.7",
+        rootfsUrl = "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.7-aarch64.tar.gz",
+        rootfsSha256 = "a".repeat(64),
+        rootfsBytes = 4_000_000L,
+        prootUrl = "https://example.org/proot-aarch64",
+        prootSha256 = "b".repeat(64),
+        prootBytes = 2_000_000L
+    )
 
-    @Test fun acceptsAPinnedHttpsManifest() {
+    @Test fun acceptsOnlyFullyPinnedHttpsArtifacts() {
         assertNull(LinuxRuntimePolicy.validate(good))
     }
 
-    @Test fun rejectsUnsafeManifests() {
+    @Test fun rejectsUnsafeManifestsAndMissingProotPin() {
         assertNotNull(LinuxRuntimePolicy.validate(good.copy(rootfsUrl = "http://example.com/a.tgz")))
         assertNotNull(LinuxRuntimePolicy.validate(good.copy(rootfsUrl = "https://example.com/a b.tgz")))
         assertNotNull(LinuxRuntimePolicy.validate(good.copy(rootfsSha256 = "ABC")))
@@ -18,6 +26,9 @@ class LinuxRuntimePolicyTest {
         assertNotNull(LinuxRuntimePolicy.validate(good.copy(version = "../etc")))
         assertNotNull(LinuxRuntimePolicy.validate(good.copy(rootfsBytes = 0)))
         assertNotNull(LinuxRuntimePolicy.validate(good.copy(rootfsBytes = LinuxRuntimePolicy.MAX_ROOTFS_BYTES + 1)))
+        assertNotNull(LinuxRuntimePolicy.validate(good.copy(prootSha256 = "")))
+        assertNotNull(LinuxRuntimePolicy.validate(good.copy(prootBytes = LinuxRuntimePolicy.MAX_PROOT_BYTES + 1)))
+        assertNotNull(LinuxRuntimePolicy.validate(good.copy(prootUrl = "http://example.org/proot")))
     }
 
     @Test fun sha256MatchesTheStandardTestVector() {
@@ -32,8 +43,8 @@ class LinuxRuntimePolicyTest {
     }
 
     @Test fun readyOnlyForTheInstalledVersion() {
-        assertTrue(LinuxRuntimePolicy.isReady("3.20.3", good))
-        assertFalse(LinuxRuntimePolicy.isReady("3.19.0", good))
+        assertTrue(LinuxRuntimePolicy.isReady("3.22.7", good))
+        assertFalse(LinuxRuntimePolicy.isReady("3.21.0", good))
         assertFalse(LinuxRuntimePolicy.isReady(null, good))
     }
 
@@ -50,6 +61,7 @@ class LinuxRuntimePolicyTest {
         assertNull(LinuxRuntimePolicy.prootArgs("proot", "/rootfs", "ls"))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "rootfs", "ls"))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs/../x", "ls"))
+        assertNull(LinuxRuntimePolicy.prootArgs("/bin/../proot", "/rootfs", "ls"))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "   "))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "a".repeat(LinuxRuntimePolicy.MAX_COMMAND + 1)))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "ls\u0000"))
