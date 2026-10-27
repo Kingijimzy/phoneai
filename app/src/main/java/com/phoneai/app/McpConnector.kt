@@ -135,7 +135,7 @@ object McpConnector {
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
             ". Local endpoint approval: " + pairing +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
-            ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
+            ". Classified read-only tools run without per-call prompts; write, communication, system and unclassified tools require approval. Unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
     }
 
     @Volatile private var sessionId: String? = null
