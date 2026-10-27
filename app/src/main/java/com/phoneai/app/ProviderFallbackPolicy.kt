@@ -20,7 +20,7 @@ internal object ProviderFallbackPolicy {
         if (!autoSwitchEnabled) return false
 
         val chain = generateSequence(error) { it.cause }.take(6).toList()
-        if (chain.any { it is InterruptedException || it is InterruptedIOException && it !is SocketTimeoutException }) {
+        if (chain.any { it is InterruptedException || (it is InterruptedIOException && it !is SocketTimeoutException) }) {
             return false
         }
 
@@ -65,7 +65,7 @@ internal object ProviderFallbackPolicy {
             message.contains("overloaded")) return true
 
         val status = (error as? AiException)?.httpStatus
-        if (status == 429 || status in 500..599) return true
+        if (status == 429 || (status != null && status in 500..599)) return true
 
         // Some HTTP/provider adapters wrap the status in a RuntimeException rather than AiException.
         if (Regex("\\bhttp\\s*(429|5\\d\\d)\\b").containsMatchIn(message)) return true
