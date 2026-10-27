@@ -265,7 +265,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
-        val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
+        val actionTools = setOf("open_app", "play_store_search", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
         val shouldVerifyAction = tool in actionTools &&
             (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
         // Capture a real pre-action state where possible, so a later comparison can
