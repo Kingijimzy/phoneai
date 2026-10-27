@@ -35,6 +35,10 @@ object ShellRunner {
     fun termuxInstalled(c: Context): Boolean = try { c.packageManager.getPackageInfo(TERMUX_PKG, 0); true } catch (_: Exception) { false }
 
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20): String {
+        // Defense in depth: callers must still obtain approval for ASK-class commands.
+        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
+            return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
+        }
         return try {
             val p = ProcessBuilder("/system/bin/sh", "-c", command).directory(workspace(c)).redirectErrorStream(true).start()
             val out = StringBuilder()
