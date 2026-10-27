@@ -14,6 +14,32 @@ class OrionIntegrationPlannerTest {
             OrionIntegrationPlanner.providerFor("read my Gmail messages"))
         assertEquals(OrionIntegrationPlanner.Provider.TERMUX,
             OrionIntegrationPlanner.providerFor("install the missing tool in Termux"))
+        assertEquals(OrionIntegrationPlanner.Provider.BUILTIN_SHELL,
+            OrionIntegrationPlanner.providerFor("open the built-in terminal and check the workspace"))
+    }
+
+    @Test
+    fun builtInShellIsAvailableWithoutTermux() {
+        val plan = OrionIntegrationPlanner.plan(
+            OrionIntegrationPlanner.Provider.BUILTIN_SHELL,
+            OrionIntegrationPlanner.State.CONNECTED,
+            "check the workspace with the built-in terminal",
+            setOf("shell.execute")
+        )
+        assertEquals(OrionIntegrationPlanner.NextStep.USE_EXISTING, plan.nextStep)
+        assertFalse(plan.mayReadPrivateData)
+        assertTrue(plan.explanation.contains("built-in Android shell"))
+    }
+
+    @Test
+    fun builtInShellWithoutItsToolIsNotClaimedAsAvailable() {
+        val plan = OrionIntegrationPlanner.plan(
+            OrionIntegrationPlanner.Provider.BUILTIN_SHELL,
+            OrionIntegrationPlanner.State.CAPABILITY_MISSING,
+            "use the built-in shell",
+            emptySet()
+        )
+        assertEquals(OrionIntegrationPlanner.NextStep.ASK_TO_ENABLE_OR_INSTALL, plan.nextStep)
     }
 
     @Test
