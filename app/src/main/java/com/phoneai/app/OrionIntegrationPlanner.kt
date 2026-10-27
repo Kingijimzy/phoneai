@@ -146,6 +146,7 @@ internal object OrionIntegrationPlanner {
             NextStep.USE_EXISTING -> if (provider == Provider.BUILTIN_SHELL)
                 "Use Orion's built-in Android shell in its private workspace; do not require Termux. This is a sandboxed Android shell, not a full Linux distribution."
                 else "Use only the already-connected capability and its granted scope."
+            NextStep.VERIFY_SAVED_CONNECTION -> "A credential is saved but not verified. Ask the user to run Verify saved access before using private data."
             NextStep.ASK_TO_CONNECT -> "Explain the requested access and ask the user to authorize the provider."
             NextStep.ASK_TO_ENABLE_OR_INSTALL -> "Explain the missing capability, research a safe supported implementation, and ask before installing or enabling it."
             NextStep.RESEARCH_AND_PROPOSE -> "Verify the live tool registry and connection state, research official integration documentation, then present the concrete missing prerequisite and ask before changing the app or installing anything."
