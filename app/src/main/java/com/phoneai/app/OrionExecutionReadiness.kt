@@ -77,7 +77,7 @@ internal object OrionExecutionReadiness {
                 "A shell entry point is registered and currently available; obey its allowlist and approval rules.",
                 shell, "Inspect command output and exit/result status; never infer task completion from dispatch alone.", true)
             return Plan(NextStep.PREPARE_SHELL_SETUP,
-                "No shell tool is currently available. Check the Termux bridge/workspace pack and its readiness before claiming execution.",
+                "No shell tool is currently available. Enable Orion's built-in workspace-shell pack; Termux is optional and only needed when explicitly requested.",
                 choose("connect_service", "capability_note"), "Re-run discovery and verify shell readiness before executing.", true)
         }
 
