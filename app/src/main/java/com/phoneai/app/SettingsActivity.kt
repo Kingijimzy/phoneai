@@ -2292,7 +2292,7 @@ class SettingsActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("MCP permissions")
-            .setMessage("Choose the categories Orion may call. Read-only stays enabled. Each remote tool call still requires a separate approval, and server tool names are classified conservatively.")
+            .setMessage("Choose the categories Orion may call. Read-only stays enabled and classified read-only tools do not interrupt you with a per-call prompt. Write, communication, system and unclassified tools require approval; server tool names are classified conservatively.")
             .setView(wrap)
             .setPositiveButton("Save scopes") { _, _ ->
                 showInfoDialog("MCP permissions", McpConnector.setScopes(this, selected))
