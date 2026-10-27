@@ -780,6 +780,7 @@ class Tools(private val svc: PhoneAiService) {
 
     fun capabilityNote(goal: String, provider: String): String =
         if (CapabilityBoard.note(svc, goal, provider)) "noted on the Capability board. Now research (live_web_search/fetch_url) and propose the safest way to add it; install only after the user approves." else "error: could not note that"
+    fun morningBrief(): String = "BRIEF (live data; relay faithfully):\n" + MorningBrief.build(svc)
 
     fun createAgent(id: String, name: String, tagline: String, persona: String): String =
         AgentProfiles.createCustom(svc, id, name, tagline, persona)

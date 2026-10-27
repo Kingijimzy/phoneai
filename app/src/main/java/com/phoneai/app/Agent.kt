@@ -1743,6 +1743,7 @@ Rules:
             "github_account_read" -> GithubConnector.get(svc, a.optString("path"))
             "gmail_list_messages" -> GmailConnector.read(svc, a.optString("query"), a.optInt("limit", 5))
             "capability_note" -> tools.capabilityNote(a.optString("goal"), a.optString("provider"))
+            "morning_brief" -> tools.morningBrief()
             "create_agent" -> tools.createAgent(a.optString("id"), a.optString("name"), a.optString("tagline"), a.optString("persona"))
             "graph_link" -> tools.graphLink(a.optString("a"), a.optString("relation"), a.optString("b"))
             "graph_query" -> tools.graphQuery(a.optString("entity"))

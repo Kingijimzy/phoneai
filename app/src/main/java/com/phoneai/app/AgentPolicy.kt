@@ -72,7 +72,7 @@ object AgentPolicy {
         "play", "look" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read" -> "workspace_shell"
-        "graph_link", "graph_query", "create_agent", "self_review", "connect_service", "service_status", "capability_note" -> "orion_core"
+        "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
