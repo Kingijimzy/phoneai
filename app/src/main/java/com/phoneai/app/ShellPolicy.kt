@@ -55,7 +55,7 @@ internal object ShellPolicy {
             }
             when {
                 w in readOnly -> {
-                    if (w == "cd" && args.size > 1) return ShellRisk.ASK
+                    if (w == "cd" && args.isNotEmpty()) return ShellRisk.ASK
                     if (w == "find" && Regex("-(exec|delete|ok)\\b").containsMatchIn(seg)) return ShellRisk.ASK
                 }
                 w in workspaceWrite -> if (!args.filter { !it.startsWith("-") }.all { relativeInside(it) }) return ShellRisk.ASK
