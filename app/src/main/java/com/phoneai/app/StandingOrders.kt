@@ -22,12 +22,13 @@ internal object StandingOrderPolicy {
         "brief" to "the live brief (weather, team, prices, tasks)"
     )
     const val MIN_MINUTES = 15
+    const val MAX_MINUTES = 7 * 24 * 60
     const val MAX_ORDERS = 6
 
     fun validate(kind: String, minutes: Int): String? = when {
         kind !in kinds -> "kind must be one of: " + kinds.keys.joinToString()
         minutes < MIN_MINUTES -> "minimum interval is $MIN_MINUTES minutes (saves battery and quota)"
-        minutes > 7 * 24 * 60 -> "maximum interval is one week"
+        minutes > MAX_MINUTES -> "maximum interval is one week"
         else -> null
     }
 
