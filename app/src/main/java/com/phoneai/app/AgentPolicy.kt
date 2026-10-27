@@ -87,7 +87,7 @@ object AgentPolicy {
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
         "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
-        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
+        "lookup_app", "open_app", "play_store_search", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
         "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
         "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
