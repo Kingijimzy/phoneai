@@ -1115,6 +1115,7 @@ Rules:
                 val r = when (fast) {
                     is FastIntents.Intent.PlayMedia -> tools.playMedia(fast.query, fast.app)
                     is FastIntents.Intent.ChromeSearch -> tools.chromeSearch(fast.query)
+                    is FastIntents.Intent.PlayStoreSearch -> tools.playStoreSearch(fast.query)
                 }
                 if (!r.startsWith("error")) {
                     val say = r.replaceFirstChar { it.uppercase() } + "."
