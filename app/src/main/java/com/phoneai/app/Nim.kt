@@ -581,12 +581,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        val primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
-            ?: if (Providers.all.any { configured(it) }) {
-                throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
-            } else {
-                throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
-            }
+        // Fail closed: never spend another provider's quota just because the selected
+        // provider key is missing, invalid, or incompatible with this request.
+        if (!configured(selected)) {
+            throw IllegalStateException(
+                "${selected.label} is selected for ${if (vision) "screen vision" else "chat/command planning"} but is not connected with a usable key. " +
+                    "Orion did not switch providers. Check the selected provider's saved key in Settings."
+            )
+        }
+        val primary = selected
 
         val now = System.currentTimeMillis()
         // Auto-switch may try eligible saved providers in order, but the shared 15-request
