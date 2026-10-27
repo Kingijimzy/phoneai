@@ -5,7 +5,7 @@ import android.content.Context
 /**
  * Orion's lightweight "soul" / executive layer. It does not replace the selected AI model:
  * it supplies verified local context so chat and tool-planning share one view of capabilities,
- * saved connections, enabled skills, and what remains blocked.
+ * verified connections, enabled skills, and what remains blocked.
  */
 internal object OrionSoulEngine {
     fun contextFor(context: Context, request: String): String {
@@ -47,7 +47,14 @@ internal object OrionSoulEngine {
                 enabledSkills.joinToString { skill -> "${skill.id} [tools=${skill.allowedTools.joinToString()}]" }
         }
         lines += SoulProtocol.serviceLines(
-            ServiceCatalog.all.map { it.title to (OrionConnectionStore.get(context, it.id)?.secretAvailable == true) },
+            ServiceCatalog.all.map { service ->
+                val connection = OrionConnectionStore.get(context, service.id)
+                service.title to when {
+                    connection?.secretAvailable == true && connection.verified -> "connected"
+                    connection?.secretAvailable == true -> "saved but not verified"
+                    else -> "not connected"
+                }
+            },
             AgentPolicy.enabled(context, "connected_services"),
             runCatching { CapabilityBoard.open(context).map { it.goal } }.getOrDefault(emptyList())
         )
