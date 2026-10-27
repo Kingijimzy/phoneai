@@ -70,42 +70,57 @@ internal object SoulWatch {
     fun setEnabled(c: Context, v: Boolean) { sp(c).edit().putBoolean("soul_watch_enabled", v).apply() }
     fun lastTick(c: Context) = sp(c).getLong("soul_watch_last", 0L)
 
-    /** Returns a short log line (for tests/diagnostics); throws on hard failure so the runtime can back off. */
+    /**
+     * One watcher tick, run by the background runner. Standing orders are checked on every tick (each has its own
+     * interval). The Gmail/GitHub checks run at most every SoulPolicy interval and only when the user switched them on.
+     * Each check is isolated: one broken account never silences the others or the standing orders.
+     * Throws only after everything else has run, so the runtime can back off and retry the connector checks.
+     */
     fun run(c: Context): String {
         val now = System.currentTimeMillis()
-        if (!SoulPolicy.due(lastTick(c), now)) return "not_due"
         val notes = ArrayList<String>()
+        try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
+        if (!SoulPolicy.due(lastTick(c), now)) return notes.joinToString(",").ifBlank { "not_due" }
         if (!enabled(c)) {
-            try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
-            // Record the tick only after the local work finishes. A thrown failure must remain retryable.
             sp(c).edit().putLong("soul_watch_last", now).apply()
             return notes.joinToString(",").ifBlank { "soul_watch_off" }
         }
-        if (OrionConnectionStore.get(c, "gmail")?.secretAvailable == true && AgentPolicy.enabled(c, "connected_services")) {
-            val r = GmailConnector.fetch(c, "unread", 1)
-            if (r.ok) {
-                val prev = sp(c).getInt("soul_mail_unseen", 0)
-                if (SoulPolicy.mailAlert(prev, r.unseen)) { post(c, 84031, "Orion: new mail", SoulPolicy.mailText(r.unseen, r.headers.firstOrNull())); notes += "mail_alert" }
-                sp(c).edit().putInt("soul_mail_unseen", r.unseen).apply()
-            } else if (r.error.contains("rejected")) {
-                if (!sp(c).getBoolean("soul_mail_bad_notified", false)) { post(c, 84032, "Orion: Gmail needs reconnecting", "The app password was rejected. Open Orion > Capability board to reconnect."); sp(c).edit().putBoolean("soul_mail_bad_notified", true).apply() }
-                notes += "mail_login_failed"
-            } else throw IllegalStateException("mail_unreachable")
-        }
-        if (OrionConnectionStore.get(c, "github")?.secretAvailable == true && AgentPolicy.enabled(c, "connected_services")) {
-            val out = GithubConnector.get(c, "/notifications")
-            if (out.startsWith("GITHUB DATA")) {
-                val n = out.lines().drop(1).count { it.isNotBlank() && !it.startsWith("(empty") }
-                val prev = sp(c).getInt("soul_gh_notes", 0)
-                if (n > prev) { post(c, 84033, "Orion: GitHub activity", "$n unread GitHub notification(s)"); notes += "github_alert" }
-                sp(c).edit().putInt("soul_gh_notes", n).apply()
-            }
-        }
-        // User-defined standing orders ("check my mail every 30 minutes") share the same event-driven tick.
-        try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
-        // Commit the due marker last, so failed network checks can be retried by OrionRuntime backoff.
+        var failure: Exception? = null
+        try { checkMail(c)?.let { notes += it } } catch (e: Exception) { failure = e }
+        try { checkGithub(c)?.let { notes += it } } catch (e: Exception) { if (failure == null) failure = e }
+        // Commit the due marker only after the connector checks finished, so failed checks are retried by backoff.
         sp(c).edit().putLong("soul_watch_last", now).apply()
+        failure?.let { throw it }
         return notes.joinToString(",").ifBlank { "nothing_new" }
+    }
+
+    private fun checkMail(c: Context): String? {
+        if (OrionConnectionStore.get(c, "gmail")?.secretAvailable != true || !AgentPolicy.enabled(c, "connected_services")) return null
+        val r = GmailConnector.fetch(c, "unread", 1)
+        if (r.ok) {
+            val prev = sp(c).getInt("soul_mail_unseen", 0)
+            var note: String? = null
+            if (SoulPolicy.mailAlert(prev, r.unseen)) { post(c, 84031, "Orion: new mail", SoulPolicy.mailText(r.unseen, r.headers.firstOrNull())); note = "mail_alert" }
+            sp(c).edit().putInt("soul_mail_unseen", r.unseen).apply()
+            return note
+        }
+        if (r.error.contains("rejected")) {
+            if (!sp(c).getBoolean("soul_mail_bad_notified", false)) { post(c, 84032, "Orion: Gmail needs reconnecting", "The app password was rejected. Open Orion > Capability board to reconnect."); sp(c).edit().putBoolean("soul_mail_bad_notified", true).apply() }
+            return "mail_login_failed"
+        }
+        throw IllegalStateException("mail_unreachable")
+    }
+
+    private fun checkGithub(c: Context): String? {
+        if (OrionConnectionStore.get(c, "github")?.secretAvailable != true || !AgentPolicy.enabled(c, "connected_services")) return null
+        val out = GithubConnector.get(c, "/notifications")
+        if (!out.startsWith("GITHUB DATA")) return null
+        val n = out.lines().drop(1).count { it.isNotBlank() && !it.startsWith("(empty") }
+        val prev = sp(c).getInt("soul_gh_notes", 0)
+        var note: String? = null
+        if (n > prev) { post(c, 84033, "Orion: GitHub activity", "$n unread GitHub notification(s)"); note = "github_alert" }
+        sp(c).edit().putInt("soul_gh_notes", n).apply()
+        return note
     }
 
     private fun post(c: Context, id: Int, title: String, text: String) {
