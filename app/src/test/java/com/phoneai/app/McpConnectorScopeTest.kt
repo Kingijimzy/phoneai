@@ -20,7 +20,7 @@ class McpConnectorScopeTest {
             "delete_branch" to "write",
             "send_message" to "communication",
             "publish_post" to "communication",
-            "run_command" to "system",
+            "device_status" to "system",
             "unknown_capability" to "other"
         )
         expected.forEach { (name, scope) ->
