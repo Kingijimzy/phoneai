@@ -136,12 +136,12 @@ class SoulEngineActivity : Activity() {
         })
         brain.addView(action("Run local self-test", "Runs built-in diagnostics without changing permissions or sending trades.") {
             runSelfTest()
-        }.apply { layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) } })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         selfTestLine = label("Self-test has not been run in this session.", 11f, 0xFFAAAAAA.toInt())
         brain.addView(selfTestLine)
         brain.addView(action("Open full capability report", "Readiness, configured services and local execution evidence.") {
             startActivity(Intent(this, OrionCapabilityReportActivity::class.java))
-        }.apply { layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(8) } })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         page.addView(brain)
 
         val systems = card()
