@@ -13,7 +13,7 @@ import java.util.UUID
  * The existing SharedPreferences archive is imported once, then SQLite is the source of truth.
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
-internal class OrionConversationRepository private constructor(context: Context) :
+class OrionConversationRepository private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 2) {
 
     data class ChatEvent(val id: String, val sessionId: String, val messageId: String?, val type: String, val status: String, val summary: String, val createdAt: Long)
