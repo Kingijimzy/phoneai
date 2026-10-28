@@ -30,8 +30,11 @@ internal object TarExtractor {
      */
     fun symlinkTargetAllowed(linkPath: String, target: String): Boolean {
         if (target.isEmpty() || target.length > 4096 || target.contains('\u0000')) return false
-        val guestTarget = if (target.startsWith("/")) target.removePrefix("/") else target
-        if (guestTarget.isEmpty() || !entryNameAllowed(guestTarget)) return false
+        val absoluteGuestTarget = target.startsWith("/")
+        val guestTarget = if (absoluteGuestTarget) target.removePrefix("/") else target
+        if (guestTarget.isEmpty() || guestTarget.startsWith("/") ||
+            guestTarget.split('/').any { it.isEmpty() || it == "." && absoluteGuestTarget } ||
+            (absoluteGuestTarget && !entryNameAllowed(guestTarget))) return false
         val parent = linkPath.substringBeforeLast('/', "")
         val combined = if (parent.isEmpty()) guestTarget else "$parent/$guestTarget"
         return try {
