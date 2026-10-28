@@ -764,24 +764,13 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
                 Text("OPEN", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(Color(0xFF292929)).clickable { onOpenBrowser(url) }.padding(horizontal = 9.dp, vertical = 6.dp))
             }
-            AndroidView(
-                factory = { context ->
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.allowFileAccess = false
-                        settings.allowContentAccess = false
-                        webViewClient = WebViewClient()
-                        tag = url
-                        loadUrl(url)
-                    }
-                },
-                update = { view -> if (view.tag != url) { view.tag = url; view.loadUrl(url) } },
-                modifier = Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(8.dp))
+            Text(
+                "Page activity is summarised here to keep the conversation light. Open the page for interactive controls.",
+                color = Color(0xFF858585), fontSize = 10.sp, lineHeight = 14.sp
             )
         }
         if (result.isNotBlank()) Text(result, color = ChatMuted, fontSize = 11.sp, lineHeight = 16.sp)
-        Text("Preview uses Orion's in-chat WebView. Use OPEN for full browser controls or sign-in flows.", color = Color(0xFF858585), fontSize = 9.sp, lineHeight = 13.sp)
+        Text("Interactive pages and sign-in stay in the Browser screen.", color = Color(0xFF858585), fontSize = 9.sp, lineHeight = 13.sp)
     }
 }
 
