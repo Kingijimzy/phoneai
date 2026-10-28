@@ -14,10 +14,11 @@ internal object ShellExecutionRouting {
     /** Linux commands always require explicit confirmation, including the Alpine alias. */
     fun requiresApproval(where: String?): Boolean = backend(where) == Backend.LINUX
 
+    /** Recognize package database mutations even when chained after a shell separator. */
+    fun isPackageOperation(command: String): Boolean =
+        Regex("""(^|[;&|]\s*)apk\s+(add|upgrade|update|fix)\b""").containsMatchIn(command)
+
     /** Package operations legitimately need longer than an interactive shell command. */
-    fun commandTimeoutMs(command: String): Long {
-        val packageOperation = Regex("""(^|[;&|]\s*)apk\s+(add|upgrade|update|fix)\b""")
-            .containsMatchIn(command)
-        return if (packageOperation) 180_000L else 60_000L
-    }
+    fun commandTimeoutMs(command: String): Long =
+        if (isPackageOperation(command)) 180_000L else 60_000L
 }
