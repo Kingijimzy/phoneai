@@ -1224,7 +1224,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         setContentView(composeRoot)
-        addMessage("ai", "Hi. I’m Orion. We can talk naturally here; phone-control commands are handled with a separate permission-aware workflow.")
+        // Do not inject a fake assistant turn into a new conversation. Leaving the transcript
+        // empty lets OrionComposeChatScreen render its actual welcome/prompts state; restored
+        // sessions arrive through onTranscriptRestored from the service.
         if (savedInstanceState == null) {
             intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }?.let { initialPrompt ->
                 window.decorView.postDelayed({
