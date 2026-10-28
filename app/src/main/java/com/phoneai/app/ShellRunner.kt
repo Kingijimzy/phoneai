@@ -136,7 +136,7 @@ object ShellRunner {
 
     /** Package operations legitimately need longer than an interactive shell command. */
     internal fun linuxCommandTimeout(command: String): Long {
-        val packageOperation = Regex("""(^|[;&|]\\s*)apk\\s+(add|upgrade|update|fix)\\b""")
+        val packageOperation = Regex("""(^|[;&|]\s*)apk\s+(add|upgrade|update|fix)\b""")
             .containsMatchIn(command)
         return if (packageOperation) 180_000L else 60_000L
     }
