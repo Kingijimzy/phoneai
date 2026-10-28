@@ -141,7 +141,7 @@ internal class LinuxRuntimeInstaller(
             environment()["PATH"] = "/usr/local/bin:/usr/bin:/bin"
             environment()["TERM"] = "dumb"
             environment()["LANG"] = "C.UTF-8"
-            environment()["TMPDIR"] = prootTmp.absolutePath
+            environment()["TMPDIR"] = "/tmp"
             environment()["PROOT_TMP_DIR"] = prootTmp.absolutePath
             // Required on Android 10+ to execute guest ELF binaries despite app-data W^X policy.
             environment()["PROOT_LOADER"] = prootLoader.absolutePath
