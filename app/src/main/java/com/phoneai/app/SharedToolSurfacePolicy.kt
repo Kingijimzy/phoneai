@@ -25,6 +25,7 @@ internal object SharedToolSurfacePolicy {
             Regex("""(?i)^(please\s+)?(can you\s+|could you\s+|please\s+)?(open|launch|close|switch to|tap|click|press|scroll|swipe|type into|navigate to|read my screen|take a screenshot|record my screen)\b"""),
             Regex("""(?i)^(please\s+)?(search|look up|browse|visit|research|fetch)\b.*\b(web|online|website|latest|current|news|price|weather|release|version|model)\b"""),
             Regex("""(?i)^(what('?s| is)\s+(the\s+)?(current|latest|today'?s|live)\s+)?(weather|news|price|score|forecast|exchange rate|time in)\b"""),
+            Regex("""(?i)^(what is|what's|check|find|show me|compare|look up)\b.*\b(current price|price of|price|weather|news|exchange rate|market price|latest update|live score|forecast|model|release|version)\b"""),
             Regex("""(?i)^(set (an? )?(alarm|timer)|turn (on|off) (the )?(flashlight|torch)|send (a )?(message|sms|telegram)|draft (a )?(text|sms|message)|call [a-z0-9+]|check my battery|read my screen|run (this|the) (shell|linux|python|terminal)\b)"""),
             Regex("""(?i)^(remember (this|that)|save (this|to memory)|recall my|show my memories|update my memory|forget this|list my tasks|create a task|add a task|list my skills|run skill)\b"""),
             Regex("""(?i)^(check|show|open) (my )?(connected services|integrations|browser|task list|skills|memory manager|saved tasks)\b""")
