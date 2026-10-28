@@ -40,6 +40,8 @@ internal class GeminiLiveSession(
     interface Listener {
         fun onStatus(message: String)
         fun onTranscript(text: String, fromModel: Boolean)
+        /** Partial ASR text is display-only and must never trigger a device action. */
+        fun onInterimTranscript(text: String) {}
         fun onInputLevel(level: Float)
         fun onUsage(message: String)
         fun onError(message: String)
@@ -314,7 +316,7 @@ internal class GeminiLiveSession(
         serverContent.optJSONObject("inputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onTranscript(it, false) }
         serverContent.optJSONObject("interimInputTranscription")?.optString("text").orEmpty()
-            .takeIf { it.isNotBlank() }?.let { listener.onTranscript(it, false) }
+            .takeIf { it.isNotBlank() }?.let { listener.onInterimTranscript(it) }
         serverContent.optJSONObject("outputTranscription")?.optString("text").orEmpty()
             .takeIf { it.isNotBlank() }?.let { listener.onTranscript(it, true) }
         val parts = serverContent.optJSONObject("modelTurn")?.optJSONArray("parts")
