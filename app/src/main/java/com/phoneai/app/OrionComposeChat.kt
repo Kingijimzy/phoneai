@@ -473,7 +473,18 @@ fun OrionComposeChatScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
             ) {
-                itemsIndexed(lines, key = { _, item -> item.id }) { _, item -> ChatBubble(item, onBrowser) }
+                itemsIndexed(lines, key = { _, item -> item.id }) { index, item ->
+                    val previousUserMessage = if (item.kind == "ai") {
+                        lines.take(index).lastOrNull { it.kind == "me" }?.text
+                    } else null
+                    ChatBubble(
+                        item = item,
+                        onOpenBrowser = onBrowser,
+                        onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
+                            { onSend(prompt) }
+                        }
+                    )
+                }
                 if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }
             }
         }
