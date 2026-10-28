@@ -290,9 +290,12 @@ fun OrionComposeChatScreen(
     onBrowser: (String?) -> Unit,
     onTasks: () -> Unit,
     onMenuAction: (String) -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onRetry: (String) -> Unit,
+    onEditSend: (String, String) -> Unit
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
     val composerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -487,9 +490,10 @@ fun OrionComposeChatScreen(
                         item = item,
                         onOpenBrowser = onBrowser,
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
-                            { onSend(prompt) }
+                            { onRetry(prompt) }
                         },
                         onEdit = if (item.kind == "me") { message ->
+                            editingOriginal = message
                             draft = message
                             composerFocusRequester.requestFocus()
                             keyboardController?.show()
@@ -579,14 +583,26 @@ fun OrionComposeChatScreen(
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
-                            if (draft.isNotBlank() || selectedImages.isNotEmpty()) { onSend(draft.trim()); draft = "" }
+                            if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
+                                val value = draft.trim()
+                                val original = editingOriginal
+                                if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
+                                draft = ""
+                                editingOriginal = null
+                            }
                         }), maxLines = 5
                     )
                 }
                 ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
                 Spacer(Modifier.width(5.dp))
                 ComposerButton(Icons.Rounded.Send, "Send message", {
-                    if (draft.isNotBlank() || selectedImages.isNotEmpty()) { onSend(draft.trim()); draft = "" }
+                    if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
+                                val value = draft.trim()
+                                val original = editingOriginal
+                                if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
+                                draft = ""
+                                editingOriginal = null
+                            }
                 }, secondary = false)
             }
             Row(
