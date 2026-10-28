@@ -19,7 +19,7 @@ internal class OrionChatUiState {
     val status = mutableStateOf("READY")
     val chatTitle = mutableStateOf("Orion")
     val commandMode = mutableStateOf(false)
-    val selectedImage = mutableStateOf<Uri?>(null)
+    val selectedImages = mutableStateOf<List<Uri>>(emptyList())
 
     fun setProvider(label: String, ready: Boolean) {
         providerLabel.value = label
@@ -42,8 +42,8 @@ internal class OrionChatUiState {
         commandMode.value = enabled
     }
 
-    fun setSelectedImage(uri: Uri?) {
-        selectedImage.value = uri
+    fun setSelectedImages(uris: List<Uri>) {
+        selectedImages.value = uris.take(4)
     }
 
     fun append(line: OrionChatLine) {

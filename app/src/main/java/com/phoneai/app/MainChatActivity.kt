@@ -41,7 +41,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private lateinit var input: EditText
     private lateinit var send: TextView
     private lateinit var stop: TextView
-    private var selectedImageUri: Uri? = null
+    private val selectedImageUris = mutableListOf<Uri>()
     private var imagePreviewPanel: LinearLayout? = null
     private var commandMode = false
     private lateinit var talkModeChip: LinearLayout
@@ -65,7 +65,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeStatus get() = chatUiState.status
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
-    private val composeSelectedImage get() = chatUiState.selectedImage
+    private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -1225,7 +1225,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     status = composeStatus.value,
                     chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
-                    selectedImage = composeSelectedImage.value,
+                    selectedImages = composeSelectedImages.value,
                     providerLabel = composeProviderLabel.value,
                     modelLabel = composeModelLabel.value,
                     providerReady = composeProviderReady.value,
@@ -1244,7 +1244,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() }
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() }
                 )
             }
         }
@@ -1321,17 +1321,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 44 && resultCode == RESULT_OK) {
-            val uri = data?.data
-            if (uri != null) {
+            val chosen = ArrayList<Uri>()
+            data?.clipData?.let { clip ->
+                for (index in 0 until minOf(clip.itemCount, 4)) chosen.add(clip.getItemAt(index).uri)
+            }
+            data?.data?.let { if (chosen.isEmpty()) chosen.add(it) }
+            val flags = data?.flags ?: 0
+            chosen.distinct().take(4).forEach { uri ->
                 try {
-                    val granted = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    val granted = flags and Intent.FLAG_GRANT_READ_URI_PERMISSION
                     if (granted != 0) contentResolver.takePersistableUriPermission(uri, granted)
-                } catch (_: Exception) {
-                    // Some photo providers grant only temporary access; the current selection can still be used.
-                }
-                selectedImageUri = uri
-                composeSelectedImage.value = uri
-                refreshImagePreview(uri)
+                } catch (_: Exception) { /* Temporary read access is sufficient for this selection. */ }
+            }
+            if (chosen.isNotEmpty()) {
+                selectedImageUris.clear()
+                selectedImageUris.addAll(chosen.distinct().take(4))
+                composeSelectedImages.value = selectedImageUris.toList()
+                refreshImagePreview(selectedImageUris.firstOrNull())
             }
         }
     }
@@ -1377,7 +1383,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             contentDescription = "Remove attached image"
             setPadding(dp(10), dp(2), dp(5), dp(2))
             setOnClickListener {
-                selectedImageUri = null
+                selectedImageUris.clear()
+                composeSelectedImages.value = emptyList()
                 refreshImagePreview(null)
             }
         }
@@ -1408,8 +1415,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     private fun sendMessage() {
         val value = input.text.toString().trim()
-        val imageUri = selectedImageUri
-        if (value.isEmpty() && imageUri == null) return
+        val imageUris = selectedImageUris.toList()
+        if (value.isEmpty() && imageUris.isEmpty()) return
         val service = PhoneAiService.instance
         if (service == null) {
             Toast.makeText(this, "Enable Orion in Accessibility settings first.", Toast.LENGTH_LONG).show()
@@ -1417,13 +1424,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             return
         }
         input.setText("")
-        if (imageUri != null) {
-            val question = value.ifBlank { "Describe this image and explain anything important I should notice." }
+        if (imageUris.isNotEmpty()) {
+            val question = value.ifBlank { "Describe these images and explain anything important I should notice. Compare them when useful." }
             addMessage("me", question)
-            addImageBubble(imageUri)
-            selectedImageUri = null
+            imageUris.forEach { addImageBubble(it) }
+            selectedImageUris.clear()
+            composeSelectedImages.value = emptyList()
             refreshImagePreview(null)
-            service.analyzeImageFromMainChat(imageUri, question)
+            service.analyzeImagesFromMainChat(imageUris, question)
         } else {
             service.sendFromMainChat(
                 value,

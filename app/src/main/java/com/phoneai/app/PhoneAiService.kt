@@ -780,67 +780,62 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             ?: throw IllegalArgumentException("Android couldn't decode the selected image. Try a JPG or PNG copy.")
     }
 
-    /** Sends a user-selected image to the configured vision provider without treating its URI as model-readable text. */
-    fun analyzeImageFromMainChat(uri: Uri, question: String) {
+    /** Single-image compatibility entry point. */
+    fun analyzeImageFromMainChat(uri: Uri, question: String) = analyzeImagesFromMainChat(listOf(uri), question)
+
+    /** Analyse up to four selected images in one request so they can be compared together. */
+    fun analyzeImagesFromMainChat(uris: List<Uri>, question: String) {
+        val images = uris.distinct().take(4)
+        if (images.isEmpty()) return
         synchronized(imageAnalysisLock) {
             if (running || imageAnalysisRunning) {
-                main.post { mainChatListener?.onMessage("ai", "Orion is already working on another task. Wait for it to finish before analysing another image.") }
+                main.post { mainChatListener?.onMessage("ai", "Orion is already working on another task. Wait for it to finish before analysing these images.") }
                 return
             }
             imageAnalysisRunning = true
         }
         main.post {
             mainChatActive = mainChatListener != null
-            mainChatListener?.onStatus("Analysing your image", OrbView.Mode.THINKING)
+            mainChatListener?.onStatus("Analysing " + images.size + " image(s)", OrbView.Mode.THINKING)
         }
         Thread({
             try {
-                val bitmap = decodeVisionBitmap(uri)
-                val bytes = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
-                bitmap.recycle()
-                if (bytes.size() == 0) throw IllegalArgumentException("The image converted to an empty file. Try another image.")
-                if (bytes.size() > 5 * 1024 * 1024) throw IllegalArgumentException("This image is still too large after compression. Choose a smaller image or screenshot.")
-                val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
-                val content = JSONArray()
-                    .put(JSONObject().put("type", "text").put("text", question))
-                    .put(JSONObject().put("type", "image_url").put("image_url",
-                        JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
+                val content = JSONArray().put(JSONObject().put("type", "text").put("text", question))
+                var totalBytes = 0
+                images.forEachIndexed { index, uri ->
+                    val bitmap = decodeVisionBitmap(uri)
+                    val bytes = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
+                    bitmap.recycle()
+                    if (bytes.size() == 0) throw IllegalArgumentException("Image " + (index + 1) + " converted to an empty file. Try JPG or PNG.")
+                    totalBytes += bytes.size()
+                    if (totalBytes > 8 * 1024 * 1024) throw IllegalArgumentException("The selected images exceed the combined 8 MB upload budget. Remove an image or choose smaller screenshots.")
+                    val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                    content.put(JSONObject().put("type", "text").put("text", "Image " + (index + 1) + " of " + images.size))
+                    content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
+                }
                 val messages = JSONArray()
-                    .put(JSONObject().put("role", "system").put("content",
-                        "You are Orion, a helpful visual assistant. Describe only what is visible, distinguish observation from inference, and ask for clarification if the image is unclear. Never claim to identify details that cannot be seen."))
+                    .put(JSONObject().put("role", "system").put("content", "You are Orion, a helpful visual assistant. Analyse all supplied images together when relevant. Describe only what is visible, distinguish observation from inference, and never claim details that cannot be seen."))
                     .put(JSONObject().put("role", "user").put("content", content))
-                val reply = Nim(this).chat(messages, true, 420, 0.2).trim()
+                val reply = Nim(this).chat(messages, true, 520, 0.2).trim()
                 main.post {
-                    mainChatListener?.onMessage("ai", if (reply.isBlank()) "I couldn't get a useful answer from that image. Please try again." else reply)
+                    mainChatListener?.onMessage("ai", if (reply.isBlank()) "I could not get a useful answer from those images. Please try again." else reply)
                     mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
                 }
             } catch (e: Exception) {
                 val reason = (e.message ?: "unknown error").take(320)
                 val guidance = when {
-                    reason.contains("No AI key", true) || reason.contains("key saved", true) ->
-                        " Open Settings → AI providers and save a key for a vision-capable provider."
-                    reason.contains("vision model", true) || reason.contains("no vision", true) ||
-                        reason.contains("supports this request type", true) ->
-                        " The selected model may be text-only. In Settings → AI providers, choose a provider and model that explicitly supports image input."
-                    reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) ->
-                        " The provider may be out of free quota or credit. Orion only tries one saved backup after an HTTP 429; if that fails, wait for the limit to reset or review the selected provider."
-                    reason.contains("503", true) || reason.contains("temporarily busy", true) ||
-                        reason.contains("service unavailable", true) ->
-                        " This is usually a temporary provider outage, not an unreadable image. Orion does not rotate providers for this error. Check the selected provider/model or retry later."
-                    reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) ||
-                        reason.contains("unsupported", true) ->
-                        " The provider may have rejected this image format or model. Try a smaller JPG/PNG image and verify that the selected model supports vision."
-                    else ->
-                        " Check internet access and the vision provider/model in Settings → AI providers."
+                    reason.contains("No AI key", true) || reason.contains("key saved", true) -> " Open Settings → AI providers and save a key for a vision-capable provider."
+                    reason.contains("vision model", true) || reason.contains("no vision", true) || reason.contains("supports this request type", true) -> " The selected model may be text-only. Choose a provider/model that explicitly supports image input."
+                    reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) -> " The provider may be out of free quota or credit. Review the selected provider or retry after the limit resets."
+                    reason.contains("503", true) || reason.contains("temporarily busy", true) || reason.contains("service unavailable", true) -> " This is usually a temporary provider outage. Check the selected provider/model or retry later."
+                    reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) || reason.contains("unsupported", true) -> " The provider may have rejected the image format or model. Try smaller JPG/PNG images and verify vision support."
+                    else -> " Check internet access and the vision provider/model in Settings → AI providers."
                 }
                 main.post {
                     val visionProvider = Prefs.provider(this, true)
                     val visionModel = Prefs.model(this, visionProvider, true)
-                    mainChatListener?.onMessage(
-                        "ai",
-                        "Image analysis failed. Selected vision model: ${visionProvider.label} / $visionModel. Details: $reason.$guidance Check Settings → AI providers → Vision model; this error does not mean the image itself is unreadable."
-                    )
+                    mainChatListener?.onMessage("ai", "Image analysis failed. Selected vision model: " + visionProvider.label + " / " + visionModel + ". Details: " + reason + "." + guidance + " Check Settings → AI providers → Vision model.")
                     mainChatListener?.onStatus("Image analysis failed · see details", OrbView.Mode.IDLE)
                 }
             } finally {

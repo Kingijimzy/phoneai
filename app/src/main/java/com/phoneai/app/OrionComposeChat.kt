@@ -273,7 +273,7 @@ fun OrionComposeChatScreen(
     status: String,
     chatTitle: String,
     commandMode: Boolean,
-    selectedImage: Uri?,
+    selectedImages: List<Uri>,
     providerLabel: String,
     modelLabel: String,
     providerReady: Boolean,
@@ -285,7 +285,7 @@ fun OrionComposeChatScreen(
     onModeChange: (Boolean) -> Unit,
     onSend: (String) -> Unit,
     onPickImage: () -> Unit,
-    onRemoveImage: () -> Unit,
+    onRemoveImage: (Int) -> Unit,
     onVoice: () -> Unit,
     onBrowser: (String?) -> Unit,
     onTasks: () -> Unit,
@@ -500,20 +500,27 @@ fun OrionComposeChatScreen(
             }
         }
 
-        AnimatedVisibility(selectedImage != null, enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 3 }) {
+        AnimatedVisibility(selectedImages.isNotEmpty(), enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 3 }) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 5.dp)
                     .clip(RoundedCornerShape(14.dp)).background(ChatPanelRaised)
                     .border(1.dp, ChatHairline, RoundedCornerShape(14.dp)).padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                selectedImage?.let { ImageThumbnail(it, Modifier.size(width = 48.dp, height = 48.dp)) }
+                selectedImages.take(4).forEachIndexed { index, uri ->
+                    Box(Modifier.size(46.dp)) {
+                        ImageThumbnail(uri, Modifier.fillMaxSize())
+                        Text("×", color = ChatCopy, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd)
+                            .clip(CircleShape).background(Color(0xFF080808)).clickable { onRemoveImage(index) }
+                            .padding(horizontal = 4.dp, vertical = 1.dp))
+                    }
+                }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Image attached", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    Text("Ready to analyse", color = ChatMuted, fontSize = 11.sp)
+                    Text("${selectedImages.size} image${if (selectedImages.size == 1) "" else "s"} attached", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text("Ready to analyse together", color = ChatMuted, fontSize = 11.sp)
                 }
-                Text("Remove", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Remove attached image"; role = Role.Button }.clickable(onClick = onRemoveImage).padding(7.dp))
+                Text("Clear", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable { selectedImages.indices.reversed().forEach(onRemoveImage) }.padding(5.dp))
             }
         }
 
@@ -572,14 +579,14 @@ fun OrionComposeChatScreen(
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
-                            if (draft.isNotBlank() || selectedImage != null) { onSend(draft.trim()); draft = "" }
+                            if (draft.isNotBlank() || selectedImages.isNotEmpty()) { onSend(draft.trim()); draft = "" }
                         }), maxLines = 5
                     )
                 }
                 ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
                 Spacer(Modifier.width(5.dp))
                 ComposerButton(Icons.Rounded.Send, "Send message", {
-                    if (draft.isNotBlank() || selectedImage != null) { onSend(draft.trim()); draft = "" }
+                    if (draft.isNotBlank() || selectedImages.isNotEmpty()) { onSend(draft.trim()); draft = "" }
                 }, secondary = false)
             }
             Row(
