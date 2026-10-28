@@ -30,8 +30,18 @@ internal object ExperiencePolicy {
     fun hasCleanSuccessEvidence(successFlags: List<Boolean>, recordedFailures: Int): Boolean =
         recordedFailures == 0 && successFlags.isNotEmpty() && successFlags.all { it }
 
-    fun gist(request: String): String =
-        MemoryRanking.tokens(request).take(8).sorted().joinToString(" ")
+    fun gist(request: String): String {
+        // Learn task shape, not user content: strip likely credentials and direct identifiers first.
+        val redacted = request
+            .replace(Regex("(?i)https?://\\\\S+|www\\\\.\\\\S+"), " ")
+            .replace(Regex("(?i)\\\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\\\.[A-Z]{2,}\\\\b"), " ")
+            .replace(Regex("(?i)\\\\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passcode|secret|authorization|bearer)\\\\b[^,;\\\\n]{0,100}"), " ")
+            .replace(Regex("(?<!\\\\w)(?:\\\\+?\\\\d[\\\\d ()-]{7,}\\\\d)(?!\\\\w)"), " ")
+        val unsafe = setOf("password", "passcode", "secret", "token", "apikey", "authorization", "bearer", "pin", "otp")
+        return MemoryRanking.tokens(redacted)
+            .filter { it.lowercase() !in unsafe && it.length <= 24 && !it.all(Char::isDigit) }
+            .take(8).sorted().joinToString(" ")
+    }
 
     fun tipFor(tool: String, category: String): String = when (category) {
         "target_not_found" -> "$tool could not find its target: re-read the screen first, then use visible text instead of a guessed id."
