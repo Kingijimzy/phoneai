@@ -86,6 +86,9 @@ import android.webkit.WebViewClient
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.draw.scale
@@ -281,7 +284,6 @@ fun OrionComposeChatScreen(
     onNewChat: () -> Unit,
     onModeChange: (Boolean) -> Unit,
     onSend: (String) -> Unit,
-    onEditMessage: (String) -> Unit,
     onPickImage: () -> Unit,
     onRemoveImage: () -> Unit,
     onVoice: () -> Unit,
@@ -292,6 +294,8 @@ fun OrionComposeChatScreen(
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
+    val composerFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
     val statusDotColor by animateColorAsState(
         targetValue = when {
@@ -485,7 +489,11 @@ fun OrionComposeChatScreen(
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
                             { onSend(prompt) }
                         },
-                        onEdit = if (item.kind == "me") onEditMessage else null
+                        onEdit = if (item.kind == "me") { message ->
+                            draft = message
+                            composerFocusRequester.requestFocus()
+                            keyboardController?.show()
+                        } else null
                     )
                 }
                 if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }
@@ -560,7 +568,7 @@ fun OrionComposeChatScreen(
                     if (draft.isEmpty()) Text(if (commandMode) "Describe the task…" else "Message Orion…", color = ChatMuted, fontSize = 14.sp)
                     BasicTextField(
                         value = draft, onValueChange = { draft = it },
-                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = if (commandMode) "Describe a task for Orion" else "Message Orion" },
+                        modifier = Modifier.fillMaxWidth().focusRequester(composerFocusRequester).semantics { contentDescription = if (commandMode) "Describe a task for Orion" else "Message Orion" },
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
