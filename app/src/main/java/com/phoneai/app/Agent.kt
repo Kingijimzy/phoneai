@@ -130,7 +130,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        val autonomous = ToolPermissions.level(svc) == "autonomous"
         // One pre-flight gate for user DENY and switched-off packs, before any prompt is shown.
         ToolGate.preflightDenial(svc, tool)?.let { denied ->
             try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
@@ -189,13 +188,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
+        val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             tool in setOf("telegram_send", "notification_action", "mcp_call", "sms", "python_exec") ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
         val gate = AgentPolicy.gate(
             svc, pack, tool,
-            dangerous = consequential || (toolIsWrite && !(autonomous && routineNavigation) &&
-                !(autonomous && safeBuiltinShell)),
+            // Per-tool ALLOW is authoritative for routine work. Only actions classified as
+            // consequential keep the separate confirmation requirement.
+            dangerous = consequential,
             toolMode = ToolPermissions.mode(svc, tool),
             askedThisTask = tool in askApproved
         )
