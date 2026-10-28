@@ -31,6 +31,13 @@ class ShellExecutionRoutingTest {
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("echo apk add python3"))
     }
 
+    @Test fun packageMutationDetectionAvoidsCommandTextFalsePositives() {
+        assertTrue(ShellExecutionRouting.isPackageOperation("apk add python3"))
+        assertTrue(ShellExecutionRouting.isPackageOperation("apk update && apk upgrade"))
+        assertTrue(ShellExecutionRouting.isPackageOperation("apk del python3"))
+        assertFalse(ShellExecutionRouting.isPackageOperation("echo apk add python3"))
+    }
+
     @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {
         assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
         assertTrue(TermuxCommandPolicy.isReadOnly("python3 --version"))
