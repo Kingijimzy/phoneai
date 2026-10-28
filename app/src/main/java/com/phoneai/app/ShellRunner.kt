@@ -164,13 +164,24 @@ class ShellResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getIntExtra("id", -1)
         val box = ShellRunner.pending[id] ?: return
-        val r = intent.getBundleExtra("result")
-        box.text = if (r == null) "error: Termux returned no result"
+        val extras = intent.extras
+        val r = intent.getBundleExtra("com.termux.app.extra.PLUGIN_RESULT_BUNDLE")
+            ?: intent.getBundleExtra("result")
+            ?: extras?.keySet()?.mapNotNull { key -> extras.get(key) as? android.os.Bundle }
+                ?.firstOrNull { it.containsKey("stdout") || it.containsKey("exitCode") || it.containsKey("errmsg") }
+        box.text = if (r == null) "error: Termux returned no readable result bundle; outcome is unverified."
         else {
-            val out = r.getString("stdout").orEmpty(); val err = r.getString("stderr").orEmpty()
-            val code = r.getInt("exitCode", 0); val errmsg = r.getString("errmsg").orEmpty()
-            if (errmsg.isNotBlank()) "error: $errmsg"
-            else (if (code == 0) "" else "exit $code\n") + ShellPolicy.clip((out + (if (err.isNotBlank()) "\n" + err else "")).trimEnd()).ifBlank { "(no output)" }
+            val out = r.getString("stdout").orEmpty()
+            val err = r.getString("stderr").orEmpty()
+            val code = if (r.containsKey("exitCode")) r.getInt("exitCode") else Int.MIN_VALUE
+            val termuxError = r.getInt("err", -1)
+            val errmsg = r.getString("errmsg").orEmpty()
+            when {
+                termuxError != -1 -> "error: TERMUX SERVICE ERROR" + if (errmsg.isBlank()) "" else "\\n" + errmsg.take(1000)
+                code == Int.MIN_VALUE -> "error: Termux returned output without an exit status; outcome is unverified."
+                else -> (if (code == 0) "EXIT 0 · SUCCESS\\n" else "error: EXIT $code · FAILED\\n") +
+                    ShellPolicy.clip((out + (if (err.isNotBlank()) "\\nSTDERR\\n" + err else "")).trimEnd()).ifBlank { "(no output)" }
+            }
         }
         box.latch.countDown()
     }
