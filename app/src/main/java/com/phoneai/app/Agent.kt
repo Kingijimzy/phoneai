@@ -1278,7 +1278,7 @@ Rules:
                 }
                 if (allowed != null && allowed.phase == next) managedTask = allowed
             }
-            ui.note("[TASK:${managedTask.phase.name}]\\n$detail")
+            ui.note("[TASK:${managedTask.phase.name}]\n$detail")
         }
         managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
         moveTaskPhase(TaskLifecycle.Phase.PLAN, "Planning the requested outcome")
@@ -1324,6 +1324,8 @@ Rules:
             // before it can be checkpointed or dispatched; the dispatch gate below also
             // rechecks cancellation to close the next small race window.
             if (stopped) {
+                managedTask = managedTask.cancel() ?: managedTask
+                moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped while the model was responding; no planned action was dispatched")
                 AgentCheckpointStore.pause(svc)
                 ui.say("Stopped before the next action could start. I saved the task progress locally.")
                 return
@@ -1385,9 +1387,9 @@ Rules:
                     if (br.startsWith("error")) {
                         managedTask = managedTask.fail() ?: managedTask
                         if (managedTask.phase == TaskLifecycle.Phase.RECOVER) {
-                            ui.note("[TASK:RECOVER]\\nA batched action failed; the next model turn must inspect the result and choose a different safe step")
+                            ui.note("[TASK:RECOVER]\nA batched action failed; the next model turn must inspect the result and choose a different safe step")
                         } else if (managedTask.phase == TaskLifecycle.Phase.RECORD) {
-                            ui.note("[TASK:BLOCKED]\\nRecovery budget exhausted; no further automatic retry will be attempted")
+                            ui.note("[TASK:BLOCKED]\nRecovery budget exhausted; no further automatic retry will be attempted")
                         }
                         break
                     }
@@ -1494,7 +1496,7 @@ Rules:
                 val failedTask = managedTask.fail()
                 if (failedTask?.phase == TaskLifecycle.Phase.RECOVER) {
                     managedTask = failedTask
-                    ui.note("[TASK:RECOVER]\\nFailure classified; preparing a new plan without repeating the same action")
+                    ui.note("[TASK:RECOVER]\nFailure classified; preparing a new plan without repeating the same action")
                     managedTask = managedTask.replan() ?: managedTask
                 } else {
                     managedTask = failedTask ?: managedTask
