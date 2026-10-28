@@ -100,7 +100,9 @@ internal class LinuxRuntimeInstaller(
                 check(markerTemp.renameTo(marker)) { "Could not commit install marker." }
                 check(isReadyIgnoringPackageMarker(manifest)) { "Installed runtime failed readiness checks." }
                 // Clear the interrupted-operation marker only after the fresh rootfs passes all checks.
-                packageOperationMarker.delete()
+                if (packageOperationMarker.exists()) {
+                    check(packageOperationMarker.delete()) { "Could not clear the package recovery marker after rootfs repair." }
+                }
             } catch (failure: Throwable) {
                 rootfs.deleteRecursively()
                 marker.delete()
