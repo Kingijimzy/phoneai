@@ -552,7 +552,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         .setMessage("This permanently removes this archived transcript from this device.")
                         .setNegativeButton("Cancel", null)
                         .setPositiveButton("Delete") { _, _ ->
-                            val deleted = ChatHistoryStore.deleteArchived(this@MainChatActivity, chat.timestamp)
+                            val deleted = ChatHistoryStore.deleteArchivedById(this@MainChatActivity, chat.sessionId)
                             Toast.makeText(this@MainChatActivity, if (deleted) "Conversation deleted" else "Could not delete conversation", Toast.LENGTH_SHORT).show()
                             if (deleted) {
                                 dialog.dismiss()
@@ -565,7 +565,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 card.addView(top)
                 card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
                 card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
-                card.setOnClickListener { showArchivedConversation(chat.title, chat.messages, dates.format(java.util.Date(chat.timestamp))) }
+                card.setOnClickListener { showArchivedConversation(chat.sessionId, chat.title, chat.messages, dates.format(java.util.Date(chat.timestamp))) }
                 rows.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
                 animateIn(card, (index.coerceAtMost(6) * 35L))
             }
@@ -593,7 +593,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         animateIn(root)
     }
 
-    private fun showArchivedConversation(title: String, messages: List<Pair<String, String>>, date: String) {
+    private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
         val dialog = android.app.Dialog(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -635,7 +635,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(8) })
         actions.addView(historyActionButton("Continue chat") {
-            PhoneAiService.instance?.restoreArchivedChat(messages)
+            PhoneAiService.instance?.restoreArchivedChat(sessionId)
                 ?: Toast.makeText(this@MainChatActivity, "Open Orion assistant service first, then try again.", Toast.LENGTH_LONG).show()
             dialog.dismiss()
         }, LinearLayout.LayoutParams(0, -2, 1f))
