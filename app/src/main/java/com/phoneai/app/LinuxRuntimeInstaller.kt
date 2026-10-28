@@ -150,8 +150,8 @@ internal class LinuxRuntimeInstaller(
         if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
         return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
-        else "exit=${result.exitCode}\\n${result.output}" +
-            if (packageRecoveryRequired) "\\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
+        else "exit=${result.exitCode}\n${result.output}" +
+            if (packageRecoveryRequired) "\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
