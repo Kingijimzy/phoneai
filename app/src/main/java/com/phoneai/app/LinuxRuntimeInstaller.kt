@@ -115,9 +115,16 @@ internal class LinuxRuntimeInstaller(
         if (command == "__orion_install__") return "error: internal command is not executable"
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command)
             ?: return "error: Linux command rejected by runtime policy."
-        val result = runProcess(args, rootfs, timeoutMs)
+        val result = try {
+            runProcess(args, rootfs, timeoutMs)
+        } catch (failure: IOException) {
+            // Surface expected pipe/cancellation failures to the caller rather than crashing the terminal.
+            return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
+        } catch (failure: SecurityException) {
+            return "error: Android denied Linux process execution: ${(failure.message ?: "permission denied").take(240)}"
+        }
         return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms"
-        else "exit=${result.exitCode}\n${result.output}"
+        else "exit=${result.exitCode}\\n${result.output}"
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
