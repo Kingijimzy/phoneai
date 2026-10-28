@@ -1,12 +1,14 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.net.ConnectivityManager
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -128,6 +130,11 @@ internal class LinuxRuntimeInstaller(
         if (command == "__orion_install__") return "error: internal command is not executable"
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command)
             ?: return "error: Linux command rejected by runtime policy."
+        // Android's resolver is network-specific. Public DNS literals inside a PRoot guest
+        // can be unreachable on mobile carriers/private DNS, so mirror the active Android
+        // network's resolver list into the private Alpine rootfs before each command.
+        val dnsStatus = syncGuestDns()
+        if (dnsStatus != null) onOutput("Network DNS setup warning: $dnsStatus\\n")
         val packageMutation = ShellExecutionRouting.isPackageOperation(command)
         if (packageMutation) {
             // If Android kills Orion mid-install, this durable marker forces a clean pinned-rootfs
@@ -159,6 +166,29 @@ internal class LinuxRuntimeInstaller(
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
+
+    private fun syncGuestDns(): String? {
+        return try {
+            val manager = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = manager.activeNetwork
+            val servers = network?.let { manager.getLinkProperties(it)?.dnsServers }
+                ?.mapNotNull { it.hostAddress?.substringBefore('%') }
+                ?.filter { it.isNotBlank() && !it.contains('\\n') && !it.contains('\\r') }
+                ?.distinct().orEmpty()
+            val usable = (servers + listOf("1.1.1.1", "8.8.8.8")).distinct().take(4)
+            val etc = File(rootfs, "etc")
+            check(etc.isDirectory) { "Alpine /etc directory is missing" }
+            val resolver = File(etc, "resolv.conf")
+            if (java.nio.file.Files.isSymbolicLink(resolver.toPath())) {
+                check(resolver.delete()) { "could not replace Alpine resolv.conf symlink" }
+            }
+            resolver.writeText(usable.joinToString(separator = "\\n", postfix = "\\n") { "nameserver $it" } +
+                "options timeout:2 attempts:2\\n")
+            null
+        } catch (failure: Exception) {
+            "could not synchronize Android DNS: ${(failure.message ?: failure.javaClass.simpleName).take(120)}"
+        }
+    }
 
     private fun runGuest(root: File, command: String, timeoutMs: Long): ProcessResult {
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, root.absolutePath, command)
