@@ -264,6 +264,7 @@ data class OrionChatLine(
 fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     status: String,
+    chatTitle: String,
     commandMode: Boolean,
     selectedImage: Uri?,
     providerLabel: String,
@@ -326,7 +327,7 @@ fun OrionComposeChatScreen(
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Orion", color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp)
+                Text(chatTitle, color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(5.dp).clip(CircleShape).background(statusDotColor))
                     Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
