@@ -52,6 +52,8 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -279,9 +281,11 @@ fun OrionComposeChatScreen(
     onVoice: () -> Unit,
     onBrowser: (String?) -> Unit,
     onTasks: () -> Unit,
+    onMenuAction: (String) -> Unit,
     onStop: () -> Unit
 ) {
     var draft by remember { mutableStateOf("") }
+    var menuExpanded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val statusDotColor by animateColorAsState(
         targetValue = when {
@@ -346,6 +350,37 @@ fun OrionComposeChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("History", color = ChatMuted, fontSize = 11.sp)
+            }
+            Box {
+                Box(
+                    Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
+                        .clickable { menuExpanded = true }
+                        .semantics { contentDescription = "More chat options"; role = Role.Button },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("⋮", color = ChatCopy, fontSize = 24.sp, lineHeight = 24.sp)
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.background(Color(0xFF10141B))
+                ) {
+                    fun choose(action: String) {
+                        menuExpanded = false
+                        onMenuAction(action)
+                    }
+                    DropdownMenuItem(text = { Text("New Chat", color = ChatCopy) }, onClick = { choose("new_chat") })
+                    DropdownMenuItem(text = { Text("Rename chat", color = ChatCopy) }, onClick = { choose("rename_chat") })
+                    DropdownMenuItem(text = { Text("Model", color = ChatCopy) }, onClick = { choose("model") })
+                    DropdownMenuItem(text = { Text("Clear Chat", color = Color(0xFFE8A6A6)) }, onClick = { choose("clear_chat") })
+                    DropdownMenuItem(text = { Text("Open Terminal", color = ChatCopy) }, onClick = { choose("terminal") })
+                    DropdownMenuItem(text = { Text("Open Browser", color = ChatCopy) }, onClick = { choose("browser") })
+                    DropdownMenuItem(text = { Text("Browse Chat Files", color = ChatCopy) }, onClick = { choose("chat_files") })
+                    DropdownMenuItem(text = { Text("Skills in Session", color = ChatCopy) }, onClick = { choose("skills") })
+                    DropdownMenuItem(text = { Text("MCPs in Session", color = ChatCopy) }, onClick = { choose("mcps") })
+                    DropdownMenuItem(text = { Text("Memories in Session", color = ChatCopy) }, onClick = { choose("memories") })
+                    DropdownMenuItem(text = { Text("Token Usage", color = ChatCopy) }, onClick = { choose("token_usage") })
+                }
             }
             Box(
                 Modifier.clip(RoundedCornerShape(9.dp)).background(modeChipFill)
