@@ -128,7 +128,7 @@ object ShellRunner {
                     } else {
                         runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command))
                     }
-                } else runtime.execute(manifest, command, linuxCommandTimeout(command))
+                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command))
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
