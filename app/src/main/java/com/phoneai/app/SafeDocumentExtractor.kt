@@ -78,7 +78,7 @@ object SafeDocumentExtractor {
         } else decoded
         val trimmed = safeText.trim()
         if (trimmed.isEmpty()) throw IllegalArgumentException("This document is empty.")
-        val bounded = if (trimmed.length > MAX_CHARS) trimmed.take(MAX_CHARS) + "\\n\\n[Document truncated at $MAX_CHARS characters.]" else trimmed
+        val bounded = if (trimmed.length > MAX_CHARS) trimmed.take(MAX_CHARS) + "\n\n[Document truncated at $MAX_CHARS characters.]" else trimmed
         return Extracted(name, mime, bounded, bytes.size)
     }
 }
