@@ -26,6 +26,7 @@ class ShellExecutionRoutingTest {
     @Test fun packageManagerCommandsGetLongerButBoundedTimeout() {
         assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("apk add python3 git nodejs npm"))
         assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("apk update && apk upgrade"))
+        assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("apk del python3"))
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("python3 --version"))
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("echo apk add python3"))
     }
