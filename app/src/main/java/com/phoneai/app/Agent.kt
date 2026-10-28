@@ -338,10 +338,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 .filter { ToolGate.preflightDenial(svc, it.name) == null }
                 .map { it.name }
                 .toSet()
+            val attemptedTools = (0 until ranSteps.length()).mapNotNull { index ->
+                runCatching { ranSteps.getJSONObject(index).optString("tool").takeIf { it.isNotBlank() } }.getOrNull()
+            }.toSet() + tool
             val alternatives = OrionRecoveryPlanner.selectAlternatives(
                 failedTool = tool,
                 result = verifiedResult,
-                registeredAndPermitted = permittedAlternatives
+                registeredAndPermitted = permittedAlternatives,
+                alreadyAttempted = attemptedTools
             )
             val alternativeNote = if (alternatives.isEmpty()) {
                 "\\nRECOVERY OPTIONS: none selected. Resolve the blocker or inspect current state; do not bypass approval."
