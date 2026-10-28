@@ -1662,6 +1662,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
+        runOnUiThread {
+            events.forEach { event ->
+                val label = when (event.type) {
+                    "approval" -> "APPROVAL · ${event.status.uppercase()}"
+                    "tool" -> "TOOL · ${event.status.uppercase()}"
+                    "tool_result" -> "TOOL RESULT · ${event.status.uppercase()}"
+                    else -> "${event.type.uppercase()} · ${event.status.uppercase()}"
+                }
+                val content = "$label\n${event.summary}"
+                if (composeLines.none { it.kind == "note" && it.text == content }) {
+                    composeLines.add(OrionChatLine(event.id.hashCode().toLong(), "note", content))
+                }
+            }
+        }
+    }
+
     override fun onStatus(text: String, mode: OrbView.Mode) {
         runOnUiThread {
             val changed = lastMode != mode
