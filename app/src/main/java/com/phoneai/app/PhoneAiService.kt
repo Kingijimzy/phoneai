@@ -710,7 +710,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
      * This is not a permission bypass: Agent dispatch still checks tool modes, packs, Android
      * grants, and action-specific confirmation before each tool runs.
      */
-    fun executeSharedToolRequest(text: String, source: String = "alternate surface") {
+    fun executeSharedToolRequest(text: String, source: String = "alternate surface", completion: ((String) -> Unit)? = null) {
         val command = text.trim()
         if (command.isEmpty()) return
         main.post {
@@ -735,7 +735,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 } catch (e: Exception) {
                     say("I couldn't complete that request. " + (e.message ?: e.javaClass.simpleName).take(180))
                 } finally {
-                    main.post { finishRun() }
+                    val result = transcript.lastOrNull { it.first == "ai" }?.second
+                        ?: "The request finished without a final response. Check the task transcript."
+                    main.post {
+                        finishRun()
+                        completion?.invoke(result)
+                    }
                 }
             }
         }
