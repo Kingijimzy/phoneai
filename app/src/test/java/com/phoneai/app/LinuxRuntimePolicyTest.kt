@@ -53,6 +53,7 @@ class LinuxRuntimePolicyTest {
         assertEquals("-r", args[1])
         assertEquals("/data/files/linux/rootfs", args[2])
         assertEquals(listOf("/bin/sh", "-c", "printf ORION_PROOT_OK"), args.takeLast(3))
+        assertFalse(args.contains("/usr/bin/env"))
         assertFalse(args.contains("/sdcard"))
     }
 
