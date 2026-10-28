@@ -148,7 +148,7 @@ object ShellRunner {
                     } else {
                         val percent = (current * 100L / total).coerceIn(0L, 100L)
                         val bucket = percent / 10L
-                        if (name != lastStage || bucket != lastProgressBucket || percent == 100L) {
+                        if (name != lastStage || bucket != lastProgressBucket) {
                             lastStage = name
                             lastProgressBucket = bucket
                             onOutput("Preparing Alpine: downloading root filesystem $percent%\n")
