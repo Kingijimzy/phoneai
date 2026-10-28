@@ -101,13 +101,13 @@ object ShellRunner {
         if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
             return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
         }
+        val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
+            .coerceIn(1L, 180L)
         val id = ids.incrementAndGet()
         val box = Pending(); pending[id] = box
         return try {
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
             val cb = PendingIntent.getBroadcast(c, id, Intent(c, ShellResultReceiver::class.java).setAction(ACTION_RESULT).putExtra("id", id), flags)
-            val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
-                .coerceIn(1L, 180L)
             val termuxTimeout = "/data/data/com.termux/files/usr/bin/timeout"
             val i = Intent("com.termux.RUN_COMMAND").setComponent(ComponentName(TERMUX_PKG, "com.termux.app.RunCommandService"))
                 .putExtra("com.termux.RUN_COMMAND_PATH", termuxTimeout)
@@ -116,7 +116,7 @@ object ShellRunner {
                 .putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
                 .putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", cb)
             try { c.startService(i) } catch (_: Exception) { c.startForegroundService(i) }
-            if (!box.latch.await(timeoutSec, TimeUnit.SECONDS)) "error: Termux did not answer within ${timeoutSec}s. Check that Termux has allow-external-apps=true and that Orion has the 'Run commands in Termux environment' permission."
+            if (!box.latch.await(effectiveTimeout + 5L, TimeUnit.SECONDS)) "error: Termux did not answer within ${effectiveTimeout + 5L}s. Check that Termux has allow-external-apps=true and that Orion has the 'Run commands in Termux environment' permission."
             else box.text
         } catch (e: SecurityException) {
             "error: Android refused the Termux call. Grant Orion the permission 'Run commands in Termux environment' (App info > Permissions) and set allow-external-apps=true in ~/.termux/termux.properties."
