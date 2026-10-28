@@ -13,4 +13,11 @@ internal object ShellExecutionRouting {
 
     /** Linux commands always require explicit confirmation, including the Alpine alias. */
     fun requiresApproval(where: String?): Boolean = backend(where) == Backend.LINUX
+
+    /** Package operations legitimately need longer than an interactive shell command. */
+    fun commandTimeoutMs(command: String): Long {
+        val packageOperation = Regex("""(^|[;&|]\s*)apk\s+(add|upgrade|update|fix)\b""")
+            .containsMatchIn(command)
+        return if (packageOperation) 180_000L else 60_000L
+    }
 }
