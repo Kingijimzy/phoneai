@@ -377,10 +377,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     }
                 }
             }
-            if (cancelled) throw java.io.IOException("Stream cancelled by user.")
-            if (answer.isNotEmpty() && !terminalEventSeen) {
-                // EOF without a terminal marker may be a truncated stream; never call it complete.
-                throw java.io.IOException("Stream ended before its completion marker.")
+            if (!StreamCompletionPolicy.isComplete(answer.isNotEmpty(), terminalEventSeen, cancelled)) {
+                throw java.io.IOException(
+                    if (cancelled) "Stream cancelled by user."
+                    else "Stream ended before its completion marker."
+                )
             }
             if (answer.isEmpty() && nonSseBody.isNotBlank()) {
                 // Some OpenAI-compatible gateways ignore stream=true and return a normal JSON body.
