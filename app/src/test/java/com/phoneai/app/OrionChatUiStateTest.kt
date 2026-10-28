@@ -2,7 +2,6 @@ package com.phoneai.app
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,7 +15,7 @@ class OrionChatUiStateTest {
         assertEquals("READY", state.status.value)
         assertEquals("Orion", state.chatTitle.value)
         assertFalse(state.commandMode.value)
-        assertNull(state.selectedImage.value)
+        assertTrue(state.selectedImages.value.isEmpty())
     }
 
     @Test fun providerAndModelUpdatesStayInUiState() {
