@@ -38,6 +38,11 @@ class LinuxRuntimePolicyTest {
         assertFalse(LinuxRuntimePolicy.isReady(null, good))
     }
 
+    @Test fun recoveryEpochInvalidatesPreviouslyInstalledRuntime() {
+        assertTrue(good.version.endsWith("-recovery1"))
+        assertFalse(LinuxRuntimePolicy.isReady("alpine-3.22.7-proot-1a71df0", good))
+    }
+
     @Test fun guestAcceptanceContractChecksSentinelAndArchitecture() {
         val valid = "ORION_PROOT_OK\naarch64\n3.22.7\n"
         assertTrue(valid.contains("ORION_PROOT_OK"))
