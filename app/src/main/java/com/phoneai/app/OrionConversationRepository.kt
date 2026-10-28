@@ -64,6 +64,7 @@ internal class OrionConversationRepository private constructor(context: Context)
         if (prefs.getBoolean(MIGRATED, false)) return
         val db = writableDatabase
         db.beginTransaction()
+        var transactionCommitted = false
         try {
             val active = readLegacyMessages(prefs.getString(ACTIVE_KEY, null))
             if (active.isNotEmpty()) {
@@ -83,10 +84,11 @@ internal class OrionConversationRepository private constructor(context: Context)
                 if (!sessionExists(db, id)) insertSession(db, id, title, timestamp, false, turns)
             }
             db.setTransactionSuccessful()
-            prefs.edit().putBoolean(MIGRATED, true).commit()
+            transactionCommitted = true
         } finally {
             db.endTransaction()
         }
+        if (transactionCommitted) prefs.edit().putBoolean(MIGRATED, true).commit()
     }
 
     @Synchronized
@@ -231,7 +233,7 @@ internal class OrionConversationRepository private constructor(context: Context)
 
     private fun insertMessage(db: SQLiteDatabase, sessionId: String, role: String, content: String, createdAt: Long, order: Int) {
         db.insert("messages", null, ContentValues().apply {
-            put("id", UUID.randomUUID().toString()); put("session_id", sessionId); put("role", role)
+            put("id", sessionId + ":" + order); put("session_id", sessionId); put("role", role)
             put("content", content.take(6000)); put("created_at", createdAt); put("sort_order", order)
         })
     }
