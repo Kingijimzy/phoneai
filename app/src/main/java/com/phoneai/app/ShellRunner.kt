@@ -126,20 +126,13 @@ object ShellRunner {
                     } else if (!runtime.isReady(manifest)) {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
-                        runtime.execute(manifest, command, linuxCommandTimeout(command))
+                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command))
                     }
                 } else runtime.execute(manifest, command, linuxCommandTimeout(command))
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
 
-
-    /** Package operations legitimately need longer than an interactive shell command. */
-    internal fun linuxCommandTimeout(command: String): Long {
-        val packageOperation = Regex("""(^|[;&|]\s*)apk\s+(add|upgrade|update|fix)\b""")
-            .containsMatchIn(command)
-        return if (packageOperation) 180_000L else 60_000L
-    }
 
     fun writeFile(c: Context, rel: String, content: String): String {
         val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
