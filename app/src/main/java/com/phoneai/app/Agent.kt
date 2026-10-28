@@ -1366,7 +1366,15 @@ Rules:
                         ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                         return
                     }
-                    if (br.startsWith("error")) break
+                    if (br.startsWith("error")) {
+                        managedTask = managedTask.fail() ?: managedTask
+                        if (managedTask.phase == TaskLifecycle.Phase.RECOVER) {
+                            ui.note("[TASK:RECOVER]\\nA batched action failed; the next model turn must inspect the result and choose a different safe step")
+                        } else if (managedTask.phase == TaskLifecycle.Phase.RECORD) {
+                            ui.note("[TASK:BLOCKED]\\nRecovery budget exhausted; no further automatic retry will be attempted")
+                        }
+                        break
+                    }
                 }
                 history.put(msg("user", "RESULT: " + sb.toString().take(3500)))
                 compact()
