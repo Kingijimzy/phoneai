@@ -46,6 +46,8 @@ Use these to understand design decisions. Do not wholesale copy implementation: 
 
 ### Phase 2 — Shared agent/task execution
 
+**Lifecycle consistency hardening:** the live loop now validates state transitions instead of unconditionally overwriting the phase, and only advances the success path through VERIFY after the existing completion-evidence gate allows it. Failed tool results remain blocked for inspection; they are not replayed automatically. Integration tests and latest-commit CI are still required.
+
 **Implementation started in the Phase 1 branch:** `Agent.kt` now drives `TaskLifecycle` through planning, capability checks, authorization, execution, verification, recording and blocked/recovery states on the live guarded tool-task path. The existing `OrionExecutionLoop`, `ToolGate`, `CapabilityRegistry`, action checkpointing and per-tool approval checks remain in place. This is not yet a claim that every direct shortcut or specialist-agent path is lifecycle-managed; those routes need separate mapping and tests.
 
 1. Trace the live path from chat input through `Agent.kt` / `AgentRunner.kt` and identify the actual tool dispatcher.
