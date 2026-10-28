@@ -234,6 +234,38 @@ internal class OrionConversationRepository private constructor(context: Context)
     }
 
     @Synchronized
+    fun deleteArchivedById(context: Context, sessionId: String): Boolean {
+        migrateLegacy(context)
+        return writableDatabase.delete("sessions", "id=? AND is_active=0", arrayOf(sessionId)) > 0
+    }
+
+    /** Switch the active pointer to the exact archived session ID; keep all other sessions intact. */
+    @Synchronized
+    fun restoreArchivedById(context: Context, sessionId: String): List<Pair<String, String>>? {
+        migrateLegacy(context)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val exists = db.rawQuery("SELECT is_active FROM sessions WHERE id=?", arrayOf(sessionId)).use {
+                it.moveToFirst() && it.getInt(0) == 0
+            }
+            if (!exists) return null
+            db.update("sessions", ContentValues().apply { put("is_active", 0) }, "is_active=1", null)
+            val changed = db.update("sessions", ContentValues().apply { put("is_active", 1); put("updated_at", System.currentTimeMillis()) },
+                "id=? AND is_active=0", arrayOf(sessionId))
+            if (changed != 1) return null
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs.edit().putString(ACTIVE_ID, sessionId).commit()
+            val messages = readMessages(db, sessionId)
+            val encoded = JSONArray()
+            messages.forEach { (kind, text) -> encoded.put(org.json.JSONObject().put("kind", kind).put("text", text)) }
+            prefs.edit().putString(ACTIVE_KEY, encoded.toString()).commit()
+            db.setTransactionSuccessful()
+            return messages
+        } finally { db.endTransaction() }
+    }
+
+    @Synchronized
     fun deleteArchived(context: Context, timestamp: Long, title: String): Boolean {
         migrateLegacy(context)
         val db = writableDatabase
