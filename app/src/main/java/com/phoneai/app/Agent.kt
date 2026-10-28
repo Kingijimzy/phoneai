@@ -1257,6 +1257,19 @@ Rules:
             ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
             return
         }
+        // TaskLifecycle governs this live tool-task path. Individual calls remain inside EXECUTE;
+        // the overall task can complete only after the existing evidence-based completion gate passes.
+        var managedTask = TaskLifecycle()
+        fun moveTaskPhase(next: TaskLifecycle.Phase, detail: String) {
+            managedTask = managedTask.copy(phase = next)
+            ui.note("[TASK:${next.name}]\\n$detail")
+        }
+        managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
+        moveTaskPhase(TaskLifecycle.Phase.PLAN, "Planning the requested outcome")
+        managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
+        moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools, enabled packs and permissions")
+        managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
+        moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Required approvals remain enforced at each real tool dispatch")
         val requestBudget = AgentHooks.RequestBudget(minOf(MAX_STEPS, AgentPolicy.maxSteps(svc)))
         val taskStartedAt = System.currentTimeMillis()
         var toolCalls = 0
@@ -1269,6 +1282,19 @@ Rules:
         val stall = SessionStall()
         var promiseNudged = false
         while (!stopped && requestBudget.tryConsume()) {
+            if (managedTask.phase == TaskLifecycle.Phase.AUTHORIZE) {
+                managedTask = managedTask.advance() ?: managedTask // AUTHORIZE -> EXECUTE
+                moveTaskPhase(TaskLifecycle.Phase.EXECUTE, "Executing through the existing guarded tool dispatcher")
+            } else if (managedTask.phase == TaskLifecycle.Phase.RECOVER) {
+                managedTask = managedTask.replan() ?: managedTask
+                moveTaskPhase(TaskLifecycle.Phase.PLAN, "Replanning after a bounded failure; previous result remains untrusted")
+                managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
+                moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Rechecking available capabilities before recovery")
+                managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
+                moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Existing dispatch approvals will be applied again")
+                managedTask = managedTask.advance() ?: managedTask // AUTHORIZE -> EXECUTE
+                moveTaskPhase(TaskLifecycle.Phase.EXECUTE, "Resuming with a newly planned action")
+            }
             ui.phase("thinking")
             val raw = try {
                 commandNim.chat(history, false, 800)
@@ -1358,10 +1384,17 @@ Rules:
                 val completion = AgentHooks.completionDecision(command, runEvidence)
                 val outcome = OrionTaskOutcome.reconcile(completion.allowed, runEvidence, runFailed)
                 if (!completion.allowed) {
+                    managedTask = managedTask.block() ?: managedTask
+                    moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Completion verification did not pass: ${completion.reason}")
                     AgentCheckpointStore.pause(svc)
                     ui.say("I stopped before marking this task complete: " + completion.reason + " " + outcome.message + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
+                managedTask = managedTask.advance() ?: managedTask // EXECUTE -> VERIFY
+                moveTaskPhase(TaskLifecycle.Phase.VERIFY, "Checking task-level completion evidence")
+                managedTask = managedTask.verifiedOk()?.advance() ?: managedTask // VERIFY -> COMPLETE only with evidence
+                managedTask = managedTask.advance() ?: managedTask // COMPLETE -> RECORD
+                moveTaskPhase(TaskLifecycle.Phase.RECORD, "Completion evidence passed; recording the final outcome")
                 if (outcome.status == OrionTaskOutcome.Status.COMPLETE_WITH_RECOVERED_FAILURES) {
                     ui.note("⚠️ " + outcome.message + " Evidence: ${outcome.successfulSteps} successful result(s), ${outcome.failedSteps} failed result(s), ${outcome.verifiedSteps} explicitly verified result(s).")
                 } else {
@@ -1426,6 +1459,15 @@ Rules:
             }
             val toolFailure = ToolResultPolicy.failureReason(result)
             if (toolFailure != null) {
+                // Never retry a potentially side-effecting action blindly. Record recovery intent,
+                // then block safely so the next turn can inspect evidence before proceeding.
+                managedTask = managedTask.fail() ?: managedTask
+                if (managedTask.phase == TaskLifecycle.Phase.RECOVER) {
+                    ui.note("[TASK:RECOVER]\\nFailure classified; preparing a new plan without repeating the same action")
+                    managedTask = managedTask.replan() ?: managedTask
+                }
+                managedTask = managedTask.block() ?: managedTask
+                moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Tool '$tool' failed verification or execution; inspect the recorded result before resuming")
                 AgentCheckpointStore.pause(svc)
                 ui.phase("error")
                 ui.say("I couldn't complete the step '$tool'. $toolFailure I paused the task and saved its progress; I have not marked the task complete. Check the current screen before asking me to continue.")
