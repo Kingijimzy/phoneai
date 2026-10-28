@@ -1261,8 +1261,24 @@ Rules:
         // the overall task can complete only after the existing evidence-based completion gate passes.
         var managedTask = TaskLifecycle()
         fun moveTaskPhase(next: TaskLifecycle.Phase, detail: String) {
-            managedTask = managedTask.copy(phase = next)
-            ui.note("[TASK:${next.name}]\\n$detail")
+            // Keep the live state authoritative: never force a phase if TaskLifecycle rejects the transition.
+            if (managedTask.phase != next) {
+                val allowed = when (next) {
+                    TaskLifecycle.Phase.PLAN -> managedTask.advance()
+                    TaskLifecycle.Phase.CHECK_CAPABILITIES,
+                    TaskLifecycle.Phase.AUTHORIZE,
+                    TaskLifecycle.Phase.EXECUTE,
+                    TaskLifecycle.Phase.VERIFY,
+                    TaskLifecycle.Phase.COMPLETE,
+                    TaskLifecycle.Phase.RECORD -> managedTask.advance()
+                    TaskLifecycle.Phase.RECOVER -> managedTask.fail()
+                    TaskLifecycle.Phase.BLOCKED -> managedTask.block()
+                    TaskLifecycle.Phase.CANCELLED -> managedTask.cancel()
+                    TaskLifecycle.Phase.UNDERSTAND -> null
+                }
+                if (allowed != null && allowed.phase == next) managedTask = allowed
+            }
+            ui.note("[TASK:${managedTask.phase.name}]\\n$detail")
         }
         managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
         moveTaskPhase(TaskLifecycle.Phase.PLAN, "Planning the requested outcome")
@@ -1398,10 +1414,16 @@ Rules:
                     ui.say("I stopped before marking this task complete: " + completion.reason + " " + outcome.message + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
-                managedTask = managedTask.advance() ?: managedTask // EXECUTE -> VERIFY
-                moveTaskPhase(TaskLifecycle.Phase.VERIFY, "Checking task-level completion evidence")
-                managedTask = managedTask.verifiedOk()?.advance() ?: managedTask // VERIFY -> COMPLETE only with evidence
-                managedTask = managedTask.advance() ?: managedTask // COMPLETE -> RECORD
+                if (managedTask.phase == TaskLifecycle.Phase.EXECUTE) {
+                    managedTask = managedTask.advance() ?: managedTask // EXECUTE -> VERIFY
+                }
+                if (managedTask.phase == TaskLifecycle.Phase.VERIFY) {
+                    moveTaskPhase(TaskLifecycle.Phase.VERIFY, "Checking task-level completion evidence")
+                    managedTask = managedTask.verifiedOk()?.advance() ?: managedTask // VERIFY -> COMPLETE only with evidence
+                }
+                if (managedTask.phase == TaskLifecycle.Phase.COMPLETE) {
+                    managedTask = managedTask.advance() ?: managedTask // COMPLETE -> RECORD
+                }
                 moveTaskPhase(TaskLifecycle.Phase.RECORD, "Completion evidence passed; recording the final outcome")
                 if (outcome.status == OrionTaskOutcome.Status.COMPLETE_WITH_RECOVERED_FAILURES) {
                     ui.note("⚠️ " + outcome.message + " Evidence: ${outcome.successfulSteps} successful result(s), ${outcome.failedSteps} failed result(s), ${outcome.verifiedSteps} explicitly verified result(s).")
@@ -1469,12 +1491,18 @@ Rules:
             if (toolFailure != null) {
                 // Never retry a potentially side-effecting action blindly. Record recovery intent,
                 // then block safely so the next turn can inspect evidence before proceeding.
-                managedTask = managedTask.fail() ?: managedTask
-                if (managedTask.phase == TaskLifecycle.Phase.RECOVER) {
+                val failedTask = managedTask.fail()
+                if (failedTask?.phase == TaskLifecycle.Phase.RECOVER) {
+                    managedTask = failedTask
                     ui.note("[TASK:RECOVER]\\nFailure classified; preparing a new plan without repeating the same action")
                     managedTask = managedTask.replan() ?: managedTask
+                } else {
+                    managedTask = failedTask ?: managedTask
                 }
-                managedTask = managedTask.block() ?: managedTask
+                // A failed tool is never treated as a verified success. Pause for inspection rather than auto-replaying it.
+                if (managedTask.phase != TaskLifecycle.Phase.RECORD) {
+                    managedTask = managedTask.block() ?: managedTask
+                }
                 moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Tool '$tool' failed verification or execution; inspect the recorded result before resuming")
                 AgentCheckpointStore.pause(svc)
                 ui.phase("error")
