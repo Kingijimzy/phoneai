@@ -33,10 +33,10 @@ internal object ExperiencePolicy {
     fun gist(request: String): String {
         // Learn task shape, not user content: strip likely credentials and direct identifiers first.
         val redacted = request
-            .replace(Regex("(?i)https?://\\\\S+|www\\\\.\\\\S+"), " ")
-            .replace(Regex("(?i)\\\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\\\.[A-Z]{2,}\\\\b"), " ")
-            .replace(Regex("(?i)\\\\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passcode|secret|authorization|bearer)\\\\b[^,;\\\\n]{0,100}"), " ")
-            .replace(Regex("(?<!\\\\w)(?:\\\\+?\\\\d[\\\\d ()-]{7,}\\\\d)(?!\\\\w)"), " ")
+            .replace(Regex("(?i)https?://\\S+|www\\.\\S+"), " ")
+            .replace(Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"), " ")
+            .replace(Regex("(?i)\\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passcode|secret|authorization|bearer)\\b[^,;\\n]{0,100}"), " ")
+            .replace(Regex("(?<!\\w)(?:\\+?\\d[\\d ()-]{7,}\\d)(?!\\w)"), " ")
         val unsafe = setOf("password", "passcode", "secret", "token", "apikey", "authorization", "bearer", "pin", "otp")
         return MemoryRanking.tokens(redacted)
             .filter { it.lowercase() !in unsafe && it.length <= 24 && !it.all(Char::isDigit) }
