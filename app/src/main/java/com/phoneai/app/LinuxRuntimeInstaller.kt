@@ -143,13 +143,15 @@ internal class LinuxRuntimeInstaller(
         } catch (failure: SecurityException) {
             return "error: Android denied Linux process execution: ${(failure.message ?: "permission denied").take(240)}"
         }
-        if (packageMutation && !result.timedOut && result.exitCode == 0) {
-            packageOperationMarker.delete()
-        }
+        // A normal non-zero apk exit is not necessarily corruption (for example, a package may
+        // not exist). Keep recovery armed only for timeout or process-killed exit codes.
+        val packageRecoveryRequired = packageMutation &&
+            (result.timedOut || result.exitCode in setOf(9, 137, 143))
+        if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
         return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
-        else "exit=${result.exitCode}\n${result.output}" +
-            if (packageMutation && result.exitCode != 0) "\nPackage operation failed; the next Linux command will restore the pinned base rootfs before continuing." else ""
+        else "exit=${result.exitCode}\\n${result.output}" +
+            if (packageRecoveryRequired) "\\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
