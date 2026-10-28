@@ -51,8 +51,22 @@ internal class LinuxRuntimeInstaller(
         check(staging.mkdirs()) { "Could not create staging directory." }
         try {
             GZIPInputStream(BufferedInputStream(archive.inputStream())).use { TarExtractor.extract(it, staging) }
-            check(File(staging, "bin/sh").isFile) { "Verified rootfs has no /bin/sh." }
+            val guestShell = File(staging, "bin/sh")
+            check(guestShell.exists()) { "Verified rootfs has no /bin/sh." }
             check(File(staging, "etc/alpine-release").isFile) { "Rootfs is not a valid Alpine installation." }
+
+            // Verify the symlink target and executable mode before invoking PRoot. A file's
+            // existence alone is insufficient: Android's extraction defaults can strip +x.
+            val resolvedShell = runCatching { guestShell.canonicalFile }.getOrNull()
+            check(resolvedShell != null && resolvedShell.isFile) {
+                "Alpine /bin/sh is a broken symlink. Resolved path: ${resolvedShell?.path ?: "unavailable"}"
+            }
+            check(resolvedShell.canExecute()) {
+                "Alpine shell target is not executable: ${resolvedShell.path}; mode restoration failed."
+            }
+            check(guestShell.canExecute()) {
+                "Alpine /bin/sh is not executable after extraction: ${guestShell.path}."
+            }
 
             // Acceptance test runs against staging before touching the working installation.
             val smoke = runGuest(staging, "printf ORION_PROOT_OK; uname -m; cat /etc/alpine-release", 10_000L)
