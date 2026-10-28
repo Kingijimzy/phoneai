@@ -28,8 +28,13 @@ internal class LinuxRuntimeInstaller(
     private val proot = File(app.applicationInfo.nativeLibraryDir, "libproot.so")
     private val prootLoader = File(app.applicationInfo.nativeLibraryDir, "libproot-loader.so")
     private val marker = File(base, "installed-version")
+    /** Survives process death during apk mutation; the next Linux command restores the pinned base rootfs. */
+    private val packageOperationMarker = File(base, "package-operation-in-progress")
 
     fun isReady(manifest: LinuxRuntimePolicy.Manifest): Boolean =
+        !packageOperationMarker.exists() && isReadyIgnoringPackageMarker(manifest)
+
+    private fun isReadyIgnoringPackageMarker(manifest: LinuxRuntimePolicy.Manifest): Boolean =
         LinuxRuntimePolicy.validate(manifest) == null &&
             LinuxRuntimePolicy.isReady(marker.takeIf { it.isFile }?.readText()?.trim(), manifest) &&
             proot.isFile && proot.canExecute() && sha256(proot) == manifest.prootSha256 &&
@@ -93,7 +98,9 @@ internal class LinuxRuntimeInstaller(
                 if (marker.exists()) check(marker.renameTo(markerBackup)) { "Could not back up install marker." }
                 check(staging.renameTo(rootfs)) { "Could not activate new rootfs." }
                 check(markerTemp.renameTo(marker)) { "Could not commit install marker." }
-                check(isReady(manifest)) { "Installed runtime failed readiness checks." }
+                check(isReadyIgnoringPackageMarker(manifest)) { "Installed runtime failed readiness checks." }
+                // Clear the interrupted-operation marker only after the fresh rootfs passes all checks.
+                packageOperationMarker.delete()
             } catch (failure: Throwable) {
                 rootfs.deleteRecursively()
                 marker.delete()
@@ -115,16 +122,32 @@ internal class LinuxRuntimeInstaller(
         if (command == "__orion_install__") return "error: internal command is not executable"
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command)
             ?: return "error: Linux command rejected by runtime policy."
+        val packageMutation = ShellExecutionRouting.isPackageOperation(command)
+        if (packageMutation) {
+            // If Android kills Orion mid-install, this durable marker forces a clean pinned-rootfs
+            // recovery before any later command can use a potentially half-written apk database.
+            try {
+                check(base.mkdirs() || base.isDirectory) { "Could not create Linux runtime directory." }
+                packageOperationMarker.writeText("Interrupted apk operation requires recovery.")
+            } catch (failure: Exception) {
+                return "error: could not protect the Alpine package database before mutation: ${(failure.message ?: failure.javaClass.simpleName).take(180)}"
+            }
+        }
         val result = try {
             runProcess(args, rootfs, timeoutMs)
         } catch (failure: IOException) {
-            // Surface expected pipe/cancellation failures to the caller rather than crashing the terminal.
+            // Keep the marker after interrupted package operations so the next call repairs the rootfs.
             return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
         } catch (failure: SecurityException) {
             return "error: Android denied Linux process execution: ${(failure.message ?: "permission denied").take(240)}"
         }
-        return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms"
-        else "exit=${result.exitCode}\n${result.output}"
+        if (packageMutation && !result.timedOut && result.exitCode == 0) {
+            packageOperationMarker.delete()
+        }
+        return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
+            if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
+        else "exit=${result.exitCode}\n${result.output}" +
+            if (packageMutation && result.exitCode != 0) "\nPackage operation failed; the next Linux command will restore the pinned base rootfs before continuing." else ""
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
