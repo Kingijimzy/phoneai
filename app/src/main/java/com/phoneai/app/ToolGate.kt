@@ -61,12 +61,20 @@ internal object ToolGate {
         else -> "Agent control > Packs"
     }
 
-    /** The live status for the system prompt, read from the same settings the dispatcher uses. */
-    fun statusFor(c: Context): String = summarize(
-        tools = ToolRegistry.all.map { it.name },
-        modeOf = { ToolPermissions.mode(c, it) },
-        packOf = { AgentPolicy.packForTool(it) },
-        packOn = { AgentPolicy.enabled(c, it) },
-        titleOf = { id -> AgentPolicy.packs.firstOrNull { it.id == id }?.title ?: id }
-    )
+    /** The live status for the system prompt, built from the same registry rule the pre-flight gate uses. */
+    fun statusFor(c: Context): String {
+        val rows = ToolRegistry.all.map { it.name }
+            .filterNot { it in ToolPermissionPolicy.alwaysAllowed }
+            .map { tool ->
+                val denied = ToolPermissions.mode(c, tool) == ToolMode.DENY
+                val pack = AgentPolicy.packForTool(tool)
+                val packOn = pack == null || AgentPolicy.enabled(c, pack)
+                CapabilityRegistry.Row(tool, pack, denied, CapabilityRegistry.forBuiltInTool(tool, denied, packOn))
+            }
+        return CapabilityRegistry.statusText(
+            rows = rows,
+            titleOf = { id -> AgentPolicy.packs.firstOrNull { it.id == id }?.title ?: id },
+            howToEnable = { pack -> howToEnable(pack) }
+        )
+    }
 }
