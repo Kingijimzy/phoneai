@@ -305,7 +305,7 @@ fun OrionComposeChatScreen(
     // Scroll only when transcript length changes. Status updates can arrive frequently while
     // a tool/model is running; tying animation to status causes repeated scroll work and fights
     // users who are reading earlier messages.
-    LaunchedEffect(lines.size) {
+    LaunchedEffect(lines.lastOrNull()?.id, lines.lastOrNull()?.text) {
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
     val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
