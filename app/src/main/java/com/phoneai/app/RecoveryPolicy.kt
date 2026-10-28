@@ -3,7 +3,7 @@ package com.phoneai.app
 /**
  * Risk-aware recovery for a failed tool step. Pure rules; Agent.kt applies the decision.
  *
- * - READ_ONLY: transient failures are retried, up to [MAX_READ_RETRIES], with backoff. Other failures replan.
+ * - READ_ONLY: transient and timed-out failures are retried (a read has no side effect), up to [MAX_READ_RETRIES], with backoff. Other failures replan.
  * - DEV_COMMAND (shell): a failing command is diagnosed and the next action must change (replan). Never retried unchanged.
  * - WRITE: a failure that proves nothing was applied (target missing, refused before dispatch) replans.
  *   A timeout or partial result is ambiguous, so it pauses for the user rather than repeating a possible side effect.
@@ -21,7 +21,7 @@ internal object RecoveryPolicy {
     private val ambiguousWords = listOf("timed out", "timeout", "no response", "interrupted", "connection lost", "may have")
     private val transientWords = listOf("temporar", "unavailable", "connection reset", "network", "503", "429", "try again", "rate limit")
     private val missingWords = listOf("not found", "no element", "not visible", "no suitable", "no match", "could not find")
-    private val diagnosticWords = listOf("exit code", "exit status", "failed", "failure", "assert", "test failed", "error:")
+    private val diagnosticWords = listOf("exit code", "exit status", "failed", "failure", "assert", "test failed")
 
     fun riskOf(tool: String, access: ToolAccess, consequential: Boolean): Risk = when {
         consequential -> Risk.CONSEQUENTIAL
@@ -47,7 +47,7 @@ internal object RecoveryPolicy {
         failure == Failure.PERMISSION -> Decision.PAUSE_ASK
         risk == Risk.CONSEQUENTIAL -> Decision.PAUSE_ASK
         failure == Failure.AMBIGUOUS && risk != Risk.READ_ONLY -> Decision.PAUSE_ASK
-        risk == Risk.READ_ONLY && failure == Failure.TRANSIENT ->
+        risk == Risk.READ_ONLY && (failure == Failure.TRANSIENT || failure == Failure.AMBIGUOUS) ->
             if (readRetriesUsed < MAX_READ_RETRIES) Decision.RETRY_READ else Decision.REPLAN
         risk == Risk.READ_ONLY -> Decision.REPLAN
         risk == Risk.DEV_COMMAND -> Decision.REPLAN

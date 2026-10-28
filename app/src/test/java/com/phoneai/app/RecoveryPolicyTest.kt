@@ -33,11 +33,9 @@ class RecoveryPolicyTest {
         assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.DEV_COMMAND, Failure.AMBIGUOUS, 0))
     }
 
-    @Test fun ambiguousReadOutcomeMayRetry() {
-        assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 0).let {
-            if (it == Decision.PAUSE_ASK) Decision.RETRY_READ else it
-        })
-        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 2))
+    @Test fun timedOutReadIsRetriedBecauseReadsHaveNoSideEffects() {
+        assertEquals(Decision.RETRY_READ, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, 0))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.READ_ONLY, Failure.AMBIGUOUS, RecoveryPolicy.MAX_READ_RETRIES))
     }
 
     @Test fun consequentialActionsPauseEvenWhenTransient() {
