@@ -20,7 +20,9 @@ class SharedToolSurfacePolicyTest {
             "Send a Telegram message",
             "Remember this preference",
             "Show my saved tasks",
-            "What is the current weather?"
+            "What is the current weather?",
+            "What is the price of BTC?",
+            "Check the latest model release"
         ).forEach { assertTrue("Expected delegation for: $it", SharedToolSurfacePolicy.shouldDelegate(it)) }
     }
 
