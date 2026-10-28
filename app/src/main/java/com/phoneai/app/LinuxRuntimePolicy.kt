@@ -19,7 +19,7 @@ internal object LinuxRuntimePolicy {
     }
 
     val productionManifest = Manifest(
-        version = "alpine-3.22.7-proot-1a71df0-recovery2",
+        version = "alpine-3.22.7-proot-1a71df0-recovery3",
         rootfsUrl = "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/aarch64/alpine-minirootfs-3.22.7-aarch64.tar.gz",
         rootfsSha256 = "7e9b34ff3304381909e566e2c93de450664ccc724191261423974fc121c11623",
         rootfsBytes = 3971679L,
