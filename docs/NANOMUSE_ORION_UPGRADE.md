@@ -40,13 +40,13 @@ Use these to understand design decisions. Do not wholesale copy implementation: 
 
 1. Keep the existing Orion black/graphite/silver palette; centralize semantic colors so chat, activity cards, buttons and status indicators cannot drift.
 2. Make the chat screen the primary task workspace: compact header, clear new-chat/history actions, readable user/assistant messages, image preview/removal, accessible composer, send/stop state, and Talk/Command mode.
-3. Keep expensive or verbose details collapsed by default. Tool activity, errors, durations, and approvals should be expandable inline rather than filling the transcript with oversized cards.
+3. Keep expensive or verbose details lightweight by default. Browser activity is summarized inline with an explicit Open action instead of creating a live WebView for every transcript event; shell/task activity stays structured and compact.
 4. Preserve transcript restoration, archive/delete semantics, image attachment handling, provider/model selection, and service callbacks. Do not replace working storage with a new parallel store.
 5. Add UI tests or focused state tests for empty chat, restored chat, image attached/removed, send/stop, history/new chat, and mode switching.
 
 ### Phase 2 — Shared agent/task execution
 
-**Lifecycle consistency hardening:** the live loop now validates state transitions instead of unconditionally overwriting the phase, and only advances the success path through VERIFY after the existing completion-evidence gate allows it. Failed tool results remain blocked for inspection; they are not replayed automatically. Integration tests and latest-commit CI are still required.
+**Lifecycle consistency hardening:** the live loop validates transitions, checks completion evidence before VERIFY/COMPLETE/RECORD, emits real line breaks in activity notes, and marks a stop during an in-flight model request as CANCELLED before returning. A resumed checkpoint reconstructs a blocked execution and enters PLAN first, so uncertain side-effecting actions are not blindly replayed. `TaskLifecycleTest` now verifies execution-block resume replans, authorization-block resume, and terminal cancellation. These are focused state tests, not a full Android-service end-to-end simulation; CI for the latest commit is still pending.
 
 **Implementation started in the Phase 1 branch:** `Agent.kt` now drives `TaskLifecycle` through planning, capability checks, authorization, execution, verification, recording and blocked/recovery states on the live guarded tool-task path. The existing `OrionExecutionLoop`, `ToolGate`, `CapabilityRegistry`, action checkpointing and per-tool approval checks remain in place. This is not yet a claim that every direct shortcut or specialist-agent path is lifecycle-managed; those routes need separate mapping and tests.
 
