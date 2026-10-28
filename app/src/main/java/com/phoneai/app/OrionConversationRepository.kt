@@ -73,6 +73,14 @@ internal class OrionConversationRepository private constructor(context: Context)
         db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
     }
 
+    private fun sanitizeEventSummary(value: String): String {
+        var clean = value.replace(Regex("[\\r\\n\\t]+"), " ").take(1200)
+        clean = clean.replace(Regex("(?i)(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret)\\s*[:=]\\s*[^ ,;]+"), "$1=[redacted]")
+        clean = clean.replace(Regex("(?i)bearer\\s+[A-Za-z0-9._~+/-]+=*"), "Bearer [redacted]")
+        clean = clean.replace(Regex("\\bsk-[A-Za-z0-9_-]{12,}\\b"), "[redacted-key]")
+        return clean.take(500)
+    }
+
     /** Store bounded, secret-free lifecycle evidence for tools and approvals in the active session. */
     @Synchronized
     fun recordEvent(context: Context, messageId: String?, type: String, status: String, summary: String): ChatEvent? {
@@ -89,7 +97,7 @@ internal class OrionConversationRepository private constructor(context: Context)
             prefs.edit().putString(ACTIVE_ID, sessionId).commit()
         }
         val event = ChatEvent(UUID.randomUUID().toString(), sessionId!!, messageId?.take(128),
-            type.take(48), status.take(32), summary.replace(Regex("[\\r\\n\\t]+"), " ").take(500), System.currentTimeMillis())
+            type.take(48), status.take(32), sanitizeEventSummary(summary), System.currentTimeMillis())
         val values = ContentValues().apply {
             put("id", event.id); put("session_id", event.sessionId); put("message_id", event.messageId)
             put("event_type", event.type); put("status", event.status); put("summary", event.summary); put("created_at", event.createdAt)
