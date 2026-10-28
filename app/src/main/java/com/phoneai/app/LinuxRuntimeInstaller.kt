@@ -109,9 +109,9 @@ internal class LinuxRuntimeInstaller(
         }
     }
 
-    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 15_000L): String {
+    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L): String {
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
-        if (timeoutMs !in 250L..60_000L) return "error: Linux timeout must be between 250 and 60000 ms."
+        if (timeoutMs !in 250L..180_000L) return "error: Linux timeout must be between 250 and 180000 ms."
         if (command == "__orion_install__") return "error: internal command is not executable"
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command)
             ?: return "error: Linux command rejected by runtime policy."
@@ -181,7 +181,7 @@ internal class LinuxRuntimeInstaller(
         }
 
         val finished = try {
-            process.waitFor(timeoutMs.coerceIn(250L, 60_000L), TimeUnit.MILLISECONDS)
+            process.waitFor(timeoutMs.coerceIn(250L, 180_000L), TimeUnit.MILLISECONDS)
         } catch (interrupted: InterruptedException) {
             process.destroy()
             if (!process.waitFor(250, TimeUnit.MILLISECONDS)) process.destroyForcibly()
