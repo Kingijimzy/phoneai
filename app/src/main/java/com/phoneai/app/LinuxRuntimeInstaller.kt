@@ -65,7 +65,9 @@ internal class LinuxRuntimeInstaller(
         staging.deleteRecursively()
         check(staging.mkdirs()) { "Could not create staging directory." }
         try {
+            progress("Extracting Alpine root filesystem", 0L, 0L)
             GZIPInputStream(BufferedInputStream(archive.inputStream())).use { TarExtractor.extract(it, staging) }
+            progress("Validating Alpine root filesystem", 0L, 0L)
             val guestShell = File(staging, "bin/sh")
             check(guestShell.exists()) { "Verified rootfs has no /bin/sh." }
             check(File(staging, "etc/alpine-release").isFile) { "Rootfs is not a valid Alpine installation." }
@@ -90,6 +92,7 @@ internal class LinuxRuntimeInstaller(
                 smoke.output.contains("3.22.7")) {
                 "Guest-shell acceptance test failed; previous runtime was preserved. Output: ${smoke.output.take(500)}"
             }
+            progress("Activating verified Alpine runtime", 0L, 0L)
             markerTemp.writeText(manifest.version)
             backup.deleteRecursively()
             markerBackup.delete()
@@ -112,6 +115,7 @@ internal class LinuxRuntimeInstaller(
             }
             backup.deleteRecursively()
             markerBackup.delete()
+            progress("Alpine runtime ready", 1L, 1L)
         } finally {
             staging.deleteRecursively()
             markerTemp.delete()
