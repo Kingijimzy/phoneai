@@ -91,15 +91,27 @@ object ShellRunner {
     }
 
     fun runTermux(c: Context, command: String, timeoutSec: Long = 60): String {
-        if (!termuxInstalled(c)) return "error: Termux is not installed. Install Termux, open it once, then in Termux run: mkdir -p ~/.termux && echo 'allow-external-apps=true' >> ~/.termux/termux.properties"
+        val readiness = TermuxBridgeRunner.readiness(c)
+        if (readiness != null) {
+            return "error: $readiness Open Orion's Termux Bridge settings and complete the listed setup before using where=termux."
+        }
+        val normalized = command.trim()
+        if (normalized.isEmpty()) return "error: command is required"
+        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
+            return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
+        }
         val id = ids.incrementAndGet()
         val box = Pending(); pending[id] = box
         return try {
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
             val cb = PendingIntent.getBroadcast(c, id, Intent(c, ShellResultReceiver::class.java).setAction(ACTION_RESULT).putExtra("id", id), flags)
+            val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
+                .coerceIn(1L, 180L)
+            val termuxTimeout = "/data/data/com.termux/files/usr/bin/timeout"
             val i = Intent("com.termux.RUN_COMMAND").setComponent(ComponentName(TERMUX_PKG, "com.termux.app.RunCommandService"))
-                .putExtra("com.termux.RUN_COMMAND_PATH", TERMUX_BASH)
-                .putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("-lc", command))
+                .putExtra("com.termux.RUN_COMMAND_PATH", termuxTimeout)
+                .putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("${effectiveTimeout}s", TERMUX_BASH, "-lc", normalized))
                 .putExtra("com.termux.RUN_COMMAND_WORKDIR", TERMUX_HOME)
                 .putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
                 .putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", cb)
