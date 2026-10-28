@@ -299,7 +299,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
      * Server-sent event transport for OpenAI-compatible chat completions.
      * Deltas are emitted as they arrive; HTTP errors before the first delta remain eligible for fallback.
      */
-    private fun requestStream(
+    internal fun requestStream(
         p: Provider, url: String, body: String, key: String, readMs0: Int, onDelta: (String) -> Unit
     ): Http {
         if (!commandRequestBudget.tryReserve()) {
