@@ -706,6 +706,41 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =
         try { OrionConversationRepository.get(this).eventsForActive(this) } catch (_: Exception) { emptyList() }
 
+    private fun rewindTranscriptToPrompt(prompt: String): Boolean {
+        val index = transcript.indexOfLast { it.first == "me" && it.second == prompt }
+        if (index < 0) return false
+        while (transcript.size > index) transcript.removeAt(transcript.lastIndex)
+        ChatHistoryStore.save(this, transcript.toList())
+        agent.reset()
+        agent.restoreConversationContext(transcript.toList())
+        mainChatListener?.onTranscriptRestored(transcript.toList())
+        return true
+    }
+
+    fun retryLastResponse(prompt: String) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop the current response before retrying.")
+                return@post
+            }
+            rewindTranscriptToPrompt(prompt)
+            submit(prompt, conversationOnly = true, autoRoute = true)
+        }
+    }
+
+    fun editAndResend(original: String, edited: String) {
+        val replacement = edited.trim()
+        if (replacement.isEmpty()) return
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop the current response before editing this message.")
+                return@post
+            }
+            rewindTranscriptToPrompt(original)
+            submit(replacement, conversationOnly = true, autoRoute = true)
+        }
+    }
+
     fun sendFromMainChat(
         text: String,
         conversationOnly: Boolean = false,
