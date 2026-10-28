@@ -707,9 +707,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         try { OrionConversationRepository.get(this).eventsForActive(this) } catch (_: Exception) { emptyList() }
 
     private fun rewindTranscriptToPrompt(prompt: String): Boolean {
-        val index = transcript.indexOfLast { it.first == "me" && it.second == prompt }
-        if (index < 0) return false
-        while (transcript.size > index) transcript.removeAt(transcript.lastIndex)
+        val rewound = TranscriptEditPolicy.rewind(transcript.toList(), prompt) ?: return false
+        transcript.clear()
+        transcript.addAll(rewound)
         ChatHistoryStore.save(this, transcript.toList())
         agent.reset()
         agent.restoreConversationContext(transcript.toList())
