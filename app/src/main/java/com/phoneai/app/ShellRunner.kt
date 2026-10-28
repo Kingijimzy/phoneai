@@ -139,7 +139,14 @@ object ShellRunner {
                 var lastStage = ""
                 var lastProgressBucket = -1L
                 val runtime = LinuxRuntimeInstaller(c.applicationContext) { name, current, total ->
-                    if (total <= 0L) {
+                    if (name == "Alpine runtime ready") {
+                        // Readiness is a stage, not a download progress event.
+                        if (name != lastStage) {
+                            lastStage = name
+                            lastProgressBucket = -1L
+                            onOutput("[$name]\n")
+                        }
+                    } else if (total <= 0L) {
                         if (name != lastStage) {
                             lastStage = name
                             lastProgressBucket = -1L
