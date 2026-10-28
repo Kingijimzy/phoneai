@@ -56,14 +56,16 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var welcomePanel: View? = null
     private var promptRail: View? = null
     private var livePulse: android.animation.AnimatorSet? = null
-    private val composeLines = mutableStateListOf<OrionChatLine>()
-    private val composeProviderLabel = mutableStateOf("Choose provider")
-    private val composeModelLabel = mutableStateOf("Choose model")
-    private val composeProviderReady = mutableStateOf(false)
-    private val composeStatus = mutableStateOf("READY")
-    private val composeChatTitle = mutableStateOf("Orion")
-    private val composeCommandMode = mutableStateOf(false)
-    private val composeSelectedImage = mutableStateOf<Uri?>(null)
+    // Keep UI state separate from Activity lifecycle and Android/service orchestration.
+    private val chatUiState = OrionChatUiState()
+    private val composeLines get() = chatUiState.lines
+    private val composeProviderLabel get() = chatUiState.providerLabel
+    private val composeModelLabel get() = chatUiState.modelLabel
+    private val composeProviderReady get() = chatUiState.providerReady
+    private val composeStatus get() = chatUiState.status
+    private val composeChatTitle get() = chatUiState.chatTitle
+    private val composeCommandMode get() = chatUiState.commandMode
+    private val composeSelectedImage get() = chatUiState.selectedImage
     private var composeChatActive = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
