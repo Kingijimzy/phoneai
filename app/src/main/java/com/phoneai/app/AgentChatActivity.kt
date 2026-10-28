@@ -356,6 +356,34 @@ class AgentChatActivity : Activity() {
             else coderNotice("I couldn't find a Python code block in my previous reply, so I haven't run anything. Ask me to write or correct the code first.")
             return
         }
+        if (image == null && SharedToolSurfacePolicy.shouldDelegate(text)) {
+            val service = PhoneAiService.instance
+            input.setText("")
+            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(input.windowToken, 0)
+            addBubble(true, text)
+            turns.add(AgentRunner.Turn("user", text))
+            val waiting = addBubble(false, "Handing this request to Orion's shared tool executor…")
+            busy = true
+            AgentChatStore.save(this, agent.id, turns)
+            if (service == null) {
+                val message = "I can't run this request from the specialist chat because Orion's accessibility service is not connected. Enable Orion's service and try again. No action was performed."
+                waiting.text = Markdown.render(message)
+                turns.add(AgentRunner.Turn("assistant", message))
+                AgentChatStore.save(this, agent.id, turns)
+                busy = false
+                return
+            }
+            service.executeSharedToolRequest(text, "specialist agent " + agent.name) { result ->
+                val shownResult = result.ifBlank { "The tool executor returned no final response. Check Orion's task transcript." }
+                waiting.text = Markdown.render(shownResult)
+                turns.add(AgentRunner.Turn("assistant", shownResult))
+                AgentChatStore.save(this, agent.id, turns)
+                busy = false
+                scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+            }
+            return
+        }
+
         input.setText("")
         pendingImage = null
         attachLabel.visibility = android.view.View.GONE

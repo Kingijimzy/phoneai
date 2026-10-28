@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermission
 
 class TarExtractorTest {
     private fun header(name: String, type: Char, size: Long, mode: Int = 420, link: String = ""): ByteArray {
@@ -34,7 +35,7 @@ class TarExtractorTest {
     @Test fun extractsFilesDirectoriesAndRelativeLinks() {
         val dir = tempDir()
         val stats = TarExtractor.extract(ByteArrayInputStream(tar { o ->
-            entry(o, "bin/", '5')
+            entry(o, "bin/", '5', mode = 493)
             entry(o, "bin/sh", '0', "#!/bin/sh\n".toByteArray(), mode = 493)
             entry(o, "usr/bin/env", '0', "env".toByteArray(), mode = 493)
             entry(o, "bin/busy", '2', link = "../usr/bin/env")
@@ -44,6 +45,17 @@ class TarExtractorTest {
         assertTrue(File(dir, "bin/sh").canExecute())
         assertTrue(File(dir, "bin/busy").exists())
         assertEquals("root:x:0", File(dir, "etc/pass").readText())
+        assertEquals(
+            setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE,
+                PosixFilePermission.GROUP_READ, PosixFilePermission.GROUP_EXECUTE,
+                PosixFilePermission.OTHERS_READ, PosixFilePermission.OTHERS_EXECUTE),
+            Files.getPosixFilePermissions(File(dir, "bin").toPath())
+        )
+        assertEquals(
+            setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.GROUP_READ, PosixFilePermission.OTHERS_READ),
+            Files.getPosixFilePermissions(File(dir, "etc/pass").toPath())
+        )
     }
 
     @Test fun rejectsPathTraversalAndAbsolutePaths() {
@@ -56,12 +68,22 @@ class TarExtractorTest {
     }
 
     @Test fun rejectsSymlinksThatLeaveTheRoot() {
-        listOf("../../../../etc" to "x", "/system/bin/sh" to "y").forEach { (target, name) ->
-            try {
-                TarExtractor.extract(ByteArrayInputStream(tar { entry(it, name, '2', link = target) }), tempDir())
-                fail("accepted link to $target")
-            } catch (_: TarExtractor.Rejected) {}
-        }
+        try {
+            TarExtractor.extract(ByteArrayInputStream(tar { entry(it, "x", '2', link = "../../../../etc") }), tempDir())
+            fail("accepted escaping relative symlink")
+        } catch (_: TarExtractor.Rejected) {}
+    }
+
+    @Test fun absoluteGuestSymlinksAreRewrittenInsideRoot() {
+        val dir = tempDir()
+        TarExtractor.extract(ByteArrayInputStream(tar { o ->
+            entry(o, "usr/bin/tool", '0', "guest-tool".toByteArray())
+            entry(o, "bin/tool", '2', link = "/usr/bin/tool")
+        }), dir)
+        assertTrue(File(dir, "bin/tool").isFile)
+        assertEquals("guest-tool", File(dir, "bin/tool").readText())
+        assertFalse(Files.isSymbolicLink(File(dir, "bin/tool").toPath()) &&
+            Files.readSymbolicLink(File(dir, "bin/tool").toPath()).isAbsolute)
     }
 
     @Test fun rejectsHardLinksOutsideTheRoot() {
@@ -85,6 +107,7 @@ class TarExtractorTest {
     @Test fun symlinkTargetRulesAreExplicit() {
         assertTrue(TarExtractor.symlinkTargetAllowed("bin/busy", "../usr/bin/env"))
         assertFalse(TarExtractor.symlinkTargetAllowed("bin/x", "../../etc"))
-        assertFalse(TarExtractor.symlinkTargetAllowed("x", "/abs"))
+        assertTrue(TarExtractor.symlinkTargetAllowed("x", "/usr/bin/tool"))
+        assertFalse(TarExtractor.symlinkTargetAllowed("x", "/../../etc"))
     }
 }

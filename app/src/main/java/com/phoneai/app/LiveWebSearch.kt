@@ -22,7 +22,12 @@ object LiveWebSearch {
     /** Detects freshness-dependent questions even when the user does not say "search the web". */
     fun isLiveInfoRequest(text: String): Boolean {
         val s = text.lowercase()
-        if (Regex("\\b(weather|forecast|temperature|bitcoin|btc|ethereum|eth|solana|crypto price|stock price|forex price|exchange rate|time is it|what time|today's date|current time)\\b").containsMatchIn(s)) return false
+        // Route price-only questions to quote providers, but never suppress news/research merely
+        // because the asset name appears. "Bitcoin news today" must trigger web research.
+        if (Regex("\\b(weather|forecast|temperature|time is it|what time|today's date|current time)\\b").containsMatchIn(s)) return false
+        val priceOnly = Regex("\\b(price|quote|trading at|how much is|value of|market price)\\b").containsMatchIn(s)
+        val asset = Regex("\\b(bitcoin|btc|ethereum|eth|solana|crypto|stock|forex|exchange rate)\\b").containsMatchIn(s)
+        if (priceOnly && asset && !Regex("\\b(news|headline|headlines|why|explain|analysis|research|update|happening)\\b").containsMatchIn(s)) return false
         return Regex("\\b(latest|currently|right now|as of today|today's|today|breaking|recently|this week|this month|current events|who is the current|who won|winner|winners|ranking|rankings|results|ballon d'or|award winners|top 10|what is happening|what happened today|latest update|new update|current status|is .+ still)\\b").containsMatchIn(s)
     }
 

@@ -705,6 +705,49 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /**
+     * Explicit live-call or specialist-agent handoff into the shared, guarded tool executor.
+     * This is not a permission bypass: Agent dispatch still checks tool modes, packs, Android
+     * grants, and action-specific confirmation before each tool runs.
+     */
+    fun executeSharedToolRequest(text: String, source: String = "alternate surface", completion: ((String) -> Unit)? = null) {
+        val command = text.trim()
+        if (command.isEmpty()) return
+        main.post {
+            if (running) {
+                val message = "Orion is already working. Let the current task finish, then retry this request."
+                mainChatListener?.onMessage("ai", message)
+                completion?.invoke(message)
+                return@post
+            }
+            handsActive = false
+            stopOfflineWakeDetector()
+            appendTranscript("me", command)
+            mainChatListener?.onMessage("me", command)
+            mainChatListener?.onStatus("Tool request handed off from $source", currentMode())
+            voice.stopSpeaking()
+            voice.stopListening()
+            listening = false
+            running = true
+            phase = "thinking"
+            refreshMode()
+            worker.execute {
+                try {
+                    agent.run(command)
+                } catch (e: Exception) {
+                    say("I couldn't complete that request. " + (e.message ?: e.javaClass.simpleName).take(180))
+                } finally {
+                    val result = transcript.lastOrNull { it.first == "ai" }?.second
+                        ?: "The request finished without a final response. Check the task transcript."
+                    main.post {
+                        finishRun()
+                        completion?.invoke(result)
+                    }
+                }
+            }
+        }
+    }
+
     @Volatile private var imageAnalysisRunning = false
     private val imageAnalysisLock = Any()
 

@@ -11,6 +11,9 @@ class LiveWebSearchTest {
         assertTrue(LiveWebSearch.isSearchRequest("Google it"))
         assertTrue(LiveWebSearch.isLiveInfoRequest("Who won the 2026 Ballon d'Or?"))
         assertTrue(LiveWebSearch.isLiveInfoRequest("Give me the top 10 rankings"))
+        assertTrue(LiveWebSearch.isLiveInfoRequest("what the bitcoin news today"))
+        assertTrue(LiveWebSearch.isLiveInfoRequest("latest BTC headlines"))
+        assertTrue(!LiveWebSearch.isLiveInfoRequest("what is the BTC price right now"))
     }
 
     @Test fun removesResearchCommandFromSearchQuery() {

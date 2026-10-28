@@ -21,7 +21,8 @@ class TerminalActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var backendBtn: TextView
-    private var termux = false
+    private enum class Backend { BUILTIN, LINUX, TERMUX }
+    private var backend = Backend.BUILTIN
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun chip(caption: String, action: () -> Unit) = TextView(this).apply {
         text = caption; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFE4E4E4.toInt()); gravity = Gravity.CENTER
@@ -36,7 +37,7 @@ class TerminalActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF090909.toInt()); setPadding(dp(14), dp(40), dp(14), dp(12)) }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(this).apply { text = "Terminal"; textSize = 24f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFFF2F2F2.toInt()); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) })
-        backendBtn = chip("Built-in") { termux = !termux; refreshBackend() }
+        backendBtn = chip("Built-in") { backend = when (backend) { Backend.BUILTIN -> Backend.LINUX; Backend.LINUX -> Backend.TERMUX; Backend.TERMUX -> Backend.BUILTIN }; refreshBackend() }
         top.addView(backendBtn); root.addView(top)
         out = TextView(this).apply { typeface = Typeface.MONOSPACE; textSize = 12f; setTextColor(0xFFCFE8CF.toInt()); setTextIsSelectable(true); setPadding(dp(10), dp(10), dp(10), dp(10)) }
         scroll = ScrollView(this).apply { background = GradientDrawable().apply { setColor(0xFF0E0E0E.toInt()); cornerRadius = dp(12).toFloat(); setStroke(dp(1), 0xFF2E2E2E.toInt()) } }
@@ -62,13 +63,13 @@ class TerminalActivity : Activity() {
         append("Orion Terminal. Built-in runs inside Orion's private workspace. Termux gives you python, git, node and more.\n")
     }
 
-    private fun refreshBackend() { backendBtn.text = if (termux) "Termux" else "Built-in"; append("— using ${if (termux) "Termux" else "built-in shell"} —\n") }
+    private fun refreshBackend() { backendBtn.text = when (backend) { Backend.BUILTIN -> "Built-in"; Backend.LINUX -> "Linux"; Backend.TERMUX -> "Termux" }; append("— using ${when (backend) { Backend.BUILTIN -> "built-in shell"; Backend.LINUX -> "Alpine Linux"; Backend.TERMUX -> "Termux" }} —\n") }
 
     private fun append(s: String) { out.append(s); scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) } }
 
     private fun runInput() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
-        when (ShellPolicy.classify(cmd)) {
+        when (if (backend == Backend.LINUX) ShellRisk.ASK else ShellPolicy.classify(cmd)) {
             ShellRisk.BLOCKED -> {
                 append("$ $cmd\nBlocked: this command is on Orion's never-run list (destructive, privileged, or touches Orion's private data).\n")
                 return
@@ -87,9 +88,23 @@ class TerminalActivity : Activity() {
     }
 
     private fun executeCommand(cmd: String) {
-        input.setText(""); append("$ $cmd\n")
-        val where = if (termux) "termux" else "builtin"
-        Thread { val r = ShellRunner.run(applicationContext, cmd, where); runOnUiThread { append(r + "\n") } }.start()
+        input.setText("")
+        append("$ $cmd\n")
+        append("⏳ Running — live output will appear below…\n")
+        val where = when (backend) { Backend.BUILTIN -> "builtin"; Backend.LINUX -> "linux"; Backend.TERMUX -> "termux" }
+        Thread {
+            val r = ShellRunner.runStreaming(applicationContext, cmd, where) { chunk ->
+                runOnUiThread { append(chunk) }
+            }
+            runOnUiThread {
+                when {
+                    r.startsWith("exit=") -> append("\n[${r.substringBefore('\n')}]\n")
+                    r.startsWith("error:") -> append("\n$r\n")
+                    r.isNotBlank() -> append("\n$r\n")
+                    else -> append("\n[Command finished]\n")
+                }
+            }
+        }.apply { name = "OrionTerminalCommand"; isDaemon = true; start() }
     }
 
     private fun askAi() {
@@ -100,7 +115,7 @@ class TerminalActivity : Activity() {
                 append("… asking AI\n")
                 Thread {
                     val reply = try {
-                        val sys = "You write ONE shell command for " + (if (termux) "Termux (bash, full Linux tools)" else "Android's built-in sh/toybox in a private folder") +
+                        val sys = "You write ONE shell command for " + (when (backend) { Backend.BUILTIN -> "Android's built-in sh/toybox in a private folder"; Backend.LINUX -> "Orion's Alpine Linux ARM64 environment"; Backend.TERMUX -> "Termux (bash, full Linux tools)" }) +
                             ". Output only the command, no explanation, no code fences. Never use sudo, never delete outside the current folder, never read secrets."
                         Nim(applicationContext).chat(JSONArray().put(JSONObject().put("role", "system").put("content", sys)).put(JSONObject().put("role", "user").put("content", task)), false, 200, 0.1)
                             .trim().removePrefix("```sh").removePrefix("```bash").removePrefix("```").removeSuffix("```").trim().lineSequence().firstOrNull().orEmpty()

@@ -24,6 +24,7 @@ class OrionSkillInstallPolicyTest {
     fun declarativeSkillRequiresExplicitApproval() {
         val review = OrionSkillInstallPolicy.review(manifest(), setOf("gmail.messages.read"), false)
         assertEquals(OrionSkillInstallPolicy.ReviewStatus.NEEDS_USER_APPROVAL, review.status)
+        assertTrue(review.requiresUserApproval)
         assertFalse(review.canExecuteNow)
     }
 
@@ -35,10 +36,11 @@ class OrionSkillInstallPolicyTest {
     }
 
     @Test
-    fun missingCapabilityCannotBeInventedByManifest() {
+    fun missingCapabilityIsRejectedRatherThanTreatedAsAnApprovalProblem() {
         val review = OrionSkillInstallPolicy.review(manifest(), emptySet(), true)
-        assertEquals(OrionSkillInstallPolicy.ReviewStatus.NEEDS_USER_APPROVAL, review.status)
+        assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
         assertTrue(review.missingCapabilities.contains("gmail.messages.read"))
+        assertFalse(review.requiresUserApproval)
         assertFalse(review.canExecuteNow)
     }
 
@@ -61,5 +63,16 @@ class OrionSkillInstallPolicyTest {
             true
         )
         assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
+    }
+
+    @Test
+    fun unknownSkillSourceIsRejectedEvenIfUserApproves() {
+        val review = OrionSkillInstallPolicy.review(
+            manifest(trust = OrionSkillInstallPolicy.SourceTrust.UNKNOWN),
+            setOf("gmail.messages.read"),
+            true
+        )
+        assertEquals(OrionSkillInstallPolicy.ReviewStatus.REJECTED, review.status)
+        assertFalse(review.canExecuteNow)
     }
 }

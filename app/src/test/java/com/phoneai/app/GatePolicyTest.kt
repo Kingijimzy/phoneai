@@ -50,12 +50,19 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(autonomous = true, mode = AgentPolicy.Mode.ASK)).verdict)
     }
 
-    @Test fun globalModesDecideTheRest() {
-        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(mode = AgentPolicy.Mode.ASK)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ALLOWLIST, allowlisted = true)).verdict)
-        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(mode = AgentPolicy.Mode.ALLOWLIST, allowlisted = false)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.TRUSTED, trusted = true)).verdict)
-        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(mode = AgentPolicy.Mode.TRUSTED, trusted = false)).verdict)
+    @Test fun explicitlyAllowedToolDoesNotHitDuplicateGlobalApprovalGate() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ASK, toolMode = ToolMode.ALLOW)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ALLOWLIST, toolMode = ToolMode.ALLOW, allowlisted = false)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.TRUSTED, toolMode = ToolMode.ALLOW, trusted = false)).verdict)
+    }
+
+    @Test fun askSettingAllowsTheToolAfterItsOneTaskApproval() {
+        assertEquals(GatePolicy.Verdict.ASK_TOOL, GatePolicy.decide(input(toolMode = ToolMode.ASK, asked = false)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ASK, toolMode = ToolMode.ASK, asked = true)).verdict)
+    }
+
+    @Test fun globalModesCannotOverrideExplicitToolDenial() {
+        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(mode = AgentPolicy.Mode.TRUSTED, toolMode = ToolMode.DENY, trusted = true)).verdict)
     }
 
     @Test fun offMessageNamesTheFix() {

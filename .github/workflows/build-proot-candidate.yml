@@ -1,0 +1,91 @@
+name: Build and validate Android PRoot candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/build-proot-candidate.yml"
+      - "docs/PROOT_ARM64_SUPPLY_CHAIN.md"
+      - "docs/linux-runtime-candidate-manifest.json"
+      - "docs/LINUX_RUNTIME_DEVICE_SMOKE_TEST.md"
+      - "app/src/main/java/com/phoneai/app/LinuxRuntimeInstaller.kt"
+      - "app/src/main/java/com/phoneai/app/LinuxRuntimePolicy.kt"
+      - "app/src/main/java/com/phoneai/app/ShellRunner.kt"
+      - "app/src/main/java/com/phoneai/app/ShellExecutionRouting.kt"
+      - "app/build.gradle.kts"
+
+permissions:
+  contents: read
+
+# This produces a review-only CI artifact. It does NOT install binaries into PhoneAI
+# or create a production manifest until runtime/device validation and license review pass.
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pinned Android integration/build recipe
+        uses: actions/checkout@v4
+        with:
+          repository: OpenMinis/OpenMinis
+          ref: 1a71df0f381cefde80bf912b723de6f9831bc177
+          submodules: recursive
+          path: upstream
+
+      - name: Verify pinned source and dependency inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "1a71df0f381cefde80bf912b723de6f9831bc177"
+          test -n "$(git -C upstream/deps/proot rev-parse HEAD)"
+          # Independently pin talloc archive before the upstream script can consume it.
+          mkdir -p upstream/deps/build/proot-android
+          curl --fail --location --retry 3 --retry-all-errors \
+            https://download.samba.org/pub/talloc/talloc-2.4.2.tar.gz \
+            -o upstream/deps/build/proot-android/talloc-2.4.2.tar.gz
+          echo "85ecf9e465e20f98f9950a52e9a411e14320bc555fa257d87697b7e7a9b1d8a6  upstream/deps/build/proot-android/talloc-2.4.2.tar.gz" | sha256sum --check -
+          # Restore only the exact loader files from the pinned upstream tree; the
+          # upstream build recipe explicitly warns that rebuilding these from its fork
+          # is incompatible on some devices. Their hashes are checked again below.
+          mkdir -p upstream/src/android/app/src/main/jniLibs/arm64-v8a
+          curl --fail --location --retry 3 --retry-all-errors \
+            https://raw.githubusercontent.com/OpenMinis/OpenMinis/1a71df0f381cefde80bf912b723de6f9831bc177/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so \
+            -o upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so
+          echo "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so" | sha256sum --check -
+          curl --fail --location --retry 3 --retry-all-errors \
+            https://raw.githubusercontent.com/OpenMinis/OpenMinis/1a71df0f381cefde80bf912b723de6f9831bc177/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so \
+            -o upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
+          echo "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34  upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so" | sha256sum --check -
+
+      - name: Install Android SDK and pinned NDK r28
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;28.0.12433566'
+
+      - name: Build pinned PRoot candidate
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.12433566
+        run: |
+          set -euo pipefail
+          bash upstream/deps/build_proot.sh clean
+          mkdir -p candidate
+          install -m 0755 upstream/src/android/app/src/main/assets/proot-aarch64 candidate/proot-aarch64
+          install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so candidate/libproot-loader.so
+          install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot.so candidate/libproot.so
+          file candidate/*
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/proot-aarch64
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/libproot.so
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/libproot-loader.so
+          install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so candidate/libproot-loader32.so
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" --file-header candidate/libproot-loader32.so
+          sha256sum candidate/* | tee candidate/SHA256SUMS
+          stat -c '%n %s bytes' candidate/* | tee candidate/SIZES.txt
+
+      - name: Upload review-only PRoot candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: proot-arm64-review-candidate
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 14

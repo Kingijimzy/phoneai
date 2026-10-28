@@ -6,6 +6,14 @@ import java.security.MessageDigest
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.chaquo.python")
+}
+
+chaquopy {
+    defaultConfig {
+        // Python is bundled in the APK for ARM64 devices; no Termux bridge required.
+        version = "3.11"
+    }
 }
 
 // Official sherpa-onnx Android AAR (pinned version + verified SHA-256).

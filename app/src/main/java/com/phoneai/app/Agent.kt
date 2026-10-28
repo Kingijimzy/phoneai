@@ -130,7 +130,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        val autonomous = ToolPermissions.level(svc) == "autonomous"
         // One pre-flight gate for user DENY and switched-off packs, before any prompt is shown.
         ToolGate.preflightDenial(svc, tool)?.let { denied ->
             try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
@@ -189,30 +188,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             return blocked
         }
-        val safeBuiltinShell = tool == "shell" &&
-            !args.optString("where", "builtin").equals("termux", ignoreCase = true) &&
-            shellRisk == ShellRisk.SAFE
-        val toolIsWrite = ToolRegistry.all.firstOrNull { it.name == tool }?.access == ToolAccess.WRITE &&
-            !(tool == "termux_command" && TermuxCommandPolicy.isReadOnly(args.optString("command"))) &&
-            !safeBuiltinShell
+        val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
-            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms")
-        // Opening apps, navigating/searching, reading screens and ordinary typing are
-        // routine task steps, not dangerous merely because their registry access is WRITE.
-        // In Autonomous mode they run without per-step approval; consequential actions
-        // still require their dedicated confirmation.
-        val routineNavigation = tool in setOf(
-            "open_app", "lookup_app", "list_apps", "click", "click_text", "tap", "long_press",
-            "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link",
-            "read_screen", "browser_snapshot", "browser_find", "browser_extract", "browser_click",
-            "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate",
-            "browser_back", "browser_tabs", "browser_wait", "wait_for", "wait", "verify_action",
-            "validate_action", "verify_send"
-        )
+            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms", "python_exec") ||
+            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
         val gate = AgentPolicy.gate(
             svc, pack, tool,
-            dangerous = consequential || (toolIsWrite && !(autonomous && routineNavigation) &&
-                !(autonomous && safeBuiltinShell)),
+            // Per-tool ALLOW is authoritative for routine work. Only actions classified as
+            // consequential keep the separate confirmation requirement.
+            dangerous = consequential,
             toolMode = ToolPermissions.mode(svc, tool),
             askedThisTask = tool in askApproved
         )
@@ -1866,6 +1850,7 @@ Rules:
             "knowledge_search" -> tools.knowledgeSearch(a.optString("query"))
             "ask_agent" -> tools.askAgent(a.optString("agent"), a.optString("task"))
             "shell" -> tools.shell(a.optString("command"), a.optString("where"))
+            "python_exec" -> tools.pythonExec(a.optString("code"))
             "workspace_write" -> ShellRunner.writeFile(svc, a.optString("path"), a.optString("content"))
             "workspace_read" -> ShellRunner.readFile(svc, a.optString("path"))
             "service_status" -> tools.serviceStatus()

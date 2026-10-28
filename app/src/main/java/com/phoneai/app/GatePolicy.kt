@@ -41,7 +41,13 @@ internal object GatePolicy {
         if (i.toolMode == ToolMode.ASK && !i.autonomous && !i.askedThisTask)
             return Result(Verdict.ASK_TOOL, "The user set '${i.tool}' to ask each task.")
         if (i.dangerous && !i.trustedForPack) return Result(Verdict.NEED_APPROVAL, "Consequential action needs clear confirmation.")
-        // Autonomous mode is the user's standing instruction for routine steps only. It never bypasses the rows above.
+        // The per-tool setting is the user's explicit authorization. Once a tool is ALLOW,
+        // do not make the user approve it again through the unrelated global ASK/ALLOWLIST
+        // mode. A tool set to ASK asks once per task; consequential actions still require
+        // the dedicated confirmation above unless covered by a trusted session.
+        if (i.toolMode == ToolMode.ALLOW) return Result(Verdict.ALLOW, "Tool is enabled in Tool permissions.")
+        if (i.toolMode == ToolMode.ASK && i.askedThisTask) return Result(Verdict.ALLOW, "Tool was approved for this task.")
+        // Autonomous mode only relaxes routine tool prompts; it never bypasses consequential-action gates.
         if (i.autonomous && !i.dangerous) return Result(Verdict.ALLOW, "Autonomous mode: routine task step allowed.")
         return when (i.mode) {
             AgentPolicy.Mode.PLAN -> Result(Verdict.PLAN_ONLY, "Plan mode never executes tools.")

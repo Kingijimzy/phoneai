@@ -95,7 +95,7 @@ object AgentPolicy {
     fun packForTool(tool: String): String? = when (tool) {
         "play", "look" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
-        "shell", "workspace_write", "workspace_read" -> "workspace_shell"
+        "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary" -> "trading_research"

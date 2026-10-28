@@ -93,18 +93,18 @@ class ToolRegistryTest {
     }
 }
 
-class ToolRegistryPromptTrimTest {
-    @Test fun plainDeviceRequestOmitsSpecialistToolDetailsButKeepsSignatures() {
-        val trimmed = ToolRegistry.promptSection("open whatsapp and read my last chat")
-        assertFalse(trimmed.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
-        assertTrue(trimmed.contains("bybit_public_ticker {symbol}"))
-        assertTrue(trimmed.contains("- read_screen {}"))
-        assertTrue(trimmed.length < ToolRegistry.promptSection().length)
+class ToolRegistryPromptAvailabilityTest {
+    @Test fun everyRequestReceivesFullContractsForAllRegisteredTools() {
+        val prompt = ToolRegistry.promptSection("open whatsapp and read my last chat")
+        ToolRegistry.all.forEach { tool ->
+            assertTrue("Missing full tool contract for ${tool.name}", prompt.contains("- " + tool.promptLine))
+        }
+        assertTrue(prompt.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
+        assertTrue(prompt.contains("- read_screen {}"))
     }
 
-    @Test fun matchingRequestKeepsTheFullContract() {
-        val trimmed = ToolRegistry.promptSection("what is the bitcoin price on bybit")
-        assertTrue(trimmed.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
+    @Test fun requestTextDoesNotHideCapabilitiesFromThePlanner() {
+        assertEquals(ToolRegistry.promptSection(), ToolRegistry.promptSection("what is the bitcoin price on bybit"))
         assertEquals(ToolRegistry.promptSection(), ToolRegistry.promptSection(null))
     }
 }
