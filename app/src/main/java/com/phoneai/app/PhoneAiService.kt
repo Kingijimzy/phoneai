@@ -114,6 +114,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         fun onAudioAmplitude(amplitude: Float) {}
         fun onSpeechWord() {}
         fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
+        fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {}
         /** Orion decided the request needs (or no longer needs) the tool agent; the UI should follow. */
         fun onModeSwitch(commandMode: Boolean) {}
     }
@@ -664,6 +665,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             } else {
                 transcript.forEach { listener.onMessage(it.first, it.second) }
             }
+            listener.onChatEvents(activeChatEvents())
         }
     }
 
