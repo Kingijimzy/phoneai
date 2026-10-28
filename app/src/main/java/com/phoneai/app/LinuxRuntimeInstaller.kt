@@ -118,7 +118,7 @@ internal class LinuxRuntimeInstaller(
         }
     }
 
-    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L): String {
+    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L, onOutput: (String) -> Unit = {}): String {
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
         if (timeoutMs !in 250L..180_000L) return "error: Linux timeout must be between 250 and 180000 ms."
         if (command == "__orion_install__") return "error: internal command is not executable"
@@ -136,7 +136,7 @@ internal class LinuxRuntimeInstaller(
             }
         }
         val result = try {
-            runProcess(args, rootfs, timeoutMs)
+            runProcess(args, rootfs, timeoutMs, onOutput)
         } catch (failure: IOException) {
             // Keep the marker after interrupted package operations so the next call repairs the rootfs.
             return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
@@ -162,7 +162,7 @@ internal class LinuxRuntimeInstaller(
         return runProcess(args, root, timeoutMs)
     }
 
-    private fun runProcess(args: List<String>, workingDir: File, timeoutMs: Long): ProcessResult {
+    private fun runProcess(args: List<String>, workingDir: File, timeoutMs: Long, onOutput: (String) -> Unit = {}): ProcessResult {
         check(prootTmp.mkdirs() || prootTmp.isDirectory) {
             "Could not create writable PRoot temporary directory."
         }
