@@ -388,7 +388,7 @@ private fun TaskActivityCard(raw: String) {
 }
 
 @Composable
-private fun ThinkingIndicator() {
+internal fun ThinkingIndicator() {
     val transition = rememberInfiniteTransition(label = "thinking-dots")
     val phase by transition.animateFloat(
         initialValue = 0f,
