@@ -24,15 +24,32 @@ internal object TarExtractor {
         return name.split('/').none { it == ".." }
     }
 
-    /** A relative link is allowed only when, resolved from its own folder, it stays inside the root. */
+    /**
+     * Validate links in the guest filesystem. Absolute tar links refer to the guest root, not the
+     * Android host root, so extraction rewrites them to relative links before creating them.
+     */
     fun symlinkTargetAllowed(linkPath: String, target: String): Boolean {
-        if (target.isEmpty() || target.length > 4096 || target.startsWith("/") || target.contains('\u0000')) return false
+        if (target.isEmpty() || target.length > 4096 || target.contains('\u0000')) return false
+        val guestTarget = if (target.startsWith("/")) target.removePrefix("/") else target
+        if (guestTarget.isEmpty() || !entryNameAllowed(guestTarget)) return false
         val parent = linkPath.substringBeforeLast('/', "")
-        val combined = if (parent.isEmpty()) target else "$parent/$target"
+        val combined = if (parent.isEmpty()) guestTarget else "$parent/$guestTarget"
         return try {
             val resolved = Paths.get(combined).normalize().toString()
-            resolved != ".." && !resolved.startsWith("../") && !resolved.startsWith("/")
+            resolved.isNotEmpty() && resolved != ".." && !resolved.startsWith("../") && !resolved.startsWith("/")
         } catch (_: Exception) { false }
+    }
+
+    /** Convert guest-root absolute links into safe relative host links within the extracted root. */
+    private fun storedSymlinkTarget(linkPath: String, target: String): String {
+        if (!target.startsWith("/")) return target
+        val parent = Paths.get(linkPath).parent ?: Paths.get("")
+        val guestTarget = Paths.get(target.removePrefix("/")).normalize()
+        require(!guestTarget.isAbsolute && guestTarget.toString().isNotEmpty() &&
+            guestTarget.toString() != ".." && !guestTarget.toString().startsWith("../")) {
+            "absolute symlink escapes the guest root"
+        }
+        return parent.relativize(guestTarget).toString()
     }
 
     fun extract(input: InputStream, root: File): Stats {
@@ -81,7 +98,8 @@ internal object TarExtractor {
                     if (!symlinkTargetAllowed(cleaned, linkName)) throw Rejected("symlink points outside the runtime folder")
                     target.parentFile?.mkdirs()
                     if (target.exists() || isLink(target)) target.delete()
-                    Files.createSymbolicLink(target.toPath(), Paths.get(linkName))
+                    // Never create a host-absolute symlink: map guest /foo to a relative path inside rootfs.
+                    Files.createSymbolicLink(target.toPath(), Paths.get(storedSymlinkTarget(cleaned, linkName)))
                     skipPayload(input, size); links++
                 }
                 '1' -> {
