@@ -68,6 +68,8 @@ Use these to understand design decisions. Do not wholesale copy implementation: 
 
 ### Phase 4 — Performance and reliability
 
+**Initial implementation started:** chat auto-scroll now reacts to the last transcript item/text rather than status changes, avoiding repeated scroll animations during frequent task/status updates while still following streamed replies. Image previews now choose power-of-two sampling to keep decoded dimensions near a 1200px bound, with focused unit tests for large and invalid dimensions. CI verification for these changes is pending; this is not device acceptance.
+
 - Keep Compose recomposition and animation work bounded; avoid unnecessary background polling and duplicate WebViews.
 - Respect Android lifecycle and cancellation; release image/bitmap/WebView resources.
 - Test build and unit tests in CI, then install and exercise on a physical Android device before claiming device acceptance.
