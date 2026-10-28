@@ -163,7 +163,7 @@ internal class LinuxRuntimeInstaller(
                             break
                         } ?: break
                         synchronized(output) {
-                            if (output.length < 6000) output.append(line).append('\\n')
+                            if (output.length < 6000) output.append(line).append('\n')
                         }
                     }
                 }
