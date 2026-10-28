@@ -135,8 +135,11 @@ object ShellRunner {
             ShellExecutionRouting.Backend.LINUX -> {
                 val manifest = LinuxRuntimePolicy.productionManifest
                 val runtime = LinuxRuntimeInstaller(c.applicationContext) { name, current, total ->
-                    val percent = if (total > 0L) (current * 100L / total).coerceIn(0L, 100L) else 0L
-                    onOutput("\rPreparing Alpine: $name $percent% ($current/$total bytes)\n")
+                    if (total <= 0L) onOutput("[$name…]\n")
+                    else {
+                        val percent = (current * 100L / total).coerceIn(0L, 100L)
+                        onOutput("\rPreparing Alpine: $name $percent% ($current/$total bytes)\n")
+                    }
                 }
                 if (!runtime.isReady(manifest)) {
                     onOutput("Preparing built-in Alpine Linux runtime…\n")
