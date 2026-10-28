@@ -56,12 +56,22 @@ class TarExtractorTest {
     }
 
     @Test fun rejectsSymlinksThatLeaveTheRoot() {
-        listOf("../../../../etc" to "x", "/system/bin/sh" to "y").forEach { (target, name) ->
-            try {
-                TarExtractor.extract(ByteArrayInputStream(tar { entry(it, name, '2', link = target) }), tempDir())
-                fail("accepted link to $target")
-            } catch (_: TarExtractor.Rejected) {}
-        }
+        try {
+            TarExtractor.extract(ByteArrayInputStream(tar { entry(it, "x", '2', link = "../../../../etc") }), tempDir())
+            fail("accepted escaping relative symlink")
+        } catch (_: TarExtractor.Rejected) {}
+    }
+
+    @Test fun absoluteGuestSymlinksAreRewrittenInsideRoot() {
+        val dir = tempDir()
+        TarExtractor.extract(ByteArrayInputStream(tar { o ->
+            entry(o, "usr/bin/tool", '0', "guest-tool".toByteArray())
+            entry(o, "bin/tool", '2', link = "/usr/bin/tool")
+        }), dir)
+        assertTrue(File(dir, "bin/tool").isFile)
+        assertEquals("guest-tool", File(dir, "bin/tool").readText())
+        assertFalse(Files.isSymbolicLink(File(dir, "bin/tool").toPath()) &&
+            Files.readSymbolicLink(File(dir, "bin/tool").toPath()).isAbsolute)
     }
 
     @Test fun rejectsHardLinksOutsideTheRoot() {
@@ -85,6 +95,7 @@ class TarExtractorTest {
     @Test fun symlinkTargetRulesAreExplicit() {
         assertTrue(TarExtractor.symlinkTargetAllowed("bin/busy", "../usr/bin/env"))
         assertFalse(TarExtractor.symlinkTargetAllowed("bin/x", "../../etc"))
-        assertFalse(TarExtractor.symlinkTargetAllowed("x", "/abs"))
+        assertTrue(TarExtractor.symlinkTargetAllowed("x", "/usr/bin/tool"))
+        assertFalse(TarExtractor.symlinkTargetAllowed("x", "/../../etc"))
     }
 }
