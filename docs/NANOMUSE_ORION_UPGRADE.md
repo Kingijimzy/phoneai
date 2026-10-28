@@ -58,6 +58,8 @@ Use these to understand design decisions. Do not wholesale copy implementation: 
 
 ### Phase 3 — Adaptive recovery and verification
 
+**Implementation started:** `ToolResultPolicy` now classifies explicit tool failures into permission, missing dependency, timeout, network/provider, invalid output, unsupported, denied/blocked, empty-result and unknown categories. Each category carries a conservative next-step recommendation. The live tool-failure path reports the diagnosis in the task activity card and user-facing response, pauses with its checkpoint, and does not auto-retry a potentially side-effecting action. Focused classifier tests were added; latest CI is still required to confirm them.
+
 1. Classify failures (permission, missing dependency, timeout, HTTP status, invalid output, unsupported action, provider failure).
 2. Select a materially different and permitted alternative when appropriate.
 3. Verify the original goal with observable evidence; if not verified, report the blocker honestly.
