@@ -172,7 +172,7 @@ internal class LinuxRuntimeInstaller(
         val process = ProcessBuilder(args).directory(workingDir).redirectErrorStream(true).apply {
             environment().clear()
             environment()["HOME"] = "/root"
-            environment()["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+            environment()["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             environment()["TERM"] = "dumb"
             environment()["LANG"] = "C.UTF-8"
             environment()["TMPDIR"] = "/tmp"
