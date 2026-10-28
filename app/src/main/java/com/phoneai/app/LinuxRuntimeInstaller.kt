@@ -8,7 +8,6 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -134,7 +133,7 @@ internal class LinuxRuntimeInstaller(
         // can be unreachable on mobile carriers/private DNS, so mirror the active Android
         // network's resolver list into the private Alpine rootfs before each command.
         val dnsStatus = syncGuestDns()
-        if (dnsStatus != null) onOutput("Network DNS setup warning: $dnsStatus\\n")
+        if (dnsStatus != null) onOutput("Network DNS setup warning: $dnsStatus\n")
         val packageMutation = ShellExecutionRouting.isPackageOperation(command)
         if (packageMutation) {
             // If Android kills Orion mid-install, this durable marker forces a clean pinned-rootfs
@@ -173,7 +172,7 @@ internal class LinuxRuntimeInstaller(
             val network = manager.activeNetwork
             val servers = network?.let { manager.getLinkProperties(it)?.dnsServers }
                 ?.mapNotNull { it.hostAddress?.substringBefore('%') }
-                ?.filter { it.isNotBlank() && !it.contains('\\n') && !it.contains('\\r') }
+                ?.filter { it.isNotBlank() && !it.contains('\n') && !it.contains('\r') }
                 ?.distinct().orEmpty()
             val usable = (servers + listOf("1.1.1.1", "8.8.8.8")).distinct().take(4)
             val etc = File(rootfs, "etc")
@@ -182,8 +181,8 @@ internal class LinuxRuntimeInstaller(
             if (java.nio.file.Files.isSymbolicLink(resolver.toPath())) {
                 check(resolver.delete()) { "could not replace Alpine resolv.conf symlink" }
             }
-            resolver.writeText(usable.joinToString(separator = "\\n", postfix = "\\n") { "nameserver $it" } +
-                "options timeout:2 attempts:2\\n")
+            resolver.writeText(usable.joinToString(separator = "\n", postfix = "\n") { "nameserver $it" } +
+                "options timeout:2 attempts:2\n")
             null
         } catch (failure: Exception) {
             "could not synchronize Android DNS: ${(failure.message ?: failure.javaClass.simpleName).take(120)}"
