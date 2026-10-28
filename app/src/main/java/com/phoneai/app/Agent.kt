@@ -332,7 +332,23 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             // Give the next planning turn a bounded, evidence-based recovery strategy.
             // This is advisory only: all dispatch, approval, capability, and safety gates still run.
-            verifiedResult += "\n" + OrionRecoveryPlanner.forFailure(tool, verifiedResult).promptLine()
+            val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
+            val permittedAlternatives = ToolRegistry.all.asSequence()
+                .filter { it.name != tool }
+                .filter { ToolGate.preflightDenial(svc, it.name) == null }
+                .map { it.name }
+                .toSet()
+            val alternatives = OrionRecoveryPlanner.selectAlternatives(
+                failedTool = tool,
+                result = verifiedResult,
+                registeredAndPermitted = permittedAlternatives
+            )
+            val alternativeNote = if (alternatives.isEmpty()) {
+                "\\nRECOVERY OPTIONS: none selected. Resolve the blocker or inspect current state; do not bypass approval."
+            } else {
+                "\\nREGISTERED ALTERNATIVES (re-check live state, scope, approval and capability immediately before use): " + alternatives.joinToString(", ")
+            }
+            verifiedResult += "\\n" + recovery.promptLine() + alternativeNote
             failedCallGuard.recordFailure(tool, args)
             try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
