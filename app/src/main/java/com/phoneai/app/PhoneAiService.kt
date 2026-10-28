@@ -108,6 +108,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     interface MainChatListener {
         fun onMessage(kind: String, text: String)
+        fun onAssistantDelta(text: String) {}
         fun onStatus(text: String, mode: OrbView.Mode)
         fun onAudioLevel(level: Float) {}
         fun onAudioAmplitude(amplitude: Float) {}
@@ -1894,6 +1895,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 if (inOwnChat) mainChatListener?.onStatus(text, OrbView.Mode.THINKING) else showStrip(text)
             }
         }
+    }
+
+    override fun stream(text: String) {
+        if (text.isEmpty()) return
+        main.post { mainChatListener?.onAssistantDelta(text) }
     }
 
     override fun note(text: String) {
