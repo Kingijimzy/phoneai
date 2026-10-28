@@ -61,8 +61,6 @@ internal object LinuxRuntimePolicy {
             prootPath, "-r", rootfsDir,
             "-b", "/dev", "-b", "/proc",
             "-w", "/root",
-            "/usr/bin/env", "-i",
-            "HOME=/root", "PATH=/usr/local/bin:/usr/bin:/bin", "TERM=dumb", "LANG=C.UTF-8",
             "/bin/sh", "-c", command
         )
     }
