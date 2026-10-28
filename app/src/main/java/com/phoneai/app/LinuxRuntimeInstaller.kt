@@ -21,6 +21,7 @@ internal class LinuxRuntimeInstaller(
     private val app = context.applicationContext
     private val base = File(app.filesDir, "orion-linux")
     private val downloads = File(base, "downloads")
+    private val prootTmp = File(base, "proot-tmp")
     private val rootfs = File(base, "rootfs")
     private val proot = File(app.applicationInfo.nativeLibraryDir, "libproot.so")
     private val marker = File(base, "installed-version")
@@ -104,12 +105,20 @@ internal class LinuxRuntimeInstaller(
     }
 
     private fun runProcess(args: List<String>, workingDir: File, timeoutMs: Long): ProcessResult {
+        check(prootTmp.mkdirs() || prootTmp.isDirectory) {
+            "Could not create writable PRoot temporary directory."
+        }
+        check(prootTmp.isDirectory && prootTmp.canWrite()) {
+            "PRoot temporary directory is not writable."
+        }
         val process = ProcessBuilder(args).directory(workingDir).redirectErrorStream(true).apply {
             environment().clear()
             environment()["HOME"] = "/root"
             environment()["PATH"] = "/usr/local/bin:/usr/bin:/bin"
             environment()["TERM"] = "dumb"
             environment()["LANG"] = "C.UTF-8"
+            environment()["TMPDIR"] = prootTmp.absolutePath
+            environment()["PROOT_TMP_DIR"] = prootTmp.absolutePath
         }.start()
         val output = StringBuilder()
         val reader = Thread {
