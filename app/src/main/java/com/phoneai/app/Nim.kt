@@ -684,7 +684,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 return attempt(p, i < order.size - 1)
             } catch (e: Exception) {
                 if (cancelled) throw RuntimeException("Stopped.")
-                if (emitted.get()) throw RuntimeException("The response was interrupted after partial text. Orion stopped provider fallback to prevent duplicated output. Tap Retry to start a fresh response.", e)
+                if (!StreamFallbackPolicy.mayTryAnotherProvider(emitted.get(), cancelled)) {
+                    if (emitted.get()) throw RuntimeException("The response was interrupted after partial text. Orion stopped provider fallback to prevent duplicated output. Tap Retry to start a fresh response.", e)
+                    throw RuntimeException("Stopped.", e)
+                }
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 failures.add(msg)
