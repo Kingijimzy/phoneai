@@ -295,6 +295,68 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
     }
 
+    /**
+     * Server-sent event transport for OpenAI-compatible chat completions.
+     * Deltas are emitted as they arrive; HTTP errors before the first delta remain eligible for fallback.
+     */
+    private fun requestStream(
+        p: Provider, url: String, body: String, key: String, readMs0: Int, onDelta: (String) -> Unit
+    ): Http {
+        if (!commandRequestBudget.tryReserve()) {
+            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
+        }
+        noteHit(p.id)
+        val conn = URL(url).openConnection() as HttpURLConnection
+        active = conn
+        val answer = StringBuilder()
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = if (p.noKey) 180000 else readMs0
+            if (p.anthropicStyle) {
+                conn.setRequestProperty("x-api-key", key)
+                conn.setRequestProperty("anthropic-version", "2023-06-01")
+            } else conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.setRequestProperty("Accept", "text/event-stream")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val error = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                val retry = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
+                return Http(code, error, retry)
+            }
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                while (true) {
+                    if (cancelled) throw java.io.IOException("Stopped.")
+                    val line = reader.readLine() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val data = line.substringAfter("data:").trim()
+                    if (data.isEmpty()) continue
+                    if (data == "[DONE]") break
+                    val delta = try {
+                        val root = JSONObject(data)
+                        val choices = root.optJSONArray("choices")
+                        choices?.optJSONObject(0)?.optJSONObject("delta")?.optString("content", "")
+                            ?: ""
+                    } catch (_: Exception) { "" }
+                    if (delta.isNotEmpty()) {
+                        answer.append(delta)
+                        onDelta(delta)
+                    }
+                }
+            }
+            val synthetic = JSONObject().put("choices", JSONArray().put(
+                JSONObject().put("message", JSONObject().put("content", answer.toString()))
+            )).toString()
+            return Http(200, synthetic, -1)
+        } finally {
+            try { conn.disconnect() } catch (_: Exception) { }
+            if (active === conn) active = null
+        }
+    }
+
     private fun keyBad(r: Http): Boolean =
         r.code == 401 || r.code == 403 ||
             (r.code == 400 && (r.body.contains("API key", true) || r.body.contains("api_key", true)))
@@ -568,7 +630,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     /** A command begins at its explicit caller; the shared budget covers every fallback. */
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
+    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null): String {
         if (cancelled) throw RuntimeException("Stopped.")
         // Do not reset here: Agent.run() can call chat() several times for one
         // multi-step user command. Its explicit beginCommand() must cover the
@@ -607,19 +669,22 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
-            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
+            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse, delta)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             return answer
         }
 
         val failures = ArrayList<String>()
+        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val delta: ((String) -> Unit)? = onDelta?.let { callback -> { part -> if (part.isNotEmpty()) { emitted.set(true); callback(part) } } }
         val order = listOf(primary) + backups
         for ((i, p) in order.withIndex()) {
             try {
                 return attempt(p, i < order.size - 1)
             } catch (e: Exception) {
                 if (cancelled) throw RuntimeException("Stopped.")
+                if (emitted.get()) throw RuntimeException("The response was interrupted after partial text. Orion stopped provider fallback to prevent duplicated output. Tap Retry to start a fresh response.", e)
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 failures.add(msg)
@@ -636,7 +701,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     private fun chatOne(
-        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null
     ): String {
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
@@ -690,6 +755,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     .put("messages", messages)
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
+                if (onDelta != null && !vision) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
@@ -699,7 +765,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
+                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen") {
+                    requestStream(p, url, payload, key, if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000, onDelta)
+                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
