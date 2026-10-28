@@ -46,6 +46,8 @@ Use these to understand design decisions. Do not wholesale copy implementation: 
 
 ### Phase 2 — Shared agent/task execution
 
+**Implementation started in the Phase 1 branch:** `Agent.kt` now drives `TaskLifecycle` through planning, capability checks, authorization, execution, verification, recording and blocked/recovery states on the live guarded tool-task path. The existing `OrionExecutionLoop`, `ToolGate`, `CapabilityRegistry`, action checkpointing and per-tool approval checks remain in place. This is not yet a claim that every direct shortcut or specialist-agent path is lifecycle-managed; those routes need separate mapping and tests.
+
 1. Trace the live path from chat input through `Agent.kt` / `AgentRunner.kt` and identify the actual tool dispatcher.
 2. Integrate `TaskLifecycle` into that path so the UI reflects real planning, running, verification, blocked, recovering, completed, failed and cancelled states.
 3. Resolve tool availability from `CapabilityRegistry`; do not let prompts claim a tool is usable when its dependency or permission is missing.
