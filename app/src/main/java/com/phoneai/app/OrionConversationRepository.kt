@@ -14,7 +14,9 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 internal class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 2) {
+
+    data class ChatEvent(val id: String, val sessionId: String, val messageId: String?, val type: String, val status: String, val summary: String, val createdAt: Long)
 
     data class Session(
         val id: String,
@@ -50,9 +52,65 @@ internal class OrionConversationRepository private constructor(context: Context)
             )"""
         )
         db.execSQL("CREATE INDEX messages_session_order ON messages(session_id, sort_order)")
+        createEventsTable(db)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) createEventsTable(db)
+    }
+
+    private fun createEventsTable(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE IF NOT EXISTS chat_events (
+            id TEXT PRIMARY KEY NOT NULL,
+            session_id TEXT NOT NULL,
+            message_id TEXT,
+            event_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        )""")
+        db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
+    }
+
+    /** Store bounded, secret-free lifecycle evidence for tools and approvals in the active session. */
+    @Synchronized
+    fun recordEvent(context: Context, messageId: String?, type: String, status: String, summary: String): ChatEvent? {
+        migrateLegacy(context)
+        val db = writableDatabase
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        var sessionId = db.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+        if (sessionId == null) {
+            sessionId = prefs.getString(ACTIVE_ID, null)?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+            val now = System.currentTimeMillis()
+            insertSession(db, sessionId, "New chat", now, true, emptyList())
+            prefs.edit().putString(ACTIVE_ID, sessionId).commit()
+        }
+        val event = ChatEvent(UUID.randomUUID().toString(), sessionId!!, messageId?.take(128),
+            type.take(48), status.take(32), summary.replace(Regex("[\\r\\n\\t]+"), " ").take(500), System.currentTimeMillis())
+        val values = ContentValues().apply {
+            put("id", event.id); put("session_id", event.sessionId); put("message_id", event.messageId)
+            put("event_type", event.type); put("status", event.status); put("summary", event.summary); put("created_at", event.createdAt)
+        }
+        if (db.insert("chat_events", null, values) < 0) return null
+        return event
+    }
+
+    @Synchronized
+    fun eventsForActive(context: Context): List<ChatEvent> {
+        migrateLegacy(context)
+        val db = readableDatabase
+        val id = db.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use {
+            if (it.moveToFirst()) it.getString(0) else return emptyList()
+        }
+        val result = ArrayList<ChatEvent>()
+        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at FROM chat_events WHERE session_id=? ORDER BY created_at ASC", arrayOf(id)).use { c ->
+            while (c.moveToNext()) result.add(ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getLong(6)))
+        }
+        return result
+    }
 
     private fun clean(turns: List<Pair<String, String>>) =
         turns.filter { (kind, text) -> (kind == "me" || kind == "ai") && text.isNotBlank() }
