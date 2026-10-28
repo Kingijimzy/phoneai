@@ -189,16 +189,21 @@ internal class LinuxRuntimeInstaller(
         val reader = Thread({
             try {
                 process.inputStream.bufferedReader().use { reader ->
+                    val buffer = CharArray(512)
                     while (true) {
-                        val line = try {
-                            reader.readLine()
+                        val count = try {
+                            reader.read(buffer, 0, buffer.size)
                         } catch (closed: InterruptedIOException) {
                             if (process.isAlive) readerFailure.compareAndSet(null, closed)
                             break
-                        } ?: break
-                        synchronized(output) {
-                            if (output.length < 6000) output.append(line).append('\n')
                         }
+                        if (count < 0) break
+                        val chunk = String(buffer, 0, count)
+                        synchronized(output) {
+                            if (output.length < 6000) output.append(chunk.take(6000 - output.length))
+                        }
+                        // Stream raw chunks immediately, including partial lines and progress bars.
+                        runCatching { onOutput(chunk) }
                     }
                 }
             } catch (closed: IOException) {
