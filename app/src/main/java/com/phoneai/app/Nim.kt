@@ -696,6 +696,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         } else emptyList()
         val mode = if (vision) "vision" else "chat"
 
+        val failures = ArrayList<String>()
+        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val delta: ((String) -> Unit)? = onDelta?.let { callback -> { part -> if (part.isNotEmpty()) { emitted.set(true); callback(part) } } }
+
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
@@ -704,10 +708,6 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             lastFailure.remove(p.id)
             return answer
         }
-
-        val failures = ArrayList<String>()
-        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
-        val delta: ((String) -> Unit)? = onDelta?.let { callback -> { part -> if (part.isNotEmpty()) { emitted.set(true); callback(part) } } }
         val order = listOf(primary) + backups
         for ((i, p) in order.withIndex()) {
             try {
