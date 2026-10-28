@@ -35,6 +35,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     @Volatile private var quotaWarningAccepted = false
     private val transcripts = ArrayDeque<String>()
     @Volatile private var lastHandoffCommand = ""
+    @Volatile private var pendingWakeTranscript = false
 
     private val sessionLimit = Runnable {
         if (active) {
@@ -303,8 +304,18 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         runOnUiThread {
             if (isFinishing || text.isBlank()) return@runOnUiThread
             if (!fromModel) {
+                val trimmed = text.trim()
+                if (trimmed.equals("Orion", ignoreCase = true) || trimmed.equals("Hey Orion", ignoreCase = true)) {
+                    pendingWakeTranscript = true
+                    transcripts.addLast("YOU: $trimmed")
+                    while (transcripts.size > 6) transcripts.removeFirst()
+                    transcriptView.text = transcripts.joinToString("\\n")
+                    return@runOnUiThread
+                }
                 val command = SharedToolSurfacePolicy.commandAfterWake(text)
+                    ?: trimmed.takeIf { pendingWakeTranscript && it.isNotBlank() }
                 if (command != null) {
+                    pendingWakeTranscript = false
                     if (command.equals(lastHandoffCommand, ignoreCase = true)) return@runOnUiThread
                     lastHandoffCommand = command
                     transcripts.addLast("YOU: Orion, $command")
