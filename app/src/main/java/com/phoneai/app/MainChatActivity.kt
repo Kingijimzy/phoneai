@@ -69,6 +69,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeCommandMode get() = chatUiState.commandMode
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
+    private var streamingMessageId: Long? = null
+    private val streamingBuffer = StringBuilder()
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -1543,7 +1545,17 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     private fun addMessage(kind: String, text: String) {
-        if (composeChatActive) { composeLines.add(OrionChatLine(System.nanoTime(), kind, text)); return }
+        if (composeChatActive) {
+            val draftId = streamingMessageId
+            if (kind == "ai" && draftId != null) {
+                val index = composeLines.indexOfFirst { it.id == draftId }
+                if (index >= 0) composeLines[index] = OrionChatLine(draftId, "ai", text)
+                else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+                streamingMessageId = null
+                streamingBuffer.setLength(0)
+            } else composeLines.add(OrionChatLine(System.nanoTime(), kind, text))
+            return
+        }
         if (kind == "me") {
             listOf(welcomePanel, promptRail).forEach { view ->
                 view?.let { panel ->
@@ -1617,6 +1629,27 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onMessage(kind: String, text: String) {
         runOnUiThread { addMessage(kind, text) }
+    }
+
+    override fun onAssistantDelta(text: String) {
+        if (text.isEmpty()) return
+        runOnUiThread {
+            if (!composeChatActive) {
+                // The full-screen Compose timeline is the canonical chat surface.
+                return@runOnUiThread
+            }
+            streamingBuffer.append(text)
+            val id = streamingMessageId
+            if (id == null) {
+                val freshId = System.nanoTime()
+                streamingMessageId = freshId
+                composeLines.add(OrionChatLine(freshId, "ai", streamingBuffer.toString()))
+            } else {
+                val index = composeLines.indexOfFirst { it.id == id }
+                if (index >= 0) composeLines[index] = OrionChatLine(id, "ai", streamingBuffer.toString())
+                else composeLines.add(OrionChatLine(id, "ai", streamingBuffer.toString()))
+            }
+        }
     }
 
     override fun onTranscriptRestored(messages: List<Pair<String, String>>) {
