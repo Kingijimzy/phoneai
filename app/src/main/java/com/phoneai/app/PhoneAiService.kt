@@ -695,6 +695,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         return true
     }
 
+    /** Persist only bounded, secret-free activity metadata in the active chat session. */
+    fun recordChatEvent(type: String, status: String, summary: String, messageId: String? = null) {
+        try { OrionConversationRepository.get(this).recordEvent(this, messageId, type, status, summary) }
+        catch (_: Exception) { /* Conversation storage must never crash phone control. */ }
+    }
+
+    fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =
+        try { OrionConversationRepository.get(this).eventsForActive(this) } catch (_: Exception) { emptyList() }
+
     fun sendFromMainChat(
         text: String,
         conversationOnly: Boolean = false,
