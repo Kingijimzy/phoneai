@@ -4,6 +4,8 @@ import android.content.Context
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -145,20 +147,75 @@ internal class LinuxRuntimeInstaller(
             environment()["PROOT_LOADER"] = prootLoader.absolutePath
         }.start()
         val output = StringBuilder()
-        val reader = Thread {
-            process.inputStream.bufferedReader().useLines { lines ->
-                lines.forEach { line -> synchronized(output) { if (output.length < 6000) output.append(line).append('\n') } }
+        // A process may close its pipe while the worker is blocked in read(). Android can
+        // surface that race as InterruptedIOException when cancellation/timeout closes the
+        // stream on another thread. Keep expected shutdown noise inside the worker instead of
+        // letting it become an uncaught thread exception.
+        val readerFailure = java.util.concurrent.atomic.AtomicReference<IOException?>(null)
+        val reader = Thread({
+            try {
+                process.inputStream.bufferedReader().use { reader ->
+                    while (true) {
+                        val line = try {
+                            reader.readLine()
+                        } catch (closed: InterruptedIOException) {
+                            if (process.isAlive) readerFailure.compareAndSet(null, closed)
+                            break
+                        } ?: break
+                        synchronized(output) {
+                            if (output.length < 6000) output.append(line).append('\\n')
+                        }
+                    }
+                }
+            } catch (closed: IOException) {
+                // Closing the pipe after process exit is normal; retain only unexpected errors.
+                if (process.isAlive) readerFailure.compareAndSet(null, closed)
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } catch (failure: Throwable) {
+                readerFailure.compareAndSet(null, IOException("Process output reader failed", failure))
             }
-        }.apply { isDaemon = true; start() }
-        val finished = process.waitFor(timeoutMs.coerceIn(250L, 60_000L), TimeUnit.MILLISECONDS)
+        }, "OrionLinuxProcessOutput").apply {
+            isDaemon = true
+            start()
+        }
+
+        val finished = try {
+            process.waitFor(timeoutMs.coerceIn(250L, 60_000L), TimeUnit.MILLISECONDS)
+        } catch (interrupted: InterruptedException) {
+            process.destroy()
+            if (!process.waitFor(250, TimeUnit.MILLISECONDS)) process.destroyForcibly()
+            Thread.currentThread().interrupt()
+            throw IOException("Interrupted while waiting for Linux process.", interrupted)
+        }
+
         if (!finished) {
             process.destroy()
             if (!process.waitFor(500, TimeUnit.MILLISECONDS)) process.destroyForcibly()
-            reader.join(500)
-            return ProcessResult(-1, synchronized(output) { output.toString().take(6000) }, true)
         }
-        reader.join(500)
-        return ProcessResult(process.exitValue(), synchronized(output) { output.toString().take(6000) }, false)
+
+        // Process termination closes the pipe and releases a blocked reader. Give it time to
+        // drain remaining output, then close the stream only after the process is no longer alive.
+        try {
+            reader.join(1_000)
+            if (reader.isAlive && !process.isAlive) {
+                runCatching { process.inputStream.close() }
+                reader.join(250)
+            }
+        } catch (interrupted: InterruptedException) {
+            process.destroyForcibly()
+            runCatching { process.inputStream.close() }
+            reader.interrupt()
+            Thread.currentThread().interrupt()
+            throw IOException("Interrupted while collecting Linux process output.", interrupted)
+        }
+
+        val captured = synchronized(output) { output.toString().take(6000) }
+        if (finished && readerFailure.get() != null) {
+            throw IOException("Could not reliably collect Linux process output.", readerFailure.get())
+        }
+        return if (!finished) ProcessResult(-1, captured, true)
+        else ProcessResult(process.exitValue(), captured, false)
     }
 
     private fun download(a: LinuxRuntimePolicy.Artifact, name: String, maxBytes: Long): File {
