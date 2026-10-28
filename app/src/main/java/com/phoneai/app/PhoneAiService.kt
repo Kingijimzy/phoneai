@@ -914,6 +914,26 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    fun restoreArchivedChat(sessionId: String) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Let the current task finish or stop it before switching conversations.")
+                return@post
+            }
+            val restored = ChatHistoryStore.restoreArchivedById(this, sessionId)
+            if (restored == null) {
+                mainChatListener?.onMessage("ai", "That archived chat is no longer available. Refresh history and try again.")
+                return@post
+            }
+            transcript.clear()
+            transcript.addAll(restored.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
+            agent.reset()
+            agent.restoreConversationContext(transcript.toList())
+            mainChatListener?.onTranscriptRestored(transcript.toList())
+            mainChatListener?.onStatus("Previous conversation restored", OrbView.Mode.IDLE)
+        }
+    }
+
     fun startNewChat() {
         main.post {
             if (running) {
