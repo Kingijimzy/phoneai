@@ -58,7 +58,7 @@ Use these to understand design decisions. Do not wholesale copy implementation: 
 
 ### Phase 3 — Adaptive recovery and verification
 
-**Implementation started:** `ToolResultPolicy` now classifies explicit tool failures into permission, missing dependency, timeout, network/provider, invalid output, unsupported, denied/blocked, empty-result and unknown categories. Each category carries a conservative next-step recommendation. The live tool-failure path reports the diagnosis in the task activity card and user-facing response, pauses with its checkpoint, and does not auto-retry a potentially side-effecting action. Focused classifier tests were added; latest CI is still required to confirm them.
+**Source implementation:** `ToolResultPolicy` classifies permission, missing dependency, timeout, network/provider, invalid output, unsupported, denied/blocked, empty-result and unknown failures. The live guarded tool path pauses on failure, inspects the current state without treating it as completion proof, records a privacy-minimal lesson, and emits recovery guidance. `OrionRecoveryPlanner.selectAlternatives` now chooses a bounded, materially different shortlist only from the caller's currently registered/permitted set; it excludes the failed tool and previously attempted tools, prefers read-only inspection when outcomes are uncertain, and returns no alternatives after denial, cancellation or safety blocks. The caller still rechecks scope, capability and approval at dispatch.
 
 1. Classify failures (permission, missing dependency, timeout, HTTP status, invalid output, unsupported action, provider failure).
 2. Select a materially different and permitted alternative when appropriate.
