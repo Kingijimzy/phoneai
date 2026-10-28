@@ -131,22 +131,22 @@ object ShellRunner {
     fun runStreaming(c: Context, command: String, where: String, onOutput: (String) -> Unit): String =
         when (ShellExecutionRouting.backend(where)) {
             ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command, onOutput = onOutput)
-            ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command).also { result -> if (result.isNotBlank()) onOutput(result + "\\n") }
+            ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command).also { result -> if (result.isNotBlank()) onOutput(result + "\n") }
             ShellExecutionRouting.Backend.LINUX -> {
                 val manifest = LinuxRuntimePolicy.productionManifest
                 val runtime = LinuxRuntimeInstaller(c.applicationContext) { name, current, total ->
                     val percent = if (total > 0L) (current * 100L / total).coerceIn(0L, 100L) else 0L
-                    onOutput("\\rPreparing Alpine: $name $percent% ($current/$total bytes)\\n")
+                    onOutput("\rPreparing Alpine: $name $percent% ($current/$total bytes)\n")
                 }
                 if (!runtime.isReady(manifest)) {
-                    onOutput("Preparing built-in Alpine Linux runtime…\\n")
+                    onOutput("Preparing built-in Alpine Linux runtime…\n")
                     val installed = runtime.install(manifest)
                     if (installed.isFailure) {
                         "error: Alpine runtime is not ready: ${installed.exceptionOrNull()?.message ?: "installation failed"}. No fallback to Android shell was attempted."
                     } else if (!runtime.isReady(manifest)) {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
-                        onOutput("Alpine ready. Running command…\\n")
+                        onOutput("Alpine ready. Running command…\n")
                         runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput)
                     }
                 } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput)
@@ -186,10 +186,10 @@ class ShellResultReceiver : BroadcastReceiver() {
             val termuxError = r.getInt("err", -1)
             val errmsg = r.getString("errmsg").orEmpty()
             when {
-                termuxError != -1 -> "error: TERMUX SERVICE ERROR" + if (errmsg.isBlank()) "" else "\\n" + errmsg.take(1000)
+                termuxError != -1 -> "error: TERMUX SERVICE ERROR" + if (errmsg.isBlank()) "" else "\n" + errmsg.take(1000)
                 code == Int.MIN_VALUE -> "error: Termux returned output without an exit status; outcome is unverified."
-                else -> (if (code == 0) "EXIT 0 · SUCCESS\\n" else "error: EXIT $code · FAILED\\n") +
-                    ShellPolicy.clip((out + (if (err.isNotBlank()) "\\nSTDERR\\n" + err else "")).trimEnd()).ifBlank { "(no output)" }
+                else -> (if (code == 0) "EXIT 0 · SUCCESS\n" else "error: EXIT $code · FAILED\n") +
+                    ShellPolicy.clip((out + (if (err.isNotBlank()) "\nSTDERR\n" + err else "")).trimEnd()).ifBlank { "(no output)" }
             }
         }
         box.latch.countDown()
