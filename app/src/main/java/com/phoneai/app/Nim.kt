@@ -341,9 +341,24 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     if (data == "[DONE]") break
                     val delta = try {
                         val root = JSONObject(data)
-                        val choices = root.optJSONArray("choices")
-                        choices?.optJSONObject(0)?.optJSONObject("delta")?.optString("content", "")
-                            ?: ""
+                        when {
+                            p.anthropicStyle -> {
+                                val type = root.optString("type")
+                                if (type == "message_stop") break
+                                if (type == "content_block_delta") root.optJSONObject("delta")?.optString("text", "") ?: "" else ""
+                            }
+                            p.id == "opencode-zen" -> {
+                                val type = root.optString("type")
+                                if (type == "response.completed" || type == "response.done") break
+                                if (type == "response.output_text.delta") root.optString("delta", "")
+                                else if (type == "response.content_part.delta") root.optJSONObject("delta")?.optString("text", "") ?: ""
+                                else ""
+                            }
+                            else -> {
+                                val choices = root.optJSONArray("choices")
+                                choices?.optJSONObject(0)?.optJSONObject("delta")?.optString("content", "") ?: ""
+                            }
+                        }
                     } catch (_: Exception) { "" }
                     if (delta.isNotEmpty()) {
                         answer.append(delta)
@@ -360,9 +375,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     onDelta(complete)
                 }
             }
-            val synthetic = JSONObject().put("choices", JSONArray().put(
-                JSONObject().put("message", JSONObject().put("content", answer.toString()))
-            )).toString()
+            val synthetic = when {
+                p.anthropicStyle -> JSONObject().put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
+                p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString()).toString()
+                else -> JSONObject().put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", answer.toString())))).toString()
+            }
             return Http(200, synthetic, -1)
         } finally {
             try { conn.disconnect() } catch (_: Exception) { }
