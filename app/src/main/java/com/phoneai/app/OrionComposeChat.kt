@@ -89,6 +89,16 @@ import androidx.compose.ui.draw.scale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Choose power-of-two sampling so previews stay near 1200px even for very large photos. */
+internal fun orionImageSampleSize(width: Int, height: Int, maxDimension: Int = 1200): Int {
+    if (width <= 0 || height <= 0 || maxDimension <= 0) return 1
+    var sample = 1
+    while (maxOf(width / sample, height / sample) > maxDimension && sample <= (1 shl 29)) {
+        sample *= 2
+    }
+    return sample
+}
+
 /** Lightweight Markdown presentation for model replies; copy still uses the original source. */
 private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
 private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
@@ -538,11 +548,7 @@ private fun ImageThumbnail(uri: Uri, modifier: Modifier = Modifier) {
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                     val options = BitmapFactory.Options().apply {
-                        inSampleSize = when {
-                            bounds.outWidth > 2400 || bounds.outHeight > 2400 -> 4
-                            bounds.outWidth > 1200 || bounds.outHeight > 1200 -> 2
-                            else -> 1
-                        }
+                        inSampleSize = orionImageSampleSize(bounds.outWidth, bounds.outHeight)
                     }
                     BitmapFactory.decodeStream(input, null, options)
                 }
