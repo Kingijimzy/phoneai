@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermission
 
 class TarExtractorTest {
     private fun header(name: String, type: Char, size: Long, mode: Int = 420, link: String = ""): ByteArray {
@@ -44,6 +45,17 @@ class TarExtractorTest {
         assertTrue(File(dir, "bin/sh").canExecute())
         assertTrue(File(dir, "bin/busy").exists())
         assertEquals("root:x:0", File(dir, "etc/pass").readText())
+        assertEquals(
+            setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE,
+                PosixFilePermission.GROUP_READ, PosixFilePermission.GROUP_EXECUTE,
+                PosixFilePermission.OTHERS_READ, PosixFilePermission.OTHERS_EXECUTE),
+            Files.getPosixFilePermissions(File(dir, "bin").toPath())
+        )
+        assertEquals(
+            setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.GROUP_READ, PosixFilePermission.OTHERS_READ),
+            Files.getPosixFilePermissions(File(dir, "etc/pass").toPath())
+        )
     }
 
     @Test fun rejectsPathTraversalAndAbsolutePaths() {
