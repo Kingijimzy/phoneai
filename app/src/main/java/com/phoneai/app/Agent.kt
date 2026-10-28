@@ -1520,7 +1520,9 @@ Rules:
                 moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Tool '$tool' failed verification or execution; inspect the recorded result before resuming")
                 AgentCheckpointStore.pause(svc)
                 ui.phase("error")
-                ui.say("I couldn't complete the step '$tool'. $toolFailure I paused the task and saved its progress; I have not marked the task complete. Check the current screen before asking me to continue.")
+                val diagnosis = ToolResultPolicy.diagnose(result)
+                ui.note("[TASK:BLOCKED]\\nFailure type: ${diagnosis.kind.name.lowercase()}\\nSafe next step: ${diagnosis.safeNextStep}")
+                ui.say("I couldn't complete the step '$tool'. ${diagnosis.reason.ifBlank { toolFailure }} Safe next step: ${diagnosis.safeNextStep} I paused the task and saved its progress; I have not marked the task complete.")
                 return
             }
             history.put(msg("user", "RESULT: " + result.take(3500)))
