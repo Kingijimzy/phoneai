@@ -134,11 +134,25 @@ object ShellRunner {
             ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command).also { result -> if (result.isNotBlank()) onOutput(result + "\n") }
             ShellExecutionRouting.Backend.LINUX -> {
                 val manifest = LinuxRuntimePolicy.productionManifest
+                // Keep install progress readable: stage changes are shown once, while a large
+                // download reports only 10% milestones instead of every 32 KB chunk.
+                var lastStage = ""
+                var lastProgressBucket = -1L
                 val runtime = LinuxRuntimeInstaller(c.applicationContext) { name, current, total ->
-                    if (total <= 0L) onOutput("[$name…]\n")
-                    else {
+                    if (total <= 0L) {
+                        if (name != lastStage) {
+                            lastStage = name
+                            lastProgressBucket = -1L
+                            onOutput("[$name…]\n")
+                        }
+                    } else {
                         val percent = (current * 100L / total).coerceIn(0L, 100L)
-                        onOutput("\rPreparing Alpine: $name $percent% ($current/$total bytes)\n")
+                        val bucket = percent / 10L
+                        if (name != lastStage || bucket != lastProgressBucket || percent == 100L) {
+                            lastStage = name
+                            lastProgressBucket = bucket
+                            onOutput("Preparing Alpine: downloading root filesystem $percent%\n")
+                        }
                     }
                 }
                 if (!runtime.isReady(manifest)) {
