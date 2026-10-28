@@ -1694,6 +1694,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
             }
             val busy = mode != OrbView.Mode.IDLE || PhoneAiService.instance?.isTaskRunning() == true
+            if (!busy && streamingMessageId != null) {
+                // Preserve any partial text after Stop, but let the next request create a fresh message.
+                streamingMessageId = null
+                streamingBuffer.setLength(0)
+            }
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
             stop.text = "■"
