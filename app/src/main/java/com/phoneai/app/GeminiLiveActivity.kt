@@ -342,6 +342,9 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
     }
 
+    /** Partial speech recognition is intentionally ignored for execution; only final transcripts may hand off. */
+    override fun onInterimTranscript(text: String) { }
+
     override fun onInputLevel(level: Float) {
         runOnUiThread {
             if (::visual.isInitialized) {
