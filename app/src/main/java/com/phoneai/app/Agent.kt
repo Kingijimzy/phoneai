@@ -1259,7 +1259,14 @@ Rules:
         }
         // TaskLifecycle governs this live tool-task path. Individual calls remain inside EXECUTE;
         // the overall task can complete only after the existing evidence-based completion gate passes.
-        var managedTask = TaskLifecycle()
+        // A resumed checkpoint does not persist the in-memory lifecycle object. Reconstruct
+        // it as a blocked execution and resume through PLAN so uncertain actions are inspected,
+        // not replayed. The checkpoint/tool dispatcher remains the source of execution evidence.
+        var managedTask = if (resumeRequest) {
+            TaskLifecycle(phase = TaskLifecycle.Phase.BLOCKED, blockedFrom = TaskLifecycle.Phase.EXECUTE).resume() ?: TaskLifecycle()
+        } else {
+            TaskLifecycle()
+        }
         fun moveTaskPhase(next: TaskLifecycle.Phase, detail: String) {
             // Keep the live state authoritative: never force a phase if TaskLifecycle rejects the transition.
             if (managedTask.phase != next) {
@@ -1280,8 +1287,13 @@ Rules:
             }
             ui.note("[TASK:${managedTask.phase.name}]\n$detail")
         }
-        managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
-        moveTaskPhase(TaskLifecycle.Phase.PLAN, "Planning the requested outcome")
+        if (managedTask.phase == TaskLifecycle.Phase.UNDERSTAND) {
+            managedTask = managedTask.advance() ?: managedTask // UNDERSTAND -> PLAN
+        }
+        moveTaskPhase(
+            TaskLifecycle.Phase.PLAN,
+            if (resumeRequest) "Replanning from the saved checkpoint before any further action" else "Planning the requested outcome"
+        )
         managedTask = managedTask.advance() ?: managedTask // PLAN -> CHECK_CAPABILITIES
         moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools, enabled packs and permissions")
         managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
