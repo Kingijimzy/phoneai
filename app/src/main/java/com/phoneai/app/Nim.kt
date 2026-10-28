@@ -310,6 +310,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         active = conn
         val answer = StringBuilder()
         val nonSseBody = StringBuilder()
+        var terminalEventSeen = false
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15000
@@ -338,18 +339,27 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                     }
                     val data = line.substringAfter("data:").trim()
                     if (data.isEmpty()) continue
-                    if (data == "[DONE]") break
+                    if (data == "[DONE]") {
+                        terminalEventSeen = true
+                        break
+                    }
                     val delta = try {
                         val root = JSONObject(data)
                         when {
                             p.anthropicStyle -> {
                                 val type = root.optString("type")
-                                if (type == "message_stop") break
+                                if (type == "message_stop") {
+                                    terminalEventSeen = true
+                                    break
+                                }
                                 if (type == "content_block_delta") root.optJSONObject("delta")?.optString("text", "") ?: "" else ""
                             }
                             p.id == "opencode-zen" -> {
                                 val type = root.optString("type")
-                                if (type == "response.completed" || type == "response.done") break
+                                if (type == "response.completed" || type == "response.done") {
+                                    terminalEventSeen = true
+                                    break
+                                }
                                 if (type == "response.output_text.delta") root.optString("delta", "")
                                 else if (type == "response.content_part.delta") root.optJSONObject("delta")?.optString("text", "") ?: ""
                                 else ""
@@ -365,6 +375,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         onDelta(delta)
                     }
                 }
+            }
+            if (cancelled) throw java.io.IOException("Stream cancelled by user.")
+            if (answer.isNotEmpty() && !terminalEventSeen) {
+                // EOF without a terminal marker may be a truncated stream; never call it complete.
+                throw java.io.IOException("Stream ended before its completion marker.")
             }
             if (answer.isEmpty() && nonSseBody.isNotBlank()) {
                 // Some OpenAI-compatible gateways ignore stream=true and return a normal JSON body.
