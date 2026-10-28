@@ -353,7 +353,7 @@ fun OrionComposeChatScreen(
         if (lines.isEmpty()) {
             Column(
                 Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                    .padding(horizontal = 22.dp, vertical = 18.dp),
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -642,13 +642,13 @@ private fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit) {
                         else if (replyType != OrionReplyType.NORMAL) Modifier
                             .clip(RoundedCornerShape(16.dp))
                             .background(when (replyType) {
-                                OrionReplyType.RESEARCH -> Color(0xFF111820)
+                                OrionReplyType.RESEARCH -> Color(0xFF151515)
                                 OrionReplyType.CODE -> Color(0xFF101010)
                                 OrionReplyType.TASK -> Color(0xFF171717)
                                 else -> Color.Transparent
                             })
                             .border(1.dp, when (replyType) {
-                                OrionReplyType.RESEARCH -> Color(0xFF354553)
+                                OrionReplyType.RESEARCH -> Color(0xFF383838)
                                 OrionReplyType.CODE -> Color(0xFF383838)
                                 OrionReplyType.TASK -> Color(0xFF454545)
                                 else -> Color.Transparent
@@ -670,7 +670,7 @@ private fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit) {
                                 OrionReplyType.NORMAL -> "ACTIVITY"
                             },
                             color = when (replyType) {
-                                OrionReplyType.RESEARCH -> Color(0xFFB6D5E8)
+                                OrionReplyType.RESEARCH -> Color(0xFFD2D2D2)
                                 OrionReplyType.CODE -> Color(0xFFE2E2E2)
                                 OrionReplyType.TASK -> Color(0xFFD0D0D0)
                                 OrionReplyType.NORMAL -> ChatMint
