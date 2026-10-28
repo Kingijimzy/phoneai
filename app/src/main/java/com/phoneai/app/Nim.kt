@@ -291,7 +291,8 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
             return Http(code, text, ra)
         } finally {
-            conn.disconnect()
+            try { conn.disconnect() } catch (_: Exception) { }
+            if (active === conn) active = null
         }
     }
 
