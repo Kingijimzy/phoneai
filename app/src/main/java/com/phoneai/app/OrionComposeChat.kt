@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -280,6 +281,7 @@ fun OrionComposeChatScreen(
     onNewChat: () -> Unit,
     onModeChange: (Boolean) -> Unit,
     onSend: (String) -> Unit,
+    onEditMessage: (String) -> Unit,
     onPickImage: () -> Unit,
     onRemoveImage: () -> Unit,
     onVoice: () -> Unit,
@@ -288,7 +290,7 @@ fun OrionComposeChatScreen(
     onMenuAction: (String) -> Unit,
     onStop: () -> Unit
 ) {
-    var draft by remember { mutableStateOf("") }
+    var draft by rememberSaveable { mutableStateOf("") }
     var menuExpanded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val statusDotColor by animateColorAsState(
@@ -482,7 +484,8 @@ fun OrionComposeChatScreen(
                         onOpenBrowser = onBrowser,
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
                             { onSend(prompt) }
-                        }
+                        },
+                        onEdit = if (item.kind == "me") onEditMessage else null
                     )
                 }
                 if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }

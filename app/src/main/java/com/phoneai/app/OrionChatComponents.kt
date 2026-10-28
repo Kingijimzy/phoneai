@@ -173,7 +173,7 @@ private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
 }
 
 @Composable
-internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, onRetry: (() -> Unit)? = null) {
+internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, onRetry: (() -> Unit)? = null, onEdit: ((String) -> Unit)? = null) {
     val mine = item.kind == "me"
     val note = item.kind == "note"
     val replyType = if (mine) OrionReplyType.NORMAL else classifyOrionReply(item)
@@ -297,6 +297,12 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                             clipboard.setText(AnnotatedString(item.text))
                             actionsVisible = false
                         }.padding(vertical = 4.dp))
+                        if (mine && onEdit != null) {
+                            Text("Edit & resend", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.clickable {
+                                actionsVisible = false
+                                onEdit(item.text)
+                            }.padding(vertical = 4.dp))
+                        }
                         if (!mine && onRetry != null) {
                             Text("Retry response", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.clickable {
                                 actionsVisible = false

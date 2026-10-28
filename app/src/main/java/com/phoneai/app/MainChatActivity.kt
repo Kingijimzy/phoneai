@@ -504,6 +504,17 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(header)
         val divider = View(this).apply { setBackgroundColor(0xFF292929.toInt()) }
         root.addView(divider, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(16); bottomMargin = dp(12) })
+        val search = EditText(this@MainChatActivity).apply {
+            hint = "Search conversations"
+            setSingleLine(true)
+            textSize = 14f
+            setTextColor(0xFFF1F1F1.toInt())
+            setHintTextColor(0xFF858585.toInt())
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = rounded(0xFF151515.toInt(), 13, 0xFF303030.toInt())
+            contentDescription = "Search saved conversations"
+        }
+        root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         val list = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         if (chats.isEmpty()) {
@@ -513,6 +524,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 setPadding(dp(22), dp(36), dp(22), dp(36))
                 background = rounded(0xFF151515.toInt(), 20, 0xFF303030.toInt())
             }
+            empty.tag = "no saved conversations yet"
             empty.addView(label("◷", 34f, 0xFFBDBDBD.toInt(), true).apply { gravity = Gravity.CENTER })
             empty.addView(label("No saved conversations yet", 18f, 0xFFF1F1F1.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)) })
             empty.addView(label("When you start a new chat, Orion keeps the previous conversation here.", 13f, 0xFF9B9B9B.toInt()).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER })
@@ -545,6 +557,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                         }.show()
                 })
                 top.addView(label("›", 25f, 0xFFBDBDBD.toInt(), true))
+                card.tag = (chat.title + " " + preview + " " + chat.messages.joinToString(" ") { it.second }).lowercase(java.util.Locale.ROOT)
                 card.addView(top)
                 card.addView(label(dates.format(java.util.Date(chat.timestamp)) + "  ·  " + chat.messages.size + " messages", 11f, 0xFF8E8E8E.toInt()).apply { setPadding(0, dp(7), 0, dp(8)) })
                 card.addView(label(preview.ifBlank { "Open conversation to view messages" }, 13f, 0xFFB6B6B6.toInt()).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
@@ -553,6 +566,18 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 animateIn(card, (index.coerceAtMost(6) * 35L))
             }
         }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s?.toString()?.trim()?.lowercase(java.util.Locale.ROOT).orEmpty()
+                for (index in 0 until rows.childCount) {
+                    val child = rows.getChildAt(index)
+                    val searchable = child.tag as? String
+                    child.visibility = if (query.isEmpty() || searchable?.contains(query) == true) View.VISIBLE else View.GONE
+                }
+            }
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        })
         list.addView(rows)
         root.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         dialog.setContentView(root)
@@ -1219,6 +1244,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
+                    onEditMessage = { message ->
+                        input.setText(message)
+                        input.setSelection(input.text?.length ?: 0)
+                        input.requestFocus()
+                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                        imm?.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    },
                     onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() }
                 )
             }
