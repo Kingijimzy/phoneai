@@ -28,7 +28,7 @@ class OrionPerformancePolicyTest {
         assertEquals(1, orionImageSampleSize(640, 480))
         assertEquals(2, orionImageSampleSize(2400, 1600))
         assertEquals(4, orionImageSampleSize(4800, 3200))
-        assertEquals(8, orionImageSampleSize(12000, 9000))
+        assertEquals(16, orionImageSampleSize(12000, 9000))
     }
 
     @Test fun invalidImageDimensionsUseSafeDefaultSampling() {
