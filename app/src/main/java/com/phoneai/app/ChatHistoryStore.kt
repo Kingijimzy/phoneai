@@ -33,6 +33,13 @@ object ChatHistoryStore {
         repo(context).archived(context).map { OrionSavedChat(it.timestamp, it.title, it.messages, it.id) }
 
     @Synchronized
+    fun deleteArchivedById(context: Context, sessionId: String): Boolean = repo(context).deleteArchivedById(context, sessionId)
+
+    @Synchronized
+    fun restoreArchivedById(context: Context, sessionId: String): List<Pair<String, String>>? =
+        repo(context).restoreArchivedById(context, sessionId)
+
+    @Synchronized
     fun deleteArchived(context: Context, timestamp: Long, title: String): Boolean =
         repo(context).deleteArchived(context, timestamp, title)
 
