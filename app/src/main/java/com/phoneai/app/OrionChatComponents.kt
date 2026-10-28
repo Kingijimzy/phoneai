@@ -264,7 +264,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit) {
                                 text = formatted,
                                 style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
                                 onClick = { offset ->
-                                    val url = formatted.getStringAnnotations("URL", offset, offset).firstOrNull()?.item
+                                    val url = formatted.getStringAnnotations("URL", offset, (offset + 1).coerceAtMost(formatted.length)).firstOrNull()?.item
                                     if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) {
                                         onOpenBrowser(url)
                                     } else {
