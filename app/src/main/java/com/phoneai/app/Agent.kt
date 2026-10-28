@@ -1485,8 +1485,15 @@ Rules:
             compact()
         }
         AgentCheckpointStore.pause(svc)
-        if (stopped) ui.say("Stopped. I saved the task progress locally; say \"continue\" when you want me to resume.")
-        else ui.say("I paused at the step limit and saved the task progress locally. Say \"continue\" to resume from the recorded results.")
+        if (stopped) {
+            managedTask = managedTask.cancel() ?: managedTask
+            moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped execution; checkpoint preserved and no new actions will start")
+            ui.say("Stopped. I saved the task progress locally; say \"continue\" when you want me to resume.")
+        } else {
+            managedTask = managedTask.block() ?: managedTask
+            moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Execution budget reached; checkpoint preserved for a later resume")
+            ui.say("I paused at the step limit and saved the task progress locally. Say \"continue\" to resume from the recorded results.")
+        }
     }
 
     /** Apply the same enabled-pack and approval policy to direct no-LLM shortcuts. */
