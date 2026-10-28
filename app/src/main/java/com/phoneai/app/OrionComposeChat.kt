@@ -70,6 +70,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.graphics.Bitmap
@@ -295,7 +299,7 @@ fun OrionComposeChatScreen(
     Column(Modifier.fillMaxSize().background(ChatInk).imePadding()) {
         // Editorial header: quiet branding, no oversized pill around every element.
         Row(
-            Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 14.dp, bottom = 15.dp),
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -312,8 +316,9 @@ fun OrionComposeChatScreen(
                 }
             }
             Row(
-                modifier = Modifier.padding(end = 7.dp).clip(RoundedCornerShape(10.dp))
-                    .clickable(onClick = onNewChat).padding(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.padding(end = 3.dp).clip(RoundedCornerShape(10.dp))
+                    .semantics { contentDescription = "Start a new chat"; role = Role.Button }
+                    .clickable(onClick = onNewChat).padding(horizontal = 6.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -321,8 +326,9 @@ fun OrionComposeChatScreen(
                 Text("New", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
             Row(
-                modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(10.dp))
-                    .clickable(onClick = onHistory).padding(horizontal = 7.dp, vertical = 8.dp),
+                modifier = Modifier.padding(end = 3.dp).clip(RoundedCornerShape(10.dp))
+                    .semantics { contentDescription = "Open chat history"; role = Role.Button }
+                    .clickable(onClick = onHistory).padding(horizontal = 5.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -330,8 +336,10 @@ fun OrionComposeChatScreen(
             }
             Box(
                 Modifier.clip(RoundedCornerShape(9.dp)).background(modeChipFill)
-                    .border(1.dp, ChatHairline, RoundedCornerShape(9.dp)).clickable { onModeChange(!commandMode) }
-                    .padding(horizontal = 11.dp, vertical = 8.dp)
+                    .border(1.dp, ChatHairline, RoundedCornerShape(9.dp))
+                    .semantics { contentDescription = if (commandMode) "Switch to Talk mode" else "Switch to Command mode"; role = Role.Button }
+                    .clickable { onModeChange(!commandMode) }
+                    .padding(horizontal = 8.dp, vertical = 7.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(if (commandMode) Icons.Rounded.Tune else Icons.Rounded.Waves, null,
@@ -393,9 +401,9 @@ fun OrionComposeChatScreen(
                     Triple("Plan my next step", "Turn a goal into a practical plan", "Help me plan my next step")
                 ).forEach { item ->
                     Row(
-                        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF121212)).border(1.dp, ChatHairline, RoundedCornerShape(16.dp))
-                            .clickable { onSend(item.third) }.padding(horizontal = 14.dp, vertical = 13.dp),
+                        Modifier.fillMaxWidth().padding(bottom = 7.dp).clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF121212)).border(1.dp, ChatHairline, RoundedCornerShape(12.dp))
+                            .clickable { onSend(item.third) }.padding(horizontal = 12.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -408,7 +416,7 @@ fun OrionComposeChatScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
@@ -485,7 +493,8 @@ fun OrionComposeChatScreen(
                 Box(Modifier.weight(1f).padding(vertical = 11.dp)) {
                     if (draft.isEmpty()) Text(if (commandMode) "Describe the task…" else "Message Orion…", color = ChatMuted, fontSize = 14.sp)
                     BasicTextField(
-                        value = draft, onValueChange = { draft = it }, modifier = Modifier.fillMaxWidth(),
+                        value = draft, onValueChange = { draft = it },
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = if (commandMode) "Describe a task for Orion" else "Message Orion" },
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
@@ -504,9 +513,9 @@ fun OrionComposeChatScreen(
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Live voice", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onVoice))
-                    Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable { onBrowser(null) })
-                    Text("Tasks", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onTasks))
+                    Text("Live voice", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Start live voice"; role = Role.Button }.clickable(onClick = onVoice))
+                    Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Open browser"; role = Role.Button }.clickable { onBrowser(null) })
+                    Text("Tasks", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Open tasks"; role = Role.Button }.clickable(onClick = onTasks))
                 }
                 Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Color(0xFF9B9B9B),
                     fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(4.dp))
