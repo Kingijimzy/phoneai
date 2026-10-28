@@ -34,6 +34,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     @Volatile private var microphoneEnabled = true
     @Volatile private var quotaWarningAccepted = false
     private val transcripts = ArrayDeque<String>()
+    @Volatile private var lastHandoffCommand = ""
 
     private val sessionLimit = Runnable {
         if (active) {
@@ -149,7 +150,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
         root.addView(standardModeButton, LinearLayout.LayoutParams(-1, dp(44)))
 
-        root.addView(label("Conversation-only mode · no phone actions · maximum 5 minutes", 10f, 0xFF787878.toInt()),
+        root.addView(label("Say “Orion, …” to hand an explicit request to Orion’s guarded tools · maximum 5 minutes", 10f, 0xFF787878.toInt()),
             LinearLayout.LayoutParams(-1, dp(30)))
         setContentView(root)
 
@@ -301,11 +302,32 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
     override fun onTranscript(text: String, fromModel: Boolean) {
         runOnUiThread {
             if (isFinishing || text.isBlank()) return@runOnUiThread
+            if (!fromModel) {
+                val command = SharedToolSurfacePolicy.commandAfterWake(text)
+                if (command != null) {
+                    if (command.equals(lastHandoffCommand, ignoreCase = true)) return@runOnUiThread
+                    lastHandoffCommand = command
+                    transcripts.addLast("YOU: Orion, $command")
+                    while (transcripts.size > 6) transcripts.removeFirst()
+                    transcriptView.text = transcripts.joinToString("\\n")
+                    val service = PhoneAiService.instance
+                    if (service == null) {
+                        statusView.text = "ORION ACCESSIBILITY SERVICE UNAVAILABLE"
+                        usageView.text = "Enable Orion's accessibility service, then retry the command."
+                        return@runOnUiThread
+                    }
+                    statusView.text = "HANDING OFF TO ORION TOOLS"
+                    usageView.text = "Gemini Live is ending so Orion can run the request through app-approved tool permissions."
+                    endCall(returnToStandard = true)
+                    service.executeSharedToolRequest(command, "Gemini Live")
+                    return@runOnUiThread
+                }
+            }
             if (fromModel) visual.mode = OrbView.Mode.SPEAKING else if (microphoneEnabled) visual.mode = OrbView.Mode.LISTENING
             val prefix = if (fromModel) "ORION: " else "YOU: "
             transcripts.addLast(prefix + text.trim())
             while (transcripts.size > 6) transcripts.removeFirst()
-            transcriptView.text = transcripts.joinToString("\n")
+            transcriptView.text = transcripts.joinToString("\\n")
         }
     }
 
