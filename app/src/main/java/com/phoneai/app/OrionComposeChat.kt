@@ -789,7 +789,9 @@ private fun TaskActivityCard(raw: String) {
         blocked -> "WAITING · NEEDS ATTENTION"
         cancelled -> "TASK CANCELLED"
         recovering -> "RECOVERING · REPLANNING"
-        state == "PHASE" -> "TASK · " + detail.substringBefore("\n").take(42).uppercase()
+        state == "PLAN" -> "PLANNING"
+        state == "CHECK_CAPABILITIES" -> "CHECKING CAPABILITIES"
+        state == "AUTHORIZE" -> "CHECKING APPROVALS"
         state == "VERIFY" -> "VERIFYING OUTCOME"
         state == "COMPLETE" -> "TASK COMPLETE"
         state == "RECORD" -> "RECORDING OUTCOME"
