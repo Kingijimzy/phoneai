@@ -1743,6 +1743,7 @@ Rules:
     }
 
     private fun exec(tool: String, a: JSONObject): String {
+        svc.recordChatEvent("tool", "started", "Tool: $tool")
         val safetyBlock = SafetyGate.blockReason(
             tool,
             when (tool) {
@@ -1780,7 +1781,7 @@ Rules:
             if (!decision.allowed) return "error: skill blocked: " + decision.reason
             activeSkillCalls++
         }
-        return when (tool) {
+        val result = when (tool) {
             "lookup_app" -> tools.lookupApp(a.optString("name"))
             "open_app" -> svc.openApp(a.optString("name"))
             "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
@@ -2068,6 +2069,10 @@ Rules:
             }
             else -> "error: unknown tool $tool"
         }
+        val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        svc.recordChatEvent("tool_result", if (failed) "error" else "result",
+            "Tool: $tool — " + result.replace("\n", " ").take(360))
+        return result
     }
 
     private fun imageMessage(prompt: String, shot: Shot): JSONArray {
