@@ -26,6 +26,8 @@ internal object LinuxRuntimePolicy {
         prootSha256 = "91c3f3ce38482fba523c0dcbfa5eb883e8aae063236bff3d091da6a58f1c94c4",
         prootBytes = 294416L
     )
+    // SHA-256 pinned in .github/workflows/build.yml for the APK-packaged Android W^X loader.
+    const val PROOT_LOADER_SHA256 = "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
     const val MAX_ROOTFS_BYTES = 300_000_000L
     const val MAX_COMMAND = 4000
     private val sha256Pattern = Regex("^[0-9a-f]{64}$")
