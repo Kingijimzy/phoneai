@@ -124,6 +124,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenBeforeAction: String = ""
 
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        // Cancellation is terminal for this dispatch attempt, including paths that would otherwise prompt for approval.
+        if (stopped) {
+            val cancelled = "error: task was stopped before capability checks or approval; no action was dispatched."
+            taskProofs.record(tool, cancelled)
+            return cancelled
+        }
         // Consent is checked before querying the current screen or resolving a target.
         if (ToolRegistry.requiresAccessibility(tool) && !Prefs.accessibilityDisclosureAccepted(svc)) {
             val blocked = "error: screen access has not been accepted. Open Orion Settings > Permissions and accept the screen-access disclosure before using app-control or screen-reading tools."
