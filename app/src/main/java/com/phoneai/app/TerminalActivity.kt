@@ -88,9 +88,23 @@ class TerminalActivity : Activity() {
     }
 
     private fun executeCommand(cmd: String) {
-        input.setText(""); append("$ $cmd\n")
+        input.setText("")
+        append("$ $cmd\n")
+        append("⏳ Running — live output will appear below…\n")
         val where = when (backend) { Backend.BUILTIN -> "builtin"; Backend.LINUX -> "linux"; Backend.TERMUX -> "termux" }
-        Thread { val r = ShellRunner.run(applicationContext, cmd, where); runOnUiThread { append(r + "\n") } }.start()
+        Thread {
+            val r = ShellRunner.runStreaming(applicationContext, cmd, where) { chunk ->
+                runOnUiThread { append(chunk) }
+            }
+            runOnUiThread {
+                when {
+                    r.startsWith("exit=") -> append("\n[${r.substringBefore('\n')}]\n")
+                    r.startsWith("error:") -> append("\n$r\n")
+                    r.isNotBlank() -> append("\n$r\n")
+                    else -> append("\n[Command finished]\n")
+                }
+            }
+        }.apply { name = "OrionTerminalCommand"; isDaemon = true; start() }
     }
 
     private fun askAi() {
