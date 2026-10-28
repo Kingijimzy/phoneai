@@ -1961,7 +1961,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         if (Prefs.voice(this)) voice.speak(question)
         latch.await()
-        recordChatEvent("approval", if (answer.get()) "approved" else "denied", question.take(360))
+        recordChatEvent("approval", if (answer.get()) "approved" else "denied", "Approval request reviewed by user")
         return answer.get()
     }
 
