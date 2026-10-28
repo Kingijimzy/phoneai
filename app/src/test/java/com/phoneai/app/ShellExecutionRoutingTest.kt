@@ -29,4 +29,12 @@ class ShellExecutionRoutingTest {
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("python3 --version"))
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("echo apk add python3"))
     }
+
+    @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {
+        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
+        assertTrue(TermuxCommandPolicy.isReadOnly("python3 --version"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ."))
+        assertFalse(TermuxCommandPolicy.isReadOnly("git status && git clean -fd"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("apk add python3"))
+    }
 }
