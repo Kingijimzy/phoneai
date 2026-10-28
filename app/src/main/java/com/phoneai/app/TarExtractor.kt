@@ -93,7 +93,13 @@ internal object TarExtractor {
                     target.parentFile?.mkdirs()
                     target.outputStream().use { out -> copyExactly(input, out, size) }
                     skipPadding(input, size)
-                    if (octal(header, 100, 8) and 73L != 0L) target.setExecutable(true, false)
+                    val mode = octal(header, 100, 8)
+                    // Restore executable bits from the POSIX tar mode; Android file defaults can be restrictive.
+                    if ((mode and 0b001001001L) != 0L) {
+                        check(target.setExecutable(true, false) || target.canExecute()) {
+                            "Could not restore executable permission for $cleaned (tar mode=${mode.toString(8)})."
+                        }
+                    }
                     files++
                 }
                 '5' -> { target.mkdirs(); skipPayload(input, size); dirs++ }
@@ -112,6 +118,12 @@ internal object TarExtractor {
                     if (!source.canonicalFile.path.startsWith(base.path + File.separator) || !source.isFile) throw Rejected("hard link target missing")
                     target.parentFile?.mkdirs()
                     source.copyTo(target, overwrite = true)
+                    // copyTo creates a new inode and does not preserve executable mode bits.
+                    if (source.canExecute()) {
+                        check(target.setExecutable(true, false) || target.canExecute()) {
+                            "Could not preserve executable permission for hard link $cleaned."
+                        }
+                    }
                     skipPayload(input, size); links++
                 }
                 else -> { skipPayload(input, size); skipped++ }
