@@ -124,7 +124,7 @@ internal class LinuxRuntimeInstaller(
             return "error: Android denied Linux process execution: ${(failure.message ?: "permission denied").take(240)}"
         }
         return if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms"
-        else "exit=${result.exitCode}\\n${result.output}"
+        else "exit=${result.exitCode}\n${result.output}"
     }
 
     private data class ProcessResult(val exitCode: Int, val output: String, val timedOut: Boolean)
