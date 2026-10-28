@@ -723,7 +723,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 mainChatListener?.onMessage("ai", "Stop the current response before retrying.")
                 return@post
             }
-            rewindTranscriptToPrompt(prompt)
+            if (!rewindTranscriptToPrompt(prompt)) {
+                mainChatListener?.onMessage("ai", "I couldn't match that message to the saved conversation, so I did not retry it. Send it again manually.")
+                return@post
+            }
             submit(prompt, conversationOnly = true, autoRoute = true)
         }
     }
@@ -736,7 +739,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 mainChatListener?.onMessage("ai", "Stop the current response before editing this message.")
                 return@post
             }
-            rewindTranscriptToPrompt(original)
+            if (!rewindTranscriptToPrompt(original)) {
+                mainChatListener?.onMessage("ai", "I couldn't match that message to the saved conversation, so I did not replace it. Copy the text into a new message instead.")
+                return@post
+            }
             submit(replacement, conversationOnly = true, autoRoute = true)
         }
     }
