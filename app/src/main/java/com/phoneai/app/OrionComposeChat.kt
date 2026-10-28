@@ -188,6 +188,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
             when {
                 match.groups[1] != null && match.groups[2] != null -> {
                     out.append(match.groupValues[1])
+                    out.addStringAnnotation("URL", match.groupValues[2], start, out.length)
                     out.addStyle(
                         androidx.compose.ui.text.SpanStyle(
                             color = Color(0xFFD2D6DA),
@@ -217,7 +218,9 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
                     )
                 }
                 else -> {
-                    out.append(match.groupValues[6].trimEnd('.', ',', ';'))
+                    val url = match.groupValues[6].trimEnd('.', ',', ';')
+                    out.append(url)
+                    out.addStringAnnotation("URL", url, start, out.length)
                     out.addStyle(
                         androidx.compose.ui.text.SpanStyle(
                             color = Color(0xFFD2D6DA),

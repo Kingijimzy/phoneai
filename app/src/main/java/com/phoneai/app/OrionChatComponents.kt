@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -256,13 +257,31 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit) {
                     note && item.text.startsWith("[SHELL:") -> ShellActivityCard(item.text)
                     note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text, onOpenBrowser)
                     note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
-                    else -> Text(
-                        text = if (!mine && !note) formatOrionMarkdown(item.text) else AnnotatedString(item.text),
-                        color = if (note) ChatMuted else ChatCopy,
-                        fontSize = 14.sp,
-                        lineHeight = 22.sp,
-                        modifier = Modifier.clickable(enabled = !note) { actionsVisible = !actionsVisible }
-                    )
+                    else -> {
+                        if (!mine && !note) {
+                            val formatted = formatOrionMarkdown(item.text)
+                            ClickableText(
+                                text = formatted,
+                                style = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 22.sp),
+                                onClick = { offset ->
+                                    val url = formatted.getStringAnnotations("URL", offset, offset).firstOrNull()?.item
+                                    if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) {
+                                        onOpenBrowser(url)
+                                    } else {
+                                        actionsVisible = !actionsVisible
+                                    }
+                                }
+                            )
+                        } else {
+                            Text(
+                                text = AnnotatedString(item.text),
+                                color = if (note) ChatMuted else ChatCopy,
+                                fontSize = 14.sp,
+                                lineHeight = 22.sp,
+                                modifier = Modifier.clickable(enabled = !note) { actionsVisible = !actionsVisible }
+                            )
+                        }
+                    }
                 }
                 if (item.imageUri != null) {
                     Spacer(Modifier.height(9.dp))
