@@ -8,6 +8,7 @@ interface AgentUi {
     fun say(text: String)
     fun status(text: String)
     fun note(text: String)
+    fun stream(text: String) {}
 
     /** "thinking" while the AI decides, "acting" while a tool runs. */
     fun phase(p: String)
@@ -468,7 +469,7 @@ RESPONSE QUALITY AND FORMAT:
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
         val answer = try {
-            talkNim.chat(messages, false, 420, 0.55).trim()
+            talkNim.chat(messages, false, 420, 0.55, onDelta = { delta -> if (!stopped) ui.stream(delta) }).trim()
         } catch (e: Exception) {
             if (stopped) return
             ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
