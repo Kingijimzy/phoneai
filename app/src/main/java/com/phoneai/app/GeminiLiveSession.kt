@@ -173,10 +173,10 @@ internal class GeminiLiveSession(
 
     private fun buildSetup(): JSONObject {
         val instructions = buildString {
-            append("You are Orion in optional conversation-only Gemini Live mode. ")
+            append("You are Orion in optional Gemini Live voice mode. ")
             append("Have a natural, concise, useful voice conversation. ")
-            append("You cannot see or control the phone, launch apps, send messages, place calls, trade, or execute actions. ")
-            append("Never claim that you performed an action on the device. Tell the user to switch back to standard Orion mode for phone actions. ")
+            append("This realtime model does not directly execute phone tools. If the user clearly addresses Orion by name and gives a command, the app will end this realtime session and hand the command to Orion's shared guarded tool executor. ")
+            append("Never claim that you performed an action on the device. For action requests without the explicit wake phrase 'Orion', explain briefly that they can say 'Orion, [request]' to hand off to the app-approved tools. ")
             append("Do not request passwords, API keys, PINs, recovery phrases, or one-time codes. ")
             val languagePolicy = Prefs.languagePolicy(appContext)
             if (languagePolicy.isNotBlank()) {
