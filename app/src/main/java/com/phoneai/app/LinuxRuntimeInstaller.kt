@@ -24,13 +24,15 @@ internal class LinuxRuntimeInstaller(
     private val prootTmp = File(base, "proot-tmp")
     private val rootfs = File(base, "rootfs")
     private val proot = File(app.applicationInfo.nativeLibraryDir, "libproot.so")
+    private val prootLoader = File(app.applicationInfo.nativeLibraryDir, "libproot-loader.so")
     private val marker = File(base, "installed-version")
 
     fun isReady(manifest: LinuxRuntimePolicy.Manifest): Boolean =
         LinuxRuntimePolicy.validate(manifest) == null &&
             LinuxRuntimePolicy.isReady(marker.takeIf { it.isFile }?.readText()?.trim(), manifest) &&
             proot.isFile && proot.canExecute() && sha256(proot) == manifest.prootSha256 &&
-            File(rootfs, "bin/sh").isFile
+            prootLoader.isFile && prootLoader.canExecute() && sha256(prootLoader) == LinuxRuntimePolicy.PROOT_LOADER_SHA256 &&
+            File(rootfs, "bin/sh").exists()
 
     @Synchronized
     fun install(manifest: LinuxRuntimePolicy.Manifest): Result<Unit> = runCatching {
@@ -39,6 +41,12 @@ internal class LinuxRuntimeInstaller(
             "Bundled ARM64 PRoot is missing or not executable. Rebuild the APK with the pinned native runtime."
         }
         check(sha256(proot) == manifest.prootSha256) { "Bundled PRoot SHA-256 mismatch; refusing Linux runtime." }
+        check(prootLoader.isFile && prootLoader.canExecute()) {
+            "Bundled PRoot loader is missing or not executable. Rebuild the APK with libproot-loader.so."
+        }
+        check(sha256(prootLoader) == LinuxRuntimePolicy.PROOT_LOADER_SHA256) {
+            "Bundled PRoot loader SHA-256 mismatch; refusing Linux runtime."
+        }
         check(base.mkdirs() || base.isDirectory) { "Could not create Linux runtime directory." }
         check(downloads.mkdirs() || downloads.isDirectory) { "Could not create downloads directory." }
 
@@ -133,6 +141,8 @@ internal class LinuxRuntimeInstaller(
             environment()["LANG"] = "C.UTF-8"
             environment()["TMPDIR"] = prootTmp.absolutePath
             environment()["PROOT_TMP_DIR"] = prootTmp.absolutePath
+            // Required on Android 10+ to execute guest ELF binaries despite app-data W^X policy.
+            environment()["PROOT_LOADER"] = prootLoader.absolutePath
         }.start()
         val output = StringBuilder()
         val reader = Thread {
