@@ -39,7 +39,7 @@ class LinuxRuntimePolicyTest {
     }
 
     @Test fun recoveryEpochInvalidatesPreviouslyInstalledRuntime() {
-        assertTrue(good.version.endsWith("-recovery2"))
+        assertTrue(good.version.endsWith("-recovery3"))
         assertFalse(LinuxRuntimePolicy.isReady("alpine-3.22.7-proot-1a71df0", good))
     }
 
