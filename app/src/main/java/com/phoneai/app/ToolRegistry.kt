@@ -151,38 +151,14 @@ internal object ToolRegistry {
     fun requiresAccessibility(name: String): Boolean = name in accessibilityRequired
     fun names(): Set<String> = byName.keys
 
-    private val groupKeywords: Map<String, Regex> = mapOf(
-        "browser" to Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|page|online|internet|news|weather|research|chrome|download)\\b"),
-        "trading" to Regex("(?i)\\b(bybit|trade|trading|crypto|bitcoin|btc|eth|coin|price|ticker|chart|market)\\b"),
-        "telegram" to Regex("(?i)\\btelegram\\b"),
-        "mcp" to Regex("(?i)\\b(mcp|connector|server)\\b"),
-        "github" to Regex("(?i)\\b(github|repo|repository|release|actions)\\b"),
-        "tasks" to Regex("(?i)\\b(task|tasks|todo|remind|reminder|deadline|skill|skills)\\b"),
-        "media" to Regex("(?i)\\b(music|song|play|pause|skip|volume|notification|notifications|media|youtube|spotify)\\b")
-    )
-
-    private fun groupOf(name: String): String? = when {
-        name.startsWith("browser_") || name in setOf("open_url", "web_search", "live_web_search", "live_news", "fetch_url", "research_web", "weather") -> "browser"
-        name == "bybit_public_ticker" -> "trading"
-        name.startsWith("telegram_") -> "telegram"
-        name.startsWith("mcp_") || name == "integration_status" -> "mcp"
-        name == "github_public" -> "github"
-        name.startsWith("task_") || name == "skills_list" -> "tasks"
-        name in setOf("read_notifications", "notification_action", "media_status", "media_control") -> "media"
-        else -> null
-    }
-
     /**
-     * Prompt catalogue trimmed to what the request plausibly needs: device/screen/memory tools are
-     * always present, specialist groups only when the request mentions them. Fewer prompt tokens means
-     * faster, cheaper turns. Dispatch is not gated by the prompt, so an omitted tool still runs if called.
+     * Every registered tool contract is supplied to the agent on every turn. Previously this
+     * catalogue was keyword-trimmed, leaving some tools available only as names/signatures; that
+     * made the model miss capabilities the user had explicitly enabled in Settings. Actual access
+     * is still enforced by ToolGate/AgentPolicy and the per-tool permission settings at dispatch.
      */
-    fun promptSection(request: String?, status: String = ""): String {
-        if (request.isNullOrBlank()) return promptSection(all, emptyList(), status)
-        val wanted = groupKeywords.filterValues { it.containsMatchIn(request) }.keys
-        val chosen = all.filter { tool -> groupOf(tool.name).let { it == null || it in wanted } }
-        return promptSection(chosen, all.filter { it !in chosen }, status)
-    }
+    fun promptSection(request: String?, status: String = ""): String =
+        promptSection(all, emptyList(), status)
 
     fun promptSection(): String = promptSection(all, emptyList(), "")
 
