@@ -715,7 +715,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (command.isEmpty()) return
         main.post {
             if (running) {
-                mainChatListener?.onMessage("ai", "Orion is already working. Let the current task finish, then retry this request.")
+                val message = "Orion is already working. Let the current task finish, then retry this request."
+                mainChatListener?.onMessage("ai", message)
+                completion?.invoke(message)
                 return@post
             }
             handsActive = false
