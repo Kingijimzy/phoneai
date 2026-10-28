@@ -309,6 +309,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         val conn = URL(url).openConnection() as HttpURLConnection
         active = conn
         val answer = StringBuilder()
+        val nonSseBody = StringBuilder()
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15000
@@ -331,7 +332,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 while (true) {
                     if (cancelled) throw java.io.IOException("Stopped.")
                     val line = reader.readLine() ?: break
-                    if (!line.startsWith("data:")) continue
+                    if (!line.startsWith("data:")) {
+                        if (line.isNotBlank() && !line.startsWith(":")) nonSseBody.append(line)
+                        continue
+                    }
                     val data = line.substringAfter("data:").trim()
                     if (data.isEmpty()) continue
                     if (data == "[DONE]") break
@@ -345,6 +349,15 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         answer.append(delta)
                         onDelta(delta)
                     }
+                }
+            }
+            if (answer.isEmpty() && nonSseBody.isNotBlank()) {
+                // Some OpenAI-compatible gateways ignore stream=true and return a normal JSON body.
+                // Preserve compatibility, though that provider cannot deliver incremental deltas.
+                val complete = extract(p, nonSseBody.toString())
+                if (complete.isNotBlank()) {
+                    answer.append(complete)
+                    onDelta(complete)
                 }
             }
             val synthetic = JSONObject().put("choices", JSONArray().put(
