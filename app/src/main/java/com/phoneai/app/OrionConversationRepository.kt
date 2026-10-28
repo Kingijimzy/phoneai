@@ -110,19 +110,18 @@ internal class OrionConversationRepository private constructor(context: Context)
             var id = db.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use {
                 if (it.moveToFirst()) it.getString(0) else null
             }
-            if (id == null) {
-                id = UUID.randomUUID().toString()
-                prefs.edit().putString(ACTIVE_ID, id).commit()
-                insertSession(db, id, titleFor(turns), System.currentTimeMillis(), true, emptyList())
+            val sessionId = id ?: UUID.randomUUID().toString().also { freshId ->
+                prefs.edit().putString(ACTIVE_ID, freshId).commit()
+                insertSession(db, freshId, titleFor(turns), System.currentTimeMillis(), true, emptyList())
             }
             val now = System.currentTimeMillis()
             val title = titleFor(turns)
             db.update("sessions", ContentValues().apply {
                 put("title", title)
                 put("updated_at", now)
-            }, "id=?", arrayOf(id))
-            db.delete("messages", "session_id=?", arrayOf(id))
-            turns.forEachIndexed { index, pair -> insertMessage(db, id, pair.first, pair.second, now + index, index) }
+            }, "id=?", arrayOf(sessionId))
+            db.delete("messages", "session_id=?", arrayOf(sessionId))
+            turns.forEachIndexed { index, pair -> insertMessage(db, sessionId, pair.first, pair.second, now + index, index) }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
