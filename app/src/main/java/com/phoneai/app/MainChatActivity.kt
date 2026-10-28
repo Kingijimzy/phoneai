@@ -61,6 +61,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeModelLabel = mutableStateOf("Choose model")
     private val composeProviderReady = mutableStateOf(false)
     private val composeStatus = mutableStateOf("READY")
+    private val composeChatTitle = mutableStateOf("Orion")
     private val composeCommandMode = mutableStateOf(false)
     private val composeSelectedImage = mutableStateOf<Uri?>(null)
     private var composeChatActive = false
@@ -380,6 +381,75 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
             .setNegativeButton("CANCEL", null)
             .show()
+    }
+
+    private fun showRenameChatDialog() {
+        val field = EditText(this).apply {
+            setSingleLine(true)
+            setTextColor(0xFFF4F4F4.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            hint = "Conversation name"
+            setText(composeChatTitle.value)
+            selectAll()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Rename chat")
+            .setMessage("The name is saved on this device and shown in the chat header.")
+            .setView(field)
+            .setPositiveButton("SAVE") { _, _ ->
+                val title = field.text.toString().trim().take(48)
+                if (title.isNotBlank()) {
+                    composeChatTitle.value = title
+                    getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().putString("active_title", title).apply()
+                    Toast.makeText(this, "Chat renamed", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun handleChatMenuAction(action: String) {
+        when (action) {
+            "new_chat" -> {
+                PhoneAiService.instance?.startNewChat() ?: run {
+                    ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
+                    composeLines.clear()
+                }
+                composeChatTitle.value = "Orion"
+                getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
+            }
+            "rename_chat" -> showRenameChatDialog()
+            "model" -> showChatModelPicker()
+            "clear_chat" -> AlertDialog.Builder(this)
+                .setTitle("Clear this chat?")
+                .setMessage("The current conversation will be archived and a fresh chat will open. Other saved chats and memories remain.")
+                .setNegativeButton("CANCEL", null)
+                .setPositiveButton("CLEAR CHAT") { _, _ ->
+                    PhoneAiService.instance?.startNewChat() ?: run {
+                        ChatHistoryStore.archiveAndClear(this, composeLines.map { it.kind to it.text })
+                        composeLines.clear()
+                    }
+                    composeChatTitle.value = "Orion"
+                    getSharedPreferences("orion_chat_history", MODE_PRIVATE).edit().remove("active_title").apply()
+                }.show()
+            "terminal" -> startActivity(Intent(this, TerminalActivity::class.java))
+            "browser" -> startActivity(Intent(this, BrowserActivity::class.java))
+            "chat_files" -> AlertDialog.Builder(this)
+                .setTitle("Chat files")
+                .setMessage("Orion can attach and analyse images from the composer. A searchable file shelf for all conversation attachments is not implemented yet.")
+                .setPositiveButton("OK", null).show()
+            "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
+            "mcps" -> AlertDialog.Builder(this)
+                .setTitle("MCP servers")
+                .setMessage("A connected MCP server/session manager is not currently available in this build. Orion will not show pretend connections.")
+                .setPositiveButton("OPEN CAPABILITIES") { _, _ -> startActivity(Intent(this, AgentControlActivity::class.java)) }
+                .setNegativeButton("CLOSE", null).show()
+            "memories" -> startActivity(Intent(this, MemoryActivity::class.java))
+            "token_usage" -> AlertDialog.Builder(this)
+                .setTitle("Token usage")
+                .setMessage("Per-session token accounting is not yet exposed by Orion's chat provider layer. The app does not have reliable token totals to show here yet.")
+                .setPositiveButton("OK", null).show()
+        }
     }
 
     private fun showChatHistory() {
@@ -1119,12 +1189,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
+        composeChatTitle.value = getSharedPreferences("orion_chat_history", MODE_PRIVATE).getString("active_title", "Orion")?.take(48)?.ifBlank { "Orion" } ?: "Orion"
         val composeRoot = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 OrionComposeChatScreen(
                     lines = composeLines,
                     status = composeStatus.value,
+                    chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
                     selectedImage = composeSelectedImage.value,
                     providerLabel = composeProviderLabel.value,
@@ -1145,7 +1217,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onStop = { if (::stop.isInitialized) stop.performClick() }
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }; startActivityForResult(Intent.createChooser(picker, "Choose an image"), 44) }, onRemoveImage = { selectedImageUri = null; composeSelectedImage.value = null }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() }
                 )
             }
         }
