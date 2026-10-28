@@ -77,7 +77,7 @@ internal class LinuxRuntimeInstaller(
             }
 
             // Acceptance test runs against staging before touching the working installation.
-            val smoke = runGuest(staging, "printf ORION_PROOT_OK; uname -m; cat /etc/alpine-release", 10_000L)
+            val smoke = runGuest(staging, "printf 'ORION_PROOT_OK\\n'; uname -m; cat /etc/alpine-release", 10_000L)
             check(smoke.exitCode == 0 && smoke.output.contains("ORION_PROOT_OK") &&
                 Regex("(?m)^aarch64\\s*$").containsMatchIn(smoke.output) &&
                 smoke.output.contains("3.22.7")) {
