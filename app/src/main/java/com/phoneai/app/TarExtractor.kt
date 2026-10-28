@@ -4,6 +4,7 @@ import java.io.File
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.nio.file.attribute.PosixFilePermission
 
 /**
  * Safe extraction of a POSIX/ustar/GNU/pax tar stream into a directory, for Orion's Linux root filesystem.
@@ -62,6 +63,9 @@ internal object TarExtractor {
         var files = 0; var dirs = 0; var links = 0; var skipped = 0; var bytes = 0L; var entries = 0
         var pendingName: String? = null
         var pendingLink: String? = null
+        // Android app storage can create directories as 0700 regardless of tar metadata.
+        // Apply directory modes after extraction so restrictive modes cannot block child extraction.
+        val directoryModes = linkedMapOf<File, Int>()
         while (true) {
             if (!readFully(input, header)) break
             if (header.all { it == 0.toByte() }) break
@@ -90,22 +94,21 @@ internal object TarExtractor {
                 '0', '\u0000', '7' -> {
                     bytes += size
                     if (bytes > MAX_TOTAL_BYTES) throw Rejected("archive expands beyond the size limit")
-                    target.parentFile?.mkdirs()
+                    ensureParents(target.parentFile, base, directoryModes)
                     target.outputStream().use { out -> copyExactly(input, out, size) }
                     skipPadding(input, size)
-                    val mode = octal(header, 100, 8)
-                    // Restore executable bits from the POSIX tar mode; Android file defaults can be restrictive.
-                    if ((mode and 0b001001001L) != 0L) {
-                        check(target.setExecutable(true, false) || target.canExecute()) {
-                            "Could not restore executable permission for $cleaned (tar mode=${mode.toString(8)})."
-                        }
-                    }
+                    setMode(target, octal(header, 100, 8).toInt(), cleaned)
                     files++
                 }
-                '5' -> { target.mkdirs(); skipPayload(input, size); dirs++ }
+                '5' -> {
+                    ensureParents(target.parentFile, base, directoryModes)
+                    check(target.mkdirs() || target.isDirectory) { "Could not create directory $cleaned" }
+                    directoryModes[target] = octal(header, 100, 8).toInt()
+                    skipPayload(input, size); dirs++
+                }
                 '2' -> {
                     if (!symlinkTargetAllowed(cleaned, linkName)) throw Rejected("symlink points outside the runtime folder")
-                    target.parentFile?.mkdirs()
+                    ensureParents(target.parentFile, base, directoryModes)
                     if (target.exists() || isLink(target)) target.delete()
                     // Never create a host-absolute symlink: map guest /foo to a relative path inside rootfs.
                     Files.createSymbolicLink(target.toPath(), Paths.get(storedSymlinkTarget(cleaned, linkName)))
@@ -116,20 +119,71 @@ internal object TarExtractor {
                     if (!entryNameAllowed(src)) throw Rejected("unsafe hard link in archive")
                     val source = File(base, src)
                     if (!source.canonicalFile.path.startsWith(base.path + File.separator) || !source.isFile) throw Rejected("hard link target missing")
-                    target.parentFile?.mkdirs()
+                    ensureParents(target.parentFile, base, directoryModes)
                     source.copyTo(target, overwrite = true)
-                    // copyTo creates a new inode and does not preserve executable mode bits.
-                    if (source.canExecute()) {
-                        check(target.setExecutable(true, false) || target.canExecute()) {
-                            "Could not preserve executable permission for hard link $cleaned."
-                        }
-                    }
+                    setMode(target, readMode(source), cleaned)
                     skipPayload(input, size); links++
                 }
                 else -> { skipPayload(input, size); skipped++ }
             }
         }
+        // Apply directory modes deepest-first, after all children have been written.
+        directoryModes.entries.sortedByDescending { it.key.toPath().nameCount }.forEach { (dir, mode) ->
+            setMode(dir, mode, dir.relativeTo(base).path)
+        }
         return Stats(files, dirs, links, skipped, bytes)
+    }
+
+    private fun ensureParents(parent: File?, base: File, modes: MutableMap<File, Int>) {
+        if (parent == null || parent == base || modes.containsKey(parent)) return
+        val chain = ArrayDeque<File>()
+        var current: File? = parent
+        while (current != null && current != base && !modes.containsKey(current)) {
+            chain.addFirst(current)
+            current = current.parentFile
+        }
+        for (dir in chain) {
+            check(dir.mkdirs() || dir.isDirectory) { "Could not create parent directory ${dir.path}" }
+            modes.putIfAbsent(dir, 493) // implicit directories default to 0755
+        }
+    }
+
+    private fun readMode(file: File): Int {
+        val p = Files.getPosixFilePermissions(file.toPath())
+        var m = 0
+        if (PosixFilePermission.OWNER_READ in p) m = m or 0b100000000
+        if (PosixFilePermission.OWNER_WRITE in p) m = m or 0b010000000
+        if (PosixFilePermission.OWNER_EXECUTE in p) m = m or 0b001000000
+        if (PosixFilePermission.GROUP_READ in p) m = m or 0b000100000
+        if (PosixFilePermission.GROUP_WRITE in p) m = m or 0b000010000
+        if (PosixFilePermission.GROUP_EXECUTE in p) m = m or 0b000001000
+        if (PosixFilePermission.OTHERS_READ in p) m = m or 0b000000100
+        if (PosixFilePermission.OTHERS_WRITE in p) m = m or 0b000000010
+        if (PosixFilePermission.OTHERS_EXECUTE in p) m = m or 0b000000001
+        return m
+    }
+
+    private fun setMode(file: File, mode: Int, label: String) {
+        val p = mutableSetOf<PosixFilePermission>()
+        if ((mode and 0b100000000) != 0) p += PosixFilePermission.OWNER_READ
+        if ((mode and 0b010000000) != 0) p += PosixFilePermission.OWNER_WRITE
+        if ((mode and 0b001000000) != 0) p += PosixFilePermission.OWNER_EXECUTE
+        if ((mode and 0b000100000) != 0) p += PosixFilePermission.GROUP_READ
+        if ((mode and 0b000010000) != 0) p += PosixFilePermission.GROUP_WRITE
+        if ((mode and 0b000001000) != 0) p += PosixFilePermission.GROUP_EXECUTE
+        if ((mode and 0b000000100) != 0) p += PosixFilePermission.OTHERS_READ
+        if ((mode and 0b000000010) != 0) p += PosixFilePermission.OTHERS_WRITE
+        if ((mode and 0b000000001) != 0) p += PosixFilePermission.OTHERS_EXECUTE
+        try {
+            Files.setPosixFilePermissions(file.toPath(), p)
+        } catch (failure: Exception) {
+            val ok = file.setReadable((mode and 0b100100100) != 0, false) &&
+                file.setWritable((mode and 0b010010010) != 0, false) &&
+                file.setExecutable((mode and 0b001001001) != 0, false)
+            check(ok) { "Could not restore mode ${Integer.toOctalString(mode)} for $label: ${failure.message}" }
+        }
+        check(file.canRead()) { "Extracted path is unreadable: $label" }
+        if (file.isDirectory) check(file.canExecute()) { "Extracted directory is not searchable: $label" }
     }
 
     private fun isLink(f: File) = Files.isSymbolicLink(f.toPath())
