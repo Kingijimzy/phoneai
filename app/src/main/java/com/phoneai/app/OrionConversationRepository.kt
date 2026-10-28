@@ -75,7 +75,7 @@ internal class OrionConversationRepository private constructor(context: Context)
 
     private fun sanitizeEventSummary(value: String): String {
         var clean = value.replace(Regex("[\\r\\n\\t]+"), " ").take(1200)
-        clean = clean.replace(Regex("(?i)(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret)\\s*[:=]\\s*[^ ,;]+"), "$1=[redacted]")
+        clean = clean.replace(Regex("(?i)(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret)\\s*[:=]\\s*[^ ,;]+"), "\$1=[redacted]")
         clean = clean.replace(Regex("(?i)bearer\\s+[A-Za-z0-9._~+/-]+=*"), "Bearer [redacted]")
         clean = clean.replace(Regex("\\bsk-[A-Za-z0-9_-]{12,}\\b"), "[redacted-key]")
         return clean.take(500)
