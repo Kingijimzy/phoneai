@@ -35,7 +35,7 @@ class TarExtractorTest {
     @Test fun extractsFilesDirectoriesAndRelativeLinks() {
         val dir = tempDir()
         val stats = TarExtractor.extract(ByteArrayInputStream(tar { o ->
-            entry(o, "bin/", '5')
+            entry(o, "bin/", '5', mode = 493)
             entry(o, "bin/sh", '0', "#!/bin/sh\n".toByteArray(), mode = 493)
             entry(o, "usr/bin/env", '0', "env".toByteArray(), mode = 493)
             entry(o, "bin/busy", '2', link = "../usr/bin/env")
