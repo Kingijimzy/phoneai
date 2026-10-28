@@ -60,6 +60,36 @@ internal object CapabilityRegistry {
     /** The only list Orion is allowed to offer as usable. Anything else must be shown with its reason, never used. */
     fun offerable(entries: List<Entry>): List<Entry> = entries.filter { it.usable }
 
+    /** One tool's gate inputs and its registry entry. [pack] is null for tools that belong to no pack. */
+    data class Row(val tool: String, val pack: String?, val denied: Boolean, val entry: Entry)
+
+    /**
+     * The live status block for the system prompt, built only from registry entries.
+     * Same wording as the older status text, so the model's instructions do not change. Returns "" when all is ready.
+     */
+    fun statusText(rows: List<Row>, titleOf: (String) -> String, howToEnable: (String) -> String): String {
+        val offByPack = LinkedHashMap<String, MutableList<String>>()
+        val denied = ArrayList<String>()
+        rows.forEach { r ->
+            if (r.entry.usable) return@forEach
+            if (r.denied) denied += r.tool
+            else r.pack?.let { offByPack.getOrPut(it) { ArrayList() } += r.tool }
+        }
+        if (offByPack.isEmpty() && denied.isEmpty()) return ""
+        val sb = StringBuilder("TOOL STATUS RIGHT NOW (true for this moment; use it, do not guess):\n")
+        offByPack.forEach { (pack, list) ->
+            sb.append("- ").append(titleOf(pack)).append(" is OFF, so these are unavailable: ")
+                .append(list.take(6).joinToString(", ")).append(if (list.size > 6) " and ${list.size - 6} more" else "")
+                .append(". Tell the user to switch it on in ").append(howToEnable(pack)).append(". The feature exists; it is not missing.\n")
+        }
+        if (denied.isNotEmpty()) {
+            sb.append("- The user has set these to DENY: ").append(denied.take(8).joinToString(", "))
+                .append(". Do not use them; say the user can change this in Tool permissions.\n")
+        }
+        sb.append("- Everything else is ready. Tools marked ASK ask the user once per task.")
+        return sb.toString()
+    }
+
     /** Prompt block: one line per capability that is not usable, so the model never claims it can use one. */
     fun blockedLines(entries: List<Entry>): String = entries
         .filterNot { it.usable }
