@@ -49,6 +49,14 @@ internal object CapabilityRegistry {
         else -> Entry(f, State.AVAILABLE, "ready")
     }
 
+    /**
+     * A built-in tool's entry from its gate inputs: the user's DENY setting and whether its pack is on.
+     * ToolGate uses this for the pre-flight decision, so the gate and the registry share one rule.
+     */
+    fun forBuiltInTool(tool: String, denied: Boolean, packOn: Boolean): Entry = evaluate(
+        Facts(id = tool, title = tool, source = Source.BUILT_IN, enabledByUser = !denied && packOn, health = Health.OK)
+    )
+
     /** The only list Orion is allowed to offer as usable. Anything else must be shown with its reason, never used. */
     fun offerable(entries: List<Entry>): List<Entry> = entries.filter { it.usable }
 
