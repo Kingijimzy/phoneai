@@ -439,7 +439,7 @@ fun OrionComposeChatScreen(
                     Text("Image attached", color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     Text("Ready to analyse", color = ChatMuted, fontSize = 11.sp)
                 }
-                Text("Remove", color = ChatMint, fontSize = 11.sp, modifier = Modifier.clickable(onClick = onRemoveImage).padding(7.dp))
+                Text("Remove", color = ChatCopy, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Remove attached image"; role = Role.Button }.clickable(onClick = onRemoveImage).padding(7.dp))
             }
         }
 
@@ -776,9 +776,27 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
 
 @Composable
 private fun TaskActivityCard(raw: String) {
-    val failed = raw.startsWith("[TASK:FAILED]")
-    val running = raw.startsWith("[TASK:RUNNING]")
+    val state = Regex("^\\[TASK:([A-Z_]+)]").find(raw)?.groupValues?.getOrNull(1).orEmpty()
+    val failed = state == "FAILED"
+    val running = state == "RUNNING" || state == "EXECUTE"
+    val blocked = state == "BLOCKED"
+    val cancelled = state == "CANCELLED"
+    val recovering = state == "RECOVER"
     val detail = raw.substringAfter("\n", raw).trim()
+    val label = when {
+        failed -> "STEP FAILED"
+        running -> "STEP RUNNING"
+        blocked -> "WAITING · NEEDS ATTENTION"
+        cancelled -> "TASK CANCELLED"
+        recovering -> "RECOVERING · REPLANNING"
+        state == "PHASE" -> "TASK · " + detail.substringBefore("\n").take(42).uppercase()
+        state == "VERIFY" -> "VERIFYING OUTCOME"
+        state == "COMPLETE" -> "TASK COMPLETE"
+        state == "RECORD" -> "RECORDING OUTCOME"
+        state == "RESULT" -> "STEP RESULT"
+        else -> "TASK UPDATE"
+    }
+    val accent = if (failed || blocked) Color(0xFFE7A18F) else Color(0xFFBFC5CC)
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF171717)).border(1.dp, Color(0xFF343434), RoundedCornerShape(10.dp))
@@ -787,11 +805,11 @@ private fun TaskActivityCard(raw: String) {
         horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Icon(
-            if (failed) Icons.Rounded.Stop else if (running) Icons.Rounded.Bolt else Icons.Rounded.TaskAlt,
-            contentDescription = null, tint = if (failed) Color(0xFFE7A18F) else Color(0xFFBFC5CC), modifier = Modifier.size(16.dp)
+            if (failed || cancelled) Icons.Rounded.Stop else if (running || recovering) Icons.Rounded.Bolt else Icons.Rounded.TaskAlt,
+            contentDescription = null, tint = accent, modifier = Modifier.size(16.dp)
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(if (running) "STEP RUNNING" else if (failed) "STEP FAILED" else "STEP RESULT", color = ChatCopy, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
+            Text(label, color = ChatCopy, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
             Text(detail.take(300), color = ChatMuted, fontSize = 11.sp, lineHeight = 15.sp)
         }
     }
