@@ -211,6 +211,19 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
 
     @Volatile
     private var active: HttpURLConnection? = null
+    private val connectionLock = Any()
+
+    /** Atomically attach a new request unless Stop has already cancelled this generation. */
+    private fun attachConnection(conn: HttpURLConnection): Boolean = synchronized(connectionLock) {
+        if (cancelled) false else {
+            active = conn
+            true
+        }
+    }
+
+    private fun detachConnection(conn: HttpURLConnection) = synchronized(connectionLock) {
+        if (active === conn) active = null
+    }
 
     private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
 
@@ -223,15 +236,18 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     fun resume() {
-        cancelled = false
+        synchronized(connectionLock) { cancelled = false }
     }
 
-    /** Aborts the request that is in flight. */
+    /** Aborts the request in flight and prevents a concurrently starting request from attaching. */
     fun cancel() {
-        cancelled = true
+        val connection = synchronized(connectionLock) {
+            cancelled = true
+            active
+        }
         try {
-            active?.disconnect()
-        } catch (e: Exception) {
+            connection?.disconnect()
+        } catch (_: Exception) {
         }
     }
 
@@ -243,7 +259,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         noteHit(p.id)
         val readMs = if (p.id == "local") 240000 else readMs0
         val conn = URL(url).openConnection() as HttpURLConnection
-        active = conn
+        if (!attachConnection(conn)) {
+            try { conn.disconnect() } catch (_: Exception) { }
+            throw java.io.IOException("Stopped.")
+        }
         try {
             conn.requestMethod = method
             conn.connectTimeout = 15000
@@ -292,7 +311,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             return Http(code, text, ra)
         } finally {
             try { conn.disconnect() } catch (_: Exception) { }
-            if (active === conn) active = null
+            detachConnection(conn)
         }
     }
 
@@ -308,7 +327,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         noteHit(p.id)
         val conn = URL(url).openConnection() as HttpURLConnection
-        active = conn
+        if (!attachConnection(conn)) {
+            try { conn.disconnect() } catch (_: Exception) { }
+            throw java.io.IOException("Stopped.")
+        }
         val answer = StringBuilder()
         val nonSseBody = StringBuilder()
         var terminalEventSeen = false
@@ -400,7 +422,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             return Http(200, synthetic, -1)
         } finally {
             try { conn.disconnect() } catch (_: Exception) { }
-            if (active === conn) active = null
+            detachConnection(conn)
         }
     }
 
