@@ -107,6 +107,52 @@ class OrionCapabilityReportActivity : Activity() {
         addLine(core, "Capability packs", implementedPacks.toString() + " implemented in source · " + enabledPacks + " enabled in settings. Disabled packs are not automatically enabled.", enabledPacks > 0)
         page.addView(core)
 
+        // Show the real routing configuration and transcript availability, without implying
+        // that a saved provider key or selected model has passed a live network test.
+        val contextCard = card()
+        contextCard.addView(label("CONVERSATION & ROUTING", 10f, 0xFFAAAAAA.toInt(), true))
+        val executionMode = runCatching { Prefs.executionMode(this) }.getOrDefault("UNKNOWN")
+        val modeDescription = when (executionMode) {
+            "PLAN" -> "Plan mode: prepare and reason about actions; execution is restricted by mode policy."
+            "ACT" -> "Act mode: execute supported actions through Orion's normal permission and safety gates."
+            "FULL" -> "Full mode: broader action policy may apply, but approvals and safety gates still apply."
+            else -> "Mode could not be read."
+        }
+        addLine(contextCard, "Execution mode", "${executionMode} — ${modeDescription}", executionMode != "UNKNOWN")
+        val selectedProvider = runCatching { Prefs.provider(this, false) }.getOrNull()
+        val selectedModel = selectedProvider?.let { runCatching { Prefs.model(this, it, false) }.getOrNull() }.orEmpty()
+        addLine(
+            contextCard,
+            "Chat provider / model",
+            if (selectedProvider == null) "Could not read selected provider." else
+                "${selectedProvider.name} · ${selectedModel.ifBlank { selectedProvider.textModel }}. Selection is not proof of live connectivity or remaining quota.",
+            selectedProvider != null
+        )
+        val commandProvider = runCatching { Prefs.commandProviderId(this)?.let { Providers.find(it) } ?: Prefs.defaultCommandProvider(this) }.getOrNull()
+        val commandModel = runCatching { Prefs.commandModelId(this) }.getOrNull()
+        addLine(
+            contextCard,
+            "Command planner",
+            if (commandProvider == null) "Could not resolve the command provider." else
+                "${commandProvider.name} · ${commandModel?.takeIf { it.isNotBlank() } ?: commandProvider.textModel}. Command mode may share or override the chat provider.",
+            commandProvider != null
+        )
+        val transcriptCount = runCatching { service?.conversationContext()?.size }.getOrNull()
+        addLine(
+            contextCard,
+            "Saved conversation context",
+            transcriptCount?.let { "${it} transcript row(s) available to restore. The active request still uses a bounded recent context; this does not prove every follow-up is interpreted correctly." }
+                ?: "Conversation storage could not be checked while the service is unavailable.",
+            transcriptCount != null
+        )
+        addLine(
+            contextCard,
+            "Live tool verification",
+            "This screen does not yet run an end-to-end test for every tool. Registered tools, enabled packs, selected models and saved credentials are not proof of successful execution.",
+            false
+        )
+        page.addView(contextCard)
+
         val integrations = card()
         integrations.addView(label("INTEGRATIONS", 10f, 0xFFAAAAAA.toInt(), true))
         addLine(integrations, "AI provider keys", providerKeys.toString() + " of " + Providers.all.size + " providers have a saved key. This does not validate the key, model, credits, quota, or network.", providerKeys > 0)
