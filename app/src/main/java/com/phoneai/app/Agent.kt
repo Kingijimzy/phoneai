@@ -147,7 +147,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
         val consequential = tool in consequentialTools ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
-            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
+            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
     }
 
@@ -240,7 +240,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             ToolPermissions.mode(svc, tool) != ToolMode.DENY
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
-            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
+            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         // A paired MCP endpoint plus an explicitly enabled read scope is already a standing
         // user grant for read-only remote tools. Do not ask again for every read call.
         val effectiveToolMode = if (mcpReadScopeGranted) ToolMode.ALLOW else ToolPermissions.mode(svc, tool)
