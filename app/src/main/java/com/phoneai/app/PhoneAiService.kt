@@ -699,8 +699,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     /** Persist only bounded, secret-free activity metadata in the active chat session. */
     fun recordChatEvent(type: String, status: String, summary: String, messageId: String? = null) {
-        try { OrionConversationRepository.get(this).recordEvent(this, messageId, type, status, summary) }
-        catch (_: Exception) { /* Conversation storage must never crash phone control. */ }
+        try {
+            val repository = OrionConversationRepository.get(this)
+            repository.recordEvent(this, messageId, type, status, summary)
+            // Persist first, then publish the canonical session event list to the open chat.
+            // This keeps tool/approval status visible immediately and restores it after reattach.
+            val events = repository.eventsForActive(this)
+            main.post { mainChatListener?.onChatEvents(events) }
+        } catch (_: Exception) {
+            /* Conversation storage must never crash phone control. */
+        }
     }
 
     fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =
