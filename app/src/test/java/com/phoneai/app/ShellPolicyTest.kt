@@ -7,7 +7,7 @@ class ShellPolicyTest {
     private fun r(c: String) = ShellPolicy.classify(c)
 
     @Test fun harmlessReadCommandsRunAtOnce() {
-        listOf("ls -la", "cat notes.txt", "grep -n todo notes.txt | head -5", "echo hi > out.txt", "mkdir -p src/app && touch src/app/a.kt", "git status", "date; uname -a")
+        listOf("ls -la", "cat notes.txt", "grep -n todo notes.txt | head -5", "echo hi > out.txt", "mkdir -p src/app && touch src/app/a.kt", "git status", "date; uname -a", "python --version", "python3 --version", "python3 -V", "command -v python3", "which python")
             .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
 
