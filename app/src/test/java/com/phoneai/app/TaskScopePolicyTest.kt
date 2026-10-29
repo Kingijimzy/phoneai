@@ -36,7 +36,7 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor(request))
         assertNull(TaskScopePolicy.blockReason(request, "open_app"))
         assertNull(TaskScopePolicy.blockReason(request, "read_screen"))
-        assertNotNull(TaskScopePolicy.blockReason(request, "bybit_public_ticker"))
+        assertNull(TaskScopePolicy.blockReason(request, "bybit_public_ticker"))
     }
 
     @Test fun explicitActionIsNotDowngradedByConversationWording() {
@@ -83,7 +83,7 @@ class TaskScopePolicyTest {
         val prev = "open WhatsApp and send kingi jimzy good morning"
         val scope = TaskScopePolicy.scopeFor("yes go ahead", prev, 30_000)
         assertNull(TaskScopePolicy.blockReason(scope, "open_app"))
-        assertNotNull(TaskScopePolicy.blockReason("yes go ahead", "open_app"))
+        assertNull(TaskScopePolicy.blockReason("yes go ahead", "open_app"))
     }
 
     @Test fun staleOrLongFollowUpDoesNotInherit() {

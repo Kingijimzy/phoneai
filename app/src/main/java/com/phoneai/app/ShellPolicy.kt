@@ -25,8 +25,9 @@ internal object ShellPolicy {
     private val approvalRequired = listOf(
         Regex("(?i)\\b(mkfs|fdisk|reboot|shutdown|setprop|su|sudo)\\b"),
         Regex("(?i)\\bdd\\s+.*\\bof="),
+        Regex("(?i)\\bdd\\s+.*\\bof=/dev/(sd[a-z]+|nvme\\d+n\\d+|mmcblk\\d+)"),
         Regex("(?i)\\bsettings\\s+put\\b|\\bpm\\s+(uninstall|clear|disable)\\b"),
-        Regex("(?i)(curl|wget)[^|;&]*\\|\\s*(sh|bash|zsh)\\b")
+        Regex("""(?i)\\b(curl|wget)\\b[^;&]*\\|\\s*(sh|bash|zsh)\\b""")
     )
 
     private fun segments(cmd: String): List<String> =
