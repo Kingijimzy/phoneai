@@ -157,18 +157,25 @@ class Tools(private val svc: PhoneAiService) {
      * arbitrary URLs, never sends a token, and never performs write operations.
      * section: repo | release | issues | runs
      */
-    fun githubPublic(owner: String, repository: String, section: String): String {
+    fun githubPublic(owner: String, repository: String, section: String, runId: String? = null): String {
         val safePart = Regex("^[A-Za-z0-9_.-]{1,100}$")
         if (!safePart.matches(owner) || !safePart.matches(repository) ||
             owner == "." || owner == ".." || repository == "." || repository == "..") {
             return "error: provide a public GitHub owner and repository name"
         }
-        val endpoint = when (section.lowercase().trim()) {
+        val normalizedSection = section.lowercase().trim()
+        val endpoint = when (normalizedSection) {
             "repo" -> "repos/$owner/$repository"
             "release" -> "repos/$owner/$repository/releases/latest"
             "issues" -> "repos/$owner/$repository/issues?state=open&per_page=10"
             "runs" -> "repos/$owner/$repository/actions/runs?per_page=5"
-            else -> return "error: section must be repo, release, issues, or runs"
+            "run" -> {
+                if (runId.isNullOrBlank() || !Regex("^[0-9]{1,20}$").matches(runId)) {
+                    return "error: an exact numeric GitHub Actions run ID is required"
+                }
+                "repos/$owner/$repository/actions/runs/$runId"
+            }
+            else -> return "error: section must be repo, release, issues, runs, or run"
         }
         return try {
             val conn = (URL("https://api.github.com/$endpoint").openConnection() as HttpURLConnection)
@@ -198,7 +205,17 @@ class Tools(private val svc: PhoneAiService) {
                 val detail = try { JSONObject(raw).optString("message", "HTTP $code") } catch (_: Exception) { "HTTP $code" }
                 return "GitHub returned $code: ${detail.take(180)}. The repository may be private, missing, or rate-limited."
             }
-            when (section.lowercase().trim()) {
+            when (normalizedSection) {
+                "run" -> {
+                    val obj = JSONObject(raw)
+                    "GitHub Actions run #" + obj.optLong("run_number", 0) + " for $owner/$repository\n" +
+                        "Workflow: " + obj.optString("name", "unknown") + "\n" +
+                        "Status: " + obj.optString("status", "unknown") + " | Conclusion: " + obj.optString("conclusion", "pending") + "\n" +
+                        "Branch: " + obj.optString("head_branch", "unknown") + " | Event: " + obj.optString("event", "unknown") + "\n" +
+                        "Commit: " + (obj.optJSONObject("head_commit")?.optString("id", "unknown") ?: "unknown") + "\n" +
+                        "Updated: " + obj.optString("updated_at", "unknown") + "\n" +
+                        "URL: " + obj.optString("html_url", "https://github.com/$owner/$repository/actions/runs/$runId")
+                }
                 "repo" -> {
                     val obj = JSONObject(raw)
                     "Public GitHub repository: ${obj.optString("full_name", "$owner/$repository")}\n" +
