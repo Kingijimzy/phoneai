@@ -58,6 +58,38 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("unverified"))
     }
 
+    @Test fun grantedAndroidPermissionsMakeMatchingCapabilitiesAvailable() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(
+                tool("resolve_contact"),
+                tool("read_notifications"),
+                tool("media_status"),
+                tool("media_control", ToolAccess.WRITE),
+                tool("device_location")
+            ),
+            setOf("messaging", "phone_control"),
+            termuxReady = true,
+            permissionStates = mapOf(
+                "contacts" to OrionCapabilityDiscovery.PermissionState.GRANTED,
+                "notification_access" to OrionCapabilityDiscovery.PermissionState.GRANTED,
+                "location" to OrionCapabilityDiscovery.PermissionState.GRANTED
+            )
+        )
+        assertEquals(5, snapshot.availableCount)
+        assertTrue(snapshot.tools.all { it.available })
+    }
+
+    @Test fun missingLocationPermissionNamesTheExactPrerequisite() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("device_location")),
+            setOf("phone_control"),
+            termuxReady = true,
+            permissionStates = mapOf("location" to OrionCapabilityDiscovery.PermissionState.MISSING)
+        )
+        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().reason.contains("location"))
+    }
+
     @Test fun availableToolRequiresRegistryAndEnabledPack() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
