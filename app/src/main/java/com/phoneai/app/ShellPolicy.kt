@@ -11,6 +11,12 @@ internal object ShellPolicy {
     )
     private val workspaceWrite = setOf("mkdir", "touch", "cp", "tee")
     private val safeGit = setOf("status", "log", "diff", "branch", "show", "remote")
+    // Exact, side-effect-free interpreter diagnostics are safe even when the interpreter is absent.
+    // Keep these anchored: do not turn arbitrary Python scripts or package-manager commands into SAFE.
+    private val safeDiagnostics = listOf(
+        Regex("""^(?:python(?:3(?:\\.\\d+)?)?)\\s+(?:--version|-V)$"""),
+        Regex("""^(?:command\\s+-v|which)\\s+(?:python(?:3(?:\\.\\d+)?)?)$""")
+    )
 
     // Keep only catastrophic/designed-to-exfiltrate targets as hard blocks. Other
     // privileged or destructive commands are approval-gated by dispatch and may run
@@ -44,6 +50,7 @@ internal object ShellPolicy {
         val cmd = command.trim()
         if (cmd.isEmpty() || cmd.length > 2000) return ShellRisk.BLOCKED
         if (blocked.any { it.containsMatchIn(cmd) }) return ShellRisk.BLOCKED
+        if (safeDiagnostics.any { it.matches(cmd) }) return ShellRisk.SAFE
         if (approvalRequired.any { it.containsMatchIn(cmd) }) return ShellRisk.ASK
         BuiltinCommands.risk(cmd)?.let { return it }
         if (cmd.contains("`") || cmd.contains("$(") || cmd.contains("<(")) return ShellRisk.ASK
