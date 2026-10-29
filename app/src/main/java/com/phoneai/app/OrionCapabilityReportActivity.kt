@@ -170,6 +170,25 @@ class OrionCapabilityReportActivity : Activity() {
         messages.distinct().forEach { limits.addView(label("• " + it, 12f, 0xFFE0E0E0.toInt())) }
         page.addView(limits)
 
+        val activityCard = card()
+        activityCard.addView(label("RECENT TOOL ACTIVITY", 10f, 0xFFAAAAAA.toInt(), true))
+        activityCard.addView(label("Local audit history records tool names and generic outcomes only; it does not store tool arguments or prove the user's goal was achieved.", 12f, 0xFFAAAAAA.toInt()))
+        val recentEvents = runCatching { ActionLogStore.all(this).take(8) }.getOrDefault(emptyList())
+        if (recentEvents.isEmpty()) {
+            activityCard.addView(label("No tool attempts are recorded yet.", 12f, 0xFFAAAAAA.toInt()))
+        } else {
+            recentEvents.forEach { event ->
+                val stamp = runCatching {
+                    SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(event.at))
+                }.getOrDefault("time unknown")
+                val isError = event.outcome.equals("error returned", ignoreCase = true)
+                val status = if (isError) "ERROR RETURNED" else "RESULT RETURNED · NOT PROOF OF SUCCESS"
+                val detail = if (event.failureCategory.isBlank()) status else "$status · ${event.failureCategory}"
+                addLine(activityCard, "${event.tool} · $stamp", detail, if (isError) false else null)
+            }
+        }
+        page.addView(activityCard)
+
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         actions.addView(Button(this).apply {
             text = "Refresh report"; isAllCaps = false; setOnClickListener { render() }
