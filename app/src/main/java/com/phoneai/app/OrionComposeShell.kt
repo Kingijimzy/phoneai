@@ -85,7 +85,8 @@ fun OrionComposeShell(
     onOpenUtilities: () -> Unit,
     onOpenTrading: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
-    onOpenAgents: () -> Unit = {}
+    onOpenAgents: () -> Unit = {},
+    onOpenSoulEngine: () -> Unit = {}
 ) {
     var selected by remember { mutableStateOf("Home") }
     val scheme = darkColorScheme(
@@ -112,7 +113,7 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
-                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents)
+                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents, onOpenSoulEngine)
                         else -> SettingsPage(onOpenSettings)
                     }
                 }
@@ -280,13 +281,15 @@ private fun ToolsPage(
     onOpenSettings: (String?) -> Unit,
     onOpenTrading: () -> Unit,
     onOpenMemory: () -> Unit,
-    onOpenAgents: () -> Unit
+    onOpenAgents: () -> Unit,
+    onOpenSoulEngine: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         PageHeading("Tools & skills", "Your capabilities, one clear workspace.")
+        ActionRow("Soul Engine Command Center", "System readiness, connected workspaces and self-test", Icons.Rounded.Hub, onOpenSoulEngine)
         ActionRow("Orion Browser", "Web navigation and assisted research", Icons.Rounded.Public, onOpenBrowser)
         ActionRow("Task centre", "Saved tasks and routines", Icons.Rounded.TaskAlt, onOpenTasks)
         ActionRow("Agents", "Trading Coach, Research, Code, Planner, Writer", Icons.Rounded.SmartToy, onOpenAgents)
