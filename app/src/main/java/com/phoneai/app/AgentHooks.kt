@@ -42,6 +42,8 @@ internal object AgentHooks {
    signatures.add(signature(tool, args))
    while (signatures.size > maxEntries) signatures.remove(signatures.first())
   }
+  /** Lets a verified-safe retry (a transient read failure) run again; every other repeat stays blocked. */
+  @Synchronized fun forget(tool: String, args: JSONObject) { signatures.remove(signature(tool, args)) }
   @Synchronized fun clear() = signatures.clear()
   @Synchronized fun size(): Int = signatures.size
  }
