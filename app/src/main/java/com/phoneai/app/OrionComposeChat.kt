@@ -117,9 +117,52 @@ private val ORION_HEADING_PATTERN = Regex("""^\s{0,3}(#{1,3})\s+(.+)$""")
 private val ORION_BULLET_PATTERN = Regex("""^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+)$""")
 private val ORION_INLINE_TOKEN_PATTERN = Regex("""\[([^\]]+)]\((https?://[^\s)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(?<![*\w])\*([^*\n]+)\*(?!\w)|(https?://[^\s)]+)""")
 
+internal fun normalizeOrionMarkdownTables(source: String): String {
+    val input = source.replace("\r\n", "\n").replace('\r', '\n').split('\n')
+    val output = mutableListOf<String>()
+    var i = 0
+    var inCode = false
+    fun cells(line: String): List<String> = line.trim().removePrefix("|").removeSuffix("|").split("|").map { it.trim() }
+    fun isSeparator(line: String): Boolean {
+        val values = cells(line)
+        return values.size >= 2 && values.all { it.matches(Regex(":?-{3,}:?")) }
+    }
+    while (i < input.size) {
+        val line = input[i]
+        if (line.trimStart().startsWith("\u0060\u0060\u0060")) {
+            inCode = !inCode
+            output += line
+            i++
+            continue
+        }
+        if (!inCode && line.count { it == '|' } >= 2 && i + 1 < input.size &&
+            input[i + 1].count { it == '|' } >= 2 && isSeparator(input[i + 1])) {
+            val headers = cells(line)
+            i += 2
+            var rows = 0
+            while (i < input.size && input[i].count { it == '|' } >= 2) {
+                val values = cells(input[i])
+                val rendered = headers.indices.mapNotNull { column ->
+                    val header = headers.getOrNull(column).orEmpty()
+                    val value = values.getOrNull(column).orEmpty()
+                    if (header.isBlank() || value.isBlank()) null else "**" + header + ":** " + value
+                }
+                if (rendered.isNotEmpty()) output += rendered.joinToString(" · ")
+                i++
+                rows++
+            }
+            if (rows == 0) output += headers.joinToString(" · ")
+            continue
+        }
+        output += line
+        i++
+    }
+    return output.joinToString("\n")
+}
+
 internal fun formatOrionMarkdown(source: String): AnnotatedString {
     val out = AnnotatedString.Builder()
-    val lines = source.replace("\r\n", "\n").replace('\r', '\n').split('\n')
+    val lines = normalizeOrionMarkdownTables(source).split('\n')
     var inCode = false
     var codeFirstLine = false
     var codeStart = -1
