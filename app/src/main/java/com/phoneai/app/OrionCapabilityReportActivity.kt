@@ -160,6 +160,62 @@ class OrionCapabilityReportActivity : Activity() {
         addLine(integrations, "Speech recognition", if (speechAvailable) "Android reports a recognizer is available; microphone capture and transcription still need a real test." else "Android reports no speech recognizer available.", speechAvailable)
         page.addView(integrations)
 
+        // Per-tool inventory: eligibility is derived from the registry, enabled packs and known
+        // prerequisites. It is deliberately labelled as NOT a live backend health test.
+        val enabledPackIds = AgentPolicy.packs
+            .filter { it.implemented && AgentPolicy.enabled(this, it.id) }
+            .map { it.id }.toSet()
+        val contactsState = runCatching {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.READ_CONTACTS
+                ) == PackageManager.PERMISSION_GRANTED
+            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
+        val notificationState = runCatching {
+            if (Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                    ?.contains(packageName) == true
+            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
+        val termuxReady = runCatching { TermuxBridgeRunner.readiness(this) == null }.getOrDefault(false)
+        val inventory = runCatching {
+            OrionCapabilityDiscovery.discover(
+                ToolRegistry.all,
+                enabledPackIds,
+                termuxReady,
+                permissionStates = mapOf(
+                    "contacts" to contactsState,
+                    "notification_access" to notificationState
+                )
+            )
+        }.getOrNull()
+        val toolsCard = card()
+        toolsCard.addView(label("TOOL-BY-TOOL AVAILABILITY", 10f, 0xFFAAAAAA.toInt(), true))
+        toolsCard.addView(label(
+            "Eligible means registered, pack enabled and known prerequisites satisfied. It does NOT mean the backend has been live-tested or that an action will succeed.",
+            12f, 0xFFAAAAAA.toInt()
+        ))
+        if (inventory == null) {
+            toolsCard.addView(label("Tool availability could not be calculated.", 12f, 0xFFFFC078.toInt()))
+        } else {
+            toolsCard.addView(label(
+                "${inventory.availableCount} of ${inventory.registeredCount} tools eligible to attempt · ${inventory.registeredCount - inventory.availableCount} blocked",
+                13f, 0xFFF0F0F0.toInt(), true
+            ))
+            inventory.tools.sortedWith(compareBy<OrionCapabilityDiscovery.ToolFact> { !it.available }.thenBy { it.name })
+                .forEach { tool ->
+                    addLine(
+                        toolsCard,
+                        "${if (tool.available) "ELIGIBLE" else "BLOCKED"} · ${tool.name} (${tool.access.name.lowercase()})",
+                        if (tool.available) "Prerequisites look satisfied; execution not live-verified." else tool.reason,
+                        if (tool.available) null else false
+                    )
+                }
+            if (inventory.blockers.isNotEmpty()) {
+                toolsCard.addView(label("Runtime notes: " + inventory.blockers.joinToString("; "), 11f, 0xFFFFC078.toInt()))
+            }
+        }
+        page.addView(toolsCard)
+
         val limits = card()
         limits.addView(label("WHAT NEEDS ATTENTION", 10f, 0xFFAAAAAA.toInt(), true))
         val messages = report.limitations.mapNotNull { limitationText(it) }.toMutableList()
