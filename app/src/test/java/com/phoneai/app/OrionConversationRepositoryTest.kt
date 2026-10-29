@@ -89,6 +89,58 @@ class OrionConversationRepositoryTest {
         assertEquals(active, repository.loadActive(context))
     }
 
+    @Test fun migratesRealLegacyPreferencesOnceAndPreservesActiveAndArchivedChats() {
+        val prefs = context.getSharedPreferences("orion_chat_history", Context.MODE_PRIVATE)
+        val legacyActive = org.json.JSONArray()
+            .put(org.json.JSONObject().put("kind", "me").put("text", "legacy active question"))
+            .put(org.json.JSONObject().put("kind", "ai").put("text", "legacy active answer"))
+        val legacyArchivedMessages = org.json.JSONArray()
+            .put(org.json.JSONObject().put("kind", "me").put("text", "legacy archived question"))
+            .put(org.json.JSONObject().put("kind", "ai").put("text", "legacy archived answer"))
+        val legacyArchives = org.json.JSONArray().put(
+            org.json.JSONObject()
+                .put("sessionId", "legacy-session-test")
+                .put("timestamp", 123456L)
+                .put("title", "legacy archive")
+                .put("messages", legacyArchivedMessages)
+        )
+        prefs.edit()
+            .putString("active_transcript", legacyActive.toString())
+            .putString("archived_chats", legacyArchives.toString())
+            .commit()
+
+        val activeExpected = listOf("me" to "legacy active question", "ai" to "legacy active answer")
+        val archivedExpected = listOf("me" to "legacy archived question", "ai" to "legacy archived answer")
+        assertEquals(activeExpected, repository.loadActive(context))
+        assertTrue(repository.archived(context).any {
+            it.id == "legacy-session-test" && it.messages == archivedExpected
+        })
+        assertTrue(prefs.getBoolean("sqlite_sessions_migrated_v1", false))
+
+        // Once the migration commits, stale legacy preferences must not overwrite SQLite state.
+        prefs.edit().putString(
+            "active_transcript",
+            org.json.JSONArray().put(org.json.JSONObject().put("kind", "me").put("text", "stale legacy data")).toString()
+        ).commit()
+        assertEquals(activeExpected, repository.loadActive(context))
+    }
+
+    @Test fun persistedLifecycleEventRedactsCredentialLikeValues() {
+        val event = repository.recordEvent(
+            context,
+            messageId = "message-1",
+            type = "tool_result",
+            status = "success",
+            summary = "api_key=sk-1234567890abcdef Bearer abcdefghijklmnop password=hunter2"
+        )
+        assertNotNull(event)
+        val safeSummary = event!!.summary
+        assertFalse(safeSummary.contains("sk-1234567890abcdef"))
+        assertFalse(safeSummary.contains("abcdefghijklmnop"))
+        assertFalse(safeSummary.contains("hunter2"))
+        assertTrue(safeSummary.contains("[redacted]"))
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
