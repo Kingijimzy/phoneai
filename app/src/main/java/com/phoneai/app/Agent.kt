@@ -1742,6 +1742,7 @@ Rules:
                 // Anything else (writes, shell, consequential actions, permission errors) is never repeated here.
                 val outcome = RecoveryPolicy.retryRead(
                     first = result,
+                    maxReadRetries = OrionAutonomySettings.read(svc).maxRetries,
                     isFailure = { ToolResultPolicy.failureReason(it) != null },
                     stopped = { stopped },
                     budgetExhausted = { budgetStopReason() != null },
@@ -1788,7 +1789,7 @@ Rules:
             val toolFailure = ToolResultPolicy.failureReason(result)
             if (toolFailure != null) {
                 val failureKind = RecoveryPolicy.classify(result)
-                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries)
+                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries, OrionAutonomySettings.read(svc).maxRetries)
                 val replanTask = managedTask.fail()
                 if (decision == RecoveryPolicy.Decision.REPLAN && replanTask?.phase == TaskLifecycle.Phase.RECOVER && !stopped && budgetStopReason() == null) {
                     // Recoverable: keep the saved progress, tell the model exactly what failed, and require a different action.
