@@ -16,6 +16,18 @@ class ToolRegistryTest {
     }
 
 
+    @Test fun everyRegisteredToolMapsToAnExistingCapabilityPack() {
+        val knownPacks = AgentPolicy.packs.map { it.id }.toSet()
+        ToolRegistry.all.forEach { tool ->
+            val pack = AgentPolicy.packForTool(tool.name)
+            assertNotNull("Registered tool ${tool.name} has no capability-pack mapping", pack)
+            assertTrue(
+                "Tool ${tool.name} maps to an unknown capability pack: $pack",
+                pack != null && knownPacks.contains(pack)
+            )
+        }
+    }
+
     @Test fun browserNavigationUsesTheInAppBrowserWithoutExternalBrowserPrerequisites() {
         val contract = ToolRegistry.all.single { it.name == "browser_navigate" }.promptLine.lowercase()
         assertTrue(contract.contains("built-in webview browser"))
