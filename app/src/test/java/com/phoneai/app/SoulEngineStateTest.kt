@@ -76,6 +76,14 @@ class SoulEngineStateTest {
         assertFalse(SoulEngineState.reviewProposal(context, proposal.id, SoulEngineState.ProposalStatus.REJECTED))
     }
 
+    @Test fun watcherStatusPersistsAcrossSnapshots() {
+        assertTrue(SoulEngineState.recordWatcherStatus(context, "limited", "local_capability_audit"))
+        val snapshot = SoulEngineState.snapshot(context)
+        assertEquals("limited", snapshot.watcherStatus)
+        assertEquals("local_capability_audit", snapshot.watcherAction)
+        assertTrue(snapshot.watcherAt > 0L)
+    }
+
     @Test fun watcherMaintenanceFindingsBecomeDeduplicatedReviewProposals() {
         assertTrue(SoulEngineState.proposeWatchIssue(
             context, "readiness", "Soul watcher found: screen_perception_unavailable",
