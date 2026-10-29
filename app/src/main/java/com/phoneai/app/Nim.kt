@@ -856,6 +856,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 )
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
+            if (r.code == 413) {
+                lastHttpStatus = 413
+                cooldown[p.id] = System.currentTimeMillis() + 5000L
+                throw AiException("${p.label}: request payload was too large (HTTP 413). Orion will try another eligible provider if Auto-switch is enabled; this does not necessarily mean your account reached a usage limit.", 413)
+            }
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
                 // OpenRouter may rate-limit one model while another model on the same
