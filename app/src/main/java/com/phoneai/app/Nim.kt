@@ -765,6 +765,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         val queue = mutableListOf(selectedModel(p, vision))
         val tried = HashSet<String>()
+        val rateLimitRetried = HashSet<String>()
         var refilled = false
         var lastNote = ""
         var lastHttpStatus: Int? = null
@@ -877,8 +878,27 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         continue
                     }
                 }
+                // Do not declare the request exhausted immediately when the provider gives
+                // a short Retry-After. Wait briefly and retry this model once, while remaining
+                // cancellable. Longer waits are better handled by a healthy backup provider.
+                if (wait in 1..5 && rateLimitRetried.add(model) && attempts < maxAttempts) {
+                    onStatus?.invoke("${p.label} rate-limited ${model.substringAfterLast('/')}; waiting ${wait}s before one retry...")
+                    var remainingMs = wait * 1000L
+                    while (remainingMs > 0L) {
+                        if (cancelled || Thread.currentThread().isInterrupted) throw RuntimeException("Stopped.")
+                        val slice = minOf(remainingMs, 200L)
+                        try { Thread.sleep(slice) } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            throw RuntimeException("Stopped.")
+                        }
+                        remainingMs -= slice
+                    }
+                    tried.remove(model)
+                    queue.add(0, model)
+                    continue
+                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
-                throw AiException("${p.label}: rate limit reached (429); retry after about ${wait.coerceIn(8, 60)} seconds.", 429)
+                throw AiException("${p.label}: rate limit reached (429); waited/retried when the provider supplied a short delay. ${if (hasBackup) "Trying another eligible provider." else "Retry after about ${wait.coerceIn(8, 60)} seconds or add another provider."}", 429)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
