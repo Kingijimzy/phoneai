@@ -84,6 +84,7 @@ internal object RecoveryPolicy {
         budgetExhausted: () -> Boolean,
         sleep: (Long) -> Unit,
         onRetry: (attempt: Int, failure: Failure) -> Unit,
+        maxReadRetries: Int = MAX_READ_RETRIES,
         attempt: () -> String
     ): ReadOutcome {
         var result = first
