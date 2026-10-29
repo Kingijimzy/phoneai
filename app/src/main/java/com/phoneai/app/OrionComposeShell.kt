@@ -87,7 +87,8 @@ fun OrionComposeShell(
     onOpenTrading: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
     onOpenAgents: () -> Unit = {},
-    onOpenSoulEngine: () -> Unit = {}
+    onOpenSoulEngine: () -> Unit = {},
+    onOpenExtensions: () -> Unit = {}
 ) {
     var selected by remember { mutableStateOf("Home") }
     val scheme = darkColorScheme(
@@ -114,7 +115,7 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
-                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents, onOpenSoulEngine)
+                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents, onOpenSoulEngine, onOpenExtensions)
                         else -> SettingsPage(onOpenSettings)
                     }
                 }
@@ -283,7 +284,8 @@ private fun ToolsPage(
     onOpenTrading: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenAgents: () -> Unit,
-    onOpenSoulEngine: () -> Unit
+    onOpenSoulEngine: () -> Unit,
+    onOpenExtensions: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -294,6 +296,7 @@ private fun ToolsPage(
         ActionRow("Task centre", "Saved tasks and routines", Icons.Rounded.TaskAlt, onOpenTasks)
         ActionRow("Agents", "Trading Coach, Research, Code, Planner, Writer", Icons.Rounded.SmartToy, onOpenAgents)
         ActionRow("Soul Engine Command Center", "System readiness, connected workspaces and self-test", Icons.Rounded.Hub, onOpenSoulEngine)
+        ActionRow("Self-extension lab", "Create, sandbox-test, approve and manage generated skills", Icons.Rounded.AutoAwesome, onOpenExtensions)
         ActionRow("Trading desk", "Bybit market scanner, journal and watchlist", Icons.Rounded.TaskAlt, onOpenTrading)
         ActionRow("Memory", "What Orion remembers; pin, edit or delete", Icons.Rounded.Memory, onOpenMemory)
         ActionRow("Teach mode", "Record a workflow for Orion to repeat", Icons.Rounded.SmartToy, onOpenUtilities)
