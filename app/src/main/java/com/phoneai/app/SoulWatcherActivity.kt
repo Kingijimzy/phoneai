@@ -69,8 +69,9 @@ class SoulWatcherActivity : Activity() {
         statusCard.addView(statusView)
         statusCard.addView(detailView.apply { setPadding(0, dp(8), 0, 0) })
         val statusActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        statusActions.addView(actionButton("Run check now") { runWatcherCheck() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
-        statusActions.addView(actionButton("Capabilities") { showCapabilities() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
+        statusActions.addView(actionButton("Run check") { runWatcherCheck() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(3) })
+        statusActions.addView(actionButton("Capabilities") { showCapabilities() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(3); marginEnd = dp(3) })
+        statusActions.addView(actionButton("Memory nudges") { showMemoryNudges() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(3) })
         statusCard.addView(statusActions)
         root.addView(statusCard)
 
@@ -114,10 +115,11 @@ class SoulWatcherActivity : Activity() {
         when {
             q in setOf("check", "check status", "run check", "scan", "audit", "refresh") -> runWatcherCheck()
             q.contains("capabilit") || q.contains("workspace status") || q.contains("what works") || q.contains("what is connected") -> showCapabilities()
+            q.contains("memory") || q.contains("nudge") || q.contains("save this") -> showMemoryNudges()
             q.contains("proposal") || q.contains("suggestion") -> showProposals()
             q.contains("capability report") || q.contains("capability board") || q.contains("open report") -> openCapabilityReport()
             q.startsWith("why") || q.contains("screen perception") || q.contains("unavailable") -> explainLimitation(raw)
-            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “why screen perception unavailable”, “show proposals”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
+            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show proposals”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
             else -> addMessage("WATCHER", "I don't have a verified local action for that command yet. I haven't changed anything. Try “check status”, “show proposals”, or “why screen perception unavailable”.")
         }
     }
@@ -132,6 +134,7 @@ class SoulWatcherActivity : Activity() {
                     val limits = if (r.limitations.isEmpty()) "No capability limitations were reported by this audit." else "Findings: " + r.limitations.joinToString(", ")
                     addMessage("WATCHER", "Audit finished. Status: ${r.status}. Action: ${r.action}. $limits\nNext step: ${r.nextStep}\nThis is a fresh audit result, not proof that every feature works.")
                     showProposals()
+                    showMemoryNudges()
                 }.onFailure { e ->
                     addMessage("WATCHER", "The local audit failed: ${e.message ?: e.javaClass.simpleName}. No repair is claimed. You can retry or open the Capability Report.")
                 }
@@ -205,6 +208,58 @@ class SoulWatcherActivity : Activity() {
         val ok = runCatching { SoulEngineState.reviewProposal(this, p.id, status, null) }.getOrDefault(false)
         addMessage("WATCHER", if (ok) "Proposal ${status.name.lowercase()} recorded. No permission, source, or tool behavior was changed." else "I couldn't save that decision. Refresh the proposals and try again.")
         renderSnapshot()
+    }
+
+
+    private fun showMemoryNudges() {
+        val snapshot = runCatching { SoulEngineState.snapshot(this) }.getOrNull()
+        if (snapshot == null) {
+            addMessage("WATCHER", "Memory-nudge state could not be read. No memory was changed.")
+            return
+        }
+        val rules = snapshot.memoryNudgeRules
+        addMessage("WATCHER", "Memory nudges: \${if (rules.enabled) "enabled" else "paused"} · cooldown \${rules.cooldownMillis / 3_600_000L}h. Suggestions are review-only; nothing is saved until you choose Save.")
+        val pending = snapshot.memoryNudges.filter { it.status == SoulEngineState.NudgeStatus.PENDING }
+        if (pending.isEmpty()) {
+            addMessage("WATCHER", "No memory suggestions are waiting for review.")
+        } else {
+            pending.take(8).forEach { n ->
+                val box = card(transcript)
+                box.addView(label(n.summary, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
+                box.addView(label("Category: \${n.category} · Suggested \${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(n.createdAt))}", muted, 10f))
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                row.addView(actionButton("Save memory") {
+                    val ok = runCatching { SoulEngineState.reviewMemoryNudge(this, n.id, SoulEngineState.NudgeStatus.SAVED) }.getOrDefault(false)
+                    addMessage("WATCHER", if (ok) "Saved to durable lessons. This memory is sanitized and can inform future planning." else "Could not save this suggestion; no change is claimed.")
+                    renderSnapshot()
+                    showMemoryNudges()
+                }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+                row.addView(actionButton("Dismiss") {
+                    val ok = runCatching { SoulEngineState.reviewMemoryNudge(this, n.id, SoulEngineState.NudgeStatus.DISMISSED) }.getOrDefault(false)
+                    addMessage("WATCHER", if (ok) "Suggestion dismissed. It will not be resurfaced as a duplicate." else "Could not dismiss this suggestion; no change is claimed.")
+                    renderSnapshot()
+                    showMemoryNudges()
+                }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
+                box.addView(row)
+            }
+        }
+        val settings = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        settings.addView(actionButton(if (rules.enabled) "Pause nudges" else "Enable nudges") {
+            val ok = SoulEngineState.configureMemoryNudges(this, !rules.enabled, rules.cooldownMillis)
+            addMessage("WATCHER", if (ok) "Memory nudges \${if (rules.enabled) "paused" else "enabled"}." else "Could not update nudge settings.")
+            showMemoryNudges()
+        }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
+        settings.addView(actionButton("Cooldown: \${rules.cooldownMillis / 3_600_000L}h → \${if (rules.cooldownMillis >= 7L * 24L * 3_600_000L) "24h" else if (rules.cooldownMillis >= 24L * 3_600_000L) "7d" else "24h"}") {
+            val next = when {
+                rules.cooldownMillis < 24L * 3_600_000L -> 24L * 3_600_000L
+                rules.cooldownMillis < 7L * 24L * 3_600_000L -> 7L * 24L * 3_600_000L
+                else -> 24L * 3_600_000L
+            }
+            val ok = SoulEngineState.configureMemoryNudges(this, rules.enabled, next)
+            addMessage("WATCHER", if (ok) "Cooldown set to \${next / 3_600_000L} hours." else "Could not update cooldown.")
+            showMemoryNudges()
+        }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(4) })
+        transcript.addView(settings)
     }
 
     private fun openCapabilityReport() {
