@@ -1,5 +1,11 @@
 package com.phoneai.app
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,9 +42,11 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,7 +82,10 @@ fun SoulEngineComposeScreen(
     onOpenBrowser: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenCapabilityReport: () -> Unit,
-    onOpenTeach: () -> Unit
+    onOpenTeach: () -> Unit,
+    coreEnabled: Boolean,
+    onCoreEnabledChange: (Boolean) -> Unit,
+    onOpenExtensions: () -> Unit
 ) {
     MaterialTheme(colorScheme = darkColorScheme(
         primary = EngineSilver,
@@ -110,6 +121,8 @@ fun SoulEngineComposeScreen(
                         modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenSettings).padding(9.dp).size(21.dp)
                     )
                 }
+
+                EngineCoreToggle(coreEnabled, onCoreEnabledChange)
 
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
@@ -160,6 +173,7 @@ fun SoulEngineComposeScreen(
                     SectionTitle("WORKSPACES", "Open a connected destination")
                     EngineWorkspace("Conversational Copilot", "Ask, reason, create and continue chat history", Icons.Rounded.ChatBubbleOutline, onOpenChat)
                     EngineWorkspace("Tasks & workflows", "Saved tasks, routines and recovery", Icons.Rounded.TaskAlt, onOpenTasks)
+                    EngineWorkspace("Self-extension lab", "Create, test, approve and manage generated skills", Icons.Rounded.Hub, onOpenExtensions)
                     Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
                         EngineMiniWorkspace("Agents & skills", Icons.Rounded.AutoAwesome, Modifier.weight(1f), onOpenAgents)
                         EngineMiniWorkspace("Memory", Icons.Rounded.Memory, Modifier.weight(1f), onOpenMemory)
@@ -185,6 +199,9 @@ fun SoulEngineComposeScreen(
 
 @Composable
 private fun NeuralNetworkMark(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "soul-engine-motion")
+    val pulse by transition.animateFloat(initialValue = 0.35f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(1800, easing = LinearEasing), repeatMode = RepeatMode.Reverse), label = "pulse")
+    val travel by transition.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(4200, easing = LinearEasing), repeatMode = RepeatMode.Restart), label = "travel")
     Canvas(modifier) {
         val w = size.width
         val h = size.height
@@ -202,9 +219,34 @@ private fun NeuralNetworkMark(modifier: Modifier = Modifier) {
         points.forEachIndexed { i, point ->
             val radius = if (i == 6) 5.5.dp.toPx() else if (i % 3 == 0) 3.4.dp.toPx() else 2.5.dp.toPx()
             drawCircle(if (i == 6) EngineBlue else EngineSilver, radius, point)
-            if (i == 6) drawCircle(EngineBlue.copy(alpha = .16f), radius * 3.1f, point)
+            if (i == 6) drawCircle(EngineBlue.copy(alpha = .12f + pulse * .12f), radius * (2.5f + pulse), point)
         }
+        val segment = travel * (points.size - 1)
+        val from = segment.toInt().coerceIn(0, points.lastIndex)
+        val to = (from + 1).coerceAtMost(points.lastIndex)
+        val fraction = segment - from
+        val moving = Offset(points[from].x + (points[to].x - points[from].x) * fraction, points[from].y + (points[to].y - points[from].y) * fraction)
+        drawCircle(EngineBlue.copy(alpha = .14f), 12.dp.toPx() * pulse, moving)
+        drawCircle(EngineWhite, 3.3.dp.toPx(), moving)
         drawLine(EngineLine, Offset(w * .04f, h * .92f), Offset(w * .96f, h * .92f), strokeWidth = 1.dp.toPx())
+    }
+}
+
+@Composable
+private fun EngineCoreToggle(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
+            .border(1.dp, if (enabled) EngineBlue.copy(alpha = .65f) else EngineLine, RoundedCornerShape(18.dp))
+            .padding(horizontal = 15.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(if (enabled) EngineBlue else EngineMuted))
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(if (enabled) "SOUL ENGINE ACTIVE" else "SOUL ENGINE PAUSED", color = EngineWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Text(if (enabled) "Core tools are available under their individual policies" else "Core tools are paused; other Android features remain separate", color = EngineMuted, fontSize = 10.sp, lineHeight = 14.sp)
+        }
+        Switch(checked = enabled, onCheckedChange = onChange)
     }
 }
 
