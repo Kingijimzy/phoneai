@@ -382,7 +382,7 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
             )
         }
         if (result.isNotBlank()) Text(result, color = ChatMuted, fontSize = 11.sp, lineHeight = 16.sp)
-        Text("Interactive pages and sign-in stay in the Browser screen.", color = Color(0xFF858585), fontSize = 9.sp, lineHeight = 13.sp)
+        Text("Interactive pages open in the in-chat browser popup. Use its Close control to return here.", color = Color(0xFF858585), fontSize = 9.sp, lineHeight = 13.sp)
     }
 }
 
