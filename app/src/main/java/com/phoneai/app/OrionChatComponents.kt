@@ -387,7 +387,6 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
 }
 
 @Composable
-@Composable
 private fun ToolActivityCard(raw: String) {
     val marker = raw.lineSequence().firstOrNull().orEmpty()
     val detail = raw.substringAfter("\n", "").trim().take(900)
@@ -431,6 +430,7 @@ private fun ToolActivityCard(raw: String) {
     }
 }
 
+@Composable
 private fun TaskActivityCard(raw: String) {
     val state = Regex("^\\[TASK:([A-Z_]+)]").find(raw)?.groupValues?.getOrNull(1).orEmpty()
     val failed = state == "FAILED"
