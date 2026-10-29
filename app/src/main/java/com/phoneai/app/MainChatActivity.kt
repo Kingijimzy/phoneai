@@ -1414,7 +1414,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
                     onRetry = { prompt -> PhoneAiService.instance?.retryLastResponse(prompt) },
                     onEditSend = { original, edited -> PhoneAiService.instance?.editAndResend(original, edited) }
                 )
@@ -1457,6 +1457,131 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         intent.getStringExtra(EXTRA_OPEN_BROWSER_URL)?.takeIf { it.isNotBlank() }?.let { target ->
             window.decorView.post { if (!isFinishing && !isDestroyed) showChatBrowserPopup(target) }
         }
+    }
+
+    /**
+     * Opens links inside the conversation in a modal browser instead of navigating away
+     * to the standalone Browser screen. Only HTTP(S) URLs are loaded; script execution
+     * stays disabled and non-web schemes are never handed to the WebView.
+     */
+    private fun showChatBrowserPopup(rawUrl: String?) {
+        fun safeWebUrl(raw: String?): String? {
+            val candidate = raw?.trim().orEmpty()
+            if (candidate.isBlank() || candidate.length > 4096) return null
+            val parsed = runCatching { Uri.parse(candidate) }.getOrNull() ?: return null
+            val scheme = parsed.scheme?.lowercase()
+            if (scheme != "https" && scheme != "http") return null
+            if (parsed.host.isNullOrBlank() || parsed.userInfo != null) return null
+            return parsed.toString()
+        }
+
+        val initial = safeWebUrl(rawUrl)
+        if (initial == null) {
+            Toast.makeText(this, "Only valid HTTP or HTTPS links can open in chat.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val dialog = android.app.Dialog(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(8))
+            setBackgroundColor(0xFF101010.toInt())
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val address = EditText(this).apply {
+            setSingleLine(true)
+            textSize = 12f
+            setTextColor(0xFFE6E6E6.toInt())
+            setHintTextColor(0xFF858585.toInt())
+            hint = "https://example.com"
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            setBackgroundColor(0xFF242424.toInt())
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setText(initial)
+        }
+        val go = TextView(this).apply {
+            text = "GO"
+            textSize = 11f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        header.addView(address, LinearLayout.LayoutParams(0, dp(42), 1f))
+        header.addView(go, LinearLayout.LayoutParams(dp(48), dp(42)))
+        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
+
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        fun control(label: String, action: () -> Unit): TextView =
+            TextView(this).apply {
+                text = label
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setTextColor(0xFFD5D5D5.toInt())
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                setOnClickListener { action() }
+            }
+        val web = android.webkit.WebView(this)
+        web.settings.javaScriptEnabled = false
+        web.settings.domStorageEnabled = false
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        web.webViewClient = object : android.webkit.WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: android.webkit.WebView,
+                request: android.webkit.WebResourceRequest
+            ): Boolean {
+                val next = safeWebUrl(request.url.toString()) ?: return true
+                address.setText(next)
+                return false
+            }
+
+            @Suppress("DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: android.webkit.WebView, url: String): Boolean {
+                val next = safeWebUrl(url) ?: return true
+                address.setText(next)
+                return false
+            }
+
+            override fun onPageStarted(view: android.webkit.WebView, url: String, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                address.setText(safeWebUrl(url) ?: initial)
+            }
+
+            override fun onPageFinished(view: android.webkit.WebView, url: String) {
+                super.onPageFinished(view, url)
+                address.setText(safeWebUrl(url) ?: initial)
+            }
+        }
+        go.setOnClickListener {
+            val target = safeWebUrl(address.text?.toString())
+            if (target == null) {
+                Toast.makeText(this, "Enter a valid HTTP or HTTPS URL.", Toast.LENGTH_SHORT).show()
+            } else {
+                address.setText(target)
+                web.loadUrl(target)
+            }
+        }
+        controls.addView(control("‹ Back") { if (web.canGoBack()) web.goBack() })
+        controls.addView(control("Forward ›") { if (web.canGoForward()) web.goForward() })
+        controls.addView(control("Reload") { web.reload() })
+        controls.addView(control("Close") { dialog.dismiss() })
+        root.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)))
+        root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        dialog.setContentView(root)
+        dialog.setOnDismissListener { web.stopLoading(); web.destroy() }
+        dialog.setOnShowListener {
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
+        }
+        dialog.show()
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
+        web.loadUrl(initial)
     }
 
     override fun onResume() {
