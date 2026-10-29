@@ -70,7 +70,7 @@ class SoulWatcherActivity : Activity() {
         statusCard.addView(detailView.apply { setPadding(0, dp(8), 0, 0) })
         val statusActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         statusActions.addView(actionButton("Run check now") { runWatcherCheck() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(6) })
-        statusActions.addView(actionButton("Capability report") { openCapabilityReport() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
+        statusActions.addView(actionButton("Capabilities") { showCapabilities() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(6) })
         statusCard.addView(statusActions)
         root.addView(statusCard)
 
@@ -112,11 +112,11 @@ class SoulWatcherActivity : Activity() {
         addMessage("YOU", raw)
         val q = raw.lowercase()
         when {
-            q in setOf("check", "check status", "run check", "scan", "audit", "check capabilities", "refresh") -> runWatcherCheck()
+            q in setOf("check", "check status", "run check", "scan", "audit", "refresh") -> runWatcherCheck()\n            q.contains("capabilit") || q.contains("workspace status") || q.contains("what works") || q.contains("what is connected") -> showCapabilities()
             q.contains("proposal") || q.contains("suggestion") -> showProposals()
             q.contains("capability report") || q.contains("capability board") || q.contains("open report") -> openCapabilityReport()
             q.startsWith("why") || q.contains("screen perception") || q.contains("unavailable") -> explainLimitation(raw)
-            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “why screen perception unavailable”, “show proposals”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
+            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “why screen perception unavailable”, “show proposals”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
             else -> addMessage("WATCHER", "I don't have a verified local action for that command yet. I haven't changed anything. Try “check status”, “show proposals”, or “why screen perception unavailable”.")
         }
     }
@@ -133,6 +133,37 @@ class SoulWatcherActivity : Activity() {
                     showProposals()
                 }.onFailure { e ->
                     addMessage("WATCHER", "The local audit failed: ${e.message ?: e.javaClass.simpleName}. No repair is claimed. You can retry or open the Capability Report.")
+                }
+            }
+        }.start()
+    }
+
+    private fun showCapabilities() {
+        addMessage("WATCHER", "Reading the shared live capability registry, enabled packs, Android permission state and saved integration metadata. A saved connection is not proof of a successful live request.")
+        Thread {
+            val snapshot = runCatching { OrionCapabilityHub.snapshot(applicationContext) }
+            runOnUiThread {
+                snapshot.onSuccess { s ->
+                    addMessage("WATCHER", "Capability snapshot at ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(s.checkedAt))}. Registered tools: ${s.registeredTools}; available under current policy: ${s.availableTools}.")
+                    s.capabilities.forEach { capability ->
+                        val box = card(transcript)
+                        box.addView(label(capability.name, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
+                        box.addView(label(OrionCapabilityHub.stateLabel(capability.state), when (capability.state) {
+                            OrionCapabilityHub.State.READY -> Color.rgb(145, 205, 151)
+                            OrionCapabilityHub.State.LIMITED -> Color.rgb(255, 194, 120)
+                            OrionCapabilityHub.State.DISABLED, OrionCapabilityHub.State.SETUP_REQUIRED -> Color.rgb(255, 155, 135)
+                            OrionCapabilityHub.State.UNKNOWN -> muted
+                        }, 10f))
+                        box.addView(label(capability.detail, muted, 12f).apply { setPadding(0, dp(5), 0, 0) })
+                        box.addView(label("Tools: " + capability.tools.take(8).joinToString(", ") + if (capability.tools.size > 8) "…" else "", muted, 10f).apply { setPadding(0, dp(5), 0, 0) })
+                    }
+                    if (s.integrationStates.isNotEmpty()) {
+                        addMessage("WATCHER", "Integration metadata (not live end-to-end proof): " + s.integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" })
+                    }
+                    if (s.limitations.isNotEmpty()) addMessage("WATCHER", "Current blockers: " + s.limitations.take(12).joinToString(" | "))
+                    else addMessage("WATCHER", "No blockers were reported by this capability snapshot. This does not mean every tool has passed a live end-to-end test.")
+                }.onFailure { e ->
+                    addMessage("WATCHER", "Capability snapshot failed: ${e.message ?: e.javaClass.simpleName}. No readiness claim was made.")
                 }
             }
         }.start()
