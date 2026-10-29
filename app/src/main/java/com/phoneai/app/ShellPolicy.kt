@@ -16,7 +16,7 @@ internal object ShellPolicy {
     // privileged or destructive commands are approval-gated by dispatch and may run
     // when the user explicitly approves them; they must not be silently impossible.
     private val blocked = listOf(
-        Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*( /|~|\\$HOME|\\*|/sdcard|/storage)(\\s|$)".replace("*( /", "*(/")),
+        Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*(\\s*/|~|\\${'$'}HOME|\\*|/sdcard|/storage)(\\s|$)"),
         Regex(":\\(\\)\\s*\\{"),
         Regex("(?i)>\\s*/dev/(sd|block|mmcblk)"),
         Regex("(?i)(/data/data/|/data/user/|shared_prefs|orion_[a-z_]+\\.json|\\bkeystore\\b|api[_-]?key|\\.env\\b|id_rsa|\\.ssh/)"),
