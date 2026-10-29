@@ -84,6 +84,7 @@ internal object SoulWatch {
             else -> "Continue bounded checks; only opted-in standing orders may run autonomously."
         }
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
+        runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=\${limitations.joinToString(",").ifBlank { "none" }}")
         return TickResult(status, action, limitations, next)
     }
