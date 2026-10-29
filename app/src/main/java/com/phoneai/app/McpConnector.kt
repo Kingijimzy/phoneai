@@ -134,7 +134,7 @@ object McpConnector {
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
             ". Local endpoint approval: " + pairing +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
-            ". Every remote tool call requires in-app approval; unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
+            ". Paired read-scope tools can run without repeat prompts; write, communication, system, and other-scope calls require action confirmation. Unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
     }
 
     @Volatile private var sessionId: String? = null
@@ -209,7 +209,7 @@ object McpConnector {
         return "Remote MCP tool discovery failed: $refreshed"
     }
 
-    /** Executes only a currently advertised tool. The caller must obtain explicit user approval first. */
+    /** Executes only a currently advertised tool after endpoint pairing and scope validation; caller confirms non-read actions. */
     fun callTool(c: Context, name: String, arguments: JSONObject): String {
         if (!configured(c)) return "error: no MCP server configured."
         if (!isPaired(c)) return "error: MCP endpoint has not been locally approved. Open Orion Settings > MCP permissions and complete PIN confirmation first."
