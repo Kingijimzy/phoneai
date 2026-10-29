@@ -256,8 +256,9 @@ object McpConnector {
         conn.setRequestProperty("User-Agent", "PhoneAI-MCP/1.0")
         readToken(c)?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
         sessionId?.let { conn.setRequestProperty("Mcp-Session-Id", it) }
-        // Streamable HTTP MCP requires the negotiated protocol version on subsequent requests.
-        if (sessionId != null) negotiatedProtocolVersion?.let { conn.setRequestProperty("MCP-Protocol-Version", it) }
+        // Send the negotiated protocol version on every post-initialize request, including
+        // stateless servers that do not issue an Mcp-Session-Id header.
+        negotiatedProtocolVersion?.let { conn.setRequestProperty("MCP-Protocol-Version", it) }
         conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         val code = conn.responseCode
         conn.getHeaderField("Mcp-Session-Id")?.takeIf { it.isNotBlank() }?.let { sessionId = it }
