@@ -1565,6 +1565,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun shouldAutoRouteToAgent(message: String): Boolean {
         val text = message.trim().lowercase(java.util.Locale.ROOT)
         if (text.isBlank()) return false
+        // Deterministic research routing takes precedence over a model's unsupported claim that it lacks tools.
+        if (OrionResearchRoutingPolicy.requiresToolAgent(text)) return true
         // Routing is deliberately conservative: a request must read like an instruction
         // or a direct question, not a sentence merely discussing an action.
         val patterns = listOf(
