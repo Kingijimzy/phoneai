@@ -15,7 +15,11 @@ import java.io.File
 import java.security.MessageDigest
 
 /** A recurring, read-only check Orion runs by itself while the app service is alive. */
-data class StandingOrder(val kind: String, val everyMinutes: Int, val lastRunAt: Long, val lastDigest: String)
+data class StandingOrder(
+    val kind: String, val everyMinutes: Int, val lastRunAt: Long, val lastDigest: String,
+    val enabled: Boolean = true, val consecutiveFailures: Int = 0,
+    val lastOutcome: String = "never_run", val nextRunAt: Long = 0L
+)
 
 internal object StandingOrderPolicy {
     val kinds = mapOf(
@@ -26,6 +30,9 @@ internal object StandingOrderPolicy {
     const val MIN_MINUTES = 15
     const val MAX_MINUTES = 7 * 24 * 60
     const val MAX_ORDERS = 6
+    const val MAX_CONSECUTIVE_FAILURES = 3
+    private val retryDelays = longArrayOf(5 * 60_000L, 15 * 60_000L, 60 * 60_000L)
+    fun retryDelay(failures: Int): Long = retryDelays[(failures - 1).coerceIn(0, retryDelays.lastIndex)]
 
     fun validate(kind: String, minutes: Int): String? = when {
         kind !in kinds -> "kind must be one of: " + kinds.keys.joinToString()
@@ -34,7 +41,11 @@ internal object StandingOrderPolicy {
         else -> null
     }
 
-    fun due(o: StandingOrder, now: Long) = now - o.lastRunAt >= o.everyMinutes * 60_000L
+    fun due(o: StandingOrder, now: Long): Boolean {
+        if (!o.enabled || o.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) return false
+        val next = o.nextRunAt.takeIf { it > 0L } ?: (o.lastRunAt + o.everyMinutes * 60_000L)
+        return now >= next
+    }
 
     /** Only tell the user when the result actually changed and is not an empty/error state. */
     fun shouldNotify(previousDigest: String, result: String, kind: String = "", dayKey: String = ""): Boolean {
@@ -101,7 +112,13 @@ object StandingOrders {
                 val minutes = o.optInt("every", 60)
                 require(kind in StandingOrderPolicy.kinds) { "unknown standing-order kind at index $index" }
                 require(StandingOrderPolicy.validate(kind, minutes) == null) { "invalid standing-order interval at index $index" }
-                StandingOrder(kind, minutes, o.optLong("last"), o.optString("digest"))
+                StandingOrder(
+                    kind, minutes, o.optLong("last"), o.optString("digest"),
+                    enabled = o.optBoolean("enabled", true),
+                    consecutiveFailures = o.optInt("failures", 0).coerceIn(0, StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES),
+                    lastOutcome = o.optString("outcome", "never_run").take(100),
+                    nextRunAt = o.optLong("next", 0L).coerceAtLeast(0L)
+                )
             }
             lastLoadError = null
             parsed
@@ -117,7 +134,9 @@ object StandingOrders {
         var stream: java.io.FileOutputStream? = null
         return try {
             val a = JSONArray()
-            list.forEach { a.put(JSONObject().put("kind", it.kind).put("every", it.everyMinutes).put("last", it.lastRunAt).put("digest", it.lastDigest)) }
+            list.forEach { a.put(JSONObject().put("kind", it.kind).put("every", it.everyMinutes).put("last", it.lastRunAt)
+                .put("digest", it.lastDigest).put("enabled", it.enabled).put("failures", it.consecutiveFailures)
+                .put("outcome", it.lastOutcome.take(100)).put("next", it.nextRunAt)) }
             stream = atomic.startWrite()
             stream.write(a.toString().toByteArray(Charsets.UTF_8))
             atomic.finishWrite(stream)
@@ -148,17 +167,58 @@ object StandingOrders {
         "removed standing order '$kind'"
     }
 
+    fun setEnabled(c: Context, kind: String, enabled: Boolean): String = synchronized(lock) {
+        val current = all(c)
+        lastLoadError?.let { return@synchronized "error: $it; no schedule changed" }
+        if (current.none { it.kind == kind }) return@synchronized "error: no standing order '$kind'"
+        val changed = current.map { if (it.kind == kind) it.copy(
+            enabled = enabled, consecutiveFailures = if (enabled) 0 else it.consecutiveFailures,
+            nextRunAt = if (enabled) 0L else it.nextRunAt,
+            lastOutcome = if (enabled) "resumed" else "paused"
+        ) else it }
+        if (!save(c, changed)) return@synchronized "error: schedule update failed; no change confirmed"
+        if (enabled) "resumed '$kind'; next run follows its saved interval" else "paused '$kind'; saved schedule retained"
+    }
+
+    fun nextRunAt(order: StandingOrder): Long? {
+        if (!order.enabled || order.consecutiveFailures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES) return null
+        return order.nextRunAt.takeIf { it > 0L } ?: (order.lastRunAt + order.everyMinutes * 60_000L)
+    }
+
     fun describe(c: Context): String {
         val list = all(c)
         lastLoadError?.let { return "error: $it; do not add or remove orders until storage is repaired" }
         if (list.isEmpty()) return "no standing orders yet"
-        return list.joinToString("\n") { "- ${it.kind}: every ${it.everyMinutes} min" }
+        return list.joinToString("\n") { order ->
+            val next = nextRunAt(order)?.let { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(it)) }
+                ?: if (!order.enabled) "paused" else "retry limit reached"
+            "- ${order.kind}: every ${order.everyMinutes} min · ${if (order.enabled) "enabled" else "paused"} · next: $next · failures: ${order.consecutiveFailures}/${StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES} · last: ${order.lastOutcome}"
+        }
     }
 
-    internal fun update(c: Context, kind: String, digest: String): Boolean = synchronized(lock) {
+    internal fun update(
+        c: Context, kind: String, digest: String, outcome: String = "checked",
+        success: Boolean = true, now: Long = System.currentTimeMillis()
+    ): Boolean = synchronized(lock) {
         val current = all(c)
         if (lastLoadError != null || current.none { it.kind == kind }) return@synchronized false
-        save(c, current.map { if (it.kind == kind) it.copy(lastRunAt = System.currentTimeMillis(), lastDigest = digest) else it })
+        save(c, current.map { order ->
+            if (order.kind != kind) order else {
+                val failures = if (success) 0 else order.consecutiveFailures + 1
+                val retryExhausted = failures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES
+                order.copy(
+                    lastRunAt = now,
+                    lastDigest = if (success) digest else order.lastDigest,
+                    consecutiveFailures = failures.coerceAtMost(StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES),
+                    lastOutcome = outcome.take(100),
+                    nextRunAt = when {
+                        !order.enabled || retryExhausted -> 0L
+                        success -> now + order.everyMinutes * 60_000L
+                        else -> now + StandingOrderPolicy.retryDelay(failures)
+                    }
+                )
+            }
+        })
     }
 }
 
@@ -216,13 +276,22 @@ object LifeLoop {
             val nextDigest = StandingOrderPolicy.digestAfterAttempt(
                 o.lastDigest, result, notify, notificationPosted, o.kind, dayKey
             )
-            val persisted = StandingOrders.update(c, o.kind, nextDigest)
+            val usable = result.isNotBlank() && !result.trim().startsWith("error", ignoreCase = true)
+            val successful = usable && (!notify || notificationPosted)
+            val outcome = when {
+                !usable -> "error: ${result.lineSequence().firstOrNull().orEmpty().take(70)}"
+                notify && !notificationPosted -> "notification_failed_or_blocked"
+                notificationPosted -> "notification_posted"
+                else -> "checked_no_change"
+            }
+            val persisted = StandingOrders.update(c, o.kind, nextDigest, outcome, successful, now)
             if (notificationPosted) posted++
             AgentPolicy.log(c, "standing_order", o.kind, null, when {
-                !persisted -> "result checked but schedule/digest could not be persisted; may retry after restart"
+                !persisted -> "result checked but schedule/outcome could not be persisted; no successful persistence is claimed"
+                !usable -> "check failed; bounded retry scheduled unless retry limit reached"
+                notify && !notificationPosted -> "notification dispatch failed or permission unavailable; bounded retry scheduled unless retry limit reached"
                 notificationPosted -> "notification dispatched to Android notification manager; user delivery/read receipt is not observable"
-                notify -> "notification dispatch failed or permission unavailable; digest retained for retry on next scheduled check"
-                else -> "nothing new or error"
+                else -> "check succeeded; no new notification was needed"
             })
         }
         return posted

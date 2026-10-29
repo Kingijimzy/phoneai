@@ -20,6 +20,9 @@ internal object SoulEngineWatcher {
     fun run(context: Context): TickResult {
         val c = context.applicationContext
         val service = PhoneAiService.instance
+        // Force a fresh durable schedule read before reporting scheduler health; a stale
+        // process-global storage-error flag is not evidence that disk is currently healthy.
+        val schedulerOrders = runCatching { StandingOrders.all(c) }.getOrDefault(emptyList())
         val registered = runCatching { ToolRegistry.all.size }.getOrDefault(0)
         val implemented = AgentPolicy.packs.count { it.implemented }
         val enabled = AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(c, it.id) }
@@ -46,13 +49,18 @@ internal object SoulEngineWatcher {
             )
         }
 
+        val schedulerStorageError = StandingOrders.storageError() != null
         val status = when {
             !AgentPolicy.enabled(c, "orion_core") -> "paused"
+            schedulerStorageError -> "limited"
             report.status == OrionCapabilityAudit.Status.BLOCKED -> "blocked"
             report.status == OrionCapabilityAudit.Status.LIMITED -> "limited"
             else -> "ready"
         }
-        val limitations = (report.limitations + if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList()).distinct()
+        val schedulerLimitations = if (schedulerStorageError) listOf("standing_order_storage_unavailable") else emptyList()
+        val limitations = (report.limitations +
+            (if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList()) +
+            schedulerLimitations).distinct()
         val summary = "Watcher readiness=$status; registered_tools=$registered; enabled_packs=$enabled; limitations=${limitations.joinToString(",").ifBlank { "none" }}."
         runCatching { SoulEngineState.recordLesson(c, "watcher_health", summary, status) }
         if (limitations.isNotEmpty() && AgentPolicy.enabled(c, "orion_core")) {
@@ -71,8 +79,7 @@ internal object SoulEngineWatcher {
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
         var action = "local_capability_audit"
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
-            val orders = runCatching { StandingOrders.all(c) }.getOrDefault(emptyList())
-            if (StandingOrders.storageError() == null && orders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
+            if (StandingOrders.storageError() == null && schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
                 val dispatched = runCatching { LifeLoop.tickOne(c) }.getOrDefault(0)
                 action = if (dispatched > 0) "one_standing_order_checked_and_notified" else "one_standing_order_checked"
             }
