@@ -4,7 +4,10 @@ package com.phoneai.app
  * Per-user-command HTTP budget. A reservation is consumed before opening a connection,
  * so connection failures and model-list requests count just like successful requests.
  */
-internal class CommandRequestBudget(private val maxRequests: Int = 15) {
+internal class CommandRequestBudget(
+    private val maxRequests: Int = 15,
+    private val maxRequestsProvider: (() -> Int)? = null
+) {
     private var usedRequests = 0
     private val repeatedFailures = HashMap<String, Int>()
 
@@ -14,7 +17,7 @@ internal class CommandRequestBudget(private val maxRequests: Int = 15) {
 
     @Synchronized
     fun tryReserve(): Boolean {
-        if (usedRequests >= maxRequests) return false
+        val limit = (maxRequestsProvider?.invoke() ?: maxRequests).coerceAtLeast(1)\n        if (usedRequests >= limit) return false
         usedRequests++
         return true
     }
