@@ -55,7 +55,7 @@ class OrionRuntimePolicyTest {
         )
         val retry = OrionRuntimePolicy.retryItem(
             original, now = 1_000L,
-            error = "network\\n timeout while checking result",
+            error = "network\n timeout while checking result",
             checkpoint = "APK validation pending"
         )
         assertEquals("Build and verify the release", retry?.goal)
