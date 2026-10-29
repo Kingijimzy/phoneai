@@ -44,6 +44,7 @@ class SoulEngineActivity : ComponentActivity() {
                         },
                         onSelfTest = ::runSelfTest,
                         onOpenChat = { open(MainChatActivity::class.java) },
+                        onOpenWatcher = { open(SoulWatcherActivity::class.java) },
                         onOpenTasks = { open(TaskCenterActivity::class.java) },
                         onOpenAgents = { open(AgentsActivity::class.java) },
                         onOpenMemory = { open(MemoryActivity::class.java) },
