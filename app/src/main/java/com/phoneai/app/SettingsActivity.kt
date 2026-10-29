@@ -962,16 +962,12 @@ class SettingsActivity : Activity() {
         // Android 14+ restricts direct reads of enabled_input_methods for modern target SDKs.
         // Use the public InputMethodManager list instead, and guard the selected-method setting
         // because system settings access can vary by Android version/device policy.
-        val enabledKeyboard = runCatching {
-            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
-                ?.enabledInputMethodList
-                ?.any { it.packageName == packageName } == true
-        }.getOrDefault(false)
-        val selectedKeyboard = runCatching {
+        val enabledKeyboard = KeyboardStatus.enabled(packageName) {
+            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.enabledInputMethodList?.map { it.packageName }
+        }
+        val selectedKeyboard = KeyboardStatus.selected(packageName) {
             Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-                ?.substringBefore('/')
-                ?.equals(packageName, ignoreCase = true) == true
-        }.getOrDefault(false)
+        }
         val notificationListener = runCatching {
             Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
                 ?.split(':')

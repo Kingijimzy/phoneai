@@ -248,4 +248,26 @@ class ChatStepsTest {
         assertEquals(StepStatus.SUCCESS, steps[0].status)
         assertNull(steps[0].durationLabel(0))
     }
+
+    @Test fun planNoteIsBoundedCleanedAndRoundTrips() {
+        val raw = listOf("  Open   Settings ", "Open Settings", "", "Find Wi-Fi", "x".repeat(200), "c", "d", "e", "f")
+        val note = PlanNote.format(raw)!!
+        assertTrue(note.startsWith("[TASK:PLANNED]\n1. Open Settings\n2. Find Wi-Fi"))
+        val titles = PlanNote.parse(note)
+        assertEquals(PlanNote.MAX_STEPS, titles.size)
+        assertTrue(titles.all { it.length <= PlanNote.MAX_TITLE })
+    }
+
+    @Test fun aSingleStepIsNotAPlan() {
+        assertNull(PlanNote.format(listOf("Open Settings")))
+        assertNull(PlanNote.format(listOf("a", "a")))
+        assertNull(PlanNote.format(emptyList()))
+    }
+
+    @Test fun currentPlanBelongsToTheCurrentTaskOnly() {
+        val old = listOf(StepLine(1, "me", "old"), note(2, PlanNote.format(listOf("a", "b"))!!))
+        assertEquals(listOf("a", "b"), PlanNote.current(old))
+        assertTrue(PlanNote.current(old + StepLine(3, "me", "new task")).isEmpty())
+        assertTrue(PlanNote.parse("[TASK:RUNNING]\nRunning x").isEmpty())
+    }
 }

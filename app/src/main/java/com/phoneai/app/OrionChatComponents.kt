@@ -394,6 +394,7 @@ private fun TaskActivityCard(raw: String) {
         state == "APPROVAL" -> "WAITING FOR YOUR APPROVAL"
         state == "APPROVED" -> "APPROVED"
         state == "DENIED" -> "NOT APPROVED"
+        state == "PLANNED" -> "PLAN"
         state == "PLAN" -> "PLANNING"
         state == "CHECK_CAPABILITIES" -> "CHECKING CAPABILITIES"
         state == "AUTHORIZE" -> "CHECKING APPROVALS"
@@ -417,7 +418,7 @@ private fun TaskActivityCard(raw: String) {
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(label, color = ChatCopy, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
-            Text(detail.take(300), color = ChatMuted, fontSize = 11.sp, lineHeight = 15.sp)
+            Text(detail.take(if (state == "PLANNED") 560 else 300), color = ChatMuted, fontSize = 11.sp, lineHeight = 15.sp)
         }
     }
 }

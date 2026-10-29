@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,7 +54,13 @@ internal fun OrionStepStrip(lines: List<OrionChatLine>, modifier: Modifier = Mod
     val stepLines = remember(lines.size, lines.lastOrNull()?.text) { lines.map { StepLine(it.id, it.kind, it.text) } }
     val steps = remember(stepLines) { StepTracker.currentTaskSteps(stepLines) }
     val taskState = remember(stepLines) { StepTracker.taskState(stepLines) }
-    if (steps.isEmpty()) return
+    val plan = remember(stepLines) { PlanNote.current(stepLines) }
+    if (steps.isEmpty() && plan.isEmpty()) return
+    var planOpen by remember(lines.firstOrNull()?.id) { mutableStateOf(false) }
+    if (steps.isEmpty()) {
+        PlanRow(plan, planOpen, { planOpen = !planOpen }, modifier)
+        return
+    }
 
     // Keyed by the conversation's first line so switching chats never carries a pager position over.
     var index by remember(lines.firstOrNull()?.id) { mutableIntStateOf(steps.lastIndex) }
@@ -70,6 +77,8 @@ internal fun OrionStepStrip(lines: List<OrionChatLine>, modifier: Modifier = Mod
     val failed = step.status == StepStatus.FAILED || step.status == StepStatus.CANCELLED
     val pagerLabel = StepPager.label(shown, steps.size)
 
+    Column {
+    if (plan.isNotEmpty()) PlanRow(plan, planOpen, { planOpen = !planOpen }, modifier)
     Row(
         modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp)).background(StripBg).border(1.dp, StripLine, RoundedCornerShape(12.dp))
@@ -93,5 +102,20 @@ internal fun OrionStepStrip(lines: List<OrionChatLine>, modifier: Modifier = Mod
             Icon(Icons.Rounded.ChevronRight, "Next step", tint = StripMuted,
                 modifier = Modifier.size(24.dp).clip(RoundedCornerShape(8.dp)).clickable { index = StepPager.next(shown, steps.size) }.padding(4.dp))
         }
+    }
+    }
+}
+
+/** One line for the model's plan ("Plan · 4 steps"); tap to list the titles. Titles are the plan as announced, not progress. */
+@Composable
+private fun PlanRow(plan: List<String>, open: Boolean, toggle: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp)).background(StripBg).border(1.dp, StripLine, RoundedCornerShape(12.dp))
+            .clickable(onClick = toggle).padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text("Plan · ${plan.size} steps" + if (open) "" else " (tap to view)", color = StripText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        if (open) plan.forEachIndexed { i, t -> Text("${i + 1}. $t", color = StripMuted, fontSize = 11.sp) }
     }
 }
