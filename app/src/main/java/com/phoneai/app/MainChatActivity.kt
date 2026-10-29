@@ -414,6 +414,40 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .show()
     }
 
+    /** Shows real MCP configuration and discovery state; configuration alone is never labelled connected. */
+    private fun showMcpSessionDialog() {
+        val registered = "Chat tools: mcp_status, mcp_list_tools, mcp_call"
+        val message = McpConnector.status(this) + "\n\n" + registered +
+            "\n\nDiscovery checks whether the configured server is reachable and advertises tools. Remote calls still require local pairing, enabled scopes, and per-call approval."
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("MCP servers in chat")
+            .setMessage(message)
+            .setPositiveButton("OPEN MCP SETTINGS") { _, _ -> startActivity(Intent(this, SettingsActivity::class.java)) }
+            .setNeutralButton("DISCOVER TOOLS", null)
+            .setNegativeButton("CLOSE", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled = false
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).text = "CHECKING…"
+                Thread {
+                    val result = McpConnector.listTools(this)
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        dialog.dismiss()
+                        AlertDialog.Builder(this)
+                            .setTitle(if (result.startsWith("error:") || result.startsWith("MCP discovery failed")) "MCP discovery failed" else "MCP discovery result")
+                            .setMessage(result + "\n\nThis result verifies discovery only; it does not prove every tool call succeeds.")
+                            .setPositiveButton("DONE", null)
+                            .setNeutralButton("MCP SETTINGS") { _, _ -> startActivity(Intent(this, SettingsActivity::class.java)) }
+                            .show()
+                    }
+                }.start()
+            }
+        }
+        dialog.show()
+    }
+
     private fun handleChatMenuAction(action: String) {
         when (action) {
             "new_chat" -> {
@@ -449,11 +483,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             "feedback" -> showFeedbackDialog()
             "notifications" -> openNotificationSettings()
             "alerts" -> startActivity(Intent(this, ProactiveActivity::class.java))
-            "mcps" -> AlertDialog.Builder(this)
-                .setTitle("MCP servers")
-                .setMessage("A connected MCP server/session manager is not currently available in this build. Orion will not show pretend connections.")
-                .setPositiveButton("OPEN CAPABILITIES") { _, _ -> startActivity(Intent(this, AgentControlActivity::class.java)) }
-                .setNegativeButton("CLOSE", null).show()
+            "mcps" -> showMcpSessionDialog()
             "memories" -> startActivity(Intent(this, MemoryActivity::class.java))
             "token_usage" -> AlertDialog.Builder(this)
                 .setTitle("Token usage")
