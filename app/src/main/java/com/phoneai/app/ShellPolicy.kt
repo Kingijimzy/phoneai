@@ -16,6 +16,7 @@ internal object ShellPolicy {
     // privileged or destructive commands are approval-gated by dispatch and may run
     // when the user explicitly approves them; they must not be silently impossible.
     private val blocked = listOf(
+        Regex("(?i)\\b(curl|wget)\\b[^;&]*\\|\\s*(sh|bash|zsh)\\b"),
         Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*(\\s*/|~|\\${'$'}HOME|\\*|/sdcard|/storage)(\\s|$)"),
         Regex(":\\(\\)\\s*\\{"),
         Regex("(?i)>\\s*/dev/(sd|block|mmcblk)"),
@@ -24,7 +25,6 @@ internal object ShellPolicy {
         Regex("(?i)\\bchmod\\s+(-[a-z]+\\s+)?[0-7]*7[0-7]*\\s+/")
     )
     private val approvalRequired = listOf(
-        Regex("(?i)\\b(curl|wget)\\b[^;&]*\\|\\s*(sh|bash|zsh)\\b"),
         Regex("(?i)\\b(mkfs|fdisk|reboot|shutdown|setprop|su|sudo)\\b"),
         Regex("(?i)\\bdd\\s+.*\\bof="),
         Regex("(?i)\\bsettings\\s+put\\b|\\bpm\\s+(uninstall|clear|disable)\\b")
