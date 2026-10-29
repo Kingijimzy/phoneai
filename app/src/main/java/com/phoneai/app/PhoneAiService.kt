@@ -117,10 +117,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {}
         /** Orion decided the request needs (or no longer needs) the tool agent; the UI should follow. */
         fun onModeSwitch(commandMode: Boolean) {}
+        /** Open a safe HTTP(S) page in the chat-owned browser surface. */
+        fun onOpenBrowser(url: String) {}
     }
 
     fun notifyModeSwitch(commandMode: Boolean) {
         main.post { mainChatListener?.onModeSwitch(commandMode) }
+    }
+
+    override fun openBrowser(url: String) {
+        val safe = ChatBrowserUrlPolicy.normalize(url) ?: return
+        main.post { mainChatListener?.onOpenBrowser(safe) }
     }
 
     @Volatile
