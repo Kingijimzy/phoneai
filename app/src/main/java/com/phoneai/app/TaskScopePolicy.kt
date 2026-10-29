@@ -74,9 +74,19 @@ internal object TaskScopePolicy {
     fun blockReason(request: String, toolName: String): String? {
         val definition = ToolRegistry.find(toolName)
             ?: return "Tool '$toolName' is not registered."
+
         val mode = modeFor(request)
+        // Scope classification selects the default tool family, but must not act as a blanket
+        // denial when an explicitly enabled, registered capability is needed to fulfill the goal.
+        // Per-tool DENY/pack state, dispatch policy, Android permissions and confirmation checks
+        // remain authoritative at the actual execution boundary.
         if (mode == TaskMode.CHAT) {
-            return "This is a conversation task; phone and external tools are outside its scope."
+            val mentionsExternalCapability = Regex(
+                "(?i)\\b(search|web_search|browse|browser|internet|online|website|url|github|repository|repo|telegram|bybit|trading|task|reminder|notification|phone|device|open|tap|click|send|call|message|read my|check my|look up|research|find)\\b"
+            ).containsMatchIn(request)
+            if (!mentionsExternalCapability) {
+                return "No tool needed for ordinary conversation."
+            }
         }
         if ((mode == TaskMode.READ_ONLY || mode == TaskMode.RESEARCH) &&
             definition.access != ToolAccess.READ) {
@@ -85,11 +95,11 @@ internal object TaskScopePolicy {
 
         val category = categoryOf(toolName) ?: return null
         val matchingIntent = when (category) {
-            "browser" -> Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|online|internet|news|weather|research|chrome|download|source|article|restaurants?|hotels?|stores?|shops?|cafes?|services?|nearby|local|recommend)\\b")
+            "browser" -> Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|online|internet|news|weather|research|chrome|download|source|article|restaurants?|hotels?|stores?|shops?|cafes?|services?|nearby|local|recommend|documentation|version|release notes)\\b")
             "trading" -> Regex("(?i)\\b(bybit|trade|trading|crypto|bitcoin|btc|eth|coin|price|ticker|chart|market)\\b")
             "telegram" -> Regex("(?i)\\btelegram\\b")
-            "mcp" -> Regex("(?i)\\b(mcp|connector|integration|server)\\b")
-            "github" -> Regex("(?i)\\b(github|repo|repository|release|actions|issues)\\b")
+            "mcp" -> Regex("(?i)\\b(mcp|connector|integration|server|github|gmail|drive|account|service)\\b")
+            "github" -> Regex("(?i)\\b(github|repo|repository|release|actions|issues|code|pull request|commit)\\b")
             "tasks" -> Regex("(?i)\\b(task|tasks|todo|remind|reminder|deadline|skill|skills)\\b")
             "media" -> Regex("(?i)\\b(music|song|play|pause|skip|volume|notification|notifications|media|youtube|spotify)\\b")
             else -> return null
