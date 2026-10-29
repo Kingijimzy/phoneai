@@ -1791,11 +1791,20 @@ Rules:
                 val action = a.optString("action")
                 val key = a.optString("key")
                 val reply = a.optString("text")
-                if (action.equals("reply", true)) {
-                    if (ui.ask("Reply to this notification with the following text? " + reply.take(500))) {
-                        OrionNotificationListener.notificationAction(key, action, reply)
-                    } else "error: user cancelled notification reply"
-                } else OrionNotificationListener.notificationAction(key, action, reply)
+                val normalizedAction = action.trim().lowercase()
+                if (normalizedAction !in setOf("reply", "dismiss")) {
+                    "error: action must be reply or dismiss"
+                } else {
+                    val confirmation = if (normalizedAction == "reply") {
+                        if (reply.isBlank()) false
+                        else ui.ask("Reply to the selected notification with this exact text? " + reply.take(500))
+                    } else {
+                        ui.ask("Dismiss the selected safe notification? This removes it from the notification shade.")
+                    }
+                    if (!confirmation) "error: user cancelled notification action"
+                    else if (stopped) "error: task was stopped before notification action; no action was dispatched"
+                    else OrionNotificationListener.notificationAction(key, normalizedAction, reply)
+                }
             }
             "media_status" -> OrionNotificationListener.mediaStatus()
             "media_control" -> OrionNotificationListener.controlMedia(a.optString("action"))
