@@ -14,8 +14,8 @@ internal object ShellPolicy {
     // Exact, side-effect-free interpreter diagnostics are safe even when the interpreter is absent.
     // Keep these anchored: do not turn arbitrary Python scripts or package-manager commands into SAFE.
     private val safeDiagnostics = listOf(
-        Regex("""^(?:python(?:3(?:\\.\\d+)?)?)\\s+(?:--version|-V)$"""),
-        Regex("""^(?:command\\s+-v|which)\\s+(?:python(?:3(?:\\.\\d+)?)?)$""")
+        Regex("""^(?:python(?:3(?:\.\d+)?)?)\s+(?:--version|-V)$"""),
+        Regex("""^(?:command\s+-v|which)\s+(?:python(?:3(?:\.\d+)?)?)$""")
     )
 
     // Keep only catastrophic/designed-to-exfiltrate targets as hard blocks. Other
