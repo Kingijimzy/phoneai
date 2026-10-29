@@ -985,56 +985,6 @@ Rules:
                 return true
             }
             val result = when (tool) {
-            "extension_list" -> try {
-                val extensions = extensionStore.all()
-                if (extensions.isEmpty()) "No generated extensions are saved yet. When a capability gap appears, create a draft with extension_create."
-                else extensions.joinToString("\n") { e -> "${e.id} [${if (e.enabled && e.verified) "ENABLED" else "DRAFT/DISABLED"}] ${e.displayName} (${e.runtime}) — ${e.description.take(120)} | source hash ${e.sourceSha256.take(12)}" }
-            } catch (e: Exception) { "error: extension registry unavailable; refusing to overwrite or execute it (${e.javaClass.simpleName})" }
-            "extension_create" -> {
-                val id = a.optString("id").trim()
-                val name = a.optString("name").trim()
-                val runtime = a.optString("runtime", "python").trim().lowercase()
-                val source = a.optString("source")
-                val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name) ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
-                if (invalid != null) "error: $invalid"
-                else {
-                    val ext = GeneratedExtension(id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source), a.optString("description").take(240), System.currentTimeMillis())
-                    if (extensionStore.saveDraft(ext)) "Saved disabled extension draft $id. Next call extension_test; the code is not yet active."
-                    else "error: extension draft was not saved; check for duplicate IDs, invalid source, or unreadable storage"
-                }
-            }
-            "extension_test" -> {
-                val id = a.optString("id").trim()
-                val ext = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
-                if (ext == null) "error: extension draft not found or registry unreadable"
-                else {
-                    val sourceIssue = SelfExtendingExtensionPolicy.validateSource(ext.runtime, ext.source)
-                    if (sourceIssue != null) "error: extension source validation failed: $sourceIssue"
-                    else {
-                        // A static preflight is not represented as execution or a passing sandbox test.
-                        extensionTestReports.remove(id)
-                        "PRECHECK ONLY: source size, runtime, restricted-operation patterns, and SHA-256 passed. This build has no isolated Python/JavaScript sandbox wired to the agent, so this is not an execution test and cannot enable the extension."
-                    }
-                }
-            }
-            "extension_enable" -> {
-                val id = a.optString("id").trim()
-                val report = extensionTestReports[id]
-                if (report == null) "error: no successful runtime sandbox test exists for this extension in the current agent session; static preflight cannot enable generated code"
-                else if (!ui.ask("Enable generated extension $id after its verified sandbox test?")) "Extension enable cancelled."
-                else if (extensionStore.promote(id, report, userApproved = true)) "Extension $id is enabled."
-                else "error: extension promotion failed; test report/source hash may be stale or storage may be unavailable"
-            }
-            "extension_run" -> {
-                val id = a.optString("id").trim()
-                val ext = try { extensionStore.enabled(id) } catch (_: Exception) { null }
-                if (ext == null) "error: extension is not enabled, verified, and hash-matching"
-                else "error: no isolated extension execution backend is connected in this build; source was not executed. The extension remains saved and can be disabled or inspected."
-            }
-            "extension_disable" -> {
-                val id = a.optString("id").trim()
-                if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
-            }
                 "tap" -> svc.tap(x!!.toFloat(), y!!.toFloat())
                 "long_press" -> svc.longPress(x!!.toFloat(), y!!.toFloat())
                 "swipe_path" -> {
@@ -1834,6 +1784,55 @@ Rules:
             activeSkillCalls++
         }
         val result = when (tool) {
+            "extension_list" -> try {
+                val extensions = extensionStore.all()
+                if (extensions.isEmpty()) "No generated extensions are saved yet. When a capability gap appears, create a draft with extension_create."
+                else extensions.joinToString("\n") { e -> "${e.id} [${if (e.enabled && e.verified) "ENABLED" else "DRAFT/DISABLED"}] ${e.displayName} (${e.runtime}) — ${e.description.take(120)} | source hash ${e.sourceSha256.take(12)}" }
+            } catch (e: Exception) { "error: extension registry unavailable; refusing to overwrite or execute it (${e.javaClass.simpleName})" }
+            "extension_create" -> {
+                val id = a.optString("id").trim()
+                val name = a.optString("name").trim()
+                val runtime = a.optString("runtime", "python").trim().lowercase()
+                val source = a.optString("source")
+                val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name) ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
+                if (invalid != null) "error: $invalid"
+                else {
+                    val ext = GeneratedExtension(id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source), a.optString("description").take(240), System.currentTimeMillis())
+                    if (extensionStore.saveDraft(ext)) "Saved disabled extension draft $id. Next call extension_test; the code is not yet active."
+                    else "error: extension draft was not saved; check for duplicate IDs, invalid source, or unreadable storage"
+                }
+            }
+            "extension_test" -> {
+                val id = a.optString("id").trim()
+                val ext = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
+                if (ext == null) "error: extension draft not found or registry unreadable"
+                else {
+                    val sourceIssue = SelfExtendingExtensionPolicy.validateSource(ext.runtime, ext.source)
+                    if (sourceIssue != null) "error: extension source validation failed: $sourceIssue"
+                    else {
+                        extensionTestReports.remove(id)
+                        "PRECHECK ONLY: source validation passed, but this build has no isolated runtime test connected; this cannot enable generated code."
+                    }
+                }
+            }
+            "extension_enable" -> {
+                val id = a.optString("id").trim()
+                val report = extensionTestReports[id]
+                if (report == null) "error: no successful runtime sandbox test exists for this extension in the current agent session; static preflight cannot enable generated code"
+                else if (!ui.ask("Enable generated extension $id after its verified sandbox test?")) "Extension enable cancelled."
+                else if (extensionStore.promote(id, report, userApproved = true)) "Extension $id is enabled."
+                else "error: extension promotion failed; test report/source hash may be stale or storage may be unavailable"
+            }
+            "extension_run" -> {
+                val id = a.optString("id").trim()
+                val ext = try { extensionStore.enabled(id) } catch (_: Exception) { null }
+                if (ext == null) "error: extension is not enabled, verified, and hash-matching"
+                else "error: no isolated extension execution backend is connected in this build; source was not executed."
+            }
+            "extension_disable" -> {
+                val id = a.optString("id").trim()
+                if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
+            }
             "lookup_app" -> tools.lookupApp(a.optString("name"))
             "open_app" -> svc.openApp(a.optString("name"))
             "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
