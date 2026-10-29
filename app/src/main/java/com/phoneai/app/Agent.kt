@@ -1380,8 +1380,11 @@ Rules:
         }
         // Named public GitHub repositories are discovered and read without requiring account-scope access.
         val namedRepo = Regex("(?i)\\b(?:my\\s+)?(?:github\\s+)?(?:repo|repository|project)\\s+(?:(?:called|named|is)\\s+)?([A-Za-z0-9_.-]{2,100})\\b").find(command)
-        if (!resumeRequest && !browserActionTask && namedRepo != null) {
-            val requestedName = namedRepo.groupValues[1]
+        val trailingNamedRepo = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
+        val requestedRepoName = namedRepo?.groupValues?.getOrNull(1)
+            ?: trailingNamedRepo?.groupValues?.getOrNull(1)
+        if (!resumeRequest && !browserActionTask && requestedRepoName != null) {
+            val requestedName = requestedRepoName
             if (!authorizeDirectTool("github_public", "orion_core")) {
                 val answer = "I couldn't search public GitHub because the GitHub public-read capability is disabled or this tool was explicitly denied. Enable the public GitHub capability and retry; public repository reads do not need a separate approval prompt."
                 logShortcut("github_repository_search", answer)
