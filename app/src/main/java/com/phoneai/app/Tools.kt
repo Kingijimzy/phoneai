@@ -190,7 +190,7 @@ class Tools(private val svc: PhoneAiService) {
     /**
      * Read-only public GitHub lookup. Calls a fixed api.github.com endpoint; never accepts
      * arbitrary URLs, never sends a token, and never performs write operations.
-     * section: repo | release | issues | runs
+     * section: repo | readme | release | issues | runs
      */
     fun githubPublic(owner: String, repository: String, section: String, runId: String? = null): String {
         val safePart = Regex("^[A-Za-z0-9_.-]{1,100}$")
@@ -244,7 +244,7 @@ class Tools(private val svc: PhoneAiService) {
             when (normalizedSection) {
                 "readme" -> {
                     val obj = JSONObject(raw)
-                    val encoded = obj.optString("content").replace("\\n", "")
+                    val encoded = obj.optString("content").replace("\n", "")
                     if (encoded.isBlank()) "The repository has no readable README content." else {
                         val decoded = try {
                             android.util.Base64.decode(encoded, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
