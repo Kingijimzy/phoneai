@@ -72,14 +72,34 @@ internal object StandingOrderPolicy {
 
 object StandingOrders {
     private val lock = Any()
+    @Volatile private var lastLoadError: String? = null
     private fun file(c: Context) = File(c.filesDir, "orion_standing_orders.json")
+
+    /** A malformed/unreadable file is not the same as an empty list; fail closed. */
+    fun storageError(): String? = lastLoadError
 
     fun all(c: Context): List<StandingOrder> = synchronized(lock) {
         try {
-            if (!file(c).exists()) return@synchronized emptyList()
-            val a = JSONArray(file(c).readText())
-            (0 until a.length()).map { val o = a.getJSONObject(it); StandingOrder(o.optString("kind"), o.optInt("every", 60), o.optLong("last"), o.optString("digest")) }
-        } catch (_: Exception) { emptyList() }
+            val f = file(c)
+            if (!f.exists()) {
+                lastLoadError = null
+                return@synchronized emptyList()
+            }
+            val a = JSONArray(f.readText())
+            val parsed = (0 until a.length()).map { index ->
+                val o = a.getJSONObject(index)
+                val kind = o.optString("kind")
+                val minutes = o.optInt("every", 60)
+                require(kind in StandingOrderPolicy.kinds) { "unknown standing-order kind at index $index" }
+                require(StandingOrderPolicy.validate(kind, minutes) == null) { "invalid standing-order interval at index $index" }
+                StandingOrder(kind, minutes, o.optLong("last"), o.optString("digest"))
+            }
+            lastLoadError = null
+            parsed
+        } catch (e: Exception) {
+            lastLoadError = "standing-order storage could not be read safely (" + e.javaClass.simpleName + ")"
+            emptyList()
+        }
     }
 
     /** Atomic persistence: callers must not report success if the durable write failed. */
@@ -101,7 +121,9 @@ object StandingOrders {
 
     fun add(c: Context, kind: String, minutes: Int): String = synchronized(lock) {
         StandingOrderPolicy.validate(kind, minutes)?.let { return@synchronized "error: $it" }
-        val list = all(c).filter { it.kind != kind }
+        val existing = all(c)
+        lastLoadError?.let { return@synchronized "error: $it; existing orders were left untouched" }
+        val list = existing.filter { it.kind != kind }
         if (list.size >= StandingOrderPolicy.MAX_ORDERS) return@synchronized "error: at most ${StandingOrderPolicy.MAX_ORDERS} standing orders"
         if (!save(c, list + StandingOrder(kind, minutes, 0L, ""))) {
             return@synchronized "error: standing order could not be saved to device storage; no order was added"
@@ -110,20 +132,23 @@ object StandingOrders {
     }
 
     fun remove(c: Context, kind: String): String = synchronized(lock) {
-        val list = all(c); if (list.none { it.kind == kind }) return@synchronized "error: no standing order '$kind'"
+        val list = all(c)
+        lastLoadError?.let { return@synchronized "error: $it; no order was removed" }
+        if (list.none { it.kind == kind }) return@synchronized "error: no standing order '$kind'"
         if (!save(c, list.filter { it.kind != kind })) return@synchronized "error: standing order could not be removed because device storage failed"
         "removed standing order '$kind'"
     }
 
     fun describe(c: Context): String {
         val list = all(c)
+        lastLoadError?.let { return "error: $it; do not add or remove orders until storage is repaired" }
         if (list.isEmpty()) return "no standing orders yet"
         return list.joinToString("\n") { "- ${it.kind}: every ${it.everyMinutes} min" }
     }
 
     internal fun update(c: Context, kind: String, digest: String): Boolean = synchronized(lock) {
         val current = all(c)
-        if (current.none { it.kind == kind }) return@synchronized false
+        if (lastLoadError != null || current.none { it.kind == kind }) return@synchronized false
         save(c, current.map { if (it.kind == kind) it.copy(lastRunAt = System.currentTimeMillis(), lastDigest = digest) else it })
     }
 }
@@ -136,7 +161,12 @@ object LifeLoop {
     fun tick(c: Context): Int {
         var posted = 0
         val now = System.currentTimeMillis()
-        for (o in StandingOrders.all(c)) {
+        val orders = StandingOrders.all(c)
+        StandingOrders.storageError()?.let { error ->
+            AgentPolicy.log(c, "standing_order", "storage", null, "skipped safely: $error")
+            return 0
+        }
+        for (o in orders) {
             if (!StandingOrderPolicy.due(o, now)) continue
             val result = try {
                 when (o.kind) {
@@ -156,8 +186,8 @@ object LifeLoop {
             if (notificationPosted) posted++
             AgentPolicy.log(c, "standing_order", o.kind, null, when {
                 !persisted -> "result checked but schedule/digest could not be persisted; may retry after restart"
-                notificationPosted -> "notified"
-                notify -> "notification not posted; digest retained for retry"
+                notificationPosted -> "notification dispatched to Android notification manager; user delivery/read receipt is not observable"
+                notify -> "notification dispatch failed or permission unavailable; digest retained for retry on next scheduled check"
                 else -> "nothing new or error"
             })
         }
