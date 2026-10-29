@@ -8,11 +8,10 @@ package com.phoneai.app
  * permissions, or bypass the normal dispatch/approval policy.
  */
 internal object ConversationAutoRoutePolicy {
-    private val runtimeInspection = Regex(
-        "(?i)\\b(check|inspect|verify|tell me|show me|find out|see)\\b.*\\b(python3?|pip3?|linux terminal|linux runtime|pr oot|proot|termux|shell|terminal)\\b.*\\b(installed|install|version|available|working|present)\\b|" +
-            "\\b(python3?|pip3?)\\s+--version\\b|" +
-            "\\b(which|whereis)\\s+(python3?|pip3?)\\b"
-    )
+    private val runtimeVerb = Regex("(?i)\\b(check|inspect|verify|tell me|show me|find out|see)\\b")
+    private val runtimeTarget = Regex("(?i)\\b(python3?|pip3?|linux terminal|linux runtime|proot|termux|shell|terminal)\\b")
+    private val runtimeState = Regex("(?i)\\b(installed|install|version|available|working|present)\\b")
+    private val directRuntimeCommand = Regex("(?i)\\b(python3?|pip3?)\\s+--version\\b|\\b(which|whereis)\\s+(python3?|pip3?)\\b")
 
     private val publicRepositoryInspection = Regex(
         "(?i)\\b(check|inspect|explain|describe|summari[sz]e|tell me about|what is|what's|read)\\b.*" +
@@ -28,7 +27,8 @@ internal object ConversationAutoRoutePolicy {
     fun requiresToolAgent(message: String): Boolean {
         val text = message.trim()
         if (text.isEmpty()) return false
-        return runtimeInspection.containsMatchIn(text) ||
+        return (runtimeVerb.containsMatchIn(text) && runtimeTarget.containsMatchIn(text) && runtimeState.containsMatchIn(text)) ||
+            directRuntimeCommand.containsMatchIn(text) ||
             publicRepositoryInspection.containsMatchIn(text) ||
             explicitWebsiteVisit.containsMatchIn(text)
     }
