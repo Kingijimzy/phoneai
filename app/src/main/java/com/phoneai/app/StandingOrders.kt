@@ -184,6 +184,20 @@ object LifeLoop {
         for (o in orders) {
             if (!StandingOrderPolicy.due(o, now)) continue
             if (checked >= maxOrders) break
+            val gate = runCatching {
+                AgentPolicy.gate(
+                    c = c,
+                    pack = "proactive",
+                    toolId = "standing_order",
+                    dangerous = false,
+                    toolMode = ToolPermissions.mode(c, "standing_order"),
+                    askedThisTask = true
+                )
+            }.getOrNull()
+            if (gate == null || gate.verdict != GatePolicy.Verdict.ALLOW) {
+                AgentPolicy.log(c, "standing_order", o.kind, null, "skipped by shared policy gate; no action taken")
+                continue
+            }
             checked++
             val result = try {
                 when (o.kind) {
