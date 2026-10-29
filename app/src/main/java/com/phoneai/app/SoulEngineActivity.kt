@@ -96,6 +96,7 @@ class SoulEngineActivity : ComponentActivity() {
             }.getOrDefault(false)
             val status = when {
                 tools == 0 || packs == 0 -> "BLOCKED · core registry unavailable"
+                !coreEnabledState.value -> "PAUSED · Soul Engine core is switched off"
                 !serviceReady || enabled == 0 -> "LIMITED · service or capability packs need attention"
                 else -> "READY FOR CHECKS · live workflows still require testing"
             }
