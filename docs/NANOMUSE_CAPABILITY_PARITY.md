@@ -40,6 +40,8 @@ Compared nanoMuse's public README, AGENTS.md, docs/architecture.md, docs/roadmap
 
 ## Fixes made during this audit
 
+5. Added a searchable **Capabilities & Tools** entry to the full-screen chat menu. It lists the actual registered tool names, READ/WRITE classification and descriptions, with a warning that registration does not guarantee the runtime dependency, permission, connector or approval is available. This makes capabilities discoverable from chat without pretending blocked or unimplemented integrations are active.
+
 1. Changed the `termux_command` registry access class from `WRITE` to `READ`, matching its exact read-only diagnostic contract. This removes a mismatched classification without granting it installation or editing capability.
 2. Added a regression assertion that the tool is classified as READ.
 3. Earlier on this branch, added narrowly anchored safe Python-version/location diagnostics and tool-routing guidance to choose the Termux/Linux backend when the user explicitly asks about that environment.
