@@ -81,6 +81,7 @@ internal fun SoulEngineComposeScreen(
     onRefresh: () -> Unit,
     onSelfTest: () -> Unit,
     onOpenChat: () -> Unit,
+    onOpenWatcher: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenAgents: () -> Unit,
     onOpenMemory: () -> Unit,
@@ -236,6 +237,9 @@ internal fun SoulEngineComposeScreen(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionTitle("SOUL ENGINE WATCHER", "Inspect, diagnose and verify the engine directly")
+                    EngineWorkspace("Soul Engine Watcher", "Talk to the watcher · run checks · inspect findings and outcomes", Icons.Rounded.Hub, onOpenWatcher)
+
                     SectionTitle("WORKSPACES", "Open a connected destination")
                     EngineWorkspace("Conversational Copilot", "Ask, reason, create and continue chat history", Icons.Rounded.ChatBubbleOutline, onOpenChat)
                     EngineWorkspace("Tasks & workflows", "Saved tasks, routines and recovery", Icons.Rounded.TaskAlt, onOpenTasks)
