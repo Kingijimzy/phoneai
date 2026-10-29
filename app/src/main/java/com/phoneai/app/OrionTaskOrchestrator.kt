@@ -24,7 +24,8 @@ internal object OrionTaskOrchestrator {
                 "Available tool names: " + available.take(24).joinToString(", ") { it.name }.ifBlank { "none" } +
                     if (available.size > 24) " (and ${available.size - 24} more)" else "",
                 "Readiness: next_step=${readiness.nextStep}; recommended_tool=${readiness.recommendedTool ?: "none"}; reason=${readiness.reason}; verify=${readiness.verificationRequirement}",
-                "Routing contract: use this as a planning hint, not permission. Only select tools present in the actual tool registry; dispatch policy, pack enablement, Android permissions, confirmation, cancellation, and verification remain mandatory."
+                "Routing contract: use this as a planning hint, not permission. Only select tools present in the actual tool registry; dispatch policy, pack enablement, Android permissions, confirmation, cancellation, and verification remain mandatory.",
+                "GRANTED CAPABILITY CONTRACT: when a registered tool is available, its capability pack is enabled, and its declared prerequisites are satisfied, use its documented functionality fully. Do not invent additional application-level restrictions, silently narrow its supported functions, or request duplicate consent. If unavailable, state the exact unmet prerequisite and try a compatible registered alternative. Actual Android permissions, real authentication/setup, cancellation, tool errors, and policy-required confirmation for consequential actions still apply."
             )
             if (goal.needsClarification) lines += "Required next action: ask one focused clarification; do not dispatch a tool."
             if (integration != null) {
