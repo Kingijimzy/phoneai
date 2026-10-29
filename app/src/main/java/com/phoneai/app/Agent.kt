@@ -1247,6 +1247,26 @@ Rules:
         ).containsMatchIn(command) || Regex(
             "(?i)\\b(search in|search on|inside|within)\\s+(youtube|whatsapp|telegram|instagram|tiktok|facebook|spotify)\\b"
         ).containsMatchIn(command)
+        // Exact public GitHub Actions run URLs are a deterministic read-only route.
+        // Do not send a known owner/repository/run URL through account identity or generic browser intent.
+        val githubRunMatch = Regex(
+            "(?i)https?://(?:www\\.)?github\\.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})/actions/runs/([0-9]{1,20})"
+        ).find(command)
+        if (!resumeRequest && !browserActionTask && githubRunMatch != null) {
+            val owner = githubRunMatch.groupValues[1]
+            val repository = githubRunMatch.groupValues[2]
+            val runId = githubRunMatch.groupValues[3]
+            if (!authorizeDirectTool("github_public", "trading_research")) {
+                ui.say("I couldn't read that public GitHub Actions run because the public research capability is disabled or this tool was explicitly denied.")
+                return
+            }
+            ui.phase("acting")
+            val result = tools.githubPublic(owner, repository, "run", runId)
+            logShortcut("github_public_run", result)
+            history.put(msg("assistant", JSONObject().put("say", result).put("tool", "done").toString()))
+            ui.say(result)
+            return
+        }
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
         if (!resumeRequest && !browserActionTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
