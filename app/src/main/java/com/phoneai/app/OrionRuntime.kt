@@ -11,7 +11,8 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     enum class State { STOPPED, ACTIVE, BUSY, PAUSED, DEGRADED }
     enum class WorkType { LEARN_FROM_RESULT, CAPABILITY_RECHECK, RESTORE_PENDING, SOUL_WATCH }
     data class WorkItem(val id: String, val key: String, val type: WorkType, val priority: Int,
-                        val createdAt: Long, val attempts: Int = 0, val notBefore: Long = 0L)
+                        val createdAt: Long, val attempts: Int = 0, val notBefore: Long = 0L,
+                        val goal: String = "", val checkpoint: String = "", val lastError: String = "")
     data class Snapshot(val state: State, val queued: Int, val lastEvent: String, val lastChangedAt: Long)
 
     private val appContext = context.applicationContext
@@ -31,7 +32,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     fun pause(reason: String = "paused") = synchronized(lock) { state = State.PAUSED; eventLocked(reason); persistLocked() }
     fun resume() = synchronized(lock) { state = State.ACTIVE; eventLocked("resumed"); persistLocked() }
 
-    fun enqueue(type: WorkType, key: String, priority: Int = 0): Boolean = synchronized(lock) {
+    fun enqueue(type: WorkType, key: String, priority: Int = 0, goal: String = "", checkpoint: String = ""): Boolean = synchronized(lock) {
         val safeKey = key.trim().take(100)
         if (safeKey.isBlank() || queue.any { it.type == type && it.key == safeKey }) return@synchronized false
         if (queue.size >= maxQueue) {
@@ -39,7 +40,8 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
             if (queue[lowest].priority >= priority) return@synchronized false
             queue.removeAt(lowest)
         }
-        queue.add(WorkItem(UUID.randomUUID().toString(), safeKey, type, priority.coerceIn(-10, 10), clock()))
+        queue.add(WorkItem(UUID.randomUUID().toString(), safeKey, type, priority.coerceIn(-10, 10), clock(),
+            goal = goal.trim().take(500), checkpoint = checkpoint.trim().take(500)))
         queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
         state = OrionRuntimePolicy.stateAfterEnqueue(state, queue.isNotEmpty())
         eventLocked("work_queued:" + type.name.lowercase())
@@ -70,7 +72,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     }
 
     /** Only the exact claimed item may be retried; stale failures cannot enqueue phantom work. */
-    fun fail(item: WorkItem): Boolean = synchronized(lock) {
+    fun fail(item: WorkItem, error: String = "unknown_failure", checkpoint: String = item.checkpoint): Boolean = synchronized(lock) {
         if (inflight?.id != item.id) return@synchronized false
         inflight = null
         val attempts = item.attempts + 1
@@ -83,10 +85,26 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         }
         val delay = OrionRuntimePolicy.retryDelayMs(attempts)
         queue.removeAll { it.id == item.id }
-        queue.add(item.copy(attempts = attempts, notBefore = clock() + delay))
+        queue.add(item.copy(attempts = attempts, notBefore = clock() + delay,
+            checkpoint = checkpoint.trim().take(500), lastError = error.trim().replace(Regex("\\s+"), " ").take(240)))
         queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
         state = State.ACTIVE
         eventLocked("work_backoff:" + attempts)
+        persistLocked()
+        true
+    }
+
+    /** Durable in-flight and queued items, including the last recoverable checkpoint. */
+    fun pendingItems(): List<WorkItem> = synchronized(lock) {
+        (listOfNotNull(inflight) + queue).map { it.copy() }
+    }
+
+    /** Update the exact active item after a verified step; stale IDs are rejected. */
+    fun checkpoint(item: WorkItem, value: String): Boolean = synchronized(lock) {
+        val active = inflight ?: return@synchronized false
+        if (active.id != item.id) return@synchronized false
+        inflight = active.copy(checkpoint = value.trim().take(500))
+        eventLocked("checkpoint_saved:" + active.type.name.lowercase())
         persistLocked()
         true
     }
@@ -116,7 +134,8 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 if (key.isBlank()) return@mapNotNull null
                 WorkItem(o.optString("id").ifBlank { UUID.randomUUID().toString() }, key, type,
                     o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
-                    o.optInt("attempts").coerceIn(0, OrionRuntimePolicy.MAX_ATTEMPTS), o.optLong("notBefore", 0L))
+                    o.optInt("attempts").coerceIn(0, OrionRuntimePolicy.MAX_ATTEMPTS), o.optLong("notBefore", 0L),
+                    o.optString("goal").take(500), o.optString("checkpoint").take(500), o.optString("lastError").take(240))
             }.distinctBy { it.type.name + ":" + it.key }.take(maxQueue).toMutableList()
             // Recover work claimed immediately before process death.
             val active = root.optJSONObject("inflight")
@@ -126,7 +145,8 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 if (type == null || key.isBlank()) null else WorkItem(
                     o.optString("id").ifBlank { UUID.randomUUID().toString() }, key, type,
                     o.optInt("priority").coerceIn(-10, 10), o.optLong("createdAt", clock()),
-                    o.optInt("attempts").coerceIn(0, OrionRuntimePolicy.MAX_ATTEMPTS), o.optLong("notBefore", 0L))
+                    o.optInt("attempts").coerceIn(0, OrionRuntimePolicy.MAX_ATTEMPTS), o.optLong("notBefore", 0L),
+                    o.optString("goal").take(500), o.optString("checkpoint").take(500), o.optString("lastError").take(240))
             }
             inflight?.let { activeItem ->
                 if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
@@ -141,13 +161,15 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         try {
             val items = JSONArray()
             queue.forEach { w -> items.put(JSONObject().put("id", w.id).put("key", w.key).put("type", w.type.name)
-                .put("priority", w.priority).put("createdAt", w.createdAt).put("attempts", w.attempts).put("notBefore", w.notBefore)) }
+                .put("priority", w.priority).put("createdAt", w.createdAt).put("attempts", w.attempts).put("notBefore", w.notBefore)
+                .put("goal", w.goal).put("checkpoint", w.checkpoint).put("lastError", w.lastError)) }
             val root = JSONObject().put("state", state.name).put("lastEvent", lastEvent)
                 .put("lastChangedAt", lastChangedAt).put("queue", items)
             inflight?.let { w ->
                 root.put("inflight", JSONObject().put("id", w.id).put("key", w.key).put("type", w.type.name)
                     .put("priority", w.priority).put("createdAt", w.createdAt).put("attempts", w.attempts)
-                    .put("notBefore", w.notBefore))
+                    .put("notBefore", w.notBefore).put("goal", w.goal).put("checkpoint", w.checkpoint)
+                    .put("lastError", w.lastError))
             }
             val tmp = File(file.parentFile, file.name + ".tmp")
             tmp.writeText(root.toString())
