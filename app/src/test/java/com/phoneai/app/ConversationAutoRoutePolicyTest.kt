@@ -23,6 +23,12 @@ class ConversationAutoRoutePolicyTest {
         assertTrue(ConversationAutoRoutePolicy.requiresToolAgent(
             "tell me about GitHub repository nanoMuse"
         ))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent(
+            "check my GitHub account and check phoneai repo"
+        ))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent(
+            "check phoneai repository and explain what it does"
+        ))
     }
 
     @Test fun routesExplicitWebsiteVisits() {
