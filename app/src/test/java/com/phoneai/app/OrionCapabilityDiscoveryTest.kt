@@ -68,6 +68,37 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.promptLines().any { it.contains("weather(read)") })
     }
 
+    @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
+        val pack = AgentPolicy.packForTool("mcp_call") ?: "connectors"
+        val unconfigured = OrionCapabilityDiscovery.discover(
+            listOf(tool("mcp_call", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            integrationStates = mapOf("mcp_endpoint" to "not-configured", "mcp_pairing" to "not-paired")
+        )
+        assertFalse(unconfigured.tools.single().available)
+        assertTrue(unconfigured.tools.single().reason.contains("endpoint"))
+        val configuredButUnpaired = OrionCapabilityDiscovery.discover(
+            listOf(tool("mcp_call", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            integrationStates = mapOf("mcp_endpoint" to "configured", "mcp_pairing" to "not-paired")
+        )
+        assertFalse(configuredButUnpaired.tools.single().available)
+        assertTrue(configuredButUnpaired.tools.single().reason.contains("paired"))
+    }
+
+    @Test fun mcpCallCanBeEligibleOnlyWhenEndpointIsConfiguredAndPaired() {
+        val pack = AgentPolicy.packForTool("mcp_call") ?: "connectors"
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("mcp_call", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            integrationStates = mapOf("mcp_endpoint" to "configured", "mcp_pairing" to "paired")
+        )
+        assertTrue(snapshot.tools.single().available)
+    }
+
     @Test fun integrationStateIsReportedAsSuppliedAndNotInvented() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
