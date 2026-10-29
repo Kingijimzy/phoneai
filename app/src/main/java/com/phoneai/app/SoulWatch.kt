@@ -75,9 +75,18 @@ internal object SoulEngineWatcher {
             }
         }
 
+        // Stage 5: bounded local Propose–Probe–Compose pass. It performs registry-only dry runs,
+        // is rate-limited to one automatic pass per six hours, and never executes candidate tools.
+        val p3 = runCatching { SoulP3Engine.run(c) }.getOrElse {
+            SoulP3Engine.RunResult(0, 0, "Stage 5 probe unavailable: " + it.javaClass.simpleName + "; no candidate adopted.")
+        }
+        if (p3.probesRun > 0 || p3.compositionsCreated > 0) {
+            runCatching { SoulEngineState.recordLesson(c, "p3_probe", p3.summary, "review_only") }
+        }
+
         // External reads/notifications only happen for explicitly configured standing orders
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
-        var action = "local_capability_audit"
+        var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
             if (StandingOrders.storageError() == null && schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
                 val dispatched = runCatching { LifeLoop.tickOne(c) }.getOrDefault(0)
@@ -88,11 +97,11 @@ internal object SoulEngineWatcher {
         val next = when {
             status == "paused" -> "Enable Orion Core explicitly to resume Soul planning."
             limitations.isNotEmpty() -> "Review the Capability board; watcher will not grant permissions or enable packs."
-            else -> "Continue bounded checks; only opted-in standing orders may run autonomously."
+            else -> "Continue bounded checks; review Stage 5 probe/composition reports before adopting any planning guidance."
         }
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
-        return TickResult(status, action, limitations, next)
+        return TickResult(status, action, limitations, next + " " + p3.summary)
     }
 }
