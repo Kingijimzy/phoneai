@@ -218,7 +218,7 @@ class SoulWatcherActivity : Activity() {
             return
         }
         val rules = snapshot.memoryNudgeRules
-        addMessage("WATCHER", "Memory nudges: \${if (rules.enabled) "enabled" else "paused"} · cooldown \${rules.cooldownMillis / 3_600_000L}h. Suggestions are review-only; nothing is saved until you choose Save.")
+        addMessage("WATCHER", "Memory nudges: ${if (rules.enabled) "enabled" else "paused"} · cooldown ${rules.cooldownMillis / 3_600_000L}h. Suggestions are review-only; nothing is saved until you choose Save.")
         val pending = snapshot.memoryNudges.filter { it.status == SoulEngineState.NudgeStatus.PENDING }
         if (pending.isEmpty()) {
             addMessage("WATCHER", "No memory suggestions are waiting for review.")
@@ -226,7 +226,7 @@ class SoulWatcherActivity : Activity() {
             pending.take(8).forEach { n ->
                 val box = card(transcript)
                 box.addView(label(n.summary, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
-                box.addView(label("Category: \${n.category} · Suggested \${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(n.createdAt))}", muted, 10f))
+                box.addView(label("Category: ${n.category} · Suggested ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(n.createdAt))}", muted, 10f))
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
                 row.addView(actionButton("Save memory") {
                     val ok = runCatching { SoulEngineState.reviewMemoryNudge(this, n.id, SoulEngineState.NudgeStatus.SAVED) }.getOrDefault(false)
@@ -246,17 +246,17 @@ class SoulWatcherActivity : Activity() {
         val settings = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         settings.addView(actionButton(if (rules.enabled) "Pause nudges" else "Enable nudges") {
             val ok = SoulEngineState.configureMemoryNudges(this, !rules.enabled, rules.cooldownMillis)
-            addMessage("WATCHER", if (ok) "Memory nudges \${if (rules.enabled) "paused" else "enabled"}." else "Could not update nudge settings.")
+            addMessage("WATCHER", if (ok) "Memory nudges ${if (rules.enabled) "paused" else "enabled"}." else "Could not update nudge settings.")
             showMemoryNudges()
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
-        settings.addView(actionButton("Cooldown: \${rules.cooldownMillis / 3_600_000L}h → \${if (rules.cooldownMillis >= 7L * 24L * 3_600_000L) "24h" else if (rules.cooldownMillis >= 24L * 3_600_000L) "7d" else "24h"}") {
+        settings.addView(actionButton("Cooldown: ${rules.cooldownMillis / 3_600_000L}h → ${if (rules.cooldownMillis >= 7L * 24L * 3_600_000L) "24h" else if (rules.cooldownMillis >= 24L * 3_600_000L) "7d" else "24h"}") {
             val next = when {
                 rules.cooldownMillis < 24L * 3_600_000L -> 24L * 3_600_000L
                 rules.cooldownMillis < 7L * 24L * 3_600_000L -> 7L * 24L * 3_600_000L
                 else -> 24L * 3_600_000L
             }
             val ok = SoulEngineState.configureMemoryNudges(this, rules.enabled, next)
-            addMessage("WATCHER", if (ok) "Cooldown set to \${next / 3_600_000L} hours." else "Could not update cooldown.")
+            addMessage("WATCHER", if (ok) "Cooldown set to ${next / 3_600_000L} hours." else "Could not update cooldown.")
             showMemoryNudges()
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(4) })
         transcript.addView(settings)
