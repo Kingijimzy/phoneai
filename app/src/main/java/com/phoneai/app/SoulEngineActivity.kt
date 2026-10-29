@@ -19,6 +19,7 @@ class SoulEngineActivity : Activity() {
     private lateinit var summaryLine: TextView
     private lateinit var runtimeLine: TextView
     private lateinit var selfTestLine: TextView
+    private lateinit var extensionBox: LinearLayout
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(value: String, size: Float, color: Int, bold: Boolean = false) =
@@ -144,6 +145,16 @@ class SoulEngineActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         page.addView(brain)
 
+        val growth = card()
+        growth.addView(label("SELF-EXTENSION", 10f, 0xFFAAAAAA.toInt(), true))
+        growth.addView(label("Orion can write a small tool, test it in a restricted sandbox (no files, network or imports), and — only after you approve — keep it for future tasks.", 12f, 0xFFAAAAAA.toInt()))
+        extensionBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        growth.addView(extensionBox)
+        growth.addView(action("Ask Orion to build a new tool", "Describe a gap; Orion drafts, tests and asks before enabling.") {
+            openChat("I want a new reusable tool. Ask me what it should do, then use extension_list, extension_create, extension_test with real test cases, and finally extension_enable (I will approve). Do not claim it is active until the sandbox test passed and I approved.")
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        page.addView(growth)
+
         val systems = card()
         systems.addView(label("CONNECTED WORKSPACES", 10f, 0xFFAAAAAA.toInt(), true))
         systems.addView(label("Open each workspace directly. Settings remain authoritative; this dashboard never silently enables permissions or live actions.", 12f, 0xFFAAAAAA.toInt()))
@@ -177,8 +188,30 @@ class SoulEngineActivity : Activity() {
         page.addView(rules)
     }
 
+    private fun renderExtensions() {
+        if (!::extensionBox.isInitialized) return
+        extensionBox.removeAllViews()
+        val all = try { SelfExtendingExtensionStore(this).all() } catch (e: Exception) {
+            extensionBox.addView(label("Generated-tool registry unavailable: " + (e.message ?: e.javaClass.simpleName).take(160), 12f, 0xFFFFC078.toInt()))
+            return
+        }
+        extensionBox.addView(label(ExtensionStatus.summary(all), 12f, 0xFFE4E4E4.toInt(), true))
+        all.take(12).forEach { e ->
+            extensionBox.addView(label(ExtensionStatus.line(e), 12f, 0xFFD0D0D0.toInt()))
+            if (e.enabled) extensionBox.addView(Button(this).apply {
+                text = "Disable " + e.id; isAllCaps = false
+                setOnClickListener {
+                    val ok = runCatching { SelfExtendingExtensionStore(this@SoulEngineActivity).disable(e.id) }.getOrDefault(false)
+                    Toast.makeText(this@SoulEngineActivity, if (ok) "Disabled; source kept" else "Could not disable", Toast.LENGTH_SHORT).show()
+                    renderExtensions()
+                }
+            })
+        }
+    }
+
     private fun refreshSnapshot() {
         if (!::statusLine.isInitialized) return
+        renderExtensions()
         try {
         val tools = runCatching { ToolRegistry.all.size }.getOrDefault(0)
         val packs = runCatching { AgentPolicy.packs.count { it.implemented } }.getOrDefault(0)
