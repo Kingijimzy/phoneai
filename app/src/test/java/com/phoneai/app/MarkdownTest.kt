@@ -33,7 +33,7 @@ class MarkdownTest {
     }
 
     @Test fun markdownTableConversionDoesNotRewriteCodeFences() {
-        val input = "\x60\x60\x60text\n| a | b |\n| --- | --- |\n\x60\x60\x60"
+        val input = "```text\n| a | b |\n| --- | --- |\n```"
         assertEquals(input, normalizeOrionMarkdownTables(input))
     }
     @Test fun emptyInputNormalizesSafely() {
