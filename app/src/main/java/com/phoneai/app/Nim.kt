@@ -176,7 +176,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         )
     )
 
-    private class Http(val code: Int, val body: String, val retryAfter: Int = -1)
+    internal class Http(val code: Int, val body: String, val retryAfter: Int = -1)
 
     private fun pause(ms: Long) {
         var left = ms
