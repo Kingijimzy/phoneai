@@ -1413,7 +1413,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> startActivity(Intent(this@MainChatActivity, BrowserActivity::class.java).apply { if (!url.isNullOrBlank()) putExtra(BrowserActivity.EXTRA_URL, url) }) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
                     onRetry = { prompt -> PhoneAiService.instance?.retryLastResponse(prompt) },
                     onEditSend = { original, edited -> PhoneAiService.instance?.editAndResend(original, edited) }
                 )
@@ -1685,95 +1685,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
-
-    /**
-     * Open links in a compact in-chat browser dialog first. The full Browser screen is an
-     * explicit optional escape hatch, not the default destination for a chat link.
-     */
-    private fun showChatBrowserPopup(rawUrl: String?) {
-        val startUrl = rawUrl?.trim().orEmpty()
-        val parsed = runCatching { android.net.Uri.parse(startUrl) }.getOrNull()
-        if (parsed == null || parsed.scheme !in setOf("http", "https") || parsed.host.isNullOrBlank()) {
-            Toast.makeText(this, "Only valid HTTP or HTTPS links can open in the chat browser.", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        val dialog = android.app.Dialog(this)
-        val surface = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setBackground(rounded(0xFF101010.toInt(), 18, 0xFF4A4A4A.toInt()))
-        }
-        val toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val address = EditText(this).apply {
-            setSingleLine(true)
-            textSize = 12f
-            setTextColor(0xFFECECEC.toInt())
-            setHintTextColor(0xFF8A8A8A.toInt())
-            hint = "https://"
-            setText(startUrl)
-            background = rounded(0xFF1D1D1D.toInt(), 10, 0xFF393939.toInt())
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            imeOptions = EditorInfo.IME_ACTION_GO
-        }
-        val web = android.webkit.WebView(this).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.javaScriptCanOpenWindowsAutomatically = false
-            settings.setSupportMultipleWindows(false)
-            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            webViewClient = object : android.webkit.WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: android.webkit.WebView?, request: android.webkit.WebResourceRequest?): Boolean {
-                    val target = request?.url ?: return true
-                    if (target.scheme !in setOf("http", "https") || target.host.isNullOrBlank()) return true
-                    address.setText(target.toString())
-                    return false
-                }
-                override fun onPageStarted(view: android.webkit.WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                    if (!url.isNullOrBlank() && (url.startsWith("https://") || url.startsWith("http://"))) address.setText(url)
-                }
-            }
-        }
-        val go = historyActionButton("GO") {
-            val candidate = address.text.toString().trim()
-            val target = runCatching { android.net.Uri.parse(candidate) }.getOrNull()
-            if (target != null && target.scheme in setOf("http", "https") && !target.host.isNullOrBlank()) {
-                web.loadUrl(candidate)
-            } else {
-                Toast.makeText(this, "Enter a valid HTTP or HTTPS URL.", Toast.LENGTH_SHORT).show()
-            }
-        }
-        toolbar.addView(address, LinearLayout.LayoutParams(0, dp(44), 1f).apply { rightMargin = dp(6) })
-        toolbar.addView(go, LinearLayout.LayoutParams(-2, dp(44)))
-        surface.addView(toolbar)
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(6), 0, dp(6))
-        }
-        actions.addView(historyActionButton("BACK") { if (web.canGoBack()) web.goBack() })
-        actions.addView(historyActionButton("RELOAD") { web.reload() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
-        actions.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        actions.addView(historyActionButton("FULL BROWSER") {
-            val current = web.url ?: startUrl
-            dialog.dismiss()
-            startActivity(Intent(this, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, current))
-        })
-        actions.addView(historyActionButton("CLOSE") { dialog.dismiss() }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
-        surface.addView(actions)
-        surface.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
-        dialog.setContentView(surface)
-        dialog.setOnDismissListener { web.stopLoading(); web.destroy() }
-        dialog.show()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.96f).toInt(), (resources.displayMetrics.heightPixels * 0.84f).toInt())
-        web.loadUrl(startUrl)
-    }
 
     private fun restoreWelcome() {
         listOf(welcomePanel, promptRail).forEach { view ->
