@@ -80,11 +80,9 @@ internal object TaskScopePolicy {
         // classified as CHAT or because another specialist category did not match a keyword.
         // Capability-pack settings, per-tool permissions, explicit DENY, Android permissions,
         // safety checks, cancellation, and fresh confirmations remain enforced at dispatch.
-        val mode = modeFor(request)
-        if ((mode == TaskMode.READ_ONLY || mode == TaskMode.RESEARCH) &&
-            definition.access != ToolAccess.READ) {
-            return "$mode tasks may use read-only tools; '$toolName' can change state."
-        }
+        // Task wording is not a second permission system. Whether a registered tool may
+        // execute is decided by Orion Settings (pack + per-tool mode) and dispatch-time
+        // safety/confirmation gates, not by a guessed intent label.
         return null
     }
 
