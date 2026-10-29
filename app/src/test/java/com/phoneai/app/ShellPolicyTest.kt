@@ -54,6 +54,14 @@ class ShellPolicyTest {
         assertTrue(contract.contains("termux_command is read-only diagnostics only"))
     }
 
+    @Test fun safeLinuxDiagnosticsDoNotTriggerAnApprovalPopup() {
+        assertFalse(ShellExecutionRouting.requiresApproval("linux", "python3 --version"))
+        assertFalse(ShellExecutionRouting.requiresApproval("alpine", "which python3"))
+        assertTrue(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
+        assertTrue(ShellExecutionRouting.requiresApproval("linux", "python3 run_script.py"))
+        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "apk add python3"))
+    }
+
     @Test fun shellToolsAreRegisteredWithCorrectAccess() {
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("shell"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("workspace_write"))
