@@ -12,16 +12,21 @@ internal object ShellPolicy {
     private val workspaceWrite = setOf("mkdir", "touch", "cp", "tee")
     private val safeGit = setOf("status", "log", "diff", "branch", "show", "remote")
 
+    // Keep only catastrophic/designed-to-exfiltrate targets as hard blocks. Other
+    // privileged or destructive commands are approval-gated by dispatch and may run
+    // when the user explicitly approves them; they must not be silently impossible.
     private val blocked = listOf(
-        Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*(/|~|\\\$HOME|\\*|/sdcard|/storage)(\\s|$)"),
+        Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*( /|~|\\\\\\$HOME|\\\\*|/sdcard|/storage)(\\s|$)".replace("*( /", "*(/")),
         Regex(":\\(\\)\\s*\\{"),
-        Regex("(?i)\\b(mkfs|fdisk|reboot|shutdown|setprop|su|sudo)\\b"),
-        Regex("(?i)\\bdd\\s+.*\\bof="),
-        Regex("(?i)>\\s*/dev/(sd|block|mmcblk|null\\s*&)"),
-        Regex("(?i)\\bsettings\\s+put\\b|\\bpm\\s+(uninstall|clear|disable)\\b"),
-        Regex("(?i)(curl|wget)[^|;&]*\\|\\s*(sh|bash|zsh)\\b"),
+        Regex("(?i)>\\s*/dev/(sd|block|mmcblk)"),
         Regex("(?i)(/data/data/|/data/user/|shared_prefs|orion_[a-z_]+\\.json|\\bkeystore\\b|api[_-]?key|\\.env\\b|id_rsa|\\.ssh/)"),
         Regex("(?i)\\bchmod\\s+(-[a-z]+\\s+)?[0-7]*7[0-7]*\\s+/")
+    )
+    private val approvalRequired = listOf(
+        Regex("(?i)\\b(mkfs|fdisk|reboot|shutdown|setprop|su|sudo)\\b"),
+        Regex("(?i)\\bdd\\s+.*\\bof="),
+        Regex("(?i)\\bsettings\\s+put\\b|\\bpm\\s+(uninstall|clear|disable)\\b"),
+        Regex("(?i)(curl|wget)[^|;&]*\\|\\s*(sh|bash|zsh)\\b")
     )
 
     private fun segments(cmd: String): List<String> =
@@ -38,6 +43,7 @@ internal object ShellPolicy {
         val cmd = command.trim()
         if (cmd.isEmpty() || cmd.length > 2000) return ShellRisk.BLOCKED
         if (blocked.any { it.containsMatchIn(cmd) }) return ShellRisk.BLOCKED
+        if (approvalRequired.any { it.containsMatchIn(cmd) }) return ShellRisk.ASK
         BuiltinCommands.risk(cmd)?.let { return it }
         if (cmd.contains("`") || cmd.contains("$(") || cmd.contains("<(")) return ShellRisk.ASK
         // Redirects: only to a relative path inside the workspace.
