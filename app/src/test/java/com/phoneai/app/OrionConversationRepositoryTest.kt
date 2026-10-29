@@ -141,6 +141,33 @@ class OrionConversationRepositoryTest {
         assertTrue(safeSummary.contains("[redacted]"))
     }
 
+    @Test fun lifecycleEventsFollowTheirSessionAcrossSwitchAndDeletion() {
+        val first = listOf("me" to "first task", "ai" to "first result")
+        repository.saveActive(context, first)
+        val firstEvent = repository.recordEvent(
+            context, messageId = "first-message", type = "tool_result",
+            status = "success", summary = "first session tool completed"
+        )
+        assertNotNull(firstEvent)
+        repository.archiveAndClear(context, first)
+
+        val second = listOf("me" to "second task", "ai" to "second result")
+        repository.saveActive(context, second)
+        val secondEvent = repository.recordEvent(
+            context, messageId = "second-message", type = "tool_result",
+            status = "failed", summary = "second session tool failed"
+        )
+        assertNotNull(secondEvent)
+        assertEquals(listOf(secondEvent!!.id), repository.eventsForActive(context).map { it.id })
+
+        val firstArchive = repository.archived(context).single { it.title == "first task" }
+        assertEquals(first, repository.restoreArchivedById(context, firstArchive.id))
+        assertEquals(listOf(firstEvent!!.id), repository.eventsForActive(context).map { it.id })
+
+        assertTrue(repository.deleteArchivedById(context, secondEvent.sessionId))
+        assertEquals(listOf(firstEvent.id), repository.eventsForActive(context).map { it.id })
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
