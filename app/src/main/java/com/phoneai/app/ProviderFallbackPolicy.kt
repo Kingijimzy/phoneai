@@ -37,6 +37,6 @@ internal object ProviderFallbackPolicy {
 
         // Rotate only for known provider/model failures. A generic exception or an
         // unclassified 400 must not silently spend another provider's quota.
-        return error is AiException && error.httpStatus in recoverableHttpStatuses
+        return error is AiException && error.httpStatus?.let { it in recoverableHttpStatuses } == true
     }
 }
