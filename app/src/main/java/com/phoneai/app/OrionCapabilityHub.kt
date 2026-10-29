@@ -50,7 +50,7 @@ internal object OrionCapabilityHub {
         val result = linkedMapOf<String, String>()
         runCatching {
             OrionConnectionStore.list(context).forEach { connection ->
-                result["connection_${connection.id}"] = when {
+                result["connection_${connection.providerId}"] = when {
                     !connection.secretAvailable -> "saved_without_secret"
                     !connection.verified -> "saved_unverified"
                     else -> "verified_metadata"
