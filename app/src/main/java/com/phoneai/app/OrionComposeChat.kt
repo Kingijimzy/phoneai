@@ -43,6 +43,8 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Stop
@@ -322,7 +324,9 @@ fun OrionComposeChatScreen(
     // Scroll only when transcript length changes. Status updates can arrive frequently while
     // a tool/model is running; tying animation to status causes repeated scroll work and fights
     // users who are reading earlier messages.
-    LaunchedEffect(lines.lastOrNull()?.id, lines.lastOrNull()?.text) {
+    LaunchedEffect(lines.lastOrNull()?.id) {
+        // Follow newly appended turns, but don't animate on every streamed token. Repeated
+        // text-key scrolls caused jitter and made it hard to read/copy an in-progress reply.
         if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
     }
     val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
@@ -345,33 +349,26 @@ fun OrionComposeChatScreen(
                     Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
                 }
             }
-            Row(
-                modifier = Modifier.padding(end = 3.dp).clip(RoundedCornerShape(10.dp))
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
                     .semantics { contentDescription = "Start a new chat"; role = Role.Button }
-                    .clickable(onClick = onNewChat).padding(horizontal = 6.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Icon(Icons.Rounded.Add, null, tint = ChatCopy, modifier = Modifier.size(15.dp))
-                Text("New", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            }
-            Row(
-                modifier = Modifier.padding(end = 3.dp).clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onNewChat),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Rounded.Add, "New chat", tint = ChatCopy, modifier = Modifier.size(19.dp)) }
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
                     .semantics { contentDescription = "Open chat history"; role = Role.Button }
-                    .clickable(onClick = onHistory).padding(horizontal = 5.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text("History", color = ChatMuted, fontSize = 11.sp)
-            }
+                    .clickable(onClick = onHistory),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Rounded.History, "Chat history", tint = ChatMuted, modifier = Modifier.size(18.dp)) }
             Box {
                 Box(
-                    Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
-                        .clickable { menuExpanded = true }
-                        .semantics { contentDescription = "More chat options"; role = Role.Button },
+                    Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                        .semantics { contentDescription = "More chat options"; role = Role.Button }
+                        .clickable { menuExpanded = true },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("⋮", color = ChatCopy, fontSize = 24.sp, lineHeight = 24.sp)
+                    Icon(Icons.Rounded.MoreVert, "More options", tint = ChatCopy, modifier = Modifier.size(19.dp))
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
@@ -601,27 +598,36 @@ fun OrionComposeChatScreen(
                 }
                 ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
                 Spacer(Modifier.width(5.dp))
-                ComposerButton(Icons.Rounded.Send, "Send message", {
-                    if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
-                                val value = draft.trim()
-                                val original = editingOriginal
-                                if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
-                                draft = ""
-                                editingOriginal = null
-                            }
-                }, secondary = false)
+                ComposerButton(
+                    if (busy) Icons.Rounded.Stop else Icons.Rounded.Send,
+                    if (busy) "Stop response" else "Send message",
+                    {
+                        if (busy) {
+                            onStop()
+                        } else if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
+                            val value = draft.trim()
+                            val original = editingOriginal
+                            if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
+                            draft = ""
+                            editingOriginal = null
+                        }
+                    },
+                    secondary = busy
+                )
             }
             Row(
-                Modifier.fillMaxWidth().padding(top = 10.dp, start = 5.dp, end = 5.dp),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().padding(top = 9.dp, start = 5.dp, end = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Live voice", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Start live voice"; role = Role.Button }.clickable(onClick = onVoice))
-                    Text("Browser", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Open browser"; role = Role.Button }.clickable { onBrowser(null) })
-                    Text("Tasks", color = ChatMuted, fontSize = 11.sp, modifier = Modifier.semantics { contentDescription = "Open tasks"; role = Role.Button }.clickable(onClick = onTasks))
-                }
-                Text("STOP", color = if (status.contains("think", true) || status.contains("work", true)) Color(0xFFE9B984) else Color(0xFF9B9B9B),
-                    fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onStop).padding(4.dp))
+                Text("Live voice", color = ChatMuted, fontSize = 11.sp,
+                    modifier = Modifier.semantics { contentDescription = "Start live voice"; role = Role.Button }.clickable(onClick = onVoice))
+                Text("Browser", color = ChatMuted, fontSize = 11.sp,
+                    modifier = Modifier.semantics { contentDescription = "Open browser"; role = Role.Button }.clickable { onBrowser(null) })
+                Text("Tasks", color = ChatMuted, fontSize = 11.sp,
+                    modifier = Modifier.semantics { contentDescription = "Open tasks"; role = Role.Button }.clickable(onClick = onTasks))
+                Spacer(Modifier.weight(1f))
+                Text(if (busy) "WORKING" else if (commandMode) "COMMAND MODE" else "TALK MODE",
+                    color = ChatMuted, fontSize = 9.sp, letterSpacing = .6.sp, maxLines = 1)
             }
         }
     }
