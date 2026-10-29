@@ -519,7 +519,7 @@ class SettingsActivity : Activity() {
         // ---- 3. AI services
         val s2 = card(
             col, "AI providers & models",
-            "Orion uses your selected primary provider first. It may try at most one backup provider only after an explicit HTTP 429 rate-limit response; other failures stop fallback. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
+            "Chat and screen vision have independent provider and model selections below. Orion uses each selected provider first; when Auto-switch is enabled, recoverable timeouts, rate limits, temporary server errors, unsupported/retired models, empty replies, and oversized requests can trigger bounded fallback. Authentication, billing, cancellation, safety blocks, and exhausted budgets stop. Simple phone actions need no AI request."
         )
         add(s2, button("Get a free Gemini key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
@@ -539,7 +539,7 @@ class SettingsActivity : Activity() {
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
         add(s2, visionBtn, 8)
-        switchRow(s2, "Auto-switch to one backup only on HTTP 429", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
+        switchRow(s2, "Auto-switch on recoverable provider errors (up to 2 backups)", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
@@ -1383,8 +1383,8 @@ class SettingsActivity : Activity() {
         providerPickerDialog(
             title = if (vision) "Screen-vision AI" else "Chat AI provider",
             subtitle = if (vision)
-                "Choose a provider that supports image understanding."
-            else "Choose which service answers Orion's messages.",
+                "Choose the provider used for screen reading. This selection is independent of Chat AI and has its own saved model."
+            else "Choose the provider used for normal chat. This selection is independent of Screen-vision AI and has its own saved model.",
             providers = providers,
             showKeyState = true
         ) { provider ->
