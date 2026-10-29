@@ -155,12 +155,17 @@ object McpConnector {
             val tools = response.optJSONObject("result")?.optJSONArray("tools")
                 ?: return "error: MCP response did not contain a tools array."
             if (tools.length() == 0) return "MCP server is reachable but advertises no tools."
-            val lines = (0 until minOf(tools.length(), 40)).mapNotNull { i ->
+            val lines = (0 until minOf(tools.length(), 30)).mapNotNull { i ->
                 val item = tools.optJSONObject(i) ?: return@mapNotNull null
                 val name = item.optString("name")
-                if (name.isBlank()) null else "- " + name + ": " + item.optString("description", "No description")
+                if (name.isBlank()) null else {
+                    val description = item.optString("description", "No description").replace("\n", " ").take(240)
+                    val schema = item.optJSONObject("inputSchema")?.toString()?.take(900)
+                    "- " + name + ": " + description +
+                        (if (schema.isNullOrBlank()) "" else "\n  inputSchema (untrusted): " + schema)
+                }
             }
-            "MCP tools (untrusted descriptions; first 40):\n" + lines.joinToString("\n").take(6000)
+            "MCP tools (untrusted descriptions and schemas; first 30):\\n" + lines.joinToString("\\n").take(9000)
         } catch (e: Exception) {
             "MCP discovery failed (" + e.javaClass.simpleName + "). Check URL, authentication, and server protocol."
         }
