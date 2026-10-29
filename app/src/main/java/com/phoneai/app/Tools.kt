@@ -11,6 +11,9 @@ import android.provider.MediaStore
 import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.location.LocationManager
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
@@ -697,6 +700,34 @@ class Tools(private val svc: PhoneAiService) {
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         val pct = if (scale > 0) level * 100 / scale else level
         return "battery $pct%" + if (charging) ", charging" else ", not charging"
+    }
+
+    /**
+     * Returns only Android's cached on-device fix. It never enables GPS, uploads coordinates,
+     * or invents a location. A user must grant Android's coarse or fine location permission.
+     */
+    fun deviceLocation(): String {
+        val fine = svc.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = svc.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            return "error: Android location permission is not granted. Open Orion Settings > Access & permissions and tap Allow location; then approve Android's permission prompt."
+        }
+        val manager = svc.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return "error: Android LocationManager is unavailable."
+        val locations = try {
+            manager.getProviders(true).mapNotNull { provider ->
+                try { manager.getLastKnownLocation(provider) } catch (_: SecurityException) { null }
+            }
+        } catch (_: SecurityException) {
+            return "error: Android denied location access. Check Orion's location permission in system settings."
+        } catch (e: Exception) {
+            return "error: could not read cached device location (${e.javaClass.simpleName})."
+        }
+        val location = locations.maxByOrNull { it.time }
+            ?: return "No cached location fix is available. Open Maps or enable device location, then retry. Orion has not guessed your location."
+        val ageMinutes = ((System.currentTimeMillis() - location.time).coerceAtLeast(0L) / 60_000L)
+        val accuracy = if (location.hasAccuracy()) ", accuracy about ${location.accuracy.toInt()} m" else ""
+        return "Cached device location: ${"%.6f".format(Locale.US, location.latitude)}, ${"%.6f".format(Locale.US, location.longitude)}; fix time ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(location.time))}; age ${ageMinutes} min$accuracy. This is on-device data; Orion did not upload it."
     }
 
     fun time(): String = SimpleDateFormat("EEEE d MMMM yyyy, HH:mm", Locale.getDefault()).format(Date())
