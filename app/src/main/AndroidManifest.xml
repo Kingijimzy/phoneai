@@ -5,6 +5,9 @@
     <!-- Optional explicit bridge to a user-installed Termux terminal; user must enable its external-command setting. -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Used only for an explicit on-device location request; Android runtime permission remains required. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
