@@ -767,6 +767,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         val tried = HashSet<String>()
         var refilled = false
         var lastNote = ""
+        var lastHttpStatus: Int? = null
         var attempts = 0
         // Always reserve one bounded same-provider recovery attempt for a stale model ID
         // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
@@ -830,6 +831,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             if (r == null) {
                 lastNote = "$model -> no response before timeout"
+                lastHttpStatus = 504
                 // NVIDIA may accept a request but fail to return a first response in time.
                 // Try one alternate catalog model, even in quota-saver mode, then report a
                 // useful timeout diagnostic rather than silently abandoning the provider.
@@ -849,7 +851,8 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw AiException(
                     if (p.id == "nvidia")
                         "NVIDIA timed out waiting for $model. The request was sent, but no response arrived in time. Check NVIDIA model access/status and try again."
-                    else "${p.label}: request timed out. Retry later or use the one configured backup."
+                    else "${p.label}: request timed out. Retry later or use the one configured backup.",
+                    504
                 )
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
@@ -876,6 +879,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
+                lastHttpStatus = r.code
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
                 // Retired catalog models must never be persisted as the provider's active choice.
                 // Put distinct known fallbacks immediately after the failed model so quota-saver mode
@@ -888,6 +892,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 continue
             }
             if (r.code in listOf(500, 502, 503, 504)) {
+                lastHttpStatus = r.code
                 // Temporary provider overload is not proof that the key or model is invalid.
                 // Try one alternate model from the same provider before moving to a backup provider.
                 lastNote = "$model -> HTTP ${r.code} ${r.body.replace("\n", " ").take(100)}"
@@ -918,12 +923,12 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         continue
                     }
                 }
-                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.")
+                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.", 502)
             }
             Prefs.setModel(ctx, p, vision, model)
             return content
         }
         val kind = if (vision) "vision" else "chat"
-        throw AiException("${p.label}: no $kind model worked. Last: $lastNote")
+        throw AiException("${p.label}: no $kind model worked. Last: $lastNote", lastHttpStatus)
     }
 }
