@@ -2102,7 +2102,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- tools: reading the screen
 
     fun readScreen(): String {
-        val root = rootInActiveWindow ?: return "error: cannot read this screen (it may be protected)"
+        val root = rootInActiveWindow ?: return "error: no accessibility root is available for the current screen. Check that Orion accessibility is enabled and connected and screen-access disclosure is accepted; wait for the screen to settle and retry read_screen once. If the screen is protected, stop rather than guessing taps."
         nodes.clear()
         ocrElements.clear()
         visualElements.clear()
