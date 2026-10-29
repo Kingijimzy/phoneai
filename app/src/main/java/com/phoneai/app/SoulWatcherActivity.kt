@@ -283,13 +283,13 @@ class SoulWatcherActivity : Activity() {
     private fun showProbeReport() {
         val report = runCatching { SoulP3Engine.probeReport(this) }
             .getOrElse { "Probe report unavailable: " + it.javaClass.simpleName }
-        addMessage("WATCHER", "PROBE RESULTS\\n" + report)
+        addMessage("WATCHER", "PROBE RESULTS\n" + report)
     }
 
     private fun showCompositionReport() {
         val report = runCatching { SoulP3Engine.compositionReport(this) }
             .getOrElse { "Composition report unavailable: " + it.javaClass.simpleName }
-        addMessage("WATCHER", "COMPOSITION DRAFTS\\n" + report)
+        addMessage("WATCHER", "COMPOSITION DRAFTS\n" + report)
     }
 
     private fun showProposals() {
