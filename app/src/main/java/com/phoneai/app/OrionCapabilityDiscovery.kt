@@ -59,6 +59,9 @@ internal object OrionCapabilityDiscovery {
             val reason = when {
                 pack == null -> "no capability-pack mapping; fail closed"
                 pack !in enabledPacks -> "capability pack '$pack' is disabled"
+                tool.name == "mcp_list_tools" && integrationStates["mcp_endpoint"] != "configured" -> "no MCP endpoint configured; open Settings to configure a remote MCP server"
+                tool.name == "mcp_call" && integrationStates["mcp_endpoint"] != "configured" -> "no MCP endpoint configured"
+                tool.name == "mcp_call" && integrationStates["mcp_pairing"] != "paired" -> "MCP endpoint is not locally paired"
                 tool.name == "termux_command" && !termuxReady -> "Termux bridge is not ready"
                 permissionRequirements[tool.name] != null &&
                     permissionStates[permissionRequirements.getValue(tool.name)] == PermissionState.MISSING ->
