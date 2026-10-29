@@ -992,6 +992,14 @@ class SettingsActivity : Activity() {
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
         val notifications = if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 33) "allowed" else "not allowed"
         val contacts = if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
+        val locationPermission = when {
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED -> "precise allowed"
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED -> "approximate allowed"
+            else -> "not allowed"
+        }
+        val locationEnabled = runCatching {
+            (getSystemService(LOCATION_SERVICE) as? android.location.LocationManager)?.getProviders(true)?.isNotEmpty() == true
+        }.getOrDefault(false)
         // Android 14+ restricts direct reads of enabled_input_methods for modern target SDKs.
         // Use the public InputMethodManager list instead, and guard the selected-method setting
         // because system settings access can vary by Android version/device policy.
@@ -1023,6 +1031,7 @@ class SettingsActivity : Activity() {
         sb.append("Microphone:    ").append(mic).append("\n")
         sb.append("Notifications: ").append(notifications).append("\n")
         sb.append("Contacts:      ").append(contacts).append("\n")
+        sb.append("Location:      ").append(locationPermission).append(" / device location ").append(if (locationEnabled) "on" else "off").append("\n")
         sb.append("Private keyboard: ").append(if (selectedKeyboard) "selected" else if (enabledKeyboard) "enabled, not selected" else "disabled").append("\n")
         sb.append("Notification access: ").append(if (notificationListener) "enabled" else "disabled").append("\n")
         sb.append("Overlay access: ").append(if (overlayAllowed) "allowed" else "missing").append("\n")
