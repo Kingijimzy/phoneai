@@ -76,6 +76,22 @@ class SoulEngineStateTest {
         assertFalse(SoulEngineState.reviewProposal(context, proposal.id, SoulEngineState.ProposalStatus.REJECTED))
     }
 
+    @Test fun watcherMaintenanceFindingsBecomeDeduplicatedReviewProposals() {
+        assertTrue(SoulEngineState.proposeWatchIssue(
+            context, "readiness", "Soul watcher found: screen_perception_unavailable",
+            "Review the Capability board and re-run the local capability audit."
+        ))
+        assertTrue(SoulEngineState.proposeWatchIssue(
+            context, "readiness", "Soul watcher found: screen_perception_unavailable",
+            "Review the Capability board and re-run the local capability audit."
+        ))
+        val proposals = SoulEngineState.snapshot(context).proposals
+        assertEquals(1, proposals.size)
+        assertEquals(SoulEngineState.ProposalKind.TOOL_GUIDANCE, proposals.single().kind)
+        assertEquals(SoulEngineState.ProposalStatus.PENDING, proposals.single().status)
+        assertTrue(proposals.single().detail.contains("proposal only"))
+    }
+
     @Test fun secretsAndUrlsAreNotKeptInSoulLabels() {
         assertTrue(SoulEngineState.setGoal(context, "Use api_key=abc123 to open https://example.com/private"))
         val saved = context.getSharedPreferences("orion_soul_state_v1", Context.MODE_PRIVATE).getString("state_json", "")!!
