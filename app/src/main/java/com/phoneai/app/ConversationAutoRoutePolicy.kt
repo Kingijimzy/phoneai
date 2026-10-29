@@ -19,6 +19,10 @@ internal object ConversationAutoRoutePolicy {
             "\\b(github|git hub)\\s+(?:repo|repository|project)\\s+[a-z0-9_.-]{2,100}\\b"
     )
 
+    private val repositoryNameBeforeType = Regex(
+        "(?i)\\b[a-z0-9_.-]{2,100}\\s+(?:github\\s+)?(?:repo|repository|project)\\b"
+    )
+
     private val explicitWebsiteVisit = Regex(
         "(?i)\\b(go to|visit|open|browse to|navigate to)\\s+(?:the\\s+)?[a-z0-9][a-z0-9.-]{1,100}\\s+(?:site|website|page)\\b|" +
             "\\b(go to|visit|open|browse to|navigate to)\\s+https?://"
@@ -30,6 +34,7 @@ internal object ConversationAutoRoutePolicy {
         return (runtimeVerb.containsMatchIn(text) && runtimeTarget.containsMatchIn(text) && runtimeState.containsMatchIn(text)) ||
             directRuntimeCommand.containsMatchIn(text) ||
             publicRepositoryInspection.containsMatchIn(text) ||
+            repositoryNameBeforeType.containsMatchIn(text) ||
             explicitWebsiteVisit.containsMatchIn(text)
     }
 }
