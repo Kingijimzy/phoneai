@@ -591,7 +591,9 @@ fun OrionComposeChatScreen(
                         textStyle = TextStyle(color = ChatCopy, fontSize = 14.sp, lineHeight = 21.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
-                            if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
+                            if (busy) {
+                                onStop()
+                            } else if (draft.isNotBlank() || selectedImages.isNotEmpty()) {
                                 val value = draft.trim()
                                 val original = editingOriginal
                                 if (original != null && value.isNotBlank()) onEditSend(original, value) else onSend(value)
