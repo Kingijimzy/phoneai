@@ -112,6 +112,36 @@ internal object SoulEngineState {
         write(context, o)
     }
 
+    /** Add a sanitized, review-only maintenance proposal from a real watcher finding. */
+    fun proposeWatchIssue(context: Context, category: String, issue: String, suggestion: String): Boolean = synchronized(lock) {
+        val safeIssue = safeText(issue, 220)
+        val safeSuggestion = safeText(suggestion, 360)
+        if (safeIssue.isBlank() || safeIssue == "[sensitive content omitted]") return@synchronized false
+        val o = read(context)
+        val current = proposals(o)
+        val duplicate = current.firstOrNull {
+            it.status == ProposalStatus.PENDING && it.kind == ProposalKind.TOOL_GUIDANCE &&
+                it.title.equals(safeIssue, ignoreCase = true)
+        }
+        if (duplicate != null) return@synchronized true
+        val now = System.currentTimeMillis()
+        val proposal = Proposal(
+            id = java.util.UUID.randomUUID().toString(),
+            kind = ProposalKind.TOOL_GUIDANCE,
+            title = safeIssue,
+            detail = safeSuggestion + " This is a proposal only; no setting, permission, source file, or tool behavior was changed.",
+            allowedTools = emptyList(),
+            status = ProposalStatus.PENDING,
+            evidenceCount = 1,
+            createdAt = now,
+            updatedAt = now
+        )
+        o.put("proposals", JSONArray().also { a ->
+            (current + proposal).takeLast(MAX_ITEMS).forEach { a.put(it.json()) }
+        }).put("lastTick", now)
+        write(context, o)
+    }
+
     /** Called only after a durable completed checkpoint; candidates never execute themselves. */
     fun learnFromCompletedCheckpoint(context: Context, checkpoint: JSONObject): Boolean = synchronized(lock) {
         val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
