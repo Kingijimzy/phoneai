@@ -231,3 +231,30 @@ internal object StepStatusText {
         else -> "Stopped"
     }
 }
+
+/** The model's optional plan for a multi-step task: parsed, bounded, and carried in one chat note. */
+internal object PlanNote {
+    const val PREFIX = "[TASK:PLANNED]"
+    const val MAX_STEPS = 6
+    const val MAX_TITLE = 80
+
+    /** Plain titles only: trims, drops blanks and duplicates, bounds the count and length. */
+    fun clean(raw: List<String>): List<String> =
+        raw.map { it.replace(Regex("\\s+"), " ").trim().take(MAX_TITLE) }.filter { it.isNotEmpty() }.distinct().take(MAX_STEPS)
+
+    fun format(titles: List<String>): String? {
+        val t = clean(titles)
+        if (t.size < 2) return null // a one-step "plan" is just the action itself
+        return PREFIX + "\n" + t.withIndex().joinToString("\n") { (i, s) -> "${i + 1}. $s" }
+    }
+
+    fun parse(note: String): List<String> =
+        if (!note.startsWith(PREFIX)) emptyList()
+        else note.lineSequence().drop(1).map { it.replace(Regex("^\\d+\\.\\s*"), "").trim() }.filter { it.isNotEmpty() }.toList()
+
+    /** The newest plan of the current task (after the last user message), or empty. */
+    fun current(lines: List<StepLine>): List<String> {
+        val start = lines.indexOfLast { it.kind == "me" } + 1
+        return lines.drop(start).lastOrNull { it.kind == "note" && it.text.startsWith(PREFIX) }?.let { parse(it.text) }.orEmpty()
+    }
+}
