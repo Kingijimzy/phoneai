@@ -381,7 +381,7 @@ private fun TaskActivityCard(raw: String) {
     val state = Regex("^\\[TASK:([A-Z_]+)]").find(raw)?.groupValues?.getOrNull(1).orEmpty()
     val failed = state == "FAILED"
     val running = state == "RUNNING" || state == "EXECUTE"
-    val blocked = state == "BLOCKED"
+    val blocked = state == "BLOCKED" || state == "APPROVAL" || state == "DENIED"
     val cancelled = state == "CANCELLED"
     val recovering = state == "RECOVER"
     val detail = raw.substringAfter("\n", raw).trim()
@@ -391,6 +391,9 @@ private fun TaskActivityCard(raw: String) {
         blocked -> "WAITING · NEEDS ATTENTION"
         cancelled -> "TASK CANCELLED"
         recovering -> "RECOVERING · REPLANNING"
+        state == "APPROVAL" -> "WAITING FOR YOUR APPROVAL"
+        state == "APPROVED" -> "APPROVED"
+        state == "DENIED" -> "NOT APPROVED"
         state == "PLAN" -> "PLANNING"
         state == "CHECK_CAPABILITIES" -> "CHECKING CAPABILITIES"
         state == "AUTHORIZE" -> "CHECKING APPROVALS"

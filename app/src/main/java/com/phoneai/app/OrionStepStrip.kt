@@ -55,27 +55,18 @@ internal fun OrionStepStrip(lines: List<OrionChatLine>, modifier: Modifier = Mod
     val taskState = remember(stepLines) { StepTracker.taskState(stepLines) }
     if (steps.isEmpty()) return
 
-    var index by remember { mutableIntStateOf(steps.lastIndex) }
+    // Keyed by the conversation's first line so switching chats never carries a pager position over.
+    var index by remember(lines.firstOrNull()?.id) { mutableIntStateOf(steps.lastIndex) }
     var now by remember { mutableLongStateOf(System.nanoTime()) }
     val anyActive = steps.any { it.active }
     // When a step is added, follow the newest unless the user is looking at one that is still running.
-    LaunchedEffect(steps.size) { index = StepPager.follow(index.coerceIn(0, steps.lastIndex), steps) }
+    LaunchedEffect(lines.firstOrNull()?.id, steps.size) { index = StepPager.follow(index.coerceIn(0, steps.lastIndex), steps) }
     LaunchedEffect(anyActive) { while (anyActive) { now = System.nanoTime(); delay(1000) } }
 
     val shown = index.coerceIn(0, steps.lastIndex)
     val step = steps[shown]
     val duration = step.durationLabel(now)
-    val recovering = taskState == StepTracker.TaskState.RECOVERING
-    val waiting = taskState == StepTracker.TaskState.WAITING
-    val statusText = when {
-        step.status == StepStatus.RUNNING && step.retries > 0 -> "Retrying ${step.retries}/${RecoveryPolicy.MAX_READ_RETRIES}"
-        step.status == StepStatus.RUNNING -> "Running"
-        step.status == StepStatus.SUCCESS -> "Done"
-        step.status == StepStatus.FAILED && recovering -> "Failed · replanning"
-        step.status == StepStatus.FAILED && waiting -> "Failed · waiting for you"
-        step.status == StepStatus.FAILED -> "Failed"
-        else -> "Stopped"
-    }
+    val statusText = StepStatusText.of(step, taskState, RecoveryPolicy.MAX_READ_RETRIES)
     val failed = step.status == StepStatus.FAILED || step.status == StepStatus.CANCELLED
     val pagerLabel = StepPager.label(shown, steps.size)
 
