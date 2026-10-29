@@ -37,7 +37,6 @@ class StandingOrderPolicyTest {
     @Test fun emptyAndErrorResultsNeverTriggerAlertsRegardlessOfCase() {
         org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "ERROR: provider offline"))
         org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "nothing new today"))
-        org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "Header
-0 matching message(s)."))
+        org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "Header\n0 matching message(s)."))
     }
 }
