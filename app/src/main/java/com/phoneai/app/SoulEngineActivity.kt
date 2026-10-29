@@ -88,6 +88,9 @@ class SoulEngineActivity : ComponentActivity() {
             val savedTasks = runCatching { TaskStore.all(this).size }.getOrDefault(0)
             val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
             val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
+            val soulState = runCatching { SoulEngineState.snapshot(this) }.getOrNull()
+            val pendingProposals = soulState?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0
+            val lessonCount = soulState?.lessons?.size ?: 0
             val serviceReady = PhoneAiService.instance != null
             // The built-in shell is Orion-owned; its readiness must not depend on an optional
             // external terminal app or bridge being installed.
@@ -97,8 +100,9 @@ class SoulEngineActivity : ComponentActivity() {
             val status = when {
                 tools == 0 || packs == 0 -> "BLOCKED · core registry unavailable"
                 !coreEnabledState.value -> "PAUSED · Soul Engine core is switched off"
-                !serviceReady || enabled == 0 -> "LIMITED · service or capability packs need attention"
-                else -> "READY FOR CHECKS · live workflows still require testing"
+                !serviceReady -> "STOPPED · phone service is not connected"
+                enabled == 0 -> "LIMITED · no implemented capability packs are enabled"
+                else -> "MONITORING · service connected; actions remain policy-gated"
             }
             statusState.value = status
             metricsState.value = buildString {
@@ -107,7 +111,9 @@ class SoulEngineActivity : ComponentActivity() {
                 appendLine("$providerKeys provider keys saved (saved does not mean verified)")
                 appendLine("$verified / ${services.count { it.secretAvailable }} saved service connections verified")
                 appendLine("$savedTasks saved tasks · $memoryCount memories · $knowledgeCount knowledge documents")
-                append("Phone service: ${if (serviceReady) "connected" else "not connected"} · shell: ${if (shellReady) "ready" else "limited"}")
+                appendLine("$pendingProposals learning proposals awaiting review · $lessonCount persisted lessons")
+                appendLine("Active goal: ${soulState?.goal?.ifBlank { "none saved" } ?: "state unavailable"}")
+                append("Phone service: ${if (serviceReady) "connected" else "not connected"} · shell: ${if (shellReady) "ready" else "limited"} · route learning: ${if (Prefs.routeLearning(this)) "enabled" else "off"}")
             }
         } catch (error: Exception) {
             Log.e(TAG, "Soul Engine live snapshot failed", error)
