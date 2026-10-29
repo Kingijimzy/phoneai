@@ -2102,7 +2102,28 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- tools: reading the screen
 
     fun readScreen(): String {
-        val root = rootInActiveWindow ?: return "error: no accessibility root is available for the current screen. Check that Orion accessibility is enabled and connected and screen-access disclosure is accepted; wait for the screen to settle and retry read_screen once. If the screen is protected, stop rather than guessing taps."
+        // Android can briefly return null during app/window transitions even when the service
+        // remains connected. Retry a few short times before reporting a genuine missing root.
+        var root = rootInActiveWindow
+        var rootAttempts = 0
+        while (root == null && rootAttempts < 3) {
+            try {
+                Thread.sleep(120L)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+            root = rootInActiveWindow
+            rootAttempts++
+        }
+        if (root == null) {
+            val serviceReady = runCatching { serviceInfo != null }.getOrDefault(false)
+            return if (serviceReady) {
+                "error: Android has not exposed an accessibility root for the current window after a short retry. The service is connected; the app may still be transitioning, a system surface may be active, or the window may not expose accessibility nodes. Wait for the target app to settle and retry once; do not infer that accessibility permission is missing."
+            } else {
+                "error: Orion accessibility service is not connected. Enable Orion in Android Accessibility settings, return to the target app, then retry screen reading."
+            }
+        }
         nodes.clear()
         ocrElements.clear()
         visualElements.clear()
