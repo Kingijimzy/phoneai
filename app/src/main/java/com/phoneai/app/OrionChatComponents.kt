@@ -256,7 +256,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                 }
                 when {
                     note && item.text.startsWith("[SHELL:") -> ShellActivityCard(item.text)
-                    note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text, onOpenBrowser)
+                    note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text) { url -> onOpenBrowser(url) }
                     note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
                     else -> {
                         if (!mine && !note) {
