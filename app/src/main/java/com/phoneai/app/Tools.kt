@@ -250,8 +250,8 @@ class Tools(private val svc: PhoneAiService) {
                             android.util.Base64.decode(encoded, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
                         } catch (_: Exception) { "" }
                         if (decoded.isBlank()) "error: GitHub returned README content that could not be decoded."
-                        else "README for $owner/$repository:\\n" + decoded.take(6000) +
-                            "\\n\\nSource: " + obj.optString("html_url", "https://github.com/$owner/$repository")
+                        else "README for $owner/$repository:\n" + decoded.take(6000) +
+                            "\n\nSource: " + obj.optString("html_url", "https://github.com/$owner/$repository")
                     }
                 }
                 "run" -> {
