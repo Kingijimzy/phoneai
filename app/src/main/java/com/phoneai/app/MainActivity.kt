@@ -182,7 +182,8 @@ class MainActivity : ComponentActivity() {
                     onOpenTrading = { startActivity(Intent(this@MainActivity, TradingActivity::class.java)) },
                     onOpenMemory = { startActivity(Intent(this@MainActivity, MemoryActivity::class.java)) },
                     onOpenAgents = { startActivity(Intent(this@MainActivity, AgentsActivity::class.java)) },
-                    onOpenSoulEngine = { startActivity(Intent(this@MainActivity, SoulEngineActivity::class.java)) }
+                    onOpenSoulEngine = { startActivity(Intent(this@MainActivity, SoulEngineActivity::class.java)) },
+                    onOpenExtensions = { startActivity(Intent(this@MainActivity, SelfExtensionLabActivity::class.java)) }
                 )
             }
         }
