@@ -126,7 +126,7 @@ class SoulEngineActivity : ComponentActivity() {
                 appendLine("$pendingProposals learning proposals awaiting review · $lessonCount persisted lessons")
                 appendLine("Active goal: ${soulState?.goal?.ifBlank { "none saved" } ?: "state unavailable"}")
                 appendLine("Watcher: ${soulState?.watcherStatus?.ifBlank { "waiting for first tick" } ?: "state unavailable"} · ${soulState?.watcherAction?.ifBlank { "no action yet" } ?: "state unavailable"}")
-                append("Phone service: ${if (serviceReady) "connected" else "not connected"} · shell: ${if (shellReady) "ready" else "limited"} · route learning: ${if (Prefs.routeLearning(this)) "enabled" else "off"}")
+                append("Phone service: ${if (serviceReady) "connected" else "not connected"} · shell: ${if (shellReady) "ready" else "limited"} · route learning: ${if (Prefs.routeLearning(this@SoulEngineActivity)) "enabled" else "off"}")
             }
         } catch (error: Exception) {
             Log.e(TAG, "Soul Engine live snapshot failed", error)
