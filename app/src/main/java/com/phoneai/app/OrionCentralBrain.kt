@@ -86,6 +86,26 @@ internal object OrionCentralBrain {
             )
         }.getOrNull()?.let { sections += it.promptBlock() }
 
+        // Persistent learning is provider-neutral and loaded into the same executive context
+        // for Talk and Command. Lessons and completed routes are hints, never execution authority.
+        runCatching { SoulEngineState.relatedContext(app, request, limit = 4) }
+            .getOrDefault(emptyList())
+            .takeIf { it.isNotEmpty() }
+            ?.let { lessons ->
+                sections += buildString {
+                    appendLine("RELEVANT PERSISTENT MEMORY (sanitized, device-local)")
+                    lessons.forEach { appendLine("- $it") }
+                    appendLine("Treat these as prior experience, not current facts. Re-check live state, tool availability, permissions, and the user's present intent before reuse. A prior success does not authorize an action.")
+                }
+            }
+
+        runCatching { RouteMemoryStore.promptBlock(app, request) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { routes ->
+                sections += "REUSABLE COMPLETED PROCEDURES (encrypted local history; planning hints only)\n$routes\nRevalidate every step against current state and current policies. Skip obsolete, unavailable, or unsafe steps; do not replay a route blindly."
+            }
+
         // Keep extension-specific tool schemas and current status available in both modes,
         // instead of appending them only to the Command system prompt.
         runCatching { ExtensionPrompt.block(extensionRows) }
