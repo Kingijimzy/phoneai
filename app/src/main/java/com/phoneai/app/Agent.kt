@@ -231,15 +231,23 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
+        val mcpScope = if (tool == "mcp_call") McpConnector.scopeForTool(args.optString("name")) else ""
+        val mcpReadScopeGranted = tool == "mcp_call" &&
+            mcpScope == "read" &&
+            McpConnector.configured(svc) &&
+            McpConnector.isPaired(svc) &&
+            "read" in McpConnector.scopes(svc) &&
+            ToolPermissions.mode(svc, tool) != ToolMode.DENY
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
-            tool in consequentialTools ||
+            (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
+        // A paired MCP endpoint plus an explicitly enabled read scope is already a standing
+        // user grant for read-only remote tools. Do not ask again for every read call.
+        val effectiveToolMode = if (mcpReadScopeGranted) ToolMode.ALLOW else ToolPermissions.mode(svc, tool)
         val gate = AgentPolicy.gate(
             svc, pack, tool,
-            // Per-tool ALLOW is authoritative for routine work. Only actions classified as
-            // consequential keep the separate confirmation requirement.
             dangerous = consequential,
-            toolMode = ToolPermissions.mode(svc, tool),
+            toolMode = effectiveToolMode,
             askedThisTask = tool in askApproved
         )
         var policyApproved = false
@@ -259,15 +267,26 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 askApproved.add(tool)
             }
             GatePolicy.Verdict.NEED_APPROVAL -> {
-                val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
-                val approved = confirm("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
-                AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
-                if (!approved) {
-                    val denied = "error: user did not approve this tool action."
-                    taskProofs.record(tool, denied)
-                    return denied
+                // These tools present a more specific confirmation at the action boundary.
+                // Showing both this generic dialog and the detailed dialog caused duplicate prompts.
+                val actionSpecificConfirmation = tool in setOf(
+                    "mcp_call", "telegram_send", "sms", "notification_action",
+                    "browser_click", "browser_click_verify"
+                )
+                if (actionSpecificConfirmation) {
+                    policyApproved = true
+                    AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
+                } else {
+                    val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
+                    val approved = confirm("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
+                    AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
+                    if (!approved) {
+                        val denied = "error: user did not approve this tool action."
+                        taskProofs.record(tool, denied)
+                        return denied
+                    }
+                    policyApproved = true
                 }
-                policyApproved = true
             }
             GatePolicy.Verdict.ALLOW -> {
                 AgentPolicy.log(svc, tool, "dispatch", null, "allowed by selected approval policy")
@@ -2256,13 +2275,15 @@ Rules:
                 val name = a.optString("name").trim()
                 val args = a.optJSONObject("arguments") ?: JSONObject()
                 val host = try { java.net.URI(McpConnector.endpoint(svc)).host ?: "unknown host" } catch (_: Exception) { "unknown host" }
+                val scope = McpConnector.scopeForTool(name)
                 when {
                     !McpConnector.configured(svc) -> "error: no MCP endpoint configured. Open Orion Settings → Configure remote MCP server."
                     !McpConnector.isPaired(svc) -> "error: MCP endpoint is not locally paired. Pair it in Orion Settings before making remote calls."
                     name.isBlank() -> "error: an exact advertised MCP tool name is required."
-                    McpConnector.scopeForTool(name) !in McpConnector.scopes(svc) ->
-                        "error: MCP tool '" + name + "' requires the '" + McpConnector.scopeForTool(name) + "' scope, which is disabled."
-                    confirm("Remote MCP server: " + host + ". Tool: " + name + ". Arguments to send: " + args.toString().take(1200) + ". Approve this exact remote call?") ->
+                    scope !in McpConnector.scopes(svc) ->
+                        "error: MCP tool '" + name + "' requires the '" + scope + "' scope, which is disabled."
+                    scope == "read" -> tools.mcpCall(name, args)
+                    confirm("Remote MCP server: " + host + ". Tool: " + name + ". Scope: " + scope + ". Arguments to send: " + args.toString().take(1200) + ". Approve this remote action?") ->
                         tools.mcpCall(name, args)
                     else -> "error: user cancelled MCP tool call"
                 }
