@@ -44,7 +44,7 @@ internal object StandingOrderPolicy {
             normalized.startsWith("Nothing new", ignoreCase = true) ||
             normalized.endsWith("(empty result)", ignoreCase = true)) return false
         // Connector replies carry a header line; an empty list means nothing to say.
-        if (Regex("(?im)^\\\\s*0 matching message\\\\(s\\\\)\\\\.\\\\s*$").containsMatchIn(normalized)) return false
+        if (Regex("(?im)^\\s*0 matching message\\(s\\)\\.\\s*$").containsMatchIn(normalized)) return false
         return digestFor(kind, normalized, dayKey) != previousDigest
     }
 
