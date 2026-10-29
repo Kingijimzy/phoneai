@@ -68,3 +68,32 @@ Do not remove Android OS permissions, explicit DENY decisions, cancellation, cre
 ## Current verification status
 
 Source changes are pushed to the existing PR branch. Automated CI and physical-device acceptance must pass before these items are considered verified. This document records gaps, not a claim of complete nanoMuse parity.
+
+## Self-extending extensions (new work)
+
+The initial lifecycle primitives live in `SelfExtendingExtensions.kt`:
+
+1. **Gap / proposal:** the caller must identify a missing capability and request a bounded extension proposal; a proposal is not automatically treated as a registered tool.
+2. **Generate:** accept only a named Python or JavaScript source artifact within the size limit. Source validation rejects several common dangerous imports/host escapes, but this is only an early filter, not a sandbox.
+3. **Test:** use the `ExtensionSandbox` boundary. The production implementation must run generated code outside the main app process with no network by default, no direct Android Context or shell access, bounded execution time/output, and a narrow capability bridge. Do not wire Chaquopy in-process execution into this boundary and call it sandboxed.
+4. **Register:** `SelfExtendingExtensionStore` persists drafts with `AtomicFile`, source hash, verification state, and disabled-by-default status. Corrupt registry data and failed writes fail closed.
+5. **Promote:** promotion requires a successful report for the exact source hash plus explicit user approval. Changed source invalidates an old report.
+6. **Execute:** only enabled, verified, hash-matching extensions can be looked up. The actual sandbox runner must still enforce capabilities and permissions at execution time.
+7. **Learn:** retain test outcomes and failure reasons as evidence for a later revision; do not silently mutate or overwrite a previously verified source.
+
+### Important implementation boundary
+
+This commit establishes the persistent lifecycle and its safety tests; it does **not yet complete** the production isolated-process Python/JavaScript runtime, automatic LLM source generation from a live chat gap, sandbox resource limits, or Agent tool-dispatch integration. Those are the remaining acceptance gates before claiming the feature is operational end-to-end. The `ExtensionSandbox` interface intentionally makes this gap explicit instead of pretending ordinary in-process execution is secure.
+
+### Self-extension acceptance checklist
+
+- [x] Stable extension identity and runtime allowlist.
+- [x] Source-size and early restricted-operation checks.
+- [x] Source hash binding between tested and promoted artifact.
+- [x] Disabled-by-default persistence; duplicate IDs rejected.
+- [x] Explicit approval required for promotion.
+- [x] Corrupt registry fails closed without overwriting evidence.
+- [ ] Real isolated-process sandbox with CPU/time/memory/output limits.
+- [ ] Chat gap detector -> generated draft -> sandbox test -> user approval -> tool registry -> verified execution flow.
+- [ ] Runtime permission checks for every capability call, including after registration.
+- [ ] On-device acceptance tests for process death, interrupted tests, cancellation and resource exhaustion.
