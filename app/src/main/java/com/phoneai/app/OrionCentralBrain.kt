@@ -75,6 +75,17 @@ internal object OrionCentralBrain {
         }.getOrNull()
         checkpointSummary?.let { sections += it }
 
+        // Capability gap planning is derived from the same live registries as execution.
+        // It prefers reuse and only instructs research/drafting when local evidence is weak.
+        runCatching {
+            CapabilityGapPlanner.assess(
+                request = request,
+                registeredTools = ToolRegistry.all,
+                enabledSkills = enabledSkills,
+                extensions = extensionRows
+            )
+        }.getOrNull()?.let { sections += it.promptBlock() }
+
         // Keep extension-specific tool schemas and current status available in both modes,
         // instead of appending them only to the Command system prompt.
         runCatching { ExtensionPrompt.block(extensionRows) }
