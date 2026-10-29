@@ -56,6 +56,25 @@ internal object OrionCentralBrain {
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 
+        // Feed the real durable action checkpoint into the same brain. Deliberately expose
+        // only progress metadata, never stored command text, arguments, or tool payloads.
+        val checkpointSummary = runCatching {
+            val saved = AgentCheckpointStore.pending(app)
+            if (saved == null) null else {
+                val steps = saved.optJSONArray("steps")
+                val active = saved.optJSONObject("inFlight")
+                val status = saved.optString("status", "unknown").take(40)
+                val notice = saved.optString("recoveryNotice", "").replace(Regex("\\s+"), " ").take(220)
+                buildString {
+                    appendLine("DURABLE EXECUTION CHECKPOINT")
+                    appendLine("status=$status; verified_recorded_steps=${steps?.length() ?: 0}; in_flight_tool=${active?.optString("tool", "unknown") ?: "none"}.")
+                    if (notice.isNotBlank()) appendLine("recovery_notice=$notice")
+                    appendLine("Resume from this checkpoint when it belongs to the user's current goal. If an in-flight action remains unresolved, inspect its outcome before any possible repeat. Do not restart completed steps without evidence that they need repeating.")
+                }
+            }
+        }.getOrNull()
+        checkpointSummary?.let { sections += it }
+
         // Keep extension-specific tool schemas and current status available in both modes,
         // instead of appending them only to the Command system prompt.
         runCatching { ExtensionPrompt.block(extensionRows) }
