@@ -1356,8 +1356,9 @@ class SettingsActivity : Activity() {
                     box.error = "Paste an API key first"
                     return@setOnClickListener
                 }
-                val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
-                val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
+                // Saving a key must not change provider routing. The Chat AI and
+                // Screen-vision AI pickers own their independent selections; providerDialog()
+                // saves the chosen route before opening this key dialog.
                 if (!Prefs.setKey(this, p.id, k)) {
                     AlertDialog.Builder(this)
                         .setTitle("Secure storage unavailable")
@@ -1366,8 +1367,6 @@ class SettingsActivity : Activity() {
                         .show()
                     return@setOnClickListener
                 }
-                if (chatNeeds) Prefs.setProvider(this, false, p.id)
-                if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
                 dialog.dismiss()
                 Toast.makeText(this, p.label + " key saved securely.", Toast.LENGTH_SHORT).show()
                 refresh()
