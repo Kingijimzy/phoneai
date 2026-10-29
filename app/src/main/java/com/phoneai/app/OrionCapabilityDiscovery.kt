@@ -44,7 +44,8 @@ internal object OrionCapabilityDiscovery {
         "read_notifications" to "notification_access",
         "media_status" to "notification_access",
         "media_control" to "notification_access",
-        "resolve_contact" to "contacts"
+        "resolve_contact" to "contacts",
+        "device_location" to "location"
     )
 
     fun discover(
