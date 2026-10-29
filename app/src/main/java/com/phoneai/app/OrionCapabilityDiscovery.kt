@@ -35,6 +35,7 @@ internal object OrionCapabilityDiscovery {
                 lines += "Observed integration states: " + integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" } + "."
             }
             lines += "Capability rule: only available registered tools may be selected. Unknown permission or connection state is not permission to act. Verify each action with observable output."
+            lines += "GRANTED CAPABILITY RULE: when a tool is registered, its pack is enabled, and its declared prerequisites are satisfied, use it fully for the requested task. Do not invent extra application-level restrictions, silently narrow its documented functions, or ask for duplicate consent. Still honor actual Android OS/runtime permissions, real connection/authentication requirements, explicit confirmations required for consequential actions, cancellation, and tool errors. If unavailable, name the exact unmet prerequisite and continue with a compatible registered alternative when possible."
             return lines
         }
     }
