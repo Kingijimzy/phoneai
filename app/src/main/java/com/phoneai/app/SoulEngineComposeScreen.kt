@@ -74,7 +74,7 @@ private val EngineMuted = Color(0xFF9A9DA1)
 private val EngineBlue = Color(0xFF7EA9D6)
 
 @Composable
-fun SoulEngineComposeScreen(
+internal fun SoulEngineComposeScreen(
     status: String,
     metrics: String,
     selfTest: String,
