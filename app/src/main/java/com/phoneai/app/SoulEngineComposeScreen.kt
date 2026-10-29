@@ -39,14 +39,20 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,8 +91,12 @@ fun SoulEngineComposeScreen(
     onOpenTeach: () -> Unit,
     coreEnabled: Boolean,
     onCoreEnabledChange: (Boolean) -> Unit,
-    onOpenExtensions: () -> Unit
+    onOpenExtensions: () -> Unit,
+    proposals: List<SoulEngineState.Proposal>,
+    onReviewProposal: (String, SoulEngineState.ProposalStatus, String?) -> Unit
 ) {
+    var editingProposal by remember { mutableStateOf<SoulEngineState.Proposal?>(null) }
+    var editedTitle by remember { mutableStateOf("") }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = EngineSilver,
         onPrimary = EngineInk,
@@ -167,6 +177,62 @@ fun SoulEngineComposeScreen(
                             Text(selfTest, color = EngineSilver, fontSize = 11.sp, lineHeight = 16.sp)
                         }
                     }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionTitle("LEARNING PROPOSALS", "Evidence-backed suggestions · nothing changes without review")
+                    val pending = proposals.filter { it.status == SoulEngineState.ProposalStatus.PENDING }
+                    if (pending.isEmpty()) {
+                        Text("No proposals waiting. Verified multi-step tasks may create a candidate when route learning is enabled.", color = EngineMuted, fontSize = 12.sp, lineHeight = 18.sp)
+                    } else {
+                        pending.take(5).forEach { proposal ->
+                            Column(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(EnginePanel)
+                                    .border(1.dp, EngineLine, RoundedCornerShape(16.dp)).padding(13.dp),
+                                verticalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                Text(proposal.title, color = EngineWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(proposal.detail, color = EngineMuted, fontSize = 11.sp, lineHeight = 16.sp)
+                                Text("Evidence: ${proposal.evidenceCount} · Type: ${proposal.kind.name.lowercase()}", color = EngineSilver, fontSize = 10.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(onClick = { onReviewProposal(proposal.id, SoulEngineState.ProposalStatus.ACCEPTED, null) }) {
+                                        Text("Accept", color = EngineWhite)
+                                    }
+                                    TextButton(onClick = { editingProposal = proposal; editedTitle = proposal.title }) {
+                                        Text("Edit", color = EngineSilver)
+                                    }
+                                    TextButton(onClick = { onReviewProposal(proposal.id, SoulEngineState.ProposalStatus.REJECTED, null) }) {
+                                        Text("Reject", color = EngineMuted)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (editingProposal != null) {
+                    AlertDialog(
+                        onDismissRequest = { editingProposal = null },
+                        title = { Text("Edit learning proposal", color = EngineWhite) },
+                        text = {
+                            OutlinedTextField(
+                                value = editedTitle,
+                                onValueChange = { editedTitle = it.take(180) },
+                                label = { Text("Proposal title") },
+                                singleLine = true
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                editingProposal?.let { onReviewProposal(it.id, SoulEngineState.ProposalStatus.EDITED, editedTitle) }
+                                editingProposal = null
+                            }) { Text("Save", color = EngineWhite) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { editingProposal = null }) { Text("Cancel", color = EngineMuted) }
+                        },
+                        containerColor = EnginePanel
+                    )
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
