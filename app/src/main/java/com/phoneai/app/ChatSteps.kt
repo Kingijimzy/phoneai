@@ -125,7 +125,7 @@ internal object StepTracker {
     }
 
     /** What the task as a whole is doing right now, from the newest lifecycle note after the last user message. */
-    enum class TaskState { NONE, WORKING, RECOVERING, WAITING, CANCELLED, FAILED, DONE }
+    enum class TaskState { NONE, WORKING, RECOVERING, WAITING, APPROVAL, CANCELLED, FAILED, DONE }
 
     fun taskState(lines: List<StepLine>): TaskState {
         val start = lines.indexOfLast { it.kind == "me" } + 1
@@ -135,6 +135,8 @@ internal object StepTracker {
             val t = line.text
             state = when {
                 t.startsWith("[TASK:RECOVER]") -> TaskState.RECOVERING
+                t.startsWith("[TASK:APPROVAL]") -> TaskState.APPROVAL
+                t.startsWith("[TASK:APPROVED]") || t.startsWith("[TASK:DENIED]") -> TaskState.WORKING
                 t.startsWith("[TASK:BLOCKED]") -> TaskState.WAITING
                 t.startsWith("[TASK:CANCELLED]") -> TaskState.CANCELLED
                 t.startsWith("[TASK:COMPLETE]") || t.startsWith("[TASK:RECORD]") -> TaskState.DONE
@@ -212,5 +214,20 @@ internal object ChatMood {
         mood == Mood.ERROR -> "Something went wrong"
         mood == Mood.HAPPY -> "Done"
         else -> "Ready"
+    }
+}
+
+/** The one-line status shown for a step in the strip. Pure so every state is unit tested. */
+internal object StepStatusText {
+    fun of(step: ToolStep, state: StepTracker.TaskState, maxReadRetries: Int): String = when {
+        step.status == StepStatus.RUNNING && state == StepTracker.TaskState.APPROVAL -> "Waiting for your approval"
+        step.status == StepStatus.RUNNING && step.retries > 0 -> "Retrying ${step.retries}/$maxReadRetries"
+        step.status == StepStatus.RUNNING -> "Running"
+        step.status == StepStatus.SUCCESS -> "Done"
+        step.status == StepStatus.FAILED && state == StepTracker.TaskState.RECOVERING -> "Failed · replanning"
+        step.status == StepStatus.FAILED && state == StepTracker.TaskState.WAITING -> "Failed · waiting for you"
+        step.status == StepStatus.FAILED -> "Failed"
+        step.status == StepStatus.CANCELLED && state == StepTracker.TaskState.CANCELLED -> "Cancelled"
+        else -> "Stopped"
     }
 }

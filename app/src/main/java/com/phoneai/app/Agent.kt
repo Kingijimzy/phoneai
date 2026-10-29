@@ -47,7 +47,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val ranSteps = JSONArray()
     private val local = Local(
         svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
-        { q -> ui.ask(q) }, { ins, data -> aiOneShot(ins, data) }
+        { q -> confirm(q) }, { ins, data -> aiOneShot(ins, data) }
     )
     private val history = JSONArray()
 
@@ -126,6 +126,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
 
+    /**
+     * Every approval prompt goes through here so the chat gets a real event. The note carries no payload
+     * (the question can contain message text or arguments); the dialog itself shows the details.
+     */
+    private fun confirm(question: String): Boolean {
+        ui.note("[TASK:APPROVAL]\nWaiting for your approval")
+        val ok = ui.ask(question)
+        ui.note(if (ok) "[TASK:APPROVED]\nApproved by you" else "[TASK:DENIED]\nNot approved; the action was not run")
+        return ok
+    }
+
     private val consequentialTools = setOf("telegram_send", "notification_action", "mcp_call", "sms", "python_exec")
 
     /** Risk used by recovery. Mirrors the dispatcher's consequential classification so recovery never loosens it. */
@@ -167,7 +178,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val cmd = args.optString("command"); val where = if (args.optString("where").equals("termux", true)) "Termux" else "built-in shell"
             when (ShellPolicy.classify(cmd)) {
                 ShellRisk.BLOCKED -> return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user."
-                ShellRisk.ASK -> if (!ui.ask("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
+                ShellRisk.ASK -> if (!confirm("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
                     val declined = "error: user did not approve running this command."
                     taskProofs.record(tool, declined); return declined
                 }
@@ -236,7 +247,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return blocked
             }
             GatePolicy.Verdict.ASK_TOOL -> {
-                if (!ui.ask("Allow Orion to use the tool '$tool' for this task?")) {
+                if (!confirm("Allow Orion to use the tool '$tool' for this task?")) {
                     val declined = "error: user did not approve using '$tool'."
                     taskProofs.record(tool, declined)
                     return declined
@@ -245,7 +256,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.NEED_APPROVAL -> {
                 val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
-                val approved = ui.ask("Approve Orion tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\n$action\\n\\nRun this action once?")
+                val approved = confirm("Approve Orion tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\n$action\\n\\nRun this action once?")
                 AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
                 if (!approved) {
                     val denied = "error: user did not approve this tool action."
@@ -265,7 +276,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 "undo_last" -> "Undo the most recent action"
                 else -> "Proceed with the action " + (if (targetLabel.isBlank()) tool else targetLabel) + ". This may change or submit information."
             }
-            if (!ui.ask(description + "?")) {
+            if (!confirm(description + "?")) {
                 val denied = "error: user did not approve the consequential action."
                 taskProofs.record(tool, denied)
                 return denied
@@ -845,7 +856,7 @@ Rules:
                 return true
             }
             val alreadyApproved = svc.consumeRoutineReplayApproval(name)
-            if (!alreadyApproved && !ui.ask("Replay '$name' (${steps.length()} recorded gestures)? It can tap buttons or submit data in the target app. I will verify screen fingerprints and stop if the screen differs.")) {
+            if (!alreadyApproved && !confirm("Replay '$name' (${steps.length()} recorded gestures)? It can tap buttons or submit data in the target app. I will verify screen fingerprints and stop if the screen differs.")) {
                 ui.say("Routine replay cancelled. No gestures were performed.")
                 return true
             }
@@ -1082,7 +1093,7 @@ Rules:
                 return
             }
             if (AgentCheckpointStore.needsRecoveryConfirmation(svc)) {
-                val confirmed = ui.ask(
+                val confirmed = confirm(
                     "The app stopped while an action was in progress, so it may already have happened. Please inspect the phone screen or relevant app state first. Have you checked what happened? Select yes only after checking; otherwise choose no and I will leave the task paused."
                 )
                 if (!confirmed) {
@@ -1633,7 +1644,7 @@ Rules:
                 true
             }
             AgentPolicy.Decision.NEED_APPROVAL -> {
-                val approved = ui.ask("Approve live tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\nRun this lookup once?")
+                val approved = confirm("Approve live tool action?\\n\\nTool: $tool\\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\\nRun this lookup once?")
                 AgentPolicy.log(svc, tool, "direct-dispatch", approved, if (approved) "user approved lookup" else "user declined lookup")
                 approved
             }
@@ -1830,7 +1841,7 @@ Rules:
             val elapsed = (System.currentTimeMillis() - activeSkillStartedAt).coerceAtLeast(0L)
             var decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, false)
             if (!decision.allowed && decision.reason.contains("approval", ignoreCase = true)) {
-                if (!ui.ask("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
+                if (!confirm("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
                     return "error: user denied skill action"
                 }
                 decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, true)
@@ -1874,7 +1885,7 @@ Rules:
                 val id = a.optString("id").trim()
                 val report = extensionTestReports[id]
                 if (report == null) "error: no successful runtime sandbox test exists for this extension in the current agent session; static preflight cannot enable generated code"
-                else if (!ui.ask("Enable generated extension $id after its verified sandbox test?")) "Extension enable cancelled."
+                else if (!confirm("Enable generated extension $id after its verified sandbox test?")) "Extension enable cancelled."
                 else if (extensionStore.promote(id, report, userApproved = true)) "Extension $id is enabled."
                 else "error: extension promotion failed; test report/source hash may be stale or storage may be unavailable"
             }
@@ -1903,9 +1914,9 @@ Rules:
                 } else {
                     val confirmation = if (normalizedAction == "reply") {
                         if (reply.isBlank()) false
-                        else ui.ask("Reply to the selected notification with this exact text? " + reply.take(500))
+                        else confirm("Reply to the selected notification with this exact text? " + reply.take(500))
                     } else {
-                        ui.ask("Dismiss the selected safe notification? This removes it from the notification shade.")
+                        confirm("Dismiss the selected safe notification? This removes it from the notification shade.")
                     }
                     if (!confirmation) "error: user cancelled notification action"
                     else if (stopped) "error: task was stopped before notification action; no action was dispatched"
@@ -1965,7 +1976,7 @@ Rules:
                 val target = a.optString("target").trim()
                 val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
                     .containsMatchIn(target)
-                if (risky && !ui.ask("Orion is about to click '$target' and inspect the resulting page. This may submit or change data. Continue?")) {
+                if (risky && !confirm("Orion is about to click '$target' and inspect the resulting page. This may submit or change data. Continue?")) {
                     "error: user cancelled browser click"
                 } else BrowserAutomation.clickAndVerify(target, a.optString("expected_text")).take(1800)
             }
@@ -1973,7 +1984,7 @@ Rules:
                 val target = a.optString("target").trim()
                 val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
                     .containsMatchIn(target)
-                if (risky && !ui.ask("Orion is about to click '$target' on the current webpage. This may submit or change data. Continue?")) {
+                if (risky && !confirm("Orion is about to click '$target' on the current webpage. This may submit or change data. Continue?")) {
                     "error: user cancelled browser click"
                 } else BrowserAutomation.click(target)
             }
@@ -2023,7 +2034,7 @@ Rules:
             "integration_status" -> tools.integrationStatus()
             "telegram_status" -> tools.telegramStatus()
             "telegram_inbox" -> TelegramBridge.checkUpdates(svc)
-            "telegram_send" -> if (ui.ask("Send this Telegram message to the saved target? Message: " + a.optString("message").take(500))) tools.telegramSend(a.optString("message")) else "error: user cancelled Telegram send"
+            "telegram_send" -> if (confirm("Send this Telegram message to the saved target? Message: " + a.optString("message").take(500))) tools.telegramSend(a.optString("message")) else "error: user cancelled Telegram send"
             "mcp_status" -> tools.mcpStatus()
             "mcp_list_tools" -> tools.mcpListTools()
             "mcp_call" -> {
@@ -2032,7 +2043,7 @@ Rules:
                 val host = try { java.net.URI(McpConnector.endpoint(svc)).host ?: "unknown host" } catch (_: Exception) { "unknown host" }
                 val catalogue = tools.mcpListTools()
                 if (catalogue.startsWith("error:") || catalogue.startsWith("MCP discovery failed")) catalogue else
-                    if (ui.ask("Remote MCP server: " + host + ". Tool: " + name + ". Advertised catalogue (untrusted): " + catalogue.take(900) + ". Arguments to send: " + args.toString().take(600) + ". Approve this exact remote call?")) tools.mcpCall(name, args) else "error: user cancelled MCP tool call"
+                    if (confirm("Remote MCP server: " + host + ". Tool: " + name + ". Advertised catalogue (untrusted): " + catalogue.take(900) + ". Arguments to send: " + args.toString().take(600) + ". Approve this exact remote call?")) tools.mcpCall(name, args) else "error: user cancelled MCP tool call"
             }
             "settings" -> tools.settings(a.optString("page", "main"))
             "dial" -> tools.dial(a.optString("number"))
@@ -2157,7 +2168,7 @@ Rules:
             }
             "task_delete" -> {
                 val id = a.optInt("id", -1)
-                if (!ui.ask("Delete task #$id permanently?")) "Task deletion cancelled."
+                if (!confirm("Delete task #$id permanently?")) "Task deletion cancelled."
                 else if (TaskStore.delete(svc, id)) "Deleted task #$id."
                 else "error: task #$id was not deleted; it may not exist or device storage may be unavailable"
             }

@@ -193,4 +193,59 @@ class ChatStepsTest {
         ))
         assertEquals(listOf("fresh"), steps.map { it.tool })
     }
+
+    @Test fun approvalEventsMakeTheTaskWaitThenResume() {
+        fun st(vararg l: StepLine) = StepTracker.taskState(l.toList())
+        val me = StepLine(1, "me", "x")
+        assertEquals(StepTracker.TaskState.APPROVAL, st(me, note(2, "[TASK:RUNNING]\nRunning sms"), note(3, "[TASK:APPROVAL]\nWaiting for your approval")))
+        assertEquals(StepTracker.TaskState.WORKING, st(me, note(2, "[TASK:RUNNING]\nRunning sms"), note(3, "[TASK:APPROVAL]\nw"), note(4, "[TASK:APPROVED]\nok")))
+        assertEquals(StepTracker.TaskState.WORKING, st(me, note(3, "[TASK:APPROVAL]\nw"), note(4, "[TASK:DENIED]\nno")))
+    }
+
+    @Test fun statusTextCoversEveryStepState() {
+        fun step(s: StepStatus, retries: Int = 0) = ToolStep(1, "t", "T", s, 1, retries = retries)
+        val max = 2
+        assertEquals("Running", StepStatusText.of(step(StepStatus.RUNNING), StepTracker.TaskState.WORKING, max))
+        assertEquals("Retrying 1/2", StepStatusText.of(step(StepStatus.RUNNING, 1), StepTracker.TaskState.RECOVERING, max))
+        assertEquals("Waiting for your approval", StepStatusText.of(step(StepStatus.RUNNING), StepTracker.TaskState.APPROVAL, max))
+        assertEquals("Done", StepStatusText.of(step(StepStatus.SUCCESS), StepTracker.TaskState.DONE, max))
+        assertEquals("Failed · replanning", StepStatusText.of(step(StepStatus.FAILED), StepTracker.TaskState.RECOVERING, max))
+        assertEquals("Failed · waiting for you", StepStatusText.of(step(StepStatus.FAILED), StepTracker.TaskState.WAITING, max))
+        assertEquals("Failed", StepStatusText.of(step(StepStatus.FAILED), StepTracker.TaskState.FAILED, max))
+        assertEquals("Cancelled", StepStatusText.of(step(StepStatus.CANCELLED), StepTracker.TaskState.CANCELLED, max))
+        assertEquals("Stopped", StepStatusText.of(step(StepStatus.CANCELLED), StepTracker.TaskState.WORKING, max))
+    }
+
+    @Test fun pagerMovesWithinBoundsAndFollowsNewSteps() {
+        assertEquals(0, StepPager.previous(0))
+        assertEquals(2, StepPager.next(2, 3))
+        assertEquals(1, StepPager.next(0, 3))
+        val a = ToolStep(1, "a", "A", StepStatus.SUCCESS, 1)
+        val b = ToolStep(2, "b", "B", StepStatus.SUCCESS, 2)
+        val c = ToolStep(3, "c", "C", StepStatus.RUNNING, 3)
+        assertEquals("a finished step the user browsed back to yields to the new step", 2, StepPager.follow(0, listOf(a, b, c)))
+        assertEquals("a running step the user is on is not left", 2, StepPager.follow(2, listOf(a, b, c)))
+        assertEquals(0, StepPager.follow(5, emptyList()))
+    }
+
+    @Test fun switchingConversationsNeverMixesTasks() {
+        val convA = listOf(StepLine(1, "me", "a"), note(2, "[TASK:RUNNING]\nRunning shell"), note(3, "[TASK:BLOCKED]\nwaiting"))
+        val convB = listOf(StepLine(10, "me", "b"), note(11, "[TASK:RUNNING]\nRunning read_screen"), note(12, "[TASK:RESULT]\nread_screen — ok"))
+        assertEquals(StepTracker.TaskState.WAITING, StepTracker.taskState(convA))
+        assertEquals(StepTracker.TaskState.WORKING, StepTracker.taskState(convB))
+        assertEquals(listOf("shell"), StepTracker.currentTaskSteps(convA).map { it.tool })
+        assertEquals(listOf("read_screen"), StepTracker.currentTaskSteps(convB).map { it.tool })
+        assertTrue(StepTracker.currentTaskSteps(emptyList()).isEmpty())
+    }
+
+    @Test fun restoredSavedConversationShowsStepsWithoutInventedDurations() {
+        val restored = listOf(
+            StepLine(111L, "me", "open settings"),
+            StepLine(222L, "note", "[TASK:RUNNING]\nRunning read_screen"),
+            StepLine(1_900_000_000L, "note", "[TASK:RESULT]\nread_screen — ok")
+        )
+        val steps = StepTracker.currentTaskSteps(restored)
+        assertEquals(StepStatus.SUCCESS, steps[0].status)
+        assertNull(steps[0].durationLabel(0))
+    }
 }
