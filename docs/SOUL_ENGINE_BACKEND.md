@@ -53,3 +53,11 @@ This document describes the Android implementation on the feature branch, not a 
 - It includes a small command interface for status checks, proposal listing, capability-report navigation, and screen-perception setup guidance. Unsupported commands explicitly report that no action was taken.
 - Explanation commands are side-effect-free. The explicit “Run check now” action invokes the real watcher; any opted-in standing order still follows the existing shared policy gate.
 - **Not yet claimed:** automatic repair of Android accessibility setup, an always-on Watcher chat model, live streaming event feed, device acceptance, or automatic resolution of every limitation. A capability report is still a separate destination for system-level settings and deeper diagnostics.
+
+## Stage 2: connected capability inventory
+
+- Added `OrionCapabilityHub` as a shared read-only runtime snapshot built from the registered `ToolRegistry`, implemented/enabled `AgentPolicy` packs, known Android permission state, Termux readiness, Telegram setup metadata, and saved connection metadata.
+- The dedicated Soul Watcher now has a **Capabilities** action and understands “show capabilities”, “what works”, “workspace status”, and related requests. It displays grouped capabilities, READY/LIMITED/DISABLED/SETUP REQUIRED states, tool names, and concrete blocker details.
+- Screen perception is checked separately against the current active accessibility root. A connected service with no readable root is reported as limited, not automatically mislabeled as a missing permission.
+- Connection metadata is explicitly labeled as metadata, not proof of successful live API access. The snapshot does not expose credentials, enable packs, grant permissions, or perform external mutations.
+- **Not yet claimed:** automatic repair for every blocker, successful end-to-end tests for every integration, a full unified workspace navigation router, or real-device verification. Provider-specific live probes should be added only where a safe, read-only health-check contract exists.
