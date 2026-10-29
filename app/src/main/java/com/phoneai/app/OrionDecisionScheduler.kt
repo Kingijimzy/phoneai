@@ -22,8 +22,8 @@ internal class OrionDecisionScheduler(
     fun onServiceReady(): Decision = synchronized(lock) {
         if (started) return@synchronized Decision(false, "already_started", null)
         started = true
-        runtime.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "startup-context", 8)
-        runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "service-ready", 6)
+        runtime.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "startup-context", 8, goal = "Restore the active conversation context", checkpoint = "startup_recovery_queued")
+        runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "service-ready", 6, goal = "Verify live capability readiness", checkpoint = "service_connected")
         Decision(true, "startup_recovery_queued", OrionRuntime.WorkType.RESTORE_PENDING)
     }
 
@@ -38,9 +38,9 @@ internal class OrionDecisionScheduler(
         // The soul loop rides on real window events (the phone is in use), at most once per tick window.
         if (SoulPolicy.due(lastSoulAt, now)) {
             lastSoulAt = now
-            runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch", 2)
+            runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch", 2, goal = "Inspect local readiness and configured standing orders", checkpoint = "window_event")
         }
-        val accepted = runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "window:$key", 1)
+        val accepted = runtime.enqueue(OrionRuntime.WorkType.CAPABILITY_RECHECK, "window:$key", 1, goal = "Recheck capability readiness after a window change", checkpoint = "window:$key")
         Decision(accepted, if (accepted) "window_recheck_queued" else "already_queued_or_capacity", OrionRuntime.WorkType.CAPABILITY_RECHECK)
     }
 
@@ -55,7 +55,7 @@ internal class OrionDecisionScheduler(
         lastTaskKey = key
         lastTaskAt = now
         val suffix = if (success) "success" else "failure"
-        val accepted = runtime.enqueue(OrionRuntime.WorkType.LEARN_FROM_RESULT, "$key:$suffix", if (success) 4 else 5)
+        val accepted = runtime.enqueue(OrionRuntime.WorkType.LEARN_FROM_RESULT, "$key:$suffix", if (success) 4 else 5, goal = task, checkpoint = "task_outcome:$suffix")
         Decision(accepted, if (accepted) "task_outcome_queued" else "already_queued_or_capacity", OrionRuntime.WorkType.LEARN_FROM_RESULT)
     }
 
