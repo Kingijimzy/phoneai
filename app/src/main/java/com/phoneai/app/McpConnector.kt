@@ -138,10 +138,12 @@ object McpConnector {
     }
 
     @Volatile private var sessionId: String? = null
+    @Volatile private var negotiatedProtocolVersion: String? = null
 
     fun listTools(c: Context): String {
         if (!configured(c)) return "error: no MCP server configured."
         sessionId = null
+        negotiatedProtocolVersion = null
         return try {
             val init = post(c, JSONObject()
                 .put("jsonrpc", "2.0").put("id", 1).put("method", "initialize")
@@ -150,6 +152,9 @@ object McpConnector {
                     .put("clientInfo", JSONObject().put("name", "PhoneAI").put("version", "1.0"))))
                 ?: return "error: MCP initialize returned no response."
             if (init.has("error")) return "error: MCP server rejected initialize."
+            negotiatedProtocolVersion = init.optJSONObject("result")?.optString("protocolVersion")
+                ?.takeIf { it in setOf("2025-03-26", "2025-06-18", "2025-11-25") }
+                ?: "2025-03-26"
             post(c, JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"))
             val response = post(c, JSONObject().put("jsonrpc", "2.0").put("id", 2)
                 .put("method", "tools/list").put("params", JSONObject()))
@@ -215,12 +220,16 @@ object McpConnector {
             return "error: MCP permission denied. Tool '$name' requires the '$requiredScope' scope, which is disabled. Review MCP permissions in Orion Settings."
         }
         sessionId = null
+        negotiatedProtocolVersion = null
         return try {
             val init = post(c, JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", "initialize")
                 .put("params", JSONObject().put("protocolVersion", "2025-03-26").put("capabilities", JSONObject())
                     .put("clientInfo", JSONObject().put("name", "PhoneAI").put("version", "1.0"))))
                 ?: return "error: MCP initialize returned no response."
             if (init.has("error")) return "error: MCP server rejected initialize."
+            negotiatedProtocolVersion = init.optJSONObject("result")?.optString("protocolVersion")
+                ?.takeIf { it in setOf("2025-03-26", "2025-06-18", "2025-11-25") }
+                ?: "2025-03-26"
             post(c, JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"))
             val catalogue = post(c, JSONObject().put("jsonrpc", "2.0").put("id", 2)
                 .put("method", "tools/list").put("params", JSONObject()))
@@ -247,6 +256,8 @@ object McpConnector {
         conn.setRequestProperty("User-Agent", "PhoneAI-MCP/1.0")
         readToken(c)?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
         sessionId?.let { conn.setRequestProperty("Mcp-Session-Id", it) }
+        // Streamable HTTP MCP requires the negotiated protocol version on subsequent requests.
+        if (sessionId != null) negotiatedProtocolVersion?.let { conn.setRequestProperty("MCP-Protocol-Version", it) }
         conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         val code = conn.responseCode
         conn.getHeaderField("Mcp-Session-Id")?.takeIf { it.isNotBlank() }?.let { sessionId = it }
