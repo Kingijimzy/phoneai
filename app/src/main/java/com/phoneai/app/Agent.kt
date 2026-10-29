@@ -1309,6 +1309,13 @@ Rules:
         val namedRepo = Regex("(?i)\\b(?:github\\s+)?(?:repo|repository)\\s+(?:called|named)\\s+([A-Za-z0-9_.-]{1,100})\\b").find(command)
         if (!resumeRequest && !browserActionTask && namedRepo != null) {
             val requestedName = namedRepo.groupValues[1]
+            if (!authorizeDirectTool("github_public", "orion_core")) {
+                val answer = "I couldn't search public GitHub because the GitHub public-read capability is disabled or this tool was explicitly denied. Enable the public GitHub capability and retry; public repository reads do not need a separate approval prompt."
+                logShortcut("github_repository_search", answer)
+                history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+                ui.say(answer)
+                return
+            }
             ui.phase("acting")
             val searchResult = tools.githubSearchRepository(requestedName)
             val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
