@@ -461,10 +461,10 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     /** Shows the actual registered tool contracts so chat capabilities are discoverable, not implied. */
     private fun showToolCatalog() {
-        val dialog = AlertDialog.Builder(this).setTitle("Orion capabilities & tools").setView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(8), dp(16), dp(4))
-        }).setNegativeButton("CLOSE", null).create()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Orion capabilities & tools")
+            .setNegativeButton("CLOSE", null)
+            .create()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)); setBackgroundColor(0xFF101010.toInt()) }
         val search = EditText(this).apply {
             hint = "Search tools, skills, browser, shell…"
