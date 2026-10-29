@@ -55,6 +55,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private lateinit var commandModeText: TextView
     private lateinit var modeHint: TextView
     private var attachedService: PhoneAiService? = null
+    private var chatBrowserDialog: android.app.Dialog? = null
+    private var chatBrowserWebView: android.webkit.WebView? = null
+    private var chatBrowserAddress: EditText? = null
     private var lastMode = OrbView.Mode.IDLE
     private var welcomePanel: View? = null
     private var promptRail: View? = null
@@ -1478,8 +1481,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             Toast.makeText(this, "Only valid HTTP or HTTPS links can open in chat.", Toast.LENGTH_SHORT).show()
             return
         }
+        // Reuse the same visible popup for multi-step browsing instead of stacking dialogs.
+        if (chatBrowserDialog?.isShowing == true) {
+            chatBrowserAddress?.setText(initial)
+            chatBrowserWebView?.loadUrl(initial)
+            return
+        }
 
         val dialog = android.app.Dialog(this)
+        chatBrowserDialog = dialog
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(8))
@@ -1525,6 +1535,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 setOnClickListener { action() }
             }
         val web = android.webkit.WebView(this)
+        chatBrowserWebView = web
+        chatBrowserAddress = address
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.allowFileAccess = false
@@ -1598,6 +1610,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             BrowserAutomation.detach(web)
             web.stopLoading()
             web.destroy()
+            if (chatBrowserDialog === dialog) chatBrowserDialog = null
+            if (chatBrowserWebView === web) chatBrowserWebView = null
+            if (chatBrowserAddress === address) chatBrowserAddress = null
         }
         dialog.setOnShowListener {
             dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
