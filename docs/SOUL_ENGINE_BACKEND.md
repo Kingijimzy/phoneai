@@ -45,3 +45,11 @@ This document describes the Android implementation on the feature branch, not a 
 - If the user has explicitly enabled the Proactive pack and saved standing orders, a tick may execute at most one due read-only standing order. Standing-order dispatch now passes the shared `AgentPolicy.gate`; a blocked gate skips the action and does not consume the schedule.
 - The watcher does not auto-enable packs, grant permissions, edit source code, replay routes, trade, send messages, or weaken guardrails. Accept/Reject/Edit stays in the proposal inbox; actual code changes still require a reviewed development workflow.
 - The five-minute in-service wake-up is best-effort, not an Android exact alarm guarantee. Doze, force-stop, battery optimization, and OEM task killing can delay or stop it.
+
+## Stage 1: dedicated Watcher control surface
+
+- Added a dedicated `SoulWatcherActivity`, reachable directly from the Soul Engine dashboard. It is a local-first Watcher workspace, not a redirect to the general Copilot chat.
+- The workspace can invoke a fresh bounded local watcher audit, display the persisted status/action/time, list pending proposals, and record accept/reject decisions. Proposal decisions remain review metadata; they do not grant permissions or execute repairs.
+- It includes a small command interface for status checks, proposal listing, capability-report navigation, and screen-perception setup guidance. Unsupported commands explicitly report that no action was taken.
+- Explanation commands are side-effect-free. The explicit “Run check now” action invokes the real watcher; any opted-in standing order still follows the existing shared policy gate.
+- **Not yet claimed:** automatic repair of Android accessibility setup, an always-on Watcher chat model, live streaming event feed, device acceptance, or automatic resolution of every limitation. A capability report is still a separate destination for system-level settings and deeper diagnostics.
