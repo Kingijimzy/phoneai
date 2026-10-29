@@ -1940,11 +1940,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onTranscriptRestored(messages: List<Pair<String, String>>) {
         runOnUiThread {
+            // Rebuild the entire visible timeline on session switches: never leave activity
+            // cards from the previous session attached to the newly restored transcript.
             composeLines.clear()
             messages.forEachIndexed { index, pair ->
                 val (kind, text) = pair
                 composeLines.add(OrionChatLine(System.nanoTime() + index, kind, text))
             }
+            // Lifecycle events are stored separately from transcript messages. Reload them
+            // after the active-session pointer changes so restored chats show only their own events.
+            val activeEvents = runCatching {
+                PhoneAiService.instance?.activeChatEvents().orEmpty()
+            }.getOrDefault(emptyList())
+            onChatEvents(activeEvents)
         }
     }
 
