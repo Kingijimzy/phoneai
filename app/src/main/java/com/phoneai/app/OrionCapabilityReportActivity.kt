@@ -125,7 +125,7 @@ class OrionCapabilityReportActivity : Activity() {
             contextCard,
             "Chat provider / model",
             if (selectedProvider == null) "Could not read selected provider." else
-                "${selectedProvider.name} · ${selectedModel.ifBlank { selectedProvider.textModel }}. Selection is not proof of live connectivity or remaining quota.",
+                "${selectedProvider.label} · ${selectedModel.ifBlank { selectedProvider.textModel }}. Selection is not proof of live connectivity or remaining quota.",
             selectedProvider != null
         )
         val commandProvider = runCatching { Prefs.commandProviderId(this)?.let { Providers.find(it) } ?: Prefs.defaultCommandProvider(this) }.getOrNull()
@@ -134,7 +134,7 @@ class OrionCapabilityReportActivity : Activity() {
             contextCard,
             "Command planner",
             if (commandProvider == null) "Could not resolve the command provider." else
-                "${commandProvider.name} · ${commandModel?.takeIf { it.isNotBlank() } ?: commandProvider.textModel}. Command mode may share or override the chat provider.",
+                "${commandProvider.label} · ${commandModel?.takeIf { it.isNotBlank() } ?: commandProvider.textModel}. Command mode may share or override the chat provider.",
             commandProvider != null
         )
         val transcriptCount = runCatching { service?.conversationContext()?.size }.getOrNull()
