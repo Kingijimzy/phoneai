@@ -59,6 +59,7 @@ class ToolRegistryTest {
         assertTrue(prompt.contains("SHELL BACKEND RULE"))
         assertTrue(prompt.contains("LIVE RESEARCH RULE"))
         assertTrue(prompt.contains("DOWNLOAD SIZE RULE"))
+        assertTrue(prompt.contains("GOAL COMPLETION RULE"))
     }
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
