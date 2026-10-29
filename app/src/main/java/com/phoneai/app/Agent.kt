@@ -1839,6 +1839,53 @@ Rules:
     }
 
     /**
+     * Canonicalize account-connector paths before dispatch and recover known public repository
+     * reads through the token-free public API if the account connector's allowlist rejects them.
+     */
+    private fun githubAccountRead(rawPath: String): String {
+        val raw = rawPath.trim()
+        if (raw.isBlank()) return "error: a GitHub read path is required."
+        val parsed = runCatching { java.net.URI(raw) }.getOrNull()
+        val normalized = if (parsed?.isAbsolute == true) {
+            if (!parsed.scheme.equals("https", true) || !parsed.host.equals("api.github.com", true)) {
+                return "error: GitHub account reads accept only api.github.com paths."
+            }
+            parsed.rawPath + (parsed.rawQuery?.let { "?$it" } ?: "")
+        } else {
+            raw.substringBefore("#").let { if (it.startsWith("/")) it else "/$it" }
+        }
+        val accountResult = GithubConnector.get(svc, normalized)
+        if (!accountResult.startsWith("error:", true) && !accountResult.contains("path is not allowed", true)) {
+            return accountResult
+        }
+
+        val repoPath = normalized.substringBefore("?")
+        val match = Regex(
+            "^/repos/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})(?:/(readme|releases/latest|issues|actions/runs(?:/([0-9]{1,20}))?))?$",
+            RegexOption.IGNORE_CASE
+        ).matchEntire(repoPath)
+        if (match != null) {
+            val owner = match.groupValues[1]
+            val repository = match.groupValues[2]
+            val suffix = match.groupValues[3].lowercase()
+            val runId = match.groupValues[4].takeIf { it.isNotBlank() }
+            val section = when {
+                runId != null -> "run"
+                suffix == "readme" -> "readme"
+                suffix == "releases/latest" -> "release"
+                suffix == "issues" -> "issues"
+                suffix == "actions/runs" -> "runs"
+                else -> "repo"
+            }
+            val fallback = tools.githubPublic(owner, repository, section, runId)
+            if (!fallback.startsWith("error:", true)) {
+                return "The account connector did not accept this repository path, so I recovered the public data through GitHub's token-free public API.\n$fallback"
+            }
+        }
+        return accountResult
+    }
+
+    /**
      * Public, read-only lookups do not need a per-request approval dialog. They still respect
      * an explicitly DENYed tool and a disabled capability pack. Mutating/consequential tools
      * continue through the normal policy and approval flow.
@@ -2356,7 +2403,7 @@ Rules:
             "workspace_read" -> ShellRunner.readFile(svc, a.optString("path"))
             "service_status" -> tools.serviceStatus()
             "connect_service" -> tools.connectService(a.optString("service"))
-            "github_account_read" -> GithubConnector.get(svc, a.optString("path"))
+            "github_account_read" -> githubAccountRead(a.optString("path"))
             "gmail_list_messages" -> GmailConnector.read(svc, a.optString("query"), a.optInt("limit", 5))
             "vault_list" -> tools.vaultList()
             "vault_request" -> tools.vaultRequest(a.optString("name"), a.optString("host"), a.optString("style"))
