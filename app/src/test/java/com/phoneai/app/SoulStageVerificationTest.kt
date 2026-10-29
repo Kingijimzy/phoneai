@@ -50,12 +50,12 @@ class SoulStageVerificationTest {
         ))
 
         val pending = SoulEngineState.snapshot(context).memoryNudges.first { it.dedupeKey == unique }
-        assertEquals(NudgeStatus.PENDING, pending.status)
+        assertEquals(SoulEngineState.NudgeStatus.PENDING, pending.status)
         assertTrue(SoulEngineState.snapshot(context).lessons.none { it.summary == summary })
 
-        assertTrue(SoulEngineState.reviewMemoryNudge(context, pending.id, NudgeStatus.SAVED))
+        assertTrue(SoulEngineState.reviewMemoryNudge(context, pending.id, SoulEngineState.NudgeStatus.SAVED))
         assertEquals(
-            NudgeStatus.SAVED,
+            SoulEngineState.NudgeStatus.SAVED,
             SoulEngineState.snapshot(context).memoryNudges.first { it.id == pending.id }.status
         )
         assertTrue(SoulEngineState.snapshot(context).lessons.any { it.summary == summary })
@@ -71,7 +71,7 @@ class SoulStageVerificationTest {
             dedupeKey = unique
         ))
         val pending = SoulEngineState.snapshot(context).memoryNudges.first { it.dedupeKey == unique }
-        assertTrue(SoulEngineState.reviewMemoryNudge(context, pending.id, NudgeStatus.DISMISSED))
+        assertTrue(SoulEngineState.reviewMemoryNudge(context, pending.id, SoulEngineState.NudgeStatus.DISMISSED))
         assertTrue(SoulEngineState.snapshot(context).lessons.none { it.summary == summary })
     }
 
