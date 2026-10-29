@@ -17,6 +17,12 @@ internal object ToolRegistry {
     }
 
     val all: List<ToolDefinition> = listOf(
+        tool("extension_list", ToolAccess.READ, "extension_list {}: list saved self-extending tool drafts and enabled status"),
+        tool("extension_create", ToolAccess.WRITE, "extension_create {id, name, runtime, source, description}: save a reusable generated Python or JavaScript tool draft"),
+        tool("extension_test", ToolAccess.WRITE, "extension_test {id}: test a saved extension and report exact results; do not claim isolated execution unless a real sandbox is available"),
+        tool("extension_enable", ToolAccess.WRITE, "extension_enable {id}: enable a saved extension only after a passing test report for its exact source and explicit user approval"),
+        tool("extension_run", ToolAccess.WRITE, "extension_run {id, input?}: run an enabled saved extension with JSON input through the configured runtime"),
+        tool("extension_disable", ToolAccess.WRITE, "extension_disable {id}: disable a saved extension without deleting its source"),
         tool("lookup_app", ToolAccess.READ, "lookup_app {name}: resolve a launchable installed app to its exact label and package before opening it"),
         tool("open_app", ToolAccess.WRITE, "open_app {name}: open an installed app by name (for example WhatsApp or FC Mobile) or package"),
         tool("system_intent", ToolAccess.WRITE, "system_intent {action, query?, url?}: deterministic allowlisted Android routes only: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, sms, alarm, timer, share, open_url. Never use arbitrary action/component strings."),
