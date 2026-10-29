@@ -8,9 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 /** A recurring, read-only check Orion runs by itself while the app service is alive. */
 data class StandingOrder(val kind: String, val everyMinutes: Int, val lastRunAt: Long, val lastDigest: String)
@@ -43,7 +45,11 @@ internal object StandingOrderPolicy {
         return digestFor(kind, result, dayKey) != previousDigest
     }
 
-    fun digest(result: String): String = result.hashCode().toString()
+    /** Stable, collision-resistant fingerprint; String.hashCode can collide on distinct results. */
+    fun digest(result: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(result.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
 
     /** The brief contains live prices, so it would differ on every run; alert at most once per calendar day. */
     fun digestFor(kind: String, result: String, dayKey: String): String =
@@ -73,24 +79,37 @@ object StandingOrders {
         } catch (_: Exception) { emptyList() }
     }
 
-    private fun save(c: Context, list: List<StandingOrder>) {
-        try {
-            val a = JSONArray(); list.forEach { a.put(JSONObject().put("kind", it.kind).put("every", it.everyMinutes).put("last", it.lastRunAt).put("digest", it.lastDigest)) }
-            file(c).writeText(a.toString())
-        } catch (_: Exception) { }
+    /** Atomic persistence: callers must not report success if the durable write failed. */
+    private fun save(c: Context, list: List<StandingOrder>): Boolean {
+        val atomic = AtomicFile(file(c))
+        var stream: java.io.FileOutputStream? = null
+        return try {
+            val a = JSONArray()
+            list.forEach { a.put(JSONObject().put("kind", it.kind).put("every", it.everyMinutes).put("last", it.lastRunAt).put("digest", it.lastDigest)) }
+            stream = atomic.startWrite()
+            stream.write(a.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+            true
+        } catch (_: Exception) {
+            if (stream != null) try { atomic.failWrite(stream) } catch (_: Exception) { }
+            false
+        }
     }
 
     fun add(c: Context, kind: String, minutes: Int): String = synchronized(lock) {
         StandingOrderPolicy.validate(kind, minutes)?.let { return@synchronized "error: $it" }
         val list = all(c).filter { it.kind != kind }
         if (list.size >= StandingOrderPolicy.MAX_ORDERS) return@synchronized "error: at most ${StandingOrderPolicy.MAX_ORDERS} standing orders"
-        save(c, list + StandingOrder(kind, minutes, 0L, ""))
+        if (!save(c, list + StandingOrder(kind, minutes, 0L, ""))) {
+            return@synchronized "error: standing order could not be saved to device storage; no order was added"
+        }
         "standing order saved: I'll check ${StandingOrderPolicy.kinds[kind]} every $minutes min while Orion is running, and notify you only when something new appears."
     }
 
     fun remove(c: Context, kind: String): String = synchronized(lock) {
         val list = all(c); if (list.none { it.kind == kind }) return@synchronized "error: no standing order '$kind'"
-        save(c, list.filter { it.kind != kind }); "removed standing order '$kind'"
+        if (!save(c, list.filter { it.kind != kind })) return@synchronized "error: standing order could not be removed because device storage failed"
+        "removed standing order '$kind'"
     }
 
     fun describe(c: Context): String {
@@ -99,8 +118,10 @@ object StandingOrders {
         return list.joinToString("\n") { "- ${it.kind}: every ${it.everyMinutes} min" }
     }
 
-    internal fun update(c: Context, kind: String, digest: String) = synchronized(lock) {
-        save(c, all(c).map { if (it.kind == kind) it.copy(lastRunAt = System.currentTimeMillis(), lastDigest = digest) else it })
+    internal fun update(c: Context, kind: String, digest: String): Boolean = synchronized(lock) {
+        val current = all(c)
+        if (current.none { it.kind == kind }) return@synchronized false
+        save(c, current.map { if (it.kind == kind) it.copy(lastRunAt = System.currentTimeMillis(), lastDigest = digest) else it })
     }
 }
 
@@ -125,11 +146,13 @@ object LifeLoop {
             val dayKey = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
             val notify = StandingOrderPolicy.shouldNotify(o.lastDigest, result, o.kind, dayKey)
             val notificationPosted = notify && post(c, o.kind, result)
-            StandingOrders.update(c, o.kind, StandingOrderPolicy.digestAfterAttempt(
+            val nextDigest = StandingOrderPolicy.digestAfterAttempt(
                 o.lastDigest, result, notify, notificationPosted, o.kind, dayKey
-            ))
+            )
+            val persisted = StandingOrders.update(c, o.kind, nextDigest)
             if (notificationPosted) posted++
             AgentPolicy.log(c, "standing_order", o.kind, null, when {
+                !persisted -> "result checked but schedule/digest could not be persisted; may retry after restart"
                 notificationPosted -> "notified"
                 notify -> "notification not posted; digest retained for retry"
                 else -> "nothing new or error"
