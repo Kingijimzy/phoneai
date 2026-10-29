@@ -28,6 +28,14 @@ class ToolRegistryTest {
         }
     }
 
+    @Test fun corePhoneAndMessagingPacksAreAvailableByDefaultButOptionalBridgesStayOptIn() {
+        assertTrue(AgentPolicy.defaultOn("phone_control"))
+        assertTrue(AgentPolicy.defaultOn("messaging"))
+        assertFalse(AgentPolicy.defaultOn("termux_bridge"))
+        assertFalse(AgentPolicy.defaultOn("remote_computer"))
+        assertFalse(AgentPolicy.defaultOn("proactive"))
+    }
+
     @Test fun browserNavigationUsesTheInAppBrowserWithoutExternalBrowserPrerequisites() {
         val contract = ToolRegistry.all.single { it.name == "browser_navigate" }.promptLine.lowercase()
         assertTrue(contract.contains("built-in webview browser"))

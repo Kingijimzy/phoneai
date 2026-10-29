@@ -157,7 +157,7 @@ class SettingsActivity : Activity() {
             setPadding(dp(18), dp(12), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21E1E1E.toInt(), 0xF0101010.toInt())).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0x55464646) }
         }
-        outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
+        outer.addView(text("ORION  /  SELECT", 10f, Theme.TEXT, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
         if (subtitle.isNotBlank()) outer.addView(text(subtitle, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(12)) })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -190,7 +190,7 @@ class SettingsActivity : Activity() {
 
     private fun showInfoDialog(title: String, message: String, positive: String = "GOT IT", onPositive: () -> Unit = {}) {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.LINE) } }
-        body.addView(text("ORION  /  INFORMATION", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
+        body.addView(text("ORION  /  INFORMATION", 10f, Theme.TEXT, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
         body.addView(text(title, 20f, Theme.TEXT, true))
         val detail = text(message, 13f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)); setTextIsSelectable(true) }
         val scroll = ScrollView(this).apply { addView(detail); isFillViewport = true }
@@ -268,7 +268,7 @@ class SettingsActivity : Activity() {
             }
             addView(OrionIconView(this@SettingsActivity).apply {
                 icon = settingsIcon(title)
-                tint = Theme.CYAN
+                tint = Theme.TEXT
                 contentDescription = null
             }, LinearLayout.LayoutParams(dp(17), dp(17)))
         }, LinearLayout.LayoutParams(dp(30), dp(30)).apply { rightMargin = dp(10) })
@@ -276,6 +276,17 @@ class SettingsActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(text("⌄", 18f, Theme.MUTED, true).apply {
+            gravity = Gravity.CENTER
+            contentDescription = "Expand or collapse section"
+        }, LinearLayout.LayoutParams(dp(24), dp(30)))
+        heading.isClickable = true
+        heading.isFocusable = true
+        heading.contentDescription = "$title, expanded. Tap to collapse."
+        heading.tag = if (note != null) 2 else 1
+        c.tag = true
+        c.contentDescription = title
+        heading.setOnClickListener { setCardExpanded(c, c.tag != true) }
         c.addView(heading)
         if (note != null) {
             val n = text(note, 13f, Theme.MUTED).apply {
@@ -291,6 +302,19 @@ class SettingsActivity : Activity() {
         c.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(230)
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         return c
+    }
+
+    /** Keep settings compact by default while leaving each section one tap away. */
+    private fun setCardExpanded(card: LinearLayout, expanded: Boolean) {
+        val heading = card.getChildAt(0) as? LinearLayout ?: return
+        val contentStart = heading.tag as? Int ?: 1
+        card.tag = expanded
+        for (index in contentStart until card.childCount) {
+            card.getChildAt(index).visibility = if (expanded) View.VISIBLE else View.GONE
+        }
+        (heading.getChildAt(heading.childCount - 1) as? TextView)?.text = if (expanded) "⌄" else "›"
+        val title = card.contentDescription?.toString() ?: "Settings section"
+        heading.contentDescription = "$title, ${if (expanded) "expanded. Tap to collapse." else "collapsed. Tap to expand."}"
     }
 
     private fun settingsIcon(title: String): String {
@@ -367,14 +391,14 @@ class SettingsActivity : Activity() {
                 cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0x666B6B6B)
             }
             addView(OrionIconView(this@SettingsActivity).apply {
-                icon = "spark"; tint = Theme.CYAN; contentDescription = null
+                icon = "spark"; tint = Theme.TEXT; contentDescription = null
             }, LinearLayout.LayoutParams(dp(25), dp(25)))
         }
         headerTop.addView(brandMark, LinearLayout.LayoutParams(dp(46), dp(46)))
         val brandText = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
-            addView(text("ORION CONTROL", 10f, Theme.CYAN, true).apply { letterSpacing = .16f })
+            addView(text("ORION CONTROL", 10f, Theme.TEXT, true).apply { letterSpacing = .16f })
             addView(text("Personal AI", 17f, Theme.TEXT, true).apply { setPadding(0, dp(3), 0, 0) })
         }
         headerTop.addView(brandText, LinearLayout.LayoutParams(0, -2, 1f))
@@ -386,7 +410,7 @@ class SettingsActivity : Activity() {
             setLineSpacing(dp(1).toFloat(), 1f)
             setPadding(0, dp(22), 0, dp(8))
         })
-        header.addView(text("Tune intelligence, voice, memory and device access from one place.", 13f, Theme.MUTED).apply {
+        header.addView(text("Tap a section title to expand it. Start with setup; optional integrations show what still needs configuration or permission.", 13f, Theme.MUTED).apply {
             setLineSpacing(dp(3).toFloat(), 1f)
         })
         add(col, header, 0)
@@ -898,13 +922,19 @@ class SettingsActivity : Activity() {
             20
         )
 
+        // Show setup first; keep advanced configuration out of the way until requested.
+        listOf(updateCard, s2, sk, s3, s4, s5, browser, s6, s7).forEach { setCardExpanded(it, false) }
+
         val shortcuts = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         listOf(
+            "SETUP" to s1,
+            "HEALTH" to updateCard,
             "AI" to s2,
             "VOICE" to s3,
+            "KNOWLEDGE" to sk,
             "MEMORY" to s4,
             "BROWSER" to browser,
             "TOOLS" to s6,
@@ -1220,7 +1250,7 @@ class SettingsActivity : Activity() {
                 setStroke(dp(1), 0x55484848)
             }
         }
-        outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.CYAN, true).apply {
+        outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.TEXT, true).apply {
             letterSpacing = .12f
             setPadding(0, 0, 0, dp(7))
         })
@@ -1250,7 +1280,7 @@ class SettingsActivity : Activity() {
                         if (selected) 0xFF181818.toInt() else 0xE8141414.toInt()
                     )).apply {
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF363636.toInt() else 0x33383838)
+                    setStroke(dp(1), if (selected) Theme.TEXT else if (saved) 0xFF363636.toInt() else 0x33383838)
                 }
                 isClickable = true
                 isFocusable = true
@@ -1266,7 +1296,7 @@ class SettingsActivity : Activity() {
             }
             val icon = OrionIconView(this).apply {
                 icon = iconName
-                tint = if (saved || selected) Theme.CYAN else Theme.MUTED
+                tint = if (saved || selected) Theme.TEXT else Theme.MUTED
                 background = GradientDrawable().apply {
                     setColor(if (saved || selected) 0xFF303030.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
@@ -1283,11 +1313,11 @@ class SettingsActivity : Activity() {
                 saved -> "KEY SAVED · CONNECTION NOT VERIFIED"
                 else -> "KEY NOT ADDED"
             }
-            details.addView(text(state, 10f, if (saved) Theme.CYAN else Theme.MUTED, true).apply {
+            details.addView(text(state, 10f, if (saved) Theme.TEXT else Theme.MUTED, true).apply {
                 setPadding(0, dp(4), 0, 0)
             })
             card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            if (selected) card.addView(text("ACTIVE", 8f, Theme.CYAN, true).apply {
+            if (selected) card.addView(text("ACTIVE", 8f, Theme.TEXT, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .04f
             }, LinearLayout.LayoutParams(dp(42), dp(30)))
@@ -1337,7 +1367,7 @@ class SettingsActivity : Activity() {
                 cornerRadius = dp(22).toFloat()
                 setStroke(dp(1), 0x55484848)
             }
-            addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.CYAN, true).apply {
+            addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.TEXT, true).apply {
                 letterSpacing = .1f; setPadding(0, 0, 0, dp(7))
             })
             addView(text(p.label + " API key", 20f, Theme.TEXT, true))
@@ -1834,7 +1864,7 @@ class SettingsActivity : Activity() {
             text = "Require approval for every run"
             isChecked = true
             setTextColor(Theme.TEXT)
-            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
+            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.TEXT)
         }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1916,7 +1946,7 @@ class SettingsActivity : Activity() {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 intArrayOf(0xFF101010.toInt(), 0xFF171717.toInt(), 0xFF0B0B0B.toInt()))
         }
-        outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.CYAN, true).apply {
+        outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.TEXT, true).apply {
             letterSpacing = .12f; setPadding(0, 0, 0, dp(7))
         })
         outer.addView(text("Choose your personality", 22f, Theme.TEXT, true))
@@ -1933,18 +1963,18 @@ class SettingsActivity : Activity() {
                 background = GradientDrawable().apply {
                     setColor(if (selected) 0xFF1B1B1B.toInt() else 0xFF121212.toInt())
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0x33383838)
+                    setStroke(dp(1), if (selected) Theme.TEXT else 0x33383838)
                 }
                 isClickable = true; isFocusable = true
                 contentDescription = profile.label + ", " + descriptions[profile.id].orEmpty()
             }
             card.addView(OrionIconView(this).apply {
                 icon = icons[profile.id] ?: "spark"
-                tint = if (selected) Theme.CYAN else Theme.MUTED
+                tint = if (selected) Theme.TEXT else Theme.MUTED
                 background = GradientDrawable().apply {
                     setColor(if (selected) 0xFF3A3A3A.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0x44464646)
+                    setStroke(dp(1), if (selected) Theme.TEXT else 0x44464646)
                 }
                 contentDescription = profile.label
             }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
@@ -1954,7 +1984,7 @@ class SettingsActivity : Activity() {
                 setPadding(0, dp(3), 0, 0)
             })
             card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            if (selected) card.addView(text("ACTIVE", 8f, Theme.CYAN, true).apply {
+            if (selected) card.addView(text("ACTIVE", 8f, Theme.TEXT, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .03f
             }, LinearLayout.LayoutParams(dp(42), dp(28)))
@@ -2170,7 +2200,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
             background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(20).toFloat(); setStroke(dp(1), Theme.LINE) }
-            addView(text("ORION  /  MEMORY", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(8)) })
+            addView(text("ORION  /  MEMORY", 10f, Theme.TEXT, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(8)) })
             addView(text(if (m == null) "Add a memory" else "Edit memory", 20f, Theme.TEXT, true))
             addView(box, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
             addView(categoryButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })

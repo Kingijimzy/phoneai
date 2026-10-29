@@ -28,11 +28,14 @@ object AgentPolicy {
     fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
     fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
     /**
-     * Packs that are safe to have on from the first launch: they are local, read-only, or already gated by
-     * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
-     * lives in orion_core) and wrongly tells the user the feature does not exist. Risky packs stay opt-in.
+     * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
+     * This only makes their tools available: Android OS permissions and consequential-action confirmations
+     * still apply. Optional bridges and remote/proactive services remain opt-in until configured.
      */
-    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research")
+    internal val defaultOnPacks = setOf(
+        "orion_core", "connected_services", "workspace_shell", "self_test",
+        "gaming_hobby", "trading_research", "phone_control", "messaging"
+    )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
