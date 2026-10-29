@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.animateColorAsState
@@ -185,7 +186,7 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
             slideInVertically(animationSpec = tween(260)) { it / 10 }
     ) {
         Column(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().animateContentSize(animationSpec = tween(180)),
             horizontalAlignment = if (mine) Alignment.End else Alignment.Start
         ) {
             if (!mine && !note) {
