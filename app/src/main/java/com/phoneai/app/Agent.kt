@@ -1265,7 +1265,7 @@ Rules:
             val owner = githubRunMatch.groupValues[1]
             val repository = githubRunMatch.groupValues[2]
             val runId = githubRunMatch.groupValues[3]
-            if (!authorizeDirectTool("github_public", "trading_research")) {
+            if (!authorizeDirectTool("github_public", "orion_core")) {
                 ui.say("I couldn't read that public GitHub Actions run because the public research capability is disabled or this tool was explicitly denied.")
                 return
             }
