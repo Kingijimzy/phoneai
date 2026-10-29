@@ -93,6 +93,7 @@ object AgentPolicy {
 
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
+        "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
         "play", "look" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
