@@ -54,6 +54,17 @@ class OrionTaskOrchestratorTest {
         assertTrue(context.readiness.requiresApproval)
     }
 
+    @Test fun grantedCapabilityContractIsIncludedInTheActualPlannerContext() {
+        val context = OrionTaskOrchestrator.build(
+            "check current weather", listOf(tool("weather")), packs, termuxReady = true
+        )
+        val prompt = context.promptLines().joinToString("\n")
+        assertTrue(prompt.contains("GRANTED CAPABILITY CONTRACT"))
+        assertTrue(prompt.contains("use its documented functionality fully"))
+        assertTrue(prompt.contains("Do not invent additional application-level restrictions"))
+        assertTrue(prompt.contains("Actual Android permissions"))
+    }
+
     @Test fun clarificationMustPrecedeDispatch() {
         val context = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
         assertTrue(context.goal.needsClarification)
