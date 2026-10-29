@@ -168,6 +168,7 @@ private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (lower.contains("research summary") || lower.contains("sources:") || lower.contains("source list") ||
         (Regex("https?://").findAll(text).count() >= 2) ||
         (lower.contains("findings") && lower.contains("source"))) return OrionReplyType.RESEARCH
+    if (Regex("(?m)^\\s*\\|?\\s*[-:]{3,}\\s*\\|\\s*[-:]{3,}.*$").containsMatchIn(text)) return OrionReplyType.RESEARCH
     if (lower.contains("task status") || lower.contains("execution result:") ||
         lower.contains("steps completed") || lower.contains("verification:")) return OrionReplyType.TASK
     return OrionReplyType.NORMAL
