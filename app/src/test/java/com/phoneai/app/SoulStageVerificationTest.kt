@@ -21,6 +21,8 @@ class SoulStageVerificationTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("orion_soul_state_v1", Context.MODE_PRIVATE)
+            .edit().putString("state_json", "{}").commit()
         SoulSubagentCoordinator.clearForTest(context)
     }
 
