@@ -1280,7 +1280,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             if (!authorizeDirectTool("web_search", "trading_research")) {
-                ui.say("Web search was not run. Enable the Trading research pack and approve the action, or change the approval mode.")
+                ui.say("Web search was not run because the Trading research capability is disabled or this tool was explicitly denied. Enable the capability or change its tool setting; public read-only searches do not need a separate approval prompt.")
                 return
             }
             ui.phase("acting")
