@@ -101,6 +101,11 @@ class SelfExtensionLabActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        refresh()
+    }
+
     private fun refresh(message: String? = null) {
         runCatching { store.all() }
             .onSuccess {
