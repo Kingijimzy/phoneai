@@ -1465,15 +1465,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
      * stays disabled and non-web schemes are never handed to the WebView.
      */
     private fun showChatBrowserPopup(rawUrl: String?) {
-        fun safeWebUrl(raw: String?): String? {
-            val candidate = raw?.trim().orEmpty()
-            if (candidate.isBlank() || candidate.length > 4096) return null
-            val parsed = runCatching { Uri.parse(candidate) }.getOrNull() ?: return null
-            val scheme = parsed.scheme?.lowercase()
-            if (scheme != "https" && scheme != "http") return null
-            if (parsed.host.isNullOrBlank() || parsed.userInfo != null) return null
-            return parsed.toString()
-        }
+        fun safeWebUrl(raw: String?): String? = ChatBrowserUrlPolicy.normalize(raw)
 
         val initial = safeWebUrl(rawUrl)
         if (initial == null) {
@@ -1499,7 +1491,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             hint = "https://example.com"
             setPadding(dp(10), dp(7), dp(10), dp(7))
             setBackgroundColor(0xFF242424.toInt())
-            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             setText(initial)
         }
         val go = TextView(this).apply {
@@ -1527,8 +1519,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 setOnClickListener { action() }
             }
         val web = android.webkit.WebView(this)
-        web.settings.javaScriptEnabled = false
-        web.settings.domStorageEnabled = false
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true
         web.settings.allowFileAccess = false
         web.settings.allowContentAccess = false
         web.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -1558,6 +1550,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 super.onPageFinished(view, url)
                 address.setText(safeWebUrl(url) ?: initial)
             }
+        }
+        address.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                go.performClick()
+                true
+            } else false
         }
         go.setOnClickListener {
             val target = safeWebUrl(address.text?.toString())
