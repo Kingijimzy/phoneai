@@ -60,10 +60,10 @@ class TerminalActivity : Activity() {
         root.addView(tools)
         setContentView(root)
         refreshBackend()
-        append("Orion Terminal. Built-in runs in Orion's private workspace; Linux runs in managed Alpine Linux.\\n")
+        append("Orion Terminal. Built-in runs in Orion's private workspace; Linux runs in managed Alpine Linux.\n")
     }
 
-    private fun refreshBackend() { backendBtn.text = if (backend == Backend.BUILTIN) "Built-in" else "Linux"; append("— using " + (if (backend == Backend.BUILTIN) "built-in shell" else "Alpine Linux") + " —\\n") }
+    private fun refreshBackend() { backendBtn.text = if (backend == Backend.BUILTIN) "Built-in" else "Linux"; append("— using " + (if (backend == Backend.BUILTIN) "built-in shell" else "Alpine Linux") + " —\n") }
 
     private fun append(s: String) { out.append(s); scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) } }
 
