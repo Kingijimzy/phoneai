@@ -2101,17 +2101,38 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val raw = url.trim()
         if (raw.isBlank()) return "error: URL is empty"
         val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
-        val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
+        val safe = ChatBrowserUrlPolicy.normalize(candidate)
+            ?: return "error: provide a valid public HTTP or HTTPS website URL"
+        val uri = try { Uri.parse(safe) } catch (_: Exception) { null }
         if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
             return "error: provide a valid http or https website URL"
         }
+
+        // Prefer the chat-owned browser surface whenever chat is attached. This keeps web-search
+        // and open-URL shortcuts in the conversation instead of unexpectedly switching activities.
+        if (mainChatListener != null) {
+            main.post {
+                val listener = mainChatListener
+                if (listener != null) {
+                    listener.onOpenBrowser(safe)
+                } else {
+                    try {
+                        startActivity(Intent(this, BrowserActivity::class.java)
+                            .putExtra(BrowserActivity.EXTRA_URL, safe)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Exception) { }
+                }
+            }
+            return "opened in the in-chat browser popup: $safe"
+        }
+
         val i = Intent(this, BrowserActivity::class.java)
-            .putExtra(BrowserActivity.EXTRA_URL, candidate)
+            .putExtra(BrowserActivity.EXTRA_URL, safe)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             startActivity(i)
             BrowserAutomation.awaitWebView(3000L)
-            "opened in Orion's in-app browser: $candidate"
+            "opened in Orion's in-app browser: $safe"
         } catch (e: Exception) {
             "error: could not open in-app browser (" + (e.message ?: "launch failed") + ")"
         }
