@@ -5,6 +5,27 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class StandingOrderPolicyTest {
+    @Test fun schedulerUsesBoundedRetryBackoffAndStopsAfterThreeFailures() {
+        assertEquals(5 * 60_000L, StandingOrderPolicy.retryDelay(1))
+        assertEquals(15 * 60_000L, StandingOrderPolicy.retryDelay(2))
+        assertEquals(60 * 60_000L, StandingOrderPolicy.retryDelay(3))
+        val now = 10_000_000L
+        val firstFailure = StandingOrder("brief", 60, now, "digest", true, 1, "error", now + StandingOrderPolicy.retryDelay(1))
+        org.junit.Assert.assertFalse(StandingOrderPolicy.due(firstFailure, now + 1))
+        org.junit.Assert.assertTrue(StandingOrderPolicy.due(firstFailure, now + StandingOrderPolicy.retryDelay(1)))
+        val paused = firstFailure.copy(enabled = false, nextRunAt = now)
+        org.junit.Assert.assertFalse(StandingOrderPolicy.due(paused, now + 1))
+        val exhausted = firstFailure.copy(consecutiveFailures = StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES, nextRunAt = now)
+        org.junit.Assert.assertFalse(StandingOrderPolicy.due(exhausted, now + 1))
+    }
+
+    @Test fun legacyStandingOrderDefaultsToEnabledAndIntervalFallbackRemainsCompatible() {
+        val legacy = StandingOrder("brief", 60, 1_000L, "")
+        org.junit.Assert.assertTrue(legacy.enabled)
+        org.junit.Assert.assertEquals(3_601_000L, StandingOrders.nextRunAt(legacy))
+        org.junit.Assert.assertTrue(StandingOrderPolicy.due(legacy, 3_601_000L))
+    }
+
     @Test fun acceptsSupportedIntervalsAndRejectsTooFrequentChecks() {
         assertNull(StandingOrderPolicy.validate("brief", StandingOrderPolicy.MIN_MINUTES))
         assertNull(StandingOrderPolicy.validate("brief", StandingOrderPolicy.MAX_MINUTES))
