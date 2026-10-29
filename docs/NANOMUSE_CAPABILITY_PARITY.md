@@ -41,6 +41,7 @@ Compared nanoMuse's public README, AGENTS.md, docs/architecture.md, docs/roadmap
 ## Fixes made during this audit
 
 5. Added a searchable **Capabilities & Tools** entry to the full-screen chat menu. It lists the actual registered tool names, READ/WRITE classification and descriptions, with a warning that registration does not guarantee the runtime dependency, permission, connector or approval is available. This makes capabilities discoverable from chat without pretending blocked or unimplemented integrations are active.
+6. Added **Send Feedback** to the chat menu. It prepares a report with app/Android/device version details and opens Android's share chooser; nothing is uploaded automatically, and the user chooses the destination. Added **Notification Access** to route directly to Android's notification-listener settings. Existing `read_notifications` and `notification_action` contracts remain permission-gated; replying/dismissing notifications is not silently enabled.
 
 1. Changed the `termux_command` registry access class from `WRITE` to `READ`, matching its exact read-only diagnostic contract. This removes a mismatched classification without granting it installation or editing capability.
 2. Added a regression assertion that the tool is classified as READ.
