@@ -22,7 +22,7 @@ class SelfExtendingExtensionsTest {
         store = SelfExtendingExtensionStore(context)
     }
 
-    private fun draft(id: String = "format_helper", source: String = "def run(value):\\n    return str(value).strip()") =
+    private fun draft(id: String = "format_helper", source: String = "def run(value):\n    return str(value).strip()") =
         GeneratedExtension(
             id = id,
             displayName = "Format helper",
@@ -56,10 +56,10 @@ class SelfExtendingExtensionsTest {
     }
 
     @Test fun sourceValidationRejectsCommonHostEscapeAndNetworkOperations() {
-        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python", "import os\\nos.system('id')"))
-        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python", "import requests\\nrequests.get('https://example.com')"))
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python", "import os\nos.system('id')"))
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python", "import requests\nrequests.get('https://example.com')"))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("javascript", "process.exit(1)"))
-        assertNull(SelfExtendingExtensionPolicy.validateSource("python", "def run(value):\\n    return str(value).strip()"))
+        assertNull(SelfExtendingExtensionPolicy.validateSource("python", "def run(value):\n    return str(value).strip()"))
     }
 
     @Test fun duplicateIdsAndUnsupportedRuntimeAreRejected() {
