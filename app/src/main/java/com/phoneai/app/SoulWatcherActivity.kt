@@ -139,14 +139,13 @@ class SoulWatcherActivity : Activity() {
     }
 
     private fun explainLimitation(raw: String) {
-        val findings = runCatching { SoulEngineWatcher.run(applicationContext) }.getOrNull()
-        val all = (findings?.limitations.orEmpty() + listOfNotNull(SoulEngineState.snapshot(this).watcherAction.takeIf { it.contains("screen", true) })).distinct()
+        val snapshot = runCatching { SoulEngineState.snapshot(this) }.getOrNull()
+        val all = listOfNotNull(snapshot?.watcherAction?.takeIf { it.contains("screen", true) }, snapshot?.lastOutcome?.takeIf { it.contains("screen", true) })
         val screenIssue = raw.contains("screen", true) || all.any { it.contains("screen_perception", true) }
         if (screenIssue) {
             addMessage("WATCHER", "screen_perception_unavailable means Orion could not verify a usable active-window accessibility root during this check. Check that PhoneAI's Accessibility service is enabled, the screen-access disclosure was accepted, and an app window is currently visible. Android/OEM restrictions can still make the root unavailable. I cannot enable the accessibility service silently. Open the Capability Report, correct the setup if needed, then run the audit again.")
         } else {
-            val limits = findings?.limitations.orEmpty()
-            addMessage("WATCHER", if (limits.isEmpty()) "The latest local audit did not report a limitation. Run “check status” to refresh evidence." else "Current findings: ${limits.joinToString(", ")}. I can guide you to the relevant setup, but I will not claim a repair until a fresh audit verifies it.")
+            addMessage("WATCHER", "I need a fresh local audit to report current limitations accurately. Say “check status” and I will run it; this explanation command itself does not change settings or run background tasks.")
         }
     }
 
@@ -158,7 +157,7 @@ class SoulWatcherActivity : Activity() {
         }
         addMessage("WATCHER", "Pending proposals (${pending.size}). Accepting records your decision only; it does not perform the repair.")
         pending.take(8).forEach { p ->
-            val box = card()
+            val box = card(transcript)
             box.addView(label(p.title, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
             box.addView(label(p.detail, muted, 12f).apply { setPadding(0, dp(6), 0, dp(8)) })
             box.addView(label("Evidence: ${p.evidenceCount} · Type: ${p.kind.name.lowercase()}", muted, 10f))
@@ -194,7 +193,7 @@ class SoulWatcherActivity : Activity() {
         transcript.addView(bubble, params)
     }
 
-    private fun card() = LinearLayout(this).apply {
+    private fun card(parent: LinearLayout = root) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(13), dp(14), dp(13))
         setBackgroundColor(panel)
@@ -202,7 +201,7 @@ class SoulWatcherActivity : Activity() {
             setColor(panel); cornerRadius = dp(18).toFloat(); setStroke(dp(1), line)
         }
         val p = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
-        root.addView(this, p)
+        parent.addView(this, p)
     }
 
     private fun label(value: String, color: Int, size: Float) = TextView(this).apply {
