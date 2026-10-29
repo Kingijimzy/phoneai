@@ -33,6 +33,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     companion object {
         const val EXTRA_PICK_IMAGE = "com.phoneai.app.PICK_IMAGE_ON_OPEN"
         const val EXTRA_INITIAL_PROMPT = "com.phoneai.app.EXTRA_INITIAL_PROMPT"
+        const val EXTRA_OPEN_BROWSER_URL = "com.phoneai.app.EXTRA_OPEN_BROWSER_URL"
     }
     private lateinit var messages: LinearLayout
     private lateinit var scroll: ScrollView
@@ -1433,6 +1434,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }, 500L)
             }
         }
+        intent.getStringExtra(EXTRA_OPEN_BROWSER_URL)?.takeIf { it.isNotBlank() }?.let { target ->
+            window.decorView.post { if (!isFinishing && !isDestroyed) showChatBrowserPopup(target) }
+        }
         if (intent.getStringExtra("open_provider_connection") == "opencode-zen") {
             window.decorView.post { showProviderConnection(Providers.get("opencode-zen")) }
         }
@@ -1444,6 +1448,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 startActivityForResult(Intent.createChooser(picker, "Choose an image for Orion"), 44)
             }, 260L)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_OPEN_BROWSER_URL)?.takeIf { it.isNotBlank() }?.let { target ->
+            window.decorView.post { if (!isFinishing && !isDestroyed) showChatBrowserPopup(target) }
         }
     }
 
