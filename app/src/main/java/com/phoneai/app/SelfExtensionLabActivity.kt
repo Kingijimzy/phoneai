@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.os.Bundle
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -89,6 +90,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
                         onBack = { finish() },
                         onRefresh = ::refresh,
                         onSaveDraft = ::saveDraft,
+                        onDraftWithOrion = ::draftWithOrion,
                         onTest = ::testExtension,
                         onEnable = { id -> confirmEnableState.value = id },
                         onDisable = ::disableExtension,
@@ -108,6 +110,24 @@ class SelfExtensionLabActivity : ComponentActivity() {
             .onFailure {
                 statusState.value = "Registry unavailable: ${it.message ?: it.javaClass.simpleName}. Existing data was not overwritten."
             }
+    }
+
+    private fun draftWithOrion() {
+        val name = nameState.value.trim()
+        val description = descriptionState.value.trim()
+        val id = idState.value.trim()
+        if (description.isBlank()) {
+            statusState.value = "Describe what the extension should do before asking Orion to draft it."
+            return
+        }
+        val idRule = if (id.isBlank()) "Choose a valid unique lowercase id (3–48 characters)." else "Use the requested id '$id' if valid and unique; otherwise explain the conflict."
+        val prompt = "Create a safe Orion self-extension draft for this capability: " + description +
+            "\nDisplay name: " + name.ifBlank { description.take(60) } +
+            "\n" + idRule +
+            "\nUse the registered extension_create tool with runtime=python. The code must be a pure data transform that reads INPUT and sets RESULT; do not use imports, files, network, Android APIs, shell, eval, or host access." +
+            "\nThen call extension_test with at least two JSON test cases containing both input and expect. Do not call extension_enable yet." +
+            "\nReport the created extension id, exact behavior, test results, and any sandbox errors. If the tool is unavailable, explain that instead of claiming success."
+        startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt))
     }
 
     private fun saveDraft() {
@@ -199,7 +219,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
         runInput: String, onRunInput: (String) -> Unit,
         runOutput: String,
         reports: Map<String, ExtensionTestReport>,
-        onBack: () -> Unit, onRefresh: () -> Unit, onSaveDraft: () -> Unit,
+        onBack: () -> Unit, onRefresh: () -> Unit, onSaveDraft: () -> Unit, onDraftWithOrion: () -> Unit,
         onTest: (String) -> Unit, onEnable: (String) -> Unit,
         onDisable: (String) -> Unit, onRun: (String) -> Unit
     ) {
@@ -219,6 +239,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
                 Field("Python source · reads INPUT and sets RESULT", source, onSource, "RESULT = INPUT[\"value\"] * 2", singleLine = false, minLines = 4)
                 Field("Sandbox tests · JSON array", tests, onTests, "[{\"input\": {\"value\": 3}, \"expect\": 6}]", singleLine = false, minLines = 3)
                 Button(onClick = onSaveDraft, modifier = Modifier.fillMaxWidth()) { Text("Save disabled draft") }
+                androidx.compose.material3.OutlinedButton(onClick = onDraftWithOrion, modifier = Modifier.fillMaxWidth()) { Text("Ask Orion to build & test it") }
             }
             PanelCard {
                 Text("REGISTRY", color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp)
