@@ -168,11 +168,11 @@ class OrionCapabilityReportActivity : Activity() {
         val contactsState = runCatching {
             if (androidx.core.content.ContextCompat.checkSelfPermission(
                     this, android.Manifest.permission.READ_CONTACTS
-                ) == PackageManager.PERMISSION_GRANTED
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
             ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
         val notificationState = runCatching {
-            if (Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            if (android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
                     ?.contains(packageName) == true
             ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
