@@ -36,3 +36,12 @@ This document describes the Android implementation on the feature branch, not a 
 2. Regression tests cover persistence, proposal status transitions, sensitive-label omission, and successful multi-step candidate creation.
 3. Physical-device checks confirm the dashboard does not crash, restored state is accurate, and all actions remain behind the same policy gate.
 4. Keep PR #103 in draft until the required checks pass.
+
+
+## Watcher follow-up
+
+- `PhoneAiService` wakes the persisted Soul queue on a bounded timer while the accessibility service is alive; the watcher does not claim to run after Android kills the service.
+- Added `SoulWatch.run`: every tick performs a local capability audit, stores sanitized readiness evidence, and can add one deduplicated maintenance proposal for a real limitation.
+- If the user has explicitly enabled the Proactive pack and saved standing orders, a tick may execute at most one due read-only standing order. Standing-order dispatch now passes the shared `AgentPolicy.gate`; a blocked gate skips the action and does not consume the schedule.
+- The watcher does not auto-enable packs, grant permissions, edit source code, replay routes, trade, send messages, or weaken guardrails. Accept/Reject/Edit stays in the proposal inbox; actual code changes still require a reviewed development workflow.
+- The five-minute in-service wake-up is best-effort, not an Android exact alarm guarantee. Doze, force-stop, battery optimization, and OEM task killing can delay or stop it.
