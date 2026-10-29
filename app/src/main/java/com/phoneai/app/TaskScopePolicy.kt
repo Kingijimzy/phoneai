@@ -11,7 +11,7 @@ internal object TaskScopePolicy {
         "(?i)^\\s*(?:(?:please|can you|could you)\\s+)*(read[- ]only|inspect|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
     private val researchIntent = Regex(
-        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|go do|go|do)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|go do|go|do|use)\\s+)*(research|browse(?: the web| online| the internet)?|search(?: the web| online| the internet| the internet for| for| up)?|web_search|look up(?: online)?|find online|check online|check the web|check the internet|google|fetch (?:the )?(?:page|url|website)|open (?:this )?(?:url|website)|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today)\\b"
     )
     // Account/integration work is an actionable task, not ordinary conversation. This only
     // classifies scope; the registered-tool, consent, permission, and provider-auth checks still apply.
