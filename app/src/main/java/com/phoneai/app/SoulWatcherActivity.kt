@@ -112,7 +112,8 @@ class SoulWatcherActivity : Activity() {
         addMessage("YOU", raw)
         val q = raw.lowercase()
         when {
-            q in setOf("check", "check status", "run check", "scan", "audit", "refresh") -> runWatcherCheck()\n            q.contains("capabilit") || q.contains("workspace status") || q.contains("what works") || q.contains("what is connected") -> showCapabilities()
+            q in setOf("check", "check status", "run check", "scan", "audit", "refresh") -> runWatcherCheck()
+            q.contains("capabilit") || q.contains("workspace status") || q.contains("what works") || q.contains("what is connected") -> showCapabilities()
             q.contains("proposal") || q.contains("suggestion") -> showProposals()
             q.contains("capability report") || q.contains("capability board") || q.contains("open report") -> openCapabilityReport()
             q.startsWith("why") || q.contains("screen perception") || q.contains("unavailable") -> explainLimitation(raw)
