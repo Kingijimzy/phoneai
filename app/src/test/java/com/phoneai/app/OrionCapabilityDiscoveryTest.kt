@@ -9,6 +9,12 @@ class OrionCapabilityDiscoveryTest {
     private fun tool(name: String, access: ToolAccess = ToolAccess.READ) =
         ToolDefinition(name, "$name {}", "test", access)
 
+    @Test fun everyRegisteredBuiltInToolHasExactlyOneCapabilityPackMapping() {
+        val missing = ToolRegistry.all.map { it.name }.filter { AgentPolicy.packForTool(it) == null }
+        assertTrue("Unmapped registered tools: $missing", missing.isEmpty())
+        assertEquals(ToolRegistry.all.size, ToolRegistry.all.map { it.name }.distinct().size)
+    }
+
     @Test fun disabledPackBlocksRegisteredTool() {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("weather")), emptySet(), termuxReady = true)
         assertEquals(0, snapshot.availableCount)
