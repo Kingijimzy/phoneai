@@ -742,6 +742,41 @@ Rules:
         history.put(msg("system", systemPrompt(svc)))
     }
 
+    /** Report actual Android permission state to capability discovery; do not leave granted features marked unknown. */
+    private fun capabilityPermissionStates(): Map<String, OrionCapabilityDiscovery.PermissionState> {
+        fun state(check: () -> Boolean): OrionCapabilityDiscovery.PermissionState =
+            try {
+                if (check()) OrionCapabilityDiscovery.PermissionState.GRANTED
+                else OrionCapabilityDiscovery.PermissionState.MISSING
+            } catch (_: Exception) {
+                OrionCapabilityDiscovery.PermissionState.UNKNOWN
+            }
+
+        return mapOf(
+            "contacts" to state {
+                svc.checkSelfPermission(android.Manifest.permission.READ_CONTACTS) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            },
+            "location" to state {
+                svc.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                    svc.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            },
+            "notification_access" to state {
+                val enabled = android.provider.Settings.Secure.getString(
+                    svc.contentResolver,
+                    "enabled_notification_listeners"
+                ).orEmpty()
+                enabled.split(':').any { component ->
+                    runCatching {
+                        android.content.ComponentName.unflattenFromString(component)?.packageName == svc.packageName
+                    }.getOrDefault(false)
+                }
+            }
+        )
+    }
+
     private fun refreshSystem(request: String? = null) {
         if (history.length() > 0) {
             val base = systemPrompt(svc, request)
@@ -788,6 +823,7 @@ Rules:
                     registeredTools = registered,
                     enabledPacks = enabledPacks,
                     termuxReady = termuxReady,
+                    permissionStates = capabilityPermissionStates(),
                     integration = integration
                 )
                 prompt + "\n\n" + context.promptLines().joinToString("\n")
