@@ -55,4 +55,19 @@ class AgentCheckpointStoreTest {
         assertFalse(args.contains("private message"))
         assertTrue(args.contains("redacted"))
     }
+
+    @Test fun persistedStepResultsAreAvailableToTheExecutiveResumeContext() {
+        assertTrue(AgentCheckpointStore.begin(context, "Inspect Settings and report the current state"))
+        val args = JSONObject().put("name", "Settings")
+        assertTrue(AgentCheckpointStore.beginStep(context, "open_app", args))
+        assertTrue(AgentCheckpointStore.record(context, "open_app", args, "Opened Settings"))
+        assertTrue(AgentCheckpointStore.pause(context))
+
+        // The executive context must use the durable ledger, not merely the in-memory transcript.
+        val resume = AgentCheckpointStore.resumeInstruction(context)
+        assertNotNull(resume)
+        assertTrue(resume!!.contains("Inspect Settings and report the current state"))
+        assertTrue(resume.contains("open_app"))
+        assertTrue(resume.contains("Opened Settings"))
+    }
 }
