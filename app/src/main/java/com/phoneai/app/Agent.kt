@@ -2177,12 +2177,19 @@ Rules:
             "mcp_status" -> tools.mcpStatus()
             "mcp_list_tools" -> tools.mcpListTools()
             "mcp_call" -> {
-                val name = a.optString("name")
+                val name = a.optString("name").trim()
                 val args = a.optJSONObject("arguments") ?: JSONObject()
                 val host = try { java.net.URI(McpConnector.endpoint(svc)).host ?: "unknown host" } catch (_: Exception) { "unknown host" }
-                val catalogue = tools.mcpListTools()
-                if (catalogue.startsWith("error:") || catalogue.startsWith("MCP discovery failed")) catalogue else
-                    if (confirm("Remote MCP server: " + host + ". Tool: " + name + ". Advertised catalogue (untrusted): " + catalogue.take(900) + ". Arguments to send: " + args.toString().take(600) + ". Approve this exact remote call?")) tools.mcpCall(name, args) else "error: user cancelled MCP tool call"
+                when {
+                    !McpConnector.configured(svc) -> "error: no MCP endpoint configured. Open Orion Settings → Configure remote MCP server."
+                    !McpConnector.isPaired(svc) -> "error: MCP endpoint is not locally paired. Pair it in Orion Settings before making remote calls."
+                    name.isBlank() -> "error: an exact advertised MCP tool name is required."
+                    McpConnector.scopeForTool(name) !in McpConnector.scopes(svc) ->
+                        "error: MCP tool '" + name + "' requires the '" + McpConnector.scopeForTool(name) + "' scope, which is disabled."
+                    confirm("Remote MCP server: " + host + ". Tool: " + name + ". Arguments to send: " + args.toString().take(1200) + ". Approve this exact remote call?") ->
+                        tools.mcpCall(name, args)
+                    else -> "error: user cancelled MCP tool call"
+                }
             }
             "settings" -> tools.settings(a.optString("page", "main"))
             "dial" -> tools.dial(a.optString("number"))
