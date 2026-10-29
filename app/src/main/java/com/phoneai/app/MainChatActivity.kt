@@ -446,6 +446,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setPositiveButton("OK", null).show()
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
             "capabilities" -> showToolCatalog()
+            "feedback" -> showFeedbackDialog()
+            "notifications" -> openNotificationSettings()
             "mcps" -> AlertDialog.Builder(this)
                 .setTitle("MCP servers")
                 .setMessage("A connected MCP server/session manager is not currently available in this build. Orion will not show pretend connections.")
@@ -460,6 +462,75 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     }
 
     /** Shows the actual registered tool contracts so chat capabilities are discoverable, not implied. */
+    /** Feedback is user-controlled: Orion prepares a report, then the user chooses where to share it. */
+    private fun showFeedbackDialog() {
+        val input = EditText(this).apply {
+            hint = "What happened? What did you expect? Include steps to reproduce if useful."
+            setTextColor(0xFFF4F4F4.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            minLines = 4
+            maxLines = 8
+            gravity = Gravity.TOP or Gravity.START
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(0xFF191919.toInt(), 12, 0xFF383838.toInt())
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(label("Feedback stays on this device until you choose a sharing app. Orion does not silently upload it.", 12f, 0xFFAAAAAA.toInt()).apply { setPadding(0, 0, 0, dp(10)) })
+            addView(input, LinearLayout.LayoutParams(-1, dp(132)))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Send Orion feedback")
+            .setView(wrap)
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("CHOOSE APP TO SEND", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val message = input.text.toString().trim()
+                if (message.isBlank()) {
+                    input.error = "Describe the feedback first"
+                    return@setOnClickListener
+                }
+                val version = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown" } catch (_: Exception) { "unknown" }
+                val report = buildString {
+                    appendLine("Orion Android feedback")
+                    appendLine("App version: " + version)
+                    appendLine("Android: " + android.os.Build.VERSION.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine("Device: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL)
+                    appendLine()
+                    append(message)
+                }
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "Orion feedback · " + version)
+                    putExtra(Intent.EXTRA_TEXT, report)
+                }
+                try {
+                    startActivity(Intent.createChooser(send, "Choose where to send feedback"))
+                    dialog.dismiss()
+                } catch (_: Exception) {
+                    Toast.makeText(this, "No compatible app is available to share feedback.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /** Opens Android's notification-listener settings; it does not silently grant notification access. */
+    private fun openNotificationSettings() {
+        val intent = if (android.os.Build.VERSION.SDK_INT >= 22) {
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        } else Intent(Settings.ACTION_SETTINGS)
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
     private fun showToolCatalog() {
         val dialog = AlertDialog.Builder(this)
             .setTitle("Orion capabilities & tools")
