@@ -22,6 +22,6 @@ internal object ResearchFollowUpPolicy {
 
     fun commandFor(message: String, previousUserRequest: String?): String {
         val target = resolveTarget(message, previousUserRequest) ?: return message.trim()
-        return "Research this: $target"
+        return "Research this $target"
     }
 }
