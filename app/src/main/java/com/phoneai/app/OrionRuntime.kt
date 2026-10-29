@@ -151,7 +151,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
             inflight?.let { activeItem ->
                 // SOUL_WATCH may process an opted-in standing order with an external effect.
                 // After a process death its outcome is ambiguous, so never replay that tick blindly.
-                if (activeItem.type == WorkType.SOUL_WATCH) {
+                if (!OrionRuntimePolicy.canReplayAfterProcessDeath(activeItem.type)) {
                     lastEvent = "recovery_required:soul_watch_outcome_unknown"
                     lastChangedAt = clock()
                 } else if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
