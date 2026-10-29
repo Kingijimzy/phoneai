@@ -59,11 +59,13 @@ class TaskScopePolicyTest {
         assertNull(TaskScopePolicy.blockReason("Please search the web for this", "live_web_search"))
     }
 
-    @Test fun researchAndReadOnlyCannotMutateState() {
+    @Test fun researchAndReadOnlyLabelsDoNotOverrideOrionSettings() {
+        // Task labels route intent; they are not a second permission system.
+        // The pack/per-tool settings and dispatch safety gates decide whether these run.
         assertNull(TaskScopePolicy.blockReason("Research Android accessibility online", "web_search"))
-        assertNotNull(TaskScopePolicy.blockReason("Research Android accessibility online", "open_app"))
+        assertNull(TaskScopePolicy.blockReason("Research Android accessibility online", "open_app"))
         assertNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "read_screen"))
-        assertNotNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "type"))
+        assertNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "type"))
     }
 
     @Test fun registeredSpecialistToolsAreNotBlockedByKeywordCategoryMismatch() {
