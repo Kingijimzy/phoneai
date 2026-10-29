@@ -10,17 +10,15 @@ class ProviderFallbackPolicyTest {
         assertTrue(ProviderFallbackPolicy.MAX_BACKUP_PROVIDERS == 2)
     }
 
-    @Test fun onlyExplicitHttp429AllowsRotation() {
+    @Test fun eligibleTransientProviderFailuresAllowBoundedRotation() {
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429", 429)))
         assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("rate limit reached", 429)))
-
-        // Recoverable-looking errors must not silently consume another provider's quota.
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503)))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 503", 503)))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("Google Gemini: request timed out.")))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("provider timed out")))
+        assertTrue(ProviderFallbackPolicy.shouldTryBackup(AiException("model returned an empty response")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 404", 404)))
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("model returned an empty response")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("OpenRouter: out of credit (402).")))
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("Google Gemini: request timed out.")))
-        assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("provider timed out")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 429 without a parsed status")))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 401", 401)))
         assertFalse(ProviderFallbackPolicy.shouldTryBackup(AiException("HTTP 400", 400)))

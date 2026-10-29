@@ -28,10 +28,11 @@ class OrionRecoveryPlannerTest {
         assertTrue(guidance.reason.contains("bypass"))
     }
 
-    @Test fun transientFailureAvoidsRapidRetry() {
+    @Test fun transientFailureChoosesAnotherMethodWithoutRapidRetry() {
         val guidance = OrionRecoveryPlanner.forFailure("browser_navigate", "error: request timeout")
-        assertEquals(OrionRecoveryPlanner.Strategy.ASK_USER_TO_RESOLVE, guidance.strategy)
-        assertTrue(guidance.reason.contains("rapid retries"))
+        assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
+        assertTrue(guidance.reason.contains("retry within the shared request budget"))
+        assertTrue(guidance.mustNotRepeatSameCall)
     }
 
     @Test fun staleTargetUsesFreshEvidenceAndDifferentArguments() {
