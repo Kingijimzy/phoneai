@@ -43,6 +43,7 @@
         android:extractNativeLibs="true"
         android:theme="@style/Theme.Orion">
 
+        <activity android:name=".SelfExtensionLabActivity" android:exported="false" />
         <activity android:name=".SoulEngineActivity" android:exported="false" />
         <activity android:name=".KnowledgeGraphActivity" android:exported="false" />
         <activity android:name=".MemoryActivity" android:exported="false" />
