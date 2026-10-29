@@ -99,6 +99,21 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().available)
     }
 
+    @Test fun enabledGrantedCapabilityTellsPlannerToUseItWithoutInventingExtraRestrictions() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("weather")),
+            setOf("trading_research"),
+            termuxReady = true
+        )
+        val prompt = snapshot.promptLines().joinToString("\n")
+        assertTrue(snapshot.tools.single().available)
+        assertTrue(prompt.contains("GRANTED CAPABILITY RULE"))
+        assertTrue(prompt.contains("use it fully"))
+        assertTrue(prompt.contains("Do not invent extra application-level restrictions"))
+        assertTrue(prompt.contains("actual Android OS/runtime permissions"))
+        assertTrue(prompt.contains("explicit confirmations required for consequential actions"))
+    }
+
     @Test fun integrationStateIsReportedAsSuppliedAndNotInvented() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
