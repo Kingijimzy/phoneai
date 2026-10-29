@@ -61,3 +61,7 @@ This document describes the Android implementation on the feature branch, not a 
 - Screen perception is checked separately against the current active accessibility root. A connected service with no readable root is reported as limited, not automatically mislabeled as a missing permission.
 - Connection metadata is explicitly labeled as metadata, not proof of successful live API access. The snapshot does not expose credentials, enable packs, grant permissions, or perform external mutations.
 - **Not yet claimed:** automatic repair for every blocker, successful end-to-end tests for every integration, a full unified workspace navigation router, or real-device verification. Provider-specific live probes should be added only where a safe, read-only health-check contract exists.
+
+### Build regression note
+
+- A Kotlin syntax error in the Watcher command-routing `when` block (literal `\\n` embedded between two branches) was corrected in commit `5f12d58e1b79adc26fe53f66898b065b6b95b0ec`. The correction is source-verified; the updated commit still requires a fresh Android build before the capability hub can be considered build-verified.
