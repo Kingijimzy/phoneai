@@ -76,6 +76,7 @@ class SoulWatcherActivity : Activity() {
         root.addView(statusCard)
         root.addView(actionButton("Schedules & next runs") { showSchedules() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
         root.addView(actionButton("Propose · Probe · Compose") { showP3Reports() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(6) })
+        root.addView(actionButton("Subagents · Run & Review") { runSubagents() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(6) })
 
         root.addView(label("WATCHER CONVERSATION", white, 13f).also { it.typeface = Typeface.DEFAULT_BOLD; it.setPadding(0, dp(16), 0, dp(8)) })
         val scroll = ScrollView(this).apply { isFillViewport = false }
@@ -122,13 +123,15 @@ class SoulWatcherActivity : Activity() {
             q.contains("schedule") || q.contains("standing order") || q.contains("next run") -> showSchedules()
             q.startsWith("pause ") || q.startsWith("resume ") -> handleScheduleCommand(q)
             q.contains("memory") || q.contains("nudge") || q.contains("save this") -> showMemoryNudges()
+            q == "run subagents" || q == "run agents" || q == "coordinate agents" -> runSubagents()
+            q.contains("subagent report") || q.contains("show agents") || q.contains("show subagents") -> showSubagentReport()
             q == "run probes" || q == "probe now" || q.contains("run experiment") -> runP3Probe()
             q.contains("probe") || q.contains("experiment") -> showProbeReport()
             q.contains("composition") || q.contains("compose") || q.contains("draft guidance") -> showCompositionReport()
             q.contains("proposal") || q.contains("suggestion") -> showProposals()
             q.contains("capability report") || q.contains("capability board") || q.contains("open report") -> openCapabilityReport()
             q.startsWith("why") || q.contains("screen perception") || q.contains("unavailable") -> explainLimitation(raw)
-            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show schedules”, “pause brief”, “resume brief”, “show proposals”, “run probes”, “show probe results”, “show composition drafts”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
+            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show schedules”, “pause brief”, “resume brief”, “show proposals”, “run probes”, “show probe results”, “show composition drafts”, “run subagents”, “show subagent report”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
             else -> addMessage("WATCHER", "I don't have a verified local action for that command yet. I haven't changed anything. Try “check status”, “show proposals”, or “why screen perception unavailable”.")
         }
     }
@@ -258,6 +261,27 @@ class SoulWatcherActivity : Activity() {
         } else {
             addMessage("WATCHER", "I need a fresh local audit to report current limitations accurately. Say “check status” and I will run it; this explanation command itself does not change settings or run background tasks.")
         }
+    }
+
+    private fun runSubagents() {
+        addMessage("WATCHER", "Coordinating four bounded local specialists. They will inspect saved proposals, capabilities, safety hints and lessons; they will not execute tools or call external models.")
+        Thread {
+            val result = runCatching { SoulSubagentCoordinator.run(applicationContext, force = true) }
+            runOnUiThread {
+                result.onSuccess {
+                    addMessage("WATCHER", it.summary)
+                    addMessage("WATCHER", SoulSubagentCoordinator.latestReport(applicationContext))
+                }.onFailure {
+                    addMessage("WATCHER", "Subagent run failed: " + (it.message ?: it.javaClass.simpleName) + ". No actions were taken.")
+                }
+            }
+        }.start()
+    }
+
+    private fun showSubagentReport() {
+        val report = runCatching { SoulSubagentCoordinator.latestReport(this) }
+            .getOrElse { "Subagent report unavailable: " + it.javaClass.simpleName }
+        addMessage("WATCHER", "SUBAGENT COORDINATION REPORT\\n" + report)
     }
 
     private fun showP3Reports() {
