@@ -456,10 +456,24 @@ class SettingsActivity : Activity() {
             12f, Theme.MUTED
         ), 8)
         add(s1, button("Allow location", false) {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION), 75)
+            val missing = arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+                .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                .toTypedArray()
+            if (missing.isEmpty()) {
+                Toast.makeText(this, "Location permission is already granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                requestPermissions(missing, 75)
+            }
         }, 8)
         add(s1, button("Allow microphone and notifications", false) {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
+            val requested = mutableListOf(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33) requested += Manifest.permission.POST_NOTIFICATIONS
+            val missing = requested.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
+            if (missing.isEmpty()) {
+                Toast.makeText(this, "Microphone and notification runtime permissions are already granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                requestPermissions(missing, 1)
+            }
         }, 8)
         add(s1, button("Open Orion", true) {
             val s = PhoneAiService.instance
