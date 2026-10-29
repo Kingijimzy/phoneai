@@ -448,6 +448,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             "capabilities" -> showToolCatalog()
             "feedback" -> showFeedbackDialog()
             "notifications" -> openNotificationSettings()
+            "alerts" -> startActivity(Intent(this, ProactiveActivity::class.java))
             "mcps" -> AlertDialog.Builder(this)
                 .setTitle("MCP servers")
                 .setMessage("A connected MCP server/session manager is not currently available in this build. Orion will not show pretend connections.")
