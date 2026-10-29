@@ -126,6 +126,24 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
 
+    private val consequentialTools = setOf("telegram_send", "notification_action", "mcp_call", "sms", "python_exec")
+
+    /** Risk used by recovery. Mirrors the dispatcher's consequential classification so recovery never loosens it. */
+    private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
+        val consequential = tool in consequentialTools ||
+            AgentHooks.requiresConfirmation(tool, args, "") ||
+            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
+        return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
+    }
+
+    private fun isRetryableRead(tool: String, args: JSONObject): Boolean =
+        recoveryRisk(tool, args) == RecoveryPolicy.Risk.READ_ONLY
+
+    private fun sleepUnlessStopped(ms: Long) {
+        var left = ms
+        while (left > 0 && !stopped) { val d = minOf(100L, left); try { Thread.sleep(d) } catch (_: InterruptedException) { return }; left -= d }
+    }
+
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         // Cancellation is terminal for this dispatch attempt, including paths that would otherwise prompt for approval.
         if (stopped) {
@@ -199,7 +217,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
-            tool in setOf("telegram_send", "notification_action", "mcp_call", "sms", "python_exec") ||
+            tool in consequentialTools ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where")))
         val gate = AgentPolicy.gate(
             svc, pack, tool,
@@ -1504,7 +1522,31 @@ Rules:
             }
             toolCalls++
             ui.note("[TASK:RUNNING]\nRunning $tool")
-            val result = executeWithRecoveryGuard(tool, args)
+            var result = executeWithRecoveryGuard(tool, args)
+            var readRetries = 0
+            if (isRetryableRead(tool, args)) {
+                // A read has no side effect, so a transient or timed-out failure is retried with bounded backoff.
+                // Anything else (writes, shell, consequential actions, permission errors) is never repeated here.
+                val outcome = RecoveryPolicy.retryRead(
+                    first = result,
+                    isFailure = { ToolResultPolicy.failureReason(it) != null },
+                    stopped = { stopped },
+                    budgetExhausted = { budgetStopReason() != null },
+                    sleep = { ms -> sleepUnlessStopped(ms) },
+                    onRetry = { n, failure ->
+                        ui.phase("recovering")
+                        ui.note("[TASK:RECOVER]\nRetry $n/${RecoveryPolicy.MAX_READ_RETRIES} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
+                        failedCallGuard.forget(tool, args)
+                        toolCalls++
+                    }
+                ) { executeWithRecoveryGuard(tool, args) }
+                result = outcome.result
+                readRetries = outcome.retries
+                if (readRetries > 0) {
+                    val ok = ToolResultPolicy.failureReason(result) == null
+                    ui.note("[TASK:RECOVER]\n" + (if (ok) "Read recovered after $readRetries retr${if (readRetries == 1) "y" else "ies"}" else "Read still failing after $readRetries retr${if (readRetries == 1) "y" else "ies"}; changing approach"))
+                }
+            }
             runTools++
             if (result.startsWith("error")) runFailed++
             ui.note(activityNote(tool, args, result))
@@ -1532,9 +1574,21 @@ Rules:
             }
             val toolFailure = ToolResultPolicy.failureReason(result)
             if (toolFailure != null) {
+                val failureKind = RecoveryPolicy.classify(result)
+                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries)
+                val replanTask = managedTask.fail()
+                if (decision == RecoveryPolicy.Decision.REPLAN && replanTask?.phase == TaskLifecycle.Phase.RECOVER && !stopped && budgetStopReason() == null) {
+                    // Recoverable: keep the saved progress, tell the model exactly what failed, and require a different action.
+                    managedTask = replanTask
+                    ui.phase("recovering")
+                    ui.note("[TASK:RECOVER]\nRecovery ${managedTask.recoveries}/${TaskLifecycle.MAX_RECOVERIES}: '$tool' failed (${failureKind.name.lowercase()}); replanning with a different action")
+                    history.put(msg("user", "RESULT: " + result.take(3000) + "\n" + RecoveryPolicy.replanNudge(tool, failureKind, toolFailure)))
+                    compact()
+                    continue
+                }
                 // Never retry a potentially side-effecting action blindly. Record recovery intent,
                 // then block safely so the next turn can inspect evidence before proceeding.
-                val failedTask = managedTask.fail()
+                val failedTask = replanTask
                 if (failedTask?.phase == TaskLifecycle.Phase.RECOVER) {
                     managedTask = failedTask
                     ui.note("[TASK:RECOVER]\nFailure classified; preparing a new plan without repeating the same action")
@@ -1551,7 +1605,8 @@ Rules:
                 ui.phase("error")
                 val diagnosis = ToolResultPolicy.diagnose(result)
                 ui.note("[TASK:BLOCKED]\nFailure type: ${diagnosis.kind.name.lowercase()}\nSafe next step: ${diagnosis.safeNextStep}")
-                ui.say("I couldn't complete the step '$tool'. ${diagnosis.reason.ifBlank { toolFailure }} Safe next step: ${diagnosis.safeNextStep} I paused the task and saved its progress; I have not marked the task complete.")
+                val precise = if (failureKind == RecoveryPolicy.Failure.PERMISSION || failureKind == RecoveryPolicy.Failure.AMBIGUOUS) RecoveryPolicy.pauseMessage(tool, failureKind) + " " else ""
+                ui.say(precise + "I couldn't complete the step '$tool'. ${diagnosis.reason.ifBlank { toolFailure }} Safe next step: ${diagnosis.safeNextStep} I paused the task and saved its progress; I have not marked the task complete.")
                 return
             }
             history.put(msg("user", "RESULT: " + result.take(3500)))
