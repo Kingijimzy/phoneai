@@ -53,9 +53,10 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Open WhatsApp and send good morning"))
     }
 
-    @Test fun chatCannotInvokeToolsEvenIfModelRequestsOne() {
-        assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "read_screen"))
-        assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "open_app"))
+    @Test fun registeredToolsAreNotBlockedByChatClassificationAlone() {
+        assertNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "read_screen"))
+        assertNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "open_app"))
+        assertNull(TaskScopePolicy.blockReason("Please search the web for this", "live_web_search"))
     }
 
     @Test fun researchAndReadOnlyCannotMutateState() {
@@ -65,9 +66,9 @@ class TaskScopePolicyTest {
         assertNotNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "type"))
     }
 
-    @Test fun unrelatedSpecialistGroupsAreBlocked() {
-        assertNotNull(TaskScopePolicy.blockReason("Open WhatsApp and read my last chat", "bybit_public_ticker"))
-        assertNotNull(TaskScopePolicy.blockReason("What is the BTC price on Bybit", "telegram_send"))
+    @Test fun registeredSpecialistToolsAreNotBlockedByKeywordCategoryMismatch() {
+        assertNull(TaskScopePolicy.blockReason("Open WhatsApp and read my last chat", "bybit_public_ticker"))
+        assertNull(TaskScopePolicy.blockReason("What is the BTC price on Bybit", "telegram_send"))
         assertNull(TaskScopePolicy.blockReason("What is the BTC price on Bybit", "bybit_public_ticker"))
         assertNull(TaskScopePolicy.blockReason("Open Telegram and read my messages", "telegram_status"))
     }
