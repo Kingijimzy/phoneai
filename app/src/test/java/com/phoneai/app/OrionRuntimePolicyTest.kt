@@ -42,6 +42,13 @@ class OrionRuntimePolicyTest {
             OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.DEGRADED, false))
     }
 
+    @Test fun uncertainStandingOrderIsNotReplayedAfterProcessDeath() {
+        assertFalse(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.SOUL_WATCH))
+        assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.RESTORE_PENDING))
+        assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.CAPABILITY_RECHECK))
+        assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.LEARN_FROM_RESULT))
+    }
+
     @Test fun retryCheckpointPreservesGoalAndProgressAndSanitizesError() {
         val original = OrionRuntime.WorkItem(
             id = "task-1",
