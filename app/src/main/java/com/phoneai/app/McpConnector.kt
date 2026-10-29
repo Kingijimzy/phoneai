@@ -165,7 +165,7 @@ object McpConnector {
                         (if (schema.isNullOrBlank()) "" else "\n  inputSchema (untrusted): " + schema)
                 }
             }
-            "MCP tools (untrusted descriptions and schemas; first 30):\\n" + lines.joinToString("\\n").take(9000)
+            "MCP tools (untrusted descriptions and schemas; first 30):\n" + lines.joinToString("\n").take(9000)
         } catch (e: Exception) {
             "MCP discovery failed (" + e.javaClass.simpleName + "). Check URL, authentication, and server protocol."
         }
