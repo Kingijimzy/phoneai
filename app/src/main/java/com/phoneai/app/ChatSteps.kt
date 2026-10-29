@@ -62,7 +62,8 @@ internal data class ToolStep(
     val status: StepStatus,
     val startedAtNs: Long,
     val endedAtNs: Long? = null,
-    val resultLineId: Long? = null
+    val resultLineId: Long? = null,
+    val retries: Int = 0
 ) {
     val active: Boolean get() = status == StepStatus.RUNNING
 
@@ -71,7 +72,8 @@ internal data class ToolStep(
         if (status == StepStatus.CANCELLED) return null
         val end = endedAtNs ?: nowNs
         val diff = end - startedAtNs
-        if (startedAtNs <= 0L || diff < MIN_REAL_GAP_NS) return null
+        // Restored history uses hashed event ids (within Int range), which are not timestamps.
+        if (startedAtNs <= Int.MAX_VALUE.toLong() || diff < MIN_REAL_GAP_NS) return null
         return diff / 1_000_000_000L
     }
 
@@ -97,6 +99,16 @@ internal object StepTracker {
                 steps += ToolStep(line.id, tool, StepFormat.label(tool), StepStatus.RUNNING, line.id)
                 continue
             }
+            if (text.startsWith("[TASK:RECOVER]")) {
+                val n = Regex("Retry (\\d+)/").find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val idx = steps.indexOfLast { it.active }
+                if (n != null && idx >= 0) steps[idx] = steps[idx].copy(retries = n)
+                continue
+            }
+            if (text.startsWith("[TASK:CANCELLED]")) {
+                for (i in steps.indices) if (steps[i].active) steps[i] = steps[i].copy(status = StepStatus.CANCELLED)
+                continue
+            }
             val result = parseResult(text) ?: continue
             val status = if (result.failed) StepStatus.FAILED else StepStatus.SUCCESS
             val openIdx = steps.indexOfLast { it.active && it.tool == result.tool }
@@ -111,6 +123,32 @@ internal object StepTracker {
         }
         return steps
     }
+
+    /** What the task as a whole is doing right now, from the newest lifecycle note after the last user message. */
+    enum class TaskState { NONE, WORKING, RECOVERING, WAITING, CANCELLED, FAILED, DONE }
+
+    fun taskState(lines: List<StepLine>): TaskState {
+        val start = lines.indexOfLast { it.kind == "me" } + 1
+        var state = TaskState.NONE
+        for (line in lines.drop(start)) {
+            if (line.kind != "note") continue
+            val t = line.text
+            state = when {
+                t.startsWith("[TASK:RECOVER]") -> TaskState.RECOVERING
+                t.startsWith("[TASK:BLOCKED]") -> TaskState.WAITING
+                t.startsWith("[TASK:CANCELLED]") -> TaskState.CANCELLED
+                t.startsWith("[TASK:COMPLETE]") || t.startsWith("[TASK:RECORD]") -> TaskState.DONE
+                t.startsWith("[TASK:RUNNING]") || t.startsWith("[TASK:EXECUTE]") || t.startsWith("[TASK:PLAN]") -> TaskState.WORKING
+                t.startsWith("[TASK:FAILED]") -> if (state == TaskState.RECOVERING) state else TaskState.FAILED
+                else -> state
+            }
+        }
+        return state
+    }
+
+    /** Steps of the current task only: everything after the newest user message. */
+    fun currentTaskSteps(lines: List<StepLine>): List<ToolStep> =
+        derive(lines.drop(lines.indexOfLast { it.kind == "me" } + 1))
 
     private data class Result(val tool: String, val failed: Boolean, val detail: String?)
 
