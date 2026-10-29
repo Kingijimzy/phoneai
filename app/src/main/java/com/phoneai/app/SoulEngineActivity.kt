@@ -78,7 +78,11 @@ class SoulEngineActivity : ComponentActivity() {
             val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
             val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
             val serviceReady = PhoneAiService.instance != null
-            val shellReady = runCatching { TermuxBridgeRunner.readiness(this) == null }.getOrDefault(false)
+            // The built-in shell is Orion-owned; its readiness must not depend on an optional
+            // external terminal app or bridge being installed.
+            val shellReady = runCatching {
+                ShellRunner.workspace(this).isDirectory && java.io.File("/system/bin/sh").canExecute()
+            }.getOrDefault(false)
             val status = when {
                 tools == 0 || packs == 0 -> "BLOCKED · core registry unavailable"
                 !serviceReady || enabled == 0 -> "LIMITED · service or capability packs need attention"
