@@ -178,7 +178,10 @@ object LifeLoop {
             } catch (e: Exception) { "error: " + (e.message ?: "failed") }
             val dayKey = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
             val notify = StandingOrderPolicy.shouldNotify(o.lastDigest, result, o.kind, dayKey)
-            val notificationPosted = notify && post(c, o.kind, result)
+            val notificationPosted = notify && try { post(c, o.kind, result) } catch (e: Exception) {
+                AgentPolicy.log(c, "standing_order", o.kind, null, "notification dispatch threw " + e.javaClass.simpleName + "; result digest retained for retry")
+                false
+            }
             val nextDigest = StandingOrderPolicy.digestAfterAttempt(
                 o.lastDigest, result, notify, notificationPosted, o.kind, dayKey
             )
@@ -197,7 +200,11 @@ object LifeLoop {
     private fun post(c: Context, kind: String, text: String): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "Orion standing orders", NotificationManager.IMPORTANCE_DEFAULT))
+        if (!androidx.core.app.NotificationManagerCompat.from(c).areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Orion standing orders", NotificationManager.IMPORTANCE_DEFAULT))
+            if (nm.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return false
+        }
         val open = PendingIntent.getActivity(c, 84021, c.packageManager.getLaunchIntentForPackage(c.packageName) ?: Intent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         @Suppress("DEPRECATION")
         val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, CHANNEL) else android.app.Notification.Builder(c)
