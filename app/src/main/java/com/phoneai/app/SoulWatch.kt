@@ -54,7 +54,7 @@ internal object SoulEngineWatcher {
         }
         val schedulerLimitations = if (StandingOrders.storageError() != null) listOf("standing_order_storage_unavailable") else emptyList()
         val limitations = (report.limitations +
-            if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList() +
+            (if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList()) +
             schedulerLimitations).distinct()
         val summary = "Watcher readiness=$status; registered_tools=$registered; enabled_packs=$enabled; limitations=${limitations.joinToString(",").ifBlank { "none" }}."
         runCatching { SoulEngineState.recordLesson(c, "watcher_health", summary, status) }
