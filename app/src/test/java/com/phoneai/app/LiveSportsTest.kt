@@ -26,6 +26,12 @@ class LiveSportsTest {
         assertTrue(lines[0].contains("Manchester United 2 - 1 AFC Bournemouth") && lines[0].contains("LIVE 67'"))
     }
 
+    @Test fun matchesFixtureWhenQuestionNamesBothTeams() {
+        val lines = LiveSports.format(payload, "manchester united bournemouth", "Premier League")
+        assertEquals(1, lines.size)
+        assertTrue(lines[0].contains("Manchester United 2 - 1 AFC Bournemouth"))
+    }
+
     @Test fun upcomingGameShowsKickoff() {
         val lines = LiveSports.format(payload, "arsenal", "Premier League")
         assertTrue(lines[0].contains("kicks off 3:00 PM"))
