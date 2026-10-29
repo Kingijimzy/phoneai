@@ -67,7 +67,7 @@ internal object OrionCentralBrain {
                 val notice = saved.optString("recoveryNotice", "").replace(Regex("\\s+"), " ").take(220)
                 buildString {
                     appendLine("DURABLE EXECUTION CHECKPOINT")
-                    appendLine("status=$status; verified_recorded_steps=${steps?.length() ?: 0}; in_flight_tool=${active?.optString("tool", "unknown") ?: "none"}.")
+                    appendLine("status=$status; recorded_steps=${steps?.length() ?: 0}; in_flight_tool=${active?.optString("tool", "unknown") ?: "none"}.")
                     if (notice.isNotBlank()) appendLine("recovery_notice=$notice")
                     appendLine("Resume from this checkpoint when it belongs to the user's current goal. If an in-flight action remains unresolved, inspect its outcome before any possible repeat. Do not restart completed steps without evidence that they need repeating.")
                 }
