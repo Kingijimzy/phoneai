@@ -10,6 +10,9 @@ interface AgentUi {
     fun note(text: String)
     fun stream(text: String) {}
 
+    /** Ask the attached chat UI to host browser automation in its in-chat popup. */
+    fun openBrowser(url: String) {}
+
     /** "thinking" while the AI decides, "acting" while a tool runs. */
     fun phase(p: String)
 
@@ -287,6 +290,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
         val shouldVerifyAction = tool in actionTools &&
             (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
+        // Browser navigation is hosted in the in-chat popup. Attach that WebView to
+        // BrowserAutomation so the visible popup and guarded tool snapshots share one session.
+        if (tool == "browser_navigate") {
+            val target = args.optString("url")
+            if (ChatBrowserUrlPolicy.normalize(target) != null) ui.openBrowser(target)
+        }
         // Capture a real pre-action state where possible, so a later comparison can
         // verify the change instead of merely reporting that a dispatch was accepted.
         if (shouldVerifyAction && (lastScreenSnapshot.isBlank() ||
