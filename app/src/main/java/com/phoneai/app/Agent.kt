@@ -1262,6 +1262,20 @@ Rules:
                 ui.say(scores)
                 return
             }
+            // Scoreboard gaps are common for postponed games and feed outages. Try web sources
+            // before falling back to a model that might only guess from stale knowledge.
+            val web = try { LiveWebSearch.search(command + " football score result") } catch (e: Exception) {
+                "error: web fallback failed (" + e.javaClass.simpleName + ")"
+            }
+            val answer = if (web.startsWith("Web search results for")) {
+                summarizeSearch(command, web)
+            } else {
+                "I couldn't verify that score from the live scoreboard or web search just now. I won't guess the result.\n" + web
+            }
+            logShortcut("live_sports_fallback", answer)
+            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+            ui.say(answer)
+            return
         }
         // Explicit app/action requests must reach the agent tool loop before any generic
         // web-search shortcut. Otherwise "open YouTube and search for X" gets sent to
