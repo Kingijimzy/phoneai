@@ -18,6 +18,7 @@ class SoulEngineActivity : ComponentActivity() {
     private val metricsState = mutableStateOf("")
     private val selfTestState = mutableStateOf("")
     private val coreEnabledState = mutableStateOf(false)
+    private val proposalsState = mutableStateOf<List<SoulEngineState.Proposal>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,7 +52,17 @@ class SoulEngineActivity : ComponentActivity() {
                         onOpenSettings = { startActivity(Intent(this@SoulEngineActivity, SettingsActivity::class.java)) },
                         onOpenCapabilityReport = { open(OrionCapabilityReportActivity::class.java) },
                         onOpenTeach = { open(TeachModeActivity::class.java) },
-                        onOpenExtensions = { open(SelfExtensionLabActivity::class.java) }
+                        onOpenExtensions = { open(SelfExtensionLabActivity::class.java) },
+                        proposals = proposalsState.value,
+                        onReviewProposal = { id, status, title ->
+                            val saved = runCatching { SoulEngineState.reviewProposal(this@SoulEngineActivity, id, status, title) }.getOrDefault(false)
+                            if (saved) {
+                                refreshSnapshot()
+                                Toast.makeText(this@SoulEngineActivity, "Proposal ${status.name.lowercase()}", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(this@SoulEngineActivity, "Proposal could not be saved; refresh and try again", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     )
             }
             refreshSnapshot()
@@ -89,6 +100,7 @@ class SoulEngineActivity : ComponentActivity() {
             val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
             val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
             val soulState = runCatching { SoulEngineState.snapshot(this) }.getOrNull()
+            proposalsState.value = soulState?.proposals ?: emptyList()
             val pendingProposals = soulState?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0
             val lessonCount = soulState?.lessons?.size ?: 0
             val serviceReady = PhoneAiService.instance != null
