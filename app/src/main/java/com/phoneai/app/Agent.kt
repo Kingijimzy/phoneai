@@ -1385,7 +1385,7 @@ Rules:
             ?: trailingNamedRepo?.groupValues?.getOrNull(1)
         if (!resumeRequest && !browserActionTask && requestedRepoName != null) {
             val requestedName = requestedRepoName
-            if (!authorizeDirectTool("github_public", "orion_core")) {
+            if (!authorizeDirectTool("github_public", "trading_research")) {
                 val answer = "I couldn't search public GitHub because the GitHub public-read capability is disabled or this tool was explicitly denied. Enable the public GitHub capability and retry; public repository reads do not need a separate approval prompt."
                 logShortcut("github_repository_search", answer)
                 history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
