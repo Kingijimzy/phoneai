@@ -155,6 +155,38 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    /** Search public GitHub repositories by name without requiring private account access. */
+    fun githubSearchRepository(name: String): String {
+        val query = name.trim().take(100)
+        if (query.isBlank() || !Regex("^[A-Za-z0-9_. -]{1,100}$").matches(query)) {
+            return "error: provide a simple public repository name"
+        }
+        return try {
+            val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+            val conn = (URL("https://api.github.com/search/repositories?q=" + encoded + "&per_page=5&sort=updated").openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("User-Agent", "PhoneAI-ReadOnly-Integration")
+            val code = conn.responseCode
+            val raw = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(80000) }.orEmpty()
+            conn.disconnect()
+            if (code !in 200..299) return "error: GitHub repository search returned HTTP $code"
+            val items = JSONObject(raw).optJSONArray("items") ?: JSONArray()
+            if (items.length() == 0) return "No public repositories matched '$query'."
+            val results = (0 until minOf(5, items.length())).mapNotNull { i ->
+                val obj = items.optJSONObject(i) ?: return@mapNotNull null
+                val full = obj.optString("full_name")
+                if (full.isBlank()) null else "MATCH: $full\nDescription: ${obj.optString("description", "No description provided")}\nURL: ${obj.optString("html_url", "https://github.com/$full")}"
+            }
+            "Public GitHub repository search for '$query':\n" + results.joinToString("\n\n")
+        } catch (e: Exception) {
+            "error: public GitHub search failed: ${e.message ?: "network error"}"
+        }
+    }
+
     /**
      * Read-only public GitHub lookup. Calls a fixed api.github.com endpoint; never accepts
      * arbitrary URLs, never sends a token, and never performs write operations.
