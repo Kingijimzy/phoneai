@@ -97,3 +97,13 @@ This commit establishes the persistent lifecycle and its safety tests; it does *
 - [ ] Chat gap detector -> generated draft -> sandbox test -> user approval -> tool registry -> verified execution flow.
 - [ ] Runtime permission checks for every capability call, including after registration.
 - [ ] On-device acceptance tests for process death, interrupted tests, cancellation and resource exhaustion.
+
+
+## 2026-10-29 settings and activation follow-up
+
+- Settings now uses collapsible sections, compact navigation shortcuts, and a neutral graphite/silver/white treatment so advanced controls do not overwhelm the first screen.
+- The device setup section remains immediately visible; health, AI providers, knowledge, voice, memory, browser, tools, and integrations can be expanded when needed.
+- Core `phone_control` and `messaging` capability packs are enabled by default for new installations so existing companion tools are discoverable. This does not grant Android OS permissions or bypass consequential-action confirmation.
+- Termux, remote-computer, and proactive services remain opt-in because they require separate setup, permissions, or an explicit user choice.
+- Regression coverage asserts the default pack contract and verifies each registered tool has a valid capability-pack mapping.
+- CI success verifies compilation and unit tests only. Physical-device acceptance is still required for keyboard/IME, accessibility, voice, attachments, and process-death recovery.
