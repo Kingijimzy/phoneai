@@ -100,6 +100,14 @@ class SoulEngineStateTest {
         assertTrue(proposals.single().detail.contains("proposal only"))
     }
 
+    @Test fun explicitMemoryDetectorOnlyAcceptsClearPreferenceLanguage() {
+        val preference = SoulEngineState.detectExplicitMemoryCandidate("I prefer concise explanations when learning.")
+        assertNotNull(preference)
+        assertEquals("preference", preference!!.first)
+        assertNull(SoulEngineState.detectExplicitMemoryCandidate("What is the weather today?"))
+        assertNull(SoulEngineState.detectExplicitMemoryCandidate("My password is abc123"))
+    }
+
     @Test fun memoryNudgeIsDeduplicatedAndCanBeSavedOrDismissed() {
         assertTrue(SoulEngineState.proposeMemoryNudge(
             context, "preference", "Prefers concise trading explanations", "prefers concise trading explanations"
