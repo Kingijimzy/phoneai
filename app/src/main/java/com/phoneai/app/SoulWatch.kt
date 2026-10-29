@@ -49,13 +49,15 @@ internal object SoulEngineWatcher {
             )
         }
 
+        val schedulerStorageError = StandingOrders.storageError() != null
         val status = when {
             !AgentPolicy.enabled(c, "orion_core") -> "paused"
+            schedulerStorageError -> "limited"
             report.status == OrionCapabilityAudit.Status.BLOCKED -> "blocked"
             report.status == OrionCapabilityAudit.Status.LIMITED -> "limited"
             else -> "ready"
         }
-        val schedulerLimitations = if (StandingOrders.storageError() != null) listOf("standing_order_storage_unavailable") else emptyList()
+        val schedulerLimitations = if (schedulerStorageError) listOf("standing_order_storage_unavailable") else emptyList()
         val limitations = (report.limitations +
             (if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList()) +
             schedulerLimitations).distinct()
