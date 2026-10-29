@@ -55,6 +55,17 @@ internal object SoulWatch {
         val limitations = (report.limitations + if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList()).distinct()
         val summary = "Watcher readiness=$status; registered_tools=$registered; enabled_packs=$enabled; limitations=\${limitations.joinToString(",").ifBlank { "none" }}."
         runCatching { SoulEngineState.recordLesson(c, "watcher_health", summary, status) }
+        if (limitations.isNotEmpty() && AgentPolicy.enabled(c, "orion_core")) {
+            val issue = limitations.first()
+            runCatching {
+                SoulEngineState.proposeWatchIssue(
+                    c,
+                    "readiness",
+                    "Soul watcher found: $issue",
+                    "Inspect the Capability board and repair the underlying setup or service condition. Re-run the local capability audit to verify the result."
+                )
+            }
+        }
 
         // External reads/notifications only happen for explicitly configured standing orders
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
