@@ -84,9 +84,21 @@ internal object SoulEngineWatcher {
             runCatching { SoulEngineState.recordLesson(c, "p3_probe", p3.summary, "review_only") }
         }
 
+        // Stage 6: bounded local specialists run sequentially under a 30-minute cooldown.
+        // They only inspect local state and report findings; they never dispatch tools or mutate policy.
+        val subagents = runCatching { SoulSubagentCoordinator.run(c) }.getOrElse {
+            SoulSubagentCoordinator.RunReport(
+                id = "unavailable",
+                at = System.currentTimeMillis(),
+                findings = emptyList(),
+                summary = "Subagent coordination unavailable: " + it.javaClass.simpleName + "; no actions taken."
+            )
+        }
+
         // External reads/notifications only happen for explicitly configured standing orders
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
         var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
+        if (subagents.findings.isNotEmpty()) action += "+subagents"
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
             if (StandingOrders.storageError() == null && schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
                 val dispatched = runCatching { LifeLoop.tickOne(c) }.getOrDefault(0)
@@ -102,6 +114,6 @@ internal object SoulEngineWatcher {
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
         AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
-        return TickResult(status, action, limitations, next + " " + p3.summary)
+        return TickResult(status, action, limitations, next + " " + p3.summary + " " + subagents.summary)
     }
 }
