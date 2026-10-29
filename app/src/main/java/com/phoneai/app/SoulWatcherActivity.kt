@@ -74,6 +74,7 @@ class SoulWatcherActivity : Activity() {
         statusActions.addView(actionButton("Memory nudges") { showMemoryNudges() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(3) })
         statusCard.addView(statusActions)
         root.addView(statusCard)
+        root.addView(actionButton("Schedules & next runs") { showSchedules() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
 
         root.addView(label("WATCHER CONVERSATION", white, 13f).also { it.typeface = Typeface.DEFAULT_BOLD; it.setPadding(0, dp(16), 0, dp(8)) })
         val scroll = ScrollView(this).apply { isFillViewport = false }
@@ -115,11 +116,13 @@ class SoulWatcherActivity : Activity() {
         when {
             q in setOf("check", "check status", "run check", "scan", "audit", "refresh") -> runWatcherCheck()
             q.contains("capabilit") || q.contains("workspace status") || q.contains("what works") || q.contains("what is connected") -> showCapabilities()
+            q.contains("schedule") || q.contains("standing order") || q.contains("next run") -> showSchedules()
+            q.startsWith("pause ") || q.startsWith("resume ") -> handleScheduleCommand(q)
             q.contains("memory") || q.contains("nudge") || q.contains("save this") -> showMemoryNudges()
             q.contains("proposal") || q.contains("suggestion") -> showProposals()
             q.contains("capability report") || q.contains("capability board") || q.contains("open report") -> openCapabilityReport()
             q.startsWith("why") || q.contains("screen perception") || q.contains("unavailable") -> explainLimitation(raw)
-            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show proposals”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
+            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show schedules”, “pause brief”, “resume brief”, “show proposals”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
             else -> addMessage("WATCHER", "I don't have a verified local action for that command yet. I haven't changed anything. Try “check status”, “show proposals”, or “why screen perception unavailable”.")
         }
     }
@@ -140,6 +143,67 @@ class SoulWatcherActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+
+    private fun handleScheduleCommand(q: String) {
+        val parts = q.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (parts.size < 2) {
+            addMessage("WATCHER", "Use “pause brief” or “resume brief”. Available schedule names: brief, gmail_unread, github_notifications.")
+            return
+        }
+        val action = parts[0]
+        val kind = parts.drop(1).joinToString("_")
+        if (kind !in StandingOrderPolicy.kinds) {
+            addMessage("WATCHER", "Unknown schedule '$kind'. Available: ${StandingOrderPolicy.kinds.keys.joinToString()}. No change made.")
+            return
+        }
+        val result = StandingOrders.setEnabled(this, kind, action == "resume")
+        addMessage("WATCHER", result)
+        showSchedules()
+    }
+
+    private fun showSchedules() {
+        val orders = runCatching { StandingOrders.all(this) }.getOrElse {
+            addMessage("WATCHER", "Could not read schedules: ${it.javaClass.simpleName}. No changes made.")
+            return
+        }
+        val storageError = StandingOrders.storageError()
+        if (storageError != null) {
+            addMessage("WATCHER", "Schedule storage is unavailable: $storageError. I will not overwrite or reset saved schedules.")
+            return
+        }
+        addMessage("WATCHER", "Persistent schedules are stored on this device. Checks run only while Orion's service gets execution time; Android/HyperOS may delay them. Consequential actions remain blocked by the shared policy gate.")
+        if (orders.isEmpty()) addMessage("WATCHER", "No standing orders are configured yet.")
+        orders.forEach { order ->
+            val cardView = card(transcript)
+            val nextAt = StandingOrders.nextRunAt(order)
+            val next = nextAt?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)) }
+                ?: if (!order.enabled) "Paused" else "Retry limit reached; resume to reset"
+            cardView.addView(label(StandingOrderPolicy.kinds[order.kind] ?: order.kind, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
+            cardView.addView(label("Every ${order.everyMinutes} min · ${if (order.enabled) "Enabled" else "Paused"}\nNext run: $next\nFailures: ${order.consecutiveFailures}/${StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES}\nLast outcome: ${order.lastOutcome}", muted, 11f))
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            row.addView(actionButton(if (order.enabled) "Pause" else "Resume") {
+                addMessage("WATCHER", StandingOrders.setEnabled(this, order.kind, !order.enabled))
+                showSchedules()
+                renderSnapshot()
+            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+            row.addView(actionButton("Remove") {
+                addMessage("WATCHER", StandingOrders.remove(this, order.kind))
+                showSchedules()
+                renderSnapshot()
+            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
+            cardView.addView(row)
+        }
+        val addHeader = label("ADD A READ-ONLY SCHEDULE (60 MIN)", white, 12f).also { it.typeface = Typeface.DEFAULT_BOLD }
+        transcript.addView(addHeader)
+        StandingOrderPolicy.kinds.forEach { (kind, description) ->
+            transcript.addView(actionButton("Add: $description") {
+                addMessage("WATCHER", StandingOrders.add(this, kind, 60))
+                showSchedules()
+                renderSnapshot()
+            }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(5) })
+        }
     }
 
     private fun showCapabilities() {
