@@ -43,12 +43,12 @@ internal object RecoveryPolicy {
         }
     }
 
-    fun decide(risk: Risk, failure: Failure, readRetriesUsed: Int): Decision = when {
+    fun decide(risk: Risk, failure: Failure, readRetriesUsed: Int, maxReadRetries: Int = MAX_READ_RETRIES): Decision = when {
         failure == Failure.PERMISSION -> Decision.PAUSE_ASK
         risk == Risk.CONSEQUENTIAL -> Decision.PAUSE_ASK
         failure == Failure.AMBIGUOUS && risk != Risk.READ_ONLY -> Decision.PAUSE_ASK
         risk == Risk.READ_ONLY && (failure == Failure.TRANSIENT || failure == Failure.AMBIGUOUS) ->
-            if (readRetriesUsed < MAX_READ_RETRIES) Decision.RETRY_READ else Decision.REPLAN
+            if (readRetriesUsed < maxReadRetries.coerceIn(0, 4)) Decision.RETRY_READ else Decision.REPLAN
         risk == Risk.READ_ONLY -> Decision.REPLAN
         risk == Risk.DEV_COMMAND -> Decision.REPLAN
         failure == Failure.TARGET_MISSING -> Decision.REPLAN
@@ -56,11 +56,11 @@ internal object RecoveryPolicy {
     }
 
     /** A retry is allowed only while the task is live and within both the tool-call and time budgets. */
-    fun canRetryRead(stopped: Boolean, budgetExhausted: Boolean, readRetriesUsed: Int): Boolean =
-        !stopped && !budgetExhausted && readRetriesUsed < MAX_READ_RETRIES
+    fun canRetryRead(stopped: Boolean, budgetExhausted: Boolean, readRetriesUsed: Int, maxReadRetries: Int = MAX_READ_RETRIES): Boolean =
+        !stopped && !budgetExhausted && readRetriesUsed < maxReadRetries.coerceIn(0, 4)
 
     /** Backoff before read retry number [attempt] (1-based): 0.8 s, then 1.6 s. */
-    fun backoffMillis(attempt: Int): Long = 800L * attempt.coerceIn(1, MAX_READ_RETRIES)
+    fun backoffMillis(attempt: Int): Long = 800L * attempt.coerceIn(1, 4)
 
     /** Evidence sent to the model before a replan. It names the failure and forbids repeating it unchanged. */
     fun replanNudge(tool: String, failure: Failure, evidence: String): String =
@@ -78,6 +78,7 @@ internal object RecoveryPolicy {
      */
     fun retryRead(
         first: String,
+        maxReadRetries: Int = MAX_READ_RETRIES,
         isFailure: (String) -> Boolean,
         stopped: () -> Boolean,
         budgetExhausted: () -> Boolean,
@@ -89,8 +90,8 @@ internal object RecoveryPolicy {
         var retries = 0
         while (isFailure(result)) {
             val failure = classify(result)
-            if (decide(Risk.READ_ONLY, failure, retries) != Decision.RETRY_READ) break
-            if (!canRetryRead(stopped(), budgetExhausted(), retries)) break
+            if (decide(Risk.READ_ONLY, failure, retries, maxReadRetries) != Decision.RETRY_READ) break
+            if (!canRetryRead(stopped(), budgetExhausted(), retries, maxReadRetries)) break
             retries++
             onRetry(retries, failure)
             sleep(backoffMillis(retries))
