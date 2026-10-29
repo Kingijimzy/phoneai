@@ -201,6 +201,7 @@ class Tools(private val svc: PhoneAiService) {
         val normalizedSection = section.lowercase().trim()
         val endpoint = when (normalizedSection) {
             "repo" -> "repos/$owner/$repository"
+            "readme" -> "repos/$owner/$repository/readme"
             "release" -> "repos/$owner/$repository/releases/latest"
             "issues" -> "repos/$owner/$repository/issues?state=open&per_page=10"
             "runs" -> "repos/$owner/$repository/actions/runs?per_page=5"
@@ -210,7 +211,7 @@ class Tools(private val svc: PhoneAiService) {
                 }
                 "repos/$owner/$repository/actions/runs/$runId"
             }
-            else -> return "error: section must be repo, release, issues, runs, or run"
+            else -> return "error: section must be repo, readme, release, issues, runs, or run"
         }
         return try {
             val conn = (URL("https://api.github.com/$endpoint").openConnection() as HttpURLConnection)
@@ -241,6 +242,18 @@ class Tools(private val svc: PhoneAiService) {
                 return "GitHub returned $code: ${detail.take(180)}. The repository may be private, missing, or rate-limited."
             }
             when (normalizedSection) {
+                "readme" -> {
+                    val obj = JSONObject(raw)
+                    val encoded = obj.optString("content").replace("\\n", "")
+                    if (encoded.isBlank()) "The repository has no readable README content." else {
+                        val decoded = try {
+                            android.util.Base64.decode(encoded, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+                        } catch (_: Exception) { "" }
+                        if (decoded.isBlank()) "error: GitHub returned README content that could not be decoded."
+                        else "README for $owner/$repository:\\n" + decoded.take(6000) +
+                            "\\n\\nSource: " + obj.optString("html_url", "https://github.com/$owner/$repository")
+                    }
+                }
                 "run" -> {
                     val obj = JSONObject(raw)
                     "GitHub Actions run #" + obj.optLong("run_number", 0) + " for $owner/$repository\n" +
