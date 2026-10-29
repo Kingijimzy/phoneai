@@ -75,6 +75,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -343,10 +344,10 @@ fun OrionComposeChatScreen(
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(chatTitle, color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp)
+                Text(chatTitle, color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(5.dp).clip(CircleShape).background(statusDotColor))
-                    Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp)
+                    Text(status.replaceFirstChar { it.uppercase() }.take(24), color = ChatMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             Box(
@@ -373,7 +374,7 @@ fun OrionComposeChatScreen(
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(Color(0xFF10141B))
+                    modifier = Modifier.background(Color(0xFF101010))
                 ) {
                     fun choose(action: String) {
                         menuExpanded = false
@@ -517,9 +518,13 @@ fun OrionComposeChatScreen(
                 selectedImages.take(4).forEachIndexed { index, uri ->
                     Box(Modifier.size(46.dp)) {
                         ImageThumbnail(uri, Modifier.fillMaxSize())
-                        Text("×", color = ChatCopy, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd)
-                            .clip(CircleShape).background(Color(0xFF080808)).clickable { onRemoveImage(index) }
-                            .padding(horizontal = 4.dp, vertical = 1.dp))
+                        Box(
+                            Modifier.align(Alignment.TopEnd).size(24.dp).clip(CircleShape)
+                                .background(Color(0xFF080808))
+                                .semantics { contentDescription = "Remove attached image ${index + 1}"; role = Role.Button }
+                                .clickable { onRemoveImage(index) },
+                            contentAlignment = Alignment.Center
+                        ) { Text("×", color = ChatCopy, fontSize = 15.sp, lineHeight = 16.sp) }
                     }
                 }
                 Spacer(Modifier.width(10.dp))
@@ -550,7 +555,7 @@ fun OrionComposeChatScreen(
                     Box(Modifier.size(6.dp).clip(CircleShape).background(if (providerReady) Color(0xFFDADADA) else Color(0xFFE2A16F)))
                     Column(Modifier.weight(1f)) {
                         Text("PROVIDER", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
-                        Text(providerLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        Text(providerLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
                 }
@@ -566,7 +571,7 @@ fun OrionComposeChatScreen(
                     Icon(Icons.Rounded.Tune, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text("MODEL", color = ChatMuted, fontSize = 8.sp, letterSpacing = .8.sp, fontWeight = FontWeight.SemiBold)
-                        Text(modelLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        Text(modelLabel, color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.ChevronRight, null, tint = ChatMuted, modifier = Modifier.size(14.dp))
                 }
@@ -620,11 +625,17 @@ fun OrionComposeChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Live voice", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.semantics { contentDescription = "Start live voice"; role = Role.Button }.clickable(onClick = onVoice))
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                        .semantics { contentDescription = "Start live voice"; role = Role.Button }
+                        .clickable(onClick = onVoice).padding(horizontal = 5.dp, vertical = 7.dp))
                 Text("Browser", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.semantics { contentDescription = "Open browser"; role = Role.Button }.clickable { onBrowser(null) })
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                        .semantics { contentDescription = "Open browser"; role = Role.Button }
+                        .clickable { onBrowser(null) }.padding(horizontal = 5.dp, vertical = 7.dp))
                 Text("Tasks", color = ChatMuted, fontSize = 11.sp,
-                    modifier = Modifier.semantics { contentDescription = "Open tasks"; role = Role.Button }.clickable(onClick = onTasks))
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                        .semantics { contentDescription = "Open tasks"; role = Role.Button }
+                        .clickable(onClick = onTasks).padding(horizontal = 5.dp, vertical = 7.dp))
                 Spacer(Modifier.weight(1f))
                 Text(if (busy) "WORKING" else if (commandMode) "COMMAND MODE" else "TALK MODE",
                     color = ChatMuted, fontSize = 9.sp, letterSpacing = .6.sp, maxLines = 1)
