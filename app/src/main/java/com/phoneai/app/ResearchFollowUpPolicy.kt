@@ -7,7 +7,7 @@ package com.phoneai.app
  */
 internal object ResearchFollowUpPolicy {
     private val followUp = Regex(
-        "(?i)^\\s*(?:(?:please|can you|could you|now)\\s+)*(?:go and )?(?:do|conduct|continue|finish|carry out)\\s+(?:your )?research(?: about| on| into)?\\s+(?:it|that|this|them|those)?[.!?\\s]*$|" +
+        "(?i)^\\s*(?:(?:please|can you|could you|now)\\s+)*(?:go and )?(?:do|conduct|continue|finish|carry out)\\s+(?:your )?research(?: about| on| into)?\\s*(?:it|that|this|them|those)?[.!?\\s]*$|" +
             "^\\s*(?:research|look it up|search for it|check it online|verify it|find out)\\s*(?:about|on|for)?\\s*(?:it|that|this)?[.!?\\s]*$"
     )
 
