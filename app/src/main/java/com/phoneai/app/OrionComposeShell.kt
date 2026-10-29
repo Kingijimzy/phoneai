@@ -307,7 +307,7 @@ private fun ToolsPage(
             ToolRegistry.all.forEach { definition ->
                 val readOnly = definition.access == ToolAccess.READ
                 val badgeColor = if (readOnly) Silver else Color(0xFFE7BD7B)
-                val badgeBackground = if (readOnly) Color(0xFF172D28) else Color(0xFF302820)
+                val badgeBackground = if (readOnly) Color(0xFF242424) else Color(0xFF302820)
                 Row(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
