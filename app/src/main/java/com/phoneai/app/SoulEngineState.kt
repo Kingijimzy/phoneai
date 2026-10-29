@@ -189,6 +189,6 @@ internal object SoulEngineState {
     fun proposalPrompt(context: Context): String = synchronized(lock) {
         val pending = proposals(read(context)).filter { it.status == ProposalStatus.PENDING }.take(5)
         if (pending.isEmpty()) "No learning proposals are waiting for review."
-        else pending.joinToString("\\n") { "- ${it.kind.name.lowercase()}: ${it.title} (evidence=${it.evidenceCount}) — ${it.detail}" }
+        else pending.joinToString("\n") { "- ${it.kind.name.lowercase()}: ${it.title} (evidence=${it.evidenceCount}) — ${it.detail}" }
     }
 }
