@@ -196,7 +196,7 @@ internal object SoulEngineState {
         val cleanKey = safeText(dedupeKey, 160).lowercase(Locale.ROOT)
         if (cleanSummary.isBlank() || cleanSummary == "[sensitive content omitted]" ||
             cleanKey.isBlank() || cleanKey == "[sensitive content omitted]") return@synchronized false
-        if (Regex("(?i)\\b(bank account|credit card|debit card|wallet address|seed phrase|recovery phrase|private key|password|passcode|one[- ]time code|otp|api[_ -]?key|access token|pin)\\b")
+        if (Regex("(?i)\\b(bank account|account number|routing number|credit card|debit card|wallet address|seed phrase|recovery phrase|private key|password|passcode|secret|security answer|national id|passport number|one[- ]time code|otp|api[_ -]?key|access token|pin)\\b")
                 .containsMatchIn("$cleanCategory $cleanSummary $cleanKey")) return@synchronized false
         val o = read(context)
         val rules = memoryNudgeRules(o)
