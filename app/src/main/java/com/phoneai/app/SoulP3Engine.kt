@@ -160,17 +160,17 @@ internal object SoulP3Engine {
     fun probeReport(context: Context): String = synchronized(lock) {
         val records = probes(context.applicationContext)
         if (records.isEmpty()) return@synchronized "No probe results yet. Run “run probes” from the Soul Engine Watcher."
-        records.takeLast(8).asReversed().joinToString("\\n") { p ->
+        records.takeLast(8).asReversed().joinToString("\n") { p ->
             "- ${p.title}: ${p.verdict}; candidate tool coverage ${p.availableTools}/${p.candidateTools}; baseline learned hints ${p.baselineHints}; evidence ${p.evidenceCount}; missing ${p.missingTools.joinToString().ifBlank { "none" }}"
-        } + "\\nCoverage is structural only; it is not a measured task-success score."
+        } + "\nCoverage is structural only; it is not a measured task-success score."
     }
 
     fun compositionReport(context: Context): String = synchronized(lock) {
         val drafts = compositions(context.applicationContext)
         if (drafts.isEmpty()) return@synchronized "No composition drafts yet. A candidate needs at least $MIN_EVIDENCE completed-task evidence records and all hinted tools must still exist."
-        drafts.takeLast(5).asReversed().joinToString("\\n\\n") { p ->
-            "DRAFT — ${p.title} (evidence=${p.evidenceCount})\\n${p.guidance}"
-        } + "\\n\\nDrafts are review-only; none is injected into execution automatically."
+        drafts.takeLast(5).asReversed().joinToString("\n\n") { p ->
+            "DRAFT — ${p.title} (evidence=${p.evidenceCount})\n${p.guidance}"
+        } + "\n\nDrafts are review-only; none is injected into execution automatically."
     }
 
     fun clearReportsForTest(context: Context) {
