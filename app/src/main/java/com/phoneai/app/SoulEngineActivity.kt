@@ -1,6 +1,6 @@
 package com.phoneai.app
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.ComposeView
  * Native Compose command center. It reuses Orion's real registries and stores for the
  * readiness snapshot; UI labels never imply that an unverified workflow is live.
  */
-class SoulEngineActivity : Activity() {
+class SoulEngineActivity : ComponentActivity() {
     private val statusState = mutableStateOf("Checking local readiness…")
     private val metricsState = mutableStateOf("")
     private val selfTestState = mutableStateOf("")
