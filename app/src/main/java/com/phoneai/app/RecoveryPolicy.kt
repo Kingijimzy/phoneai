@@ -60,7 +60,7 @@ internal object RecoveryPolicy {
         !stopped && !budgetExhausted && readRetriesUsed < maxReadRetries.coerceIn(0, 4)
 
     /** Backoff before read retry number [attempt] (1-based): 0.8 s, then 1.6 s. */
-    fun backoffMillis(attempt: Int): Long = 800L * attempt.coerceIn(1, 4)
+    fun backoffMillis(attempt: Int): Long = 800L * attempt.coerceIn(1, 2)
 
     /** Evidence sent to the model before a replan. It names the failure and forbids repeating it unchanged. */
     fun replanNudge(tool: String, failure: Failure, evidence: String): String =
