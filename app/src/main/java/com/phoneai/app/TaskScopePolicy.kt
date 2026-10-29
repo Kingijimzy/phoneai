@@ -75,37 +75,15 @@ internal object TaskScopePolicy {
         val definition = ToolRegistry.find(toolName)
             ?: return "Tool '$toolName' is not registered."
 
+        // Intent classification is a routing hint, not an authorization boundary. If a tool is
+        // registered, the task-scope layer must not reject it merely because the request was
+        // classified as CHAT or because another specialist category did not match a keyword.
+        // Capability-pack settings, per-tool permissions, explicit DENY, Android permissions,
+        // safety checks, cancellation, and fresh confirmations remain enforced at dispatch.
         val mode = modeFor(request)
-        // Scope classification selects the default tool family, but must not act as a blanket
-        // denial when an explicitly enabled, registered capability is needed to fulfill the goal.
-        // Per-tool DENY/pack state, dispatch policy, Android permissions and confirmation checks
-        // remain authoritative at the actual execution boundary.
-        if (mode == TaskMode.CHAT) {
-            val mentionsExternalCapability = Regex(
-                "(?i)\\b(search|web_search|browse|browser|internet|online|website|url|github|repository|repo|telegram|bybit|trading|task|reminder|notification|phone|device|open|tap|click|send|call|message|read my|check my|look up|research|find)\\b"
-            ).containsMatchIn(request)
-            if (!mentionsExternalCapability) {
-                return "No tool needed for ordinary conversation."
-            }
-        }
         if ((mode == TaskMode.READ_ONLY || mode == TaskMode.RESEARCH) &&
             definition.access != ToolAccess.READ) {
             return "$mode tasks may use read-only tools; '$toolName' can change state."
-        }
-
-        val category = categoryOf(toolName) ?: return null
-        val matchingIntent = when (category) {
-            "browser" -> Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|online|internet|news|weather|research|chrome|download|source|article|restaurants?|hotels?|stores?|shops?|cafes?|services?|nearby|local|recommend|documentation|version|release notes)\\b")
-            "trading" -> Regex("(?i)\\b(bybit|trade|trading|crypto|bitcoin|btc|eth|coin|price|ticker|chart|market)\\b")
-            "telegram" -> Regex("(?i)\\btelegram\\b")
-            "mcp" -> Regex("(?i)\\b(mcp|connector|integration|server|github|gmail|drive|account|service)\\b")
-            "github" -> Regex("(?i)\\b(github|repo|repository|release|actions|issues|code|pull request|commit)\\b")
-            "tasks" -> Regex("(?i)\\b(task|tasks|todo|remind|reminder|deadline|skill|skills)\\b")
-            "media" -> Regex("(?i)\\b(music|song|play|pause|skip|volume|notification|notifications|media|youtube|spotify)\\b")
-            else -> return null
-        }
-        if (!matchingIntent.containsMatchIn(request)) {
-            return "Task scope is limited to the user's stated purpose; '$toolName' belongs to the unrelated '$category' tool group."
         }
         return null
     }
