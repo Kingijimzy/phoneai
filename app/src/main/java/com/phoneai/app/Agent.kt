@@ -479,6 +479,25 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         stopped = false
         setRequestScope(command)
         taskProofs.clear()
+
+        // A short explicit research continuation inherits the last user request. Do this
+        // before asking a model to interpret "it", so it cannot become a dictionary question.
+        var previousUserRequest: String? = null
+        for (i in chatHist.length() - 1 downTo 0) {
+            val turn = runCatching { chatHist.getJSONObject(i) }.getOrNull() ?: continue
+            if (turn.optString("role").equals("user", ignoreCase = true)) {
+                previousUserRequest = turn.optString("content").takeIf { it.isNotBlank() }
+                if (previousUserRequest != null) break
+            }
+        }
+        val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
+        if (contextualResearchCommand != command) {
+            chatHist.put(msg("user", command))
+            while (chatHist.length() > 12) chatHist.remove(0)
+            svc.notifyModeSwitch(true)
+            runInternal(contextualResearchCommand, reuseCommandBudget = false)
+            return
+        }
         researchCancelled.set(false)
         talkNim.resume()
         val soulContext = OrionSoulEngine.contextFor(svc, command)
@@ -509,6 +528,10 @@ RESPONSE QUALITY AND FORMAT:
         }
         if (stopped) return
         if (answer.trim().trim('.', '!').equals("ACTION", true)) {
+            // Persist tool-routed user turns too. Previously ACTION returned before chatHist was
+            // updated, so follow-ups such as "go research it" lost their subject and were reinterpreted.
+            chatHist.put(msg("user", command))
+            while (chatHist.length() > 12) chatHist.remove(0)
             // The model judged this needs tools: switch to Command mode and run the guarded agent now.
             svc.notifyModeSwitch(true)
             runInternal(command, reuseCommandBudget = true)
@@ -1636,8 +1659,25 @@ Rules:
         }
     }
 
-    /** Apply the same enabled-pack and approval policy to direct no-LLM shortcuts. */
+    /**
+     * Public, read-only lookups do not need a per-request approval dialog. They still respect
+     * an explicitly DENYed tool and a disabled capability pack. Mutating/consequential tools
+     * continue through the normal policy and approval flow.
+     */
     private fun authorizeDirectTool(tool: String, pack: String): Boolean {
+        val publicReadOnly = tool in setOf(
+            "web_search", "live_web_search", "live_news", "weather", "fetch_url",
+            "research_web", "github_public", "bybit_public_ticker"
+        )
+        if (publicReadOnly) {
+            if (!AgentPolicy.enabled(svc, pack) || ToolPermissions.mode(svc, tool) == ToolMode.DENY) {
+                AgentPolicy.log(svc, tool, "direct-dispatch", false,
+                    if (!AgentPolicy.enabled(svc, pack)) "capability pack is disabled" else "explicit per-tool DENY")
+                return false
+            }
+            AgentPolicy.log(svc, tool, "direct-dispatch", true, "read-only public lookup; no per-request approval required")
+            return true
+        }
         val decision = AgentPolicy.evaluate(svc, pack, tool, dangerous = false)
         return when (decision.decision) {
             AgentPolicy.Decision.ALLOW -> {
