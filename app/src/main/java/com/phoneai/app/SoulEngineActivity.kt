@@ -17,17 +17,26 @@ class SoulEngineActivity : ComponentActivity() {
     private val statusState = mutableStateOf("Checking local readiness…")
     private val metricsState = mutableStateOf("")
     private val selfTestState = mutableStateOf("")
+    private val coreEnabledState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
+        coreEnabledState.value = AgentPolicy.enabled(this, "orion_core")
         try {
             setContent {
                     SoulEngineComposeScreen(
                         status = statusState.value,
                         metrics = metricsState.value,
                         selfTest = selfTestState.value,
+                        coreEnabled = coreEnabledState.value,
+                        onCoreEnabledChange = { enabled ->
+                            AgentPolicy.setEnabled(this@SoulEngineActivity, "orion_core", enabled)
+                            coreEnabledState.value = AgentPolicy.enabled(this@SoulEngineActivity, "orion_core")
+                            refreshSnapshot()
+                            Toast.makeText(this@SoulEngineActivity, if (coreEnabledState.value) "Soul Engine core enabled" else "Soul Engine core paused", Toast.LENGTH_SHORT).show()
+                        },
                         onRefresh = {
                             refreshSnapshot()
                             Toast.makeText(this@SoulEngineActivity, "Local status refreshed", Toast.LENGTH_SHORT).show()
@@ -41,7 +50,8 @@ class SoulEngineActivity : ComponentActivity() {
                         onOpenBrowser = { startActivity(Intent(this@SoulEngineActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")) },
                         onOpenSettings = { startActivity(Intent(this@SoulEngineActivity, SettingsActivity::class.java)) },
                         onOpenCapabilityReport = { open(OrionCapabilityReportActivity::class.java) },
-                        onOpenTeach = { open(TeachModeActivity::class.java) }
+                        onOpenTeach = { open(TeachModeActivity::class.java) },
+                        onOpenExtensions = { open(SelfExtensionLabActivity::class.java) }
                     )
             }
             refreshSnapshot()
@@ -68,6 +78,7 @@ class SoulEngineActivity : ComponentActivity() {
 
     private fun refreshSnapshot() {
         try {
+            coreEnabledState.value = AgentPolicy.enabled(this, "orion_core")
             val tools = runCatching { ToolRegistry.all.size }.getOrDefault(0)
             val packs = runCatching { AgentPolicy.packs.count { it.implemented } }.getOrDefault(0)
             val enabled = runCatching { AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(this, it.id) } }.getOrDefault(0)
