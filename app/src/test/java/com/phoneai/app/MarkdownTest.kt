@@ -25,15 +25,15 @@ class MarkdownTest {
     }
 
     @Test fun markdownTablesBecomeReadableLabelValueRows() {
-        val input = "| Pair | Bias | Status |\\n| --- | --- | --- |\\n| EURUSD | Bearish | Wait |\\n| GBPUSD | Bullish | Confirmed |"
+        val input = "| Pair | Bias | Status |\n| --- | --- | --- |\n| EURUSD | Bearish | Wait |\n| GBPUSD | Bullish | Confirmed |"
         assertEquals(
-            "**Pair:** EURUSD · **Bias:** Bearish · **Status:** Wait\\n**Pair:** GBPUSD · **Bias:** Bullish · **Status:** Confirmed",
+            "**Pair:** EURUSD · **Bias:** Bearish · **Status:** Wait\n**Pair:** GBPUSD · **Bias:** Bullish · **Status:** Confirmed",
             normalizeOrionMarkdownTables(input)
         )
     }
 
     @Test fun markdownTableConversionDoesNotRewriteCodeFences() {
-        val input = "\x60\x60\x60text\\n| a | b |\\n| --- | --- |\\n\x60\x60\x60"
+        val input = "\x60\x60\x60text\n| a | b |\n| --- | --- |\n\x60\x60\x60"
         assertEquals(input, normalizeOrionMarkdownTables(input))
     }
     @Test fun emptyInputNormalizesSafely() {
