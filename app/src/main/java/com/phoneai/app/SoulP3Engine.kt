@@ -88,7 +88,7 @@ internal object SoulP3Engine {
         }
     }
 
-    fun run(context: Context): RunResult = synchronized(lock) {
+    fun run(context: Context, force: Boolean = false): RunResult = synchronized(lock) {
         val c = context.applicationContext
         val state = SoulEngineState.snapshot(c)
         val pending = state.proposals.filter {
@@ -102,8 +102,12 @@ internal object SoulP3Engine {
         val registered = ToolRegistry.names().toSet()
         val oldProbes = probes(c).toMutableList()
         val oldCompositions = compositions(c).toMutableList()
-        var composed = 0
         val now = System.currentTimeMillis()
+        val latestProbeAt = oldProbes.maxOfOrNull { it.at } ?: 0L
+        if (!force && latestProbeAt > 0L && now - latestProbeAt < 6L * 60L * 60L * 1000L) {
+            return@synchronized RunResult(0, 0, "Probe cooldown active; next automatic probe is due later. Use run probes for a manual re-check.")
+        }
+        var composed = 0
 
         pending.forEach { candidate ->
             val hinted = candidate.allowedTools.distinct()
