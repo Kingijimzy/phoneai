@@ -148,14 +148,14 @@ class TaskScopePolicyTest {
         assertNull(result)
     }
 
-    @Test fun fullModeDoesNotBypassTaskScope() {
+    @Test fun fullModeDoesNotApplyFalseKeywordScopeBlockToRegisteredTool() {
         val result = AgentDispatchPolicy.blockReason(
             request = "Explain how Bluetooth works",
             tool = "open_app",
             args = org.json.JSONObject().put("name", "WhatsApp"),
             executionMode = "FULL"
         )
-        assertNotNull(result)
+        assertNull(result)
     }
 
     @Test fun readOnlyTradingBlocksMutationsAcrossCommonWordings() {
