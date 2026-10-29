@@ -746,7 +746,7 @@ private fun ChatInlineBrowserDialog(
                 },
                 update = { if (webView !== it) webView = it }
             )
-            DisposableEffect(webView) {
+            DisposableEffect(Unit) {
                 onDispose { /* Keep the WebView alive only for this dialog; do not retain a hidden browsing surface. */ webView?.stopLoading(); webView?.destroy(); webView = null }
             }
         }
