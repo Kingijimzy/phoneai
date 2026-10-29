@@ -1,18 +1,23 @@
 package com.phoneai.app
 
 /**
- * Cross-provider fallback is deliberately rate-limit-only.
+ * Cross-provider fallback is bounded and failure-aware.
  *
- * Keep the selected provider as the primary. Move to a backup only when that provider
- * explicitly returns HTTP 429 and automatic switching is enabled. Timeouts, empty replies,
- * unsupported models, invalid credentials, network failures, and billing errors must be
- * surfaced to the user rather than silently spending another provider's quota.
+ * Keep the selected provider as the primary, but allow another eligible provider to answer
+ * when the primary is rate-limited, times out, returns an empty reply, rejects a model, or
+ * reports a transient/server/payload-size failure. Same-provider model recovery runs first.
  *
- * The caller filters provider eligibility and the shared command request budget bounds attempts.
+ * Never rotate for cancellation, exhausted request budgets, authentication, billing, explicit
+ * safety blocks, or a general network-unavailable condition. The caller filters provider
+ * eligibility and the shared command request budget bounds all attempts.
  */
 internal object ProviderFallbackPolicy {
     /** Maximum backup providers considered after the selected primary. */
     const val MAX_BACKUP_PROVIDERS = 2
+
+    private val recoverableHttpStatuses = setOf(
+        404, 408, 410, 413, 422, 425, 429, 500, 502, 503, 504
+    )
 
     fun shouldTryBackup(error: Throwable, autoSwitchEnabled: Boolean = true): Boolean {
         if (!autoSwitchEnabled || error is InterruptedException) return false
@@ -26,13 +31,12 @@ internal object ProviderFallbackPolicy {
             message.contains("authentication") ||
             message.contains("cannot connect") ||
             message.contains("check internet") ||
-            message.contains("sockettimeout") ||
             message.contains("reached orion's 15-request budget") ||
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false
 
-        // Do not infer permission to rotate from message text. Only an explicit HTTP 429
-        // response from the current provider permits a backup attempt.
-        return error is AiException && error.httpStatus == 429
+        // Rotate only for known provider/model failures. A generic exception or an
+        // unclassified 400 must not silently spend another provider's quota.
+        return error is AiException && error.httpStatus in recoverableHttpStatuses
     }
 }
