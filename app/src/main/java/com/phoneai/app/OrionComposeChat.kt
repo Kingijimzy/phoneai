@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -88,6 +89,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusRequester
@@ -300,6 +304,7 @@ fun OrionComposeChatScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var inlineBrowserUrl by rememberSaveable { mutableStateOf<String?>(null) }
     val composerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
@@ -498,7 +503,7 @@ fun OrionComposeChatScreen(
                     } else null
                     ChatBubble(
                         item = item,
-                        onOpenBrowser = onBrowser,
+                        onOpenBrowser = { url -> inlineBrowserUrl = url ?: "https://duckduckgo.com/" },
                         onRetry = previousUserMessage?.takeIf { it.isNotBlank() }?.let { prompt ->
                             { onRetry(prompt) }
                         },
@@ -640,8 +645,8 @@ fun OrionComposeChatScreen(
                         .clickable(onClick = onVoice).padding(horizontal = 5.dp, vertical = 7.dp))
                 Text("Browser", color = ChatMuted, fontSize = 11.sp,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                        .semantics { contentDescription = "Open browser"; role = Role.Button }
-                        .clickable { onBrowser(null) }.padding(horizontal = 5.dp, vertical = 7.dp))
+                        .semantics { contentDescription = "Open browser preview in chat"; role = Role.Button }
+                        .clickable { inlineBrowserUrl = "https://duckduckgo.com/" }.padding(horizontal = 5.dp, vertical = 7.dp))
                 Text("Tasks", color = ChatMuted, fontSize = 11.sp,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp))
                         .semantics { contentDescription = "Open tasks"; role = Role.Button }
@@ -649,6 +654,100 @@ fun OrionComposeChatScreen(
                 Spacer(Modifier.weight(1f))
                 Text(if (busy) "WORKING" else if (commandMode) "COMMAND MODE" else "TALK MODE",
                     color = ChatMuted, fontSize = 9.sp, letterSpacing = .6.sp, maxLines = 1)
+            }
+        }
+    }
+    inlineBrowserUrl?.let { url ->
+        ChatInlineBrowserDialog(
+            initialUrl = url,
+            onDismiss = { inlineBrowserUrl = null },
+            onOpenFullBrowser = { target -> onBrowser(target) }
+        )
+    }
+}
+
+@Composable
+private fun ChatInlineBrowserDialog(
+    initialUrl: String,
+    onDismiss: () -> Unit,
+    onOpenFullBrowser: (String) -> Unit
+) {
+    var address by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
+    var currentUrl by rememberSaveable(initialUrl) { mutableStateOf(initialUrl) }
+    var pageTitle by rememberSaveable { mutableStateOf("Chat browser") }
+    var loading by remember { mutableStateOf(true) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    fun safeWebUrl(raw: String): String? {
+        val candidate = raw.trim().let { if (it.startsWith("https://", true) || it.startsWith("http://", true)) it else "https://$it" }
+        val uri = runCatching { Uri.parse(candidate) }.getOrNull() ?: return null
+        if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) return null
+        return uri.toString()
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            Modifier.fillMaxSize().padding(10.dp).clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF101010)).border(1.dp, Color(0xFF383838), RoundedCornerShape(18.dp)).padding(10.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("BROWSER", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, modifier = Modifier.weight(1f))
+                Text("OPEN FULL", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable {
+                    val target = safeWebUrl(currentUrl) ?: safeWebUrl(address) ?: "https://duckduckgo.com/"
+                    onOpenFullBrowser(target)
+                }.padding(6.dp))
+                Text("DONE", color = ChatCopy, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onDismiss).padding(6.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xFF1D1D1D)).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BasicTextField(value = address, onValueChange = { address = it }, modifier = Modifier.weight(1f), singleLine = true,
+                    textStyle = TextStyle(color = ChatCopy, fontSize = 12.sp), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { safeWebUrl(address)?.let { currentUrl = it; webView?.loadUrl(it); loading = true } })
+                )
+                Text("GO", color = ChatCopy, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                    val target = safeWebUrl(address)
+                    if (target != null) { currentUrl = target; webView?.loadUrl(target); loading = true }
+                }.padding(4.dp))
+            }
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("‹ BACK", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable { if (webView?.canGoBack() == true) webView?.goBack() }.padding(4.dp))
+                Text("RELOAD", color = ChatMuted, fontSize = 10.sp, modifier = Modifier.clickable { webView?.reload(); loading = true }.padding(4.dp))
+                Text(if (loading) "LOADING…" else pageTitle.take(42), color = ChatMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(10.dp)),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.loadsImagesAutomatically = true
+                        settings.javaScriptCanOpenWindowsAutomatically = false
+                        settings.setSupportMultipleWindows(false)
+                        if (android.os.Build.VERSION.SDK_INT >= 26) settings.safeBrowsingEnabled = true
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+                                val uri = request.url
+                                return uri.scheme !in setOf("http", "https")
+                            }
+                            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                                loading = true
+                                if (!url.isNullOrBlank() && safeWebUrl(url) != null) { currentUrl = url; address = url }
+                            }
+                            override fun onPageFinished(view: WebView, url: String?) {
+                                loading = false
+                                pageTitle = view.title?.takeIf { it.isNotBlank() } ?: "Page loaded"
+                                if (!url.isNullOrBlank() && safeWebUrl(url) != null) { currentUrl = url; address = url }
+                            }
+                        }
+                        webChromeClient = object : android.webkit.WebChromeClient() {
+                            override fun onReceivedTitle(view: WebView, title: String?) { if (!title.isNullOrBlank()) pageTitle = title }
+                        }
+                        webView = this
+                        safeWebUrl(initialUrl)?.let { loadUrl(it) }
+                    }
+                },
+                update = { if (webView !== it) webView = it }
+            )
+            DisposableEffect(webView) {
+                onDispose { /* Keep the WebView alive only for this dialog; do not retain a hidden browsing surface. */ webView?.stopLoading(); webView?.destroy(); webView = null }
             }
         }
     }
