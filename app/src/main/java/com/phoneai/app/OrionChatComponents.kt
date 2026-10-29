@@ -266,6 +266,8 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                     note && item.text.startsWith("[SHELL:") -> ShellActivityCard(item.text)
                     note && item.text.startsWith("[BROWSER:") -> BrowserActivityCard(item.text) { url -> onOpenBrowser(url) }
                     note && item.text.startsWith("[TASK:") -> TaskActivityCard(item.text)
+                    note && (item.text.startsWith("[TOOL:") || item.text.startsWith("[TOOL_RESULT:") ||
+                        item.text.startsWith("[APPROVAL:") || item.text.startsWith("[EVENT:")) -> ToolActivityCard(item.text)
                     else -> {
                         if (!mine && !note) {
                             val formatted = formatOrionMarkdown(item.text)
@@ -385,6 +387,50 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
 }
 
 @Composable
+@Composable
+private fun ToolActivityCard(raw: String) {
+    val marker = raw.lineSequence().firstOrNull().orEmpty()
+    val detail = raw.substringAfter("\n", "").trim().take(900)
+    val approval = marker.startsWith("[APPROVAL:")
+    val result = marker.startsWith("[TOOL_RESULT:")
+    val failed = marker.contains("ERROR") || marker.contains("FAILED") || marker.contains("DENIED")
+    val waiting = marker.contains("WAITING") || marker.contains("PENDING")
+    val status = marker.substringAfter(":", "").substringBefore("]").replace("_", " ").ifBlank { "UPDATE" }
+    val title = when {
+        approval -> "APPROVAL"
+        result -> "TOOL RESULT"
+        marker.startsWith("[TOOL:") -> "TOOL ACTIVITY"
+        else -> "ORION EVENT"
+    }
+    val accent = when {
+        failed -> Color(0xFFE7A18F)
+        waiting -> Color(0xFFE5D0A5)
+        else -> Color(0xFFCFD3D8)
+    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+            .background(Color(0xFF121212))
+            .border(1.dp, Color(0xFF343434), RoundedCornerShape(11.dp))
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Icon(
+                if (approval) Icons.Rounded.TaskAlt else Icons.Rounded.Tune,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(15.dp)
+            )
+            Text(title, color = Color(0xFFE8E8E8), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+            Spacer(Modifier.weight(1f))
+            Text(status, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+        if (detail.isNotBlank()) {
+            Text(detail, color = Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp)
+        }
+    }
+}
+
 private fun TaskActivityCard(raw: String) {
     val state = Regex("^\\[TASK:([A-Z_]+)]").find(raw)?.groupValues?.getOrNull(1).orEmpty()
     val failed = state == "FAILED"
