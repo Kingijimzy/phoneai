@@ -83,10 +83,10 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
             persistLocked()
             return@synchronized false
         }
-        val delay = OrionRuntimePolicy.retryDelayMs(attempts)
+        val retry = OrionRuntimePolicy.retryItem(item, clock(), error, checkpoint)
+            ?: return@synchronized false
         queue.removeAll { it.id == item.id }
-        queue.add(item.copy(attempts = attempts, notBefore = clock() + delay,
-            checkpoint = checkpoint.trim().take(500), lastError = error.trim().replace(Regex("\\s+"), " ").take(240)))
+        queue.add(retry)
         queue.sortWith(compareByDescending<WorkItem> { it.priority }.thenBy { it.createdAt })
         state = State.ACTIVE
         eventLocked("work_backoff:" + attempts)
