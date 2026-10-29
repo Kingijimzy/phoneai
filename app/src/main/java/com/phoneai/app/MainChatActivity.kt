@@ -445,6 +445,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setMessage("Orion can attach and analyse images from the composer. A searchable file shelf for all conversation attachments is not implemented yet.")
                 .setPositiveButton("OK", null).show()
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
+            "capabilities" -> showToolCatalog()
             "mcps" -> AlertDialog.Builder(this)
                 .setTitle("MCP servers")
                 .setMessage("A connected MCP server/session manager is not currently available in this build. Orion will not show pretend connections.")
@@ -456,6 +457,51 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 .setMessage("Per-session token accounting is not yet exposed by Orion's chat provider layer. The app does not have reliable token totals to show here yet.")
                 .setPositiveButton("OK", null).show()
         }
+    }
+
+    /** Shows the actual registered tool contracts so chat capabilities are discoverable, not implied. */
+    private fun showToolCatalog() {
+        val dialog = AlertDialog.Builder(this).setTitle("Orion capabilities & tools").setView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(4))
+        }).setNegativeButton("CLOSE", null).create()
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)); setBackgroundColor(0xFF101010.toInt()) }
+        val search = EditText(this).apply {
+            hint = "Search tools, skills, browser, shell…"
+            setSingleLine(true); setTextColor(0xFFF4F4F4.toInt()); setHintTextColor(0xFF888888.toInt())
+            background = rounded(0xFF1B1B1B.toInt(), 12, 0xFF383838.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            contentDescription = "Search registered Orion capabilities"
+        }
+        root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        root.addView(label("Registered contracts only. A listed tool may still require an enabled capability pack, Android permission, configured connector, provider access or per-action approval.", 12f, 0xFFAAAAAA.toInt()).apply { setPadding(dp(2), 0, dp(2), dp(10)) })
+        val scroll = ScrollView(this).apply { isFillViewport = true }
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(rows)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, dp(430)))
+        fun render(filter: String) {
+            rows.removeAllViews()
+            val query = filter.trim().lowercase()
+            val matches = ToolRegistry.all.filter { query.isBlank() || it.name.lowercase().contains(query) || it.description.lowercase().contains(query) }
+            if (matches.isEmpty()) rows.addView(label("No registered tool matches that search.", 13f, 0xFFAAAAAA.toInt()).apply { setPadding(dp(8), dp(18), dp(8), dp(18)) })
+            matches.forEach { tool ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(11), dp(9), dp(11), dp(9))
+                    background = rounded(0xFF191919.toInt(), 10, 0xFF303030.toInt())
+                }
+                row.addView(label(tool.name + "  ·  " + tool.access.name, 13f, if (tool.access == ToolAccess.READ) 0xFFD8D8D8.toInt() else 0xFFF0F0F0.toInt(), true))
+                row.addView(label(tool.description, 12f, 0xFFAAAAAA.toInt()).apply { setPadding(0, dp(4), 0, 0) })
+                rows.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+            }
+        }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { render(s?.toString().orEmpty()) }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        render("")
+        dialog.setView(root)
+        dialog.show()
     }
 
     private fun showChatHistory() {
