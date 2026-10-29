@@ -1811,6 +1811,7 @@ Rules:
                     "INVALID: system intent action is not in the local allowlist."
                 }
             }
+            "device_location" -> "VALID: no arguments required; Android permission and cached fix are checked at execution."
             "resolve_contact" -> if (a.optString("name").isNotBlank()) "VALID: contact query supplied; permission and results are checked locally." else "INVALID: contact name is required."
             "find_files" -> if (a.optString("query").isNotBlank()) "VALID: file search query supplied." else "INVALID: file search query is required."
             "open_file" -> if (a.optString("id").toLongOrNull()?.let { it >= 0L } == true) "VALID: numeric file id supplied; Android access is checked at open time." else "INVALID: open_file requires a numeric id from find_files."
@@ -2097,6 +2098,7 @@ Rules:
             "browser_handoff" -> BrowserAutomation.handoff(a.optString("reason"))
             "web_search" -> tools.webSearch(a.optString("query"))
             "fetch_url", "research_web" -> researchWeb(a.optString("url"))
+            "device_location" -> tools.deviceLocation()
             "weather" -> WeatherService.current(a.optString("location"))
             "live_news" -> LiveNews.search(a.optString("query"))
             "live_web_search" -> LiveWebSearch.search(a.optString("query"))
