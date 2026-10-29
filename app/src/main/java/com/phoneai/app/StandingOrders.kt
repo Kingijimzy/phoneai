@@ -276,13 +276,22 @@ object LifeLoop {
             val nextDigest = StandingOrderPolicy.digestAfterAttempt(
                 o.lastDigest, result, notify, notificationPosted, o.kind, dayKey
             )
-            val persisted = StandingOrders.update(c, o.kind, nextDigest)
+            val usable = result.isNotBlank() && !result.trim().startsWith("error", ignoreCase = true)
+            val successful = usable && (!notify || notificationPosted)
+            val outcome = when {
+                !usable -> "error: ${result.lineSequence().firstOrNull().orEmpty().take(70)}"
+                notify && !notificationPosted -> "notification_failed_or_blocked"
+                notificationPosted -> "notification_posted"
+                else -> "checked_no_change"
+            }
+            val persisted = StandingOrders.update(c, o.kind, nextDigest, outcome, successful, now)
             if (notificationPosted) posted++
             AgentPolicy.log(c, "standing_order", o.kind, null, when {
-                !persisted -> "result checked but schedule/digest could not be persisted; may retry after restart"
+                !persisted -> "result checked but schedule/outcome could not be persisted; no successful persistence is claimed"
+                !usable -> "check failed; bounded retry scheduled unless retry limit reached"
+                notify && !notificationPosted -> "notification dispatch failed or permission unavailable; bounded retry scheduled unless retry limit reached"
                 notificationPosted -> "notification dispatched to Android notification manager; user delivery/read receipt is not observable"
-                notify -> "notification dispatch failed or permission unavailable; digest retained for retry on next scheduled check"
-                else -> "nothing new or error"
+                else -> "check succeeded; no new notification was needed"
             })
         }
         return posted
