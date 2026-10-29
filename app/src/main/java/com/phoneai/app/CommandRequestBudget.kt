@@ -17,7 +17,8 @@ internal class CommandRequestBudget(
 
     @Synchronized
     fun tryReserve(): Boolean {
-        val limit = (maxRequestsProvider?.invoke() ?: maxRequests).coerceAtLeast(1)\n        if (usedRequests >= limit) return false
+        val limit = (maxRequestsProvider?.invoke() ?: maxRequests).coerceAtLeast(1)
+        if (usedRequests >= limit) return false
         usedRequests++
         return true
     }
