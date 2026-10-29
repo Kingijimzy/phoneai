@@ -488,16 +488,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         stopped = false
         setRequestScope(command)
         taskProofs.clear()
+        researchCancelled.set(false)
+        talkNim.resume()
 
-        // A short explicit research continuation inherits the last user request. Do this
-        // before asking a model to interpret "it", so it cannot become a dictionary question.
+        // A short explicit research continuation inherits the last substantive user request.
+        // Skip previous follow-up phrases so chains like "research it" → "verify it" keep the topic.
         var previousUserRequest: String? = null
         for (i in chatHist.length() - 1 downTo 0) {
             val turn = runCatching { chatHist.getJSONObject(i) }.getOrNull() ?: continue
-            if (turn.optString("role").equals("user", ignoreCase = true)) {
-                previousUserRequest = turn.optString("content").takeIf { it.isNotBlank() }
-                if (previousUserRequest != null) break
-            }
+            if (!turn.optString("role").equals("user", ignoreCase = true)) continue
+            val candidate = turn.optString("content").trim()
+            if (candidate.isBlank() || ResearchFollowUpPolicy.isResearchFollowUp(candidate)) continue
+            previousUserRequest = candidate
+            break
         }
         val contextualResearchCommand = ResearchFollowUpPolicy.commandFor(command, previousUserRequest)
         if (contextualResearchCommand != command) {
@@ -507,8 +510,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             runInternal(contextualResearchCommand, reuseCommandBudget = false)
             return
         }
-        researchCancelled.set(false)
-        talkNim.resume()
         val soulContext = OrionSoulEngine.contextFor(svc, command)
         val safeSystem = (chatSystem(command) + "\n\n" + soulContext).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
