@@ -78,7 +78,6 @@ internal object RecoveryPolicy {
      */
     fun retryRead(
         first: String,
-        maxReadRetries: Int = MAX_READ_RETRIES,
         isFailure: (String) -> Boolean,
         stopped: () -> Boolean,
         budgetExhausted: () -> Boolean,
