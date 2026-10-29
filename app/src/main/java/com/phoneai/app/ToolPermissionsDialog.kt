@@ -122,7 +122,7 @@ private fun Activity.showAndroidPermissionStatus() {
     if (Build.VERSION.SDK_INT >= 33) rows += "Notifications: " + if (granted(Manifest.permission.POST_NOTIFICATIONS)) "GRANTED" else "not granted / not requested"
     val notificationAccess = runCatching {
         Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
-            .split(':').any { it.equals("${packageName}/${PhoneAiNotificationListener::class.java.name}", true) }
+            .split(':').any { it.equals("${packageName}/${OrionNotificationListener::class.java.name}", true) }
     }.getOrDefault(false)
     rows += "Notification listener access: " + if (notificationAccess) "GRANTED" else "not granted"
     AlertDialog.Builder(this).setTitle("Android permission status")
