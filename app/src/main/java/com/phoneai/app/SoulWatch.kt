@@ -9,7 +9,7 @@ import android.content.Context
  * at most one already-opted-in standing order. It never calls an LLM, enables packs, changes
  * permissions, edits source code, or performs an unapproved consequential action.
  */
-internal object SoulWatch {
+internal object SoulEngineWatcher {
     data class TickResult(
         val status: String,
         val action: String,
@@ -23,7 +23,7 @@ internal object SoulWatch {
         val registered = runCatching { ToolRegistry.all.size }.getOrDefault(0)
         val implemented = AgentPolicy.packs.count { it.implemented }
         val enabled = AgentPolicy.packs.count { it.implemented && AgentPolicy.enabled(c, it.id) }
-        val disclosure = runCatching { Prefs.accessibilityDisclosureAccepted(c) }.getOrDefault(false)
+        val disclosure = runCatching { false }.getOrDefault(false)
         val report = runCatching {
             OrionCapabilityAudit.evaluate(
                 registeredTools = registered,
@@ -53,7 +53,7 @@ internal object SoulWatch {
             else -> "ready"
         }
         val limitations = (report.limitations + if (!AgentPolicy.enabled(c, "orion_core")) listOf("orion_core_disabled") else emptyList()).distinct()
-        val summary = "Watcher readiness=$status; registered_tools=$registered; enabled_packs=$enabled; limitations=\${limitations.joinToString(",").ifBlank { "none" }}."
+        val summary = "Watcher readiness=$status; registered_tools=$registered; enabled_packs=$enabled; limitations=${limitations.joinToString(",").ifBlank { "none" }}."
         runCatching { SoulEngineState.recordLesson(c, "watcher_health", summary, status) }
         if (limitations.isNotEmpty() && AgentPolicy.enabled(c, "orion_core")) {
             val issue = limitations.first()
@@ -85,7 +85,7 @@ internal object SoulWatch {
         }
         runCatching { SoulEngineState.recordLesson(c, "watcher_tick", "Watcher action: $action; status=$status.", "observed") }
         runCatching { SoulEngineState.recordWatcherStatus(c, status, action) }
-        AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=\${limitations.joinToString(",").ifBlank { "none" }}")
+        AgentPolicy.log(c, "soul_watcher", action, null, "status=$status; limitations=${limitations.joinToString(",").ifBlank { "none" }}")
         return TickResult(status, action, limitations, next)
     }
 }
