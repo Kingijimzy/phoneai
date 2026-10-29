@@ -1575,6 +1575,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (text.isBlank()) return false
         // Deterministic research routing takes precedence over a model's unsupported claim that it lacks tools.
         if (OrionResearchRoutingPolicy.requiresToolAgent(text)) return true
+        // Explicit runtime checks and named public-repository/site requests must reach
+        // the guarded agent even when the chat is currently in Talk mode.
+        if (ConversationAutoRoutePolicy.requiresToolAgent(text)) return true
         // Routing is deliberately conservative: a request must read like an instruction
         // or a direct question, not a sentence merely discussing an action.
         val patterns = listOf(
