@@ -5,6 +5,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolRegistryTest {
+    @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
+        assertTrue(ToolRegistry.all.any { it.name == "device_location" })
+        assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
+    }
+
     @Test fun registryNamesAreUniqueAndContainEveryRuntimeToolFamily() {
         val names = ToolRegistry.all.map { it.name }
         assertEquals("Each tool name must have exactly one definition.", names.size, names.toSet().size)
