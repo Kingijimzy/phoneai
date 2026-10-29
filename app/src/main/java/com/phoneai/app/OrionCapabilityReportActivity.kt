@@ -177,6 +177,8 @@ class OrionCapabilityReportActivity : Activity() {
             ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
         val termuxReady = runCatching { TermuxBridgeRunner.readiness(this) == null }.getOrDefault(false)
+        val mcpEndpointState = runCatching { if (McpConnector.configured(this)) "configured" else "not-configured" }.getOrDefault("unknown")
+        val mcpPairingState = runCatching { if (McpConnector.isPaired(this)) "paired" else "not-paired" }.getOrDefault("unknown")
         val inventory = runCatching {
             OrionCapabilityDiscovery.discover(
                 ToolRegistry.all,
@@ -185,6 +187,11 @@ class OrionCapabilityReportActivity : Activity() {
                 permissionStates = mapOf(
                     "contacts" to contactsState,
                     "notification_access" to notificationState
+                ),
+                integrationStates = mapOf(
+                    "mcp_endpoint" to mcpEndpointState,
+                    "mcp_pairing" to mcpPairingState,
+                    "mcp_live_discovery" to "not-run-by-capability-report"
                 )
             )
         }.getOrNull()
