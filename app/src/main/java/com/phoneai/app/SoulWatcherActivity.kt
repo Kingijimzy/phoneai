@@ -75,6 +75,7 @@ class SoulWatcherActivity : Activity() {
         statusCard.addView(statusActions)
         root.addView(statusCard)
         root.addView(actionButton("Schedules & next runs") { showSchedules() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
+        root.addView(actionButton("Propose · Probe · Compose") { showP3Reports() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(6) })
 
         root.addView(label("WATCHER CONVERSATION", white, 13f).also { it.typeface = Typeface.DEFAULT_BOLD; it.setPadding(0, dp(16), 0, dp(8)) })
         val scroll = ScrollView(this).apply { isFillViewport = false }
@@ -121,10 +122,13 @@ class SoulWatcherActivity : Activity() {
             q.contains("schedule") || q.contains("standing order") || q.contains("next run") -> showSchedules()
             q.startsWith("pause ") || q.startsWith("resume ") -> handleScheduleCommand(q)
             q.contains("memory") || q.contains("nudge") || q.contains("save this") -> showMemoryNudges()
+            q == "run probes" || q == "probe now" || q.contains("run experiment") -> runP3Probe()
+            q.contains("probe") || q.contains("experiment") -> showProbeReport()
+            q.contains("composition") || q.contains("compose") || q.contains("draft guidance") -> showCompositionReport()
             q.contains("proposal") || q.contains("suggestion") -> showProposals()
             q.contains("capability report") || q.contains("capability board") || q.contains("open report") -> openCapabilityReport()
             q.startsWith("why") || q.contains("screen perception") || q.contains("unavailable") -> explainLimitation(raw)
-            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show schedules”, “pause brief”, “resume brief”, “show proposals”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
+            q == "help" || q == "what can you do" -> addMessage("WATCHER", "Try: “check status”, “show capabilities”, “show memory nudges”, “show schedules”, “pause brief”, “resume brief”, “show proposals”, “run probes”, “show probe results”, “show composition drafts”, “why screen perception unavailable”, or “open capability report”. I can inspect and guide repairs, but Android permission changes and consequential actions remain under your control.")
             else -> addMessage("WATCHER", "I don't have a verified local action for that command yet. I haven't changed anything. Try “check status”, “show proposals”, or “why screen perception unavailable”.")
         }
     }
@@ -140,6 +144,7 @@ class SoulWatcherActivity : Activity() {
                     addMessage("WATCHER", "Audit finished. Status: ${r.status}. Action: ${r.action}. $limits\nNext step: ${r.nextStep}\nThis is a fresh audit result, not proof that every feature works.")
                     showProposals()
                     showMemoryNudges()
+                    showP3Reports()
                 }.onFailure { e ->
                     addMessage("WATCHER", "The local audit failed: ${e.message ?: e.javaClass.simpleName}. No repair is claimed. You can retry or open the Capability Report.")
                 }
@@ -253,6 +258,38 @@ class SoulWatcherActivity : Activity() {
         } else {
             addMessage("WATCHER", "I need a fresh local audit to report current limitations accurately. Say “check status” and I will run it; this explanation command itself does not change settings or run background tasks.")
         }
+    }
+
+    private fun showP3Reports() {
+        showProbeReport()
+        showCompositionReport()
+    }
+
+    private fun runP3Probe() {
+        addMessage("WATCHER", "Running a local dry-run comparison now. No candidate tools will execute, and no guidance will be auto-adopted.")
+        Thread {
+            val result = runCatching { SoulP3Engine.run(applicationContext, force = true) }
+            runOnUiThread {
+                result.onSuccess {
+                    addMessage("WATCHER", it.summary)
+                    showP3Reports()
+                }.onFailure {
+                    addMessage("WATCHER", "Stage 5 probe failed: " + (it.message ?: it.javaClass.simpleName) + ". No candidate was adopted.")
+                }
+            }
+        }.start()
+    }
+
+    private fun showProbeReport() {
+        val report = runCatching { SoulP3Engine.probeReport(this) }
+            .getOrElse { "Probe report unavailable: " + it.javaClass.simpleName }
+        addMessage("WATCHER", "PROBE RESULTS\\n" + report)
+    }
+
+    private fun showCompositionReport() {
+        val report = runCatching { SoulP3Engine.compositionReport(this) }
+            .getOrElse { "Composition report unavailable: " + it.javaClass.simpleName }
+        addMessage("WATCHER", "COMPOSITION DRAFTS\\n" + report)
     }
 
     private fun showProposals() {
