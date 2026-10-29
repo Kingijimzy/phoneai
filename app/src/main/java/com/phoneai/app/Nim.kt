@@ -221,8 +221,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
     }
 
-    private fun detachConnection(conn: HttpURLConnection) = synchronized(connectionLock) {
-        if (active === conn) active = null
+    private fun detachConnection(conn: HttpURLConnection) {
+        synchronized(connectionLock) {
+            if (active === conn) active = null
+        }
     }
 
     private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
