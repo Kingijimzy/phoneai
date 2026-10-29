@@ -223,6 +223,29 @@ class OrionCapabilityReportActivity : Activity() {
         }
         page.addView(toolsCard)
 
+        // The same grouped snapshot is shown in the Watcher and here so both destinations agree.
+        val shared = runCatching { OrionCapabilityHub.snapshot(this, service) }.getOrNull()
+        if (shared != null) {
+            val sharedCard = card()
+            sharedCard.addView(label("CONNECTED CAPABILITY HUB", 10f, 0xFFAAAAAA.toInt(), true))
+            sharedCard.addView(label("${shared.registeredTools} registered tools · ${shared.availableTools} eligible under current policy", 12f, 0xFFCCCCCC.toInt()))
+            shared.capabilities.forEach { capability ->
+                val good = capability.state == OrionCapabilityHub.State.READY
+                val color = when (capability.state) {
+                    OrionCapabilityHub.State.READY -> 0xFF9ED6A2.toInt()
+                    OrionCapabilityHub.State.LIMITED -> 0xFFFFC078.toInt()
+                    OrionCapabilityHub.State.DISABLED, OrionCapabilityHub.State.SETUP_REQUIRED -> 0xFFFF8585.toInt()
+                    OrionCapabilityHub.State.UNKNOWN -> 0xFFAAAAAA.toInt()
+                }
+                sharedCard.addView(label("${OrionCapabilityHub.stateLabel(capability.state)} · ${capability.name}", 13f, color, true))
+                sharedCard.addView(label(capability.detail, 11f, 0xFFBBBBBB.toInt()))
+            }
+            if (shared.integrationStates.isNotEmpty()) {
+                sharedCard.addView(label("Connection metadata only: " + shared.integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" }, 10f, 0xFFAAAAAA.toInt()))
+            }
+            page.addView(sharedCard)
+        }
+
         val limits = card()
         limits.addView(label("WHAT NEEDS ATTENTION", 10f, 0xFFAAAAAA.toInt(), true))
         val messages = report.limitations.mapNotNull { limitationText(it) }.toMutableList()
