@@ -455,6 +455,9 @@ class SettingsActivity : Activity() {
             "Typing setup: enable Orion Private Keyboard and select it in Android's picker. If Orion asks for the keyboard during a typing action, tap Orion in that picker; it requests restoration of your previous keyboard afterward. Orion selects existing field text before replacement and refuses to type if select-all is unsupported, rather than silently appending duplicates. The keyboard never reads field contents.",
             12f, Theme.MUTED
         ), 8)
+        add(s1, button("Allow location", false) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION), 75)
+        }, 8)
         add(s1, button("Allow microphone and notifications", false) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
         }, 8)
