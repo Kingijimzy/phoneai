@@ -1339,7 +1339,7 @@ Rules:
             val owner = githubRunMatch.groupValues[1]
             val repository = githubRunMatch.groupValues[2]
             val runId = githubRunMatch.groupValues[3]
-            if (!authorizeDirectTool("github_public", "orion_core")) {
+            if (!authorizeDirectTool("github_public", "trading_research")) {
                 ui.say("I couldn't read that public GitHub Actions run because the public research capability is disabled or this tool was explicitly denied.")
                 return
             }
@@ -1351,7 +1351,7 @@ Rules:
             return
         }
         // Named public GitHub repositories are discovered and read without requiring account-scope access.
-        val namedRepo = Regex("(?i)\\b(?:github\\s+)?(?:repo|repository)\\s+(?:called|named)\\s+([A-Za-z0-9_.-]{1,100})\\b").find(command)
+        val namedRepo = Regex("(?i)\\b(?:my\\s+)?(?:github\\s+)?(?:repo|repository|project)\\s+(?:(?:called|named|is)\\s+)?([A-Za-z0-9_.-]{2,100})\\b").find(command)
         if (!resumeRequest && !browserActionTask && namedRepo != null) {
             val requestedName = namedRepo.groupValues[1]
             if (!authorizeDirectTool("github_public", "orion_core")) {
