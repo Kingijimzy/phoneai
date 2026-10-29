@@ -105,9 +105,9 @@ object Providers {
             "https://opencode.ai/zen/v1/models", false, false, requiresPaidOptIn = true
         ),
         Provider(
-            "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
+            "local", "Local AI (Ollama endpoint)", "http://127.0.0.1:11434/v1",
             "llama3.2:3b", null, "",
-            "FREE and unlimited, runs on this phone inside Termux. Slower, text only.",
+            "Local OpenAI-compatible endpoint at 127.0.0.1:11434; requires a separately running Ollama service. Availability and speed depend on the device.",
             null, false, true
         )
     )
