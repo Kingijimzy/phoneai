@@ -51,8 +51,9 @@ class ShellPolicyTest {
         val contract = ToolRegistry.all.single { it.name == "shell" }.promptLine.lowercase()
         assertTrue(contract.contains("no termux"))
         assertTrue(contract.contains("not a full linux distribution"))
-        assertTrue(contract.contains("does not promise python"))
-        assertTrue(contract.contains("environment variables do not"))
+        assertTrue(contract.contains("does not provide python"))
+        assertTrue(contract.contains("where=termux"))
+        assertTrue(contract.contains("termux_command is read-only diagnostics only"))
     }
 
     @Test fun shellToolsAreRegisteredWithCorrectAccess() {
