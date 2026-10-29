@@ -34,6 +34,10 @@ internal object SoulEngineState {
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun safeText(raw: String, max: Int = MAX_LABEL): String {
+        // If the label itself appears to contain a secret/code, omit the whole label instead of guessing boundaries.
+        if (Regex("(?i)\\b(password|passcode|one[- ]time code|otp|recovery phrase|seed phrase|private key)\\b").containsMatchIn(raw)) {
+            return "[sensitive content omitted]"
+        }
         var s = AgentPrivacyFilter.safeCommand(raw).replace(Regex("\\s+"), " ").trim()
         s = s.replace(Regex("(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]+"), "[REDACTED]")
         s = s.replace(Regex("(?i)\\b(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret|authorization|pin|otp|passcode)\\b\\s*[:=]\\s*[^\\s,;]+"), "[REDACTED]")
@@ -124,7 +128,7 @@ internal object SoulEngineState {
             }
         }
         val label = safeText(checkpoint.optString("command"))
-        if (checkpoint.optString("status") != "completed" || label.isBlank() || successes < 2 || tools.size < 2) return@synchronized true
+        if (checkpoint.optString("status") != "completed" || label.isBlank() || label == "[sensitive content omitted]" || successes < 2 || tools.size < 2) return@synchronized true
         if (label.contains(Regex("(?i)\\b(bank|payment|transfer money|send money|withdraw|deposit|checkout|trade order|wallet|password|passcode|pin|otp|login|sign in|credential|recovery phrase)\\b"))) return@synchronized true
         val o = read(context)
         val existing = proposals(o).firstOrNull { it.kind == ProposalKind.ROUTE && it.title.equals(label, true) && it.status == ProposalStatus.PENDING }
