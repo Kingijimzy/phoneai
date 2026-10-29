@@ -149,8 +149,16 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                     o.optString("goal").take(500), o.optString("checkpoint").take(500), o.optString("lastError").take(240))
             }
             inflight?.let { activeItem ->
-                if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
-                    queue.add(activeItem.copy(notBefore = 0L))
+                // SOUL_WATCH may process an opted-in standing order with an external effect.
+                // After a process death its outcome is ambiguous, so never replay that tick blindly.
+                if (activeItem.type == WorkType.SOUL_WATCH) {
+                    lastEvent = "recovery_required:soul_watch_outcome_unknown"
+                    lastChangedAt = clock()
+                } else if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
+                    queue.add(activeItem.copy(
+                        notBefore = 0L,
+                        lastError = "process_interrupted; resuming checkpointed local work"
+                    ))
                 }
                 inflight = null
             }
