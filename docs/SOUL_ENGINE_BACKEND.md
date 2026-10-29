@@ -41,7 +41,7 @@ This document describes the Android implementation on the feature branch, not a 
 ## Watcher follow-up
 
 - `PhoneAiService` wakes the persisted Soul queue on a bounded timer while the accessibility service is alive; the watcher does not claim to run after Android kills the service.
-- Added `SoulWatch.run`: every tick performs a local capability audit, stores sanitized readiness evidence, and can add one deduplicated maintenance proposal for a real limitation.
+- Added `SoulWatch.run`: every tick performs a local capability audit, stores sanitized readiness evidence, and can add one deduplicated maintenance proposal for a real limitation. The last watcher status/action/time are persisted and surfaced on the Soul Engine dashboard.
 - If the user has explicitly enabled the Proactive pack and saved standing orders, a tick may execute at most one due read-only standing order. Standing-order dispatch now passes the shared `AgentPolicy.gate`; a blocked gate skips the action and does not consume the schedule.
 - The watcher does not auto-enable packs, grant permissions, edit source code, replay routes, trade, send messages, or weaken guardrails. Accept/Reject/Edit stays in the proposal inbox; actual code changes still require a reviewed development workflow.
 - The five-minute in-service wake-up is best-effort, not an Android exact alarm guarantee. Doze, force-stop, battery optimization, and OEM task killing can delay or stop it.
