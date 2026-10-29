@@ -448,7 +448,11 @@ class Tools(private val svc: PhoneAiService) {
                 val u = try { java.net.URI(raw) } catch (_: Exception) { null }
                 if (u == null || u.scheme?.lowercase() !in setOf("http", "https") || u.host.isNullOrBlank())
                     return "error: open_url requires a complete HTTP/HTTPS URL"
-                Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+                // Keep web research inside the conversation: open the chat's compact browser
+                // dialog instead of ejecting the user into a separate browser Activity/app.
+                Intent(svc, MainChatActivity::class.java)
+                    .putExtra(MainChatActivity.EXTRA_OPEN_BROWSER_URL, raw)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, sms, alarm, timer, share, open_url"
         }
