@@ -158,6 +158,25 @@ internal object SoulEngineState {
     private const val MIN_NUDGE_COOLDOWN = 60L * 60L * 1000L
     private const val MAX_NUDGE_COOLDOWN = 30L * 24L * 60L * 60L * 1000L
 
+
+    /**
+     * Conservative local detector: only explicit memory/preference language is eligible.
+     * It never sends text to a provider and the resulting candidate still requires user review.
+     */
+    fun detectExplicitMemoryCandidate(text: String): Pair<String, String>? {
+        val raw = text.trim()
+        if (raw.length !in 8..500) return null
+        val explicit = Regex("(?i)^(?:please\\s+)?(?:remember|keep in mind|note)\\s+(?:that\\s+)?(?:i\\s+)?|^(?:i\\s+(?:prefer|like|usually|always|want you to|need you to))\\b")
+        if (!explicit.containsMatchIn(raw)) return null
+        val clean = safeText(raw, 300)
+        if (clean.isBlank() || clean == "[sensitive content omitted]") return null
+        val category = when {
+            Regex("(?i)\\b(prefer|like|usually|always)\\b").containsMatchIn(raw) -> "preference"
+            else -> "user instruction"
+        }
+        return category to clean
+    }
+
     /** Change nudge behavior without deleting existing saved lessons or review history. */
     fun configureMemoryNudges(context: Context, enabled: Boolean, cooldownMillis: Long): Boolean = synchronized(lock) {
         val o = read(context)
