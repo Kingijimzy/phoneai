@@ -325,10 +325,18 @@ fun OrionComposeChatScreen(
     // Scroll only when transcript length changes. Status updates can arrive frequently while
     // a tool/model is running; tying animation to status causes repeated scroll work and fights
     // users who are reading earlier messages.
-    LaunchedEffect(lines.lastOrNull()?.id) {
-        // Follow newly appended turns, but don't animate on every streamed token. Repeated
-        // text-key scrolls caused jitter and made it hard to read/copy an in-progress reply.
-        if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
+    LaunchedEffect(lines.lastOrNull()?.id, (lines.lastOrNull()?.text?.length ?: 0) / 80) {
+        // Keep streaming replies in view in coarse chunks, not every token. Never yank the
+        // reader away from older messages unless they are already near the bottom; always
+        // reveal a newly sent user turn.
+        if (lines.isNotEmpty()) {
+            val layout = listState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index
+            val nearBottom = lastVisible == null || layout.totalItemsCount - 1 - lastVisible <= 2
+            if (lines.lastOrNull()?.kind == "me" || nearBottom) {
+                listState.animateScrollToItem(lines.lastIndex)
+            }
+        }
     }
     val busy = status.contains("think", true) || status.contains("work", true) || status.contains("act", true)
     Column(Modifier.fillMaxSize().background(ChatInk).imePadding()) {
