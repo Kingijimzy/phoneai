@@ -508,6 +508,8 @@ fun OrionComposeChatScreen(
             }
         }
 
+        OrionStepStrip(lines)
+
         AnimatedVisibility(selectedImages.isNotEmpty(), enter = fadeIn(animationSpec = tween(180)) + slideInVertically(animationSpec = tween(180)) { it / 3 }) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 5.dp)

@@ -6,7 +6,9 @@ import org.junit.Test
 
 class ChatStepsTest {
     private val sec = 1_000_000_000L
-    private fun note(id: Long, text: String) = StepLine(id, "note", text)
+    // Live line ids are System.nanoTime(), far above Int range; small ids model restored (hashed) history.
+    private val base = 100 * sec
+    private fun note(id: Long, text: String) = StepLine(if (id < 1_000L) id else id + base, "note", text)
 
     @Test fun durationFormatCoversSecondsMinutesAndHours() {
         assertEquals("0s", StepFormat.duration(0, false))
@@ -70,7 +72,7 @@ class ChatStepsTest {
     @Test fun anUnfinishedStepStaysRunningAndShowsElapsedTime() {
         val steps = StepTracker.derive(listOf(note(10 * sec, "[TASK:RUNNING]\nRunning shell")))
         assertTrue(steps[0].active)
-        assertEquals("5s…", steps[0].durationLabel(15 * sec))
+        assertEquals("5s…", steps[0].durationLabel(115 * sec))
     }
 
     @Test fun aNewStepInterruptsAnEarlierUnfinishedOne() {
@@ -142,5 +144,53 @@ class ChatStepsTest {
         assertEquals("Waiting for you", ChatMood.statusLine(Mood.WAITING, "x", false))
         assertEquals("Ready", ChatMood.statusLine(Mood.IDLE, null, false))
         assertEquals("Done", ChatMood.statusLine(Mood.HAPPY, null, false))
+    }
+
+    @Test fun hashedRestoredIdsNeverShowADuration() {
+        val steps = StepTracker.derive(listOf(
+            StepLine(123_456L, "note", "[TASK:RUNNING]\nRunning read_screen"),
+            StepLine(2_000_000_000L, "note", "[TASK:RESULT]\nread_screen — ok")
+        ))
+        assertNull(steps[0].durationLabel(0))
+    }
+
+    @Test fun retryNotesAreShownOnTheRunningStep() {
+        val steps = StepTracker.derive(listOf(
+            note(1 * sec, "[TASK:RUNNING]\nRunning web_search"),
+            note(2 * sec, "[TASK:RECOVER]\nRetry 1/2 of read-only 'web_search' after a transient failure; reads have no side effects"),
+            note(3 * sec, "[TASK:RECOVER]\nRetry 2/2 of read-only 'web_search' after a transient failure; reads have no side effects"),
+            note(5 * sec, "[TASK:RESULT]\nweb_search — ok")
+        ))
+        assertEquals(2, steps[0].retries)
+        assertEquals(StepStatus.SUCCESS, steps[0].status)
+    }
+
+    @Test fun cancelNoteMarksTheRunningStepCancelled() {
+        val steps = StepTracker.derive(listOf(
+            note(1 * sec, "[TASK:RUNNING]\nRunning shell"),
+            note(2 * sec, "[TASK:CANCELLED]\nUser stopped execution")
+        ))
+        assertEquals(StepStatus.CANCELLED, steps[0].status)
+    }
+
+    @Test fun taskStateFollowsTheNewestLifecycleNoteOfTheCurrentTask() {
+        fun st(vararg l: StepLine) = StepTracker.taskState(l.toList())
+        assertEquals(StepTracker.TaskState.NONE, st(StepLine(1, "me", "hi")))
+        assertEquals(StepTracker.TaskState.WORKING, st(StepLine(1, "me", "x"), note(2, "[TASK:RUNNING]\nRunning a")))
+        assertEquals(StepTracker.TaskState.RECOVERING, st(StepLine(1, "me", "x"), note(2, "[TASK:RECOVER]\nRecovery 1/2")))
+        assertEquals(StepTracker.TaskState.WAITING, st(StepLine(1, "me", "x"), note(2, "[TASK:BLOCKED]\nneeds you")))
+        assertEquals(StepTracker.TaskState.CANCELLED, st(StepLine(1, "me", "x"), note(2, "[TASK:CANCELLED]\nstopped")))
+        assertEquals(StepTracker.TaskState.FAILED, st(StepLine(1, "me", "x"), note(2, "[TASK:FAILED]\na — error")))
+        // an earlier task's state never leaks into a new one
+        assertEquals(StepTracker.TaskState.NONE, st(note(2, "[TASK:BLOCKED]\nold"), StepLine(3, "me", "new request")))
+    }
+
+    @Test fun onlyTheCurrentTasksStepsAreShown() {
+        val steps = StepTracker.currentTaskSteps(listOf(
+            note(1 * sec, "[TASK:RUNNING]\nRunning old"), note(2 * sec, "[TASK:RESULT]\nold — ok"),
+            StepLine(3, "me", "next"),
+            note(4 * sec, "[TASK:RUNNING]\nRunning fresh")
+        ))
+        assertEquals(listOf("fresh"), steps.map { it.tool })
     }
 }
