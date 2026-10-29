@@ -45,6 +45,7 @@
 
         <activity android:name=".SelfExtensionLabActivity" android:exported="false" />
         <activity android:name=".SoulEngineActivity" android:exported="false" />
+        <activity android:name=".SoulWatcherActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".KnowledgeGraphActivity" android:exported="false" />
         <activity android:name=".MemoryActivity" android:exported="false" />
         <activity android:name=".CapabilityBoardActivity" android:exported="false" />
