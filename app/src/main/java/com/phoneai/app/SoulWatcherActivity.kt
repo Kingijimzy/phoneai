@@ -103,7 +103,9 @@ class SoulWatcherActivity : Activity() {
         val status = snapshot?.watcherStatus?.takeIf { it.isNotBlank() } ?: "not checked yet"
         statusView.text = "Watcher: $status" + if (!core) " · core paused" else ""
         val time = snapshot?.watcherAt?.takeIf { it > 0L }?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)) } ?: "no recorded tick"
-        detailView.text = "Last check: $time\nLast action: ${snapshot?.watcherAction?.ifBlank { "none recorded" } ?: "state unavailable"}\nAccessibility service: ${if (service) "connected" else "not connected"}\nPending proposals: ${snapshot?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0}"
+        val schedules = runCatching { StandingOrders.all(this) }.getOrDefault(emptyList())
+        val scheduleState = if (StandingOrders.storageError() != null) "unavailable" else "${schedules.count { it.enabled && it.consecutiveFailures < StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} active / ${schedules.count { !it.enabled || it.consecutiveFailures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} paused/limited"
+        detailView.text = "Last check: $time\nLast action: ${snapshot?.watcherAction?.ifBlank { "none recorded" } ?: "state unavailable"}\nAccessibility service: ${if (service) "connected" else "not connected"}\nSchedules: $scheduleState\nPending proposals: ${snapshot?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0}"
     }
 
     private fun submitCommand() {
@@ -178,8 +180,13 @@ class SoulWatcherActivity : Activity() {
         orders.forEach { order ->
             val cardView = card(transcript)
             val nextAt = StandingOrders.nextRunAt(order)
-            val next = nextAt?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)) }
-                ?: if (!order.enabled) "Paused" else "Retry limit reached; resume to reset"
+            val next = when {
+                !order.enabled -> "Paused"
+                order.consecutiveFailures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES -> "Retry limit reached; resume to reset"
+                order.lastRunAt <= 0L -> "Due on next watcher tick"
+                nextAt != null -> DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(nextAt))
+                else -> "Not scheduled"
+            }
             cardView.addView(label(StandingOrderPolicy.kinds[order.kind] ?: order.kind, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
             cardView.addView(label("Every ${order.everyMinutes} min · ${if (order.enabled) "Enabled" else "Paused"}\nNext run: $next\nFailures: ${order.consecutiveFailures}/${StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES}\nLast outcome: ${order.lastOutcome}", muted, 11f))
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -197,7 +204,7 @@ class SoulWatcherActivity : Activity() {
         }
         val addHeader = label("ADD A READ-ONLY SCHEDULE (60 MIN)", white, 12f).also { it.typeface = Typeface.DEFAULT_BOLD }
         transcript.addView(addHeader)
-        StandingOrderPolicy.kinds.forEach { (kind, description) ->
+        StandingOrderPolicy.kinds.filterKeys { kind -> orders.none { it.kind == kind } }.forEach { (kind, description) ->
             transcript.addView(actionButton("Add: $description") {
                 addMessage("WATCHER", StandingOrders.add(this, kind, 60))
                 showSchedules()
