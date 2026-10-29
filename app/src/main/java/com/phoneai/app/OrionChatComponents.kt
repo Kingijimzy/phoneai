@@ -155,12 +155,15 @@ private fun ModePill(label: String, selected: Boolean, modifier: Modifier = Modi
     }
 }
 
-private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK }
+private enum class OrionReplyType { NORMAL, RESEARCH, CODE, TASK, MCP }
 
 private fun classifyOrionReply(item: OrionChatLine): OrionReplyType {
     if (item.kind == "note") return OrionReplyType.TASK
     val text = item.text
     val lower = text.lowercase()
+    if (lower.contains("mcp tool result") || lower.contains("mcp discovery result") || lower.contains("mcp discovery failed")) {
+        return OrionReplyType.MCP
+    }
     if (Regex("(?s)```(?:kotlin|java|python|py|javascript|js|typescript|ts|bash|sh|json|xml|html|css|sql|rust|go)?\\s*\\n").containsMatchIn(text) ||
         (text.count { it == '\u0060' } >= 2 && (lower.contains("fun main") || lower.contains("def ") || lower.contains("import ") || lower.contains("class ")))) {
         return OrionReplyType.CODE
@@ -218,12 +221,14 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                                 OrionReplyType.RESEARCH -> Color(0xFF151515)
                                 OrionReplyType.CODE -> Color(0xFF101010)
                                 OrionReplyType.TASK -> Color(0xFF171717)
+                                OrionReplyType.MCP -> Color(0xFF151515)
                                 else -> Color.Transparent
                             })
                             .border(1.dp, when (replyType) {
                                 OrionReplyType.RESEARCH -> Color(0xFF383838)
                                 OrionReplyType.CODE -> Color(0xFF383838)
                                 OrionReplyType.TASK -> Color(0xFF454545)
+                                OrionReplyType.MCP -> Color(0xFF454545)
                                 else -> Color.Transparent
                             }, RoundedCornerShape(16.dp))
                         else Modifier
@@ -240,12 +245,14 @@ internal fun ChatBubble(item: OrionChatLine, onOpenBrowser: (String?) -> Unit, o
                                 OrionReplyType.RESEARCH -> "RESEARCH"
                                 OrionReplyType.CODE -> "CODE OUTPUT"
                                 OrionReplyType.TASK -> "TASK UPDATE"
+                                OrionReplyType.MCP -> "MCP TOOL RESULT"
                                 OrionReplyType.NORMAL -> "ACTIVITY"
                             },
                             color = when (replyType) {
                                 OrionReplyType.RESEARCH -> Color(0xFFD2D2D2)
                                 OrionReplyType.CODE -> Color(0xFFE2E2E2)
                                 OrionReplyType.TASK -> Color(0xFFD0D0D0)
+                                OrionReplyType.MCP -> Color(0xFFCFD3D8)
                                 OrionReplyType.NORMAL -> ChatMint
                             },
                             fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp
