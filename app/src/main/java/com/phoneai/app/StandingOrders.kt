@@ -65,9 +65,18 @@ internal object StandingOrderPolicy {
         return lines.take(3).joinToString(" · ").take(160).ifBlank { "Something new" }
     }
 
-    /** Do not consume a new-result digest when Android could not post its notification. */
+    /** Do not consume a digest for an error/empty response or an alert Android could not dispatch. */
     fun digestAfterAttempt(previousDigest: String, result: String, notificationNeeded: Boolean, notificationPosted: Boolean, kind: String = "", dayKey: String = ""): String =
-        if (result.startsWith("error") || (notificationNeeded && !notificationPosted)) previousDigest else digestFor(kind, result, dayKey)
+        if (!isUsableResult(result) || (notificationNeeded && !notificationPosted)) previousDigest else digestFor(kind, result, dayKey)
+
+    private fun isUsableResult(result: String): Boolean {
+        val normalized = result.trim()
+        if (normalized.isEmpty() || normalized.startsWith("error", ignoreCase = true)) return false
+        if (normalized.startsWith("No unread", ignoreCase = true) ||
+            normalized.startsWith("Nothing new", ignoreCase = true) ||
+            normalized.endsWith("(empty result)", ignoreCase = true)) return false
+        return !normalized.contains("0 matching message(s).", ignoreCase = true)
+    }
 }
 
 object StandingOrders {
