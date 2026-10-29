@@ -96,6 +96,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
+    override fun onOpenBrowser(url: String) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) showChatBrowserPopup(url)
+        }
+    }
+
     override fun onModeSwitch(commandMode: Boolean) {
         runOnUiThread {
             if (this.commandMode == commandMode) return@runOnUiThread
@@ -1524,6 +1530,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         web.settings.allowFileAccess = false
         web.settings.allowContentAccess = false
         web.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        // Agent browser tools attach to this exact WebView so the visible popup and
+        // automation snapshot/navigation path cannot drift into separate browser sessions.
+        BrowserAutomation.attach(web)
         web.webViewClient = object : android.webkit.WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: android.webkit.WebView,
@@ -1573,7 +1582,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)))
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         dialog.setContentView(root)
-        dialog.setOnDismissListener { web.stopLoading(); web.destroy() }
+        dialog.setOnDismissListener {
+            BrowserAutomation.detach(web)
+            web.stopLoading()
+            web.destroy()
+        }
         dialog.setOnShowListener {
             dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.88f).toInt())
         }
