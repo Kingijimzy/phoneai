@@ -20,7 +20,7 @@ internal object ShellPolicy {
         Regex(":\\(\\)\\s*\\{"),
         Regex("(?i)>\\s*/dev/(sd|block|mmcblk)"),
         Regex("(?i)\\bdd\\s+.*\\bof=/dev/(sd[a-z]+|nvme\\d+n\\d+|mmcblk\\d+)"),
-        Regex("(?i)\\\\b(curl|wget)\\\\b[^;&]*\\\\|\\\\s*(sh|bash|zsh)\\\\b"),
+        Regex("(?i)\\b(curl|wget)\\b[^;&]*\\|\\s*(sh|bash|zsh)\\b"),
         Regex("(?i)(/data/data/|/data/user/|shared_prefs|orion_[a-z_]+\\.json|\\bkeystore\\b|api[_-]?key|\\.env\\b|id_rsa|\\.ssh/)"),
         Regex("(?i)\\bchmod\\s+(-[a-z]+\\s+)?[0-7]*7[0-7]*\\s+/")
     )
