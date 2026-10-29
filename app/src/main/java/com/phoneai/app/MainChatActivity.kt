@@ -1578,6 +1578,18 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         controls.addView(control("‹ Back") { if (web.canGoBack()) web.goBack() })
         controls.addView(control("Forward ›") { if (web.canGoForward()) web.goForward() })
         controls.addView(control("Reload") { web.reload() })
+        controls.addView(control("Open externally") {
+            val target = safeWebUrl(web.url) ?: safeWebUrl(address.text?.toString())
+            if (target == null) {
+                Toast.makeText(this, "No valid web page is available to open.", Toast.LENGTH_SHORT).show()
+            } else {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "No external browser is available.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
         controls.addView(control("Close") { dialog.dismiss() })
         root.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)))
         root.addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
