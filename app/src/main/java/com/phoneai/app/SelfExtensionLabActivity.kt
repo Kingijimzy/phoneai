@@ -207,9 +207,6 @@ class SelfExtensionLabActivity : ComponentActivity() {
             Modifier.fillMaxSize().background(ink).verticalScroll(rememberScrollState()).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("‹  SOUL ENGINE", color = blue, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).then(Modifier))
-                .also { }
             TextButton(onClick = onBack) { Text("← Back to Command Center", color = muted) }
             Text("SELF-EXTENSION LAB", color = muted, fontSize = 10.sp, letterSpacing = 1.5.sp)
             Text("Build a new skill", color = white, fontSize = 27.sp, fontWeight = FontWeight.Bold)
