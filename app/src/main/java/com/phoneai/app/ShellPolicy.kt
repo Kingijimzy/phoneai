@@ -19,15 +19,15 @@ internal object ShellPolicy {
         Regex("(?i)\\brm\\s+(-[a-z]*\\s+)*(\\s*/|~|\\${'$'}HOME|\\*|/sdcard|/storage)(\\s|$)"),
         Regex(":\\(\\)\\s*\\{"),
         Regex("(?i)>\\s*/dev/(sd|block|mmcblk)"),
+        Regex("(?i)\\bdd\\s+.*\\bof=/dev/(sd[a-z]+|nvme\\d+n\\d+|mmcblk\\d+)"),
+        Regex("""(?i)\\b(curl|wget)\\b[^;&]*\\|\\s*(sh|bash|zsh)\\b"""),
         Regex("(?i)(/data/data/|/data/user/|shared_prefs|orion_[a-z_]+\\.json|\\bkeystore\\b|api[_-]?key|\\.env\\b|id_rsa|\\.ssh/)"),
         Regex("(?i)\\bchmod\\s+(-[a-z]+\\s+)?[0-7]*7[0-7]*\\s+/")
     )
     private val approvalRequired = listOf(
         Regex("(?i)\\b(mkfs|fdisk|reboot|shutdown|setprop|su|sudo)\\b"),
         Regex("(?i)\\bdd\\s+.*\\bof="),
-        Regex("(?i)\\bdd\\s+.*\\bof=/dev/(sd[a-z]+|nvme\\d+n\\d+|mmcblk\\d+)"),
-        Regex("(?i)\\bsettings\\s+put\\b|\\bpm\\s+(uninstall|clear|disable)\\b"),
-        Regex("""(?i)\\b(curl|wget)\\b[^;&]*\\|\\s*(sh|bash|zsh)\\b""")
+        Regex("(?i)\\bsettings\\s+put\\b|\\bpm\\s+(uninstall|clear|disable)\\b")
     )
 
     private fun segments(cmd: String): List<String> =
