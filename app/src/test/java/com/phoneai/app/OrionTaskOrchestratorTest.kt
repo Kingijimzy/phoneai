@@ -63,6 +63,8 @@ class OrionTaskOrchestratorTest {
         assertTrue(prompt.contains("use its documented functionality fully"))
         assertTrue(prompt.contains("Do not invent additional application-level restrictions"))
         assertTrue(prompt.contains("Actual Android permissions"))
+        assertTrue(prompt.contains("EXECUTION ERROR HONESTY CONTRACT"))
+        assertTrue(prompt.contains("is not proof permission is missing"))
     }
 
     @Test fun clarificationMustPrecedeDispatch() {
