@@ -167,8 +167,14 @@ object LifeLoop {
     private const val CHANNEL = "orion_life"
 
     /** Blocking; call off the main thread. Returns how many notifications were posted. */
-    fun tick(c: Context): Int {
+    fun tick(c: Context): Int = tickInternal(c, Int.MAX_VALUE)
+
+    /** Soul watcher variant: execute at most one due standing order per tick. */
+    internal fun tickOne(c: Context): Int = tickInternal(c, 1)
+
+    private fun tickInternal(c: Context, maxOrders: Int): Int {
         var posted = 0
+        var checked = 0
         val now = System.currentTimeMillis()
         val orders = StandingOrders.all(c)
         StandingOrders.storageError()?.let { error ->
@@ -177,6 +183,8 @@ object LifeLoop {
         }
         for (o in orders) {
             if (!StandingOrderPolicy.due(o, now)) continue
+            if (checked >= maxOrders) break
+            checked++
             val result = try {
                 when (o.kind) {
                     "gmail_unread" -> GmailConnector.read(c, "unread", 3)
