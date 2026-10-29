@@ -1,5 +1,6 @@
 package com.phoneai.app
 
+import android.app.Activity
 import androidx.activity.ComponentActivity
 import android.content.Intent
 import android.os.Bundle
@@ -7,7 +8,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.ComposeView
 
 /**
  * Native Compose command center. It reuses Orion's real registries and stores for the
@@ -23,8 +23,7 @@ class SoulEngineActivity : ComponentActivity() {
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         try {
-            setContentView(ComposeView(this).apply {
-                setContent {
+            setContent {
                     SoulEngineComposeScreen(
                         status = statusState.value,
                         metrics = metricsState.value,
@@ -44,8 +43,7 @@ class SoulEngineActivity : ComponentActivity() {
                         onOpenCapabilityReport = { open(OrionCapabilityReportActivity::class.java) },
                         onOpenTeach = { open(TeachModeActivity::class.java) }
                     )
-                }
-            })
+            }
             refreshSnapshot()
         } catch (error: Exception) {
             Log.e(TAG, "Soul Engine Compose dashboard failed", error)
