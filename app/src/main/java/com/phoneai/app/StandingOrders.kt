@@ -38,11 +38,14 @@ internal object StandingOrderPolicy {
 
     /** Only tell the user when the result actually changed and is not an empty/error state. */
     fun shouldNotify(previousDigest: String, result: String, kind: String = "", dayKey: String = ""): Boolean {
-        if (result.startsWith("error")) return false
-        if (result.startsWith("No unread") || result.startsWith("Nothing new")) return false
+        val normalized = result.trim()
+        if (normalized.isEmpty() || normalized.startsWith("error", ignoreCase = true)) return false
+        if (normalized.startsWith("No unread", ignoreCase = true) ||
+            normalized.startsWith("Nothing new", ignoreCase = true) ||
+            normalized.endsWith("(empty result)", ignoreCase = true)) return false
         // Connector replies carry a header line; an empty list means nothing to say.
-        if (result.contains("\n0 matching message(s).") || result.trimEnd().endsWith("(empty result)")) return false
-        return digestFor(kind, result, dayKey) != previousDigest
+        if (Regex("(?im)^\\\\s*0 matching message\\\\(s\\\\)\\\\.\\\\s*$").containsMatchIn(normalized)) return false
+        return digestFor(kind, normalized, dayKey) != previousDigest
     }
 
     /** Stable, collision-resistant fingerprint; String.hashCode can collide on distinct results. */
