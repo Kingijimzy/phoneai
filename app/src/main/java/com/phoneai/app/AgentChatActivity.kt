@@ -337,6 +337,17 @@ class AgentChatActivity : Activity() {
         }.start()
     }
 
+    /** Cross-fades the live assistant status into its final response so long-running tool calls feel connected, not frozen. */
+    private fun transitionReply(view: TextView, value: String) {
+        view.animate().cancel()
+        view.animate().alpha(0.35f).setDuration(100).withEndAction {
+            view.text = Markdown.render(value)
+            view.alpha = 0.35f
+            view.animate().alpha(1f).setDuration(190)
+                .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        }.start()
+    }
+
     private fun send() {
         if (busy) return
         val text = input.text.toString().trim()
@@ -367,7 +378,7 @@ class AgentChatActivity : Activity() {
             AgentChatStore.save(this, agent.id, turns)
             if (service == null) {
                 val message = "I can't run this request from the specialist chat because Orion's accessibility service is not connected. Enable Orion's service and try again. No action was performed."
-                waiting.text = Markdown.render(message)
+                transitionReply(waiting, message)
                 turns.add(AgentRunner.Turn("assistant", message))
                 AgentChatStore.save(this, agent.id, turns)
                 busy = false
@@ -375,7 +386,7 @@ class AgentChatActivity : Activity() {
             }
             service.executeSharedToolRequest(text, "specialist agent " + agent.name) { result ->
                 val shownResult = result.ifBlank { "The tool executor returned no final response. Check Orion's task transcript." }
-                waiting.text = Markdown.render(shownResult)
+                transitionReply(waiting, shownResult)
                 turns.add(AgentRunner.Turn("assistant", shownResult))
                 AgentChatStore.save(this, agent.id, turns)
                 busy = false
@@ -399,7 +410,7 @@ class AgentChatActivity : Activity() {
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
                 trades.forEach { addTradeCard(it) }
-                waiting.text = Markdown.render(reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
+                transitionReply(waiting, reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
                 turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))
