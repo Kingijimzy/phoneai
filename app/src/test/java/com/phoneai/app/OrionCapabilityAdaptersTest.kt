@@ -142,4 +142,24 @@ class OrionCapabilityAdaptersTest {
     }
 
 
+    @Test fun everyMemoryAndTasksRouteHasAConcreteDedicatedExecutor() {
+        val memory = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.MEMORY }
+        val tasks = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.TASKS }
+
+        assertTrue("Memory backend must not be empty", memory.isNotEmpty())
+        assertTrue("Tasks backend must not be empty", tasks.isNotEmpty())
+        memory.forEach {
+            assertTrue("Missing memory executor for ${it.tool}", OrionMemoryCapabilityExecutor.supports(it.tool))
+        }
+        tasks.forEach {
+            assertTrue("Missing tasks executor for ${it.tool}", OrionTasksCapabilityExecutor.supports(it.tool))
+        }
+        assertEquals(OrionCapabilityAdapters.Backend.MEMORY, OrionCapabilityAdapters.route("undo_last")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.MEMORY, OrionCapabilityAdapters.route("undo_status")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.TASKS, OrionCapabilityAdapters.route("ask_user")?.backend)
+    }
+
+
 }

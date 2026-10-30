@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * Concrete local-runtime and file capability executor.
  * This owns the execution implementation for these backend families; Agent remains responsible
- * for task planning, policy gates, approvals, evidence and recovery.
+ * for task planning, policy gates, approvals and evidence; Tasks owns durable checkpoint/recovery operations.
  */
 internal object OrionRuntimeCapabilityExecutor {
     fun execute(
@@ -24,7 +24,8 @@ internal object OrionRuntimeCapabilityExecutor {
         play: (String, Int) -> String = { _, _ -> "error: game-control callback unavailable" },
         readScreen: () -> String = { service.readScreen() },
         githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },
-        researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false)
+        researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
+        askUser: (String, List<String>, String) -> String = { _, _, _ -> "" }
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
@@ -34,6 +35,8 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.execute(tool, args, service, tools, researchCancelled)
         OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm)
+        OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.execute(tool, args, service, tools, stopped)
+        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
