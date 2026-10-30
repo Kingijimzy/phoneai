@@ -2088,6 +2088,7 @@ Rules:
             stall.add(tool, args.toString(), result)?.let { reason ->
                 OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
+                activeObjectiveId = ""
                 return
             }
             if (tool in setOf("browser_handoff", "browser_upload") && result.startsWith("BROWSER HANDOFF REQUIRED")) {
@@ -2110,6 +2111,7 @@ Rules:
                 OrionTasksCapabilityExecutor.requireRecovery(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
                 ui.phase("error")
                 ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
+                activeObjectiveId = ""
                 return
             }
             if (activeObjectiveId.isNotBlank()) {
