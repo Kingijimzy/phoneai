@@ -477,7 +477,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             verifiedResult += "\n" + recovery.promptLine() + alternativeNote
             failedCallGuard.recordFailure(tool, args)
-            try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
+            try { OrionMemoryCapabilityExecutor.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
         AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true),
             if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified; details remain in the task transcript"
@@ -491,7 +491,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
         // Select memories relevant to this request instead of injecting the same recent notes into every chat turn.
-        val mem = MemoryStore.promptBlock(svc, query).take(900)
+        val mem = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, query, 900)
         return "You are Orion: a capable, warm, sharp personal AI with the calm competence of a cinematic AI co-pilot. You are conversational, curious, practical, and occasionally witty without forcing jokes. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Consequential actions require approval through the app interface; never treat model-generated confirmation arguments as user approval. " +
@@ -658,7 +658,7 @@ RESPONSE QUALITY AND FORMAT:
         talkNim.resume()
         if (liveHistory.length() == 0) {
             val name = Prefs.userName(svc).ifBlank { "friend" }
-            val memory = MemoryStore.promptBlock(svc, input).take(700)
+            val memory = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, input, 700)
             val prompt = "You are Orion, a calm, warm, sharp personal AI co-pilot in a hands-free voice conversation. " +
                 "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
                 "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
@@ -1228,8 +1228,8 @@ Rules:
 
         if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
             try {
-                if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) ExperienceStore.recordCorrection(svc, currentTask, command)
-                else if (currentTask.isNotBlank() && ExperiencePolicy.isPraise(command)) ExperienceStore.recordPraise(svc, currentTask)
+                if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) OrionMemoryCapabilityExecutor.recordCorrection(svc, currentTask, command)
+                else if (currentTask.isNotBlank() && ExperiencePolicy.isPraise(command)) OrionMemoryCapabilityExecutor.recordPraise(svc, currentTask)
             } catch (_: Exception) { }
             // Feedback ("no, do it this way") belongs to the previous task; it must not replace it as the task being learned from.
             if (!ExperiencePolicy.isCorrection(command) && !ExperiencePolicy.isPraise(command)) {
@@ -1771,14 +1771,14 @@ Rules:
                 )
                 if (cleanLearningEvidence) {
                     // Reinforce only the sequence whose every step has independent verification evidence.
-                    try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success && it.verified }.map { it.tool }) } catch (_: Exception) { }
+                    try { OrionMemoryCapabilityExecutor.recordSuccess(svc, currentTask, runEvidence.filter { it.success && it.verified }.map { it.tool }) } catch (_: Exception) { }
                 }
                 // A task may finish after a recovered error; report that final outcome separately from
                 // routine learning, which accepts only a clean, fully successful trace.
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
-                    if (runTools >= 2 && cleanLearningEvidence && ExperienceStore.routineReady(svc, currentTask)) ui.note("💡 I've stored another clean example of this successful tool sequence. That is learning guidance, not an executable no-AI routine. To create a replayable gesture routine, record the exact flow in Teach Mode and save it there.")
+                    if (runTools >= 2 && cleanLearningEvidence && OrionMemoryCapabilityExecutor.routineReady(svc, currentTask)) ui.note("💡 I've stored another clean example of this successful tool sequence. That is learning guidance, not an executable no-AI routine. To create a replayable gesture routine, record the exact flow in Teach Mode and save it there.")
                 } catch (_: Exception) { }
                 if (!AgentCheckpointStore.complete(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
