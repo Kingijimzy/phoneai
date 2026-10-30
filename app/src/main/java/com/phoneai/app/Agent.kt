@@ -40,10 +40,25 @@ internal object OrionCommandIntentPolicy {
         "(?i)\\b(?:save|persist|checkpoint)\\b.{0,80}\\b(?:progress|state)\\b.{0,80}\\b(?:resum(?:e|ed|ing)|continu(?:e|ed|ing)|reopen(?:ed)?)\\b"
     )
 
-    /** Explicit multi-objective plans must enter the guarded planner, not ordinary chat. */
+    private val createMultiStepTask = Regex(
+        "(?is)\\b(?:create|make|start|save)\\s+(?:a\\s+)?(?:new\\s+)?task\\b.{0,500}\\b(?:break\\s+(?:it|the\\s+task)\\s+into\\s+(?:these\\s+)?steps|steps?\\s*[:：]|checkpoint|next\\s+unfinished\\s+action)\\b"
+    )
+    private val explicitMemoryWrite = Regex(
+        "(?i)\\b(?:remember|record|save|store)\\b.{0,100}\\b(?:this\\s+)?(?:decision|preference|fact|rule|lesson)\\b|\\b(?:decision|preference|fact|rule|lesson)\\b.{0,80}\\b(?:remember|record|save|store)\\b"
+    )
+
+    /** Explicit multi-objective plans and memory writes must enter the guarded executor directly. */
     fun requiresStructuredTaskPlanning(command: String): Boolean =
         explicitObjectiveGraph.containsMatchIn(command) ||
+            createMultiStepTask.containsMatchIn(command) ||
             (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command))
+
+    fun requiresDirectActionRouting(command: String): Boolean =
+        explicitMemoryWrite.containsMatchIn(command) ||
+            requiresStructuredTaskPlanning(command) ||
+            AgentHooks.isPhoneActionRequest(command) ||
+            requiresPythonExecution(command) ||
+            isConnectedGitHubAccountRequest(command)
 
     fun requestedGitHubRepositoryName(command: String): String {
         val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
@@ -561,7 +576,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "GITHUB ROUTING: If the user supplies a github.com URL, use the exact owner, repository name, and run/PR number from that URL; never rewrite casing, insert hyphens, or infer an owner from a display name. If they name a public repository but provide no owner or URL, search public GitHub by the exact repository name first; do not require private account access to explain a public repository. Use github_account_read only for requests that truly require private account identity or private repository listings, and if that connector fails, explain the limit and use a public search fallback when possible. For an Actions run URL, inspect that exact run instead of substituting a repository-wide search. " +
             "ORION CAPABILITY TRUTH: Describe a capability as available only when the current registered tool/skill inventory, settings, permissions, and actual connection state support it. A name in a prompt or a recognized provider name is not proof of an implementation. Distinguish public GitHub lookup from private repository access; a Telegram bot bridge from a Telegram user account; accessible screen nodes from complete screen understanding; recorded gesture routines from semantic automation; and local Android speech recognition/TTS from a remote live-voice provider. Do not claim private Gmail/Drive/GitHub access, Gemini Live, source editing, builds, installs, task completion, or live facts unless the corresponding authorized capability actually exists and its call/result verifies the claim. State whether work is proposed, applied, built, tested, or installed. Never ask the user to run a skill or command themselves when Orion has a registered, authorized tool to do it; otherwise state the precise missing tool, permission, connection, or workspace. " +
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions. " +
-            "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() + ".\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
+            ".\nACTUAL ORION CAPABILITY INVENTORY (generated from this installed app, not model assumptions):\n" +
+            "Registered tools: " + runCatching { ToolRegistry.names().distinct().sorted().joinToString(", ") }.getOrDefault("unavailable") +
+            "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
+            "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
+            "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
+            "\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -638,8 +659,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val command = input.trim()
         if (command.isEmpty()) return
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
+        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command)
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
-            OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)) {
+            directActionRoute) {
             if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)) OrionObjectiveGraph.clear(svc)
             chatHist.put(msg("user", command))
             while (chatHist.length() > 12) chatHist.remove(0)
