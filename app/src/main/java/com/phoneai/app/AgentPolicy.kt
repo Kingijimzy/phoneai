@@ -111,7 +111,7 @@ object AgentPolicy {
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
-        "weather", "live_news", "live_web_search", "web_search", "github_public", "github_search_repositories", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
+        "weather", "live_news", "live_web_search", "live_sports", "web_search", "github_public", "github_search_repositories", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
         "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control", "play_media", "chrome_search",
         "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
