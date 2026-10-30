@@ -125,8 +125,6 @@ class OrionConversationRepository private constructor(context: Context) :
         return event
     }
 
-    /** Search active and archived sessions locally; every result includes stable session/turn references. */
-    @Synchronized
     /** Verify provenance against an actual stored transcript turn before recording a decision. */
     @Synchronized
     fun findTranscriptEvidence(context: Context, sourceRole: String, excerpt: String, turnId: String? = null): Pair<String, String>? {
@@ -148,6 +146,8 @@ class OrionConversationRepository private constructor(context: Context) :
         }
     }
 
+    /** Search active and archived sessions locally; every result includes stable session/turn references. */
+    @Synchronized
     fun searchHistory(context: Context, query: String, limit: Int = 8): List<SearchHit> {
         migrateLegacy(context)
         val stopWords = setOf("the", "and", "for", "with", "from", "that", "this", "it", "its", "please", "continue", "finish", "complete", "remaining", "outstanding", "previous", "task", "work", "fix", "test", "verify", "everything", "last", "time", "earlier", "chat", "discussed", "talked", "about", "what", "as", "our", "where", "we", "your", "you", "actual", "history", "conversation", "conversations", "orion", "search", "tell", "incomplete", "agreed", "next")
