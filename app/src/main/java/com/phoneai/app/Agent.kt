@@ -107,7 +107,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val extensionTestReports = HashMap<String, ExtensionTestReport>()
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var currentTask = ""
-    private fun evidenceTaskId(): String = AgentCheckpointStore.evidenceTaskId(svc) ?: currentTask
+    private fun evidenceTaskId(): String = OrionTasksCapabilityExecutor.evidenceTaskId(svc) ?: currentTask
     private fun effectiveRecoveryMaxAttempts(): Int {
         val autonomy = OrionAutonomySettings.read(svc).maxRetries
         val owner = OrionOwnerDialSettings.read(svc).recoveryMaxAttempts
@@ -1249,11 +1249,11 @@ Rules:
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
         if (resumeRequest) {
-            if (AgentCheckpointStore.pending(svc) == null) {
+            if (OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
                 ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
                 return
             }
-            if (AgentCheckpointStore.needsRecoveryConfirmation(svc)) {
+            if (OrionTasksCapabilityExecutor.needsRecoveryConfirmation(svc)) {
                 val confirmed = confirm(
                     "The app stopped while an action was in progress, so it may already have happened. Please inspect the phone screen or relevant app state first. Have you checked what happened? Select yes only after checking; otherwise choose no and I will leave the task paused."
                 )
@@ -1261,12 +1261,12 @@ Rules:
                     ui.say("I left the task paused. Check the previous action's outcome, then say continue when you are ready.")
                     return
                 }
-                if (!AgentCheckpointStore.acknowledgeRecovery(svc, "User confirmed they inspected the current phone/app state before resuming.")) {
+                if (!OrionTasksCapabilityExecutor.acknowledgeRecovery(svc, "User confirmed they inspected the current phone/app state before resuming.")) {
                     ui.say("I could not safely record the recovery confirmation. The task remains paused and no new action was started.")
                     return
                 }
             }
-            val instruction = AgentCheckpointStore.resumeInstruction(svc)
+            val instruction = OrionTasksCapabilityExecutor.resumeInstruction(svc)
             if (instruction == null) {
                 ui.say("I could not read the saved task safely. No actions were resumed.")
                 return
@@ -1275,7 +1275,7 @@ Rules:
             // A fresh Agent instance has no in-memory currentTask, but the checkpoint retains
             // the exact task prompt needed to reconcile the Task Centre after completion.
             if (currentTask.isBlank()) {
-                currentTask = AgentCheckpointStore.pending(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: instruction
+                currentTask = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: instruction
             }
             if (runStartedAt <= 0L) {
                 runStartedAt = System.currentTimeMillis()
@@ -1283,7 +1283,7 @@ Rules:
                 runFailed = 0
             }
             command = instruction
-            if (!AgentCheckpointStore.markRunning(svc)) {
+            if (!OrionTasksCapabilityExecutor.markRunning(svc)) {
                 ui.say("I found the saved task, but could not safely update its recovery checkpoint. I have not resumed actions. Check storage and try again.")
                 return
             }
@@ -1563,7 +1563,7 @@ Rules:
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
         }
         // Only agent/tool tasks reach this point. Save a checkpoint so process death or the step cap does not erase progress.
-        if (!resumeRequest && !AgentCheckpointStore.begin(svc, command)) {
+        if (!resumeRequest && !OrionTasksCapabilityExecutor.beginRun(svc, command)) {
             ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
             return
         }
@@ -1639,7 +1639,7 @@ Rules:
                 commandNim.chat(history, false, 800)
             } catch (e: Exception) {
                 if (stopped) break
-                AgentCheckpointStore.pause(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I could not reach the AI. ${e.message}. I saved the task progress locally; say \"continue\" when the connection is back.")
                 return
             }
@@ -1649,7 +1649,7 @@ Rules:
             if (stopped) {
                 managedTask = managedTask.cancel() ?: managedTask
                 moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped while the model was responding; no planned action was dispatched")
-                AgentCheckpointStore.pause(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("Stopped before the next action could start. I saved the task progress locally.")
                 return
             }
@@ -1659,7 +1659,7 @@ Rules:
                 // Ask for one complete object again; give up politely after two bad replies.
                 damagedReplies++
                 if (damagedReplies > 2) {
-                    AgentCheckpointStore.pause(svc)
+                    OrionTasksCapabilityExecutor.pauseRun(svc)
                     ui.say("The AI model keeps returning incomplete replies, so I stopped before acting. Try again, or pick a different chat model in Settings.")
                     return
                 }
@@ -1690,12 +1690,12 @@ Rules:
                     if (bt.isBlank() || bt == "done") continue
                     val batchArgs = one.optJSONObject("args") ?: JSONObject()
                     budgetStopReason()?.let { reason ->
-                        AgentCheckpointStore.pause(svc)
+                        OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                         return
                     }
-                    if (!AgentCheckpointStore.beginStep(svc, bt, batchArgs)) {
-                        AgentCheckpointStore.pause(svc)
+                    if (!OrionTasksCapabilityExecutor.beginStep(svc, bt, batchArgs)) {
+                        OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
                         return
                     }
@@ -1704,14 +1704,14 @@ Rules:
                     val br = executeWithRecoveryGuard(bt, batchArgs)
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
-                    if (!AgentCheckpointStore.record(svc, bt, batchArgs, br)) {
-                        AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
+                    if (!OrionTasksCapabilityExecutor.recordStep(svc, bt, batchArgs, br)) {
+                        OrionTasksCapabilityExecutor.requireRecovery(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
                         ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
                         return
                     }
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
                     stall.add(bt, batchArgs.toString(), br)?.let { reason ->
-                        AgentCheckpointStore.pause(svc)
+                        OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                         return
                     }
@@ -1744,7 +1744,7 @@ Rules:
                 if (!completion.allowed) {
                     managedTask = managedTask.block() ?: managedTask
                     moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Completion verification did not pass: ${completion.reason}")
-                    AgentCheckpointStore.pause(svc)
+                    OrionTasksCapabilityExecutor.pauseRun(svc)
                     ui.say("I stopped before marking this task complete: " + completion.reason + " " + outcome.message + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
@@ -1780,7 +1780,7 @@ Rules:
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
                     if (runTools >= 2 && cleanLearningEvidence && OrionMemoryCapabilityExecutor.routineReady(svc, currentTask)) ui.note("💡 I've stored another clean example of this successful tool sequence. That is learning guidance, not an executable no-AI routine. To create a replayable gesture routine, record the exact flow in Teach Mode and save it there.")
                 } catch (_: Exception) { }
-                if (!AgentCheckpointStore.complete(svc)) {
+                if (!OrionTasksCapabilityExecutor.completeRun(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
                     return
                 }
@@ -1792,12 +1792,12 @@ Rules:
             val args = step.optJSONObject("args") ?: JSONObject()
             ui.phase("acting")
             budgetStopReason()?.let { reason ->
-                AgentCheckpointStore.pause(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                 return
             }
-            if (!AgentCheckpointStore.beginStep(svc, tool, args)) {
-                AgentCheckpointStore.pause(svc)
+            if (!OrionTasksCapabilityExecutor.beginStep(svc, tool, args)) {
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
                 return
             }
@@ -1835,22 +1835,22 @@ Rules:
             ui.note(activityNote(tool, args, result))
             record(tool, args, result)
             stall.add(tool, args.toString(), result)?.let { reason ->
-                AgentCheckpointStore.pause(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                 return
             }
             if (tool in setOf("browser_handoff", "browser_upload") && result.startsWith("BROWSER HANDOFF REQUIRED")) {
-                if (!AgentCheckpointStore.record(svc, tool, args, result)) {
-                    AgentCheckpointStore.recoveryRequired(svc, "The browser handed control to the user, but the handoff result could not be saved. Verify the page before resuming.")
+                if (!OrionTasksCapabilityExecutor.recordStep(svc, tool, args, result)) {
+                    OrionTasksCapabilityExecutor.requireRecovery(svc, "The browser handed control to the user, but the handoff result could not be saved. Verify the page before resuming.")
                     ui.say("Browser automation paused, but I could not save the handoff. Check the page before asking Orion to continue.")
                     return
                 }
-                AgentCheckpointStore.pause(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say(result + " I have paused the automated task. Complete the step yourself, then ask Orion to continue.")
                 return
             }
-            if (!AgentCheckpointStore.record(svc, tool, args, result)) {
-                AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
+            if (!OrionTasksCapabilityExecutor.recordStep(svc, tool, args, result)) {
+                OrionTasksCapabilityExecutor.requireRecovery(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
                 ui.phase("error")
                 ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
                 return
@@ -1884,7 +1884,7 @@ Rules:
                     managedTask = managedTask.block() ?: managedTask
                 }
                 moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Tool '$tool' failed verification or execution; inspect the recorded result before resuming")
-                AgentCheckpointStore.pause(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.phase("error")
                 val diagnosis = ToolResultPolicy.diagnose(result)
                 ui.note("[TASK:BLOCKED]\nFailure type: ${diagnosis.kind.name.lowercase()}\nSafe next step: ${diagnosis.safeNextStep}")
@@ -1895,7 +1895,7 @@ Rules:
             history.put(msg("user", "RESULT: " + result.take(3500)))
             compact()
         }
-        AgentCheckpointStore.pause(svc)
+        OrionTasksCapabilityExecutor.pauseRun(svc)
         if (stopped) {
             managedTask = managedTask.cancel() ?: managedTask
             moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped execution; checkpoint preserved and no new actions will start")
