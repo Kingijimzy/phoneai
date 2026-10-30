@@ -36,7 +36,7 @@ internal object OrionMemoryCapabilityExecutor {
             }
             val result = tools.remember(category, text)
             if (!result.startsWith("error:", true)) {
-                learnFromRequest(service, text)
+                runCatching { KnowledgeGraph.learnFrom(service, text) }
                 val id = Regex("\\[(\\d+)\\]").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 val after = id?.let { target -> MemoryStore.all(service).firstOrNull { it.id == target } }
                 if (after != null) UndoStore.recordMemory(
