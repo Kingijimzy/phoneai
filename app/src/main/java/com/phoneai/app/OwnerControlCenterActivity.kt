@@ -346,10 +346,11 @@ class OwnerControlCenterActivity : Activity() {
             "Service process visible: ${if (running) "RUNNING" else "NOT RUNNING"}\n" +
             "Battery optimization exemption: ${if (batteryExempt) "EXEMPT" else "NOT EXEMPT"}\n" +
             "Android/HyperOS may still stop or defer background work. A running flag is not proof of uninterrupted execution."
+        val watcherActive = requested && running
         AlertDialog.Builder(this).setTitle("Watcher & background status")
             .setMessage(message)
-            .setPositiveButton(if (requested) "STOP WATCHER" else "START WATCHER") { _, _ ->
-                if (requested) {
+            .setPositiveButton(if (watcherActive) "STOP WATCHER" else "START / RESTART WATCHER") { _, _ ->
+                if (watcherActive) {
                     WatchService.stop(this)
                     AgentPolicy.log(this, "owner-watcher", "stop", true, "watcher stopped by owner")
                 } else {
