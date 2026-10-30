@@ -57,16 +57,14 @@ object AgentRunner {
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
             // Each operation owns its own cached market inputs; avoid fetching the same calendar/candles twice.
             if (wantsConditions) {
-                val cur = (userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.flatMap { MarketCalendar.currenciesFor(it) }).toSet()
-                sb.append("\\nNEWS CALENDAR (next 24h): ").append(MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.MEDIUM, cur.ifEmpty { null }).take(6), now))
-                sb.append("\\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
+                sb.append("\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
             }
             if (target != null && wantsForecast)
-                sb.append("\\nFORECAST (computed now from technicals, playbook, simulation and news):\\n").append(TradingDesk.forecast(c, target))
+                sb.append("\nFORECAST (computed now from technicals, playbook, simulation and news):\n").append(TradingDesk.forecast(c, target))
             if (target != null && wantsSimulation)
-                sb.append("\\nSIMULATION (history, costs charged):\\n").append(TradingDesk.backtest(c, null, target, "1h").text)
+                sb.append("\nSIMULATION (history, costs charged):\n").append(TradingDesk.backtest(c, null, target, "1h").text)
             if (wantsScan) {
-                sb.append("\\nPLAYBOOK MATCHES NOW:\\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
+                sb.append("\nPLAYBOOK MATCHES NOW:\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
             }
         } catch (e: Exception) { sb.append("\n(desk data unavailable: ").append(e.javaClass.simpleName).append(")") }
         return sb.toString()
