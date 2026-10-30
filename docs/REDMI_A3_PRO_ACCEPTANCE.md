@@ -41,8 +41,8 @@ Record PASS, FAIL, or BLOCKED. Add a short observation for every FAIL/BLOCKED re
 | D11 | Extension draft and validation | Draft a harmless JSON-to-JSON extension; run valid, invalid, and boundary test cases; activation remains approval-gated |
 | D12 | Background notification | Complete/fail a standing-order check; verify configured notification preference and Android notification permission are respected |
 | D13 | Battery/background behavior | Test with screen off and battery saver on/off; record whether the watcher is paused or resumed by Android/HyperOS; verify WorkManager leaves queued work intact and asks to reopen Orion when the accessibility service is unavailable |
-| D14 | Memory and learning | Complete a multi-step harmless task; confirm only a route candidate is recorded and it is labelled unverified until reviewed |
-| D15 | Thermal and memory stability | Use chat + one tool flow for 15 minutes; record crashes, app restarts, excessive heat, or OS process kills |
+| D14 | Memory and learning | Complete a harmless multi-step task; only independently verified post-action steps may create a route candidate. Confirm the task-level completion gate passed, evidence count increments per completed run (not per tool call), and review is required before reuse |
+| D15 | Thermal and memory stability | Use chat + one tool flow for 15 minutes; record crashes, app restarts, excessive heat, or OS process kills |\n| D16 | Live task controls | Start a harmless multi-step agent task; use Stop from Task Centre and the chat Stop control; verify no new tool starts after stop, the checkpoint remains paused, and any in-flight action is marked uncertain rather than replayed |\n| D17 | Pause, resume and status explanations | Pause and resume a saved task from Task Centre; verify status persists after navigation/restart and each status label matches the stored task/checkpoint state |\n| D18 | Learning review UI | Accept, edit and reject harmless learning proposals from Soul Engine; verify each choice persists after leaving and reopening the screen, and rejected proposals do not reappear |
 
 ## Safe test data
 
