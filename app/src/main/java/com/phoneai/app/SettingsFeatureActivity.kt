@@ -128,6 +128,13 @@ class SettingsFeatureActivity : Activity() {
                     val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
                     startActivity(intent)
                 }
+                card("Orion Private Keyboard", "Enable Orion in Android's on-screen keyboard list, then select it using the system keyboard picker. Android requires you to make this choice; Orion cannot silently replace your current keyboard.", "Enable keyboard") {
+                    startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                }
+                card("Switch to Orion keyboard", "Open Android's keyboard picker. Choose Orion Private Keyboard to use it; you can switch back to your previous keyboard from the same system picker.", "Choose keyboard") {
+                    val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    imm.showInputMethodPicker()
+                }
             }
             "recording" -> {
                 card("Start screen recording", "Android displays its own consent dialog. Recording starts only after you approve the system prompt.", "Start recording") {
