@@ -127,6 +127,27 @@ class OrionConversationRepository private constructor(context: Context) :
 
     /** Search active and archived sessions locally; every result includes stable session/turn references. */
     @Synchronized
+    /** Verify provenance against an actual stored transcript turn before recording a decision. */
+    @Synchronized
+    fun findTranscriptEvidence(context: Context, sourceRole: String, excerpt: String, turnId: String? = null): Pair<String, String>? {
+        migrateLegacy(context)
+        val role = when (sourceRole.trim().lowercase()) {
+            "user" -> "me"
+            "assistant" -> "ai"
+            else -> return null
+        }
+        val needle = excerpt.trim().take(1200)
+        if (needle.length < 12) return null
+        val sql = if (turnId.isNullOrBlank())
+            "SELECT session_id,id FROM messages WHERE role=? AND instr(content,?)>0 ORDER BY created_at DESC LIMIT 1"
+        else
+            "SELECT session_id,id FROM messages WHERE role=? AND id=? AND instr(content,?)>0 LIMIT 1"
+        val args = if (turnId.isNullOrBlank()) arrayOf(role, needle) else arrayOf(role, turnId, needle)
+        return readableDatabase.rawQuery(sql, args).use { c ->
+            if (c.moveToFirst()) c.getString(0) to c.getString(1) else null
+        }
+    }
+
     fun searchHistory(context: Context, query: String, limit: Int = 8): List<SearchHit> {
         migrateLegacy(context)
         val stopWords = setOf("the", "and", "for", "with", "from", "that", "this", "it", "its", "please", "continue", "finish", "complete", "remaining", "outstanding", "previous", "task", "work", "fix", "test", "verify", "everything", "last", "time", "earlier", "chat", "discussed", "talked", "about", "what", "as", "our", "where", "we", "your", "you", "actual", "history", "conversation", "conversations", "orion", "search", "tell", "incomplete", "agreed", "next")
