@@ -69,6 +69,7 @@ class OrionCapabilityAdaptersTest {
             "remember" to OrionCapabilityAdapters.Backend.MEMORY,
             "task_add" to OrionCapabilityAdapters.Backend.TASKS,
             "web_search" to OrionCapabilityAdapters.Backend.RESEARCH,
+            "live_sports" to OrionCapabilityAdapters.Backend.RESEARCH,
             "telegram_send" to OrionCapabilityAdapters.Backend.COMMUNICATION,
             "sms" to OrionCapabilityAdapters.Backend.COMMUNICATION,
             "notification_action" to OrionCapabilityAdapters.Backend.COMMUNICATION,
