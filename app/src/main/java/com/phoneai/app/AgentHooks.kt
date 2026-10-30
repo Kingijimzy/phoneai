@@ -124,11 +124,30 @@ internal object AgentHooks {
   if(risky.containsMatchIn(target)) return true
   return tool=="type"&&Regex("\\b(whatsapp|email|gmail|message|send|reply)\\b",RegexOption.IGNORE_CASE).containsMatchIn(targetLabel)
  }
- fun completionDecision(request:String,proofs:List<Proof>):GateDecision {
-  val success=proofs.filter{it.success}
-  if(success.isEmpty()) return GateDecision(false,"No successful tool result was recorded.")
+ fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
+  completionDecision(request, proofs, emptyList())
+
+ /** Durable adapter evidence supplements the in-memory run trace after a process restart. */
+ fun completionDecision(
+  request:String,
+  proofs:List<Proof>,
+  durable:List<OrionEvidenceLedger.Event>
+ ):GateDecision {
+  val merged = proofs.toMutableList()
+  durable.forEach { event ->
+   when(event.outcome) {
+    OrionEvidenceLedger.Outcome.VERIFIED ->
+     merged.add(Proof(event.tool, true, true, event.summary))
+    OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED ->
+     merged.add(Proof(event.tool, true, false, event.summary))
+    OrionEvidenceLedger.Outcome.FAILED, OrionEvidenceLedger.Outcome.RECOVERY ->
+     merged.add(Proof(event.tool, false, false, event.summary))
+   }
+  }
+  val success=merged.filter{it.success}
+  if(success.isEmpty()) return GateDecision(false,"No successful tool result was recorded in the current run or durable evidence ledger.")
   if(risky.containsMatchIn(request)&&success.none{it.verified}) return GateDecision(false,"No post-action evidence confirms the consequential outcome.")
-  return GateDecision(true,"Action evidence recorded.")
+  return GateDecision(true,"Action evidence recorded in the current run and durable ledger.")
  }
  /** Failed screen reads reset the stability streak; an exception is never a matching sample. */
  fun awaitStableSnapshot(read:()->String,maxSamples:Int=5,stableSamples:Int=2,intervalMs:Long=120L):String {
