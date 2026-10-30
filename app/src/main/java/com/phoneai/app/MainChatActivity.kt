@@ -506,6 +506,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 startActivityForResult(Intent.createChooser(picker, "Attach a supported text document"), 45)
             }
             "tasks" -> startActivity(Intent(this, TaskCenterActivity::class.java))
+            "agents" -> startActivity(Intent(this, AgentsActivity::class.java))
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
             "orion_hub" -> startActivity(Intent(this, CapabilityBoardActivity::class.java))
             "capabilities" -> showToolCatalog()
