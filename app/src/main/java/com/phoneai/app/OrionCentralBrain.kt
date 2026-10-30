@@ -98,6 +98,7 @@ internal object OrionCentralBrain {
             continuity.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
         val continuityObjective = continuity?.resolvedObjective?.takeIf { isFollowUp }
             ?: activeObjective.takeIf { isFollowUp }.orEmpty()
+        val contextQuery = continuityObjective.takeIf { isFollowUp && it.isNotBlank() } ?: request
         if (isFollowUp && continuityObjective.isNotBlank()) {
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
@@ -132,7 +133,7 @@ internal object OrionCentralBrain {
         }
 
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
-        val learnedExperience = runCatching { ExperienceStore.promptBlock(app, request, 5) }.getOrDefault("")
+        val learnedExperience = runCatching { ExperienceStore.promptBlock(app, contextQuery, 5) }.getOrDefault("")
         if (learnedExperience.isNotBlank()) {
             sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\n" + learnedExperience +
                 "\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
@@ -142,7 +143,7 @@ internal object OrionCentralBrain {
         // It prefers reuse and only instructs research/drafting when local evidence is weak.
         runCatching {
             CapabilityGapPlanner.assess(
-                request = request,
+                request = contextQuery,
                 registeredTools = ToolRegistry.all,
                 enabledSkills = enabledSkills,
                 extensions = extensionRows
@@ -151,7 +152,7 @@ internal object OrionCentralBrain {
 
         // Persistent learning is provider-neutral and loaded into the same executive context
         // for Talk and Command. Lessons and completed routes are hints, never execution authority.
-        runCatching { SoulEngineState.relatedContext(app, request, limit = 4) }
+        runCatching { SoulEngineState.relatedContext(app, contextQuery, limit = 4) }
             .getOrDefault(emptyList())
             .takeIf { it.isNotEmpty() }
             ?.let { lessons ->
@@ -162,7 +163,7 @@ internal object OrionCentralBrain {
                 }
             }
 
-        runCatching { RouteMemoryStore.promptBlock(app, request) }
+        runCatching { RouteMemoryStore.promptBlock(app, contextQuery) }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let { routes ->
