@@ -1075,7 +1075,10 @@ Rules:
 
         ui.phase("acting")
         val currentSize = svc.replayScreenSize()
-        for (index in nextIndex until steps.length()) {
+        // Saved routines are bounded by the same owner-configured per-command tool-step ceiling.
+        val routineStepLimit = OrionAutonomySettings.read(svc).maxToolSteps.coerceIn(1, 40)
+        val routineStopIndex = minOf(steps.length(), nextIndex + routineStepLimit)
+        for (index in nextIndex until routineStopIndex) {
             if (stopped) {
                 RoutineReplayCheckpointStore.pauseAt(svc, name, index)
                 ui.say("I stopped the routine at step ${index + 1}. Its checkpoint is saved; say 'resume routine $name' when the target screen is ready.")
@@ -1104,7 +1107,7 @@ Rules:
             val currentPackage = svc.currentPackageName()
             if (targetPackage.isNotBlank() && !currentPackage.equals(targetPackage, true)) {
                 if (index == 0 && request.action == RoutineReplayPolicy.Action.RUN) {
-                    val launch = svc.openRoutineTarget(targetPackage)
+                    val launch = executeWithRecoveryGuard("open_app", JSONObject().put("name", targetPackage))
                     if (launch.startsWith("error") || !svc.waitForRoutinePackage(targetPackage, 6_000L) { stopped }) {
                         RoutineReplayCheckpointStore.pauseAt(svc, name, index)
                         ui.say("I couldn't confirm the recorded target app was opened. " + launch + ". No gesture was performed.")
@@ -1167,9 +1170,10 @@ Rules:
                 ui.say("I couldn't save the recovery checkpoint before step ${index + 1}; no gesture was started.")
                 return true
             }
+            val dispatchArgs = JSONObject(args.toString())
             val result = when (tool) {
-                "tap" -> svc.tap(x!!.toFloat(), y!!.toFloat())
-                "long_press" -> svc.longPress(x!!.toFloat(), y!!.toFloat())
+                "tap" -> executeWithRecoveryGuard("tap", dispatchArgs.put("x", x!!).put("y", y!!))
+                "long_press" -> executeWithRecoveryGuard("long_press", dispatchArgs.put("x", x!!).put("y", y!!))
                 "swipe_path" -> {
                     val points = args.optJSONArray("points") ?: JSONArray()
                     val scaled = JSONArray()
@@ -1186,7 +1190,9 @@ Rules:
                         else scaled.put(JSONObject().put("x", px).put("y", py))
                     }
                     if (!valid || scaled.length() < 2) "error: recorded swipe path is invalid for this display"
-                    else svc.performRecordedPath(scaled, args.optLong("ms", 700L))
+                    else executeWithRecoveryGuard(
+                        "swipe_path", dispatchArgs.put("points", scaled).put("ms", args.optLong("ms", 700L))
+                    )
                 }
                 else -> "error: unsupported saved gesture"
             }
@@ -1212,6 +1218,12 @@ Rules:
             }
             ui.note("Routine step ${index + 1}/${steps.length()} — $tool dispatched" +
                 if (afterSig != null) " and after-state matched." else "; this step has no distinct saved after-state.")
+        }
+        if (routineStopIndex < steps.length()) {
+            val saved = RoutineReplayCheckpointStore.pauseAt(svc, name, routineStopIndex)
+            ui.say("Routine '$name' reached the owner-configured limit of $routineStepLimit gesture steps for this run. " +
+                if (saved) "Progress is saved at step ${routineStopIndex + 1}; say 'resume routine $name' to continue." else "I could not save the next-step checkpoint, so inspect the app before continuing.")
+            return true
         }
         val cleared = RoutineReplayCheckpointStore.clear(svc)
         ui.say("Routine '$name' replayed ${steps.length()} recorded gestures. The overall goal is not independently confirmed, so check the target app before assuming it completed." +
