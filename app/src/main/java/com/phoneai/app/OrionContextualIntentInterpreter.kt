@@ -40,6 +40,7 @@ internal object OrionContextualIntentInterpreter {
         """(?i)^\s*(?:please\s+)?(?:test|verify|validate|audit|check)\s+(?:everything|it all|all of it|the rest|the remaining work|the outstanding work|all remaining work)\b[.! ]*$"""
     )
     private val historicalReference = Regex("""(?i)\b(?:last time|previous conversation|earlier chat|we discussed|we talked about|as before|from before|the earlier|that earlier|what we did before)\b""")
+    private val explicitHistoricalLookup = Regex("""(?i)\b(?:search|find|retrieve|look\s+up|look\s+through)\b.{0,80}\b(?:previous|past|earlier|old)\s+(?:conversations?|chats?|discussions?)\b|\b(?:search|find|retrieve)\b.{0,60}\bconversation\s+history\b""")
 
     private val followUpOnly = Regex(
         """(?i)^\s*(?:and\s+)?(?:it|that|this|those|them|the previous task|the outstanding work|the remaining work|everything|all of it)(?:\s+(?:too|as well))?[.! ]*$"""
