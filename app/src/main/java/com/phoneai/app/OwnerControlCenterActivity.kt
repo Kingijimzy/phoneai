@@ -294,13 +294,13 @@ class OwnerControlCenterActivity : Activity() {
         val pending = runCatching { runtime?.pendingItems().orEmpty() }.getOrDefault(emptyList())
         val body = buildString {
             append("Runtime state: ").append(snapshot?.state?.name ?: "UNAVAILABLE")
-            append("\\nQueued items: ").append(snapshot?.queued ?: 0)
-            append("\\nLast event: ").append(snapshot?.lastEvent ?: "unknown")
-            append("\\n\\n")
-            append(pending.ifEmpty { emptyList() }.joinToString("\\n\\n") {
-                "${it.type.name} · ${it.key}\\nAttempts: ${it.attempts} · ${it.checkpoint.take(180)}"
+            append("\nQueued items: ").append(snapshot?.queued ?: 0)
+            append("\nLast event: ").append(snapshot?.lastEvent ?: "unknown")
+            append("\n\n")
+            append(pending.ifEmpty { emptyList() }.joinToString("\n\n") {
+                "${it.type.name} · ${it.key}\nAttempts: ${it.attempts} · ${it.checkpoint.take(180)}"
             }.ifBlank { "No durable runtime work is waiting." })
-            append("\\n\\nInterrupted external actions are reconciled, not blindly replayed.")
+            append("\n\nInterrupted external actions are reconciled, not blindly replayed.")
         }
         AlertDialog.Builder(this).setTitle("Durable recovery queue")
             .setMessage(body).setPositiveButton("OPEN TASK CENTRE") { _, _ ->
