@@ -112,6 +112,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
     @Volatile private var activeRequestScope: String = ""
+    @Volatile private var activeOrchestrationContext: OrionTaskOrchestrator.Context? = null
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -161,6 +162,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
+        // A model cannot call an unregistered tool or one the live registry marked unavailable.
+        val orchestration = activeOrchestrationContext
+        if (orchestration != null) {
+            val capability = orchestration.capabilities.tools.firstOrNull { it.name == tool }
+                ?: return "error: dispatch blocked because '$tool' is not present in the request-time registered capability inventory."
+            if (!capability.available) return "error: dispatch blocked because capability '$tool' is ${capability.state.name.lowercase()}: ${capability.reason}"
+            if (orchestration.goal.needsClarification || !orchestration.goal.shouldAct) return "error: dispatch blocked because the current goal is not authorized for tool execution; resolve the goal before dispatch."
+        }
         // Cancellation is terminal for this dispatch attempt, including paths that would otherwise prompt for approval.
         if (stopped) {
             val cancelled = "error: task was stopped before capability checks or approval; no action was dispatched."
@@ -862,6 +872,7 @@ Rules:
                     permissionStates = capabilityPermissionStates(),
                     integration = integration
                 )
+                activeOrchestrationContext = context
                 prompt + "\n\n" + context.promptLines().joinToString("\n")
             }
             history.put(0, msg("system", coordinatedPrompt))
@@ -1291,6 +1302,13 @@ Rules:
         refreshSystem(command)
         history.put(msg("user", command))
         compact()
+        val taskContext = activeOrchestrationContext
+        if (!resumeRequest && taskContext?.goal?.needsClarification == true) {
+            val question = if (taskContext.goal.kind == OrionGoalUnderstanding.Kind.AMBIGUOUS) "Which account or service do you want me to connect?" else "What exact outcome should I complete?"
+            ui.note("[TASK:CLARIFY]\nWaiting for the missing task detail; no tool was dispatched")
+            ui.say(question)
+            return
+        }
         if (!resumeRequest && !browserActionTask && runSavedRoutineCommand(command)) return
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
         if (!resumeRequest && !browserActionTask) {
