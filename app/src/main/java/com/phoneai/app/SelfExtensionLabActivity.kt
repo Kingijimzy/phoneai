@@ -135,7 +135,9 @@ class SelfExtensionLabActivity : ComponentActivity() {
             "\nPHASE 4 — TEST: call extension_test with at least two meaningful JSON cases containing both input and expect, including a boundary case. Inspect actual sandbox output; repair and retest failures. Never claim a pass without the runtime report." +
             "\nPHASE 5 — ACTIVATION: inspect the owner extension-activation dial. If owner pre-approval is OFF, leave the extension disabled and request explicit approval. If it is ON, the app may auto-promote only after exact-source-hash sandbox tests pass; do not claim activation until extension_list confirms enabled/hash-matching status. Never bypass source validation, sandbox testing, or the registered extension tool contract." +
             "\nReport the existing capabilities checked, sources actually inspected, created extension id, exact behavior, test outputs, activation status, and limitations. If any tool is unavailable, explain that instead of claiming success.";
-        startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt))
+        startActivity(Intent(this, MainChatActivity::class.java)
+            .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt)
+            .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true))
     }
 
     private fun saveDraft() {
