@@ -12,7 +12,7 @@ import org.json.JSONObject
  */
 internal object OrionCapabilityAdapters {
     enum class Backend {
-        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, TRADING_READONLY, GAMING, CORE
+        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, TRADING_READONLY, TRADING_DESK, GAMING, CORE
     }
 
     data class Route(val backend: Backend, val tool: String)
@@ -51,6 +51,7 @@ internal object OrionCapabilityAdapters {
         Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy",
             "battery", "time", "wait", "device_info", "device_location"),
         Backend.TRADING_READONLY to setOf("trade_history_summary"),
+        Backend.TRADING_DESK to setOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch"),
         Backend.GAMING to setOf("gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset")
     )
 
