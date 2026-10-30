@@ -16,6 +16,27 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun namedTaskWithStepsAndCheckpointUsesStructuredPlanning() {
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(
+            "Create a task called Orion Reliability Test. Break it into these steps: check memory, check recovery, check providers. Save the task and show me its checkpoint and next unfinished action."
+        ))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(
+            "Create a task called Orion Reliability Test. Break it into these steps: check memory, check recovery, check providers. Save the task and show me its checkpoint and next unfinished action."
+        ))
+    }
+
+    @Test fun explicitDecisionMemoryWriteSkipsTheChatOnlyClassificationCall() {
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(
+            "Remember this decision: reliability before adding new features. Record the reason in decision history."
+        ))
+    }
+
+    @Test fun capabilityQuestionIsNotMistakenForAnAction() {
+        assertFalse(OrionCommandIntentPolicy.requiresDirectActionRouting(
+            "List the phone actions and memory tools you can actually execute right now."
+        ))
+    }
+
     @Test fun ordinaryThreeStepExplanationIsNotForcedIntoTaskExecution() {
         assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(
             "Explain three steps for understanding Android background restrictions."
