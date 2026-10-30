@@ -71,6 +71,31 @@ class ToolPermissionsPersistenceTest {
         assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
     }
 
+    @Test fun deterministicReadCannotRunInPlanMode() {
+        ToolPermissions.applyLevel(context, "balanced")
+        AgentPolicy.setEnabled(context, "trading_research", true)
+        AgentPolicy.setMode(context, AgentPolicy.Mode.PLAN)
+
+        val result = AgentPolicy.gate(
+            context, "trading_research", "live_sports", dangerous = false,
+            toolMode = ToolPermissions.mode(context, "live_sports"), askedThisTask = false
+        )
+        assertEquals(GatePolicy.Verdict.PLAN_ONLY, result.verdict)
+    }
+
+    @Test fun deterministicReadHonoursExplicitAskOverride() {
+        ToolPermissions.applyLevel(context, "balanced")
+        ToolPermissions.cycle(context, "live_sports") // ALLOW -> ASK
+        AgentPolicy.setEnabled(context, "trading_research", true)
+        AgentPolicy.setMode(context, AgentPolicy.Mode.ASK)
+
+        val result = AgentPolicy.gate(
+            context, "trading_research", "live_sports", dangerous = false,
+            toolMode = ToolPermissions.mode(context, "live_sports"), askedThisTask = false
+        )
+        assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
+    }
+
     @Test fun legacyCustomToolMapIsMigratedAsOverrides() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
             .putString("tool_level", "custom")

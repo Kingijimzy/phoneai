@@ -1984,32 +1984,31 @@ Rules:
      * continue through the normal policy and approval flow.
      */
     private fun authorizeDirectTool(tool: String, pack: String): Boolean {
-        val publicReadOnly = tool in setOf(
-            "web_search", "live_web_search", "live_news", "weather", "fetch_url",
-            "research_web", "github_public", "github_search_repositories", "live_sports", "bybit_public_ticker"
+        // Deterministic reads skip model planning, not the owner's real permission mode.
+        // In particular, Plan mode blocks them and an explicit per-tool ASK still prompts.
+        val gate = AgentPolicy.gate(
+            svc,
+            pack,
+            tool,
+            dangerous = false,
+            toolMode = ToolPermissions.mode(svc, tool),
+            askedThisTask = tool in askApproved
         )
-        if (publicReadOnly) {
-            if (!AgentPolicy.enabled(svc, pack) || ToolPermissions.mode(svc, tool) == ToolMode.DENY) {
-                AgentPolicy.log(svc, tool, "direct-dispatch", false,
-                    if (!AgentPolicy.enabled(svc, pack)) "capability pack is disabled" else "explicit per-tool DENY")
-                return false
-            }
-            AgentPolicy.log(svc, tool, "direct-dispatch", true, "read-only public lookup; no per-request approval required")
-            return true
-        }
-        val decision = AgentPolicy.evaluate(svc, pack, tool, dangerous = false)
-        return when (decision.decision) {
-            AgentPolicy.Decision.ALLOW -> {
-                AgentPolicy.log(svc, tool, "direct-dispatch", null, decision.reason)
+        return when (gate.verdict) {
+            GatePolicy.Verdict.ALLOW -> {
+                AgentPolicy.log(svc, tool, "direct-dispatch", null, gate.reason)
                 true
             }
-            AgentPolicy.Decision.NEED_APPROVAL -> {
-                val approved = confirm("Approve live tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\nRun this lookup once?")
+            GatePolicy.Verdict.ASK_TOOL, GatePolicy.Verdict.NEED_APPROVAL -> {
+                val approved = confirm(
+                    "Approve live tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\nRun this lookup once?"
+                )
+                if (approved) askApproved.add(tool)
                 AgentPolicy.log(svc, tool, "direct-dispatch", approved, if (approved) "user approved lookup" else "user declined lookup")
                 approved
             }
-            AgentPolicy.Decision.PLAN_ONLY, AgentPolicy.Decision.DENY -> {
-                AgentPolicy.log(svc, tool, "direct-dispatch", false, decision.reason)
+            GatePolicy.Verdict.PLAN_ONLY, GatePolicy.Verdict.DENY -> {
+                AgentPolicy.log(svc, tool, "direct-dispatch", false, gate.reason)
                 false
             }
         }
