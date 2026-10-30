@@ -37,6 +37,7 @@ internal object SelfExtendingExtensionPolicy {
         if (source.isBlank()) return "Generated source is empty."
         if (source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 32 KiB limit."
         if (runtime !in setOf("python", "javascript")) return "Only Python and JavaScript extension sources are supported."
+        OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."
         }
