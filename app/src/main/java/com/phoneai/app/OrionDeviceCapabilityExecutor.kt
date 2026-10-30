@@ -12,7 +12,7 @@ import org.json.JSONObject
 internal object OrionDeviceCapabilityExecutor {
     private val supportedTools = setOf(
         "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
-        "notification_action", "media_status", "media_control", "resolve_contact", "list_apps",
+        "media_status", "media_control", "resolve_contact", "list_apps",
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
         "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path",
         "scroll", "type", "key", "look", "play", "record_screen"
@@ -39,22 +39,6 @@ internal object OrionDeviceCapabilityExecutor {
         "system_intent" -> tools.systemIntent(args.optString("action"), args.optString("query"), args.optString("url"))
         "open_deep_link" -> tools.openDeepLink(args.optString("uri"))
         "read_notifications" -> OrionNotificationListener.readSafeNotifications()
-        "notification_action" -> {
-            val action = args.optString("action").trim().lowercase()
-            val key = args.optString("key")
-            val reply = args.optString("text")
-            when {
-                action !in setOf("reply", "dismiss") -> "error: action must be reply or dismiss"
-                action == "reply" && reply.isBlank() -> "error: reply text cannot be blank"
-                stopped() -> "error: task was stopped before notification action; no action was dispatched"
-                action == "reply" && !confirm("Reply to the selected notification with this exact text? " + reply.take(500)) ->
-                    "error: user cancelled notification action"
-                action == "dismiss" && !confirm("Dismiss the selected safe notification? This removes it from the notification shade.") ->
-                    "error: user cancelled notification action"
-                stopped() -> "error: task was stopped before notification action; no action was dispatched"
-                else -> OrionNotificationListener.notificationAction(key, action, reply)
-            }
-        }
         "media_status" -> OrionNotificationListener.mediaStatus()
         "media_control" -> OrionNotificationListener.controlMedia(args.optString("action"))
         "resolve_contact" -> tools.resolveContact(args.optString("name"))
