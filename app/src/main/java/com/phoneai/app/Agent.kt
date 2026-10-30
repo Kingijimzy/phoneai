@@ -2181,7 +2181,8 @@ Rules:
                     { goal, steps -> play(goal, steps) },
                     { svc.readScreen().also { lastScreenSnapshot = it } },
                     { path -> githubAccountRead(path) },
-                    researchCancelled
+                    researchCancelled,
+                    { question, options, access -> ui.askUser(question, options, access) }
                 ) ?: dispatchLegacyTool(route.tool, args)
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
