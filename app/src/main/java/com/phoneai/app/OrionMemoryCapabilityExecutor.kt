@@ -52,12 +52,12 @@ internal object OrionMemoryCapabilityExecutor {
         if (!request.isNullOrBlank()) {
             val decisions = runCatching { OrionDecisionHistoryStore.get(service).search(request, 6) }.getOrDefault(emptyList())
             if (decisions.isNotEmpty()) {
-                append("\\n\\nRelevant decision history (provenance is mandatory; proposals are not user decisions):\\n")
+                append("\n\nRelevant decision history (provenance is mandatory; proposals are not user decisions):\n")
                 decisions.forEach { d ->
                     append("- [${d.status}] ${d.topic}: ${d.statement}")
                     if (d.rationale.isNotBlank()) append("; reason: ${d.rationale}")
                     if (d.rejectedAlternative.isNotBlank()) append("; rejected: ${d.rejectedAlternative} (${d.rejectionReason})")
-                    append("; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}\\n")
+                    append("; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}\n")
                 }
             }
         }
