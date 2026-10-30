@@ -61,6 +61,12 @@ class AgentChatActivity : Activity() {
     private val turns = mutableListOf<AgentRunner.Turn>()
     private var pendingImage: String? = null
     @Volatile private var busy = false
+    @Volatile private var screenDestroyed = false
+
+    override fun onDestroy() {
+        screenDestroyed = true
+        super.onDestroy()
+    }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -288,7 +294,11 @@ class AgentChatActivity : Activity() {
     }
 
     private fun pickImage() {
-        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
         try { startActivityForResult(pick, REQUEST_IMAGE) } catch (_: Exception) { Toast.makeText(this, "No image picker is available.", Toast.LENGTH_LONG).show() }
     }
 
@@ -299,6 +309,7 @@ class AgentChatActivity : Activity() {
         Thread {
             val encoded = try { encodeImage(uri) } catch (e: Exception) { null }
             runOnUiThread {
+                if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
                 if (encoded == null) {
                     Toast.makeText(this, "Could not read that image. Try a screenshot or a smaller picture.", Toast.LENGTH_LONG).show()
                 } else {
@@ -428,6 +439,11 @@ class AgentChatActivity : Activity() {
             }
             service.executeSharedToolRequest(text, "specialist agent " + agent.name) { result ->
                 val shownResult = result.ifBlank { "The tool executor returned no final response. Check Orion's task transcript." }
+                if (screenDestroyed || isFinishing || isDestroyed) {
+                    val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shownResult)) }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@executeSharedToolRequest
+                }
                 transitionReply(waiting, shownResult)
                 turns.add(AgentRunner.Turn("assistant", shownResult))
                 AgentChatStore.save(this, agent.id, turns)
@@ -451,8 +467,17 @@ class AgentChatActivity : Activity() {
             val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades }.text }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
+                val finalReply = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
+                if (screenDestroyed || isFinishing || isDestroyed) {
+                    val recovered = history.toMutableList().apply {
+                        add(AgentRunner.Turn("user", shown.trim()))
+                        add(AgentRunner.Turn("assistant", finalReply))
+                    }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@runOnUiThread
+                }
                 trades.forEach { addTradeCard(it) }
-                transitionReply(waiting, reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
+                transitionReply(waiting, finalReply)
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
                 turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))
