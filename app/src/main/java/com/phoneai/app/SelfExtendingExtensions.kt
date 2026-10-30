@@ -37,6 +37,7 @@ internal object SelfExtendingExtensionPolicy {
         if (source.isBlank()) return "Generated source is empty."
         if (source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 32 KiB limit."
         if (runtime !in setOf("python", "javascript")) return "Only Python and JavaScript extension sources are supported."
+        OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."
         }
@@ -118,6 +119,7 @@ internal class SelfExtendingExtensionStore(context: Context) {
     fun saveDraft(extension: GeneratedExtension): Boolean = synchronized(lock) {
         if (SelfExtendingExtensionPolicy.validateIdentity(extension.id, extension.displayName) != null) return@synchronized false
         if (SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source) != null) return@synchronized false
+        if (OrionSecurityPolicy.findEmbeddedSecret(extension.description) != null) return@synchronized false
         if (SelfExtendingExtensionPolicy.sha256(extension.source) != extension.sourceSha256) return@synchronized false
         val current = try { all() } catch (_: Exception) { return@synchronized false }
         if (current.any { it.id == extension.id }) return@synchronized false

@@ -19,7 +19,7 @@ class OrionRuntimePolicyTest {
     @Test fun retryScheduleUsesBoundedExponentialBackoff() {
         assertEquals(0L, OrionRuntimePolicy.retryDelayMs(0))
         assertEquals(listOf(30_000L, 60_000L, 120_000L, 240_000L),
-            (1..4).map(OrionRuntimePolicy::retryDelayMs))
+            (1..4).map { OrionRuntimePolicy.retryDelayMs(it) })
         assertEquals(OrionRuntimePolicy.MAX_BACKOFF_MS, OrionRuntimePolicy.retryDelayMs(99))
     }
 
@@ -40,6 +40,15 @@ class OrionRuntimePolicyTest {
             OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.STOPPED, true))
         assertEquals(OrionRuntime.State.DEGRADED,
             OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.DEGRADED, false))
+    }
+
+    @Test fun ownerRecoveryDialsCanDisableRetriesAndChangeBackoff() {
+        assertFalse(OrionRuntimePolicy.shouldRetry(1, 0))
+        assertTrue(OrionRuntimePolicy.shouldRetry(1, 2))
+        assertTrue(OrionRuntimePolicy.shouldRetry(2, 2))
+        assertFalse(OrionRuntimePolicy.shouldRetry(3, 2))
+        assertEquals(15_000L, OrionRuntimePolicy.retryDelayMs(1, 15_000L))
+        assertEquals(30_000L, OrionRuntimePolicy.retryDelayMs(2, 15_000L))
     }
 
     @Test fun uncertainStandingOrderIsNotReplayedAfterProcessDeath() {

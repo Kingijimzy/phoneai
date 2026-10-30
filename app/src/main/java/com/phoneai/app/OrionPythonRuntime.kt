@@ -12,10 +12,10 @@ import com.chaquo.python.android.AndroidPlatform
 internal object OrionPythonRuntime {
     @Synchronized
     fun execute(context: Context, code: String, explicitlyApproved: Boolean): String {
-        PythonExecutionPolicy.rejection(code, explicitlyApproved)?.let { return "error: $it" }
+        PythonExecutionPolicy.rejection(code, explicitlyApproved, PythonExecutionPolicy.maxCodeChars(context))?.let { return "error: $it" }
         return try {
             if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
-            Python.getInstance().getModule("orion_exec").callAttr("run", code).toString().take(5_200)
+            Python.getInstance().getModule("orion_exec").callAttr("run", code, PythonExecutionPolicy.maxCodeChars(context)).toString().take(5_200)
         } catch (e: Exception) {
             "error: bundled Python is unavailable (" + (e.message ?: e.javaClass.simpleName).take(180) + ")."
         }
