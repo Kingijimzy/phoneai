@@ -54,16 +54,16 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
         val role = sourceRole.trim().lowercase()
         val evidence = sourceExcerpt.trim().take(1200)
         if (safeTopic.isBlank() || safeStatement.isBlank() || evidence.isBlank()) return "error: topic, decision, and source evidence are required."
-        if (state !in setOf("PROPOSED", "ACCEPTED", "REJECTED", "UNRESOLVED", "SUPERSEDED")) return "error: status must be PROPOSED, ACCEPTED, REJECTED, UNRESOLVED, or SUPERSEDED."
+        if (state !in setOf("PROPOSED", "ACCEPTED", "REJECTED", "UNRESOLVED")) return "error: status must be PROPOSED, ACCEPTED, REJECTED, UNRESOLVED, or SUPERSEDED."
         if (state in setOf("ACCEPTED", "REJECTED") && role != "user") return "error: accepted/rejected decisions require explicit user-origin evidence; assistant proposals cannot establish user agreement."
         if (state == "PROPOSED" && role != "assistant") return "error: PROPOSED records must identify assistant-origin evidence."
         if (state == "REJECTED" && (rejectedAlternative.isBlank() || rejectionReason.isBlank())) return "error: rejected decisions require the rejected approach and the reason it was rejected."
-        if (state == "SUPERSEDED" && supersedesId.isNullOrBlank()) return "error: a superseding decision must identify the earlier decision ID."
+        if (!supersedesId.isNullOrBlank() && state != "ACCEPTED") return "error: only a newly accepted user decision can supersede an earlier decision."
         val id = UUID.randomUUID().toString()
         val db = writableDatabase
         db.beginTransaction()
         try {
-            if (state == "SUPERSEDED") {
+            if (!supersedesId.isNullOrBlank()) {
                 val changed = db.update("decisions", ContentValues().apply { put("status", "SUPERSEDED") },
                     "id=?", arrayOf(supersedesId))
                 if (changed != 1) return "error: the decision to supersede was not found."
@@ -87,7 +87,7 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
     fun search(query: String, limit: Int = 12): List<Decision> {
         val q = query.trim()
         if (q.isBlank()) return emptyList()
-        val pattern = "%" + q.replace("%", "\\%").replace("_", "\\_") + "%"
+        val pattern = "%$q%"
         val out = ArrayList<Decision>()
         readableDatabase.rawQuery(
             """SELECT id,topic,statement,status,rationale,rejected_alternative,rejection_reason,
