@@ -131,3 +131,8 @@ The repository already had a SQLite-backed `OrionConversationRepository`; this i
 - Verify database migration on an existing install with archived chats, not only a fresh database.
 - Physical-device verification is still required on the Redmi device.
 - The completion gate currently proves an exact successful executor receipt and dependency completion. Domain-specific objective validators (for example, checking that a saved file exists or a message is actually delivered) should be added for consequential outcome types before claiming those objectives complete.
+
+
+### Vague-reference recovery
+
+When a follow-up contains no useful search terms (for example, "fix that" or "continue what we discussed last time"), the agent falls back to the most recently updated durable session and retrieves its last bounded turns. It re-runs contextual resolution against those source turns, excluding follow-up-only messages from becoming the objective. If the historical session still does not identify a substantive user objective, Orion asks for clarification rather than inventing one.
