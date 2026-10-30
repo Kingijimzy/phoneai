@@ -92,10 +92,29 @@ class OrionNotificationListener : NotificationListenerService() {
             runCatching {
                 SoulEngineState.recordWatcherStatus(applicationContext, "event_received", safeEventLabel)
             }
-            PhoneAiService.instance?.onExternalPresenceEvent(
-                eventKey = "notification:${pkg.take(80)}",
-                safeDescription = safeEventLabel
-            )
+            val liveService = PhoneAiService.instance
+            if (liveService != null) {
+                liveService.onExternalPresenceEvent(
+                    eventKey = "notification:${pkg.take(80)}",
+                    safeDescription = safeEventLabel
+                )
+            } else {
+                // Keep the event durable when Orion's accessibility service is not bound.
+                // WorkManager may notify the user that recovery is pending, but must not start
+                // AccessibilityService or perform an unattended phone action.
+                runCatching {
+                    val runtime = OrionRuntime(applicationContext)
+                    runtime.start()
+                    runtime.enqueue(
+                        OrionRuntime.WorkType.PRESENCE_EVENT,
+                        "notification:${pkg.take(80)}:${sbn.postTime / 60_000L}",
+                        3,
+                        goal = "Record safe external event: $safeEventLabel",
+                        checkpoint = "source=notification_listener; content=not_retained"
+                    )
+                    runtime.stop()
+                }
+            }
         } catch (_: Exception) {
             // Fail closed: notification content is never logged or forwarded on parsing errors.
         }
