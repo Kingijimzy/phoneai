@@ -37,7 +37,7 @@ internal object OrionCommandIntentPolicy {
         "(?i)\\b(?:two|three|four|five|six|\\d+)\\s*[- ]?\\s*(?:step|objective|task)s?\\b"
     )
     private val resumableProgress = Regex(
-        "(?i)\\b(?:save|persist|checkpoint)\\b.{0,80}\\b(?:progress|state)\\b.{0,80}\\b(?:resume|continue|reopen)\\b"
+        "(?i)\\b(?:save|persist|checkpoint)\\b.{0,80}\\b(?:progress|state)\\b.{0,80}\\b(?:resum(?:e|ed|ing)|continu(?:e|ed|ing)|reopen(?:ed)?)\\b"
     )
 
     /** Explicit multi-objective plans must enter the guarded planner, not ordinary chat. */
@@ -1930,15 +1930,19 @@ Rules:
                     }
                 }
             }
-            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) &&
-                (OrionObjectiveGraph.load(svc)?.nodes?.size ?: 0) < 2) {
+            val proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
+            val requiresSequentialGraph = Regex("(?i)\\b(?:depends on one another|in that order|sequential(?:ly)?)\\b").containsMatchIn(inputCommand)
+            val graphHasRequiredStructure = proposedObjectiveGraph != null &&
+                proposedObjectiveGraph.nodes.size >= 2 &&
+                (!requiresSequentialGraph || proposedObjectiveGraph.nodes.drop(1).all { it.dependsOn.isNotEmpty() })
+            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
                 graphRepairAttempts++
                 if (graphRepairAttempts > 2) {
                     OrionTasksCapabilityExecutor.pauseRun(svc)
                     ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")
                     return
                 }
-                history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for sequential dependencies. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
+                history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for every sequential prerequisite. For a request that says 'in that order', every node after the first must depend on an earlier node. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
                 continue
             }
             step.optJSONArray("complete_objectives")?.let { updates ->
