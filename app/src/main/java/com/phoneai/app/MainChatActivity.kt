@@ -493,6 +493,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 startActivityForResult(Intent.createChooser(picker, "Attach images to this chat"), 44)
             }
+            "attach_text" -> {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                        "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
+                        "application/json", "application/xml", "text/xml", "text/html"
+                    ))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                startActivityForResult(Intent.createChooser(picker, "Attach a supported text document"), 45)
+            }
+            "tasks" -> startActivity(Intent(this, TaskCenterActivity::class.java))
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
             "orion_hub" -> startActivity(Intent(this, CapabilityBoardActivity::class.java))
             "capabilities" -> showToolCatalog()
