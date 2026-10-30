@@ -53,28 +53,19 @@ object AgentRunner {
             val wantsSimulation = Regex("(?i)\\b(simulat|backtest|back-test|test my strategy|how would)\\b").containsMatchIn(userText)
             val wantsConditions = Regex("(?i)\\b(conditions?|fundamentals?|forex factory|calendar|news|currency|currencies|cpi|nfp|fomc)\\b").containsMatchIn(userText)
             val wantsScan = Regex("(?i)\\b(match|setups?|scan|find)\\b").containsMatchIn(userText)
-            val cur = (userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.flatMap { MarketCalendar.currenciesFor(it) }).toSet()
-            // Network calendar/candle reads are performed only when the requested answer needs them.
-            if (wantsForecast || wantsSimulation || wantsConditions || wantsScan) {
-                sb.append("\\nNEWS CALENDAR (next 24h): ").append(MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.MEDIUM, cur.ifEmpty { null }).take(6), now))
-            }
-            val pairs = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.distinct().take(1)
-            if (wantsForecast || wantsSimulation || wantsScan) {
-                for (pair in pairs) {
-                    val h1 = FxData.candles(pair, "1h"); val h4 = FxData.candles(pair, "4h")
-                    if (h1.size > 30) sb.append("\\n").append(Ta.summary(pair, "1h", h1.dropLast(1)))
-                    if (h4.size > 30) sb.append("\\n").append(Ta.summary(pair, "4h", h4.dropLast(1)))
-                }
-            }
             val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
+            // Each operation owns its own cached market inputs; avoid fetching the same calendar/candles twice.
+            if (wantsConditions) {
+                val cur = (userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.flatMap { MarketCalendar.currenciesFor(it) }).toSet()
+                sb.append("\\nNEWS CALENDAR (next 24h): ").append(MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.MEDIUM, cur.ifEmpty { null }).take(6), now))
+                sb.append("\\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
+            }
             if (target != null && wantsForecast)
                 sb.append("\\nFORECAST (computed now from technicals, playbook, simulation and news):\\n").append(TradingDesk.forecast(c, target))
             if (target != null && wantsSimulation)
                 sb.append("\\nSIMULATION (history, costs charged):\\n").append(TradingDesk.backtest(c, null, target, "1h").text)
-            if (wantsConditions)
-                sb.append("\\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
-            if (wantsScan && play.isNotEmpty()) {
+            if (wantsScan) {
                 sb.append("\\nPLAYBOOK MATCHES NOW:\\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
             }
         } catch (e: Exception) { sb.append("\n(desk data unavailable: ").append(e.javaClass.simpleName).append(")") }
@@ -82,7 +73,7 @@ object AgentRunner {
     }
 
     private fun wantsDeskContext(text: String): Boolean =
-        Regex("(?i)\\b(forex|fx|gold|xauusd|eurusd|gbpusd|usdjpy|trading|trade|setup|playbook|strategy|backtest|simulat|forecast|market conditions|economic calendar|high-impact news|sessions?)\\b").containsMatchIn(text)
+        Regex("(?i)\\b(forex|fx|gold|xauusd|eurusd|gbpusd|usdjpy|trading|trade|setup|playbook|strategy|backtest|simulat|forecast|market conditions|economic calendar|news|calendar|cpi|nfp|fomc|fundamentals|sessions?)\\b").containsMatchIn(text)
 
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
@@ -109,16 +100,6 @@ object AgentRunner {
                 if (outlook != null) { PredictionLog.record(c, outlook); sb.append("\n\nOUTLOOK (rule-based, computed now): ").append(outlook.text) }
                 Thread.sleep(150)
             } catch (e: Exception) { sb.append("\n\nOutlook for $symbol failed (${e.javaClass.simpleName}).") }
-        }
-        if (looksLikeSetupRequest(userText)) {
-            try {
-                val found = Scanner.scan(c).take(5)
-                sb.append("\n\nSCANNER RESULTS (watchlist, computed from candles; not trade signals):\n")
-                if (found.isEmpty()) sb.append("No setup scored high enough right now.")
-                found.forEach { s ->
-                    sb.append(String.format(Locale.US, "- %s %s %s %s entry %.6g stop %.6g target %.6g RR %.1f score %d. %s\n", s.symbol, s.tf, s.type, s.side, s.entry, s.stop, s.target, s.rr(), s.score, s.note))
-                }
-            } catch (e: Exception) { sb.append("\n\nScanner failed (${e.javaClass.simpleName}).") }
         }
         return sb.toString()
     }
