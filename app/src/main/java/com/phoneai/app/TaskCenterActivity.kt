@@ -482,7 +482,7 @@ class TaskCenterActivity : Activity() {
             append("\\nTreat this as an explicit request to carry out the task using available registered capabilities. First inspect what is possible, ask only for essential missing information or required approval, execute permitted steps, verify the result, and clearly report any blocker. Do not mark the task complete unless there is evidence.")
         }
         val previous = task.status
-        if (!TaskStore.update(this, task.id, status = "running")) {
+        if (!TaskStore.update(this, task.id, status = "running", resultSummary = "")) {
             errorToast()
             return
         }
@@ -578,7 +578,10 @@ class TaskCenterActivity : Activity() {
             .setPositiveButton("Confirm") { _, _ -> change(task, status) }.show()
     }
     private fun change(task: OrionTask, status: String) {
-        if (TaskStore.update(this, task.id, status = status)) refresh() else errorToast()
+        // Manual status changes must not inherit an old agent verification summary.
+        val clearOldOutcome = status in setOf("queued", "running", "completed", "failed", "cancelled")
+        if (TaskStore.update(this, task.id, status = status,
+                resultSummary = if (clearOldOutcome) "" else null)) refresh() else errorToast()
     }
     private fun statusExplanation(task: OrionTask) = when (task.status) {
         "queued", "open" -> "Saved and waiting; this task is not executing."
