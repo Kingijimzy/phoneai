@@ -17,15 +17,15 @@ class DeskDataParsingTest {
     ]"""
 
     @Test fun calendarParsesAndSkipsBadRows() {
-        val ev = MarketCalendar.parse(feed)
+        val ev = CalendarFeed.parse(feed)
         assertEquals(3, ev.size)
         assertTrue(ev.zipWithNext().all { it.first.atMillis <= it.second.atMillis })
         assertEquals(MarketCalendar.Impact.HIGH, ev.first { it.currency == "USD" }.impact)
-        assertTrue(MarketCalendar.parse("garbage").isEmpty())
+        assertTrue(CalendarFeed.parse("garbage").isEmpty())
     }
 
     @Test fun blackoutWindowAroundHighImpactOnly() {
-        val ev = MarketCalendar.parse(feed)
+        val ev = CalendarFeed.parse(feed)
         val usd = setOf("USD")
         assertTrue(MarketCalendar.inBlackout(ev, t0 - 20 * 60_000L, usd))
         assertTrue(MarketCalendar.inBlackout(ev, t0 + 10 * 60_000L, usd))
@@ -35,7 +35,7 @@ class DeskDataParsingTest {
     }
 
     @Test fun upcomingFiltersByImpactAndCurrency() {
-        val ev = MarketCalendar.parse(feed)
+        val ev = CalendarFeed.parse(feed)
         val now = t0 - 9 * 3_600_000L
         assertEquals(2, MarketCalendar.upcoming(ev, now, 24).size)
         assertEquals(1, MarketCalendar.upcoming(ev, now, 24, MarketCalendar.Impact.HIGH).size)
