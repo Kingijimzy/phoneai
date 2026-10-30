@@ -289,6 +289,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     throw IllegalArgumentException("invalid_task_outcome_event")
                                 }
                             }
+                            OrionRuntime.WorkType.PRESENCE_EVENT -> {
+                                // Event awareness is local and privacy-minimal: only the sanitized source label
+                                // is retained. Notification bodies, sender names and message text never enter Soul.
+                                val source = item.goal.substringAfter("Record safe external event: ", "system")
+                                    .take(100)
+                                if (!SoulEngineState.recordWatcherStatus(this, "event_received", source)) {
+                                    throw IllegalStateException("presence_event_state_write_failed")
+                                }
+                            }
                         }
                         if (runtime.complete(item) && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = true)
