@@ -48,4 +48,15 @@ class OrionEvidenceLedgerTest {
         assertFalse(contents.contains("private message"))
         assertFalse(contents.contains("private text"))
     }
+
+    @Test fun explicitVerifierPassIsDurableButUnverifiedPassIsNot() {
+        val task = "ledger-explicit-pass-${System.nanoTime()}"
+        assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "device", "verify_send", JSONObject(), 1L,
+            "PASS: exact contact, message and sent status are visible"))
+        assertTrue(OrionEvidenceLedger.hasVerifiedEvidence(context, task))
+        val other = "ledger-unverified-${System.nanoTime()}"
+        assertTrue(OrionEvidenceLedger.recordDispatch(context, other, "device", "verify_send", JSONObject(), 1L,
+            "UNVERIFIED: could not read the messaging screen"))
+        assertFalse(OrionEvidenceLedger.hasVerifiedEvidence(context, other))
+    }
 }
