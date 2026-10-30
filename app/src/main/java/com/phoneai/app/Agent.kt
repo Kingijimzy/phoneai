@@ -424,6 +424,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             // Give the next planning turn a bounded, evidence-based recovery strategy.
             // This is advisory only: all dispatch, approval, capability, and safety gates still run.
             val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
+            runCatching {
+                OrionEvidenceLedger.recordRecovery(
+                    svc, currentTask, tool,
+                    recovery.strategy.name.lowercase().replace('_', '-'),
+                    recovery.reason
+                )
+            }
             val permittedAlternatives = ToolRegistry.all.asSequence()
                 .filter { it.name != tool }
                 .filter { ToolGate.preflightDenial(svc, it.name) == null }
@@ -2130,10 +2137,20 @@ Rules:
     }
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
-    private fun exec(tool: String, a: JSONObject): String =
-        OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
-            dispatchLegacyTool(route.tool, args)
+    private fun exec(tool: String, a: JSONObject): String {
+        val startedAt = System.currentTimeMillis()
+        return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
+            val result = dispatchLegacyTool(route.tool, args)
+            val saved = runCatching {
+                OrionEvidenceLedger.recordDispatch(svc, currentTask, route.backend.name.lowercase(), route.tool, args, startedAt, result)
+            }.getOrDefault(false)
+            if (!saved) {
+                // Evidence persistence failure must never be misreported as verified execution.
+                if (result.trimStart().startsWith("error", true)) result
+                else "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${result.take(240)}"
+            } else result
         }
+    }
 
     /** Existing guarded backend implementations; adapter routing is intentionally outside this dispatcher. */
     private fun dispatchLegacyTool(tool: String, a: JSONObject): String {
