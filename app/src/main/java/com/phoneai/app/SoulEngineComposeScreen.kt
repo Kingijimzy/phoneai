@@ -81,6 +81,7 @@ internal fun SoulEngineComposeScreen(
     goal: String,
     mode: SoulEngineState.Mode,
     onSaveGoal: (String, SoulEngineState.Mode) -> Unit,
+    onRunGoal: (String) -> Unit,
     onRefresh: () -> Unit,
     onSelfTest: () -> Unit,
     onOpenChat: () -> Unit,
@@ -172,6 +173,13 @@ internal fun SoulEngineComposeScreen(
                     EngineButton("Save Soul configuration", Icons.Rounded.CheckCircle, Modifier.fillMaxWidth()) {
                         onSaveGoal(goalDraft, selectedMode)
                     }
+                    EngineButton("Run objective now · Command", Icons.Rounded.PlayArrow, Modifier.fillMaxWidth()) {
+                        onRunGoal(goalDraft)
+                    }
+                    Text(
+                        "Saving changes the stored objective only. Run objective now sends it to Orion's Command agent for execution and outcome verification. Background execution requires a separately configured schedule.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
+                    )
                 }
 
                 Column(
