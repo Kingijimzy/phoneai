@@ -2167,7 +2167,7 @@ Rules:
         val startedAt = System.currentTimeMillis()
         return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val backendResult = runCatching {
-                OrionRuntimeCapabilityExecutor.execute(route.backend, route.tool, args, svc, tools) { stopped }
+                OrionRuntimeCapabilityExecutor.execute(route.backend, route.tool, args, svc, tools, { stopped }, { question -> confirm(question) }, { url -> ui.openBrowser(url) })
                     ?: dispatchLegacyTool(route.tool, args)
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
@@ -2371,63 +2371,6 @@ Rules:
             "key" -> svc.key(a.optString("name"))
             "look" -> look(a.optString("question", "Describe what is on the screen."))
             "play" -> play(a.optString("goal"), a.optInt("steps", 20))
-            "open_url" -> svc.openUrl(a.optString("url"))
-            "browser_snapshot" -> BrowserAutomation.snapshot().take(6000)
-            "browser_find" -> BrowserAutomation.find(a.optString("query")).take(1800)
-            "browser_extract" -> BrowserAutomation.extract().take(13000)
-            "browser_verify" -> BrowserAutomation.verifyPage(a.optString("expected_text"), a.optString("previous_url")).take(1200)
-            "browser_click_verify" -> {
-                val target = a.optString("target").trim()
-                val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
-                    .containsMatchIn(target)
-                if (risky && !confirm("Orion is about to click '$target' and inspect the resulting page. This may submit or change data. Continue?")) {
-                    "error: user cancelled browser click"
-                } else BrowserAutomation.clickAndVerify(target, a.optString("expected_text")).take(1800)
-            }
-            "browser_click" -> {
-                val target = a.optString("target").trim()
-                val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
-                    .containsMatchIn(target)
-                if (risky && !confirm("Orion is about to click '$target' on the current webpage. This may submit or change data. Continue?")) {
-                    "error: user cancelled browser click"
-                } else BrowserAutomation.click(target)
-            }
-            "browser_type" -> BrowserAutomation.type(a.optString("target"), a.optString("text"))
-            "browser_scroll" -> BrowserAutomation.scroll(a.optString("direction", "down"))
-            "browser_navigate" -> {
-                val requestedUrl = a.optString("url").trim()
-                val existingBrowser = BrowserAutomation.awaitWebView(250L)
-                if (existingBrowser != null) {
-                    BrowserAutomation.navigate(requestedUrl)
-                } else {
-                    val candidate = if (requestedUrl.startsWith("https://", true) ||
-                        requestedUrl.startsWith("http://", true)) requestedUrl else "https://$requestedUrl"
-                    val uri = runCatching { android.net.Uri.parse(candidate) }.getOrNull()
-                    if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() ||
-                        !uri.userInfo.isNullOrBlank() || uri.host.orEmpty().any { it.isWhitespace() }) {
-                        "error: provide a valid HTTP or HTTPS URL without embedded credentials"
-                    } else {
-                        try {
-                            svc.startActivity(android.content.Intent(svc, BrowserActivity::class.java)
-                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                .putExtra(BrowserActivity.EXTRA_URL, candidate))
-                            if (BrowserAutomation.awaitWebView(8000L) == null) {
-                                "error: Orion Browser launch was requested but its WebView did not become ready; open Orion Browser manually and retry"
-                            } else {
-                                "Orion Browser opened at ${uri.host}; inspect browser_snapshot to verify the page before acting."
-                            }
-                        } catch (e: Exception) {
-                            "error: could not open Orion Browser (${e.javaClass.simpleName}); open it manually and retry"
-                        }
-                    }
-                }
-            }
-            "browser_back" -> BrowserAutomation.back()
-            "browser_wait" -> BrowserAutomation.waitFor(a.optString("text"), a.optDouble("seconds", 8.0))
-            "browser_tabs" -> BrowserActivity.manageTabs(a.optString("action", "list"), a.optInt("index", 0), a.optString("url"))
-            "browser_upload" -> BrowserAutomation.upload(a.optString("target"))
-            "browser_close" -> BrowserActivity.closeBrowser()
-            "browser_handoff" -> BrowserAutomation.handoff(a.optString("reason"))
             "web_search" -> tools.webSearch(a.optString("query"))
             "fetch_url", "research_web" -> researchWeb(a.optString("url"))
             "device_location" -> tools.deviceLocation()
