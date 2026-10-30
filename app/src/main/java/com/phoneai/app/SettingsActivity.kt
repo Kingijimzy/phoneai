@@ -492,6 +492,9 @@ class SettingsActivity : Activity() {
         val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
+        add(updateCard, button("OWNER CONTROL CENTRE · private", true) {
+            startActivity(android.content.Intent(this, OwnerControlCenterActivity::class.java))
+        }, 8)
         add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
         add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
         add(updateCard, button("Capability board (connect GitHub / Gmail)", false) { startActivity(android.content.Intent(this, CapabilityBoardActivity::class.java)) }, 8)
