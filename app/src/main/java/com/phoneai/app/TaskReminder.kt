@@ -51,6 +51,10 @@ object TaskReminder {
             schedule(context, task)
             return
         }
+        val notificationGranted = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!OrionNotificationPolicy.canPost(Build.VERSION.SDK_INT, notificationGranted)) return
+
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(
@@ -75,7 +79,7 @@ object TaskReminder {
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()
-        manager.notify(10000 + id, notification)
+        runCatching { manager.notify(10000 + id, notification) }
     }
 }
 
