@@ -161,7 +161,11 @@ object AgentCheckpointStore {
         }
     }
 
-    fun pause(c: Context): Boolean = update(c) { it.put("status", "paused") }
+    fun pause(c: Context): Boolean {
+        val saved = update(c) { it.put("status", "paused") }
+        if (saved) runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        return saved
+    }
 
     fun complete(c: Context): Boolean {
         // Never mark a task complete while an action's outcome is still uncertain.
@@ -172,6 +176,7 @@ object AgentCheckpointStore {
             it.remove("recoveryNotice")
         }
         if (!saved) return false
+        runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = true) }
         // Route learning is optional; it must never turn a completed task into a failed task.
         try {
             val checkpoint = JSONObject(file(c).readText())
@@ -187,7 +192,10 @@ object AgentCheckpointStore {
             it.put("status", "recovery_required")
             it.put("recoveryNotice", reason.take(500))
         }
-        if (saved) runCatching { SoulEngineState.recordLesson(c, "recovery", reason, "failure") }
+        if (saved) {
+            runCatching { SoulEngineState.recordLesson(c, "recovery", reason, "failure") }
+            runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        }
         return saved
     }
 
