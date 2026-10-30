@@ -298,9 +298,16 @@ class OrionConversationRepository private constructor(context: Context) :
                     put("updated_at", System.currentTimeMillis())
                     put("is_active", 0)
                 }, "id=?", arrayOf(sessionId))
+                val preservedIds = HashMap<Int, String>()
+                db.rawQuery("SELECT id,role,content,sort_order FROM messages WHERE session_id=?", arrayOf(sessionId)).use { rows ->
+                    while (rows.moveToNext()) {
+                        val order = rows.getInt(3)
+                        if (order in turns.indices && rows.getString(1) == turns[order].first && rows.getString(2) == turns[order].second) preservedIds[order] = rows.getString(0)
+                    }
+                }
                 db.delete("messages", "session_id=?", arrayOf(sessionId))
                 val now = System.currentTimeMillis()
-                turns.forEachIndexed { index, pair -> insertMessage(db, sessionId, pair.first, pair.second, now + index, index) }
+                turns.forEachIndexed { index, pair -> insertMessage(db, sessionId, pair.first, pair.second, now + index, index, preservedIds[index] ?: UUID.randomUUID().toString()) }
             } else if (id != null) {
                 db.delete("sessions", "id=?", arrayOf(id))
             }
