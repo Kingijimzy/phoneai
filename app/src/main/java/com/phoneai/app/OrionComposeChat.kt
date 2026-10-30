@@ -492,6 +492,7 @@ fun OrionComposeChatScreen(
                     action("Orion Hub & connections", "orion_hub")
                     action("Tool catalog", "capabilities")
                     action("Saved memories", "memories")
+                    action("Switch keyboard", "keyboard")
                     action("MCP servers in session", "mcps")
                     section("System & support")
                     action("Notification access", "notifications")
