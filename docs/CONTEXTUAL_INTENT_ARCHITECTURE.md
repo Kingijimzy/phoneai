@@ -81,3 +81,25 @@ The first implementation adds:
 - Regression tests for follow-up resolution, misleading capability words, current-turn transcript duplication, and unresolved references.
 
 This is an initial foundation, not a claim of complete semantic understanding. The model planner still interprets complex natural language, and future work should add durable session retrieval, structured multi-objective tracking, and a completion reconciler that checks every requested outcome against evidence.
+
+
+## Multi-objective graph foundation (2026-10-30)
+
+The current implementation adds `OrionObjectiveGraph`:
+- Accepts a bounded structured objective list (1–24 nodes) with stable IDs, titles, explicit dependency IDs, status and short evidence.
+- Rejects malformed/duplicate IDs, missing dependencies, self-dependencies, duplicate edges and cycles.
+- Computes a dependency-first topological order and identifies objectives whose prerequisites are complete.
+- Prevents a dependent objective from being marked complete before its prerequisites.
+- Persists the active graph in app-private SharedPreferences and restores it after process restart.
+- The planner can return an `objective_graph` object; Agent validates it before saving. Invalid proposals are ignored and surfaced as a task warning.
+- A new objective creates a durable root objective; follow-up context can resolve against that graph after the in-memory task and execution checkpoint are absent.
+
+This is the graph/state foundation, not yet a complete execution ledger. Tool-to-objective attribution and automatic status transitions from each executor's verified evidence still need to be connected before Orion can enforce dependency gates during every action.
+
+## Reference update
+
+The current Hermes architecture documentation confirms a distinct agent loop, modular prompt/context construction, tool registry/backends, and SQLite + FTS5 session storage with session lineage. The durable-history lesson is to retrieve relevant earlier sessions instead of relying only on a small recent-turn window. See https://github.com/NousResearch/hermes-agent/blob/main/website/docs/developer-guide/architecture.md.
+
+The nanoMuse Android/architecture documentation illustrates per-thread agents sharing durable memory/goals and atomic, versioned conversation persistence. This is a useful pattern for Orion's local-first Android runtime; retain Android-side approval and device ownership. See https://github.com/nano-muse/nanoMuse/blob/main/docs/android.md and https://git.mitgai.net/nano-muse/nanoMuse/blob/main/docs/architecture.md.
+
+The next required layer is a bounded local conversation index (session ID, turn ID, role, timestamp, text digest/full text under retention limits), ranked retrieval for references such as "the earlier keyboard crash" or "the task we paused last week", and an evidence reconciler that updates graph node states only from verified executor outcomes. Retrieval must return source turns and dates so the planner can distinguish remembered user requirements from assistant claims.
