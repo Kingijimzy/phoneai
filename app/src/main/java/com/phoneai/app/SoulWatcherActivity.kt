@@ -91,7 +91,6 @@ class SoulWatcherActivity : Activity() {
         statusActions.addView(actionButton("Capabilities") { showCapabilities() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(3); marginEnd = dp(3) })
         statusActions.addView(actionButton("Memory nudges") { showMemoryNudges() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(3) })
         statusCard.addView(statusActions)
-        root.addView(statusCard)
         root.addView(actionButton("Schedules & next runs") { showSchedules() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
         root.addView(actionButton("Propose · Probe · Compose") { showP3Reports() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(6) })
         root.addView(actionButton("Subagents · Run & Review") { runSubagents() }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(6) })
@@ -364,7 +363,6 @@ class SoulWatcherActivity : Activity() {
             row.addView(actionButton("Accept") { review(p, SoulEngineState.ProposalStatus.ACCEPTED) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
             row.addView(actionButton("Reject") { review(p, SoulEngineState.ProposalStatus.REJECTED) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
             box.addView(row)
-            reportContainer.addView(box)
         }
     }
 
