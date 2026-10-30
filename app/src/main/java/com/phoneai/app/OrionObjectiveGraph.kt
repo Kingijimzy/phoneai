@@ -24,7 +24,7 @@ internal object OrionObjectiveGraph {
     private const val GRAPH_KEY = "active_graph"
     private val idPattern = Regex("^[a-z][a-z0-9_-]{0,31}$")
 
-    fun parse(raw: String, objective: String): ParseResult {
+    fun parse(raw: String, objective: String, restoreState: Boolean = false): ParseResult {
         val root = try { JSONObject(raw) } catch (_: Exception) { return ParseResult.Invalid("Objective graph must be valid JSON.") }
         val array = root.optJSONArray("objectives") ?: return ParseResult.Invalid("Objective graph is missing the objectives array.")
         if (array.length() !in 1..24) return ParseResult.Invalid("A task graph must contain between 1 and 24 objectives.")
@@ -42,8 +42,9 @@ internal object OrionObjectiveGraph {
             val deps = (0 until depsJson.length()).map { depsJson.optString(it).trim().lowercase() }
             if (deps.any { !idPattern.matches(it) } || deps.distinct().size != deps.size || id in deps)
                 return ParseResult.Invalid("Objective '$id' has invalid or duplicate dependencies.")
-            val status = runCatching { Status.valueOf(item.optString("status", "PENDING").uppercase()) }.getOrDefault(Status.PENDING)
-            nodes += Objective(id, title, deps, status, item.optString("evidence").take(1000))
+            val status = if (restoreState) runCatching { Status.valueOf(item.optString("status", "PENDING").uppercase()) }.getOrDefault(Status.PENDING) else Status.PENDING
+            val evidence = if (restoreState) item.optString("evidence").take(1000) else ""
+            nodes += Objective(id, title, deps, status, evidence)
         }
         val ids = nodes.map { it.id }.toSet()
         nodes.forEach { node ->
@@ -109,7 +110,7 @@ internal object OrionObjectiveGraph {
     fun load(context: Context): Graph? {
         val raw = runCatching { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(GRAPH_KEY, null) }.getOrNull() ?: return null
         val objective = runCatching { JSONObject(raw).optString("objective") }.getOrDefault("")
-        return (parse(raw, objective) as? ParseResult.Valid)?.graph
+        return (parse(raw, objective, restoreState = true) as? ParseResult.Valid)?.graph
     }
     fun clear(context: Context): Boolean = runCatching {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(GRAPH_KEY).commit()
