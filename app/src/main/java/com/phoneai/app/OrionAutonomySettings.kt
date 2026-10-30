@@ -30,6 +30,9 @@ internal object OrionAutonomyPolicy {
         maxRetries = c.maxRetries.coerceIn(MIN_RETRIES, MAX_RETRIES)
     )
 
+    fun blocksWrite(mode: OrionMode, access: ToolAccess?): Boolean =
+        mode == OrionMode.TALK && access == ToolAccess.WRITE
+
     /** Map high-level modes to existing per-tool presets; explicit per-tool overrides remain visible. */
     fun preset(mode: OrionMode): String = when (mode) {
         OrionMode.TALK -> "read_only"
