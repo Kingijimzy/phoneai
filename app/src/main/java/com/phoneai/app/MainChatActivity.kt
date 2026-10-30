@@ -33,6 +33,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     companion object {
         const val EXTRA_PICK_IMAGE = "com.phoneai.app.PICK_IMAGE_ON_OPEN"
         const val EXTRA_INITIAL_PROMPT = "com.phoneai.app.EXTRA_INITIAL_PROMPT"
+        const val EXTRA_FORCE_COMMAND = "com.phoneai.app.EXTRA_FORCE_COMMAND"
+        private const val STATE_COMMAND_MODE = "orion_chat_command_mode"
         const val EXTRA_OPEN_BROWSER_URL = "com.phoneai.app.EXTRA_OPEN_BROWSER_URL"
     }
     private lateinit var messages: LinearLayout
@@ -115,8 +117,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_COMMAND_MODE, commandMode)
+        super.onSaveInstanceState(outState)
+    }
+
     private fun refreshModeSelector() {
         if (!::talkModeChip.isInitialized || !::commandModeChip.isInitialized) return
+        composeCommandMode.value = commandMode
         val talkSelected = !commandMode
         talkModeChip.background = rounded(if (talkSelected) 0xFF2B2B2B.toInt() else 0xFF161616.toInt(),
             16, if (talkSelected) 0xFF787878.toInt() else 0xFF333333.toInt())
@@ -1040,6 +1048,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        commandMode = savedInstanceState?.getBoolean(STATE_COMMAND_MODE)
+            ?: intent.getBooleanExtra(EXTRA_FORCE_COMMAND, false)
+        composeCommandMode.value = commandMode
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
