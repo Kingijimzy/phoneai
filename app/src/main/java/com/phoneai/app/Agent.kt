@@ -615,7 +615,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
-        taskProofs.clear()
+        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) taskProofs.clear()
         researchCancelled.set(false)
         talkNim.resume()
 
@@ -1323,7 +1323,7 @@ Rules:
             askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
         val resumeRequest = contextualFollowUp && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
-        if (!resumeRequest) {
+        if (!resumeRequest && !contextualFollowUp) {
             failedCallGuard.clear()
             // Proofs belong to one task only. Reusing a previous task's success could
             // otherwise let a new task pass its completion gate without evidence.
