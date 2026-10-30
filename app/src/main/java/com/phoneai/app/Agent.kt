@@ -49,7 +49,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val tools = Tools(svc)
     private val ranSteps = JSONArray()
     private val local = Local(
-        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
+        svc, tools, { t, args -> executeWithRecoveryGuard(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
         { q -> confirm(q) }, { ins, data -> aiOneShot(ins, data) }
     )
     private val history = JSONArray()
