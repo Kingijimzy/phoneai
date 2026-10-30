@@ -357,7 +357,7 @@ class TaskCenterActivity : Activity() {
             actions.addView(button("Open run") { openTaskInChat(task) }, LinearLayout.LayoutParams(-2, dp(42)))
             actions.addView(button("Pause") { change(task, "paused") }, LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
         } else if (task.status != "completed" && task.status != "done" && task.status != "cancelled") {
-            actions.addView(button(if (task.status == "paused") "Resume in chat" else "Run in chat", true) {
+            actions.addView(button(if (task.status == "paused") "Resume" else "Run in chat", true) {
                 openTaskInChat(task)
             }, LinearLayout.LayoutParams(-2, dp(42)))
         }
