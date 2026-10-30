@@ -27,14 +27,25 @@ internal object OrionTasksCapabilityExecutor {
     fun resumeInstruction(service: Context): String? = AgentCheckpointStore.resumeInstruction(service)
     fun markRunning(service: Context): Boolean = AgentCheckpointStore.markRunning(service)
     fun beginRun(service: Context, command: String): Boolean = AgentCheckpointStore.begin(service, command)
-    fun pauseRun(service: Context): Boolean = AgentCheckpointStore.pause(service)
+    fun pauseRun(service: Context): Boolean {
+        val paused = AgentCheckpointStore.pause(service)
+        if (paused) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = false) }
+        return paused
+    }
     fun beginStep(service: Context, tool: String, args: JSONObject): Boolean =
         AgentCheckpointStore.beginStep(service, tool, args)
     fun recordStep(service: Context, tool: String, args: JSONObject, result: String): Boolean =
         AgentCheckpointStore.record(service, tool, args, result)
-    fun requireRecovery(service: Context, reason: String): Boolean =
-        AgentCheckpointStore.recoveryRequired(service, reason)
-    fun completeRun(service: Context): Boolean = AgentCheckpointStore.complete(service)
+    fun requireRecovery(service: Context, reason: String): Boolean {
+        val required = AgentCheckpointStore.recoveryRequired(service, reason)
+        if (required) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = false) }
+        return required
+    }
+    fun completeRun(service: Context): Boolean {
+        val completed = AgentCheckpointStore.complete(service)
+        if (completed) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = true) }
+        return completed
+    }
 
     fun execute(
         tool: String,

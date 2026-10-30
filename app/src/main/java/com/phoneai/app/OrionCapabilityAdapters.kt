@@ -33,7 +33,7 @@ internal object OrionCapabilityAdapters {
         Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call"),
         Backend.DEVICE to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
-            "media_status", "media_control", "resolve_contact",
+            "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
             "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
             "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe",
             "swipe_path", "scroll", "type", "key", "look", "play", "record_screen"
@@ -47,7 +47,7 @@ internal object OrionCapabilityAdapters {
         Backend.TASKS to setOf("ask_agent", "create_agent", "task_list", "task_add", "task_update",
             "task_delete", "ask_user", "morning_brief", "standing_order"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
-            "weather", "github_public", "bybit_public_ticker"),
+            "weather", "github_public", "github_search_repositories", "bybit_public_ticker"),
         Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy",
             "battery", "time", "wait", "device_info", "device_location"),
         Backend.TRADING_READONLY to setOf("trade_history_summary"),

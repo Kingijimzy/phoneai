@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal object OrionResearchCapabilityExecutor {
     private val supportedTools = setOf(
         "web_search", "live_news", "live_web_search", "fetch_url", "research_web",
-        "weather", "github_public", "bybit_public_ticker"
+        "weather", "github_public", "github_search_repositories", "bybit_public_ticker"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -33,6 +33,7 @@ internal object OrionResearchCapabilityExecutor {
                 "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
         }
         "weather" -> WeatherService.current(args.optString("location"))
+        "github_search_repositories" -> tools.githubSearchRepository(args.optString("query"))
         "github_public" -> tools.githubPublic(
             args.optString("owner"),
             args.optString("repo"),

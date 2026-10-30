@@ -305,7 +305,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 // These tools present a more specific confirmation at the action boundary.
                 // Showing both this generic dialog and the detailed dialog caused duplicate prompts.
                 val actionSpecificConfirmation = tool in setOf(
-                    "mcp_call", "telegram_send", "sms", "notification_action",
+                    "mcp_call", "telegram_send", "sms", "notification_action", "python_exec",
                     "browser_click", "browser_click_verify"
                 )
                 if (actionSpecificConfirmation) {
@@ -1328,8 +1328,17 @@ Rules:
             if (fast != null) {
                 ui.phase("acting")
                 val r = when (fast) {
-                    is FastIntents.Intent.PlayMedia -> tools.playMedia(fast.query, fast.app)
-                    is FastIntents.Intent.ChromeSearch -> tools.chromeSearch(fast.query)
+                    is FastIntents.Intent.PlayMedia -> exec(
+                        "play_media", JSONObject().put("query", fast.query).put("app", fast.app)
+                    )
+                    is FastIntents.Intent.ChromeSearch -> exec(
+                        "chrome_search", JSONObject().put("query", fast.query)
+                    )
+                }
+                if (r.startsWith("error:", true) &&
+                    (r.contains("cancel", true) || r.contains("denied", true) || r.contains("approval", true))) {
+                    ui.say(r)
+                    return
                 }
                 if (!r.startsWith("error")) {
                     val say = r.replaceFirstChar { it.uppercase() } + "."
@@ -1428,7 +1437,7 @@ Rules:
                 return
             }
             ui.phase("acting")
-            val result = tools.githubPublic(owner, repository, "run", runId)
+            val result = exec("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "run").put("run_id", runId))
             logShortcut("github_public_run", result)
             history.put(msg("assistant", JSONObject().put("say", result).put("tool", "done").toString()))
             ui.say(result)
@@ -1449,7 +1458,7 @@ Rules:
                 return
             }
             ui.phase("acting")
-            val searchResult = tools.githubSearchRepository(requestedName)
+            val searchResult = exec("github_search_repositories", JSONObject().put("query", requestedName))
             val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
                 .findAll(searchResult).toList()
             val exact = candidates.firstOrNull { it.groupValues[2].equals(requestedName, ignoreCase = true) }
@@ -1463,8 +1472,8 @@ Rules:
             }
             val owner = exact.groupValues[1]
             val repository = exact.groupValues[2]
-            val metadata = tools.githubPublic(owner, repository, "repo")
-            val readme = tools.githubPublic(owner, repository, "readme")
+            val metadata = exec("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "repo"))
+            val readme = exec("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "readme"))
             val answer = if (metadata.startsWith("error:") || readme.startsWith("error:")) {
                 "I found the public repository https://github.com/$owner/$repository, but couldn't retrieve all of its details.\n$metadata\n$readme"
             } else summarizeRepository(command, metadata, readme)
@@ -1944,7 +1953,11 @@ Rules:
                 suffix == "actions/runs" -> "runs"
                 else -> "repo"
             }
-            val fallback = tools.githubPublic(owner, repository, section, runId)
+            val fallback = exec(
+                "github_public",
+                JSONObject().put("owner", owner).put("repo", repository).put("section", section)
+                    .put("run_id", runId.orEmpty())
+            )
             if (!fallback.startsWith("error:", true)) {
                 return "The account connector did not accept this repository path, so I recovered the public data through GitHub's token-free public API.\n$fallback"
             }
@@ -2138,14 +2151,8 @@ Rules:
         return if (x == null || y == null) "error: need $kx and $ky" else f(x, y)
     }
 
-    /** Direct read-only research shortcuts share the same adapter and executor path as model-planned tools. */
-    private fun research(tool: String, args: JSONObject): String =
-        OrionCapabilityAdapters.dispatch(tool, args) { route, routedArgs ->
-            OrionRuntimeCapabilityExecutor.execute(
-                route.backend, route.tool, routedArgs, svc, tools, { stopped },
-                researchCancelled = researchCancelled
-            ) ?: "error: research route has no concrete runtime executor."
-        }
+    /** Direct shortcuts use the same preflight, owner policy, executor and evidence path as planned tools. */
+    private fun research(tool: String, args: JSONObject): String = exec(tool, args)
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {

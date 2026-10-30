@@ -12,7 +12,7 @@ import org.json.JSONObject
 internal object OrionDeviceCapabilityExecutor {
     private val supportedTools = setOf(
         "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
-        "media_status", "media_control", "resolve_contact", "list_apps",
+        "media_status", "media_control", "play_media", "chrome_search", "resolve_contact", "list_apps",
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
         "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path",
         "scroll", "type", "key", "look", "play", "record_screen"
@@ -41,6 +41,8 @@ internal object OrionDeviceCapabilityExecutor {
         "read_notifications" -> OrionNotificationListener.readSafeNotifications()
         "media_status" -> OrionNotificationListener.mediaStatus()
         "media_control" -> OrionNotificationListener.controlMedia(args.optString("action"))
+        "play_media" -> tools.playMedia(args.optString("query"), args.optString("app").takeIf { it.isNotBlank() })
+        "chrome_search" -> tools.chromeSearch(args.optString("query"))
         "resolve_contact" -> tools.resolveContact(args.optString("name"))
         "list_apps" -> tools.listApps()
         "list_app_deeplinks" -> tools.listAppDeepLinks(args.optString("scheme"))

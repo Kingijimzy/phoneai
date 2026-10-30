@@ -20,6 +20,9 @@ class OrionCapabilityAdaptersTest {
             "extension_run" to OrionCapabilityAdapters.Backend.PYTHON,
             "workspace_write" to OrionCapabilityAdapters.Backend.FILES,
             "browser_navigate" to OrionCapabilityAdapters.Backend.BROWSER,
+            "play_media" to OrionCapabilityAdapters.Backend.DEVICE,
+            "chrome_search" to OrionCapabilityAdapters.Backend.DEVICE,
+            "github_search_repositories" to OrionCapabilityAdapters.Backend.RESEARCH,
             "mcp_call" to OrionCapabilityAdapters.Backend.MCP,
             "click" to OrionCapabilityAdapters.Backend.DEVICE,
             "skills_list" to OrionCapabilityAdapters.Backend.SKILLS
@@ -220,6 +223,12 @@ class OrionCapabilityAdaptersTest {
                 unsupported.joinToString { "${it.backend}:${it.tool}" },
             unsupported.isEmpty()
         )
+    }
+    
+    @Test fun directPythonExecutionRequiresItsOwnActionSpecificConfirmation() {
+        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
     }
 
 }
