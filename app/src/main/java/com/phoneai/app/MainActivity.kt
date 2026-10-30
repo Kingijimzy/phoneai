@@ -261,7 +261,7 @@ class MainActivity : ComponentActivity() {
     private fun installCrashRecorder() {
         if (crashDiagnosticsInstalled) return
         crashDiagnosticsInstalled = true
-        val app = applicationContext
+        val app = application
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: android.app.Activity, state: Bundle?) {}
@@ -287,7 +287,7 @@ class MainActivity : ComponentActivity() {
                     appendLine("Orion crash report")
                     appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date()))
                     appendLine("Thread: " + thread.name)
-                    appendLine("Android: " + android.os.Build.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine("Android: " + android.os.Build.VERSION.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
                     appendLine("Last resumed screen: " + nav.getString("last_activity", "unknown"))
                     appendLine("Pending destination: " + nav.getString("pending_destination", "none"))
                     appendLine("Launch requested at: " + nav.getLong("launch_requested_at", 0L))
