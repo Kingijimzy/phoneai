@@ -892,6 +892,8 @@ Rules:
     private fun contextualActiveObjective(): String = currentTask.ifBlank {
         runCatching { OrionTasksCapabilityExecutor.pendingCheckpoint(svc)?.optString("command").orEmpty() }
             .getOrDefault("")
+    }.ifBlank {
+        runCatching { OrionObjectiveGraph.load(svc)?.objective.orEmpty() }.getOrDefault("")
     }
 
     private fun recentConversationTurns(): List<Pair<String, String>> = buildList {
