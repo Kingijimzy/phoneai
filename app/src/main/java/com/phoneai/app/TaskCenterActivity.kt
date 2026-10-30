@@ -343,7 +343,7 @@ class TaskCenterActivity : Activity() {
         block.addView(label("#" + task.id + "  " + task.title, 15f, Theme.TEXT, true))
         block.addView(label(statusName(task.status) + " · " + task.priority.uppercase(Locale.getDefault()),
             10f, statusColor(task.status), true).apply { setPadding(0, dp(4), 0, 0) })
-        block.addView(label(statusExplanation(task.status), 10f, Theme.MUTED).apply {
+        block.addView(label(statusExplanation(task), 10f, Theme.MUTED).apply {
             setPadding(0, dp(4), 0, 0)
         })
         head.addView(block, LinearLayout.LayoutParams(0, -2, 1f))
@@ -548,14 +548,11 @@ class TaskCenterActivity : Activity() {
     private fun change(task: OrionTask, status: String) {
         if (TaskStore.update(this, task.id, status = status)) refresh() else errorToast()
     }
-    private fun taskHasVerifiedResult(status: String): Boolean = status in setOf("completed", "done") &&
-        TaskStore.all(this).any { it.status == status && it.resultSummary.isNotBlank() }
-
-    private fun statusExplanation(status: String) = when (status) {
+    private fun statusExplanation(task: OrionTask) = when (task.status) {
         "queued", "open" -> "Saved and waiting; this task is not executing."
         "running", "in_progress" -> "Marked running on the task board; check the agent session for live execution."
         "paused" -> "Paused; saved task details remain available to resume."
-        "completed", "done" -> if (taskHasVerifiedResult(status)) "Agent completion gate passed; review the attached result summary." else "Marked complete manually; no agent completion evidence is attached."
+        "completed", "done" -> if (task.resultSummary.isNotBlank()) "Agent completion gate passed; review the attached result summary." else "Marked complete manually; no agent completion evidence is attached."
         "failed" -> "Marked failed; inspect the activity log before retrying."
         "cancelled" -> "Cancelled; no further task-board progress is expected."
         else -> "Status is saved locally; inspect the task session for execution evidence."
