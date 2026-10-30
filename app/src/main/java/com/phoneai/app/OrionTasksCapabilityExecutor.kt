@@ -43,7 +43,7 @@ internal object OrionTasksCapabilityExecutor {
         }
         "task_list" -> {
             val tasks = TaskStore.all(service).take(30)
-            if (tasks.isEmpty()) "No saved tasks yet."
+            val taskLines = if (tasks.isEmpty()) "No saved tasks yet."
             else tasks.joinToString("\n") { task ->
                 val due = task.dueAt?.let {
                     SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()).format(Date(it))
@@ -53,6 +53,16 @@ internal object OrionTasksCapabilityExecutor {
                     " (due: $due)" +
                     (if (task.resultSummary.isBlank()) "" else "\n  Last result: ${task.resultSummary.take(180)}")
             }
+            val checkpoint = AgentCheckpointStore.pending(service)
+            val recovery = checkpoint?.let { pending ->
+                val status = pending.optString("status", "unknown")
+                val steps = pending.optJSONArray("steps")?.length() ?: 0
+                val inFlightTool = pending.optJSONObject("inFlight")?.optString("tool")?.takeIf { it.isNotBlank() }
+                "\nINTERRUPTED AGENT RUN: status=$status; recorded_steps=$steps" +
+                    (inFlightTool?.let { "; uncertain_in_flight_tool=$it" } ?: "") +
+                    ". Continue only through the normal resume/recovery flow; verify uncertain outcomes and never blindly replay an in-flight action."
+            }.orEmpty()
+            taskLines + recovery
         }
         "task_add" -> {
             if (stopped()) "error: task was stopped before saving the task."
