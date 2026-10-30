@@ -1716,7 +1716,6 @@ Rules:
                 }
                 // A task may finish after a recovered error; report that final outcome separately from
                 // routine learning, which accepts only a clean, fully successful trace.
-                try { svc.onAgentTaskFinished(currentTask, true) } catch (_: Exception) { }
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
@@ -1724,7 +1723,11 @@ Rules:
                 } catch (_: Exception) { }
                 if (!AgentCheckpointStore.complete(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
+                    return
                 }
+                // Only now may the Task Centre record completion: the evidence gate and
+                // the durable checkpoint completion marker have both succeeded.
+                try { svc.onAgentTaskFinished(currentTask, true) } catch (_: Exception) { }
                 return
             }
             val args = step.optJSONObject("args") ?: JSONObject()
