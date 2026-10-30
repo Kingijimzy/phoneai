@@ -28,17 +28,15 @@ internal object OrionCapabilityAdapters {
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
-            "browser_tabs", "browser_upload", "browser_close", "web_search",
-            "live_web_search", "live_news", "fetch_url", "research_web"
+            "browser_tabs", "browser_upload", "browser_close"
         ),
         Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call"),
         Backend.DEVICE to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
-            "notification_action", "media_status", "media_control", "resolve_contact",
+            "media_status", "media_control", "resolve_contact",
             "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
             "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe",
-            "swipe_path", "scroll", "type", "key", "look", "play", "device_location",
-            "dial", "sms", "alarm", "timer", "volume", "flashlight", "copy", "record_screen"
+            "swipe_path", "scroll", "type", "key", "look", "play", "record_screen"
         ),
         Backend.SKILLS to setOf("skills_list"),
         Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",
