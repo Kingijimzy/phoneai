@@ -15,6 +15,25 @@ class OrionObjectiveGraphTest {
         assertEquals(setOf("test", "audit"), graph.ready().map { it.id }.toSet())
     }
 
+    @Test fun plannerCannotInjectCompletedStatusOrEvidence() {
+        val result = OrionObjectiveGraph.parse(
+            """{"objectives":[{"id":"a","title":"Pretend done","status":"COMPLETE","evidence":"model says so"}]}""",
+            "Test trust boundary"
+        ) as OrionObjectiveGraph.ParseResult.Valid
+        assertEquals(OrionObjectiveGraph.Status.PENDING, result.graph.nodes.single().status)
+        assertEquals("", result.graph.nodes.single().evidence)
+    }
+
+    @Test fun dependencyGateBlocksDependentUntilPrerequisiteComplete() {
+        val graph = OrionObjectiveGraph.parse(
+            """{"objectives":[{"id":"prepare","title":"Prepare"},{"id":"release","title":"Release","dependsOn":["prepare"]}]}""",
+            "Release safely"
+        ) as OrionObjectiveGraph.ParseResult.Valid
+        assertNotNull(OrionObjectiveGraph.canExecute(graph.graph, "release"))
+        val unlocked = OrionObjectiveGraph.updateStatus(graph.graph, "prepare", OrionObjectiveGraph.Status.COMPLETE, "local receipt id")
+        assertNull(OrionObjectiveGraph.canExecute(unlocked, "release"))
+    }
+
     @Test fun rejectsMissingDependency() {
         val result = OrionObjectiveGraph.parse(
             """{"objectives":[{"id":"build","title":"Build","dependsOn":["compile"]}]}""",
