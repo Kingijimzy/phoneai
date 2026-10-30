@@ -14,7 +14,8 @@ internal object OrionContextualIntentInterpreter {
         COMPLETE_REMAINING,
         CORRECT_PREVIOUS,
         TEST_OBJECTIVE,
-        AMBIGUOUS_REFERENCE
+        AMBIGUOUS_REFERENCE,
+        HISTORICAL_LOOKUP
     }
 
     data class Resolution(
@@ -82,6 +83,21 @@ internal object OrionContextualIntentInterpreter {
         val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
         val isHistorical = historicalReference.containsMatchIn(raw)
         val contextual = isContinue || isComplete || isCorrection || isTest || isReferenceOnly || isHistorical
+
+        // A historical search names its own target. Never replace it with the latest active task.
+        if (isHistorical) {
+            val goal = OrionGoalUnderstanding.understand(raw)
+            val context = """
+HISTORICAL CONVERSATION LOOKUP:
+- Search the durable conversation index using the specific subject and technical terms in the current request.
+- Do not substitute the most recent task, active objective, or current conversation for the requested historical subject.
+- Retrieve actual user and assistant turns with session/turn references.
+- Report only what the retrieved history supports. If no matching history is found, say so and do not guess.
+- Current historical search request: $raw
+- First-pass goal frame: kind=${goal.kind}; outcome=${goal.requestedOutcome}; target=${goal.target.ifBlank { "not confidently identified" }}
+""".trimIndent()
+            return Resolution(Kind.HISTORICAL_LOOKUP, raw, raw, "explicit historical search request", false, context)
+        }
 
         if (!contextual) {
             val goal = OrionGoalUnderstanding.understand(raw)
