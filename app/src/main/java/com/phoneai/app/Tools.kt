@@ -1003,6 +1003,47 @@ class Tools(private val svc: PhoneAiService) {
     }
 
 
+    /** Record decisions only with explicit provenance; user agreement is never inferred from assistant text. */
+    fun recordDecision(args: JSONObject): String {
+        val sessionId = runCatching { OrionConversationRepository.get(svc).activeSessionId(svc) }.getOrNull()
+        return OrionDecisionHistoryStore.get(svc).record(
+            topic = args.optString("topic"),
+            statement = args.optString("decision"),
+            status = args.optString("status"),
+            rationale = args.optString("rationale"),
+            rejectedAlternative = args.optString("rejected_alternative"),
+            rejectionReason = args.optString("rejection_reason"),
+            sourceRole = args.optString("source_role"),
+            sessionId = sessionId,
+            turnId = args.optString("source_turn_id").takeIf { it.isNotBlank() },
+            sourceExcerpt = args.optString("source_evidence"),
+            supersedesId = args.optString("supersedes_id").takeIf { it.isNotBlank() }
+        )
+    }
+
+    /** Search the structured decision ledger; keep proposals and user decisions visibly separate. */
+    fun decisionHistory(query: String): String {
+        if (query.isBlank()) return "error: provide a topic or search phrase."
+        val decisions = OrionDecisionHistoryStore.get(svc).search(query)
+        if (decisions.isEmpty()) return "No structured decisions matched that query."
+        return buildString {
+            appendLine("DECISION HISTORY — local records with provenance")
+            decisions.forEach { d ->
+                appendLine()
+                appendLine("[${d.id}] ${d.status} · topic=${d.topic}")
+                appendLine("Decision: ${d.statement}")
+                if (d.rationale.isNotBlank()) appendLine("Reason: ${d.rationale}")
+                if (d.rejectedAlternative.isNotBlank()) appendLine("Rejected approach: ${d.rejectedAlternative}")
+                if (d.rejectionReason.isNotBlank()) appendLine("Why rejected: ${d.rejectionReason}")
+                appendLine("Origin: ${d.sourceRole}; session=${d.sourceSessionId ?: "unknown"}; turn=${d.sourceTurnId ?: "not recorded"}")
+                appendLine("Evidence: ${d.sourceExcerpt}")
+                if (d.supersedesId != null) appendLine("Supersedes: ${d.supersedesId}")
+            }
+            appendLine()
+            appendLine("ACCEPTED/REJECTED require user-origin evidence. PROPOSED is assistant-origin only. UNRESOLVED is not a settled decision. SUPERSEDED records remain in history.")
+        }.take(10000)
+    }
+
     /** Retrieve complete technical discussion context from active and archived chats. */
     fun discussionSearch(query: String): String {
         if (query.isBlank()) return "error: discussion query is required"
