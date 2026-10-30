@@ -129,7 +129,7 @@ class OrionConversationRepository private constructor(context: Context) :
     @Synchronized
     fun searchHistory(context: Context, query: String, limit: Int = 8): List<SearchHit> {
         migrateLegacy(context)
-        val stopWords = setOf("the", "and", "for", "with", "from", "that", "this", "it", "its", "please", "continue", "finish", "complete", "remaining", "outstanding", "previous", "task", "work", "fix", "test", "verify", "everything")
+        val stopWords = setOf("the", "and", "for", "with", "from", "that", "this", "it", "its", "please", "continue", "finish", "complete", "remaining", "outstanding", "previous", "task", "work", "fix", "test", "verify", "everything", "last", "time", "earlier", "chat", "discussed", "talked", "about", "what", "as")
         val terms = Regex("[\\p{L}\\p{N}_-]{2,}").findAll(query.lowercase()).map { it.value.take(48) }.filterNot { it in stopWords }.distinct().take(8).toList()
         if (terms.isEmpty()) return emptyList()
         val match = terms.joinToString(" OR ") { "\"" + it.replace("\"", "\"\"") + "\"" }
