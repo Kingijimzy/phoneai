@@ -156,6 +156,9 @@ class OrionCapabilityAdaptersTest {
         tasks.forEach {
             assertTrue("Missing tasks executor for ${it.tool}", OrionTasksCapabilityExecutor.supports(it.tool))
         }
+        assertEquals(OrionCapabilityAdapters.Backend.MEMORY, OrionCapabilityAdapters.route("undo_last")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.MEMORY, OrionCapabilityAdapters.route("undo_status")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.TASKS, OrionCapabilityAdapters.route("ask_user")?.backend)
     }
 
 
