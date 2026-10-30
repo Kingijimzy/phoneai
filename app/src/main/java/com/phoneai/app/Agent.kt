@@ -1941,6 +1941,11 @@ Rules:
                         ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
                         return
                     }
+                    if (activeObjectiveId.isNotBlank()) {
+                        val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, bt, br)
+                        if (receipt != null) br += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
+                    }
+                    activeObjectiveId = ""
                     sb.append(bt).append(": ").append(br.take(700)).append("\n")
                     stall.add(bt, batchArgs.toString(), br)?.let { reason ->
                         OrionTasksCapabilityExecutor.pauseRun(svc)
