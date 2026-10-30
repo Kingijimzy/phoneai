@@ -85,7 +85,7 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
 
     @Synchronized
     fun search(query: String, limit: Int = 12): List<Decision> {
-        val terms = Regex("[\\\\p{L}\\\\p{N}_-]{2,}")
+        val terms = Regex("[\\p{L}\\p{N}_-]{2,}")
             .findAll(query.lowercase()).map { it.value.take(48) }.distinct().take(8).toList()
         if (terms.isEmpty()) return emptyList()
         val clauses = terms.joinToString(" OR ") {
