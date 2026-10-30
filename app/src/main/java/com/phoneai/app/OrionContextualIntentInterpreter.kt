@@ -77,7 +77,7 @@ internal object OrionContextualIntentInterpreter {
             val goal = OrionGoalUnderstanding.understand(raw)
             return Resolution(
                 Kind.NEW_OBJECTIVE, raw, raw, null, false,
-                "CONTEXTUAL INTENT: new objective. First-pass whole-request goal frame: kind=\${goal.kind}; outcome=\${goal.requestedOutcome}; target=\${goal.target.ifBlank { "not confidently identified" }}; should_act=\${goal.shouldAct}; needs_clarification=\${goal.needsClarification}; verification=\${goal.verification}. Treat the complete current request as the source of truth; do not trigger tools merely because a capability name or keyword appears in it. The model planner must interpret the full request and conversation before selecting a capability."
+                "CONTEXTUAL INTENT: new objective. First-pass whole-request goal frame: kind=${goal.kind}; outcome=${goal.requestedOutcome}; target=${goal.target.ifBlank { "not confidently identified" }}; should_act=${goal.shouldAct}; needs_clarification=${goal.needsClarification}; verification=${goal.verification}. Treat the complete current request as the source of truth; do not trigger tools merely because a capability name or keyword appears in it. The model planner must interpret the full request and conversation before selecting a capability."
             )
         }
 
@@ -108,7 +108,6 @@ internal object OrionContextualIntentInterpreter {
         val context = """
 CONTEXTUAL INTENT RESOLUTION:
 - Whole-objective goal frame: kind=${goal.kind}; outcome=${goal.requestedOutcome}; target=${goal.target.ifBlank { "not confidently identified" }}; should_act=${goal.shouldAct}; needs_clarification=${goal.needsClarification}; verification=${goal.verification}
-CONTEXTUAL INTENT RESOLUTION:
 - Current user message: $raw
 - Interpreted intent: $label
 - Resolved objective: $objective
