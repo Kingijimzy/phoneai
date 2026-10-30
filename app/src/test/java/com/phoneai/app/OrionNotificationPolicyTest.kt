@@ -15,4 +15,11 @@ class OrionNotificationPolicyTest {
         assertFalse(OrionNotificationPolicy.canPost(36, false))
         assertTrue(OrionNotificationPolicy.canPost(36, true))
     }
+
+    @Test fun approvalAlertsRespectPreferenceForegroundAndOsPermission() {
+        assertFalse(OrionNotificationPolicy.shouldNotifyApproval(false, false, 36, true))
+        assertFalse(OrionNotificationPolicy.shouldNotifyApproval(true, true, 36, true))
+        assertFalse(OrionNotificationPolicy.shouldNotifyApproval(true, false, 36, false))
+        assertTrue(OrionNotificationPolicy.shouldNotifyApproval(true, false, 36, true))
+    }
 }
