@@ -55,7 +55,7 @@ class OrionContextualIntentInterpreterTest {
         val result = OrionContextualIntentInterpreter.resolve(request, emptyList(), "")
         assertEquals(OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE, result.kind)
         assertEquals(request, result.resolvedObjective)
-        assertTrue(result.contextBlock.contains("not, by themselves, authorization"))
+        assertTrue(result.contextBlock.contains("do not trigger tools merely because a capability name or keyword appears"))
     }
 
     @Test fun currentFollowUpInTranscriptDoesNotBecomeItsOwnObjective() {
