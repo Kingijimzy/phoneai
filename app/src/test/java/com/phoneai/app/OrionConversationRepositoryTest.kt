@@ -287,4 +287,16 @@ class OrionConversationRepositoryTest {
         field.isAccessible = true
         field.set(null, null)
     }
+    @Test fun decisionEvidenceMustMatchStoredSpeakerAndExactTranscriptText() {
+        val userText = "I explicitly accept keeping a separate decision ledger with source evidence."
+        val assistantText = "I propose a searchable decision history table."
+        repository.saveActive(context, listOf("me" to userText, "ai" to assistantText))
+
+        val userEvidence = repository.findTranscriptEvidence(context, "user", userText)
+        assertNotNull(userEvidence)
+        assertNull(repository.findTranscriptEvidence(context, "assistant", userText))
+        assertNotNull(repository.findTranscriptEvidence(context, "assistant", assistantText))
+        assertNull(repository.findTranscriptEvidence(context, "user", "I accept a decision that was never said here."))
+    }
+
 }
