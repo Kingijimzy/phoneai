@@ -28,8 +28,8 @@ internal object OrionResearchCapabilityExecutor {
         "fetch_url", "research_web" -> {
             val result = BrowserResearch.fetch(args.optString("url"), cancelled)
             val page = result.page
-                ?: return "error: " + (result.error ?: "could not read webpage")
-            "SOURCE: " + page.sourceUrl + "\nTITLE: " + page.title +
+            if (page == null) "error: " + (result.error ?: "could not read webpage")
+            else "SOURCE: " + page.sourceUrl + "\nTITLE: " + page.title +
                 "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
         }
         "weather" -> WeatherService.current(args.optString("location"))
