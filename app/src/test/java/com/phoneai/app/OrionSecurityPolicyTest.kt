@@ -9,6 +9,9 @@ class OrionSecurityPolicyTest {
         assertNotNull(OrionSecurityPolicy.findEmbeddedSecret("ghp_abcdefghijklmnopqrstuvwxyz1234567890"))
         assertNotNull(OrionSecurityPolicy.findEmbeddedSecret("-----BEGIN PRIVATE KEY-----"))
         assertNull(OrionSecurityPolicy.findEmbeddedSecret("const result = INPUT['value'] + 1"))
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("python", "token = 'sk-abcdefghijklmnopqrstuvwxyz123456'"))
+        val skill = PhoneAiSkill("safe_skill", "1.0.0", "api_key=abcdefghijklmnopqrstuvwxyz123456", setOf("time"))
+        assertFalse(SkillRegistry.validate(skill).allowed)
     }
 
     @Test fun externalResearchIsMarkedAsDataNotInstructions() {
