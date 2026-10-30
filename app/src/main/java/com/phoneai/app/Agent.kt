@@ -1705,9 +1705,14 @@ Rules:
                 } else {
                     ui.note("✓ Completion gate passed: ${outcome.successfulSteps} successful result(s), ${outcome.verifiedSteps} explicitly verified result(s).")
                 }
-                val cleanLearningEvidence = ExperiencePolicy.hasCleanSuccessEvidence(runEvidence.map { it.success }, runFailed)
+                val cleanLearningEvidence = ExperiencePolicy.hasCleanSuccessEvidence(
+                    successFlags = runEvidence.map { it.success },
+                    verifiedFlags = runEvidence.map { it.verified },
+                    recordedFailures = runFailed
+                )
                 if (cleanLearningEvidence) {
-                    try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success }.map { it.tool }) } catch (_: Exception) { }
+                    // Reinforce only the sequence whose every step has independent verification evidence.
+                    try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success && it.verified }.map { it.tool }) } catch (_: Exception) { }
                 }
                 // A task may finish after a recovered error; report that final outcome separately from
                 // routine learning, which accepts only a clean, fully successful trace.
