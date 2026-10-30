@@ -785,7 +785,7 @@ Rules:
                 sb.append("\n\nEncrypted route memory (hints only; inspect current state and re-check safety before every action):\n")
                     .append(routeHints.take(900))
             }
-            val enabledSkills = if (request.isNullOrBlank()) SkillRegistry.list(svc).filter { it.enabled }.take(6) else OrionSkillsCapabilityExecutor.discover(svc, request, 4)
+            val enabledSkills = if (request.isNullOrBlank()) OrionSkillsCapabilityExecutor.list(svc).filter { it.enabled }.take(6) else OrionSkillsCapabilityExecutor.discover(svc, request, 4)
             sb.append("\n\nRegistered skills available for relevant requests (do not claim a skill ran unless it was invoked and verified):")
             if (enabledSkills.isEmpty()) {
                 sb.append("\nNo enabled registered skills.")
@@ -855,7 +855,7 @@ Rules:
     private fun refreshSystem(request: String? = null) {
         if (history.length() > 0) {
             val base = systemPrompt(svc, request)
-            val skill = activeSkillId?.let { id -> SkillRegistry.list(svc).firstOrNull { it.id == id } }
+            val skill = activeSkillId?.let { id -> OrionSkillsCapabilityExecutor.list(svc).firstOrNull { it.id == id } }
             val prompt = if (skill != null) {
                 base +
                     "\n\nACTIVE DECLARATIVE SKILL: " + skill.id + " v" + skill.version +
