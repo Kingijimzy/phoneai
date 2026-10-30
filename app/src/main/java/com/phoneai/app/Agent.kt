@@ -615,7 +615,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
-        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) taskProofs.clear()
+        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
+            taskProofs.clear()
+            OrionObjectiveGraph.save(svc, OrionObjectiveGraph.Graph(
+                objective = intentResolution.resolvedObjective.orEmpty(),
+                nodes = listOf(OrionObjectiveGraph.Objective(
+                    id = "main", title = intentResolution.resolvedObjective.orEmpty().take(240),
+                    status = OrionObjectiveGraph.Status.RUNNING
+                ))
+            ))
+        }
         researchCancelled.set(false)
         talkNim.resume()
 
@@ -945,6 +954,7 @@ Rules:
                 )
                 activeOrchestrationContext = context
                 prompt + "\n\n" + context.promptLines().joinToString("\n") +
+                    (OrionObjectiveGraph.load(svc)?.let { "\\n\\n" + OrionObjectiveGraph.prompt(it) } ?: "") +
                     if (activeIntentContext.isBlank()) "" else "\n\n" + activeIntentContext
             }
             history.put(0, msg("system", coordinatedPrompt))
