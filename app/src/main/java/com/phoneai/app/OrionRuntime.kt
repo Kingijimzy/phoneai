@@ -27,7 +27,10 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     private var queue = mutableListOf<WorkItem>()
     private var inflight: WorkItem? = null
 
-    init { synchronized(lock) { loadLocked() } }
+    init {
+        synchronized(lock) { loadLocked() }
+        if (pendingItems().isNotEmpty()) OrionRecoveryWork.schedule(appContext)
+    }
 
     fun start() = synchronized(lock) { state = State.ACTIVE; eventLocked("service_connected"); persistLocked() }
     fun stop() = synchronized(lock) { state = State.STOPPED; eventLocked("service_disconnected"); persistLocked() }
@@ -48,6 +51,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         state = OrionRuntimePolicy.stateAfterEnqueue(state, queue.isNotEmpty())
         eventLocked("work_queued:" + type.name.lowercase())
         persistLocked()
+        OrionRecoveryWork.schedule(appContext)
         true
     }
 
@@ -93,6 +97,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         state = State.ACTIVE
         eventLocked("work_backoff:" + attempts)
         persistLocked()
+        OrionRecoveryWork.schedule(appContext, retry.notBefore - clock())
         true
     }
 
