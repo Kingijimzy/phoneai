@@ -38,12 +38,12 @@ class TaskCenterActivityTest {
         assertTrue(TaskStore.update(context, task.id, status = "running"))
         val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
 
-        val pause = buttons(activity.window.decorView).firstOrNull { it.text.toString().contains("Pause") }
+        val pause = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim().endsWith("Pause") }
         assertNotNull("Running task must expose a Pause control", pause)
         pause!!.performClick()
         assertEquals("paused", TaskStore.all(context).first { it.id == task.id }.status)
 
-        val resume = buttons(activity.window.decorView).firstOrNull { it.text.toString().contains("Resume") }
+        val resume = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim().endsWith("Resume") }
         assertNotNull("Paused task must expose a Resume control", resume)
         resume!!.performClick()
         assertEquals("running", TaskStore.all(context).first { it.id == task.id }.status)
