@@ -213,7 +213,10 @@ class AgentChatActivity : Activity() {
                             else -> "I don't recognise \"$sym\". Try a Bybit symbol, a forex pair such as EURUSD, or gold, oil, SPX."
                         }
                     } catch (e: Exception) { "Quote failed: " + (e.message ?: e.javaClass.simpleName).take(120) }
-                    runOnUiThread { AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show() }
+                    runOnUiThread {
+                        if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
+                        AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show()
+                    }
                 }.start()
             }.setNegativeButton("Cancel", null).show()
     }
@@ -283,7 +286,10 @@ class AgentChatActivity : Activity() {
                     latch.await(120, java.util.concurrent.TimeUnit.SECONDS); ok
                 }
                 if (result.startsWith("Order placed")) AgentLessons.addTagged(this, "coach", "trade", result.take(200))
-                runOnUiThread { status.text = result }
+                runOnUiThread {
+                    if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
+                    status.text = result
+                }
             }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Dismiss") { messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
@@ -306,6 +312,12 @@ class AgentChatActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_IMAGE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+            // Some document providers grant a temporary read-only URI; the image is
+            // encoded immediately below, so persistent access is optional.
+        }
         Thread {
             val encoded = try { encodeImage(uri) } catch (e: Exception) { null }
             runOnUiThread {
@@ -381,6 +393,11 @@ class AgentChatActivity : Activity() {
             }
             runOnUiThread {
                 val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
+                if (screenDestroyed || isFinishing || isDestroyed) {
+                    val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shown)) }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@runOnUiThread
+                }
                 waiting.text = Markdown.render(shown)
                 turns.add(AgentRunner.Turn("assistant", shown))
                 AgentChatStore.save(this, agent.id, turns)
