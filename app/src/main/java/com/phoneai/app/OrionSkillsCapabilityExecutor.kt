@@ -30,6 +30,8 @@ internal object OrionSkillsCapabilityExecutor {
         }
     }
 
+    fun list(context: Context): List<PhoneAiSkill> = SkillRegistry.list(context)
+
     fun discover(context: Context, request: String, limit: Int = 4): List<PhoneAiSkill> =
         SkillRegistry.discover(context, request, limit)
 
