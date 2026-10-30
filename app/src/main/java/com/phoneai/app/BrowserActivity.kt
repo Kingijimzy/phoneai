@@ -289,7 +289,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Theme.CYAN)
-                setStroke(dp(2), 0xFFB8F7FF.toInt())
+                setStroke(dp(2), Theme.LINE_STRONG)
             }
             elevation = dp(8).toFloat()
             contentDescription = "Orion browser tools"

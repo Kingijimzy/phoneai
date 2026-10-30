@@ -71,7 +71,7 @@ class MemoryActivity : Activity() {
             val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13)); background = panel() }
             val meta = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             meta.addView(text(memory.category.uppercase(Locale.ROOT), 10f, 0xFFBEBEBE.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
-            if (memory.pinned) meta.addView(text("PINNED", 10f, 0xFF65D8E8.toInt(), true).apply { setPadding(0, 0, dp(8), 0) })
+            if (memory.pinned) meta.addView(text("PINNED", 10f, Theme.SILVER, true).apply { setPadding(0, 0, dp(8), 0) })
             meta.addView(text("#${memory.id}", 10f, 0xFF777777.toInt())); card.addView(meta)
             card.addView(text(memory.text, 14f, 0xFFEAEAEA.toInt()).apply { setPadding(0, dp(7), 0, dp(9)) })
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }

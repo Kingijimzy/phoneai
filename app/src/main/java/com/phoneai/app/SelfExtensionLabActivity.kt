@@ -46,7 +46,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
     private val line = Color(0xFF343434)
     private val white = Color(0xFFF4F5F6)
     private val muted = Color(0xFF9A9DA1)
-    private val blue = Color(0xFF7EA9D6)
+    private val blue = Color(Theme.SILVER)
     private val store by lazy { SelfExtendingExtensionStore(applicationContext) }
     private val sandbox by lazy {
         RestrictedPythonSandbox { source, inputJson ->

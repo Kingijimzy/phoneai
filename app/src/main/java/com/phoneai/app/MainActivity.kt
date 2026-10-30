@@ -326,7 +326,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildHome(page: LinearLayout) {
-        // Editorial home: near-black canvas, restrained mint, clearer hierarchy and fewer noisy cards.
+        // Editorial home: near-black canvas, neutral silver accents, clearer hierarchy and fewer noisy cards.
         val brandRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL

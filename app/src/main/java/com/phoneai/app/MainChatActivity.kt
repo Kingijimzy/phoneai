@@ -95,7 +95,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private fun animateIn(view: View, delay: Long = 0L) {
         view.alpha = 0f
         view.translationY = dp(8).toFloat()
-        view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(260)
+        view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(Theme.MOTION_MEDIUM_MS.toLong())
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
@@ -1012,7 +1012,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         titleCol.addView(personality)
         refreshPersonalityLabel(personality)
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        stop = label("■", 13f, Theme.CYAN, true).apply {
+        stop = label("STOP", 9f, Theme.CYAN, true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
             background = rounded(0xFF1D1D1D.toInt(), 14, 0xFF7B7B7B.toInt())
