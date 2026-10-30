@@ -81,6 +81,20 @@ class OrionContextualIntentInterpreterTest {
         assertTrue(recovered.resolvedObjective!!.contains("keyboard switching crash"))
     }
 
+    @Test fun explicitHistoricalSearchUsesItsOwnQueryInsteadOfTheLatestObjective() {
+        val recent = listOf(
+            "user" to "Investigate Telegram message delays and non-replies.",
+            "assistant" to "The investigation is still proposal-level."
+        )
+        val query = "Search our previous conversations for the Orion task where we discussed separating backend executors from dispatchLegacyTool."
+        val result = OrionContextualIntentInterpreter.resolve(query, recent, "Investigate Telegram message delays and non-replies.")
+        assertEquals(OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP, result.kind)
+        assertEquals(query, result.resolvedObjective)
+        assertFalse(result.needsClarification)
+        assertTrue(result.contextBlock.contains("Do not substitute the most recent task"))
+        assertTrue(result.contextBlock.contains("dispatchLegacyTool"))
+    }
+
     @Test fun ambiguousFollowUpDoesNotInventItsTarget() {
         val result = OrionContextualIntentInterpreter.resolve("continue", emptyList(), "")
         assertEquals(OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE, result.kind)
