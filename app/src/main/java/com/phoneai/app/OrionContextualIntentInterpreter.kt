@@ -38,6 +38,8 @@ internal object OrionContextualIntentInterpreter {
     private val testRequest = Regex(
         """(?i)^\s*(?:please\s+)?(?:test|verify|validate|audit|check)\s+(?:everything|it all|all of it|the rest|the remaining work|the outstanding work|all remaining work)\b[.! ]*$"""
     )
+    private val historicalReference = Regex("""(?i)\b(?:last time|previous conversation|earlier chat|we discussed|we talked about|as before|from before|the earlier|that earlier|what we did before)\b""")
+
     private val followUpOnly = Regex(
         """(?i)^\s*(?:and\s+)?(?:it|that|this|those|them|the previous task|the outstanding work|the remaining work|everything|all of it)(?:\s+(?:too|as well))?[.! ]*$"""
     )
@@ -62,6 +64,7 @@ internal object OrionContextualIntentInterpreter {
     private fun isFollowUpOnly(value: String): Boolean =
         continuation.matches(value) || followUpOnly.matches(value) ||
             standaloneContextual.matches(value) || testRequest.matches(value) ||
+            historicalReference.containsMatchIn(value) ||
             (value.length < 48 && (completeRemaining.containsMatchIn(value) || correction.containsMatchIn(value)))
 
     fun resolve(
@@ -77,7 +80,8 @@ internal object OrionContextualIntentInterpreter {
         val isCorrection = correction.containsMatchIn(raw)
         val isTest = testRequest.containsMatchIn(raw)
         val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
-        val contextual = isContinue || isComplete || isCorrection || isTest || isReferenceOnly
+        val isHistorical = historicalReference.containsMatchIn(raw)
+        val contextual = isContinue || isComplete || isCorrection || isTest || isReferenceOnly || isHistorical
 
         if (!contextual) {
             val goal = OrionGoalUnderstanding.understand(raw)
