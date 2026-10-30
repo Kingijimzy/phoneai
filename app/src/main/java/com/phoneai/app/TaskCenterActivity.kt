@@ -458,6 +458,43 @@ class TaskCenterActivity : Activity() {
             }
             return
         }
+        if (task.status == "paused") {
+            val checkpoint = AgentCheckpointStore.pending(this)
+            if (checkpoint != null) {
+                val command = checkpoint.optString("command")
+                if (!command.contains("saved task #" + task.id, ignoreCase = true)) {
+                    Toast.makeText(this, "A different task owns the saved agent checkpoint. Inspect that recovery session first.", Toast.LENGTH_LONG).show()
+                    return
+                }
+                if (PhoneAiService.instance == null) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Orion phone control is not connected")
+                        .setMessage("The saved execution checkpoint is still here. Enable Orion's Accessibility service, then return and resume this task.")
+                        .setNegativeButton("CLOSE", null)
+                        .setPositiveButton("OPEN SETTINGS") { _, _ ->
+                            try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                            catch (_: Exception) { Toast.makeText(this, "Open Android Settings → Accessibility manually.", Toast.LENGTH_LONG).show() }
+                        }
+                        .show()
+                    return
+                }
+                if (!TaskStore.update(this, task.id, status = "running")) {
+                    errorToast()
+                    return
+                }
+                try {
+                    startActivity(Intent(this, MainChatActivity::class.java)
+                        .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, "continue")
+                        .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true))
+                    refresh()
+                } catch (error: Exception) {
+                    TaskStore.update(this, task.id, status = "paused")
+                    refresh()
+                    Toast.makeText(this, "Could not reopen the saved checkpoint: " + (error.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+        }
         // Do not mark a task as running if the real execution service is unavailable.
         // MainChatActivity would otherwise open, reject the prompt, and leave a false
         // running state on the board.
