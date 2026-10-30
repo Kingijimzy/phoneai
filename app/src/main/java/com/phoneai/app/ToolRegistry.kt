@@ -36,6 +36,7 @@ internal object ToolRegistry {
         tool("resolve_contact", ToolAccess.READ, "resolve_contact {name}: local contact search; confirm the exact person before a call/message; requires Android Contacts permission"),
         tool("find_files", ToolAccess.READ, "find_files {query}: search accessible indexed shared files and return current numeric IDs"),
         tool("open_file", ToolAccess.WRITE, "open_file {id}: open a numeric ID returned by the latest find_files result"),
+        tool("save_file", ToolAccess.WRITE, "save_file {filename, content}: create a user-accessible text or code file in Downloads/Orion (for example calculator.py); max 200 KB; verify the saved name, byte size and location before reporting success; never claim success on a storage error"),
         tool("list_apps", ToolAccess.READ, "list_apps {}: list names of installed apps"),
         tool("list_app_deeplinks", ToolAccess.READ, "list_app_deeplinks {scheme?}: list installed handlers for allowlisted https, tel, sms, smsto, mailto, geo, whatsapp, tg, youtube, spotify schemes"),
         tool("read_screen", ToolAccess.READ, "read_screen {}: merged numbered accessibility, on-device OCR, and unlabeled visual-region targets; visual regions are heuristic and OCR/detection are withheld on potentially sensitive screens"),
