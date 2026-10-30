@@ -1200,14 +1200,17 @@ Rules:
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
         // Persist only actual tool-agent objectives; shared context generation is side-effect free.
-        if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) runCatching { SoulEngineState.setGoal(svc, command) }
+
         if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
             try {
                 if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) ExperienceStore.recordCorrection(svc, currentTask, command)
                 else if (currentTask.isNotBlank() && ExperiencePolicy.isPraise(command)) ExperienceStore.recordPraise(svc, currentTask)
             } catch (_: Exception) { }
             // Feedback ("no, do it this way") belongs to the previous task; it must not replace it as the task being learned from.
-            if (!ExperiencePolicy.isCorrection(command) && !ExperiencePolicy.isPraise(command)) currentTask = command
+            if (!ExperiencePolicy.isCorrection(command) && !ExperiencePolicy.isPraise(command)) {
+                currentTask = command
+                runCatching { SoulEngineState.setGoal(svc, command) }
+            }
             askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
         val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
