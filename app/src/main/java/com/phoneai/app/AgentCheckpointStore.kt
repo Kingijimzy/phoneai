@@ -178,8 +178,6 @@ object AgentCheckpointStore {
             RouteMemoryStore.recordCompleted(c, checkpoint)
             // Learning is downstream of the durable completion marker and can never change task outcome.
             SoulEngineState.learnFromCompletedCheckpoint(c, checkpoint)
-            val successful = (checkpoint.optJSONArray("steps")?.length() ?: 0)
-            if (successful > 0) SoulEngineState.recordLesson(c, "route", "A completed task was durably checkpointed; verify the same goal's current state before reusing any route.", "success")
         } catch (_: Exception) { }
         return true
     }
