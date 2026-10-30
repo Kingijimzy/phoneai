@@ -123,9 +123,12 @@ object RouteMemoryStore {
                     if (tools.length() == 0 || tools.optString(tools.length() - 1) != tool) tools.put(tool.take(80))
                 }
             }
-            if (label.isBlank() || tools.length() == 0) return@synchronized true
+            // A one-tool observation is not enough to infer a reusable procedure.
+            // This remains an observed route candidate, not independently verified success.
+            if (label.isBlank() || tools.length() < 2) return@synchronized true
             val routes = read(c)
-            routes.put(JSONObject().put("task", label).put("tools", tools).put("at", System.currentTimeMillis()))
+            routes.put(JSONObject().put("task", label).put("tools", tools)
+                .put("evidence", "completed_checkpoint_candidate").put("at", System.currentTimeMillis()))
             while (routes.length() > MAX_ROUTES) routes.remove(0)
             write(c, routes)
         } catch (_: Exception) {
@@ -144,7 +147,7 @@ object RouteMemoryStore {
                 val names = (0 until tools.length()).joinToString(" → ") { tools.optString(it).take(60) }
                 val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(route.optLong("at")))
-                "$date · $task\nRoute: $names"
+                "$date · $task\nObserved route candidate (not verified): $names"
             }.asReversed()
         } catch (_: Exception) { emptyList() }
     }
@@ -177,7 +180,7 @@ object RouteMemoryStore {
                 if (matches.isEmpty()) "" else matches.joinToString("\\n") { (route, _, _) ->
                     val names = route.optJSONArray("tools") ?: JSONArray()
                     val sequence = (0 until names.length()).joinToString(" → ") { names.optString(it) }
-                    "- Similar completed task: ${route.optString("task").take(MAX_LABEL)}; tool route: ${sequence.take(280)}"
+                    "- Similar task with a completed checkpoint (route not independently verified): ${route.optString("task").take(MAX_LABEL)}; observed tool sequence: ${sequence.take(280)}"
                 }
             } catch (_: Exception) {
                 ""
