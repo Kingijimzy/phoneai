@@ -917,8 +917,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     content.put(JSONObject().put("type", "text").put("text", "Image " + (index + 1) + " of " + images.size))
                     content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
                 }
+                val visualSystem = "You are Orion, a helpful visual assistant. Analyse all supplied images together when relevant. Describe only what is visible, distinguish observation from inference, and never claim details that cannot be seen." +
+                    "\n\n" + OrionCentralBrain.contextFor(this, question) +
+                    "\n\nIMAGE ANALYSIS BOUNDARY: use shared executive context for continuity only. Do not claim phone actions, file operations, external writes, or background tasks were performed from image analysis. If the user asks for an action, route it through the normal guarded Agent workflow."
                 val messages = JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", "You are Orion, a helpful visual assistant. Analyse all supplied images together when relevant. Describe only what is visible, distinguish observation from inference, and never claim details that cannot be seen."))
+                    .put(JSONObject().put("role", "system").put("content", visualSystem))
                     .put(JSONObject().put("role", "user").put("content", content))
                 val reply = Nim(this).chat(messages, true, 520, 0.2).trim()
                 main.post {
