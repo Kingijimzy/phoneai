@@ -156,6 +156,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var activeRequestScope: String = ""
     @Volatile private var activeOrchestrationContext: OrionTaskOrchestrator.Context? = null
     @Volatile private var activeIntentContext: String = ""
+    @Volatile private var activeObjectiveId: String = ""
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -769,7 +770,7 @@ You are Orion, a personal AI assistant living on the user's Android phone, in th
 You can use the phone like a person. Reply with ONLY one JSON object per turn:
 {"say":"what you tell the user","tool":"tool_name","args":{...}}
 When finished (or when you only need to answer a question), reply {"say":"your answer","tool":"done"}.
-For a task that needs three or more steps, add a short plan once, in your first reply: "plan":["first step","second step"] (at most six plain phrases). Skip it for simple requests. For tasks with two or more independently verifiable objectives, also include objective_graph as an object: {"objectives":[{"id":"stable_id","title":"outcome","dependsOn":["prior_id"],"status":"PENDING"}]}. Use explicit dependency IDs only when an objective truly requires another objective first; omit dependsOn for independent objectives. Keep IDs stable across turns. Never mark an objective COMPLETE without tool/result evidence. This graph is saved locally and supplied on follow-up turns; it is planning state, not permission to execute.
+For a task that needs three or more steps, add a short plan once, in your first reply: "plan":["first step","second step"] (at most six plain phrases). Skip it for simple requests. For tasks with two or more independently verifiable objectives, also include objective_graph as an object: {"objectives":[{"id":"stable_id","title":"outcome","dependsOn":["prior_id"],"status":"PENDING"}]}. Use explicit dependency IDs only when an objective truly requires another objective first; omit dependsOn for independent objectives. Keep IDs stable across turns. Never mark an objective COMPLETE without tool/result evidence. This graph is saved locally and supplied on follow-up turns; it is planning state, not permission to execute. For each tool call, include objective_id with the stable objective ID it advances. A multi-objective task tool call without a valid objective_id will be blocked. To propose completion after receiving a tool result, include complete_objectives:[{"id":"stable_id","evidence_id":"exact_executor_evidence_id"}]; Orion accepts it only if that exact successful receipt exists locally and all prerequisites are complete. Never invent evidence IDs or mark an objective complete from your own narrative.
 After each tool you get RESULT.
 To save free API quota, batch up to four independent low-risk tool calls in one reply when their inputs are already known: {"say":"...","steps":[{"tool":"open_app","args":{"name":"WhatsApp"}},{"tool":"wait","args":{"seconds":2}}]}. They run in order and stop at the first error. Do not batch actions that depend on seeing a changed screen; after read_screen, look, or a screen change you depend on, wait for RESULT. Prefer local/device and direct-data tools over an AI call when they can answer the request. Once a tool result proves the task is complete, finish without another verification call. Never repeat an identical failed tool call; change approach or explain the blocker.
 Be fast and economical: plan the next safe group of actions together instead of asking the model to decide every trivial step.
@@ -1851,9 +1852,8 @@ Rules:
             history.put(msg("assistant", raw))
             val step = parsedStep.obj
             step.optJSONObject("objective_graph")?.let { proposed ->
-                when (val parsedGraph = OrionObjectiveGraph.parse(
-                    proposed.toString(),
-                    currentTask.ifBlank { inputCommand }
+                when (val parsedGraph = OrionObjectiveGraph.applyProposal(
+                    svc, proposed.toString(), currentTask.ifBlank { inputCommand }
                 )) {
                     is OrionObjectiveGraph.ParseResult.Valid -> {
                         if (!OrionObjectiveGraph.save(svc, parsedGraph.graph)) {
