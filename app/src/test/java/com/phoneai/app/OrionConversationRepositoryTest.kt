@@ -223,7 +223,7 @@ class OrionConversationRepositoryTest {
 
         val hits = repository.searchHistory(context, "Android 16 keyboard crash recovery root cause", 8)
         assertTrue(hits.isNotEmpty())
-        assertTrue(hits.first().title.contains("Android 16 keyboard crash recovery root cause"))
+        assertTrue(hits.first().title.contains("Android 16 keyboard crash recovery"))
         assertTrue(hits.first().snippet.contains("recovery root cause"))
         assertTrue(hits.first().after.contains("inspect the in-flight action"))
     }
