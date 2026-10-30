@@ -33,6 +33,7 @@ internal object OrionCentralBrain {
         }.getOrDefault(emptyList())
         val skills = runCatching { SkillRegistry.list(app) }.getOrDefault(emptyList())
         val enabledSkills = skills.filter { it.enabled }
+        val savedTasks = runCatching { TaskStore.all(app).take(12) }.getOrDefault(emptyList())
         val taskCount = runCatching { TaskStore.all(app).size }.getOrNull()
         val extensionRows = runCatching { SelfExtendingExtensionStore(app).all() }.getOrDefault(emptyList())
         val verifiedExtensions = extensionRows.count {
@@ -45,6 +46,13 @@ internal object OrionCentralBrain {
             appendLine("This is the single coordination layer for Talk, Command, tools, MCP, browser, Android actions, shell/workspace, memory, tasks, schedules, skills, subagents, voice, and verified extensions. These are not separate assistants: use the same current goal and shared app registries.")
             appendLine("Live inventory: registered_tools=${registered.size}; enabled_packs=${enabledPacks.joinToString().ifBlank { "none" }}; enabled_skills=${enabledSkills.joinToString { it.id }.ifBlank { "none" }}; saved_tasks=${taskCount?.toString() ?: "unavailable"}; saved_extensions=${extensionRows.size}; verified_enabled_extensions=$verifiedExtensions.")
             appendLine("Registered tool names (not a promise of availability): ${registered.take(100).joinToString().ifBlank { "none" }}.")
+            if (savedTasks.isNotEmpty()) {
+                appendLine("PERSISTED TASK CENTRE RECORDS (authoritative task titles/status/details; these are not execution receipts):")
+                savedTasks.forEach { task ->
+                    appendLine("- #${task.id} [${task.status}/${task.priority}] ${task.title}: ${task.details.take(500)}; last_result=${task.resultSummary.take(220)}")
+                }
+                appendLine("When the user names one of these tasks, retrieve and continue that exact record; do not say it is missing merely because the separate execution checkpoint is empty. Distinguish a saved task definition from a running execution checkpoint.")
+            }
             if (enabledSkills.isNotEmpty()) {
                 appendLine("Enabled skill contracts: " + enabledSkills.take(20).joinToString(" | ") {
                     "${it.id}: tools=${it.allowedTools.sorted().joinToString(",")}; purpose=${it.description.take(180)}"
