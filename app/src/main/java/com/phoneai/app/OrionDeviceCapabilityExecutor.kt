@@ -10,6 +10,16 @@ import org.json.JSONObject
  * small Agent callbacks needed for higher-level verification flows.
  */
 internal object OrionDeviceCapabilityExecutor {
+    private val supportedTools = setOf(
+        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
+        "notification_action", "media_status", "media_control", "resolve_contact", "list_apps",
+        "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
+        "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path",
+        "scroll", "type", "key", "look", "play", "record_screen"
+    )
+
+    fun supports(tool: String): Boolean = tool in supportedTools
+
     fun execute(
         tool: String,
         args: JSONObject,
@@ -21,7 +31,8 @@ internal object OrionDeviceCapabilityExecutor {
         verifyAction: (JSONObject) -> String,
         verifySend: (JSONObject) -> String,
         look: (String) -> String,
-        play: (String, Int) -> String
+        play: (String, Int) -> String,
+        readScreen: () -> String
     ): String = when (tool) {
         "lookup_app" -> tools.lookupApp(args.optString("name"))
         "open_app" -> service.openApp(args.optString("name"))
@@ -49,7 +60,8 @@ internal object OrionDeviceCapabilityExecutor {
         "resolve_contact" -> tools.resolveContact(args.optString("name"))
         "list_apps" -> tools.listApps()
         "list_app_deeplinks" -> tools.listAppDeepLinks(args.optString("scheme"))
-        "read_screen" -> service.readScreen()
+        "read_screen" -> readScreen()
+        "record_screen" -> if (args.optString("action", "start").equals("stop", true)) tools.recordStop() else tools.recordStart()
         "validate_action" -> validateAction(args)
         "verify_action" -> verifyAction(args)
         "verify_send" -> verifySend(args)
