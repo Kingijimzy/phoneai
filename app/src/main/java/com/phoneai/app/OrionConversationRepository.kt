@@ -159,7 +159,8 @@ class OrionConversationRepository private constructor(context: Context) :
         migrateLegacy(context)
         val db = writableDatabase
         val sid = db.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use { if (it.moveToFirst()) it.getString(0) else null } ?: return null
-        val evidence = ObjectiveEvidence(UUID.randomUUID().toString(),sid,turnId?.take(128),objectiveId.take(32),tool.take(80),outcome.take(24),sanitizeEventSummary(summary),System.currentTimeMillis())
+        val sourceTurnId = turnId?.take(128) ?: db.rawQuery("SELECT id FROM messages WHERE session_id=? AND role!=? ORDER BY sort_order DESC LIMIT 1", arrayOf(sid, "ai")).use { if (it.moveToFirst()) it.getString(0) else null }
+        val evidence = ObjectiveEvidence(UUID.randomUUID().toString(),sid,sourceTurnId,objectiveId.take(32),tool.take(80),outcome.take(24),sanitizeEventSummary(summary),System.currentTimeMillis())
         val values = ContentValues().apply { put("id",evidence.id); put("session_id",sid); put("turn_id",evidence.turnId); put("objective_id",evidence.objectiveId); put("tool",evidence.tool); put("outcome",evidence.outcome); put("summary",evidence.summary); put("created_at",evidence.createdAt) }
         return if (db.insert("objective_evidence",null,values) >= 0) evidence else null
     }
