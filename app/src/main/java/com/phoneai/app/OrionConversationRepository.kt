@@ -131,10 +131,10 @@ class OrionConversationRepository private constructor(context: Context) :
         migrateLegacy(context)
         val terms = Regex("[\\p{L}\\p{N}_-]{2,}").findAll(query.lowercase()).map { it.value.take(48) }.distinct().take(8).toList()
         if (terms.isEmpty()) return emptyList()
-        val match = terms.joinToString(" AND ") { "\"" + it.replace("\"", "\"\"") + "\"" }
+        val match = terms.joinToString(" OR ") { "\"" + it.replace("\"", "\"\"") + "\"" }
         val db = readableDatabase
         val result = ArrayList<SearchHit>()
-        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,snippet(messages_fts,1,'[',']',' … ',18),m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY m.created_at DESC LIMIT ?"
+        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,snippet(messages_fts,1,'[',']',' … ',18),m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY CASE WHEN f.role='me' OR f.role='user' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ?"
         db.rawQuery(sql, arrayOf(match, limit.coerceIn(1, 12).toString())).use { c ->
             while (c.moveToNext()) {
                 val sid = c.getString(0); val turn = c.getString(1); val order = c.getInt(6)
