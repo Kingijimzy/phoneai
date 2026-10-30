@@ -226,6 +226,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         orionRuntime?.pause("accessibility_interrupted")
     }
 
+    /** WorkManager may request a drain only while this already-enabled service is connected. */
+    internal fun requestRuntimeDrain(): Boolean {
+        val runtime = orionRuntime ?: return false
+        if (runtime.snapshot().state in setOf(
+                OrionRuntime.State.STOPPED,
+                OrionRuntime.State.PAUSED,
+                OrionRuntime.State.DEGRADED
+            )) return false
+        scheduleRuntimeDrain()
+        return true
+    }
+
     private fun scheduleRuntimeDrain() {
         if (runtimeDrainScheduled) {
             runtimeDrainRequested = true
