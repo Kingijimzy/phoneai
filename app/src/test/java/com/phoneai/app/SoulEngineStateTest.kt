@@ -60,6 +60,19 @@ class SoulEngineStateTest {
         assertTrue(SoulEngineState.snapshot(context).proposals.isEmpty())
     }
 
+    @Test fun encryptedRouteMemoryAcceptsOnlyDistinctVerifiedStepsFromCompletedTasks() {
+        val checkpoint = JSONObject()
+            .put("status", "completed")
+            .put("steps", JSONArray()
+                .put(JSONObject().put("tool", "open_app").put("result", "LOCAL VERIFY PASS: visible state changed."))
+                .put(JSONObject().put("tool", "click_text").put("result", "LOCAL VERIFY PASS: visible state changed."))
+                .put(JSONObject().put("tool", "shell").put("result", "success"))
+                .put(JSONObject().put("tool", "type").put("result", "LOCAL VERIFY PASS: visible state changed.")))
+        assertEquals(listOf("open_app", "click_text"), RouteMemoryStore.verifiedToolsForCheckpoint(checkpoint))
+        checkpoint.put("status", "running")
+        assertTrue(RouteMemoryStore.verifiedToolsForCheckpoint(checkpoint).isEmpty())
+    }
+
     @Test fun riskySensitiveGoalsDoNotProduceReusableRouteCandidates() {
         val checkpoint = JSONObject()
             .put("status", "completed")
