@@ -17,7 +17,8 @@ Do not mark a row PASS from a source-code inspection or an emulator-only run.
 - [ ] `gradle testDebugUnitTest assembleDebug --no-daemon` passes.
 - [ ] Python sandbox policy tests pass (`python3 -m unittest discover -s app/src/test/python -v`).
 - [ ] Extension sandbox tests pass (`ExtensionSandboxTest`, `SelfExtendingExtensionsTest`, and `CapabilityGapPlannerTest`).
-- [ ] Runtime/restart tests pass (`OrionRuntimePersistenceTest`, `OrionRuntimePolicyTest`).
+- [ ] Runtime/restart tests pass (`OrionRuntimePersistenceTest`, `OrionRuntimePolicyTest`, `OrionRecoveryPolicyTest`).
+- [ ] Permission/notification and per-tool override regressions pass (`OrionNotificationPolicyTest`, `ToolPermissionOverrideTest`).
 - [ ] MCP retry-scope tests pass (`McpConnectorScopePolicyTest`): safe handshake/catalogue requests may retry once; `tools/call` must not retry.
 - [ ] APK archive, required ARM64 native libraries, package metadata, and APK signature validation pass.
 
@@ -39,7 +40,7 @@ Record PASS, FAIL, or BLOCKED. Add a short observation for every FAIL/BLOCKED re
 | D10 | MCP reconnect | Disconnect network during initialize/list; reconnect and confirm bounded safe retry; verify tool calls are not duplicated |
 | D11 | Extension draft and validation | Draft a harmless JSON-to-JSON extension; run valid, invalid, and boundary test cases; activation remains approval-gated |
 | D12 | Background notification | Complete/fail a standing-order check; verify configured notification preference and Android notification permission are respected |
-| D13 | Battery/background behavior | Test with screen off and battery saver on/off; record whether the watcher is paused or resumed by Android/HyperOS |
+| D13 | Battery/background behavior | Test with screen off and battery saver on/off; record whether the watcher is paused or resumed by Android/HyperOS; verify WorkManager leaves queued work intact and asks to reopen Orion when the accessibility service is unavailable |
 | D14 | Memory and learning | Complete a multi-step harmless task; confirm only a route candidate is recorded and it is labelled unverified until reviewed |
 | D15 | Thermal and memory stability | Use chat + one tool flow for 15 minutes; record crashes, app restarts, excessive heat, or OS process kills |
 
@@ -83,4 +84,4 @@ A capability is:
 - **Device-verified** only when the corresponding Redmi scenario passes with evidence.
 - **Reliable** only after repeated device runs, including restart and background/battery conditions, show no unresolved failure.
 
-A green CI run does not equal physical-device acceptance. Background scheduling remains subject to Android and HyperOS process/battery policies; a test must record actual behavior rather than promise uninterrupted execution.
+A green CI run does not equal physical-device acceptance. WorkManager provides a durable, deferrable recovery signal only: it may wake an already-connected accessibility service, or notify the user to reopen Orion. It does not start the accessibility service, run screen actions, or replay uncertain standing-order effects. Background scheduling remains subject to Android and HyperOS process/battery policies; a test must record actual behavior rather than promise uninterrupted execution.
