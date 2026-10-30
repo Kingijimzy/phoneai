@@ -135,8 +135,18 @@ class OrionConversationRepository private constructor(context: Context) :
         val match = terms.joinToString(" OR ") { "\"" + it.replace("\"", "\"\"") + "\"" }
         val db = readableDatabase
         val result = ArrayList<SearchHit>()
-        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,m.content,m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY CASE WHEN f.role='me' OR f.role='user' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ?"
-        db.rawQuery(sql, arrayOf(match, limit.coerceIn(1, 12).toString())).use { c ->
+        // FTS OR keeps recall broad; rank by the number of concrete query terms in the
+        // matched turn/title before applying recency and user-turn tie-breakers.
+        val contentScore = terms.joinToString(" + ") { "CASE WHEN instr(lower(m.content), ?) > 0 THEN 2 ELSE 0 END" }
+        val titleScore = terms.joinToString(" + ") { "CASE WHEN instr(lower(s.title), ?) > 0 THEN 1 ELSE 0 END" }
+        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,m.content,m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY ($contentScore + $titleScore) DESC, CASE WHEN f.role='me' OR f.role='user' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ?"
+        val queryArgs = ArrayList<String>().apply {
+            add(match)
+            terms.forEach { add(it) }
+            terms.forEach { add(it) }
+            add(limit.coerceIn(1, 12).toString())
+        }
+        db.rawQuery(sql, queryArgs.toTypedArray()).use { c ->
             while (c.moveToNext()) {
                 val sid = c.getString(0); val turn = c.getString(1); val order = c.getInt(6)
                 var before = ""; var after = ""
