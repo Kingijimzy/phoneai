@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -42,6 +43,21 @@ class AgentCheckpointStoreTest {
 
         // A new attempt is allowed only after the uncertain action has been acknowledged.
         assertTrue(AgentCheckpointStore.beginStep(context, "read_screen", JSONObject()))
+    }
+
+
+    @Test fun atomicBackupRestoresCheckpointWhenBaseFileWasInterrupted() {
+        assertTrue(AgentCheckpointStore.begin(context, "Inspect the current app state"))
+        val base = File(context.filesDir, "orion_agent_checkpoint.json")
+        val backup = File(context.filesDir, "orion_agent_checkpoint.json.bak")
+        assertTrue(base.isFile)
+        base.copyTo(backup, overwrite = true)
+        assertTrue(base.delete())
+
+        val recovered = AgentCheckpointStore.pending(context)
+        assertNotNull(recovered)
+        assertTrue(recovered!!.optString("command").contains("Inspect the current app state"))
+        assertTrue("AtomicFile should restore its backup to the base path", base.isFile)
     }
 
     @Test fun checkpointRedactsPrivateArgumentsBeforeWritingThemToDisk() {
