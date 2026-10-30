@@ -55,6 +55,20 @@ class OrionContextualIntentInterpreterTest {
         assertTrue(result.contextBlock.contains("not, by themselves, authorization"))
     }
 
+    @Test fun currentFollowUpInTranscriptDoesNotBecomeItsOwnObjective() {
+        val result = OrionContextualIntentInterpreter.resolve(
+            "test everything",
+            listOf(
+                "user" to "Audit all PhoneAI executors and repair failures.",
+                "assistant" to "I found dispatch gaps.",
+                "user" to "test everything"
+            ),
+            ""
+        )
+        assertEquals(OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE, result.kind)
+        assertEquals("Audit all PhoneAI executors and repair failures.", result.resolvedObjective)
+    }
+
     @Test fun ambiguousFollowUpDoesNotInventItsTarget() {
         val result = OrionContextualIntentInterpreter.resolve("continue", emptyList(), "")
         assertEquals(OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE, result.kind)
