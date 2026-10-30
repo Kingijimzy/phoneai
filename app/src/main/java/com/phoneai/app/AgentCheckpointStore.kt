@@ -193,17 +193,17 @@ object AgentCheckpointStore {
         save(c, checkpoint)
     }
 
-    fun complete(c: Context): Boolean {
-        // Never complete a stopped task or one whose action outcome is uncertain.
-        val current = synchronized(lock) { readCheckpoint(c) }
-        if (current?.optBoolean("stopRequested") == true || current?.optBoolean("pauseRequested") == true) return false
-        if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return false
+    fun complete(c: Context): Boolean = synchronized(lock) {
+        // Serialize completion with Stop/Pause so a racing completion cannot overwrite the user's control.
+        val current = readCheckpoint(c)
+        if (current?.optBoolean("stopRequested") == true || current?.optBoolean("pauseRequested") == true) return@synchronized false
+        if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return@synchronized false
         val saved = update(c) {
             it.put("status", "completed")
             it.remove("inFlight")
             it.remove("recoveryNotice")
         }
-        if (!saved) return false
+        if (!saved) return@synchronized false
         runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = true) }
         // Route learning is optional; it must never turn a completed task into a failed task.
         try {
@@ -212,7 +212,7 @@ object AgentCheckpointStore {
             // Learning is downstream of the durable completion marker and can never change task outcome.
             SoulEngineState.learnFromCompletedCheckpoint(c, checkpoint)
         } catch (_: Exception) { }
-        return true
+        true
     }
 
     fun recoveryRequired(c: Context, reason: String): Boolean {
