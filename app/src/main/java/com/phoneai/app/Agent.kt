@@ -155,6 +155,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var runFailed = 0
     @Volatile private var activeRequestScope: String = ""
     @Volatile private var activeOrchestrationContext: OrionTaskOrchestrator.Context? = null
+    @Volatile private var activeIntentContext: String = ""
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
@@ -609,6 +610,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), currentTask)
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
@@ -636,7 +638,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return
         }
         val soulContext = OrionCentralBrain.contextFor(svc, command)
-        val safeSystem = (chatSystem(command) + "\n\n" + soulContext).replace(
+        val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), reply with exactly ACTION so the built-in direct-data/search route can run and then answer using verified results and source links when available. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, reply with exactly ACTION and nothing else. Never claim an action or lookup succeeded without evidence."
         )
@@ -876,6 +878,15 @@ Rules:
         )
     }
 
+    private fun recentConversationTurns(): List<Pair<String, String>> = buildList {
+        for (i in 0 until chatHist.length()) {
+            val turn = runCatching { chatHist.getJSONObject(i) }.getOrNull() ?: continue
+            val role = turn.optString("role")
+            val content = turn.optString("content")
+            if (role.equals("user", true) || role.equals("assistant", true)) add(role to content)
+        }
+    }
+
     private fun refreshSystem(request: String? = null) {
         if (history.length() > 0) {
             val base = systemPrompt(svc, request)
@@ -926,7 +937,8 @@ Rules:
                     integration = integration
                 )
                 activeOrchestrationContext = context
-                prompt + "\n\n" + context.promptLines().joinToString("\n")
+                prompt + "\n\n" + context.promptLines().joinToString("\n") +
+                    if (activeIntentContext.isBlank()) "" else "\n\n" + activeIntentContext
             }
             history.put(0, msg("system", coordinatedPrompt))
         }
@@ -1275,9 +1287,19 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
+        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), currentTask)
+        activeIntentContext = intentResolution.contextBlock
+        if (intentResolution.needsClarification) {
+            ui.say("I understand this is a follow-up, but I cannot reliably identify what it refers to. Which previous task should I continue?")
+            return
+        }
+        val contextualFollowUp = intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+        if (contextualFollowUp && !intentResolution.resolvedObjective.isNullOrBlank()) {
+            command = intentResolution.resolvedObjective + "\n\nCURRENT FOLLOW-UP INSTRUCTION: " + command
+        }
         // Persist only actual tool-agent objectives; shared context generation is side-effect free.
 
-        if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
+        if (!contextualFollowUp && !Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
             try {
                 if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) OrionMemoryCapabilityExecutor.recordCorrection(svc, currentTask, command)
                 else if (currentTask.isNotBlank() && ExperiencePolicy.isPraise(command)) OrionMemoryCapabilityExecutor.recordPraise(svc, currentTask)
