@@ -2155,7 +2155,22 @@ Rules:
                         val report = extensionSandbox.test(ext, cases)
                         if (report.passed) {
                             extensionTestReports[id] = report
-                            "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} Next: extension_enable (needs the user's approval)."
+                            val ownerAutoActivation = OrionOwnerDialSettings.read(svc).autoActivateVerifiedExtensions
+                            val autoActivated = ownerAutoActivation &&
+                                extensionStore.promote(id, report, userApproved = true)
+                            AgentPolicy.log(
+                                svc, "extension:$id", "auto-activate", autoActivated,
+                                if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
+                                else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
+                                else "owner auto-activation is off; awaiting explicit extension_enable approval"
+                            )
+                            if (autoActivated) {
+                                extensionTestReports.remove(id)
+                                "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
+                            } else {
+                                "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
+                                    if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval." else "Next: extension_enable (requires explicit approval)."
+                            }
                         } else {
                             extensionTestReports.remove(id)
                             "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
