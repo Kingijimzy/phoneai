@@ -47,6 +47,9 @@ internal object OrionCommunicationCapabilityExecutor {
                 number.isBlank() -> "error: a recipient phone number is required."
                 message.isBlank() -> "error: SMS draft text cannot be blank."
                 stopped() -> "error: task was stopped before opening the SMS draft."
+                !confirm("Open an SMS draft to $number with this exact text? Orion will not send it; you must press Send yourself. Message: " + message.take(500)) ->
+                    "error: user cancelled SMS draft"
+                stopped() -> "error: task was stopped after approval; no SMS draft was opened."
                 else -> tools.sms(number, message.take(4000))
             }
         }
