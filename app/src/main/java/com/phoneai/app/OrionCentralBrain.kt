@@ -10,7 +10,9 @@ import android.content.Context
  * live capability picture and task-continuity contract.
  */
 internal object OrionCentralBrain {
-    private const val MAX_CONTEXT_CHARS = 12_000
+    // Keep enough room for the original task, transcript evidence, decisions and recovery
+    // instructions; the lower-priority general Soul Engine snapshot is bounded separately.
+    private const val MAX_CONTEXT_CHARS = 16_000
 
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
@@ -20,7 +22,7 @@ internal object OrionCentralBrain {
         runCatching { OrionSoulEngine.contextFor(app, request) }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
+            ?.let { sections += it.take(5_200) }
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
