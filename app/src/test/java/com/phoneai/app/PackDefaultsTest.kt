@@ -10,7 +10,7 @@ class PackDefaultsTest {
     }
 
     @Test fun riskyPacksStayOptIn() {
-        listOf("phone_control", "termux_bridge", "remote_computer", "messaging", "proactive", "self_evolution")
+        listOf("phone_control", "termux_bridge", "remote_computer", "messaging", "proactive", "self_evolution", "trading_execution")
             .forEach { assertFalse(it, AgentPolicy.defaultOn(it)) }
     }
 

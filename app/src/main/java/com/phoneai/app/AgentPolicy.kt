@@ -17,7 +17,8 @@ object AgentPolicy {
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
         Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
+        Pack("trading_research", "Trading research", "Public data, playbook, matcher, alerts, journal and news; no order placement", true),
+        Pack("trading_execution", "Trading execution", "Permissioned order placement (Bybit first); off by default; every order needs approval or Trusted session", false),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
@@ -98,9 +99,16 @@ object AgentPolicy {
         "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
-        "trade_history_summary" -> "trading_research"
+        "trade_history_summary",
+        "trading_watchlist_list", "trading_watchlist_set",
+        "trading_playbook_list", "trading_playbook_propose", "trading_playbook_set_enabled",
+        "trading_match_setups", "trading_journal_add", "trading_journal_list",
+        "trading_strategy_note",
+        "bybit_public_ticker", "bybit_public_kline" -> "trading_research"
+        "bybit_place_order", "bybit_cancel_order", "bybit_set_leverage", "bybit_close_position",
+        "forex_place_order", "forex_cancel_order" -> "trading_execution"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
-        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
+        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
         "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
         "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",

@@ -15,8 +15,32 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false, approved = true)).verdict)
     }
 
-    @Test fun tradingOrdersAreAlwaysDenied() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place", autonomous = true)).verdict)
+    @Test fun tradingResearchNeverPlacesOrders() {
+        val r = GatePolicy.decide(input(pack = "trading_research", tool = "bybit_place_order", autonomous = true, approved = true))
+        assertEquals(GatePolicy.Verdict.DENY, r.verdict)
+        assertTrue(r.reason.contains("read-only", ignoreCase = true))
+    }
+
+    @Test fun tradingExecutionOrdersNeedApprovalOrTrust() {
+        assertEquals(
+            GatePolicy.Verdict.NEED_APPROVAL,
+            GatePolicy.decide(input(pack = "trading_execution", tool = "bybit_place_order", mode = AgentPolicy.Mode.ASK)).verdict
+        )
+        assertEquals(
+            GatePolicy.Verdict.ALLOW,
+            GatePolicy.decide(input(pack = "trading_execution", tool = "bybit_place_order", approved = true)).verdict
+        )
+        assertEquals(
+            GatePolicy.Verdict.ALLOW,
+            GatePolicy.decide(input(pack = "trading_execution", tool = "bybit_place_order", trusted = true, dangerous = true)).verdict
+        )
+    }
+
+    @Test fun tradingExecutionOffDeniesOrders() {
+        assertEquals(
+            GatePolicy.Verdict.DENY,
+            GatePolicy.decide(input(pack = "trading_execution", packOn = false, tool = "bybit_place_order", approved = true)).verdict
+        )
     }
 
     @Test fun userDenyBeatsEverythingElse() {
