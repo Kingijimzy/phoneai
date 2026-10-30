@@ -14,7 +14,7 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 2) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 3) {
 
     data class ChatEvent(val id: String, val sessionId: String, val messageId: String?, val type: String, val status: String, val summary: String, val createdAt: Long)
 
@@ -53,10 +53,13 @@ class OrionConversationRepository private constructor(context: Context) :
         )
         db.execSQL("CREATE INDEX messages_session_order ON messages(session_id, sort_order)")
         createEventsTable(db)
+        createObjectiveEvidenceTable(db)
+        createSearchIndex(db, true)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createEventsTable(db)
+        if (oldVersion < 3) { createObjectiveEvidenceTable(db); createSearchIndex(db, true) }
     }
 
     private fun createEventsTable(db: SQLiteDatabase) {
@@ -73,6 +76,22 @@ class OrionConversationRepository private constructor(context: Context) :
         db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
     }
 
+    data class SearchHit(val sessionId: String, val turnId: String, val role: String, val timestamp: Long, val title: String, val snippet: String, val before: String, val after: String)
+    data class ObjectiveEvidence(val id: String, val sessionId: String, val turnId: String?, val objectiveId: String, val tool: String, val outcome: String, val summary: String, val createdAt: Long)
+
+    private fun createObjectiveEvidenceTable(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS objective_evidence (id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL, turn_id TEXT, objective_id TEXT NOT NULL, tool TEXT NOT NULL, outcome TEXT NOT NULL, summary TEXT NOT NULL, created_at INTEGER NOT NULL, FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS objective_evidence_objective_time ON objective_evidence(objective_id, created_at)")
+    }
+
+    /** FTS4 works on a wider range of Android SQLite versions than FTS5. */
+    private fun createSearchIndex(db: SQLiteDatabase, rebuild: Boolean) {
+        db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts4(role, content, session_id UNINDEXED, message_id UNINDEXED)")
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN INSERT INTO messages_fts(rowid,role,content,session_id,message_id) VALUES(new.rowid,new.role,new.content,new.session_id,new.id); END")
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN DELETE FROM messages_fts WHERE rowid=old.rowid; END")
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages BEGIN DELETE FROM messages_fts WHERE rowid=old.rowid; INSERT INTO messages_fts(rowid,role,content,session_id,message_id) VALUES(new.rowid,new.role,new.content,new.session_id,new.id); END")
+        if (rebuild) { db.delete("messages_fts", null, null); db.execSQL("INSERT INTO messages_fts(rowid,role,content,session_id,message_id) SELECT rowid,role,content,session_id,id FROM messages") }
+    }
     private fun sanitizeEventSummary(value: String): String {
         var clean = value.replace(Regex("[\\r\\n\\t]+"), " ").take(1200)
         clean = clean.replace(Regex("(?i)(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret)\\s*[:=]\\s*[^ ,;]+"), "\$1=[redacted]")
