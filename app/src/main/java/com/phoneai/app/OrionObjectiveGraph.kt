@@ -128,7 +128,12 @@ internal object OrionObjectiveGraph {
     fun completeFromEvidence(context: Context, id: String, evidenceId: String): Boolean {
         val graph = load(context) ?: return false
         if (canExecute(graph, id) != null) return false
-        val receipt = ChatHistoryStore.objectiveEvidence(context, id).firstOrNull { it.id == evidenceId && it.outcome == "success" } ?: return false
+        val node = graph.nodes.firstOrNull { it.id == id } ?: return false
+        if (node.evidence != evidenceId) return false
+        val receipt = ChatHistoryStore.objectiveEvidence(context, id).firstOrNull {
+            it.id == evidenceId && it.outcome == "success"
+        } ?: return false
+        if (receipt.sessionId != ChatHistoryStore.activeSessionId(context)) return false
         return save(context, updateStatus(graph, id, Status.COMPLETE, receipt.id))
     }
 
