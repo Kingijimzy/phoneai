@@ -412,6 +412,8 @@ class OwnerControlCenterActivity : Activity() {
         val entries = listOf(
             "Tool permissions — configurable Allow / Ask / Deny per registered tool; always-available conversation tools remain reserved.",
             "Autonomy mode — configurable Talk / Assist / Autopilot / Builder; modes do not erase explicit safety gates.",
+            "Owner dials — exact-hash, sandbox-tested extension auto-promotion; guarded/developer Python code-size profiles with approval retained; configurable durable recovery retries and backoff.",
+            "Tool registry — extensions run through the pre-registered extension tool contract; they cannot self-register arbitrary native tools or add capability mappings.",
             "Execution budgets — configurable within enforced app caps: 1–40 tool steps, 1–30 AI requests, 0–4 retries.",
             "Agent approval — configurable Plan / Ask / Allowlist / timed trusted session; trust expires and can be stopped.",
             "Capability packs — individually enabled only when a working adapter exists; unsupported packs remain unavailable.",
@@ -421,7 +423,7 @@ class OwnerControlCenterActivity : Activity() {
             "Secrets — provider and exchange credentials are masked in UI and excluded from audit events; manage or rotate them in Settings.",
             "Android permissions — controlled by Android. Orion can report grant state and open system settings, but cannot silently grant itself access.",
             "Accessibility and notification access — user-enabled Android special access; Android can revoke these independently.",
-            "Background execution — Android battery, process and foreground-service rules apply; Orion cannot guarantee permanent background execution.",
+            "Background execution — owner can start/stop the Watcher, set its scan interval, inspect requested/running state and open battery settings; Android/HyperOS can still kill or defer it.",
             "Network/provider limits — provider quotas, billing, model availability and server-side refusals are controlled externally.",
             "OpenAI/system safety instructions — external to this app and not configurable or bypassable from Orion.",
             "Hard security invariants — certain checks cannot be disabled through app preferences; the app must fail closed when required proof or authorization is absent.",
