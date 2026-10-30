@@ -202,7 +202,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 stream.write(root.toString().toByteArray(Charsets.UTF_8))
                 atomicFile.finishWrite(stream)
             } catch (e: Exception) {
-                if (stream != null) runCatching { atomicFile.failWrite(stream) }
+                stream?.let { failed -> runCatching { atomicFile.failWrite(failed) } }
                 throw e
             }
         } catch (_: Exception) {
