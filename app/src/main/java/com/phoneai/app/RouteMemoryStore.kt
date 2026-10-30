@@ -159,7 +159,8 @@ object RouteMemoryStore {
                 val names = (0 until tools.length()).joinToString(" → ") { tools.optString(it).take(60) }
                 val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(route.optLong("at")))
-                "$date · $task\nObserved route candidate (not verified): $names"
+                val verified = route.optString("evidence") == "independently_verified_completed_task"
+                "$date · $task\n" + if (verified) "Verified completed route: $names" else "Observed route candidate (not verified): $names"
             }.asReversed()
         } catch (_: Exception) { emptyList() }
     }
@@ -181,7 +182,8 @@ object RouteMemoryStore {
             try {
                 val words = request.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 3 }.toSet()
                 val routes = read(c)
-                val matches = (0 until routes.length()).mapNotNull { routes.optJSONObject(it) }\n                    .filter { it.optString("evidence") == "independently_verified_completed_task" }
+                val matches = (0 until routes.length()).mapNotNull { routes.optJSONObject(it) }
+                    .filter { it.optString("evidence") == "independently_verified_completed_task" }
                     .mapNotNull { route ->
                         val label = route.optString("task")
                         val overlap = words.count { label.lowercase().contains(it) }
