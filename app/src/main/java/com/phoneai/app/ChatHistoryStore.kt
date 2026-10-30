@@ -22,6 +22,9 @@ object ChatHistoryStore {
     fun search(context: Context, query: String, limit: Int = 8): List<OrionConversationRepository.SearchHit> = repo(context).searchHistory(context, query, limit)
 
     @Synchronized
+    fun recent(context: Context, limit: Int = 8): List<OrionConversationRepository.SearchHit> = repo(context).recentHistory(context, limit)
+
+    @Synchronized
     fun recordObjectiveEvidence(context: Context, objectiveId: String, tool: String, outcome: String, summary: String, turnId: String? = null): OrionConversationRepository.ObjectiveEvidence? = repo(context).recordObjectiveEvidence(context, objectiveId, tool, outcome, summary, turnId)
 
     @Synchronized
