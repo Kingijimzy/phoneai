@@ -72,6 +72,15 @@ class OrionContextualIntentInterpreterTest {
         assertEquals("Audit all PhoneAI executors and repair failures.", result.resolvedObjective)
     }
 
+    @Test fun explicitEarlierConversationReferenceIsContextual() {
+        val turns = listOf("user" to "We need to repair the keyboard switching crash", "assistant" to "I found the Android 16 settings crash path.")
+        val result = OrionContextualIntentInterpreter.resolve("Continue what we discussed last time", emptyList())
+        assertEquals(OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE, result.kind)
+        val recovered = OrionContextualIntentInterpreter.resolve("Continue what we discussed last time", turns)
+        assertEquals(OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE, recovered.kind)
+        assertTrue(recovered.resolvedObjective!!.contains("keyboard switching crash"))
+    }
+
     @Test fun ambiguousFollowUpDoesNotInventItsTarget() {
         val result = OrionContextualIntentInterpreter.resolve("continue", emptyList(), "")
         assertEquals(OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE, result.kind)
