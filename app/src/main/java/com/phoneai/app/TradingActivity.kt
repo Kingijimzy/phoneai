@@ -74,12 +74,12 @@ class TradingActivity : Activity() {
         host.removeAllViews()
         val test = Prefs.bybitTestnet(this)
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
-        host.addView(label("Control room", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
+        host.addView(label("Desk", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
         host.addView(row(
-            pill("Open trading workspace", true) { openWithFade(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach")) },
+            pill("Back to chat", true) { openWithFade(AgentChatActivity.workspaceIntent(this)) },
             pill("Orion brain", false) { openWithFade(Intent(this, SoulEngineActivity::class.java)) }
         ))
-        host.addView(label("Chat with your trader, upload a TradingView chart or strategy screenshot, and accept the playbook it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        host.addView(label("Settings, playbook, simulation and safety for your trading chat. The chat is the front door: talk to it, upload a chart, accept what it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
         host.addView(gap(12))
         host.addView(playbookCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))

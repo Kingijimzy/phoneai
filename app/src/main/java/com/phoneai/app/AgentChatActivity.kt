@@ -48,6 +48,9 @@ internal object AgentChatStore {
 class AgentChatActivity : Activity() {
     companion object {
         const val EXTRA_AGENT = "agent_id"
+
+        /** The trading workspace: the coach chat is the front door of the desk. */
+        fun workspaceIntent(c: Context): Intent = Intent(c, AgentChatActivity::class.java).putExtra(EXTRA_AGENT, "coach")
         private const val REQUEST_IMAGE = 7422
     }
 
@@ -59,6 +62,7 @@ class AgentChatActivity : Activity() {
     private val turns = mutableListOf<AgentRunner.Turn>()
     private var pendingImage: String? = null
     @Volatile private var busy = false
+    private var deskStatus: TextView? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -73,6 +77,14 @@ class AgentChatActivity : Activity() {
         titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(header, -1, -2)
+        if (agent.id == "coach") {
+            deskStatus = TextView(this).apply {
+                textSize = 12f; setTextColor(Theme.MUTED); setPadding(dp(18), 0, dp(18), dp(8))
+                text = "Desk: loading…"
+                setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
+            }
+            root.addView(deskStatus, -1, -2)
+        }
 
         run {
             val chips = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
@@ -126,6 +138,15 @@ class AgentChatActivity : Activity() {
 
         turns.addAll(AgentChatStore.load(this, agent.id))
         if (turns.isEmpty()) greet() else turns.forEach { addBubble(it.role == "user", it.text) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val v = deskStatus ?: return
+        Thread {
+            val t = try { TradingDesk.statusLine(this) } catch (_: Exception) { "Desk status unavailable" }
+            runOnUiThread { v.text = t }
+        }.start()
     }
 
     private fun statusBarPad(): Int {
