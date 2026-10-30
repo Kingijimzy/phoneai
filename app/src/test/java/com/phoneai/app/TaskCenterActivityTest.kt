@@ -50,6 +50,17 @@ class TaskCenterActivityTest {
         assertEquals("paused", TaskStore.all(context).first { it.id == task.id }.status)
     }
 
+    @Test fun staleRunningTaskWithoutWorkerOrCheckpointReturnsToQueue() {
+        val task = TaskStore.add(context, "Stale task ${UUID.randomUUID()}")!!
+        assertTrue(TaskStore.update(context, task.id, status = "running"))
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+
+        val open = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim() == "Open run" }
+        assertNotNull("Running task must expose an Open run control", open)
+        open!!.performClick()
+        assertEquals("queued", TaskStore.all(context).first { it.id == task.id }.status)
+    }
+
     @Test fun verifiedTaskOutcomeIsPersistedAndVisibleOnTheBoard() {
         val task = TaskStore.add(context, "Verified task ${UUID.randomUUID()}")!!
         val evidenceSummary = "Orion's task-level completion gate passed. Review the chat transcript."
