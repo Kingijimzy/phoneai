@@ -487,7 +487,9 @@ class TaskCenterActivity : Activity() {
             return
         }
         try {
-            startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt))
+            startActivity(Intent(this, MainChatActivity::class.java)
+                .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt)
+                .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true))
             refresh()
         } catch (error: Exception) {
             TaskStore.update(this, task.id, status = previous)
