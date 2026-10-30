@@ -74,9 +74,10 @@ internal object OrionContextualIntentInterpreter {
         val contextual = isContinue || isComplete || isCorrection || isTest || isReferenceOnly
 
         if (!contextual) {
+            val goal = OrionGoalUnderstanding.understand(raw)
             return Resolution(
                 Kind.NEW_OBJECTIVE, raw, raw, null, false,
-                "CONTEXTUAL INTENT: new objective. Treat the complete current request as the source of truth; do not trigger tools merely because a capability name or keyword appears in it."
+                "CONTEXTUAL INTENT: new objective. First-pass whole-request goal frame: kind=\${goal.kind}; outcome=\${goal.requestedOutcome}; target=\${goal.target.ifBlank { "not confidently identified" }}; should_act=\${goal.shouldAct}; needs_clarification=\${goal.needsClarification}; verification=\${goal.verification}. Treat the complete current request as the source of truth; do not trigger tools merely because a capability name or keyword appears in it. The model planner must interpret the full request and conversation before selecting a capability."
             )
         }
 
@@ -103,7 +104,10 @@ internal object OrionContextualIntentInterpreter {
             else -> "continue the existing objective"
         }
         val source = if (activeObjective.isNotBlank()) "active task state" else "most recent substantive user turn"
+        val goal = OrionGoalUnderstanding.understand(objective)
         val context = """
+CONTEXTUAL INTENT RESOLUTION:
+- Whole-objective goal frame: kind=${goal.kind}; outcome=${goal.requestedOutcome}; target=${goal.target.ifBlank { "not confidently identified" }}; should_act=${goal.shouldAct}; needs_clarification=${goal.needsClarification}; verification=${goal.verification}
 CONTEXTUAL INTENT RESOLUTION:
 - Current user message: $raw
 - Interpreted intent: $label
