@@ -1939,6 +1939,7 @@ Rules:
                     if (!OrionTasksCapabilityExecutor.recordStep(svc, bt, batchArgs, br)) {
                         OrionTasksCapabilityExecutor.requireRecovery(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
                         ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
+                        activeObjectiveId = ""
                         return
                     }
                     if (activeObjectiveId.isNotBlank()) {
@@ -2082,6 +2083,7 @@ Rules:
                 if (!OrionTasksCapabilityExecutor.recordStep(svc, tool, args, result)) {
                     OrionTasksCapabilityExecutor.requireRecovery(svc, "The browser handed control to the user, but the handoff result could not be saved. Verify the page before resuming.")
                     ui.say("Browser automation paused, but I could not save the handoff. Check the page before asking Orion to continue.")
+                    activeObjectiveId = ""
                     return
                 }
                 if (activeObjectiveId.isNotBlank()) {
