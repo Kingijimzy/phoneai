@@ -22,7 +22,8 @@ internal object OrionSecurityPolicy {
         "AWS access key" to Regex("\\bAKIA[0-9A-Z]{16}\\b"),
         "private key material" to Regex("-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
         "bearer credential" to Regex("(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]{24,}"),
-        "credential assignment" to Regex("(?i)\\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd)\\s*[:=]\\s*['\"]?[A-Za-z0-9_./+=-]{16,}")
+        "JWT credential" to Regex("\\b[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b"),
+        "credential assignment" to Regex("(?i)\\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|aws_secret_access_key|private[_-]?key|signing[_-]?key|secret|password|passwd)\\s*[:=]\\s*['\"]?[A-Za-z0-9_./+=-]{16,}")
     )
 
     fun findEmbeddedSecret(text: String): Finding? {
