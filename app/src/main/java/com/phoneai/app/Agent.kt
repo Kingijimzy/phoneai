@@ -1552,13 +1552,21 @@ Rules:
                     print("Division: undefined (division by zero)")
             """.trimIndent()
             ui.phase("acting")
-            val result = executeWithRecoveryGuard("python_exec", JSONObject().put("code", code))
-            val answer = if (result.startsWith("error:", true)) {
-                "I prepared the calculator, but Python execution did not complete: $result\n\nCode:\n$code"
-            } else {
-                "Python calculator code:\n$code\n\nExecution result:\n$result"
+            val saveResult = executeWithRecoveryGuard(
+                "save_file",
+                JSONObject().put("filename", "calculator.py").put("content", code)
+            )
+            val executionResult = executeWithRecoveryGuard("python_exec", JSONObject().put("code", code))
+            val saved = !saveResult.startsWith("error:", true)
+            val executed = !executionResult.startsWith("error:", true)
+            val answer = buildString {
+                append("Python calculator")
+                append(if (saved) " saved: $saveResult" else " was not saved: $saveResult")
+                append(if (executed) "\\nExecution result:\\n$executionResult" else "\\nExecution failed or was not approved: $executionResult")
+                append("\\n\\nCode:\\n$code")
             }
-            logShortcut("python_calculator_execution", result)
+            logShortcut("python_calculator_save", saveResult)
+            logShortcut("python_calculator_execution", executionResult)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
