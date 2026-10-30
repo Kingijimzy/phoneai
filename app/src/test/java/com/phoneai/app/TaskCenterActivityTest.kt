@@ -33,7 +33,7 @@ class TaskCenterActivityTest {
         return found
     }
 
-    @Test fun taskBoardPauseAndResumeControlsPersistTheSelectedStatus() {
+    @Test fun taskBoardPauseAndResumeControlsDoNotInventExecution() {
         val task = TaskStore.add(context, "UI control test ${UUID.randomUUID()}")!!
         assertTrue(TaskStore.update(context, task.id, status = "running"))
         val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
@@ -46,7 +46,8 @@ class TaskCenterActivityTest {
         val resume = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim().endsWith("Resume") }
         assertNotNull("Paused task must expose a Resume control", resume)
         resume!!.performClick()
-        assertEquals("running", TaskStore.all(context).first { it.id == task.id }.status)
+        // Without a connected execution service, Resume must not falsely mark work as running.
+        assertEquals("paused", TaskStore.all(context).first { it.id == task.id }.status)
     }
 
     @Test fun stopControlMarksInflightActionForRecoveryInsteadOfDiscardingIt() {
