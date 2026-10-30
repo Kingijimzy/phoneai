@@ -170,6 +170,7 @@ internal object OrionObjectiveGraph {
 
     fun load(context: Context): Graph? {
         val sessionId = ChatHistoryStore.activeSessionId(context) ?: return null
+        runCatching { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LAST_SESSION_KEY, sessionId).apply() }
         val raw = runCatching {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(graphKey(sessionId), null)
         }.getOrNull() ?: return null
