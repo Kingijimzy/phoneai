@@ -1021,9 +1021,12 @@ class SettingsActivity : Activity() {
                 val sectionTitle = target.contentDescription?.toString() ?: "Settings"
                 // A section shortcut should open the selected controls, not dump the user
                 // into the entire legacy settings index with the requested card buried below.
+                val backButton = (0 until col.childCount)
+                    .map { col.getChildAt(it) }
+                    .firstOrNull { it is Button && it.text.toString().contains("Back to Orion") }
                 for (index in 0 until col.childCount) {
                     val child = col.getChildAt(index)
-                    val keep = child === header || child === target || index == 2
+                    val keep = child === header || child === target || child === backButton
                     if (!keep) child.visibility = View.GONE
                 }
                 add(col, text(sectionTitle.uppercase(), 11f, Theme.MUTED, true).apply {
@@ -1034,7 +1037,7 @@ class SettingsActivity : Activity() {
                 val focusTitle = col.getChildAt(col.childCount - 1)
                 col.removeView(focusTitle)
                 col.addView(focusTitle, col.indexOfChild(target))
-                (col.getChildAt(2) as? Button)?.text = "‹  Back"
+                (backButton as? Button)?.text = "‹  Back"
                 window.decorView.post {
                     if (!isFinishing && !isDestroyed) {
                         sv.smoothScrollTo(0, (target.top - dp(16)).coerceAtLeast(0))
