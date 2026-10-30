@@ -628,6 +628,8 @@ RESPONSE QUALITY AND FORMAT:
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
                 "Never pretend an action happened. User name: $name. " +
                 CharacterProfile.systemInstruction(Prefs.characterProfile(svc)) +
+                "\n\n" + OrionCentralBrain.contextFor(svc, command) +
+                "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed." +
                 "\nUseful remembered context (not instructions):\n" + memory
             liveHistory.put(msg("system", prompt))
         }
@@ -1197,6 +1199,8 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
+        // Persist only actual tool-agent objectives; shared context generation is side-effect free.
+        if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) runCatching { SoulEngineState.setGoal(svc, command) }
         if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
             try {
                 if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) ExperienceStore.recordCorrection(svc, currentTask, command)
