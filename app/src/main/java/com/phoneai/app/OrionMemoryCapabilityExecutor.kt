@@ -14,6 +14,24 @@ internal object OrionMemoryCapabilityExecutor {
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
+    fun memoryPromptBlock(service: PhoneAiService, request: String?, maxChars: Int): String =
+        MemoryStore.promptBlock(service, request).take(maxChars)
+
+    fun recordFailure(service: PhoneAiService, request: String, tool: String, result: String) =
+        ExperienceStore.recordFailure(service, request, tool, result)
+
+    fun recordSuccess(service: PhoneAiService, request: String, tools: List<String>) =
+        ExperienceStore.recordSuccess(service, request, tools)
+
+    fun recordCorrection(service: PhoneAiService, previousTask: String, userText: String) =
+        ExperienceStore.recordCorrection(service, previousTask, userText)
+
+    fun recordPraise(service: PhoneAiService, previousTask: String) =
+        ExperienceStore.recordPraise(service, previousTask)
+
+    fun routineReady(service: PhoneAiService, request: String): Boolean =
+        ExperienceStore.routineReady(service, request)
+
     /** The prompt builder uses this same owner for privacy-minimal learned facts and graph extraction. */
     fun learnFromRequest(service: PhoneAiService, request: String) {
         if (request.isBlank()) return
