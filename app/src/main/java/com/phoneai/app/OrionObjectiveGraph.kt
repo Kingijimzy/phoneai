@@ -75,6 +75,51 @@ internal object OrionObjectiveGraph {
         return result
     }
 
+    /** Merge model proposals while preserving runtime status/evidence already recorded locally. */
+    fun applyProposal(context: Context, raw: String, objective: String): ParseResult {
+        val parsed = parse(raw, objective)
+        val proposed = (parsed as? ParseResult.Valid)?.graph ?: return parsed
+        val old = load(context)
+        val merged = if (old == null) proposed else {
+            val oldById = old.nodes.associateBy { it.id }
+            val next = proposed.nodes.map { node -> oldById[node.id]?.let { prior -> node.copy(status = prior.status, evidence = prior.evidence) } ?: node }
+            Graph(objective.trim().take(1000), topologicalOrder(next))
+        }
+        return if (save(context, merged)) ParseResult.Valid(merged) else ParseResult.Invalid("Objective graph could not be persisted.")
+    }
+
+    fun canExecute(graph: Graph, id: String): String? {
+        val node = graph.nodes.firstOrNull { it.id == id } ?: return "Unknown objective ID: " + id
+        if (node.status == Status.COMPLETE) return "Objective is already complete: " + id
+        val blocked = node.dependsOn.firstOrNull { dep -> graph.nodes.firstOrNull { it.id == dep }?.status != Status.COMPLETE }
+        if (blocked != null) return "Objective " + id + " is blocked until prerequisite " + blocked + " is complete."
+        return null
+    }
+
+    fun startExecution(context: Context, id: String): Boolean {
+        val graph = load(context) ?: return false
+        if (canExecute(graph, id) != null) return false
+        return save(context, updateStatus(graph, id, Status.RUNNING))
+    }
+
+    fun recordExecution(context: Context, id: String, tool: String, result: String): String? {
+        val outcome = if (result.trimStart().startsWith("error", true)) "failed" else "success"
+        val receipt = ChatHistoryStore.recordObjectiveEvidence(context, id, tool, outcome, result.take(700)) ?: return null
+        val graph = load(context) ?: return receipt.id
+        if (graph.nodes.none { it.id == id }) return receipt.id
+        val status = if (outcome == "success") Status.RUNNING else Status.BLOCKED
+        save(context, updateStatus(graph, id, status, receipt.id))
+        return receipt.id
+    }
+
+    /** A model can request completion, but only an exact stored successful executor receipt can authorize it. */
+    fun completeFromEvidence(context: Context, id: String, evidenceId: String): Boolean {
+        val graph = load(context) ?: return false
+        if (canExecute(graph, id) != null) return false
+        val receipt = ChatHistoryStore.objectiveEvidence(context, id).firstOrNull { it.id == evidenceId && it.outcome == "success" } ?: return false
+        return save(context, updateStatus(graph, id, Status.COMPLETE, receipt.id))
+    }
+
     fun updateStatus(graph: Graph, id: String, status: Status, evidence: String = graph.nodes.firstOrNull { it.id == id }?.evidence.orEmpty()): Graph {
         require(graph.nodes.any { it.id == id }) { "Unknown objective '$id'." }
         val updated = graph.nodes.map { if (it.id == id) it.copy(status = status, evidence = evidence.take(1000)) else it }
