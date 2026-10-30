@@ -180,7 +180,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return denied
         }
         if (tool == "shell") {
-            val cmd = args.optString("command"); val where = if (args.optString("where").equals("termux", true)) "Termux" else "built-in shell"
+            val cmd = args.optString("command")
+            val where = when (ShellExecutionRouting.backend(args.optString("where"))) {
+                ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
+                ShellExecutionRouting.Backend.TERMUX -> "Termux"
+                ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
+                ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+            }
             when (ShellPolicy.classify(cmd)) {
                 ShellRisk.BLOCKED -> return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user."
                 ShellRisk.ASK -> if (!confirm("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
