@@ -174,6 +174,18 @@ class OrionIconView @JvmOverloads constructor(
                 path.moveTo(13f, 5f); path.lineTo(20f, 12f); path.lineTo(13f, 19f)
                 canvas.drawPath(path, paint)
             }
+            "search" -> { canvas.drawCircle(10f, 10f, 6.5f, paint); canvas.drawLine(15f, 15f, 21f, 21f, paint) }
+            "more", "menu" -> { canvas.drawCircle(5f, 12f, 1.5f, paint); canvas.drawCircle(12f, 12f, 1.5f, paint); canvas.drawCircle(19f, 12f, 1.5f, paint) }
+            "refresh", "sync" -> { canvas.drawArc(4f, 4f, 20f, 20f, 45f, 275f, false, paint); path.moveTo(16f, 3f); path.lineTo(21f, 4f); path.lineTo(20f, 9f); canvas.drawPath(path, paint) }
+            "edit", "pencil" -> { path.moveTo(4f, 17f); path.lineTo(16f, 5f); path.lineTo(19f, 8f); path.lineTo(7f, 20f); path.lineTo(3f, 21f); path.close(); canvas.drawPath(path, paint) }
+            "delete", "trash" -> { canvas.drawRoundRect(6f, 8f, 18f, 21f, 2f, 2f, paint); canvas.drawLine(4f, 5f, 20f, 5f, paint); canvas.drawLine(9f, 3f, 15f, 3f, paint); canvas.drawLine(10f, 11f, 10f, 18f, paint); canvas.drawLine(14f, 11f, 14f, 18f, paint) }
+            "chart", "trading", "analytics" -> { canvas.drawLine(3f, 21f, 21f, 21f, paint); canvas.drawLine(5f, 18f, 5f, 12f, paint); canvas.drawLine(11f, 18f, 11f, 7f, paint); canvas.drawLine(17f, 18f, 17f, 3f, paint) }
+            "terminal", "code" -> { path.moveTo(4f, 7f); path.lineTo(10f, 12f); path.lineTo(4f, 17f); canvas.drawPath(path, paint); canvas.drawLine(12f, 18f, 21f, 18f, paint) }
+            "folder" -> { path.moveTo(2f, 7f); path.lineTo(9f, 7f); path.lineTo(11f, 10f); path.lineTo(22f, 10f); path.lineTo(20f, 20f); path.lineTo(3f, 20f); path.close(); canvas.drawPath(path, paint) }
+            "download" -> { canvas.drawLine(12f, 3f, 12f, 16f, paint); path.moveTo(7f, 11f); path.lineTo(12f, 16f); path.lineTo(17f, 11f); canvas.drawPath(path, paint); canvas.drawLine(4f, 21f, 20f, 21f, paint) }
+            "upload" -> { canvas.drawLine(12f, 21f, 12f, 8f, paint); path.moveTo(7f, 13f); path.lineTo(12f, 8f); path.lineTo(17f, 13f); canvas.drawPath(path, paint); canvas.drawLine(4f, 3f, 20f, 3f, paint) }
+            "lock" -> { canvas.drawRoundRect(4f, 10f, 20f, 21f, 2f, 2f, paint); canvas.drawArc(7f, 3f, 17f, 15f, 180f, 180f, false, paint) }
+            "globe", "language" -> { canvas.drawCircle(12f, 12f, 9f, paint); canvas.drawOval(7f, 3f, 17f, 21f, paint); canvas.drawLine(3f, 12f, 21f, 12f, paint) }
             else -> {
                 canvas.drawCircle(12f, 12f, 8f, paint)
                 canvas.drawCircle(12f, 12f, 2f, paint)

@@ -71,7 +71,7 @@ private val EngineLine = Color(0xFF333333)
 private val EngineWhite = Color(0xFFF4F5F6)
 private val EngineSilver = Color(0xFFBFC5CC)
 private val EngineMuted = Color(0xFF9A9DA1)
-private val EngineBlue = Color(0xFF7EA9D6)
+private val EngineBlue = EngineSilver
 
 @Composable
 internal fun SoulEngineComposeScreen(
@@ -104,7 +104,7 @@ internal fun SoulEngineComposeScreen(
         background = EngineInk,
         surface = EnginePanel,
         onSurface = EngineWhite,
-        secondary = EngineBlue
+        secondary = EngineSilver
     )) {
         Surface(Modifier.fillMaxSize(), color = EngineInk) {
             Column(

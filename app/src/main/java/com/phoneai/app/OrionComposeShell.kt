@@ -71,7 +71,7 @@ private val Panel = Color(0xFF141414)
 private val PanelRaised = Color(0xFF202020)
 private val Silver = Color(0xFFBFC5CC)
 private val GraphiteAccent = Color(0xFF292D32)
-private val Copy = Color(0xFFF7FAF9)
+private val Copy = Color(0xFFF5F5F5)
 private val Muted = Color(0xFF9B9B9B)
 private val Hairline = Color(0xFF303030)
 
@@ -106,10 +106,10 @@ fun OrionComposeShell(
                     targetState = selected,
                     modifier = Modifier.weight(1f),
                     transitionSpec = {
-                        (androidx.compose.animation.fadeIn(tween(260)) +
-                            androidx.compose.animation.slideInVertically(tween(300, easing = FastOutSlowInEasing)) { it / 18 }) togetherWith
-                            (androidx.compose.animation.fadeOut(tween(130)) +
-                                androidx.compose.animation.slideOutVertically(tween(180)) { -it / 30 })
+                        (androidx.compose.animation.fadeIn(tween(Theme.MOTION_MEDIUM_MS)) +
+                            androidx.compose.animation.slideInVertically(tween(Theme.MOTION_SLOW_MS, easing = FastOutSlowInEasing)) { it / 18 }) togetherWith
+                            (androidx.compose.animation.fadeOut(tween(Theme.MOTION_FAST_MS)) +
+                                androidx.compose.animation.slideOutVertically(tween(Theme.MOTION_FAST_MS)) { -it / 30 })
                     },
                     label = "orion-page"
                 ) { page ->

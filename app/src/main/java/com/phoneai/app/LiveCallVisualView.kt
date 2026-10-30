@@ -51,8 +51,8 @@ class LiveCallVisualView(context: Context) : View(context) {
     var onVisualTap: (() -> Unit)? = null
     @Volatile var animationEnabled: Boolean = true
 
-    private val mint = 0xFF8CFFD0.toInt()
-    private val dimMint = 0xFF285E4C.toInt()
+    private val mint = Theme.SILVER
+    private val dimMint = Theme.LINE_STRONG
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
