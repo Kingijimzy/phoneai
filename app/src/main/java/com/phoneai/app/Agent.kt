@@ -2129,7 +2129,14 @@ Rules:
             "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
     }
 
-    private fun exec(tool: String, a: JSONObject): String {
+    /** All capability families enter one adapter boundary before reaching their established backend. */
+    private fun exec(tool: String, a: JSONObject): String =
+        OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
+            dispatchLegacyTool(route.tool, args)
+        }
+
+    /** Existing guarded backend implementations; adapter routing is intentionally outside this dispatcher. */
+    private fun dispatchLegacyTool(tool: String, a: JSONObject): String {
         svc.recordChatEvent("tool", "started", "Tool: $tool")
         val safetyBlock = SafetyGate.blockReason(
             tool,
