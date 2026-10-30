@@ -15,6 +15,9 @@ internal object OrionNotificationPolicy {
 
     fun shouldNotifyApproval(preferenceEnabled: Boolean, appForeground: Boolean, sdkInt: Int, permissionGranted: Boolean): Boolean =
         preferenceEnabled && !appForeground && canPost(sdkInt, permissionGranted)
+
+    fun shouldNotifyTaskOutcome(preferenceEnabled: Boolean, appForeground: Boolean, sdkInt: Int, permissionGranted: Boolean): Boolean =
+        preferenceEnabled && !appForeground && canPost(sdkInt, permissionGranted)
 }
 
 /** Posts user-configured background-work notifications without claiming unsupported execution. */
@@ -77,6 +80,38 @@ internal object OrionRuntimeNotifier {
         }
     }
 
+
+
+    private fun appForeground(): Boolean {
+        val process = android.app.ActivityManager.RunningAppProcessInfo()
+        runCatching { android.app.ActivityManager.getMyMemoryState(process) }
+        return process.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+    }
+
+    /** Task-level result notifications are emitted only after durable checkpoint transitions. */
+    fun postTaskOutcome(context: Context, success: Boolean) {
+        val config = OrionAutonomySettings.read(context)
+        val preference = if (success) config.notifyOnCompletion else config.notifyOnFailure
+        val granted = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!OrionNotificationPolicy.shouldNotifyTaskOutcome(preference, appForeground(), Build.VERSION.SDK_INT, granted)) return
+        runCatching {
+            val body = if (success) "Your task was completed and its checkpoint was saved."
+                else "Your task is paused or needs recovery. Open Orion to review the saved progress."
+            val id = NOTIFICATION_BASE + 0x3ffd
+            manager(context).notify(
+                id,
+                builder(context)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(if (success) "Orion completed your task" else "Orion task needs attention")
+                    .setContentText(body)
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(body))
+                    .setContentIntent(openIntent(context, id))
+                    .setAutoCancel(true)
+                    .build()
+            )
+        }
+    }
 
     /** Generic approval alert only; never include the action text or private arguments. */
     fun postApprovalRequired(context: Context) {
