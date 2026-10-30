@@ -187,8 +187,19 @@ class SelfExtensionLabActivity : ComponentActivity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (report.passed) reports[id] = report else reports.remove(id)
-                statusState.value = if (report.passed) "TEST PASSED · ${report.summary}" else "TEST FAILED · ${report.summary}"
-                Toast.makeText(this, if (report.passed) "Sandbox tests passed" else "Sandbox tests failed", Toast.LENGTH_SHORT).show()
+                val autoActivate = report.passed && OrionOwnerDialSettings.read(this).autoActivateVerifiedExtensions
+                val activated = if (autoActivate) store.promote(id, report, userApproved = true) else false
+                statusState.value = when {
+                    activated -> "TEST PASSED · ${report.summary} · AUTO-ACTIVATED by your owner pre-approval"
+                    report.passed -> "TEST PASSED · ${report.summary} · awaiting enable approval"
+                    else -> "TEST FAILED · ${report.summary}"
+                }
+                refresh(statusState.value)
+                Toast.makeText(this, when {
+                    activated -> "Verified extension auto-activated"
+                    report.passed -> "Sandbox tests passed"
+                    else -> "Sandbox tests failed"
+                }, Toast.LENGTH_SHORT).show()
             }
         }.start()
     }
