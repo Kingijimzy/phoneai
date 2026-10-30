@@ -236,6 +236,28 @@ internal fun SoulEngineComposeScreen(
                     )
                 }
 
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
+                        .border(1.dp, EngineLine, RoundedCornerShape(18.dp)).padding(15.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SectionTitle("WHAT THE SOUL ENGINE CAN DO", "Available local workflows, surfaced in one place")
+                    Text(
+                        "• Audit registered tools, enabled capability packs and current blockers\\n" +
+                            "• Check accessibility and active-window screen-perception readiness\\n" +
+                            "• Review evidence-backed learning proposals before accepting or rejecting them\\n" +
+                            "• Review or pause memory suggestions; saved memories remain under your control\\n" +
+                            "• Manage read-only schedules and inspect their last outcomes and failures\\n" +
+                            "• Run dry-run probes, inspect composition drafts and coordinate bounded local subagents\\n" +
+                            "• Open the capability report to see setup requirements and limitations",
+                        color = EngineSilver, fontSize = 11.sp, lineHeight = 17.sp
+                    )
+                    Text(
+                        "The watcher diagnoses and proposes. It does not silently grant Android permissions, rewrite app code, or claim a repair without verification.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
+
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionTitle("SOUL ENGINE WATCHER", "Inspect, diagnose and verify the engine directly")
                     EngineWorkspace("Soul Engine Watcher", "Talk to the watcher · run checks · inspect findings and outcomes", Icons.Rounded.Hub, onOpenWatcher)
