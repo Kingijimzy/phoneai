@@ -204,9 +204,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
             }
             when (ShellPolicy.classify(cmd)) {
-                ShellRisk.BLOCKED -> return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user."
+                ShellRisk.BLOCKED -> { recordDispatchBlocked(tool, args, "shell_policy_blocked"); return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user." }
                 ShellRisk.ASK -> if (!confirm("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
                     val declined = "error: user did not approve running this command."
+                    recordDispatchBlocked(tool, args, "shell_approval_declined")
                     taskProofs.record(tool, declined); return declined
                 }
                 ShellRisk.SAFE -> {}
@@ -235,6 +236,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val blocked = "error: " + dispatchBlock
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             AgentPolicy.log(svc, tool, "dispatch", false, "blocked by safety policy: " + dispatchBlock)
+            recordDispatchBlocked(tool, args, "dispatch_safety_policy_denied")
             return blocked
         }
 
@@ -245,6 +247,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val blocked = "error: tool is not registered in an enabled capability pack."
             AgentPolicy.log(svc, tool, "dispatch", false, "unknown tool-to-pack mapping; denied")
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            recordDispatchBlocked(tool, args, "tool_pack_mapping_denied")
             return blocked
         }
         val shellRisk = if (tool == "shell") ShellPolicy.classify(args.optString("command")) else null
@@ -252,6 +255,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val blocked = "error: Orion blocked this shell command because it is destructive, privileged, or targets sensitive paths."
             AgentPolicy.log(svc, tool, "dispatch", false, "blocked by ShellPolicy")
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            recordDispatchBlocked(tool, args, "shell_policy_blocked")
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
@@ -280,11 +284,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 val blocked = "error: " + gate.reason
                 AgentPolicy.log(svc, tool, "dispatch", false, gate.reason)
                 try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+                recordDispatchBlocked(tool, args, "approval_policy_denied")
                 return blocked
             }
             GatePolicy.Verdict.ASK_TOOL -> {
                 if (!confirm("Allow Orion to use the tool '$tool' for this task?")) {
                     val declined = "error: user did not approve using '$tool'."
+                    recordDispatchBlocked(tool, args, "tool_approval_declined")
                     taskProofs.record(tool, declined)
                     return declined
                 }
@@ -306,6 +312,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
                     if (!approved) {
                         val denied = "error: user did not approve this tool action."
+                        recordDispatchBlocked(tool, args, "action_approval_declined")
                         taskProofs.record(tool, denied)
                         return denied
                     }
@@ -325,6 +332,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             if (!confirm(description + "?")) {
                 val denied = "error: user did not approve the consequential action."
+                recordDispatchBlocked(tool, args, "consequential_approval_declined")
                 taskProofs.record(tool, denied)
                 return denied
             }
@@ -359,6 +367,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val cancelled = "error: " + reason
             taskProofs.record(tool, cancelled)
             try { ActionLogStore.record(svc, tool, cancelled) } catch (_: Exception) { }
+            recordDispatchBlocked(tool, args, "cancelled_before_execution")
             return cancelled
         }
         val dispatch = OrionExecutionLoop.dispatch(tool, stopped) {
