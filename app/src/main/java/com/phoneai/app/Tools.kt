@@ -1009,8 +1009,12 @@ class Tools(private val svc: PhoneAiService) {
         val excerpt = args.optString("source_evidence")
         val requestedTurn = args.optString("source_turn_id").takeIf { it.isNotBlank() }
         val repository = OrionConversationRepository.get(svc)
+        // The live service transcript is authoritative for the current user turn. Persist it
+        // before provenance lookup: tool execution can begin before the chat UI's end-of-turn
+        // archive write, which previously made an explicit user decision impossible to record.
+        runCatching { ChatHistoryStore.save(svc, svc.conversationContext()) }
         val evidence = repository.findTranscriptEvidence(svc, role, excerpt, requestedTurn)
-            ?: return "error: source evidence was not found verbatim in a stored transcript turn with the declared speaker; no decision was recorded."
+            ?: return "error: source evidence was not found verbatim in the live or persisted transcript turn with the declared speaker; no decision was recorded."
         return OrionDecisionHistoryStore.get(svc).record(
             topic = args.optString("topic"),
             statement = args.optString("decision"),
