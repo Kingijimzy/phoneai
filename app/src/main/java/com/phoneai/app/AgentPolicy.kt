@@ -68,19 +68,24 @@ object AgentPolicy {
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
-    ): GatePolicy.Result = GatePolicy.decide(GatePolicy.Input(
+    ): GatePolicy.Result {
+        val talkReadOnly = OrionAutonomySettings.read(c).mode == OrionMode.TALK &&
+            ToolRegistry.all.firstOrNull { it.name == toolId }?.access == ToolAccess.WRITE
+        val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
+        return GatePolicy.decide(GatePolicy.Input(
         pack = pack,
         packOn = packs.any { it.id == pack } && enabled(c, pack),
         tool = toolId,
         mode = mode(c),
-        toolMode = toolMode,
+        toolMode = effectiveToolMode,
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
         allowlisted = allowed(c, pack, toolId),
         askedThisTask = askedThisTask
-    ))
+        ))
+    }
 
     /** Existing callers keep their RuleResult shape; the decision itself comes from GatePolicy. */
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
