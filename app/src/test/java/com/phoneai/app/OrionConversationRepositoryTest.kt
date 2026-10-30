@@ -194,6 +194,19 @@ class OrionConversationRepositoryTest {
         assertTrue(hit.after.contains("timed out"))
     }
 
+    @Test fun recentHistoryReturnsTurnReferencesFromTheMostRecentlyUpdatedSession() {
+        val older = listOf("me" to "Older unrelated project", "ai" to "Older answer")
+        repository.saveActive(context, older)
+        repository.archiveAndClear(context, older)
+        val latest = listOf("me" to "Repair the Android keyboard crash", "ai" to "The previous crash came from settings resume")
+        repository.saveActive(context, latest)
+        val turns = repository.recentHistory(context, 8)
+        assertEquals(2, turns.size)
+        assertTrue(turns.all { it.title.contains("Repair the Android keyboard crash") })
+        assertTrue(turns.any { it.role == "me" && it.snippet.contains("keyboard crash") })
+        assertTrue(turns.all { it.sessionId == turns.first().sessionId })
+    }
+
     @Test fun objectiveEvidenceIsBoundToActiveSessionAndLatestUserTurn() {
         repository.saveActive(context, listOf("me" to "Finish the conversation index", "ai" to "I will add indexed recall"))
         val evidence = repository.recordObjectiveEvidence(context, "history-index", "web_search", "success", "Search returned source-backed documentation")
