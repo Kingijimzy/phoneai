@@ -16,6 +16,18 @@ class OrionContextualIntentInterpreterTest {
         assertTrue(result.contextBlock.contains("not an unrelated new command"))
     }
 
+    @Test fun namedContinueResolvesToMatchingActiveObjective() {
+        val objective = "Create a task called Orion Reliability Test. Break it into these steps: check memory retrieval, task recovery, provider switching and permission boundaries."
+        val result = OrionContextualIntentInterpreter.resolve(
+            "Continue the Orion Reliability Test",
+            listOf("user" to objective),
+            objective
+        )
+        assertEquals(OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE, result.kind)
+        assertEquals(objective, result.resolvedObjective)
+        assertFalse(result.needsClarification)
+    }
+
     @Test fun finishRemainingWorkKeepsTheExistingObjective() {
         val result = OrionContextualIntentInterpreter.resolve(
             "finish the remaining work",
