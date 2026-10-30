@@ -185,5 +185,17 @@ class OrionCapabilityAdaptersTest {
             assertTrue("Missing trading read-only executor for ${it.tool}", OrionTradingReadOnlyCapabilityExecutor.supports(it.tool))
         }
     }
+    
+    @Test fun everyGamingRouteHasAConcreteDedicatedExecutor() {
+        val gaming = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.GAMING }
+        assertEquals(
+            setOf("gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"),
+            gaming.map { it.tool }.toSet()
+        )
+        gaming.forEach {
+            assertTrue("Missing gaming executor for ${it.tool}", OrionGamingCapabilityExecutor.supports(it.tool))
+        }
+    }
 
 }
