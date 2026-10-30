@@ -39,8 +39,8 @@ internal object MarketCalendar {
         val s = symbol.uppercase(Locale.US).replace(Regex("[^A-Z]"), "").removeSuffix("X")
         return when {
             s.endsWith("USDT") -> setOf("USD")
-            s.length == 6 -> setOf(s.take(3), s.takeLast(3))
             s.startsWith("XAU") || s.startsWith("XAG") -> setOf("USD")
+            s.length == 6 -> setOf(s.take(3), s.takeLast(3))
             else -> setOf("USD")
         }
     }

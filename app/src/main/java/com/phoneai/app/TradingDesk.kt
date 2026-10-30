@@ -30,10 +30,10 @@ internal object TradingDesk {
         sp(c).edit().putString("day", dayKey(now)).putInt("trades_today", n).apply()
     }
 
-    private fun dayStartEquity(c: Context, equity: Double, now: Long): Double {
+    private fun dayStartEquity(c: Context, equity: Double, now: Long, account: String = "bybit"): Double {
         val p = sp(c)
-        if (p.getString("eq_day", "") != dayKey(now)) p.edit().putString("eq_day", dayKey(now)).putFloat("eq_start", equity.toFloat()).apply()
-        return p.getFloat("eq_start", equity.toFloat()).toDouble()
+        if (p.getString("eq_day_$account", "") != dayKey(now)) p.edit().putString("eq_day_$account", dayKey(now)).putFloat("eq_start_$account", equity.toFloat()).apply()
+        return p.getFloat("eq_start_$account", equity.toFloat()).toDouble()
     }
 
     fun recordOutcome(c: Context, rMultiple: Double, now: Long = System.currentTimeMillis()) {
@@ -55,11 +55,11 @@ internal object TradingDesk {
     }
 
     /** The gate every real order passes before the approval prompt. Returns null when allowed, else the reason text. */
-    fun gateOrder(c: Context, side: String, symbol: String, usd: Double, entry: Double, stop: Double, target: Double?, equity: Double): String? {
+    fun gateOrder(c: Context, side: String, symbol: String, usd: Double, entry: Double, stop: Double, target: Double?, equity: Double, account: String = "bybit"): String? {
         val now = System.currentTimeMillis()
         val blackout = MarketCalendar.inBlackout(events(now), now, MarketCalendar.currenciesFor(symbol))
         val acct = TradingRisk.Account(
-            equity = equity, dayStartEquity = dayStartEquity(c, equity, now), openPositions = 0,
+            equity = equity, dayStartEquity = dayStartEquity(c, equity, now, account), openPositions = 0,
             tradesToday = tradesToday(c, now), consecutiveLosses = sp(c).getInt("loss_streak", 0), lastLossAtMillis = sp(c).getLong("last_loss", 0L)
         )
         val v = TradingRisk.evaluate(TradingRisk.Order(symbol, side, usd, entry, stop, target), acct, limits(c), now, killSwitch(c), blackout)
@@ -67,8 +67,11 @@ internal object TradingDesk {
     }
 
     // ---- strategies
-    fun strategies(c: Context): List<StrategySpec> = try {
-        val a = JSONArray(sp(c).getString("strategies", "[]"))
+    fun strategies(c: Context): List<StrategySpec> = readSpecs(c, "strategies")
+    fun pending(c: Context): List<StrategySpec> = readSpecs(c, "pending")
+
+    private fun readSpecs(c: Context, key: String): List<StrategySpec> = try {
+        val a = JSONArray(sp(c).getString(key, "[]"))
         (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
             StrategySpec(o.getString("name"), strs(o.optJSONArray("instruments")), strs(o.optJSONArray("timeframes")), strs(o.optJSONArray("setups")),
@@ -78,14 +81,29 @@ internal object TradingDesk {
 
     private fun strs(a: JSONArray?): List<String> = if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
 
-    private fun saveStrategies(c: Context, l: List<StrategySpec>) {
+    private fun saveStrategies(c: Context, l: List<StrategySpec>) = writeSpecs(c, "strategies", l)
+
+    private fun writeSpecs(c: Context, key: String, l: List<StrategySpec>) {
         val a = JSONArray()
         l.forEach { s ->
             a.put(JSONObject().put("name", s.name).put("instruments", JSONArray(s.instruments)).put("timeframes", JSONArray(s.timeframes))
                 .put("setups", JSONArray(s.setupTypes)).put("min_rr", s.minRewardToRisk).put("risk_pct", s.riskPct)
                 .put("news_filter", s.newsFilter).put("notes", s.notes))
         }
-        sp(c).edit().putString("strategies", a.toString()).apply()
+        sp(c).edit().putString(key, a.toString()).apply()
+    }
+
+    // ---- playbook: strategies the user accepted, proposals waiting for a decision
+    fun addPending(c: Context, s: StrategySpec) = writeSpecs(c, "pending", (pending(c).filterNot { it.name.equals(s.name, true) } + s).takeLast(10))
+    fun dismissPending(c: Context, name: String) = writeSpecs(c, "pending", pending(c).filterNot { it.name.equals(name, true) })
+    fun accept(c: Context, s: StrategySpec) { saveStrategies(c, strategies(c).filterNot { it.name.equals(s.name, true) } + s); dismissPending(c, s.name) }
+    fun acceptPending(c: Context, name: String): Boolean = pending(c).firstOrNull { it.name.equals(name, true) }?.let { accept(c, it); true } ?: false
+    fun deleteStrategy(c: Context, name: String) = saveStrategies(c, strategies(c).filterNot { it.name.equals(name, true) })
+
+    /** Plain-language results for one strategy from the evidence ledger. */
+    fun evidenceFor(c: Context, strategy: String): String {
+        val rs = resultsFor(c) { it.optString("s") }[strategy].orEmpty()
+        return if (rs.isEmpty()) "no recorded results yet" else TradingStats.text(TradingStats.summarize(rs))
     }
 
     // ---- evidence ledger: R multiples per setup type
@@ -159,7 +177,9 @@ internal object TradingDesk {
     }
 
     // ---- setup scan across crypto and forex
-    fun scan(c: Context, symbols: List<String>): String {
+    class ScanResult(val matches: List<SetupMatcher.Match>, val failed: List<String>, val hour: Int)
+
+    fun match(c: Context, symbols: List<String>, blackoutBeforeMin: Int = 60): ScanResult {
         val now = System.currentTimeMillis()
         val ev = events(now)
         val hour = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).hour
@@ -172,17 +192,65 @@ internal object TradingDesk {
                 val h1 = if (fx != null) FxData.candles(fx, "1h") else Bybit.candles(c, sym, "60", 200)
                 val h4 = if (fx != null) FxData.candles(fx, "4h") else Bybit.candles(c, sym, "240", 200)
                 if (h1.size < 40 || h4.size < 40) { failed += sym; continue }
+                Journal.evaluate(c, sym, h1) // settle earlier setups so win rates keep learning
                 val htf = Ta.trend(h4.dropLast(1))
                 setups.addAll(Ta.scan(sym, "1h", h1.dropLast(1), htf)); setups.addAll(Ta.scan(sym, "4h", h4.dropLast(1), htf))
             } catch (_: Exception) { failed += sym }
         }
         val strategies = strategies(c).ifEmpty { listOf(StrategySpec("default")) }
-        val ranked = SetupMatcher.rank(setups, strategies, hour, { MarketCalendar.inBlackout(ev, now, MarketCalendar.currenciesFor(it), 60, 15) }, winRateOf(c))
+        val ranked = SetupMatcher.rank(setups, strategies, hour, { MarketCalendar.inBlackout(ev, now, MarketCalendar.currenciesFor(it), blackoutBeforeMin, 15) }, winRateOf(c))
+        return ScanResult(ranked, failed, hour)
+    }
+
+    fun scan(c: Context, symbols: List<String>): String {
+        val r = match(c, symbols)
         val sb = StringBuilder()
-        sb.append(if (ranked.isEmpty()) "No setups match your rules right now." else ranked.take(5).joinToString("\n") { SetupMatcher.text(it) })
-        if (failed.isNotEmpty()) sb.append("\nCould not read data for: ").append(failed.joinToString(", ")).append(".")
-        sb.append("\n").append(MarketSessions.describe(hour))
+        sb.append(if (r.matches.isEmpty()) "No setups match your rules right now." else r.matches.take(5).joinToString("\n") { SetupMatcher.text(it) })
+        if (r.failed.isNotEmpty()) sb.append("\nCould not read data for: ").append(r.failed.joinToString(", ")).append(".")
+        sb.append("\n").append(MarketSessions.describe(r.hour))
         return sb.toString()
+    }
+
+    /** Symbols the automation should follow: whatever the playbook names, else the crypto watchlist. */
+    fun followSymbols(c: Context): List<String> =
+        (strategies(c).flatMap { it.instruments }.ifEmpty { watchSymbols(c) }).distinct().take(12)
+
+    /** One automated pass for the background watcher: settle practice trades, warn before big news, alert matches, morning brief. */
+    fun watchCycle(c: Context, notify: (Int, String, String) -> Unit) {
+        if (!Prefs.deskAuto(c)) return
+        val now = System.currentTimeMillis()
+        val hour = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).hour
+        val ev = events(now)
+        val follow = followSymbols(c)
+        // practice trades resolve while the user is away
+        if (paper(c).open.isNotEmpty()) {
+            val before = paper(c).closed.size
+            updatePaper(c)
+            val after = paper(c)
+            after.closed.drop(before).forEach { notify(4100 + it.id % 50, "Practice trade closed", "${it.symbol} ${it.reason}: ${"%+.2f".format(Locale.US, it.rMultiple)}R") }
+        }
+        // heads-up before high-impact news on currencies the user follows
+        val cur = follow.flatMap { MarketCalendar.currenciesFor(it) }.toSet()
+        val seen = sp(c).getString("news_seen", "").orEmpty().split("\n").filter { it.isNotBlank() }.toMutableList()
+        MarketCalendar.upcoming(ev, now, 1, MarketCalendar.Impact.HIGH, cur).filter { it.key !in seen }.take(2).forEachIndexed { i, e ->
+            seen += e.key
+            notify(4200 + i, "High-impact news soon", MarketCalendar.text(listOf(e), now) + ". New orders on ${e.currency} pairs are paused around it.")
+        }
+        sp(c).edit().putString("news_seen", seen.takeLast(50).joinToString("\n")).apply()
+        // setups that fit the playbook
+        var sent = 0
+        for (m in match(c, follow).matches) {
+            if (sent >= 2 || m.score < 55) break
+            if (Journal.add(c, m.setup)) { notify(4300 + sent, "Orion: setup for your playbook", SetupMatcher.text(m)); sent++ }
+        }
+        // one morning brief a day
+        val day = dayKey(now)
+        if (hour >= 6 && sp(c).getString("brief_day", "") != day) {
+            sp(c).edit().putString("brief_day", day).apply()
+            val today = MarketCalendar.upcoming(ev, now, 16, MarketCalendar.Impact.HIGH, null).take(4)
+            notify(4400, "Orion morning brief", MarketSessions.describe(hour) + "\n" + MarketCalendar.text(today, now) +
+                "\nPlaybook: ${strategies(c).size} strateg${if (strategies(c).size == 1) "y" else "ies"}, watching ${follow.joinToString(", ").ifBlank { "nothing yet" }}.")
+        }
     }
 
     fun watchSymbols(c: Context): List<String> =
@@ -214,7 +282,7 @@ internal object TradingDesk {
                 }
             }
             "setup_scan" -> {
-                val l = a.optJSONArray("symbols")?.let { strs(it) }.orEmpty().ifEmpty { watchSymbols(c) + defaultFx }
+                val l = a.optJSONArray("symbols")?.let { strs(it) }.orEmpty().ifEmpty { followSymbols(c) + defaultFx }
                 scan(c, l.take(12))
             }
             "strategy_save" -> {

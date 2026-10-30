@@ -206,6 +206,15 @@ object Prefs {
     }
 
     /** Practice money by default. Real money must be switched on on purpose. */
+    fun derivToken(c: Context): String = ApiKeyVault.read(c, "enc_deriv_token", "deriv_token")
+    fun setDerivToken(c: Context, token: String): Boolean = ApiKeyVault.write(c, "enc_deriv_token", "deriv_token", token)
+    fun derivAppId(c: Context): String = sp(c).getString("deriv_app_id", DerivProtocol.DEFAULT_APP_ID) ?: DerivProtocol.DEFAULT_APP_ID
+    fun setDerivAppId(c: Context, v: String) = sp(c).edit().putString("deriv_app_id", v.filter { it.isDigit() }.ifBlank { DerivProtocol.DEFAULT_APP_ID }).apply()
+    fun derivRealAllowed(c: Context): Boolean = sp(c).getBoolean("deriv_real_ok", false)
+    fun setDerivRealAllowed(c: Context, v: Boolean) = sp(c).edit().putBoolean("deriv_real_ok", v).apply()
+    fun deskAuto(c: Context): Boolean = sp(c).getBoolean("desk_auto", true)
+    fun setDeskAuto(c: Context, v: Boolean) = sp(c).edit().putBoolean("desk_auto", v).apply()
+
     fun bybitTestnet(c: Context): Boolean = sp(c).getBoolean("bybit_test", true)
     fun setBybitTestnet(c: Context, v: Boolean) = sp(c).edit().putBoolean("bybit_test", v).apply()
 
