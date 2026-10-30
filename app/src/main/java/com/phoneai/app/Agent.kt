@@ -1172,8 +1172,8 @@ Rules:
             }
             val dispatchArgs = JSONObject(args.toString())
             val result = when (tool) {
-                "tap" -> executeWithRecoveryGuard("tap", dispatchArgs.put("x", x!!).put("y", y!!))
-                "long_press" -> executeWithRecoveryGuard("long_press", dispatchArgs.put("x", x!!).put("y", y!!))
+                "tap" -> executeWithRecoveryGuard("tap", dispatchArgs.put("x", x!!).put("y", y!!).put("allow_coordinates", true))
+                "long_press" -> executeWithRecoveryGuard("long_press", dispatchArgs.put("x", x!!).put("y", y!!).put("allow_coordinates", true))
                 "swipe_path" -> {
                     val points = args.optJSONArray("points") ?: JSONArray()
                     val scaled = JSONArray()
@@ -1370,7 +1370,7 @@ Rules:
             Regex("analy|study|read|look|see|opportunit|trade|setup|learn").containsMatchIn(chartCommand)) {
             ui.phase("thinking")
             val chartAnswer = try {
-                look("This is a trading chart. Name the symbol and timeframe if visible, then the trend, key support and resistance levels, any trade setup with entry, stop and target, and the main risk. Use four short spoken sentences and no markdown.")
+                executeWithRecoveryGuard("look", JSONObject().put("question", "This is a trading chart. Name the symbol and timeframe if visible, then the trend, key support and resistance levels, any trade setup with entry, stop and target, and the main risk. Use four short spoken sentences and no markdown."))
             } catch (e: Exception) {
                 "I could not read the chart. ${e.message ?: e.javaClass.simpleName}"
             }
@@ -2375,7 +2375,7 @@ Rules:
                 "tap" -> {
                     val x = px("x", shot.w) ?: return "vision stopped: invalid tap coordinates"
                     val y = px("y", shot.h) ?: return "vision stopped: invalid tap coordinates"
-                    val result = executeWithRecoveryGuard("tap", JSONObject().put("x", x).put("y", y))
+                    val result = executeWithRecoveryGuard("tap", JSONObject().put("x", x).put("y", y).put("allow_coordinates", true))
                     if (result.startsWith("error", true)) return "vision tap was blocked or unverified: $result"
                 }
                 "swipe" -> {
@@ -2384,7 +2384,7 @@ Rules:
                     val x2 = px("x2", shot.w) ?: return "vision stopped: invalid swipe coordinates"
                     val y2 = px("y2", shot.h) ?: return "vision stopped: invalid swipe coordinates"
                     val result = executeWithRecoveryGuard(
-                        "swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2).put("ms", 400L)
+                        "swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2).put("ms", 400L).put("allow_coordinates", true)
                     )
                     if (result.startsWith("error", true)) return "vision swipe was blocked or unverified: $result"
                 }
@@ -2393,7 +2393,7 @@ Rules:
                     if (key !in setOf("back", "home", "enter")) {
                         return "vision stopped: unsupported key action; please handle the screen manually"
                     }
-                    val result = executeWithRecoveryGuard("key", JSONObject().put("key", key))
+                    val result = executeWithRecoveryGuard("key", JSONObject().put("name", key))
                     if (result.startsWith("error", true)) return "vision key action was blocked or unverified: $result"
                 }
                 "wait" -> Thread.sleep(700)

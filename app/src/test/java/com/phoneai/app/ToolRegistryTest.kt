@@ -89,6 +89,7 @@ class ToolRegistryTest {
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
         assertEquals(ToolAccess.READ, ToolRegistry.access("read_screen"))
+        assertEquals("phone_control", AgentPolicy.packForTool("look"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
