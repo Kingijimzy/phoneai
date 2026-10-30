@@ -1934,11 +1934,6 @@ Rules:
                     val batchGraph = OrionObjectiveGraph.load(svc)
                     activeObjectiveId = one.optString("objective_id").ifBlank { step.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" } }
                     var br = executeWithRecoveryGuard(bt, batchArgs)
-                    if (activeObjectiveId.isNotBlank()) {
-                        val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, bt, br)
-                        if (receipt != null) br += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
-                    }
-                    activeObjectiveId = ""
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
                     if (!OrionTasksCapabilityExecutor.recordStep(svc, bt, batchArgs, br)) {
