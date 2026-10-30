@@ -438,7 +438,9 @@ fun OrionComposeChatScreen(
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xF2161616))
                         .border(1.dp, ChatHairline, RoundedCornerShape(18.dp))
-                        .verticalScroll(rememberScrollState())
+                        // Material3 DropdownMenu owns its scroll container inside the popup.
+                        // Adding verticalScroll here creates nested unbounded scroll measurement
+                        // on Android 16 and crashes MainChatActivity when the menu is opened.
                         .padding(vertical = 7.dp)
                 ) {
                     fun choose(action: String) {
