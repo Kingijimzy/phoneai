@@ -68,11 +68,12 @@ object RouteMemoryStore {
     }
 
     private fun read(c: Context): JSONArray {
-        val f = file(c)
-        if (!f.exists()) return JSONArray()
+        val atomic = AtomicFile(file(c))
         return try {
-            val encoded = Base64.decode(f.readText(), Base64.NO_WRAP)
+            val encoded = atomic.openRead().bufferedReader().use { Base64.decode(it.readText(), Base64.NO_WRAP) }
             JSONArray(String(decrypt(encoded), Charsets.UTF_8))
+        } catch (_: java.io.FileNotFoundException) {
+            JSONArray()
         } catch (_: Exception) {
             // Never treat corrupt/unreadable ciphertext as an empty plaintext history and overwrite it.
             throw IllegalStateException("Encrypted route memory could not be unlocked")
