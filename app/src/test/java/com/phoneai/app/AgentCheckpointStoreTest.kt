@@ -46,6 +46,15 @@ class AgentCheckpointStoreTest {
     }
 
 
+    @Test fun terminalStopCannotBeResumedOrStartAnotherTool() {
+        assertTrue(AgentCheckpointStore.begin(context, "Open Settings"))
+        assertTrue(AgentCheckpointStore.stop(context, "Stopped from Task Centre"))
+        assertTrue("A terminal stop is no longer a pending resumable session", AgentCheckpointStore.pending(context) == null)
+        assertFalse(AgentCheckpointStore.markRunning(context))
+        assertFalse(AgentCheckpointStore.beginStep(context, "open_app", JSONObject()))
+        assertFalse(AgentCheckpointStore.complete(context))
+    }
+
     @Test fun atomicBackupRestoresCheckpointWhenBaseFileWasInterrupted() {
         assertTrue(AgentCheckpointStore.begin(context, "Inspect the current app state"))
         val base = File(context.filesDir, "orion_agent_checkpoint.json")
