@@ -1200,20 +1200,29 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF202020.toInt(), 0xFF111111.toInt(), 0xFF090909.toInt())).apply {
+            intArrayOf(0xF2202020.toInt(), 0xEF151515.toInt(), 0xEC090909.toInt())).apply {
             cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0xFF414141.toInt())
+            setStroke(dp(1), 0x775F5F5F.toInt())
         }
-        root.setPadding(dp(12), dp(10), dp(12), dp(12))
+        root.setPadding(dp(12), dp(7), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
+
+        val handle = View(this).apply {
+            background = rounded(0xFF777777.toInt(), dp(3).toFloat())
+            alpha = .55f
+        }
+        root.addView(handle, LinearLayout.LayoutParams(dp(34), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(8)
+        })
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF292929.toInt(), 0xFF191919.toInt(), 0xFF141414.toInt())).apply {
+            intArrayOf(0xF2292929.toInt(), 0xEF191919.toInt(), 0xED141414.toInt())).apply {
             cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0xFF3E3E3E.toInt())
+            setStroke(dp(1), 0x77585858.toInt())
         }
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
@@ -1293,8 +1302,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             clp.setMargins(0, 0, dp(6), 0)
             chips.addView(c, clp)
         }
+        chips.setPadding(0, 0, dp(8), 0)
         val chipScroll = HorizontalScrollView(this)
         chipScroll.isHorizontalScrollBarEnabled = false
+        chipScroll.isHorizontalFadingEdgeEnabled = true
+        chipScroll.setFadingEdgeLength(dp(14))
         chipScroll.addView(chips)
         val chipLp = LinearLayout.LayoutParams(MATCH, WRAP)
         chipLp.setMargins(0, dp(6), 0, dp(6))
@@ -1327,7 +1339,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         row.addView(input, LinearLayout.LayoutParams(0, dp(46), 1f))
         lateinit var micBtn: TextView
-        micBtn = pill("Mic", Theme.PANEL2, Theme.CYAN) {
+        micBtn = pill("Mic", Theme.PANEL2, Theme.SILVER) {
             if (listening) {
                 voice.stopListening()
                 listening = false
@@ -1340,7 +1352,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        val micLp = LinearLayout.LayoutParams(dp(52), dp(46))
+        micBtn.setPadding(dp(7), dp(8), dp(7), dp(8))
+        micBtn.minWidth = dp(60)
+        micBtn.maxLines = 1
+        micBtn.isSingleLine = true
+        val micLp = LinearLayout.LayoutParams(dp(60), dp(46))
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
@@ -1362,8 +1378,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.addView(send, sendLp)
         root.addView(row)
 
+        // Keep the command surface compact enough to reveal the app underneath. Full chat
+        // remains a separate destination for long conversations, files and history.
+        val panelHeight = (size.second * 0.62f).toInt().coerceAtLeast(dp(360))
+            .coerceAtMost((size.second * 0.68f).toInt())
         val lp = WindowManager.LayoutParams(
-            size.first - dp(16), (size.second * 0.70f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
