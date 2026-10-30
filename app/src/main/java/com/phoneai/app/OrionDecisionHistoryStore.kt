@@ -54,7 +54,7 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
         val role = sourceRole.trim().lowercase()
         val evidence = sourceExcerpt.trim().take(1200)
         if (safeTopic.isBlank() || safeStatement.isBlank() || evidence.isBlank()) return "error: topic, decision, and source evidence are required."
-        if (state !in setOf("PROPOSED", "ACCEPTED", "REJECTED", "UNRESOLVED")) return "error: status must be PROPOSED, ACCEPTED, REJECTED, UNRESOLVED, or SUPERSEDED."
+        if (state !in setOf("PROPOSED", "ACCEPTED", "REJECTED", "UNRESOLVED")) return "error: status must be PROPOSED, ACCEPTED, REJECTED, or UNRESOLVED."
         if (state in setOf("ACCEPTED", "REJECTED") && role != "user") return "error: accepted/rejected decisions require explicit user-origin evidence; assistant proposals cannot establish user agreement."
         if (state == "PROPOSED" && role != "assistant") return "error: PROPOSED records must identify assistant-origin evidence."
         if (state == "REJECTED" && (rejectedAlternative.isBlank() || rejectionReason.isBlank())) return "error: rejected decisions require the rejected approach and the reason it was rejected."
@@ -92,9 +92,8 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
         readableDatabase.rawQuery(
             """SELECT id,topic,statement,status,rationale,rejected_alternative,rejection_reason,
                source_role,source_session_id,source_turn_id,source_excerpt,supersedes_id,created_at
-               FROM decisions WHERE topic LIKE ? ESCAPE '\\' OR statement LIKE ? ESCAPE '\\'
-               OR rationale LIKE ? ESCAPE '\\' OR rejected_alternative LIKE ? ESCAPE '\\'
-               OR rejection_reason LIKE ? ESCAPE '\\' OR source_excerpt LIKE ? ESCAPE '\\'
+               FROM decisions WHERE topic LIKE ? OR statement LIKE ? OR rationale LIKE ? OR rejected_alternative LIKE ?
+               OR rejection_reason LIKE ? OR source_excerpt LIKE ?
                ORDER BY CASE status WHEN 'ACCEPTED' THEN 0 WHEN 'UNRESOLVED' THEN 1
                WHEN 'REJECTED' THEN 2 WHEN 'PROPOSED' THEN 3 ELSE 4 END, created_at DESC LIMIT ?""",
             arrayOf(pattern, pattern, pattern, pattern, pattern, pattern, limit.coerceIn(1, 30).toString())
@@ -114,5 +113,7 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
             instance ?: synchronized(this) {
                 instance ?: OrionDecisionHistoryStore(context).also { instance = it }
             }
+
+        internal fun resetForTests() { synchronized(this) { instance?.close(); instance = null } }
     }
 }
