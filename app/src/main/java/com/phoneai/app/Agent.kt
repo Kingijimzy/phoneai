@@ -30,6 +30,21 @@ internal object OrionCommandIntentPolicy {
     fun isConnectedGitHubAccountRequest(command: String): Boolean =
         connectedGitHub.containsMatchIn(command) && inspectVerb.containsMatchIn(command)
 
+    private val explicitObjectiveGraph = Regex(
+        "(?i)\\b(?:objective graph|dependency graph|depends on one another|in that order)\\b"
+    )
+    private val multiStepTask = Regex(
+        "(?i)\\b(?:two|three|four|five|six|\\d+)\\s*[- ]?\\s*(?:step|objective|task)s?\\b"
+    )
+    private val resumableProgress = Regex(
+        "(?i)\\b(?:save|persist|checkpoint)\\b.{0,80}\\b(?:progress|state)\\b.{0,80}\\b(?:resume|continue|reopen)\\b"
+    )
+
+    /** Explicit multi-objective plans must enter the guarded planner, not ordinary chat. */
+    fun requiresStructuredTaskPlanning(command: String): Boolean =
+        explicitObjectiveGraph.containsMatchIn(command) ||
+            (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command))
+
     fun requestedGitHubRepositoryName(command: String): String {
         val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
         val named = Regex("(?i)\\b(?:repo|repository|project)\\s+(?:called|named|for)\\s+([A-Za-z0-9_.-]{2,100})\\b").find(command)
@@ -623,6 +638,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val command = input.trim()
         if (command.isEmpty()) return
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
+        if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
+            OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)) {
+            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)) OrionObjectiveGraph.clear(svc)
+            chatHist.put(msg("user", command))
+            while (chatHist.length() > 12) chatHist.remove(0)
+            svc.notifyModeSwitch(true)
+            runInternal(command, reuseCommandBudget = false)
+            return
+        }
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
@@ -1347,7 +1371,8 @@ Rules:
             ui.say("I understand this is a follow-up, but I cannot reliably identify what it refers to. Which previous task should I continue?")
             return
         }
-        val contextualFollowUp = intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
+        val contextualFollowUp = intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
+            intentResolution.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
         val resolvedObjective = intentResolution.resolvedObjective
         if (contextualFollowUp && !resolvedObjective.isNullOrBlank()) {
             command = resolvedObjective + "\n\nCURRENT FOLLOW-UP INSTRUCTION: " + command
@@ -1834,6 +1859,7 @@ Rules:
             else -> null
         }
         var damagedReplies = 0
+        var graphRepairAttempts = 0
         val stall = SessionStall()
         var promiseNudged = false
         var planAnnounced = false
@@ -1899,6 +1925,17 @@ Rules:
                         ui.note("[TASK:WARNING] Ignored invalid objective graph: ${parsedGraph.reason}")
                     }
                 }
+            }
+            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) &&
+                (OrionObjectiveGraph.load(svc)?.nodes?.size ?: 0) < 2) {
+                graphRepairAttempts++
+                if (graphRepairAttempts > 2) {
+                    OrionTasksCapabilityExecutor.pauseRun(svc)
+                    ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")
+                    return
+                }
+                history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for sequential dependencies. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
+                continue
             }
             step.optJSONArray("complete_objectives")?.let { updates ->
                 for (i in 0 until updates.length()) {
