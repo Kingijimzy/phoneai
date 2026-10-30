@@ -33,7 +33,7 @@ class TaskCenterActivityTest {
         return found
     }
 
-    @Test fun taskBoardPauseAndResumeControlsPersistTheSelectedStatus() {
+    @Test fun taskBoardPauseAndResumeControlsDoNotInventExecution() {
         val task = TaskStore.add(context, "UI control test ${UUID.randomUUID()}")!!
         assertTrue(TaskStore.update(context, task.id, status = "running"))
         val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
@@ -46,7 +46,51 @@ class TaskCenterActivityTest {
         val resume = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim().endsWith("Resume") }
         assertNotNull("Paused task must expose a Resume control", resume)
         resume!!.performClick()
-        assertEquals("running", TaskStore.all(context).first { it.id == task.id }.status)
+        // Without a connected execution service, Resume must not falsely mark work as running.
+        assertEquals("paused", TaskStore.all(context).first { it.id == task.id }.status)
+    }
+
+    @Test fun staleRunningTaskWithoutWorkerOrCheckpointReturnsToQueue() {
+        val task = TaskStore.add(context, "Stale task ${UUID.randomUUID()}")!!
+        assertTrue(TaskStore.update(context, task.id, status = "running"))
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+
+        val open = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim() == "Open run" }
+        assertNotNull("Running task must expose an Open run control", open)
+        open!!.performClick()
+        assertEquals("queued", TaskStore.all(context).first { it.id == task.id }.status)
+    }
+
+    @Test fun manualCompletionDoesNotReuseAnOldAgentEvidenceSummary() {
+        val task = TaskStore.add(context, "Manual completion ${UUID.randomUUID()}")!!
+        assertTrue(TaskStore.update(context, task.id, status = "failed", resultSummary = "Old failed run"))
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+
+        val complete = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim() == "Complete" }
+        assertNotNull("An unfinished task must expose a manual Complete control", complete)
+        complete!!.performClick()
+        val saved = TaskStore.all(context).first { it.id == task.id }
+        assertEquals("completed", saved.status)
+        assertEquals("", saved.resultSummary)
+    }
+
+    @Test fun verifiedTaskOutcomeIsPersistedAndVisibleOnTheBoard() {
+        val task = TaskStore.add(context, "Verified task ${UUID.randomUUID()}")!!
+        val evidenceSummary = "Orion's task-level completion gate passed. Review the chat transcript."
+        assertTrue(TaskStore.update(context, task.id, status = "completed", resultSummary = evidenceSummary))
+        val restored = TaskStore.all(context).first { it.id == task.id }
+        assertEquals(evidenceSummary, restored.resultSummary)
+
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+        val rendered = mutableListOf<String>()
+        fun collect(view: View) {
+            if (view is android.widget.TextView) rendered += view.text.toString()
+            if (view is ViewGroup) for (i in 0 until view.childCount) collect(view.getChildAt(i))
+        }
+        collect(activity.window.decorView)
+        assertTrue("The task card must show its saved completion evidence", rendered.any { it.contains(evidenceSummary) })
+        assertTrue("The card must distinguish agent-verified completion from manual completion",
+            rendered.any { it.contains("Agent completion gate passed") })
     }
 
     @Test fun stopControlMarksInflightActionForRecoveryInsteadOfDiscardingIt() {

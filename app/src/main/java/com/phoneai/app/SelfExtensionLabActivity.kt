@@ -135,7 +135,9 @@ class SelfExtensionLabActivity : ComponentActivity() {
             "\nPHASE 4 — TEST: call extension_test with at least two meaningful JSON cases containing both input and expect, including a boundary case. Inspect actual sandbox output; repair and retest failures. Never claim a pass without the runtime report." +
             "\nPHASE 5 — ACTIVATION: inspect the owner extension-activation dial. If owner pre-approval is OFF, leave the extension disabled and request explicit approval. If it is ON, the app may auto-promote only after exact-source-hash sandbox tests pass; do not claim activation until extension_list confirms enabled/hash-matching status. Never bypass source validation, sandbox testing, or the registered extension tool contract." +
             "\nReport the existing capabilities checked, sources actually inspected, created extension id, exact behavior, test outputs, activation status, and limitations. If any tool is unavailable, explain that instead of claiming success.";
-        startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt))
+        startActivity(Intent(this, MainChatActivity::class.java)
+            .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt)
+            .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true))
     }
 
     private fun saveDraft() {
@@ -250,6 +252,18 @@ class SelfExtensionLabActivity : ComponentActivity() {
             Text("SELF-EXTENSION LAB", color = muted, fontSize = 10.sp, letterSpacing = 1.5.sp)
             Text("Build a new skill", color = white, fontSize = 27.sp, fontWeight = FontWeight.Bold)
             Text("Drafts are inert by default. Orion runs the constrained Python sandbox and checks expected results. Activation requires your explicit approval or the narrow owner pre-approval dial for exact-hash, sandbox-tested extensions.", color = muted, fontSize = 12.sp, lineHeight = 18.sp)
+            PanelCard {
+                Text("WHAT THIS LAB CHANGES", color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(
+                    "Self-extensions add small, reusable data-processing skills to Orion's registered extension tool after sandbox tests and approval. They do not rewrite the Soul Engine, change its personality or core prompt, grant phone permissions, add arbitrary Android actions, or bypass policy.",
+                    color = muted, fontSize = 12.sp, lineHeight = 18.sp
+                )
+                Text("TO CHANGE THE SOUL ENGINE", color = white, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Text(
+                    "Open Soul Engine to change its saved goal and Talk / Command mode, pause or resume its core, review learning proposals, and inspect capability status. Use Settings and the Owner Control Center for the separate provider, permission and autonomy controls.",
+                    color = muted, fontSize = 12.sp, lineHeight = 18.sp
+                )
+            }
             PanelCard {
                 Text("CREATE DRAFT", color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 Field("Unique ID · lowercase", id, onId, "e.g. number_helper", singleLine = true)

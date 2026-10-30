@@ -917,8 +917,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                     content.put(JSONObject().put("type", "text").put("text", "Image " + (index + 1) + " of " + images.size))
                     content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
                 }
+                val visualSystem = "You are Orion, a helpful visual assistant. Analyse all supplied images together when relevant. Describe only what is visible, distinguish observation from inference, and never claim details that cannot be seen." +
+                    "\n\n" + OrionCentralBrain.contextFor(this, question) +
+                    "\n\nIMAGE ANALYSIS BOUNDARY: use shared executive context for continuity only. Do not claim phone actions, file operations, external writes, or background tasks were performed from image analysis. If the user asks for an action, route it through the normal guarded Agent workflow."
                 val messages = JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", "You are Orion, a helpful visual assistant. Analyse all supplied images together when relevant. Describe only what is visible, distinguish observation from inference, and never claim details that cannot be seen."))
+                    .put(JSONObject().put("role", "system").put("content", visualSystem))
                     .put(JSONObject().put("role", "user").put("content", content))
                 val reply = Nim(this).chat(messages, true, 520, 0.2).trim()
                 main.post {
@@ -1091,8 +1094,56 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun conversationContext(): List<Pair<String, String>> =
         transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
 
+    internal fun onAgentTaskRunEnded(task: String) {
+        val savedTaskId = Regex("(?i)^Work on saved task #(\\d+):").find(task.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: return
+        runCatching {
+            val saved = TaskStore.all(this).firstOrNull { it.id == savedTaskId } ?: return@runCatching
+            if (saved.status !in setOf("running", "in_progress")) return@runCatching
+            val checkpoint = AgentCheckpointStore.pending(this)
+            val checkpointCommand = checkpoint?.optString("command").orEmpty()
+            if (checkpoint != null && !checkpointCommand.contains("saved task #" + savedTaskId, ignoreCase = true)) {
+                // A different task owns the single global checkpoint. Leave this task untouched.
+                return@runCatching
+            }
+            if (checkpoint != null) {
+                if (checkpoint.optString("status") == "running") AgentCheckpointStore.pause(this)
+                val inFlight = checkpoint.optJSONObject("inFlight")
+                val detail = checkpoint.optString("recoveryNotice").ifBlank {
+                    if (inFlight != null) "Execution paused with an action outcome that still needs inspection."
+                    else "Execution paused before the evidence-based completion gate passed."
+                }
+                TaskStore.update(this, savedTaskId, status = "paused", resultSummary = detail)
+            } else {
+                TaskStore.update(
+                    this,
+                    savedTaskId,
+                    status = "failed",
+                    resultSummary = "The agent run ended without passing its evidence-based completion gate or saving a resumable checkpoint. Review the chat transcript; success was not recorded."
+                )
+            }
+        }
+    }
+
     internal fun onAgentTaskFinished(task: String, success: Boolean) {
         decisionScheduler?.onTaskFinished(task, success)
+        // Saved Task Centre items opt into this bridge through the explicit task-id prefix
+        // added by TaskCenterActivity. Only Agent's evidence-based completion path calls
+        // this with success=true; never infer success from a generic assistant reply.
+        val savedTaskId = Regex("(?i)^Work on saved task #(\\d+):").find(task.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (savedTaskId != null && success) {
+            runCatching {
+                val saved = TaskStore.all(this).firstOrNull { it.id == savedTaskId }
+                if (saved != null && saved.status in setOf("running", "in_progress")) {
+                    TaskStore.update(
+                        this,
+                        savedTaskId,
+                        status = "completed",
+                        resultSummary = "Orion's task-level completion gate passed. Review the chat transcript and verification notes for the recorded evidence."
+                    )
+                }
+            }
+        }
         scheduleRuntimeDrain()
     }
 
@@ -1200,20 +1251,29 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF202020.toInt(), 0xFF111111.toInt(), 0xFF090909.toInt())).apply {
+            intArrayOf(0xF2202020.toInt(), 0xEF151515.toInt(), 0xEC090909.toInt())).apply {
             cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0xFF414141.toInt())
+            setStroke(dp(1), 0x775F5F5F.toInt())
         }
-        root.setPadding(dp(12), dp(10), dp(12), dp(12))
+        root.setPadding(dp(12), dp(7), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
+
+        val handle = View(this).apply {
+            background = rounded(0xFF777777.toInt(), dp(3).toFloat())
+            alpha = .55f
+        }
+        root.addView(handle, LinearLayout.LayoutParams(dp(34), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(8)
+        })
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF292929.toInt(), 0xFF191919.toInt(), 0xFF141414.toInt())).apply {
+            intArrayOf(0xF2292929.toInt(), 0xEF191919.toInt(), 0xED141414.toInt())).apply {
             cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0xFF3E3E3E.toInt())
+            setStroke(dp(1), 0x77585858.toInt())
         }
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
@@ -1293,8 +1353,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             clp.setMargins(0, 0, dp(6), 0)
             chips.addView(c, clp)
         }
+        chips.setPadding(0, 0, dp(8), 0)
         val chipScroll = HorizontalScrollView(this)
         chipScroll.isHorizontalScrollBarEnabled = false
+        chipScroll.isHorizontalFadingEdgeEnabled = true
+        chipScroll.setFadingEdgeLength(dp(14))
         chipScroll.addView(chips)
         val chipLp = LinearLayout.LayoutParams(MATCH, WRAP)
         chipLp.setMargins(0, dp(6), 0, dp(6))
@@ -1327,7 +1390,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         row.addView(input, LinearLayout.LayoutParams(0, dp(46), 1f))
         lateinit var micBtn: TextView
-        micBtn = pill("Mic", Theme.PANEL2, Theme.CYAN) {
+        micBtn = pill("Mic", Theme.PANEL2, Theme.SILVER) {
             if (listening) {
                 voice.stopListening()
                 listening = false
@@ -1340,7 +1403,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        val micLp = LinearLayout.LayoutParams(dp(52), dp(46))
+        micBtn.setPadding(dp(7), dp(8), dp(7), dp(8))
+        micBtn.minWidth = dp(60)
+        micBtn.maxLines = 1
+        micBtn.isSingleLine = true
+        val micLp = LinearLayout.LayoutParams(dp(60), dp(46))
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
@@ -1362,8 +1429,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.addView(send, sendLp)
         root.addView(row)
 
+        // Keep the command surface compact enough to reveal the app underneath. Full chat
+        // remains a separate destination for long conversations, files and history.
+        val panelHeight = (size.second * 0.62f).toInt().coerceAtLeast(dp(360))
+            .coerceAtMost((size.second * 0.68f).toInt())
         val lp = WindowManager.LayoutParams(
-            size.first - dp(16), (size.second * 0.70f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
@@ -1759,6 +1830,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 agent.run(t)
             } catch (e: Exception) {
                 say("Error: ${e.message}")
+            } finally {
+                onAgentTaskRunEnded(agent.currentTaskCommand().ifBlank { t })
             }
             main.post { finishRun() }
         }

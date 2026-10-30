@@ -3,7 +3,9 @@ package com.phoneai.app
 import android.content.Context
 import java.io.File
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -94,5 +96,18 @@ class AgentCheckpointStoreTest {
         assertTrue(resume!!.contains("Inspect Settings and report the current state"))
         assertTrue(resume.contains("open_app"))
         assertTrue(resume.contains("Opened Settings"))
+    }
+
+    @Test fun evidenceTaskIdentityIsUniqueAndStableAcrossResume() {
+        assertTrue(AgentCheckpointStore.begin(context, "repeatable request"))
+        val first = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(first)
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertEquals(first, AgentCheckpointStore.evidenceTaskId(context))
+        assertTrue(AgentCheckpointStore.clear(context))
+        assertTrue(AgentCheckpointStore.begin(context, "repeatable request"))
+        val second = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(second)
+        assertNotEquals(first, second)
     }
 }

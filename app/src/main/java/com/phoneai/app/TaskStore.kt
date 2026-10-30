@@ -14,7 +14,8 @@ data class OrionTask(
     var priority: String,
     var dueAt: Long?,
     val createdAt: Long,
-    var updatedAt: Long
+    var updatedAt: Long,
+    var resultSummary: String = ""
 )
 
 object TaskStore {
@@ -40,7 +41,8 @@ object TaskStore {
                             validPriority(o.optString("priority", "normal")),
                             if (o.isNull("dueAt") || !o.has("dueAt")) null else o.optLong("dueAt"),
                             o.optLong("createdAt", 0L),
-                            o.optLong("updatedAt", 0L)
+                            o.optLong("updatedAt", 0L),
+                            o.optString("resultSummary", "").take(1200)
                         )
                     )
                 }
@@ -80,6 +82,7 @@ object TaskStore {
                     .put("dueAt", t.dueAt ?: JSONObject.NULL)
                     .put("createdAt", t.createdAt)
                     .put("updatedAt", t.updatedAt)
+                    .put("resultSummary", t.resultSummary.take(1200))
             )
         }
         val target = file(c)
@@ -141,7 +144,7 @@ object TaskStore {
 
     fun update(c: Context, id: Int, title: String? = null, details: String? = null,
                status: String? = null, priority: String? = null, dueAt: Long? = null,
-               clearDueAt: Boolean = false): Boolean = synchronized(lock) {
+               clearDueAt: Boolean = false, resultSummary: String? = null): Boolean = synchronized(lock) {
         val task = load(c).firstOrNull { it.id == id } ?: return@synchronized false
         val before = copyOf(task)
         title?.trim()?.takeIf { it.isNotEmpty() }?.let { task.title = it.replace(Regex("\\s+"), " ").take(160) }
@@ -149,6 +152,7 @@ object TaskStore {
         status?.let { task.status = validStatus(it) }
         priority?.let { task.priority = validPriority(it) }
         if (clearDueAt) task.dueAt = null else if (dueAt != null && dueAt > 0L) task.dueAt = dueAt
+        resultSummary?.let { task.resultSummary = it.take(1200) }
         task.updatedAt = System.currentTimeMillis()
         if (!save(c)) {
             task.title = before.title
@@ -157,6 +161,7 @@ object TaskStore {
             task.priority = before.priority
             task.dueAt = before.dueAt
             task.updatedAt = before.updatedAt
+            task.resultSummary = before.resultSummary
             return@synchronized false
         }
         TaskReminder.schedule(c, copyOf(task))

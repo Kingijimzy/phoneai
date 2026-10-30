@@ -41,6 +41,14 @@ internal object OrionTaskOrchestrator {
         }
     }
 
+    /** Deterministic dispatch guard shared by the Agent and unit tests. */
+    fun dispatchBlockReason(context: Context, toolName: String): String? {
+        val capability = context.capabilities.tools.firstOrNull { it.name == toolName }
+            ?: return "'$toolName' is not registered for this request."
+        if (!capability.available) return "'$toolName' is ${capability.state.name.lowercase()}: ${capability.reason}"
+        if (context.goal.needsClarification || !context.goal.shouldAct) return "the current goal is not ready for tool execution."
+        return null
+    }
     fun build(
         request: String,
         registeredTools: Collection<ToolDefinition>,

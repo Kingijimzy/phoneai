@@ -31,6 +31,11 @@ object AgentCheckpointStore {
         }
     }
 
+    /** Stable across resume, unique across separate tasks even when their request text is identical. */
+    fun evidenceTaskId(c: Context): String? = synchronized(lock) {
+        readCheckpoint(c)?.optString("taskId")?.takeIf { it.isNotBlank() }
+    }
+
     private fun safeCommand(command: String): String = AgentPrivacyFilter.safeCommand(
         command
             .replace(Regex("(?i)\\bpasswd\\s*[:=]\\s*[^\\s,;]+")) { "passwd=[redacted]" }
@@ -40,6 +45,7 @@ object AgentCheckpointStore {
         val now = System.currentTimeMillis()
         val o = JSONObject()
             .put("command", safeCommand(command))
+            .put("taskId", java.util.UUID.randomUUID().toString())
             .put("status", "running")
             .put("startedAt", now)
             .put("updatedAt", now)

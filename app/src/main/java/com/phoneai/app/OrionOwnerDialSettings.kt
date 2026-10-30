@@ -21,7 +21,7 @@ internal object OrionOwnerDialSettings {
             OrionPythonProfile.valueOf(p.getString("python_profile", "GUARDED") ?: "GUARDED")
         }.getOrDefault(OrionPythonProfile.GUARDED)
         return OrionOwnerDials(
-            autoActivateVerifiedExtensions = p.getBoolean("auto_activate_verified_extensions", true),
+            autoActivateVerifiedExtensions = p.getBoolean("auto_activate_verified_extensions", false),
             pythonProfile = profile,
             recoveryMaxAttempts = p.getInt("recovery_max_attempts", 3).coerceIn(0, 4),
             recoveryBackoffSeconds = p.getInt("recovery_backoff_seconds", 30).coerceIn(15, 300)

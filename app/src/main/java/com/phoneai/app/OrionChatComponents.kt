@@ -74,6 +74,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -389,7 +390,9 @@ private fun BrowserActivityCard(raw: String, onOpenBrowser: (String?) -> Unit) {
 @Composable
 private fun ToolActivityCard(raw: String) {
     val marker = raw.lineSequence().firstOrNull().orEmpty()
-    val detail = raw.substringAfter("\n", "").trim().take(900)
+    val detail = raw.substringAfter("\n", "").trim().take(2400)
+    val clipboard = LocalClipboardManager.current
+    var expanded by remember(raw) { mutableStateOf(false) }
     val approval = marker.startsWith("[APPROVAL:")
     val result = marker.startsWith("[TOOL_RESULT:")
     val failed = marker.contains("ERROR") || marker.contains("FAILED") || marker.contains("DENIED")
@@ -425,7 +428,38 @@ private fun ToolActivityCard(raw: String) {
             Text(status, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
         if (detail.isNotBlank()) {
-            Text(detail, color = Color(0xFFBFC5CC), fontSize = 11.sp, lineHeight = 16.sp)
+            Text(
+                detail,
+                color = Color(0xFFBFC5CC),
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                maxLines = if (expanded) 12 else 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (detail.length > 150) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (expanded) "SHOW LESS" else "SHOW DETAILS",
+                        color = Color(0xFFD4D4D4),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 5.dp)
+                    )
+                    Text(
+                        "COPY",
+                        color = ChatMuted,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            clipboard.setText(AnnotatedString(detail))
+                        }.padding(vertical = 5.dp)
+                    )
+                }
+            }
         }
     }
 }

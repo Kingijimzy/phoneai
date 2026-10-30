@@ -70,7 +70,10 @@ internal object OrionCapabilityHub {
             enabledPacks = packs,
             termuxReady = states["termux"] == "ready",
             permissionStates = permissionStates(context),
-            integrationStates = states
+            integrationStates = states,
+            deniedTools = ToolRegistry.all.map { it.name }
+                .filter { it !in ToolPermissionPolicy.alwaysAllowed && ToolPermissions.mode(context, it) == ToolMode.DENY }
+                .toSet()
         )
         val rootReadable = service != null && runCatching {
             val root = service.rootInActiveWindow
@@ -91,17 +94,24 @@ internal object OrionCapabilityHub {
         }
         val capabilities = grouped.map { (group, facts) ->
             val ready = facts.count { it.available }
-            val detail = facts.filterNot { it.available }.take(4).joinToString("; ") { "${it.name}: ${it.reason}" }
-            val packOff = facts.any { it.reason.contains("pack", true) && it.reason.contains("disabled", true) }
+            val detail = facts.filterNot { it.available }.take(4).joinToString("; ") { "${it.name}: ${it.state.name.lowercase()} — ${it.reason}" }
+            val states = facts.map { it.state }.toSet()
+            val groupState = when {
+                states.all { it == CapabilityRegistry.State.AVAILABLE } -> State.READY
+                facts.any { it.available } -> State.LIMITED
+                states.all { it == CapabilityRegistry.State.DISABLED } -> State.DISABLED
+                states.any { it == CapabilityRegistry.State.UNSUPPORTED } && states.size == 1 -> State.UNKNOWN
+                states.any { it == CapabilityRegistry.State.PERMISSION_REQUIRED ||
+                    it == CapabilityRegistry.State.SETUP_REQUIRED ||
+                    it == CapabilityRegistry.State.MISSING_DEPENDENCY ||
+                    it == CapabilityRegistry.State.TEMPORARILY_UNAVAILABLE ||
+                    it == CapabilityRegistry.State.FAILED_HEALTH } -> State.SETUP_REQUIRED
+                else -> State.UNKNOWN
+            }
             Capability(
                 name = group,
                 group = group,
-                state = when {
-                    ready == facts.size && facts.isNotEmpty() -> State.READY
-                    ready > 0 -> State.LIMITED
-                    packOff -> State.DISABLED
-                    else -> State.SETUP_REQUIRED
-                },
+                state = groupState,
                 detail = if (detail.isBlank()) "${ready}/${facts.size} registered tools available under current policy." else "${ready}/${facts.size} tools available. ${detail}",
                 tools = facts.map { it.name }
             )

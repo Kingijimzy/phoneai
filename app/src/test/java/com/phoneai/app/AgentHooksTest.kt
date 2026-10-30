@@ -109,4 +109,29 @@ class AgentHooksTest {
         assertFalse(g.isBlocked("web_search", a))
         assertTrue(g.isBlocked("web_search", b))
     }
+
+    @Test fun durableVerifiedEvidenceCanRestoreCompletionAfterProcessRestart() {
+        val event = OrionEvidenceLedger.Event("1", "task", "device", "click",
+            OrionEvidenceLedger.Outcome.VERIFIED, 1L, 2L, "hash", "visible state changed")
+        val decision = AgentHooks.completionDecision("Open the app", emptyList(), listOf(event))
+        assertTrue(decision.allowed)
+    }
+
+    @Test fun durableDispatchAcceptanceAloneCannotVerifyConsequentialGoal() {
+        val event = OrionEvidenceLedger.Event("2", "task", "shell", "shell",
+            OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED, 1L, 2L, "hash", "command returned")
+        val decision = AgentHooks.completionDecision("Send a message to Amma", emptyList(), listOf(event))
+        assertFalse(decision.allowed)
+    }
+
+    @Test fun durableFailureAndRecoveryEventsNeverCountAsSuccess() {
+        val events = listOf(
+            OrionEvidenceLedger.Event("3", "task", "mcp", "mcp_call",
+                OrionEvidenceLedger.Outcome.FAILED, 1L, 2L, "hash", "offline"),
+            OrionEvidenceLedger.Event("4", "task", "orchestrator", "mcp_call",
+                OrionEvidenceLedger.Outcome.RECOVERY, 2L, 3L, "", "stop and report")
+        )
+        val decision = AgentHooks.completionDecision("Read my connected data", emptyList(), events)
+        assertFalse(decision.allowed)
+    }
 }
