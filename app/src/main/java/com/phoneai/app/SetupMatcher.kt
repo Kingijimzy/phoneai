@@ -3,7 +3,7 @@ package com.phoneai.app
 import java.util.Locale
 
 /** The user's strategy, as rules Orion can match setups against. Edited only by the user or with their approval. */
-internal data class StrategySpec(
+data class StrategySpec(
     val name: String,
     val instruments: List<String> = emptyList(),   // empty = any
     val timeframes: List<String> = emptyList(),    // empty = any

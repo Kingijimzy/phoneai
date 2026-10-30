@@ -7,7 +7,7 @@ package com.phoneai.app
  *   STRATEGY: London breakouts | EURUSD, GBPUSD | 1h, 4h | breakout, pullback | 2 | enter after the Asian range breaks
  *   PAPER: long EURUSD 500 stop=1.0700 target=1.0900 | reason
  */
-internal object DeskProposals {
+object DeskProposals {
     class Paper(val long: Boolean, val symbol: String, val usd: Double, val stop: Double, val target: Double?, val note: String) {
         fun summary(): String = "${if (long) "LONG" else "SHORT"} $symbol ${"%.0f".format(usd)} USD stop ${fmt(stop)}" + (target?.let { " target ${fmt(it)}" } ?: "")
         private fun fmt(v: Double) = if (v >= 100) "%.2f".format(v) else "%.5g".format(v)
