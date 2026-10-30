@@ -440,7 +440,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
         try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
-        return verifiedResult
+        return OrionSecurityPolicy.modelFacingResult(tool, verifiedResult)
     }
 
     private fun chatSystem(query: String? = null): String {
