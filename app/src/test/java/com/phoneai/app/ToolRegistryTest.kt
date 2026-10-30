@@ -16,7 +16,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
+            "mcp_call", "remember", "recall", "discussion_search", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
@@ -88,6 +88,9 @@ class ToolRegistryTest {
     }
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
+        assertEquals(ToolAccess.READ, ToolRegistry.access("discussion_search"))
+        assertEquals("orion_core", AgentPolicy.packForTool("discussion_search"))
+        assertTrue(OrionMemoryCapabilityExecutor.supports("discussion_search"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("read_screen"))
         assertEquals("phone_control", AgentPolicy.packForTool("look"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
