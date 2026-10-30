@@ -350,6 +350,10 @@ class TaskCenterActivity : Activity() {
         head.addView(iconButton("more", "Task options") { taskMenu(task) }, LinearLayout.LayoutParams(dp(42), dp(42)))
         card.addView(head)
         if (task.details.isNotBlank()) add(card, label(task.details, 12f, Theme.MUTED), 7)
+        if (task.resultSummary.isNotBlank()) {
+            add(card, label("VERIFIED RESULT", 10f, Theme.OK, true), 8)
+            add(card, label(task.resultSummary, 12f, Theme.MUTED), 3)
+        }
         add(card, label((task.dueAt?.let { "Due " + time(it) } ?: "No due date") + " · Updated " + time(task.updatedAt),
             10f, Theme.MUTED), 7)
 
@@ -544,11 +548,14 @@ class TaskCenterActivity : Activity() {
     private fun change(task: OrionTask, status: String) {
         if (TaskStore.update(this, task.id, status = status)) refresh() else errorToast()
     }
+    private fun taskHasVerifiedResult(status: String): Boolean = status in setOf("completed", "done") &&
+        TaskStore.all(this).any { it.status == status && it.resultSummary.isNotBlank() }
+
     private fun statusExplanation(status: String) = when (status) {
         "queued", "open" -> "Saved and waiting; this task is not executing."
         "running", "in_progress" -> "Marked running on the task board; check the agent session for live execution."
         "paused" -> "Paused; saved task details remain available to resume."
-        "completed", "done" -> "Marked complete here; confirm the actual goal in its evidence or result."
+        "completed", "done" -> if (taskHasVerifiedResult(status)) "Agent completion gate passed; review the attached result summary." else "Marked complete manually; no agent completion evidence is attached."
         "failed" -> "Marked failed; inspect the activity log before retrying."
         "cancelled" -> "Cancelled; no further task-board progress is expected."
         else -> "Status is saved locally; inspect the task session for execution evidence."
