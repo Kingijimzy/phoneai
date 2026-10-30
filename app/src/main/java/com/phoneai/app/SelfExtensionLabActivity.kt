@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Real self-extension workflow: save draft -> execute sandbox tests -> explicit approval -> promote. */
+/** Self-extension workflow: save draft -> execute sandbox tests -> explicit or owner pre-approval -> promote. */
 class SelfExtensionLabActivity : ComponentActivity() {
     private val ink = Color(0xFF080808)
     private val panel = Color(0xFF171717)
