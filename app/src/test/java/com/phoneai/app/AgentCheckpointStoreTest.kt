@@ -125,6 +125,27 @@ class AgentCheckpointStoreTest {
         assertTrue(prompt.contains("verification"))
     }
 
+    @Test fun redactedPrivateFailureCanBeResolvedWithoutPersistingItsPayload() {
+        val request = "Send a Telegram update and verify delivery"
+        assertTrue(AgentCheckpointStore.begin(context, request))
+        val privateArgs = JSONObject().put("text", "private message body")
+        assertTrue(AgentCheckpointStore.beginStep(context, "telegram_send", privateArgs))
+        assertTrue(AgentCheckpointStore.record(context, "telegram_send", privateArgs, "error: network timeout"))
+        ExperienceStore.recordFailure(context, request, "telegram_send", "error: network timeout")
+
+        val correctedArgs = JSONObject().put("text", "Delivery status")
+        assertTrue(AgentCheckpointStore.beginStep(context, "click_text", correctedArgs))
+        assertTrue(AgentCheckpointStore.record(context, "click_text", correctedArgs,
+            "LOCAL VERIFY PASS: delivery status is visible."))
+        assertTrue(AgentCheckpointStore.complete(context))
+
+        val lesson = ExperienceStore.all(context).single()
+        assertEquals("resolved_failure", lesson.kind)
+        assertEquals("network_or_timeout", lesson.category)
+        assertFalse(lesson.correction.contains("private message body"))
+        assertFalse(lesson.verification.contains("private message body"))
+    }
+
     @Test fun evidenceTaskIdentityIsUniqueAndStableAcrossResume() {
         assertTrue(AgentCheckpointStore.begin(context, "repeatable request"))
         val first = AgentCheckpointStore.evidenceTaskId(context)
