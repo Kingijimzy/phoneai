@@ -194,6 +194,18 @@ class OrionConversationRepositoryTest {
         assertTrue(hit.after.contains("timed out"))
     }
 
+    @Test fun historicalSearchPrioritizesSpecificEngineeringTermsOverPromptFiller() {
+        val transcript = listOf(
+            "me" to "We discussed separating backend executors from dispatchLegacyTool; the remaining work was to extract browser, device, MCP, integrations, and skills families.",
+            "ai" to "Next, finish the direct-call audit and prove owner settings against actual execution."
+        )
+        repository.saveActive(context, transcript)
+        val query = "Search our previous conversations for the Orion task where we discussed separating backend executors from dispatchLegacyTool. Tell me what was incomplete and what we agreed to do next. Use actual conversation history, not guesses."
+        val hits = repository.searchHistory(context, query, 8)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.any { it.snippet.contains("backend executors") || it.snippet.contains("dispatchLegacyTool") })
+    }
+
     @Test fun objectiveCompletionRequiresLatestSuccessfulExecutorReceipt() {
         repository.saveActive(context, listOf("me" to "Complete the release objective", "ai" to "I am validating the release"))
         val graph = OrionObjectiveGraph.Graph("Release objective", listOf(OrionObjectiveGraph.Objective("release", "Release the build")))
