@@ -948,33 +948,43 @@ class SettingsActivity : Activity() {
         // Show setup first; keep advanced configuration out of the way until requested.
         listOf(updateCard, s2, sk, s3, s4, s5, browser, s6, s7).forEach { setCardExpanded(it, false) }
 
-        val shortcuts = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        listOf(
-            "SETUP" to s1,
+        // Compact, fully visible settings index: no sideways scrolling or hidden destinations.
+        val shortcutItems = listOf(
+            "ACCESS" to s1,
             "HEALTH" to updateCard,
-            "AI" to s2,
+            "AI MODELS" to s2,
             "VOICE" to s3,
             "KNOWLEDGE" to sk,
             "MEMORY" to s4,
+            "RECORDING" to s5,
             "BROWSER" to browser,
             "TOOLS" to s6,
             "INTEGRATIONS" to s7
-        ).forEach { (label, target) ->
-            shortcuts.addView(quickJump(label, target, sv),
-                LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
-        }
-        val shortcutScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
+        )
+        val shortcutGrid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(0, dp(2), 0, dp(3))
-            addView(shortcuts, ViewGroup.LayoutParams(-2, -2))
         }
-        col.addView(shortcutScroll, 2, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(10)
+        shortcutItems.chunked(3).forEach { group ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            group.forEach { (label, target) ->
+                row.addView(quickJump(label, target, sv), LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    rightMargin = dp(6)
+                    bottomMargin = dp(6)
+                })
+            }
+            if (group.size < 3) {
+                repeat(3 - group.size) {
+                    row.addView(View(this), LinearLayout.LayoutParams(0, dp(1), 1f).apply { rightMargin = dp(6) })
+                }
+            }
+            shortcutGrid.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+        col.addView(shortcutGrid, 2, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(8)
             bottomMargin = dp(2)
         })
 
