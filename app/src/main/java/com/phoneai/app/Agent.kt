@@ -135,6 +135,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
      * (the question can contain message text or arguments); the dialog itself shows the details.
      */
     private fun confirm(question: String): Boolean {
+        runCatching { OrionRuntimeNotifier.postApprovalRequired(svc) }
         ui.note("[TASK:APPROVAL]\nWaiting for your approval")
         val ok = ui.ask(question)
         ui.note(if (ok) "[TASK:APPROVED]\nApproved by you" else "[TASK:DENIED]\nNot approved; the action was not run")
