@@ -67,6 +67,12 @@ class OrionContinuityIntegrationTest {
         assertTrue(AgentCheckpointStore.beginStep(context, "open_app", args))
         assertTrue(AgentCheckpointStore.record(context, "open_app", args, "Opened Settings"))
         assertTrue(AgentCheckpointStore.pause(context))
+        ExperienceStore.recordFailure(context, original, "open_app", "error: target not found")
+
+        // Provider-neutral restoration must retain the same stored user/assistant turns.
+        val restoredTurns = ConversationContextPolicy.recent(ChatHistoryStore.load(context))
+        assertTrue(restoredTurns.any { it.first == "user" && it.second == userEvidence })
+        assertTrue(restoredTurns.any { it.first == "assistant" && it.second.contains("provider-neutral") })
 
         val prompt = OrionCentralBrain.contextFor(context, "Continue the work")
         assertTrue(prompt.contains("TASK RESUME INSTRUCTIONS"))
@@ -78,5 +84,7 @@ class OrionContinuityIntegrationTest {
         assertTrue(prompt.contains("Next objective candidates"))
         assertTrue(prompt.contains("open_app"))
         assertTrue(prompt.contains("Opened Settings"))
+        assertTrue(prompt.contains("RELEVANT EXECUTION LESSONS"))
+        assertTrue(prompt.contains("target_not_found"))
     }
 }
