@@ -140,7 +140,7 @@ internal object AgentHooks {
      merged.add(Proof(event.tool, true, true, event.summary))
     OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED ->
      merged.add(Proof(event.tool, true, false, event.summary))
-    OrionEvidenceLedger.Outcome.FAILED, OrionEvidenceLedger.Outcome.RECOVERY ->
+    OrionEvidenceLedger.Outcome.FAILED, OrionEvidenceLedger.Outcome.DENIED, OrionEvidenceLedger.Outcome.RECOVERY ->
      merged.add(Proof(event.tool, false, false, event.summary))
    }
   }
