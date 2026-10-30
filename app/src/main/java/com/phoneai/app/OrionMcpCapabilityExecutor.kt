@@ -10,6 +10,10 @@ import org.json.JSONObject
  * after an ambiguous outcome; only the connector's handshake/catalogue methods may reconnect.
  */
 internal object OrionMcpCapabilityExecutor {
+    private val supportedTools = setOf("mcp_status", "mcp_list_tools", "mcp_call")
+
+    fun supports(tool: String): Boolean = tool in supportedTools
+
     fun execute(
         tool: String,
         args: JSONObject,
