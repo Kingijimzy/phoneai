@@ -17,6 +17,24 @@ internal object OrionTasksCapabilityExecutor {
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
+    // Durable execution checkpoint ownership stays here; Agent supplies the control-flow decisions.
+    fun evidenceTaskId(service: PhoneAiService): String? = AgentCheckpointStore.evidenceTaskId(service)
+    fun pendingCheckpoint(service: PhoneAiService): JSONObject? = AgentCheckpointStore.pending(service)
+    fun needsRecoveryConfirmation(service: PhoneAiService): Boolean = AgentCheckpointStore.needsRecoveryConfirmation(service)
+    fun acknowledgeRecovery(service: PhoneAiService, confirmation: String): Boolean =
+        AgentCheckpointStore.acknowledgeRecovery(service, confirmation)
+    fun resumeInstruction(service: PhoneAiService): String? = AgentCheckpointStore.resumeInstruction(service)
+    fun markRunning(service: PhoneAiService): Boolean = AgentCheckpointStore.markRunning(service)
+    fun beginRun(service: PhoneAiService, command: String): Boolean = AgentCheckpointStore.begin(service, command)
+    fun pauseRun(service: PhoneAiService): Boolean = AgentCheckpointStore.pause(service)
+    fun beginStep(service: PhoneAiService, tool: String, args: JSONObject): Boolean =
+        AgentCheckpointStore.beginStep(service, tool, args)
+    fun recordStep(service: PhoneAiService, tool: String, args: JSONObject, result: String): Boolean =
+        AgentCheckpointStore.record(service, tool, args, result)
+    fun requireRecovery(service: PhoneAiService, reason: String): Boolean =
+        AgentCheckpointStore.recoveryRequired(service, reason)
+    fun completeRun(service: PhoneAiService): Boolean = AgentCheckpointStore.complete(service)
+
     fun execute(
         tool: String,
         args: JSONObject,
