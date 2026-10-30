@@ -1538,9 +1538,9 @@ Rules:
                     if (matchingRepos.isEmpty()) {
                         "Authenticated GitHub account: $login. No repository named '$requestedName' was found in the connected account's visible repository list. I did not substitute an unrelated public repository."
                     } else {
-                        "Authenticated GitHub account: $login\\n" +
-                            matchingRepos.joinToString("\\n") { (fullName, details) ->
-                                "Repository: $fullName\\nURL: https://github.com/$fullName\\nAccount result: $details"
+                        "Authenticated GitHub account: $login\n" +
+                            matchingRepos.joinToString("\n") { (fullName, details) ->
+                                "Repository: $fullName\nURL: https://github.com/$fullName\nAccount result: $details"
                             }
                     }
                 }
