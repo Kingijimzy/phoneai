@@ -79,5 +79,10 @@ class TaskCenterActivityTest {
         assertEquals("paused", checkpoint!!.optString("status"))
         assertNotNull("Stop must retain the in-flight marker for safe reconciliation", checkpoint.optJSONObject("inFlight"))
         assertTrue(AgentCheckpointStore.resumeInstruction(context)!!.contains("outcome is unknown"))
+        assertFalse("Pause must prevent a new tool from starting", AgentCheckpointStore.beginStep(context, "read_screen", JSONObject()))
+        assertTrue(AgentCheckpointStore.acknowledgeRecovery(context, "I checked the phone and confirmed the screen state"))
+        assertTrue(AgentCheckpointStore.markRunning(context))
+        assertTrue("Explicit resume may continue after recovery is acknowledged",
+            AgentCheckpointStore.beginStep(context, "read_screen", JSONObject()))
     }
 }
