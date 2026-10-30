@@ -71,7 +71,7 @@ private val EngineLine = Color(0xFF333333)
 private val EngineWhite = Color(0xFFF4F5F6)
 private val EngineSilver = Color(0xFFBFC5CC)
 private val EngineMuted = Color(0xFF9A9DA1)
-private val EngineBlue = Color(0xFF7EA9D6)
+private val EngineAccent = EngineSilver
 
 @Composable
 internal fun SoulEngineComposeScreen(
@@ -104,7 +104,7 @@ internal fun SoulEngineComposeScreen(
         background = EngineInk,
         surface = EnginePanel,
         onSurface = EngineWhite,
-        secondary = EngineBlue
+        secondary = EngineSilver
     )) {
         Surface(Modifier.fillMaxSize(), color = EngineInk) {
             Column(
@@ -284,19 +284,19 @@ private fun NeuralNetworkMark(modifier: Modifier = Modifier) {
         )
         val links = listOf(0 to 1, 0 to 2, 1 to 3, 2 to 3, 3 to 4, 3 to 5, 4 to 6, 5 to 6, 6 to 7, 6 to 8, 7 to 9, 8 to 9, 1 to 4, 2 to 5)
         links.forEach { (a, b) ->
-            drawLine(EngineBlue.copy(alpha = .45f), points[a], points[b], strokeWidth = 1.3.dp.toPx(), cap = StrokeCap.Round)
+            drawLine(EngineAccent.copy(alpha = .45f), points[a], points[b], strokeWidth = 1.3.dp.toPx(), cap = StrokeCap.Round)
         }
         points.forEachIndexed { i, point ->
             val radius = if (i == 6) 5.5.dp.toPx() else if (i % 3 == 0) 3.4.dp.toPx() else 2.5.dp.toPx()
-            drawCircle(if (i == 6) EngineBlue else EngineSilver, radius, point)
-            if (i == 6) drawCircle(EngineBlue.copy(alpha = .12f + pulse * .12f), radius * (2.5f + pulse), point)
+            drawCircle(if (i == 6) EngineAccent else EngineSilver, radius, point)
+            if (i == 6) drawCircle(EngineAccent.copy(alpha = .12f + pulse * .12f), radius * (2.5f + pulse), point)
         }
         val segment = travel * (points.size - 1)
         val from = segment.toInt().coerceIn(0, points.lastIndex)
         val to = (from + 1).coerceAtMost(points.lastIndex)
         val fraction = segment - from
         val moving = Offset(points[from].x + (points[to].x - points[from].x) * fraction, points[from].y + (points[to].y - points[from].y) * fraction)
-        drawCircle(EngineBlue.copy(alpha = .14f), 12.dp.toPx() * pulse, moving)
+        drawCircle(EngineAccent.copy(alpha = .14f), 12.dp.toPx() * pulse, moving)
         drawCircle(EngineWhite, 3.3.dp.toPx(), moving)
         drawLine(EngineLine, Offset(w * .04f, h * .92f), Offset(w * .96f, h * .92f), strokeWidth = 1.dp.toPx())
     }
@@ -306,11 +306,11 @@ private fun NeuralNetworkMark(modifier: Modifier = Modifier) {
 private fun EngineCoreToggle(enabled: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
-            .border(1.dp, if (enabled) EngineBlue.copy(alpha = .65f) else EngineLine, RoundedCornerShape(18.dp))
+            .border(1.dp, if (enabled) EngineAccent.copy(alpha = .65f) else EngineLine, RoundedCornerShape(18.dp))
             .padding(horizontal = 15.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(if (enabled) EngineBlue else EngineMuted))
+        Box(Modifier.size(10.dp).clip(CircleShape).background(if (enabled) EngineAccent else EngineMuted))
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(if (enabled) "SOUL ENGINE ACTIVE" else "SOUL ENGINE PAUSED", color = EngineWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)

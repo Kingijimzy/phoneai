@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="color-scheme" content="dark">
 <style>
-:root{color-scheme:dark;--blue:#56baff;--ice:#b9e6ff}
+:root{color-scheme:dark;--accent:#bfc5cc;--ice:#e4e7eb}
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#f4f7fb;font-family:system-ui,-apple-system,Arial,sans-serif}
 #stage{position:absolute;inset:0;background:#000;overflow:hidden}
 canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
 #ambient{pointer-events:none;position:absolute;inset:0;background:radial-gradient(ellipse 38% 40% at 50% 43%,#07518b20 0%,#03223b0d 46%,transparent 76%)}
-#headGlow{pointer-events:none;position:absolute;width:min(82vw,520px);height:min(82vw,520px);left:50%;top:43%;transform:translate(-50%,-50%);border-radius:50%;background:#087ed0;filter:blur(95px);opacity:.09;transition:opacity .5s ease}
+#headGlow{pointer-events:none;position:absolute;width:min(82vw,520px);height:min(82vw,520px);left:50%;top:43%;transform:translate(-50%,-50%);border-radius:50%;background:#737b84;filter:blur(95px);opacity:.09;transition:opacity .5s ease}
 #wave{position:absolute;left:0;right:0;bottom:20%;height:100px;width:100%;opacity:.72;pointer-events:none}
 #status{position:absolute;top:calc(env(safe-area-inset-top,0px) + 22px);left:0;right:0;text-align:center;font-size:10px;font-weight:600;letter-spacing:.28em;color:#aeb9c8;text-transform:uppercase}
 #caption{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 13%);left:16px;right:16px;text-align:center;color:#8e9cad;font-size:12px;letter-spacing:.04em}
@@ -98,7 +98,7 @@ function drawHead(t){
   const pulse=(Math.sin(t*.002+p.phase)+1)*.5;
   const r=.45+p.energy*.9+(state==='speaking'?pulse*1.2:state==='listening'?mic*.8:0);
   ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
-  ctx.fillStyle='rgba(113,204,255,'+(0.36+p.seed*.56+pulse*.12)+')';ctx.shadowColor='#299eff';ctx.shadowBlur=state==='speaking'?7:3;ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(191,197,204,'+(0.36+p.seed*.56+pulse*.12)+')';ctx.shadowColor='#bfc5cc';ctx.shadowBlur=state==='speaking'?7:3;ctx.fill();ctx.shadowBlur=0;
  }
  // Soft contour edge gives the particle field a recognizable human head/neck shape.
  ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(60,163,255,.13)';ctx.lineWidth=1.2;

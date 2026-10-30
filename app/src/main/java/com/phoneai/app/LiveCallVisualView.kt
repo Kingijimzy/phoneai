@@ -51,8 +51,8 @@ class LiveCallVisualView(context: Context) : View(context) {
     var onVisualTap: (() -> Unit)? = null
     @Volatile var animationEnabled: Boolean = true
 
-    private val mint = 0xFF8CFFD0.toInt()
-    private val dimMint = 0xFF285E4C.toInt()
+    private val silver = Theme.SILVER
+    private val dimSilver = Theme.LINE_STRONG
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -212,7 +212,7 @@ class LiveCallVisualView(context: Context) : View(context) {
                 }.coerceIn(.08f, 1f)
                 val pulse = if (mode == OrbView.Mode.IDLE && !reducedMotion) .75f + ripple * .35f else 1f
                 val radius = max(1.05f, maxR * (.34f + energy * .85f) * pulse)
-                paint.color = if (energy > .57f) mint else dimMint
+                paint.color = if (energy > .57f) silver else dimSilver
                 paint.alpha = (55 + energy * 200f).toInt().coerceIn(0, 255)
                 canvas.drawCircle(cx + dx * spacingX, cy + dy * spacingY, radius, paint)
             }
@@ -243,7 +243,7 @@ class LiveCallVisualView(context: Context) : View(context) {
         for (side in -1..1 step 2) {
             val ex = cx + side * unit * 1.12f
             if (mode == OrbView.Mode.SPEAKING) {
-                linePaint.color = mint
+                linePaint.color = silver
                 linePaint.alpha = 245
                 linePaint.strokeWidth = max(2f, unit * .085f)
                 eyeCurve.reset()
@@ -251,7 +251,7 @@ class LiveCallVisualView(context: Context) : View(context) {
                 eyeCurve.quadTo(ex, cy - eyeH * .85f, ex + eyeW / 2f, cy + unit * .05f)
                 canvas.drawPath(eyeCurve, linePaint)
             } else {
-                eyePaint.color = mint
+                eyePaint.color = silver
                 eyeRect.set(ex - eyeW / 2f, cy - eyeH / 2f, ex + eyeW / 2f, cy + eyeH / 2f)
                 canvas.drawRoundRect(eyeRect, eyeH * .5f, eyeH * .5f, eyePaint)
                 eyePaint.color = android.graphics.Color.BLACK
@@ -261,19 +261,19 @@ class LiveCallVisualView(context: Context) : View(context) {
         }
         if (mode == OrbView.Mode.THINKING) {
             for (i in -1..1) {
-                paint.color = mint
+                paint.color = silver
                 paint.alpha = if (reducedMotion) 210 else (100 + abs(sin(t * 4f + i)) * 155).toInt()
                 canvas.drawCircle(cx + i * unit * .34f, cy + unit * 1.0f, max(2f, unit * .075f), paint)
             }
         } else if (mode == OrbView.Mode.ACTING) {
-            linePaint.color = mint
+            linePaint.color = silver
             linePaint.alpha = 200
             linePaint.strokeWidth = max(2f, unit * .035f)
             val scan = if (reducedMotion) .5f else .5f + sin(t * 2.8f) * .42f
             canvas.drawLine(cx - unit * 1.7f, cy + unit * 1.05f, cx - unit * 1.7f + unit * 3.4f * scan, cy + unit * 1.05f, linePaint)
         } else if (mode == OrbView.Mode.SPEAKING) {
             val mouthH = max(2f, unit * (.04f + speechAmplitude * .28f + wordPulse * .13f))
-            linePaint.color = mint
+            linePaint.color = silver
             linePaint.alpha = 220
             linePaint.strokeWidth = max(2f, unit * .055f)
             mouth.reset()
@@ -281,7 +281,7 @@ class LiveCallVisualView(context: Context) : View(context) {
             mouth.quadTo(cx, cy + unit * (.85f + mouthH), cx + unit * .28f, cy + unit * .85f)
             canvas.drawPath(mouth, linePaint)
         } else if (mode == OrbView.Mode.WAITING_APPROVAL) {
-            paint.color = mint
+            paint.color = silver
             paint.alpha = 170
             canvas.drawCircle(cx, cy + unit * 1.15f, max(2f, unit * .06f), paint)
         }

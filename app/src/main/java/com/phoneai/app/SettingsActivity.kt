@@ -276,8 +276,9 @@ class SettingsActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        heading.addView(text("⌄", 18f, Theme.MUTED, true).apply {
-            gravity = Gravity.CENTER
+        heading.addView(OrionIconView(this@SettingsActivity).apply {
+            icon = "chevron-down"
+            tint = Theme.MUTED
             contentDescription = "Expand or collapse section"
         }, LinearLayout.LayoutParams(dp(24), dp(30)))
         heading.isClickable = true
@@ -312,7 +313,7 @@ class SettingsActivity : Activity() {
         for (index in contentStart until card.childCount) {
             card.getChildAt(index).visibility = if (expanded) View.VISIBLE else View.GONE
         }
-        (heading.getChildAt(heading.childCount - 1) as? TextView)?.text = if (expanded) "⌄" else "›"
+        (heading.getChildAt(heading.childCount - 1) as? OrionIconView)?.icon = if (expanded) "chevron-down" else "chevron-right"
         val title = card.contentDescription?.toString() ?: "Settings section"
         heading.contentDescription = "$title, ${if (expanded) "expanded. Tap to collapse." else "collapsed. Tap to expand."}"
     }

@@ -73,7 +73,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             setBackgroundColor(android.graphics.Color.BLACK)
         }
 
-        status = label("ORION  ·  READY", 11f, 0xFF8CFFD0.toInt(), true).apply {
+        status = label("ORION  ·  READY", 11f, Theme.SILVER, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .16f
         }
@@ -85,10 +85,10 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
         }
         root.addView(visual, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        stepChip = label("", 12f, 0xFF8CFFD0.toInt(), true).apply {
+        stepChip = label("", 12f, Theme.SILVER, true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(13), dp(7), dp(13), dp(7))
-            background = round(0xFF07150F.toInt(), 0xFF285E4C.toInt(), 18)
+            background = round(Theme.PANEL, Theme.LINE_STRONG, 18)
             visibility = View.GONE
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
@@ -98,7 +98,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             bottomMargin = dp(8)
         })
 
-        caption = label("Ready when you are.", 25f, 0xFFF4FFF9.toInt(), true).apply {
+        caption = label("Ready when you are.", 25f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             maxLines = 2
@@ -130,7 +130,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(0xFFE8FFF4.toInt())
+                setColor(Theme.SILVER)
                 setStroke(dp(1), 0xFFFFFFFF.toInt())
             }
             elevation = dp(5).toFloat()
@@ -139,14 +139,14 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
             contentDescription = "Start voice input"
             micIcon = OrionIconView(this@LiveConversationActivity).apply {
                 icon = "mic"
-                tint = 0xFF07150F.toInt()
+                tint = Theme.PANEL
                 contentDescription = null
             }
             addView(micIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
             setOnClickListener { handleMicTap() }
         }
         micItem.addView(micButton, LinearLayout.LayoutParams(dp(66), dp(66)))
-        micCaption = label("MIC", 10f, 0xFFF4FFF9.toInt(), true).apply {
+        micCaption = label("MIC", 10f, Theme.TEXT, true).apply {
             gravity = Gravity.CENTER
             letterSpacing = .08f
             setPadding(0, dp(6), 0, 0)
@@ -178,12 +178,12 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 background = round(fill, stroke, 24)
                 addView(OrionIconView(this@LiveConversationActivity).apply {
                     icon = iconName
-                    tint = if (captionText == "END") 0xFFE4E4E4.toInt() else 0xFFF4FFF9.toInt()
+                    tint = if (captionText == "END") 0xFFE4E4E4.toInt() else Theme.TEXT
                     contentDescription = null
                 }, LinearLayout.LayoutParams(dp(23), dp(23)))
             }
             addView(iconBox, LinearLayout.LayoutParams(dp(52), dp(52)))
-            addView(label(captionText, 10f, 0xFF9EAAA4.toInt(), true).apply {
+            addView(label(captionText, 10f, Theme.MUTED, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .07f
                 setPadding(0, dp(6), 0, 0)
@@ -340,7 +340,7 @@ class LiveConversationActivity : Activity(), PhoneAiService.MainChatListener {
                 OrbView.Mode.WAITING_APPROVAL -> "APPROVAL"
                 OrbView.Mode.ERROR -> "ERROR"
             }
-            status.setTextColor(if (mode == OrbView.Mode.WAITING_APPROVAL) 0xFFFFD49B.toInt() else 0xFF8CFFD0.toInt())
+            status.setTextColor(if (mode == OrbView.Mode.WAITING_APPROVAL) 0xFFFFD49B.toInt() else Theme.SILVER)
             micIcon.icon = if (mode == OrbView.Mode.LISTENING) "pause" else if (mode == OrbView.Mode.SPEAKING) "mic" else "mic"
             micCaption.text = when (mode) {
                 OrbView.Mode.LISTENING -> "PAUSE"

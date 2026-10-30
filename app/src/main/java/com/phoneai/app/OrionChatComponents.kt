@@ -97,7 +97,7 @@ private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
 private val ChatMint = Color(0xFFE5E5E5)
-private val ChatCopy = Color(0xFFF7FAF9)
+private val ChatCopy = Color(0xFFF5F5F5)
 private val ChatMuted = Color(0xFF9B9B9B)
 private val ChatHairline = Color(0xFF303030)
 

@@ -74,14 +74,14 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
 
     private fun control(text: String, primary: Boolean = false, action: () -> Unit): TextView =
-        label(text, 13f, if (primary) Color.BLACK else 0xFFF3FFF9.toInt(), true).apply {
+        label(text, 13f, if (primary) Color.BLACK else Theme.TEXT, true).apply {
             minHeight = dp(48)
             setPadding(dp(18), dp(10), dp(18), dp(10))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(18).toFloat()
-                setColor(if (primary) 0xFF8CFFD0.toInt() else 0xFF171717.toInt())
-                setStroke(dp(1), if (primary) 0xFF8CFFD0.toInt() else 0xFF3C3C3C.toInt())
+                setColor(if (primary) Theme.SILVER else 0xFF171717.toInt())
+                setStroke(dp(1), if (primary) Theme.SILVER else 0xFF3C3C3C.toInt())
             }
             isClickable = true
             isFocusable = true
@@ -101,7 +101,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             setPadding(dp(22), dp(18), dp(22), dp(20))
             setBackgroundColor(Color.BLACK)
         }
-        root.addView(label("ORION  ·  GEMINI LIVE", 11f, 0xFF8CFFD0.toInt(), true),
+        root.addView(label("ORION  ·  GEMINI LIVE", 11f, Theme.SILVER, true),
             LinearLayout.LayoutParams(-1, dp(32)))
         statusView = label("READY · NOT STREAMING", 11f, 0xFFBDBDBD.toInt(), true)
         root.addView(statusView, LinearLayout.LayoutParams(-1, dp(28)))
@@ -116,7 +116,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
         transcriptView = label(
             "Gemini Live is an optional network voice mode. No microphone audio is streamed until you accept the quota warning.",
-            17f, 0xFFF4FFF9.toInt(), true
+            17f, Theme.TEXT, true
         ).apply {
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             maxLines = 5
@@ -143,7 +143,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             marginStart = dp(8)
         })
         root.addView(controls, LinearLayout.LayoutParams(-1, android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
-        standardModeButton = label("Switch to standard Orion voice", 12f, 0xFF8CFFD0.toInt(), true).apply {
+        standardModeButton = label("Switch to standard Orion voice", 12f, Theme.SILVER, true).apply {
             setPadding(dp(10), dp(12), dp(10), dp(8))
             isClickable = true
             isFocusable = true

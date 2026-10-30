@@ -98,6 +98,24 @@ class TaskCenterActivity : Activity() {
             setPadding(dp(8), dp(2), dp(8), dp(2))
             setOnClickListener { click() }
         }
+    private fun iconButton(iconName: String, description: String, click: () -> Unit) =
+        LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                setColor(Theme.PANEL2)
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), Theme.LINE_STRONG)
+            }
+            isClickable = true
+            isFocusable = true
+            contentDescription = description
+            addView(OrionIconView(this@TaskCenterActivity).apply {
+                icon = iconName
+                tint = Theme.SILVER
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(18), dp(18)))
+            setOnClickListener { click() }
+        }
     private fun add(parent: LinearLayout, view: View, top: Int = 8) {
         parent.addView(view, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(top) })
     }
@@ -328,7 +346,7 @@ class TaskCenterActivity : Activity() {
             setPadding(0, dp(4), 0, 0)
         })
         head.addView(block, LinearLayout.LayoutParams(0, -2, 1f))
-        head.addView(button("⋯") { taskMenu(task) })
+        head.addView(iconButton("more", "Task options") { taskMenu(task) }, LinearLayout.LayoutParams(dp(42), dp(42)))
         card.addView(head)
         if (task.details.isNotBlank()) add(card, label(task.details, 12f, Theme.MUTED), 7)
         add(card, label((task.dueAt?.let { "Due " + time(it) } ?: "No due date") + " · Updated " + time(task.updatedAt),
@@ -336,14 +354,14 @@ class TaskCenterActivity : Activity() {
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (task.status == "running" || task.status == "in_progress") {
-            actions.addView(button("Ⅱ  Pause") { change(task, "paused") })
+            actions.addView(button("Pause") { change(task, "paused") })
         } else if (task.status != "completed" && task.status != "done") {
-            actions.addView(button(if (task.status == "paused") "▶  Resume" else "▶  Start", true) { change(task, "running") })
+            actions.addView(button(if (task.status == "paused") "Resume" else "Start", true) { change(task, "running") })
         }
         if (task.status != "completed" && task.status != "done") {
             actions.addView(button("Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
                 LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
-            actions.addView(button("!  Fail") { change(task, "failed") }.apply { setTextColor(0xFFFF8D8D.toInt()) },
+            actions.addView(button("Fail") { change(task, "failed") }.apply { setTextColor(0xFFFF8D8D.toInt()) },
                 LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
         }
         actions.setPadding(0, dp(5), 0, 0)

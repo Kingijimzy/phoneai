@@ -326,7 +326,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildHome(page: LinearLayout) {
-        // Editorial home: near-black canvas, restrained mint, clearer hierarchy and fewer noisy cards.
+        // Editorial home: near-black canvas, neutral silver accents, clearer hierarchy and fewer noisy cards.
         val brandRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -347,7 +347,7 @@ class MainActivity : ComponentActivity() {
         brandText.addView(label("PERSONAL INTELLIGENCE", 9f, Theme.MUTED, true).apply { letterSpacing = .08f; setPadding(0, dp(2), 0, 0) })
         brandRow.addView(brandText)
         brandRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        val livePill = label("●  READY", 9f, Theme.OK, true).apply {
+        val livePill = label("READY", 9f, Theme.OK, true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(7), dp(10), dp(7))
             background = GradientDrawable().apply {
@@ -590,7 +590,7 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshStatus() {
         composeStatus?.value = buildStatusText()
-        if (::statusLabel.isInitialized) statusLabel.text = "●  " + buildStatusText()
+        if (::statusLabel.isInitialized) statusLabel.text = buildStatusText()
     }
 
     override fun onResume() {
