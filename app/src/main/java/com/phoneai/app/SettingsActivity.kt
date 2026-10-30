@@ -232,7 +232,15 @@ class SettingsActivity : Activity() {
         b.background = g
         b.elevation = 0f
         b.stateListAnimator = null
-        b.setOnClickListener { onClick() }
+        b.setOnClickListener {
+            try {
+                onClick()
+            } catch (error: Exception) {
+                val detail = error.javaClass.simpleName + ": " + (error.message ?: "action failed")
+                runCatching { AgentPolicy.log(this, "settings_button:$label", "activate", false, detail) }
+                Toast.makeText(this, "Couldn't open this setting. The failure was recorded; check app permissions or installed apps.", Toast.LENGTH_LONG).show()
+            }
+        }
         Motion.pressFeedback(b)
         return b
     }
@@ -1010,6 +1018,23 @@ class SettingsActivity : Activity() {
             }
             if (target != null) {
                 setCardExpanded(target, true)
+                val sectionTitle = target.contentDescription?.toString() ?: "Settings"
+                // A section shortcut should open the selected controls, not dump the user
+                // into the entire legacy settings index with the requested card buried below.
+                for (index in 0 until col.childCount) {
+                    val child = col.getChildAt(index)
+                    val keep = child === header || child === target || index == 2
+                    if (!keep) child.visibility = View.GONE
+                }
+                add(col, text(sectionTitle.uppercase(), 11f, Theme.MUTED, true).apply {
+                    letterSpacing = .12f
+                    setPadding(dp(2), dp(14), dp(2), dp(2))
+                }, 2)
+                // The section title was appended; move it directly above the selected card.
+                val focusTitle = col.getChildAt(col.childCount - 1)
+                col.removeView(focusTitle)
+                col.addView(focusTitle, col.indexOfChild(target))
+                (col.getChildAt(2) as? Button)?.text = "‹  Back"
                 window.decorView.post {
                     if (!isFinishing && !isDestroyed) {
                         sv.smoothScrollTo(0, (target.top - dp(16)).coerceAtLeast(0))
