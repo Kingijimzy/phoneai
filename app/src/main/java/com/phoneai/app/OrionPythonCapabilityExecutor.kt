@@ -97,7 +97,7 @@ internal class OrionPythonCapabilityExecutor(
             else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
             else "owner auto-activation is off; awaiting explicit extension_enable approval"
         )
-        if (autoActivated) {
+        return if (autoActivated) {
             testReports.remove(id)
             "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
