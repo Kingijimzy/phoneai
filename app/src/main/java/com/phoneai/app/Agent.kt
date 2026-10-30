@@ -1802,16 +1802,16 @@ Rules:
             "time" -> tools.time()
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command")) { stopped }
             "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
-  "trading_watchlist_list" -> TradingToolHandlers.watchlistList(svc)
-  "trading_watchlist_set" -> TradingToolHandlers.watchlistSet(svc, a.optString("symbols"))
-  "trading_playbook_list" -> TradingToolHandlers.playbookList(svc)
-  "trading_playbook_propose" -> TradingToolHandlers.playbookPropose(svc, a)
-  "trading_playbook_set_enabled" -> TradingToolHandlers.playbookSetEnabled(svc, a.optString("id"), a.optBoolean("enabled", true))
-  "trading_match_setups" -> TradingToolHandlers.matchSetups(svc)
-  "trading_strategy_note" -> TradingToolHandlers.strategyNote(svc, a)
-  "bybit_public_kline" -> TradingToolHandlers.publicKline(svc, a.optString("symbol"), a.optString("interval", "60"), a.optInt("limit", 50))
-  "bybit_place_order" -> TradingToolHandlers.placeOrder(svc, ui, a)
-  "bybit_cancel_order" -> TradingToolHandlers.cancelOrders(svc, ui)
+            "trading_watchlist_list" -> TradingToolHandlers.watchlistList(svc)
+            "trading_watchlist_set" -> TradingToolHandlers.watchlistSet(svc, a.optString("symbols"))
+            "trading_playbook_list" -> TradingToolHandlers.playbookList(svc)
+            "trading_playbook_propose" -> TradingToolHandlers.playbookPropose(svc, a)
+            "trading_playbook_set_enabled" -> TradingToolHandlers.playbookSetEnabled(svc, a.optString("id"), a.optBoolean("enabled", true))
+            "trading_match_setups" -> TradingToolHandlers.matchSetups(svc)
+            "trading_strategy_note" -> TradingToolHandlers.strategyNote(svc, a)
+            "bybit_public_kline" -> TradingToolHandlers.publicKline(svc, a.optString("symbol"), a.optString("interval", "60"), a.optInt("limit", 50))
+            "bybit_place_order" -> TradingToolHandlers.placeOrder(svc, ui, a)
+            "bybit_cancel_order" -> TradingToolHandlers.cancelOrders(svc, ui)
             "gaming_session_summary" -> GameCoachStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent notes:\n" + GameCoachStore.all(svc).take(12).joinToString("\n") { "${it.game} · ${it.durationMinutes} min · ${it.result} · ${it.note}" } else ""
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
             "gaming_focus_preset" -> GamingFocus.start(svc, a.optInt("minutes", 0))
