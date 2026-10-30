@@ -82,10 +82,16 @@ internal object OrionCentralBrain {
         val savedGraph = runCatching { OrionObjectiveGraph.load(app) }.getOrNull()
         val savedSoulGoal = runCatching { SoulEngineState.snapshot(app).goal }.getOrDefault("")
         val activeObjective = pendingTask?.optString("command")?.takeIf { it.isNotBlank() }
-            ?: savedGraph?.objective?.takeIf { it.isNotBlank() }
-            ?: savedSoulGoal
+            ?: savedGraph?.objective?.takeIf { it.isNotBlank() }.orEmpty()
+        val recentTurns = runCatching { ChatHistoryStore.recent(app, 8) }.getOrDefault(emptyList())
+            .asReversed().map { hit ->
+                (if (hit.role == "ai" || hit.role == "assistant") "assistant" else "user") to hit.snippet
+            }
         val continuity = runCatching {
-            OrionContextualIntentInterpreter.resolve(request, emptyList(), activeObjective)
+            val current = OrionContextualIntentInterpreter.resolve(request, recentTurns, activeObjective)
+            if (current.needsClarification && savedSoulGoal.isNotBlank())
+                OrionContextualIntentInterpreter.resolve(request, recentTurns, savedSoulGoal)
+            else current
         }.getOrNull()
         val isFollowUp = continuity != null && !continuity.needsClarification &&
             continuity.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
