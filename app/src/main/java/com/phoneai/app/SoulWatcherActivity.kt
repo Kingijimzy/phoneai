@@ -364,7 +364,7 @@ class SoulWatcherActivity : Activity() {
             row.addView(actionButton("Accept") { review(p, SoulEngineState.ProposalStatus.ACCEPTED) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
             row.addView(actionButton("Reject") { review(p, SoulEngineState.ProposalStatus.REJECTED) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
             box.addView(row)
-            transcript.addView(box)
+            reportContainer.addView(box)
         }
     }
 
@@ -372,6 +372,7 @@ class SoulWatcherActivity : Activity() {
         val ok = runCatching { SoulEngineState.reviewProposal(this, p.id, status, null) }.getOrDefault(false)
         addMessage("WATCHER", if (ok) "Proposal ${status.name.lowercase()} recorded. No permission, source, or tool behavior was changed." else "I couldn't save that decision. Refresh the proposals and try again.")
         renderSnapshot()
+        showProposals()
     }
 
 
