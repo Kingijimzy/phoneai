@@ -215,6 +215,10 @@ class MainActivity : ComponentActivity() {
         val destination: Class<out android.app.Activity>
         val intent: Intent
         when (section) {
+            "providers", "voice", "character", "permissions", "recording" -> {
+                destination = SettingsFeatureActivity::class.java
+                intent = Intent(this, destination).putExtra(SettingsFeatureActivity.EXTRA_SECTION, section)
+            }
             "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
             "routines" -> { destination = TaskCenterActivity::class.java; intent = Intent(this, destination) }
             "skills" -> { destination = AgentControlActivity::class.java; intent = Intent(this, destination) }
@@ -599,7 +603,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, TeachModeActivity::class.java))
         }, 8)
         gap(agent, action("Skills studio", "Manage enabled skills and their permissions") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
+            openSettingsSection("skills")
         }, 8)
         gap(agent, action("Memory & routines", "Browse, search, edit, and delete Orion’s local memories") {
             startActivity(Intent(this, MemoryActivity::class.java))
