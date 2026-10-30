@@ -46,7 +46,7 @@ internal object OrionContextualIntentInterpreter {
     )
 
     private fun recentExchange(turns: List<Pair<String, String>>): String =
-        turns.takeLast(6).joinToString("\\n") { (role, text) ->
+        turns.takeLast(6).joinToString("\n") { (role, text) ->
             val speaker = if (role.equals("assistant", true) || role.equals("ai", true)) "ASSISTANT" else "USER"
             "$speaker: ${text.trim().take(600)}"
         }.take(2400)
