@@ -67,6 +67,34 @@ class OrionRuntimePersistenceTest {
         assertFalse(afterDeath.complete(recovered))
     }
 
+
+    @Test fun interruptedStandingOrderIsReconciledButNeverBlindlyReplayed() {
+        val first = OrionRuntime(context)
+        first.start()
+        assertTrue(first.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "standing-order-tick", 2))
+        val claimed = first.claimNext()!!
+        assertEquals(OrionRuntime.WorkType.SOUL_WATCH, claimed.type)
+
+        val recovered = OrionRuntime(context)
+        val pending = recovered.pendingItems()
+        assertEquals(1, pending.size)
+        assertEquals(OrionRuntime.WorkType.CAPABILITY_RECHECK, pending.single().type)
+        assertTrue(pending.single().key.startsWith("reconcile:"))
+        assertTrue(pending.single().checkpoint.contains("do not replay external effects"))
+    }
+
+    @Test fun atomicSnapshotRemainsReadableAfterNormalRecreation() {
+        val first = OrionRuntime(context)
+        first.start()
+        assertTrue(first.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "atomic-restore", 3))
+        assertTrue(stateFile.isFile)
+        val json = org.json.JSONObject(stateFile.readText())
+        assertEquals(1, json.getJSONArray("queue").length())
+
+        val restored = OrionRuntime(context)
+        assertEquals("atomic-restore", restored.pendingItems().single().key)
+    }
+
     @Test fun staleAcknowledgementsCannotCompleteOrRetryAnotherTask() {
         val runtime = OrionRuntime(context)
         runtime.start()
