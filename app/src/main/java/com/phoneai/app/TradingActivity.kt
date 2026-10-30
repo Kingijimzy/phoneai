@@ -71,9 +71,15 @@ class TradingActivity : Activity() {
         val test = Prefs.bybitTestnet(this)
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
         host.addView(label("Control room", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
-        host.addView(pill("Trading Coach · upload a chart, find setups, review mistakes", true) {
-            startActivity(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach"))
-        })
+        host.addView(row(
+            pill("Open trading workspace", true) { startActivity(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach")) },
+            pill("Orion brain", false) { startActivity(Intent(this, SoulEngineActivity::class.java)) }
+        ))
+        host.addView(label("Chat with your trader, upload a TradingView chart or strategy screenshot, and accept the playbook it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        host.addView(gap(12))
+        host.addView(playbookCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(deskCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
         val acc = card()
@@ -135,6 +141,9 @@ class TradingActivity : Activity() {
         host.addView(history, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
+        host.addView(derivCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+
         val lim = card()
         lim.addView(label("Safety limits", 12f, Theme.MUTED))
         lim.addView(label("Max order " + Prefs.maxOrderUsd(this).toInt() + " USD, max risk " + Prefs.maxRiskPct(this) + "% of balance", 15f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(6)) })
@@ -148,6 +157,103 @@ class TradingActivity : Activity() {
         host.addView(help, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(16))
         host.addView(label("Use a Read + Trade key. Never enable Withdraw.", 11f, Theme.MUTED))
+    }
+
+    private fun playbookCard(): LinearLayout {
+        val c = card()
+        c.addView(label("PLAYBOOK", 12f, Theme.MUTED, true))
+        val pend = TradingDesk.pending(this)
+        pend.forEach { st ->
+            c.addView(label("Proposed: " + st.name, 15f, Theme.CYAN, true).apply { setPadding(0, dp(10), 0, 0) })
+            c.addView(label(describe(st), 12f, Theme.MUTED))
+            c.addView(row(
+                pill("Accept", true) { TradingDesk.accept(this, st); render() },
+                pill("Dismiss", false) { TradingDesk.dismissPending(this, st.name); render() }
+            ).apply { setPadding(0, dp(6), 0, 0) })
+        }
+        val list = TradingDesk.strategies(this)
+        if (list.isEmpty() && pend.isEmpty()) c.addView(label("Empty. Open the workspace and upload a chart or describe how you trade; I will propose rules for you to accept.", 13f, Theme.TEXT).apply { setPadding(0, dp(6), 0, 0) })
+        list.forEach { st ->
+            c.addView(label(st.name, 16f, Theme.TEXT, true).apply { setPadding(0, dp(12), 0, 0) })
+            c.addView(label(describe(st), 12f, Theme.MUTED))
+            c.addView(label("Results: " + TradingDesk.evidenceFor(this, st.name), 12f, Theme.TEXT))
+            c.addView(row(pill("Remove", false) { TradingDesk.deleteStrategy(this, st.name); render() }).apply { setPadding(0, dp(6), 0, 0) })
+        }
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(10), 0, 0); visibility = View.GONE }
+        c.addView(row(pill("Match now", list.isNotEmpty()) {
+            out.visibility = View.VISIBLE; out.text = "Scanning your playbook pairs…"
+            Thread {
+                val r = try { TradingDesk.scan(this, TradingDesk.followSymbols(this)) } catch (e: Exception) { "Scan failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r }
+            }.start()
+        }).apply { setPadding(0, dp(12), 0, 0) })
+        c.addView(out)
+        return c
+    }
+
+    private fun describe(st: StrategySpec) =
+        st.instruments.ifEmpty { listOf("any instrument") }.joinToString(", ") + " · " + st.timeframes.ifEmpty { listOf("any timeframe") }.joinToString(", ") +
+            " · " + st.setupTypes.ifEmpty { listOf("any setup") }.joinToString(", ") + " · min R:R " + st.minRewardToRisk + (if (st.notes.isNotBlank()) "\n" + st.notes else "")
+
+    private fun deskCard(): LinearLayout {
+        val c = card()
+        c.addView(label("AUTOMATION & SAFETY", 12f, Theme.MUTED, true))
+        c.addView(Switch(this).apply {
+            text = "Desk automation (playbook matches, news heads-ups, morning brief)"; setTextColor(Theme.TEXT)
+            isChecked = Prefs.deskAuto(this@TradingActivity)
+            setOnCheckedChangeListener { _, on -> Prefs.setDeskAuto(this@TradingActivity, on) }
+        })
+        c.addView(label("Runs inside Market watch below. Alerts only; it never places an order by itself.", 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(8)) })
+        c.addView(Switch(this).apply {
+            text = "Kill switch: block every new order"; setTextColor(Theme.TEXT)
+            isChecked = TradingDesk.killSwitch(this@TradingActivity)
+            setOnCheckedChangeListener { _, on -> TradingDesk.setKill(this@TradingActivity, on) }
+        })
+        val info = label("Loading news and sessions…", 12f, Theme.MUTED).apply { setPadding(0, dp(10), 0, 0) }
+        c.addView(info)
+        Thread {
+            val t = try {
+                val now = System.currentTimeMillis()
+                val hour = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).hour
+                MarketSessions.describe(hour) + "\n" + MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.HIGH).take(4), now)
+            } catch (_: Exception) { "News calendar unavailable right now." }
+            runOnUiThread { info.text = t }
+        }.start()
+        return c
+    }
+
+    private fun derivCard(): LinearLayout {
+        val c = card()
+        c.addView(label("DERIV (forex and gold)", 12f, Theme.MUTED, true))
+        c.addView(label(if (DerivDesk.hasToken(this)) "Token saved" else "Not connected", 16f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(4)) })
+        c.addView(label("Start with a DEMO account token (needs trade scope, never withdraw). Every trade is a defined-risk multiplier with a stop loss and target, passes the risk gate and asks you first. Not yet verified on a live account.", 11f, Theme.MUTED))
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(8), 0, 0); visibility = View.GONE }
+        c.addView(row(
+            pill("Set token", false) { derivDialog() },
+            pill("Check", DerivDesk.hasToken(this)) {
+                out.visibility = View.VISIBLE; out.text = "Connecting…"
+                Thread { val r = DerivDesk.status(this); runOnUiThread { out.text = r } }.start()
+            }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+        c.addView(out)
+        c.addView(Switch(this).apply {
+            text = "Allow a REAL Deriv account"; setTextColor(Theme.TEXT)
+            isChecked = Prefs.derivRealAllowed(this@TradingActivity)
+            setOnCheckedChangeListener { _, on -> Prefs.setDerivRealAllowed(this@TradingActivity, on) }
+        })
+        return c
+    }
+
+    private fun derivDialog() {
+        val t = EditText(this).apply { hint = "Deriv API token"; setSingleLine(true); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val a = EditText(this).apply { hint = "App ID (optional)"; setSingleLine(true); setText(Prefs.derivAppId(this@TradingActivity)) }
+        val w = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0); addView(t); addView(a) }
+        AlertDialog.Builder(this).setTitle("Deriv API token").setMessage("Create a token at app.deriv.com with Read and Trade scopes on a demo account.").setView(w)
+            .setPositiveButton("Save") { _, _ ->
+                if (t.text.isNotBlank() && !Prefs.setDerivToken(this, t.text.toString().trim())) {
+                    Toast.makeText(this, "Secure storage unavailable; token not saved.", Toast.LENGTH_LONG).show()
+                } else { Prefs.setDerivAppId(this, a.text.toString()); render() }
+            }.setNegativeButton("Cancel", null).show()
     }
 
     private fun startTradeImport() {
