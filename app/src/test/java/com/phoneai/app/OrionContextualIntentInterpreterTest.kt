@@ -29,14 +29,17 @@ class OrionContextualIntentInterpreterTest {
     @Test fun fixThatResolvesToTheActiveTaskRatherThanAKeywordTool() {
         val result = OrionContextualIntentInterpreter.resolve(
             "fix that",
-            emptyList(),
+            listOf(
+                "user" to "Improve Orion's task recovery.",
+                "assistant" to "I found that the resume path drops the latest correction."
+            ),
             "Repair Orion's task recovery and preserve its existing behavior."
         )
         assertEquals(OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS, result.kind)
         assertTrue(result.contextBlock.contains("Repair Orion's task recovery"))
+        assertTrue(result.contextBlock.contains("resume path drops the latest correction"))
         assertTrue(result.contextBlock.contains("not, by themselves, authorization"))
     }
-
     @Test fun testEverythingInheritsThePriorSubject() {
         val result = OrionContextualIntentInterpreter.resolve(
             "test everything",
