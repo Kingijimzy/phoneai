@@ -1749,7 +1749,7 @@ Rules:
                     sleep = { ms -> sleepUnlessStopped(ms) },
                     onRetry = { n, failure ->
                         ui.phase("recovering")
-                        ui.note("[TASK:RECOVER]\nRetry $n/${RecoveryPolicy.MAX_READ_RETRIES} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
+                        ui.note("[TASK:RECOVER]\nRetry $n/${OrionAutonomySettings.read(svc).maxRetries} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
                         failedCallGuard.forget(tool, args)
                         toolCalls++
                     }
