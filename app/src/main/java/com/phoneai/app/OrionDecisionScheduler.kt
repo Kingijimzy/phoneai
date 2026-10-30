@@ -44,6 +44,21 @@ internal class OrionDecisionScheduler(
         Decision(accepted, if (accepted) "window_recheck_queued" else "already_queued_or_capacity", OrionRuntime.WorkType.CAPABILITY_RECHECK)
     }
 
+    /** Safe external signals (for example a filtered notification) enter the same durable queue. */
+    fun onExternalPresenceEvent(eventKey: String, description: String): Decision = synchronized(lock) {
+        val key = eventKey.trim().take(100)
+        val detail = description.trim().take(120)
+        if (key.isBlank() || detail.isBlank()) return@synchronized Decision(false, "invalid_presence_event", null)
+        val now = clock()
+        val dedupe = "$key:${now / PRESENCE_DEDUPE_WINDOW_MS}"
+        val accepted = runtime.enqueue(
+            OrionRuntime.WorkType.PRESENCE_EVENT, dedupe, 3,
+            goal = "Record safe external event: $detail",
+            checkpoint = "source=system_event; content=not_retained"
+        )
+        Decision(accepted, if (accepted) "presence_event_queued" else "duplicate_or_capacity", OrionRuntime.WorkType.PRESENCE_EVENT)
+    }
+
     /** Called only after an explicit user-requested agent task ends. */
     fun onTaskFinished(task: String, success: Boolean): Decision = synchronized(lock) {
         val key = ExperiencePolicy.gist(task).take(100)
