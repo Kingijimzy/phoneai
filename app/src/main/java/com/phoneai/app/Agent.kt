@@ -2349,6 +2349,7 @@ Rules:
             "battery" -> tools.battery()
             "time" -> tools.time()
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command")) { stopped }
+            "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_list", "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch" -> TradingDesk.run(svc, tool, a)
             "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
             "gaming_session_summary" -> GameCoachStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent notes:\n" + GameCoachStore.all(svc).take(12).joinToString("\n") { "${it.game} · ${it.durationMinutes} min · ${it.result} · ${it.note}" } else ""
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
