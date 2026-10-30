@@ -605,6 +605,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         lastScreenSnapshot = ""
         lastScreenBeforeAction = ""
         failedCallGuard.clear()
+        activeIntentContext = ""
     }
 
     fun runConversation(input: String) {
@@ -840,6 +841,7 @@ Rules:
         while (liveHistory.length() > 0) liveHistory.remove(0)
         chatCache.clear()
         activeRequestScope = ""; lastActionScope = ""; lastActionScopeAt = 0L
+        activeIntentContext = ""
         history.put(msg("system", systemPrompt(svc)))
     }
 
@@ -1311,7 +1313,8 @@ Rules:
             }
             askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
-        val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(command)
+        val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(inputCommand.trim()) &&
+            OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
         if (!resumeRequest) {
             failedCallGuard.clear()
             // Proofs belong to one task only. Reusing a previous task's success could
