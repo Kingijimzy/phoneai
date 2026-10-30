@@ -484,10 +484,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }.show()
             "terminal" -> startActivity(Intent(this, TerminalActivity::class.java))
             "browser" -> startActivity(Intent(this, BrowserActivity::class.java))
-            "chat_files" -> AlertDialog.Builder(this)
-                .setTitle("Chat files")
-                .setMessage("Orion can attach and analyse images from the composer. A searchable file shelf for all conversation attachments is not implemented yet.")
-                .setPositiveButton("OK", null).show()
+            "chat_files" -> {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    type = "image/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                startActivityForResult(Intent.createChooser(picker, "Attach images to this chat"), 44)
+            }
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
             "capabilities" -> showToolCatalog()
             "feedback" -> showFeedbackDialog()
