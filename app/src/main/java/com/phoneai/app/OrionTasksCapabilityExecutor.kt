@@ -12,7 +12,7 @@ import java.util.Locale
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
         "ask_agent", "create_agent", "task_list", "task_add", "task_update", "task_delete",
-        "undo_last", "undo_status", "morning_brief", "standing_order"
+        "morning_brief", "standing_order"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -105,9 +105,6 @@ internal object OrionTasksCapabilityExecutor {
                 else -> "error: task #$id was not deleted; it may not exist or device storage may be unavailable"
             }
         }
-        "undo_status" -> UndoStore.status(service)
-        "undo_last" -> if (stopped()) "error: task was stopped before undo."
-            else UndoStore.undoLast(service)
         else -> "error: tasks executor does not implement '$tool'."
     }
 }
