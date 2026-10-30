@@ -23,7 +23,7 @@ internal object OrionCapabilityAdapters {
             "python_exec", "extension_list", "extension_create", "extension_test",
             "extension_enable", "extension_run", "extension_disable"
         ),
-        Backend.FILES to setOf("find_files", "open_file", "workspace_write", "workspace_read"),
+        Backend.FILES to setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read"),
         Backend.BROWSER to setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
