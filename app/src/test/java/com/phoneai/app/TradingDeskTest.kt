@@ -85,9 +85,15 @@ class TradingDeskTest {
         assertTrue(AgentPolicy.defaultOn("trading_research"))
     }
 
-    @Test fun tradingExecutionPackExistsButNotImplementedUntilOrderPath() {
+    @Test fun tradingExecutionPackIsImplementedButOptIn() {
         val pack = AgentPolicy.packs.first { it.id == "trading_execution" }
-        assertFalse(pack.implemented)
+        assertTrue(pack.implemented)
         assertFalse(AgentPolicy.defaultOn(pack.id))
+    }
+
+    @Test fun isTradingOrderToolDetectsPlaceAndCancel() {
+        assertTrue(GatePolicy.isTradingOrderTool("bybit_place_order"))
+        assertTrue(GatePolicy.isTradingOrderTool("bybit_cancel_order"))
+        assertFalse(GatePolicy.isTradingOrderTool("bybit_public_ticker"))
     }
 }
