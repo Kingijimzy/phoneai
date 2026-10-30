@@ -55,6 +55,8 @@ class OrionContinuityIntegrationTest {
             supersedesId = null
         )
         assertTrue(decision.startsWith("Recorded decision"))
+        assertTrue("The accepted decision must be retrievable by its original task terms",
+            OrionDecisionHistoryStore.get(context).search(original).any { it.status == "ACCEPTED" })
 
         val graph = OrionObjectiveGraph.parse(
             """{"objectives":[{"id":"provider","title":"Verify provider-neutral conversation restoration"},{"id":"recovery","title":"Verify durable task recovery","dependsOn":["provider"]}]}""",
