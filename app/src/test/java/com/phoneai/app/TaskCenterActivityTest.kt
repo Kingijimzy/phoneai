@@ -49,13 +49,29 @@ class TaskCenterActivityTest {
         assertEquals("running", TaskStore.all(context).first { it.id == task.id }.status)
     }
 
-    @Test fun stopControlPausesCheckpointAndRetainsUncertainInflightEvidence() {
+    @Test fun stopControlMarksInflightActionForRecoveryInsteadOfDiscardingIt() {
         assertTrue(AgentCheckpointStore.begin(context, "Open Settings and inspect the Android version"))
         assertTrue(AgentCheckpointStore.beginStep(context, "open_app", JSONObject().put("package", "com.android.settings")))
         val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
 
         val stop = buttons(activity.window.decorView).firstOrNull { it.text.toString() == "Stop active run" }
-        assertNotNull("Saved agent session must expose a Stop control", stop)
+        assertNotNull("Saved agent session must expose a terminal Stop control", stop)
+        stop!!.performClick()
+
+        val checkpoint = AgentCheckpointStore.pending(context)
+        assertNotNull(checkpoint)
+        assertEquals("recovery_required", checkpoint!!.optString("status"))
+        assertNotNull(checkpoint.optJSONObject("inFlight"))
+        assertTrue(checkpoint.optString("recoveryNotice").contains("outcome is unknown"))
+    }
+
+    @Test fun pauseControlPausesCheckpointAndRetainsUncertainInflightEvidence() {
+        assertTrue(AgentCheckpointStore.begin(context, "Open Settings and inspect the Android version"))
+        assertTrue(AgentCheckpointStore.beginStep(context, "open_app", JSONObject().put("package", "com.android.settings")))
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+
+        val stop = buttons(activity.window.decorView).firstOrNull { it.text.toString() == "Pause active run" }
+        assertNotNull("Saved agent session must expose a Pause control", stop)
         stop!!.performClick()
 
         val checkpoint = AgentCheckpointStore.pending(context)
