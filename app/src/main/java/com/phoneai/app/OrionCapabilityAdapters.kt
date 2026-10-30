@@ -46,7 +46,7 @@ internal object OrionCapabilityAdapters {
         Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "knowledge_search",
             "graph_link", "graph_query", "self_review"),
         Backend.TASKS to setOf("ask_agent", "create_agent", "task_list", "task_add", "task_update",
-            "task_delete", "undo_last", "undo_status", "ask_user", "morning_brief"),
+            "task_delete", "undo_last", "undo_status", "ask_user", "morning_brief", "standing_order"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
             "weather", "github_public", "bybit_public_ticker"),
         Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy",
