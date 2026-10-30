@@ -13,6 +13,15 @@ internal object ConversationAutoRoutePolicy {
     private val runtimeState = Regex("(?i)\\b(installed|install|version|available|working|present)\\b")
     private val directRuntimeCommand = Regex("(?i)\\b(python3?|pip3?)\\s+--version\\b|\\b(which|whereis)\\s+(python3?|pip3?)\\b")
 
+    // Explicit requests to create and execute code in a named terminal must reach the guarded tool agent,
+    // even when the conversation is currently in Talk mode and even when the model could otherwise draft code.
+    private val terminalCodeTask = Regex(
+        "(?is)\\b(create|write|save|make|build)\\b.{0,100}\\b(code|script|program|file|calculator|python)\\b.{0,180}\\b(run|execute|test)\\b.{0,60}\\b(linux|alpine|termux|terminal|shell)\\b|" +
+            "\\b(run|execute|test)\\b.{0,80}\\b(python|script|program|calculator|code)\\b.{0,60}\\b(linux|alpine|termux|terminal)\\b"
+    )
+    // Short follow-ups such as "test it yourself" resume the tool agent instead of returning a generic disclaimer.
+    private val executeFollowUp = Regex("(?i)^\\s*(test|run|execute|try)\\s+(it|that|the code|the script)(\\s+yourself)?[.! ]*\\s*$")
+
     private val publicRepositoryInspection = Regex(
         "(?i)\\b(check|inspect|explain|describe|summari[sz]e|tell me about|what is|what's|read)\\b.*" +
             "\\b(github|git hub)\\b.*\\b(repo|repository|project)\\s+(?:called\\s+|named\\s+|is\\s+)?[a-z0-9_.-]{2,100}\\b|" +
@@ -33,6 +42,8 @@ internal object ConversationAutoRoutePolicy {
         if (text.isEmpty()) return false
         return (runtimeVerb.containsMatchIn(text) && runtimeTarget.containsMatchIn(text) && runtimeState.containsMatchIn(text)) ||
             directRuntimeCommand.containsMatchIn(text) ||
+            terminalCodeTask.containsMatchIn(text) ||
+            executeFollowUp.matches(text) ||
             publicRepositoryInspection.containsMatchIn(text) ||
             repositoryNameBeforeType.containsMatchIn(text) ||
             explicitWebsiteVisit.containsMatchIn(text)
