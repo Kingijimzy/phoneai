@@ -47,9 +47,11 @@ object AgentCheckpointStore {
         save(c, o)
     }
 
-    fun markRunning(c: Context): Boolean = update(c) {
-        it.put("status", "running")
-        // Keep recovery evidence until the user has explicitly acknowledged it.
+    fun markRunning(c: Context): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optBoolean("stopRequested")) return@synchronized false
+        checkpoint.put("status", "running").put("updatedAt", System.currentTimeMillis())
+        save(c, checkpoint)
     }
 
     fun needsRecoveryConfirmation(c: Context): Boolean = synchronized(lock) {
@@ -71,6 +73,7 @@ object AgentCheckpointStore {
             val inFlight = o.optJSONObject("inFlight") ?: return@synchronized false
             val tool = inFlight.optString("tool", "unknown").take(80)
             o.remove("inFlight")
+            o.remove("stopRequested")
             o.put("recoveryNotice", "User confirmed checking the outcome of interrupted action '$tool'. Confirmation: " + confirmation.take(240))
             o.put("status", "paused")
             o.put("updatedAt", System.currentTimeMillis())
@@ -124,7 +127,8 @@ object AgentCheckpointStore {
     /** Persist intent before executing any tool; never overwrite an unresolved action marker. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = synchronized(lock) {
         val existing = readCheckpoint(c) ?: return@synchronized false
-        if (!CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
+        if (existing.optBoolean("stopRequested") ||
+            !CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
         update(c) { o ->
             o.put("inFlight", JSONObject()
                 .put("tool", tool.take(80))
@@ -151,11 +155,18 @@ object AgentCheckpointStore {
             while (steps.length() > MAX_RECORDED_STEPS) steps.remove(0)
             o.put("steps", steps)
             o.remove("inFlight")
+            if (o.optBoolean("stopRequested")) o.put("status", "cancelled")
         }
     }
 
     fun pause(c: Context): Boolean {
-        val saved = update(c) { it.put("status", "paused") }
+        val saved = update(c) {
+            if (it.optBoolean("stopRequested")) {
+                it.put("status", if (it.optJSONObject("inFlight") != null) "recovery_required" else "cancelled")
+            } else {
+                it.put("status", "paused")
+            }
+        }
         if (saved) runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
         return saved
     }
@@ -167,6 +178,7 @@ object AgentCheckpointStore {
     fun stop(c: Context, reason: String = "User stopped the agent run"): Boolean = synchronized(lock) {
         val checkpoint = readCheckpoint(c) ?: return@synchronized false
         val inFlight = checkpoint.optJSONObject("inFlight")
+        checkpoint.put("stopRequested", true)
         if (inFlight != null) {
             checkpoint.put("status", "recovery_required")
             checkpoint.put("recoveryNotice", reason.take(300) + "; the in-flight action outcome is unknown. Inspect current state before continuing.")
@@ -180,7 +192,9 @@ object AgentCheckpointStore {
     }
 
     fun complete(c: Context): Boolean {
-        // Never mark a task complete while an action's outcome is still uncertain.
+        // Never complete a stopped task or one whose action outcome is uncertain.
+        val current = synchronized(lock) { readCheckpoint(c) }
+        if (current?.optBoolean("stopRequested") == true) return false
         if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return false
         val saved = update(c) {
             it.put("status", "completed")
