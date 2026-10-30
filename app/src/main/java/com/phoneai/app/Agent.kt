@@ -455,7 +455,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             failedCallGuard.recordFailure(tool, args)
             try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
-        taskProofs.record(tool, verifiedResult)
         AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true),
             if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified; details remain in the task transcript"
             else "tool returned; details remain in the task transcript")
@@ -2142,15 +2141,18 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
         return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
-            val result = dispatchLegacyTool(route.tool, args)
+            val backendResult = runCatching { dispatchLegacyTool(route.tool, args) }
+                .getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
-                OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, result)
+                OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, backendResult)
             }.getOrDefault(false)
-            if (!saved) {
+            val finalResult = if (!saved && !backendResult.trimStart().startsWith("error", true)) {
                 // Evidence persistence failure must never be misreported as verified execution.
-                if (result.trimStart().startsWith("error", true)) result
-                else "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${result.take(240)}"
-            } else result
+                "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${backendResult.take(240)}"
+            } else backendResult
+            // Record only the final result after durable evidence succeeds; never retain a stale success.
+            taskProofs.record(route.tool, finalResult)
+            finalResult
         }
     }
 
