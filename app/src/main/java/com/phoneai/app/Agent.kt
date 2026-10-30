@@ -1347,8 +1347,9 @@ Rules:
                         "chrome_search", JSONObject().put("query", fast.query)
                     )
                 }
-                if (r.startsWith("error:", true) &&
-                    (r.contains("cancel", true) || r.contains("denied", true) || r.contains("approval", true))) {
+                if (r.startsWith("error", true)) {
+                    // A device action may have partially started even when verification failed.
+                    // Never fall through and ask the model to dispatch the same intent again.
                     ui.say(r)
                     return
                 }
