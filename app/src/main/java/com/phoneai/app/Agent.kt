@@ -2166,8 +2166,7 @@ Rules:
                     { svc.readScreen().also { lastScreenSnapshot = it } },
                     { path -> githubAccountRead(path) },
                     researchCancelled,
-                    { question, options, access -> ui.askUser(question, options, access) }
-                    ,
+                    { question, options, access -> ui.askUser(question, options, access) },
                     pythonExecutor = pythonExecutor
                 ) ?: "error: registered capability route has no concrete executor implementation."
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
