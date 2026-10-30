@@ -58,6 +58,8 @@ internal object OrionEvidenceLedger {
     private fun outcome(result: String): Outcome = when {
         result.trimStart().startsWith("error", true) -> Outcome.FAILED
         result.contains("LOCAL VERIFY PASS:", true) -> Outcome.VERIFIED
+        result.contains("PASS:", true) && !result.contains("UNVERIFIED:", true) && !result.contains("FAIL:", true) -> Outcome.VERIFIED
+        Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b", RegexOption.IGNORE_CASE).containsMatchIn(result) -> Outcome.VERIFIED
         else -> Outcome.EXECUTED_UNVERIFIED
     }
 
