@@ -84,6 +84,12 @@ class OrionNotificationListener : NotificationListenerService() {
                 recent[sbn.key] = item
                 while (recent.size > 20) recent.remove(recent.keys.first())
             }
+            // Notify the live Soul session without retaining notification contents in its durable queue.
+            // The listener has already excluded sensitive apps and financial/authentication content.
+            PhoneAiService.instance?.onExternalPresenceEvent(
+                eventKey = "notification:${pkg.take(80)}",
+                safeDescription = "notification from ${app.take(60)}"
+            )
         } catch (_: Exception) {
             // Fail closed: notification content is never logged or forwarded on parsing errors.
         }
