@@ -2069,11 +2069,6 @@ Rules:
                     ui.note("[TASK:RECOVER]\n" + (if (ok) "Read recovered after $readRetries retr${if (readRetries == 1) "y" else "ies"}" else "Read still failing after $readRetries retr${if (readRetries == 1) "y" else "ies"}; changing approach"))
                 }
             }
-            if (activeObjectiveId.isNotBlank()) {
-                val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, tool, result)
-                if (receipt != null) result += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
-            }
-            activeObjectiveId = ""
             runTools++
             if (result.startsWith("error")) runFailed++
             ui.note(activityNote(tool, args, result))
@@ -2089,6 +2084,11 @@ Rules:
                     ui.say("Browser automation paused, but I could not save the handoff. Check the page before asking Orion to continue.")
                     return
                 }
+                if (activeObjectiveId.isNotBlank()) {
+                    val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, tool, result)
+                    if (receipt != null) result += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
+                }
+                activeObjectiveId = ""
                 OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say(result + " I have paused the automated task. Complete the step yourself, then ask Orion to continue.")
                 return
@@ -2099,6 +2099,11 @@ Rules:
                 ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
                 return
             }
+            if (activeObjectiveId.isNotBlank()) {
+                val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, tool, result)
+                if (receipt != null) result += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
+            }
+            activeObjectiveId = ""
             val toolFailure = ToolResultPolicy.failureReason(result)
             if (toolFailure != null) {
                 val failureKind = RecoveryPolicy.classify(result)
