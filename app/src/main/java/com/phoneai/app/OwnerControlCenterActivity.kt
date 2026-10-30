@@ -123,7 +123,8 @@ class OwnerControlCenterActivity : Activity() {
 
         section("PRIVACY & SECRETS")
         addText(secretSummary(), 12f, Theme.TEXT, false, 4)
-        addButton("Manage provider keys and integrations") { startActivity(Intent(this, SettingsActivity::class.java)) }
+        addButton("Inspect / remove stored credentials") { showCredentialManager() }
+        addButton("Add or rotate provider keys and integrations") { startActivity(Intent(this, SettingsActivity::class.java)) }
         addButton("View Android permission grants") { showPermissionStatus() }
         addButton("Review local action and policy audit") { showAudit() }
         addButton("Open memory and learning controls") { startActivity(Intent(this, MemoryActivity::class.java)) }
@@ -147,6 +148,42 @@ class OwnerControlCenterActivity : Activity() {
             append(if (bybit) "both present (values masked)" else "not fully configured")
             append("\nCredential values are encrypted by the app vault where supported and are not displayed in this summary.")
         }
+    }
+
+    private fun showCredentialManager() {
+        val providers = Providers.all
+        val labels = providers.map { p ->
+            p.label + " · " + if (Prefs.hasKey(this, p.id)) "CREDENTIAL STORED" else "not configured"
+        }.toMutableList()
+        labels += "Bybit exchange · " + if (Prefs.bybitKey(this).isNotBlank() && Prefs.bybitSecret(this).isNotBlank()) "BOTH CREDENTIALS STORED" else "not fully configured"
+        AlertDialog.Builder(this).setTitle("Credential vault · values masked")
+            .setItems(labels.toTypedArray()) { _, index ->
+                if (index < providers.size) {
+                    val provider = providers[index]
+                    if (Prefs.hasKey(this, provider.id)) {
+                        AlertDialog.Builder(this).setTitle(provider.label + " credential")
+                            .setMessage("The key is stored in the Android Keystore-backed AES-GCM vault. Its value is intentionally not printed to the screen or audit log.")
+                            .setNeutralButton("REMOVE KEY") { _, _ ->
+                                if (Prefs.setKey(this, provider.id, "")) {
+                                    Toast.makeText(this, provider.label + " credential removed.", Toast.LENGTH_SHORT).show()
+                                } else Toast.makeText(this, "Credential removal failed.", Toast.LENGTH_LONG).show()
+                            }
+                            .setPositiveButton("CLOSE", null).show()
+                    } else {
+                        Toast.makeText(this, "No stored key for " + provider.label, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    AlertDialog.Builder(this).setTitle("Bybit credentials")
+                        .setMessage("Remove both stored Bybit credentials? This does not revoke the API key at Bybit; revoke it in your Bybit account as well.")
+                        .setNegativeButton("CANCEL", null)
+                        .setPositiveButton("REMOVE BOTH") { _, _ ->
+                            val ok = Prefs.setBybit(this, "", "")
+                            Toast.makeText(this, if (ok) "Stored Bybit credentials removed." else "Could not remove stored Bybit credentials.", Toast.LENGTH_LONG).show()
+                        }.show()
+                }
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
     }
 
     private fun showToolRules() {
@@ -179,7 +216,9 @@ class OwnerControlCenterActivity : Activity() {
             "Background execution — Android battery, process and foreground-service rules apply; Orion cannot guarantee permanent background execution.",
             "Network/provider limits — provider quotas, billing, model availability and server-side refusals are controlled externally.",
             "OpenAI/system safety instructions — external to this app and not configurable or bypassable from Orion.",
-            "Hard security invariants — certain checks cannot be disabled through app preferences; the app must fail closed when required proof or authorization is absent."
+            "Hard security invariants — certain checks cannot be disabled through app preferences; the app must fail closed when required proof or authorization is absent.",
+            "Source policy modules — ActionLearningPolicy, AgentDispatchPolicy, AgentPolicy, CheckpointTransitionPolicy, ConversationAutoRoutePolicy, GatePolicy, LinuxRuntimePolicy, OrionKeyboardPolicy, OrionPerformancePolicy, OrionRuntimePolicy, OrionSkillInstallPolicy, ProviderBillingPolicy, ProviderFallbackPolicy, PythonExecutionPolicy, RecoveryPolicy, RoutineReplayCheckpointPolicy, RoutineReplayPolicy, SharedToolSurfacePolicy, ShellPolicy, SkillAuthorizationPolicy, StreamCompletionPolicy, StreamFallbackPolicy, SystemIntentPolicy, TaskScopePolicy, ToolPermissionPolicy and ToolResultPolicy.",
+            "Other app policy modules — AgentPrivacyFilter, ChatBrowserUrlPolicy, GeminiLivePolicy, LiveCallStylePolicy, ResearchRoutingPolicy, ResearchFollowUpPolicy, WakeWordPolicy and the MCP scope policy. Their implementation constraints are enforced by their owning modules; this panel does not silently rewrite source code or disable invariants."
         )
         AlertDialog.Builder(this).setTitle("Orion app policy register")
             .setMessage(entries.mapIndexed { i, s -> "${i + 1}. $s" }.joinToString("\n\n"))
