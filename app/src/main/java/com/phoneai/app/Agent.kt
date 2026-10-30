@@ -2307,25 +2307,10 @@ Rules:
                 val id = a.optString("id").trim()
                 if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
             }
-            "device_location" -> tools.deviceLocation()
-            "settings" -> tools.settings(a.optString("page", "main"))
-            "alarm" -> tools.alarm(a.optInt("hour", 7), a.optInt("minute", 0), a.optString("label", "Orion"))
-            "timer" -> tools.timer(a.optInt("seconds", 60), a.optString("label", "Orion"))
-            "volume" -> tools.volume(a.optString("action", "up"), a.optInt("percent", 50))
-            "flashlight" -> tools.flashlight(a.optBoolean("on", true))
-            "copy" -> tools.copy(a.optString("text"))
-            "battery" -> tools.battery()
-            "time" -> tools.time()
             "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
             "gaming_session_summary" -> GameCoachStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent notes:\n" + GameCoachStore.all(svc).take(12).joinToString("\n") { "${it.game} · ${it.durationMinutes} min · ${it.result} · ${it.note}" } else ""
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
             "gaming_focus_preset" -> GamingFocus.start(svc, a.optInt("minutes", 0))
-            "device_info" -> tools.deviceInfo()
-            "wait" -> {
-                val s = a.optDouble("seconds", 2.0).coerceIn(0.5, 10.0)
-                Thread.sleep((s * 1000).toLong())
-                "waited"
-            }
             else -> "error: unknown tool $tool"
         }
         val failed = result.trimStart().startsWith("error", ignoreCase = true)

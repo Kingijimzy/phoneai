@@ -161,5 +161,20 @@ class OrionCapabilityAdaptersTest {
         assertEquals(OrionCapabilityAdapters.Backend.TASKS, OrionCapabilityAdapters.route("ask_user")?.backend)
     }
 
+    
+    @Test fun everyUtilityRouteHasAConcreteDedicatedExecutor() {
+        val utilities = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.UTILITIES }
+        assertEquals(
+            setOf("settings", "alarm", "timer", "volume", "flashlight", "copy", "battery",
+                "time", "wait", "device_info", "device_location"),
+            utilities.map { it.tool }.toSet()
+        )
+        utilities.forEach {
+            assertTrue("Missing utilities executor for ${it.tool}", OrionUtilitiesCapabilityExecutor.supports(it.tool))
+        }
+        assertEquals(OrionCapabilityAdapters.Backend.UTILITIES, OrionCapabilityAdapters.route("device_location")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.UTILITIES, OrionCapabilityAdapters.route("wait")?.backend)
+    }
 
 }
