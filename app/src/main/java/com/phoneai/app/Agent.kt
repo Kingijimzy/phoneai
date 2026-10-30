@@ -1825,7 +1825,8 @@ Rules:
                 // Anything else (writes, shell, consequential actions, permission errors) is never repeated here.
                 val outcome = RecoveryPolicy.retryRead(
                     first = result,
-                    maxReadRetries = effectiveRecoveryMaxAttempts(),\n                    baseBackoffSeconds = ownerRecoveryBackoffSeconds(),
+                    maxReadRetries = effectiveRecoveryMaxAttempts(),
+                    baseBackoffSeconds = ownerRecoveryBackoffSeconds(),
                     isFailure = { ToolResultPolicy.failureReason(it) != null },
                     stopped = { stopped },
                     budgetExhausted = { budgetStopReason() != null },
