@@ -1093,6 +1093,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     internal fun onAgentTaskFinished(task: String, success: Boolean) {
         decisionScheduler?.onTaskFinished(task, success)
+        // Saved Task Centre items opt into this bridge through the explicit task-id prefix
+        // added by TaskCenterActivity. Only Agent's evidence-based completion path calls
+        // this with success=true; never infer success from a generic assistant reply.
+        val savedTaskId = Regex("(?i)^Work on saved task #(\\d+):").find(task.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (savedTaskId != null && success) {
+            runCatching {
+                val saved = TaskStore.all(this).firstOrNull { it.id == savedTaskId }
+                if (saved != null && saved.status in setOf("running", "in_progress")) {
+                    TaskStore.update(
+                        this,
+                        savedTaskId,
+                        status = "completed",
+                        resultSummary = "Orion's task-level completion gate passed. Review the chat transcript and verification notes for the recorded evidence."
+                    )
+                }
+            }
+        }
         scheduleRuntimeDrain()
     }
 
