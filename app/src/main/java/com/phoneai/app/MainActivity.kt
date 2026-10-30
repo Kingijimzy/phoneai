@@ -241,6 +241,8 @@ class MainActivity : ComponentActivity() {
             "cloud_coding" -> { destination = CursorCloudAgentActivity::class.java; intent = Intent(this, destination) }
             "capabilities" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
             "capability_report" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }
+            "agent_control" -> { destination = AgentControlActivity::class.java; intent = Intent(this, destination) }
+            "termux_bridge" -> { destination = TermuxBridgeActivity::class.java; intent = Intent(this, destination) }
             "owner_control" -> { destination = OwnerControlCenterActivity::class.java; intent = Intent(this, destination) }
             "gemini_live" -> { destination = GeminiLiveActivity::class.java; intent = Intent(this, destination) }
             else -> {

@@ -314,6 +314,8 @@ private fun ToolsPage(onOpenFeature: (String) -> Unit) {
             Feature("Cloud coding agent", "Connected coding-agent workspace", Icons.Rounded.SmartToy, "cloud_coding"),
             Feature("Capability & integrations board", "Connected services, permissions and capability gaps", Icons.Rounded.Public, "capabilities"),
             Feature("Capability report", "Inspect the current capability and readiness report", Icons.Rounded.Shield, "capability_report"),
+            Feature("Approval & capabilities", "Approval mode, trusted sessions and tool access", Icons.Rounded.Shield, "agent_control"),
+            Feature("Termux bridge", "Optional external terminal runtime with explicit approval", Icons.Rounded.Tune, "termux_bridge"),
             Feature("Owner Control Center", "Private autonomy, recovery, extension and Watcher controls", Icons.Rounded.Settings, "owner_control")
         ),
         "ADVANCED VOICE" to listOf(
