@@ -42,7 +42,7 @@ internal object OrionAutonomyPolicy {
     }
 
     fun description(mode: OrionMode): String = when (mode) {
-        OrionMode.TALK -> "Conversation and read-only tools; changes are blocked."
+        OrionMode.TALK -> "Conversation and read-only tools; all registered write tools are hard-blocked."
         OrionMode.ASSIST -> "Help plan and act with the current per-tool policy."
         OrionMode.AUTOPILOT -> "Execute permitted multi-step goals; existing confirmation and safety gates still apply."
         OrionMode.BUILDER -> "Create and test disabled drafts; activation follows the current approval policy."
