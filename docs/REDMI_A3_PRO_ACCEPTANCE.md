@@ -18,7 +18,7 @@ Do not mark a row PASS from a source-code inspection or an emulator-only run.
 - [ ] Python sandbox policy tests pass (`python3 -m unittest discover -s app/src/test/python -v`).
 - [ ] Extension sandbox tests pass (`ExtensionSandboxTest`, `SelfExtendingExtensionsTest`, and `CapabilityGapPlannerTest`).
 - [ ] Runtime/restart tests pass (`OrionRuntimePersistenceTest`, `OrionRuntimePolicyTest`, `OrionRecoveryPolicyTest`).
-- [ ] Permission/notification and per-tool override regressions pass (`OrionNotificationPolicyTest`, `ToolPermissionOverrideTest`).
+- [ ] Permission/notification and per-tool override regressions pass (`OrionNotificationPolicyTest`, `ToolPermissionOverrideTest`, `ToolPermissionsPersistenceTest`).
 - [ ] MCP retry-scope tests pass (`McpConnectorScopePolicyTest`): safe handshake/catalogue requests may retry once; `tools/call` must not retry.
 - [ ] APK archive, required ARM64 native libraries, package metadata, and APK signature validation pass.
 
