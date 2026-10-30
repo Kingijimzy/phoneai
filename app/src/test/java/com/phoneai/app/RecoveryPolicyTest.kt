@@ -82,6 +82,13 @@ class RecoveryPolicyTest {
         assertEquals(1600L, RecoveryPolicy.backoffMillis(9))
     }
 
+    @Test fun ownerConfiguredBackoffUsesBaseAndBoundedExponentialDelay() {
+        assertEquals(15_000L, RecoveryPolicy.backoffMillis(1, 15))
+        assertEquals(30_000L, RecoveryPolicy.backoffMillis(2, 15))
+        assertEquals(30_000L, RecoveryPolicy.backoffMillis(99, 15))
+        assertEquals(300_000L, RecoveryPolicy.backoffMillis(1, 999))
+    }
+
     @Test fun replanNudgeForbidsRepeatingTheSameAction() {
         assertTrue(RecoveryPolicy.replanNudge("shell", Failure.DIAGNOSTIC, "exit code 1").contains("Do not repeat this action unchanged"))
     }
