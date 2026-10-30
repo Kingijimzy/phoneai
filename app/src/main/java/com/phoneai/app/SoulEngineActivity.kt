@@ -19,6 +19,8 @@ class SoulEngineActivity : ComponentActivity() {
     private val selfTestState = mutableStateOf("")
     private val coreEnabledState = mutableStateOf(false)
     private val proposalsState = mutableStateOf<List<SoulEngineState.Proposal>>(emptyList())
+    private val goalState = mutableStateOf("")
+    private val modeState = mutableStateOf(SoulEngineState.Mode.TALK)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +33,19 @@ class SoulEngineActivity : ComponentActivity() {
                         status = statusState.value,
                         metrics = metricsState.value,
                         selfTest = selfTestState.value,
+                        goal = goalState.value,
+                        mode = modeState.value,
+                        onSaveGoal = { goal, mode ->
+                            val saved = runCatching { SoulEngineState.setGoal(this@SoulEngineActivity, goal, mode) }.getOrDefault(false)
+                            if (saved) {
+                                goalState.value = goal.trim()
+                                modeState.value = mode
+                                Toast.makeText(this@SoulEngineActivity, "Soul Engine goal and mode saved", Toast.LENGTH_SHORT).show()
+                                refreshSnapshot()
+                            } else {
+                                Toast.makeText(this@SoulEngineActivity, "Could not save Soul Engine controls", Toast.LENGTH_LONG).show()
+                            }
+                        },
                         coreEnabled = coreEnabledState.value,
                         onCoreEnabledChange = { enabled ->
                             AgentPolicy.setEnabled(this@SoulEngineActivity, "orion_core", enabled)
@@ -101,6 +116,8 @@ class SoulEngineActivity : ComponentActivity() {
             val memoryCount = runCatching { MemoryStore.all(this).size }.getOrDefault(0)
             val knowledgeCount = runCatching { KnowledgeStore.list(this).size }.getOrDefault(0)
             val soulState = runCatching { SoulEngineState.snapshot(this) }.getOrNull()
+            goalState.value = soulState?.goal.orEmpty()
+            modeState.value = soulState?.mode ?: SoulEngineState.Mode.TALK
             proposalsState.value = soulState?.proposals ?: emptyList()
             val pendingProposals = soulState?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0
             val lessonCount = soulState?.lessons?.size ?: 0
