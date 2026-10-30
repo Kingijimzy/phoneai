@@ -36,8 +36,8 @@ internal object CapabilityRegistry {
     }
 
     fun evaluate(f: Facts): Entry = when {
-        !f.supported -> Entry(f, State.UNSUPPORTED, "not supported on this device")
-        !f.enabledByUser -> Entry(f, State.DISABLED, "turned off in Tools & Skills")
+        !f.supported -> Entry(f, State.UNSUPPORTED, f.limitation ?: "not supported on this device")
+        !f.enabledByUser -> Entry(f, State.DISABLED, f.limitation ?: "turned off in Tools & Skills")
         f.permissionNeeded != null -> Entry(f, State.PERMISSION_REQUIRED, f.permissionNeeded)
         f.setupNeeded != null -> Entry(f, State.SETUP_REQUIRED, f.setupNeeded)
         f.missingDependencies.isNotEmpty() -> Entry(f, State.MISSING_DEPENDENCY, "missing: " + f.missingDependencies.joinToString(", "))
