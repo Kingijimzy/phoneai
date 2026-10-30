@@ -110,7 +110,11 @@ internal object OrionObjectiveGraph {
     }
 
     fun recordExecution(context: Context, id: String, tool: String, result: String): String? {
-        val outcome = if (result.trimStart().startsWith("error", true)) "failed" else "success"
+        val outcome = when {
+            result.trimStart().startsWith("error", true) -> "failed"
+            result.contains("BROWSER HANDOFF REQUIRED", ignoreCase = true) -> "pending_user"
+            else -> "success"
+        }
         val receipt = ChatHistoryStore.recordObjectiveEvidence(context, id, tool, outcome, result.take(700)) ?: return null
         val graph = load(context) ?: return receipt.id
         if (graph.nodes.none { it.id == id }) return receipt.id
