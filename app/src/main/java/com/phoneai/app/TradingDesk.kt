@@ -312,6 +312,24 @@ internal object TradingDesk {
     fun watchSymbols(c: Context): List<String> =
         (Prefs.watchlist(c).split(",").map { it.trim() }.filter { it.isNotEmpty() } + defaultFx.filter { false }).distinct()
 
+    /** One line for the top of the trading workspace: mode, kill switch, session, next high-impact news, playbook size. */
+    fun statusLine(c: Context): String {
+        val now = System.currentTimeMillis()
+        val hour = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).hour
+        val mode = when {
+            Prefs.tradingReadOnly(c) -> "Read-only"
+            Prefs.bybitTestnet(c) -> "Practice"
+            else -> "REAL money"
+        }
+        val next = MarketCalendar.upcoming(events(now), now, 48, MarketCalendar.Impact.HIGH).firstOrNull()?.let {
+            val m = (it.atMillis - now) / 60_000L
+            "next ${it.currency} ${it.title.take(24)} in " + (if (m < 60) "${m}m" else "${m / 60}h")
+        } ?: "no high-impact news in 48h"
+        val n = strategies(c).size
+        return "$mode · " + MarketSessions.describe(hour).substringBefore('.') + " · " + next + " · playbook $n" +
+            (if (killSwitch(c)) " · KILL SWITCH ON" else "") + "  (tap for Desk)"
+    }
+
     // ---- tool entry point
     fun run(c: Context, tool: String, a: JSONObject): String = try {
         val now = System.currentTimeMillis()
