@@ -386,8 +386,17 @@ class TaskCenterActivity : Activity() {
     private fun pauseTaskExecution(task: OrionTask) {
         val checkpoint = AgentCheckpointStore.pending(this)
         val command = checkpoint?.optString("command").orEmpty()
-        if (checkpoint == null || !command.contains("saved task #" + task.id, ignoreCase = true)) {
-            Toast.makeText(this, "No resumable execution checkpoint is linked to this task. Open the current run to inspect it; Orion has not changed its status.", Toast.LENGTH_LONG).show()
+        if (checkpoint != null && !command.contains("saved task #" + task.id, ignoreCase = true)) {
+            Toast.makeText(this, "Another agent session is active. Open its recovery card before changing this task.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (checkpoint == null) {
+            // This task has no linked worker checkpoint. Pause only its board status;
+            // do not claim that an agent or phone action was stopped.
+            if (TaskStore.update(this, task.id, status = "paused")) {
+                Toast.makeText(this, "Task moved to Paused. No active execution checkpoint was linked, so no worker was stopped.", Toast.LENGTH_LONG).show()
+                refresh()
+            } else errorToast()
             return
         }
         val service = PhoneAiService.instance
