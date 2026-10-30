@@ -887,6 +887,8 @@ Rules:
         return JSONObject().put("say", raw.trim())
     }
 
+    internal fun currentTaskCommand(): String = currentTask
+
     fun run(inputCommand: String) {
         runInternal(inputCommand, reuseCommandBudget = false)
     }
