@@ -212,7 +212,7 @@ object Prefs {
     fun setDerivAppId(c: Context, v: String) = sp(c).edit().putString("deriv_app_id", v.filter { it.isDigit() }.ifBlank { DerivProtocol.DEFAULT_APP_ID }).apply()
     fun derivRealAllowed(c: Context): Boolean = sp(c).getBoolean("deriv_real_ok", false)
     fun setDerivRealAllowed(c: Context, v: Boolean) = sp(c).edit().putBoolean("deriv_real_ok", v).apply()
-    fun deskAuto(c: Context): Boolean = sp(c).getBoolean("desk_auto", true)
+    fun deskAuto(c: Context): Boolean = sp(c).getBoolean("desk_auto", false)
     fun setDeskAuto(c: Context, v: Boolean) = sp(c).edit().putBoolean("desk_auto", v).apply()
 
     fun bybitTestnet(c: Context): Boolean = sp(c).getBoolean("bybit_test", true)
