@@ -23,7 +23,8 @@ internal object OrionRuntimeCapabilityExecutor {
         look: (String) -> String = { "error: screen interpretation callback unavailable" },
         play: (String, Int) -> String = { _, _ -> "error: game-control callback unavailable" },
         readScreen: () -> String = { service.readScreen() },
-        githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" }
+        githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },
+        researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false)
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
@@ -31,6 +32,8 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools, confirm)
         OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.execute(tool, args, service, tools, githubAccountRead)
         OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.execute(tool, args, service)
+        OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.execute(tool, args, service, tools, researchCancelled)
+        OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
