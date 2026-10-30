@@ -2340,22 +2340,6 @@ Rules:
                 Thread.sleep((s * 1000).toLong())
                 "waited"
             }
-            "ask_user" -> {
-                val rawOptions = a.optJSONArray("options")
-                val options = if (rawOptions == null) listOf("Continue", "Cancel") else
-                    (0 until minOf(rawOptions.length(), 4)).map { rawOptions.optString(it).trim().take(64) }
-                        .filter { it.isNotBlank() }.distinct()
-                if (options.size !in 2..4) "error: ask_user requires two to four distinct tap options."
-                else {
-                    val choice = ui.askUser(
-                        a.optString("question", "What would you like me to do?").take(500),
-                        options,
-                        a.optString("access", "READ").uppercase()
-                    )
-                    if (choice.isBlank()) "user cancelled the choice. Do not continue."
-                    else "USER CHOICE: " + choice.take(64)
-                }
-            }
             else -> "error: unknown tool $tool"
         }
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
