@@ -22,4 +22,11 @@ class OrionNotificationPolicyTest {
         assertFalse(OrionNotificationPolicy.shouldNotifyApproval(true, false, 36, false))
         assertTrue(OrionNotificationPolicy.shouldNotifyApproval(true, false, 36, true))
     }
+
+    @Test fun taskOutcomeAlertsRespectPreferenceForegroundAndOsPermission() {
+        assertFalse(OrionNotificationPolicy.shouldNotifyTaskOutcome(false, false, 36, true))
+        assertFalse(OrionNotificationPolicy.shouldNotifyTaskOutcome(true, true, 36, true))
+        assertFalse(OrionNotificationPolicy.shouldNotifyTaskOutcome(true, false, 36, false))
+        assertTrue(OrionNotificationPolicy.shouldNotifyTaskOutcome(true, false, 36, true))
+    }
 }
