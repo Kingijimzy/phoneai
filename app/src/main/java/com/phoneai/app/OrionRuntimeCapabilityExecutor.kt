@@ -1,6 +1,5 @@
 package com.phoneai.app
 
-import android.content.Context
 import org.json.JSONObject
 
 /**
@@ -13,13 +12,13 @@ internal object OrionRuntimeCapabilityExecutor {
         backend: OrionCapabilityAdapters.Backend,
         tool: String,
         args: JSONObject,
-        context: Context,
+        service: PhoneAiService,
         tools: Tools,
         stopped: () -> Boolean
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
-            "termux_command" -> TermuxBridgeRunner.executeReadOnly(context, args.optString("command"), stopped)
+            "termux_command" -> TermuxBridgeRunner.executeReadOnly(service, args.optString("command"), stopped)
             else -> null
         }
         OrionCapabilityAdapters.Backend.PYTHON -> when (tool) {
@@ -29,8 +28,8 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.FILES -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
-            "workspace_write" -> ShellRunner.writeFile(context, args.optString("path"), args.optString("content"))
-            "workspace_read" -> ShellRunner.readFile(context, args.optString("path"))
+            "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
+            "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
             else -> null
         }
         else -> null
