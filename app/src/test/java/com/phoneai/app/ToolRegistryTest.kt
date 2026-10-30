@@ -21,6 +21,22 @@ class ToolRegistryTest {
     }
 
 
+    @Test fun tradingDeskToolsHaveOneConcreteOwnerAndSafeAccessClasses() {
+        val readTools = listOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list")
+        readTools.forEach {
+            assertEquals("$it must be read-only", ToolAccess.READ, ToolRegistry.access(it))
+            assertEquals("trading_research", AgentPolicy.packForTool(it))
+            assertEquals(OrionCapabilityAdapters.Backend.TRADING_DESK, OrionCapabilityAdapters.route(it)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TRADING_DESK, it))
+        }
+        listOf("strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch").forEach {
+            assertEquals("$it must require write policy", ToolAccess.WRITE, ToolRegistry.access(it))
+            assertEquals("trading_research", AgentPolicy.packForTool(it))
+            assertEquals(OrionCapabilityAdapters.Backend.TRADING_DESK, OrionCapabilityAdapters.route(it)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TRADING_DESK, it))
+        }
+    }
+
     @Test fun everyRegisteredToolMapsToAnExistingCapabilityPack() {
         val knownPacks = AgentPolicy.packs.map { it.id }.toSet()
         ToolRegistry.all.forEach { tool ->
