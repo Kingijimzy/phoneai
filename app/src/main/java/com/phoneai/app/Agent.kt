@@ -2165,27 +2165,34 @@ Rules:
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
+        svc.recordChatEvent("tool", "started", "Tool: $tool")
         return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
-            val backendResult = runCatching {
-                OrionRuntimeCapabilityExecutor.execute(route.backend, route.tool, args, svc, tools, { stopped }, { question -> confirm(question) }, { url -> ui.openBrowser(url) })
-                    ?: dispatchLegacyTool(route.tool, args)
+            val preflight = preflightTool(route.tool, args)
+            val backendResult = if (preflight != null) preflight else runCatching {
+                OrionRuntimeCapabilityExecutor.execute(
+                    route.backend, route.tool, args, svc, tools, { stopped },
+                    { question -> confirm(question) },
+                    { url -> ui.openBrowser(url) },
+                    { input -> validateAction(input) },
+                    { input -> verifyAction(input) },
+                    { input -> verifySend(input) },
+                    { question -> look(question) },
+                    { goal, steps -> play(goal, steps) }
+                ) ?: dispatchLegacyTool(route.tool, args)
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
                 OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, backendResult)
             }.getOrDefault(false)
             val finalResult = if (!saved && !backendResult.trimStart().startsWith("error", true)) {
-                // Evidence persistence failure must never be misreported as verified execution.
                 "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${backendResult.take(240)}"
             } else backendResult
-            // Record only the final result after durable evidence succeeds; never retain a stale success.
             taskProofs.record(route.tool, finalResult)
             finalResult
         }
     }
 
-    /** Existing guarded backend implementations; adapter routing is intentionally outside this dispatcher. */
-    private fun dispatchLegacyTool(tool: String, a: JSONObject): String {
-        svc.recordChatEvent("tool", "started", "Tool: $tool")
+    /** Shared preflight runs before every backend, including extracted executors. */
+    private fun preflightTool(tool: String, a: JSONObject): String? {
         val safetyBlock = SafetyGate.blockReason(
             tool,
             when (tool) {
@@ -2225,6 +2232,10 @@ Rules:
             if (!decision.allowed) { recordDispatchBlocked(tool, a, "skill_authorization_denied"); return "error: skill blocked: " + decision.reason }
             activeSkillCalls++
         }
+        return null
+    }
+
+    private fun dispatchLegacyTool(tool: String, a: JSONObject): String {
         val result = when (tool) {
             "extension_list" -> try {
                 val extensions = extensionStore.all()
@@ -2305,72 +2316,6 @@ Rules:
                 val id = a.optString("id").trim()
                 if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
             }
-            "lookup_app" -> tools.lookupApp(a.optString("name"))
-            "open_app" -> svc.openApp(a.optString("name"))
-            "system_intent" -> tools.systemIntent(a.optString("action"), a.optString("query"), a.optString("url"))
-            "open_deep_link" -> tools.openDeepLink(a.optString("uri"))
-            "read_notifications" -> OrionNotificationListener.readSafeNotifications()
-            "notification_action" -> {
-                val action = a.optString("action")
-                val key = a.optString("key")
-                val reply = a.optString("text")
-                val normalizedAction = action.trim().lowercase()
-                if (normalizedAction !in setOf("reply", "dismiss")) {
-                    "error: action must be reply or dismiss"
-                } else {
-                    val confirmation = if (normalizedAction == "reply") {
-                        if (reply.isBlank()) false
-                        else confirm("Reply to the selected notification with this exact text? " + reply.take(500))
-                    } else {
-                        confirm("Dismiss the selected safe notification? This removes it from the notification shade.")
-                    }
-                    if (!confirmation) "error: user cancelled notification action"
-                    else if (stopped) "error: task was stopped before notification action; no action was dispatched"
-                    else OrionNotificationListener.notificationAction(key, normalizedAction, reply)
-                }
-            }
-            "media_status" -> OrionNotificationListener.mediaStatus()
-            "media_control" -> OrionNotificationListener.controlMedia(a.optString("action"))
-            "resolve_contact" -> tools.resolveContact(a.optString("name"))
-            "list_apps" -> tools.listApps()
-            "list_app_deeplinks" -> tools.listAppDeepLinks(a.optString("scheme"))
-            "read_screen" -> svc.readScreen().also { lastScreenSnapshot = it }
-            "validate_action" -> validateAction(a)
-            "verify_action" -> verifyAction(a)
-            "verify_send" -> verifySend(a)
-            "click" -> {
-                val id = a.optInt("id", -1)
-                if (id < 0 || svc.nodeInfo(id) == null) "error: target ID is stale or missing. Run read_screen and choose a current ID."
-                else svc.clickId(id)
-            }
-            "click_text" -> tools.clickText(a.optString("text"))
-            "wait_for" -> tools.waitFor(a.optString("text"), a.optDouble("seconds", 8.0))
-            "tap" -> xy(a, "x", "y") { x, y -> svc.tap(x, y) }
-            "long_press" -> xy(a, "x", "y") { x, y -> svc.longPress(x, y) }
-            "swipe" -> {
-                val x1 = num(a, "x1")
-                val y1 = num(a, "y1")
-                val x2 = num(a, "x2")
-                val y2 = num(a, "y2")
-                if (x1 == null || y1 == null || x2 == null || y2 == null) {
-                    "error: swipe needs x1,y1,x2,y2"
-                } else {
-                    svc.swipe(x1, y1, x2, y2, a.optLong("ms", 300L))
-                }
-            }
-            "swipe_path" -> {
-                val points = a.optJSONArray("points")
-                if (points == null || points.length() < 2) {
-                    "error: recorded swipe needs at least two points"
-                } else {
-                    svc.performRecordedPath(points, a.optLong("ms", 300L))
-                }
-            }
-            "scroll" -> svc.scroll(a.optString("direction", "down"))
-            "type" -> svc.typeText(a.optString("text"))
-            "key" -> svc.key(a.optString("name"))
-            "look" -> look(a.optString("question", "Describe what is on the screen."))
-            "play" -> play(a.optString("goal"), a.optInt("steps", 20))
             "web_search" -> tools.webSearch(a.optString("query"))
             "fetch_url", "research_web" -> researchWeb(a.optString("url"))
             "device_location" -> tools.deviceLocation()
@@ -2383,25 +2328,6 @@ Rules:
             "telegram_status" -> tools.telegramStatus()
             "telegram_inbox" -> TelegramBridge.checkUpdates(svc)
             "telegram_send" -> if (confirm("Send this Telegram message to the saved target? Message: " + a.optString("message").take(500))) tools.telegramSend(a.optString("message")) else "error: user cancelled Telegram send"
-            "mcp_status" -> tools.mcpStatus()
-            "mcp_list_tools" -> tools.mcpListTools()
-            "mcp_call" -> {
-                val name = a.optString("name").trim()
-                val args = a.optJSONObject("arguments") ?: JSONObject()
-                val host = try { java.net.URI(McpConnector.endpoint(svc)).host ?: "unknown host" } catch (_: Exception) { "unknown host" }
-                val scope = McpConnector.scopeForTool(name)
-                when {
-                    !McpConnector.configured(svc) -> "error: no MCP endpoint configured. Open Orion Settings → Configure remote MCP server."
-                    !McpConnector.isPaired(svc) -> "error: MCP endpoint is not locally paired. Pair it in Orion Settings before making remote calls."
-                    name.isBlank() -> "error: an exact advertised MCP tool name is required."
-                    scope !in McpConnector.scopes(svc) ->
-                        "error: MCP tool '" + name + "' requires the '" + scope + "' scope, which is disabled."
-                    scope == "read" -> tools.mcpCall(name, args)
-                    confirm("Remote MCP server: " + host + ". Tool: " + name + ". Scope: " + scope + ". Arguments to send: " + args.toString().take(1200) + ". Approve this remote action?") ->
-                        tools.mcpCall(name, args)
-                    else -> "error: user cancelled MCP tool call"
-                }
-            }
             "settings" -> tools.settings(a.optString("page", "main"))
             "dial" -> tools.dial(a.optString("number"))
             "sms" -> tools.sms(a.optString("number"), a.optString("text"))
@@ -2417,10 +2343,6 @@ Rules:
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
             "gaming_focus_preset" -> GamingFocus.start(svc, a.optInt("minutes", 0))
             "device_info" -> tools.deviceInfo()
-            "record_screen" -> {
-                val act = a.optString("action", "start").lowercase()
-                if (act == "stop") tools.recordStop() else tools.recordStart()
-            }
             "undo_status" -> UndoStore.status(svc)
             "undo_last" -> UndoStore.undoLast(svc)
             "remember" -> {
