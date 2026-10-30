@@ -86,9 +86,15 @@ class OrionNotificationListener : NotificationListenerService() {
             }
             // Notify the live Soul session without retaining notification contents in its durable queue.
             // The listener has already excluded sensitive apps and financial/authentication content.
+            val safeEventLabel = "notification from ${app.take(60)}"
+            // Persist the event even when the accessibility service is not currently bound.
+            // This stores no notification body, sender, title, or message text.
+            runCatching {
+                SoulEngineState.recordWatcherStatus(applicationContext, "event_received", safeEventLabel)
+            }
             PhoneAiService.instance?.onExternalPresenceEvent(
                 eventKey = "notification:${pkg.take(80)}",
-                safeDescription = "notification from ${app.take(60)}"
+                safeDescription = safeEventLabel
             )
         } catch (_: Exception) {
             // Fail closed: notification content is never logged or forwarded on parsing errors.
