@@ -23,6 +23,7 @@ class OrionRuntimePersistenceTest {
         stateFile = File(context.filesDir, "orion_runtime.json")
         stateFile.delete()
         File(context.filesDir, "orion_runtime.json.tmp").delete()
+        File(context.filesDir, "orion_runtime.json.bak").delete()
     }
 
     @After fun tearDown() {
@@ -93,6 +94,20 @@ class OrionRuntimePersistenceTest {
 
         val restored = OrionRuntime(context)
         assertEquals("atomic-restore", restored.pendingItems().single().key)
+    }
+
+
+    @Test fun atomicBackupRestoresRuntimeQueueWhenBaseFileWasInterrupted() {
+        val first = OrionRuntime(context)
+        first.start()
+        assertTrue(first.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "backup-restore", 3))
+        val backup = File(stateFile.path + ".bak")
+        assertTrue(stateFile.copyTo(backup, overwrite = true).exists())
+        assertTrue(stateFile.delete())
+
+        val restored = OrionRuntime(context)
+        assertEquals("backup-restore", restored.pendingItems().single().key)
+        assertTrue(stateFile.isFile)
     }
 
     @Test fun staleAcknowledgementsCannotCompleteOrRetryAnotherTask() {
