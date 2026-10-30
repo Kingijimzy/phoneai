@@ -66,6 +66,9 @@ class OrionCapabilityAdaptersTest {
             "remember" to OrionCapabilityAdapters.Backend.MEMORY,
             "task_add" to OrionCapabilityAdapters.Backend.TASKS,
             "web_search" to OrionCapabilityAdapters.Backend.RESEARCH,
+            "telegram_send" to OrionCapabilityAdapters.Backend.COMMUNICATION,
+            "sms" to OrionCapabilityAdapters.Backend.COMMUNICATION,
+            "notification_action" to OrionCapabilityAdapters.Backend.COMMUNICATION,
             "alarm" to OrionCapabilityAdapters.Backend.UTILITIES,
             "trade_history_summary" to OrionCapabilityAdapters.Backend.TRADING_READONLY,
             "gaming_session_summary" to OrionCapabilityAdapters.Backend.GAMING
@@ -117,5 +120,26 @@ class OrionCapabilityAdaptersTest {
         assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(allowedTools = setOf("not_a_tool"))).allowed)
         assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(maxCalls = 21)).allowed)
     }
+
+    @Test fun everyResearchAndCommunicationRouteHasAConcreteDedicatedExecutor() {
+        val research = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.RESEARCH }
+        val communication = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.COMMUNICATION }
+
+        assertTrue("Research backend must not be empty", research.isNotEmpty())
+        assertTrue("Communication backend must not be empty", communication.isNotEmpty())
+        research.forEach {
+            assertTrue("Missing research executor for ${it.tool}", OrionResearchCapabilityExecutor.supports(it.tool))
+        }
+        communication.forEach {
+            assertTrue("Missing communication executor for ${it.tool}", OrionCommunicationCapabilityExecutor.supports(it.tool))
+        }
+        assertFalse("Notification actions belong to communication, not device", 
+            OrionCapabilityAdapters.routes().any {
+                it.tool == "notification_action" && it.backend == OrionCapabilityAdapters.Backend.DEVICE
+            })
+    }
+
 
 }

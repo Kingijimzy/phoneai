@@ -1383,7 +1383,7 @@ Rules:
             val extractedPlace = WeatherService.requestedPlace(command)
             val place = extractedPlace.ifBlank { rememberedWeatherPlace }
             if (extractedPlace.isNotBlank()) WeatherService.rememberPlace(svc, extractedPlace)
-            val answer = if (place.isBlank()) WeatherService.current("") else WeatherService.current(place)
+            val answer = research("weather", JSONObject().put("location", place))
             logShortcut("weather", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1392,7 +1392,7 @@ Rules:
         // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
         if (!resumeRequest && !browserActionTask && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
-            val answer = LiveNews.search(LiveNews.queryFrom(command))
+            val answer = research("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))
             logShortcut("live_news", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1410,7 +1410,7 @@ Rules:
             }
             // Scoreboard gaps are common for postponed games and feed outages. Try web sources
             // before falling back to a model that might only guess from stale knowledge.
-            val web = try { LiveWebSearch.search(command + " football score result") } catch (e: Exception) {
+            val web = try { research("live_web_search", JSONObject().put("query", command + " football score result")) } catch (e: Exception) {
                 "error: web fallback failed (" + e.javaClass.simpleName + ")"
             }
             val answer = if (web.startsWith("Web search results for")) {
@@ -1498,7 +1498,7 @@ Rules:
                 return
             }
             ui.phase("acting")
-            val answer = summarizeSearch(command, LiveWebSearch.search(LiveWebSearch.queryFrom(command)))
+            val answer = summarizeSearch(command, research("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))
             logShortcut("web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1512,7 +1512,7 @@ Rules:
             }
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
-            val raw = LiveWebSearch.search(query)
+            val raw = research("live_web_search", JSONObject().put("query", query))
             val answer = summarizeSearch(command, raw)
             logShortcut("live_web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -1537,7 +1537,7 @@ Rules:
                 else -> rawSymbol
             }
             val symbol = baseSymbol + "USDT"
-            val answer = tools.bybitPublicTicker(symbol)
+            val answer = research("bybit_public_ticker", JSONObject().put("symbol", symbol))
             logShortcut("market_quote", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -2155,12 +2155,14 @@ Rules:
         return if (x == null || y == null) "error: need $kx and $ky" else f(x, y)
     }
 
-    private fun researchWeb(rawUrl: String): String {
-        val result = BrowserResearch.fetch(rawUrl, researchCancelled)
-        val page = result.page ?: return "error: " + (result.error ?: "could not read webpage")
-        return "SOURCE: " + page.sourceUrl + "\nTITLE: " + page.title +
-            "\nUNTRUSTED WEBPAGE CONTENT:\n" + page.text.take(3500)
-    }
+    /** Direct read-only research shortcuts share the same adapter and executor path as model-planned tools. */
+    private fun research(tool: String, args: JSONObject): String =
+        OrionCapabilityAdapters.dispatch(tool, args) { route, routedArgs ->
+            OrionRuntimeCapabilityExecutor.execute(
+                route.backend, route.tool, routedArgs, svc, tools, { stopped },
+                researchCancelled = researchCancelled
+            ) ?: "error: research route has no concrete runtime executor."
+        }
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
@@ -2179,7 +2181,8 @@ Rules:
                     { question -> look(question) },
                     { goal, steps -> play(goal, steps) },
                     { svc.readScreen().also { lastScreenSnapshot = it } },
-                    { path -> githubAccountRead(path) }
+                    { path -> githubAccountRead(path) },
+                    researchCancelled
                 ) ?: dispatchLegacyTool(route.tool, args)
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
@@ -2318,20 +2321,8 @@ Rules:
                 val id = a.optString("id").trim()
                 if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
             }
-            "web_search" -> tools.webSearch(a.optString("query"))
-            "fetch_url", "research_web" -> researchWeb(a.optString("url"))
             "device_location" -> tools.deviceLocation()
-            "weather" -> WeatherService.current(a.optString("location"))
-            "live_news" -> LiveNews.search(a.optString("query"))
-            "live_web_search" -> LiveWebSearch.search(a.optString("query"))
-            "bybit_public_ticker" -> tools.bybitPublicTicker(a.optString("symbol"))
-            "github_public" -> tools.githubPublic(a.optString("owner"), a.optString("repo"), a.optString("section", "repo"))
-            "telegram_status" -> tools.telegramStatus()
-            "telegram_inbox" -> TelegramBridge.checkUpdates(svc)
-            "telegram_send" -> if (confirm("Send this Telegram message to the saved target? Message: " + a.optString("message").take(500))) tools.telegramSend(a.optString("message")) else "error: user cancelled Telegram send"
             "settings" -> tools.settings(a.optString("page", "main"))
-            "dial" -> tools.dial(a.optString("number"))
-            "sms" -> tools.sms(a.optString("number"), a.optString("text"))
             "alarm" -> tools.alarm(a.optInt("hour", 7), a.optInt("minute", 0), a.optString("label", "Orion"))
             "timer" -> tools.timer(a.optInt("seconds", 60), a.optString("label", "Orion"))
             "volume" -> tools.volume(a.optString("action", "up"), a.optInt("percent", 50))
