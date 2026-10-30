@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -430,27 +431,67 @@ fun OrionComposeChatScreen(
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(Color(0xFF101010))
+                    modifier = Modifier
+                        .widthIn(min = 232.dp, max = 260.dp)
+                        .heightIn(max = 520.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xF2161616))
+                        .border(1.dp, ChatHairline, RoundedCornerShape(18.dp))
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 7.dp)
                 ) {
                     fun choose(action: String) {
                         menuExpanded = false
                         onMenuAction(action)
                     }
-                    DropdownMenuItem(text = { Text("New Chat", color = ChatCopy) }, onClick = { choose("new_chat") })
-                    DropdownMenuItem(text = { Text("Rename chat", color = ChatCopy) }, onClick = { choose("rename_chat") })
-                    DropdownMenuItem(text = { Text("Model", color = ChatCopy) }, onClick = { choose("model") })
-                    DropdownMenuItem(text = { Text("Clear Chat", color = Color(0xFFE8A6A6)) }, onClick = { choose("clear_chat") })
-                    DropdownMenuItem(text = { Text("Open Terminal", color = ChatCopy) }, onClick = { choose("terminal") })
-                    DropdownMenuItem(text = { Text("Open Browser", color = ChatCopy) }, onClick = { choose("browser") })
-                    DropdownMenuItem(text = { Text("Browse Chat Files", color = ChatCopy) }, onClick = { choose("chat_files") })
-                    DropdownMenuItem(text = { Text("Skills in Session", color = ChatCopy) }, onClick = { choose("skills") })
-                    DropdownMenuItem(text = { Text("Capabilities & Tools", color = ChatCopy) }, onClick = { choose("capabilities") })
-                    DropdownMenuItem(text = { Text("Send Feedback", color = ChatCopy) }, onClick = { choose("feedback") })
-                    DropdownMenuItem(text = { Text("Notification Access", color = ChatCopy) }, onClick = { choose("notifications") })
-                    DropdownMenuItem(text = { Text("Alerts & Briefings", color = ChatCopy) }, onClick = { choose("alerts") })
-                    DropdownMenuItem(text = { Text("MCPs in Session", color = ChatCopy) }, onClick = { choose("mcps") })
-                    DropdownMenuItem(text = { Text("Memories in Session", color = ChatCopy) }, onClick = { choose("memories") })
-                    DropdownMenuItem(text = { Text("Token Usage", color = ChatCopy) }, onClick = { choose("token_usage") })
+                    @Composable
+                    fun section(title: String) {
+                        Text(
+                            title.uppercase(),
+                            color = ChatMuted,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 1.15.sp,
+                            modifier = Modifier.fillMaxWidth().padding(start = 15.dp, end = 12.dp, top = 9.dp, bottom = 4.dp)
+                        )
+                    }
+                    @Composable
+                    fun action(title: String, key: String, destructive: Boolean = false) {
+                        Row(
+                            Modifier.fillMaxWidth().height(41.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable { choose(key) }
+                                .padding(horizontal = 15.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                title,
+                                color = if (destructive) Color(0xFFE3A0A0) else ChatCopy,
+                                fontSize = 13.sp,
+                                fontWeight = if (destructive) FontWeight.Medium else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    section("Conversation")
+                    action("New chat", "new_chat")
+                    action("Rename conversation", "rename_chat")
+                    action("Choose model", "model")
+                    action("Clear conversation", "clear_chat", destructive = true)
+                    section("Workspace")
+                    action("Open terminal", "terminal")
+                    action("Open browser", "browser")
+                    action("Attachment support", "chat_files")
+                    section("Orion capabilities")
+                    action("Skills in session", "skills")
+                    action("Capabilities & tools", "capabilities")
+                    action("Memories in session", "memories")
+                    action("MCP servers in session", "mcps")
+                    section("System & support")
+                    action("Notification access", "notifications")
+                    action("Alerts & briefings", "alerts")
+                    action("Send feedback", "feedback")
                 }
             }
             Box(
