@@ -142,7 +142,7 @@ internal object OrionObjectiveGraph {
         graph.ordered().forEach { node ->
             append("- ${node.id}: ${node.title}; status=${node.status}; depends_on=")
             append(node.dependsOn.ifEmpty { listOf("none") }.joinToString(","))
-            if (node.evidence.isNotBlank()) append("; evidence=${node.evidence.take(240)}")
+            if (node.evidence.isNotBlank()) append("; last_executor_evidence_id=${node.evidence.take(80)}")
             appendLine()
         }
         appendLine("Only work on objectives whose dependencies are COMPLETE. Update status only from execution evidence. A tool call being attempted is not completion evidence. Preserve blocked and failed nodes; do not silently mark them complete.")
