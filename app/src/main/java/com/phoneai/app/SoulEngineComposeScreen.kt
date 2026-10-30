@@ -173,7 +173,7 @@ internal fun SoulEngineComposeScreen(
                     EngineButton("Save Soul configuration", Icons.Rounded.CheckCircle, Modifier.fillMaxWidth()) {
                         onSaveGoal(goalDraft, selectedMode)
                     }
-                    EngineButton("Run objective now · Command", Icons.Rounded.PlayArrow, Modifier.fillMaxWidth()) {
+                    EngineButton("Run objective now · Command", Icons.Rounded.Bolt, Modifier.fillMaxWidth()) {
                         onRunGoal(goalDraft)
                     }
                     Text(
