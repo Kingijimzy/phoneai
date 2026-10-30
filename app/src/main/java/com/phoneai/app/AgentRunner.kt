@@ -78,8 +78,8 @@ object AgentRunner {
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
         val needsAccount = Regex("(?i)\\b(balance|equity|account|position|risk|size|sizing|order|margin|wallet|capital)\\b").containsMatchIn(userText)
-        if (needsAccount) sb.append(accountBlock(c)).append("\\n\\n")
-        else sb.append("ACCOUNT DATA: not fetched for this request; no live account details were used.\\n\\n")
+        if (needsAccount) sb.append(accountBlock(c)).append("\n\n")
+        else sb.append("ACCOUNT DATA: not fetched for this request; no live account details were used.\n\n")
         val needsPredictionRefresh = wantsOutlook(userText) ||
             Regex("(?i)\\b(review|track record|performance|stats|accuracy|weekly review|prediction history)\\b").containsMatchIn(userText)
         if (needsPredictionRefresh) {
