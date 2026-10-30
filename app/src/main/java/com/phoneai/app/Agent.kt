@@ -615,6 +615,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         lastScreenBeforeAction = ""
         failedCallGuard.clear()
         activeIntentContext = ""
+        activeObjectiveId = ""
     }
 
     fun runConversation(input: String) {
@@ -1930,7 +1931,7 @@ Rules:
                     toolCalls++
                     ui.note("[TASK:RUNNING]\nRunning $bt")
                     val batchGraph = OrionObjectiveGraph.load(svc)
-                    activeObjectiveId = one.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" }
+                    activeObjectiveId = one.optString("objective_id").ifBlank { step.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" } }
                     var br = executeWithRecoveryGuard(bt, batchArgs)
                     if (activeObjectiveId.isNotBlank()) {
                         val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, bt, br)
