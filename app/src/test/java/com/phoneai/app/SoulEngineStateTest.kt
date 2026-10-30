@@ -39,8 +39,8 @@ class SoulEngineStateTest {
             .put("status", "completed")
             .put("command", "Summarize my saved tasks")
             .put("steps", JSONArray()
-                .put(JSONObject().put("tool", "task_list").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action."))
-                .put(JSONObject().put("tool", "read_screen").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action.")))
+                .put(JSONObject().put("tool", "open_app").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action."))
+                .put(JSONObject().put("tool", "click_text").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action.")))
         assertTrue(SoulEngineState.learnFromCompletedCheckpoint(context, checkpoint))
         val proposal = SoulEngineState.snapshot(context).proposals.single()
         assertEquals(SoulEngineState.ProposalKind.ROUTE, proposal.kind)
@@ -54,8 +54,8 @@ class SoulEngineStateTest {
             .put("status", "completed")
             .put("command", "Summarize my saved tasks")
             .put("steps", JSONArray()
-                .put(JSONObject().put("tool", "task_list").put("result", "success"))
-                .put(JSONObject().put("tool", "read_screen").put("result", "[returned; private result omitted]")))
+                .put(JSONObject().put("tool", "open_app").put("result", "success"))
+                .put(JSONObject().put("tool", "click_text").put("result", "[returned; private result omitted]")))
         assertTrue(SoulEngineState.learnFromCompletedCheckpoint(context, checkpoint))
         assertTrue(SoulEngineState.snapshot(context).proposals.isEmpty())
     }
@@ -65,8 +65,8 @@ class SoulEngineStateTest {
             .put("status", "completed")
             .put("command", "Transfer money from my bank account")
             .put("steps", JSONArray()
-                .put(JSONObject().put("tool", "task_list").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action."))
-                .put(JSONObject().put("tool", "read_screen").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action.")))
+                .put(JSONObject().put("tool", "open_app").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action."))
+                .put(JSONObject().put("tool", "click_text").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action.")))
         assertTrue(SoulEngineState.learnFromCompletedCheckpoint(context, checkpoint))
         assertTrue(SoulEngineState.snapshot(context).proposals.isEmpty())
     }
@@ -76,8 +76,8 @@ class SoulEngineStateTest {
             .put("status", "completed")
             .put("command", "Summarize my saved tasks")
             .put("steps", JSONArray()
-                .put(JSONObject().put("tool", "task_list").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action."))
-                .put(JSONObject().put("tool", "read_screen").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action.")))
+                .put(JSONObject().put("tool", "open_app").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action."))
+                .put(JSONObject().put("tool", "click_text").put("result", "action returned\nLOCAL VERIFY PASS: visible state changed after action.")))
         SoulEngineState.learnFromCompletedCheckpoint(context, checkpoint)
         val proposal = SoulEngineState.snapshot(context).proposals.single()
         assertTrue(SoulEngineState.reviewProposal(context, proposal.id, SoulEngineState.ProposalStatus.ACCEPTED))
@@ -85,6 +85,11 @@ class SoulEngineStateTest {
         assertEquals(SoulEngineState.ProposalStatus.ACCEPTED, accepted.status)
         assertTrue(accepted.allowedTools.all { it in ToolRegistry.names() })
         assertFalse(SoulEngineState.reviewProposal(context, proposal.id, SoulEngineState.ProposalStatus.REJECTED))
+        assertTrue("A second independently verified completed run should improve the evidence count",
+            SoulEngineState.learnFromCompletedCheckpoint(context, checkpoint))
+        val learnedAgain = SoulEngineState.snapshot(context).proposals.single()
+        assertEquals(SoulEngineState.ProposalStatus.ACCEPTED, learnedAgain.status)
+        assertEquals(2, learnedAgain.evidenceCount)
     }
 
     @Test fun watcherStatusPersistsAcrossSnapshots() {
