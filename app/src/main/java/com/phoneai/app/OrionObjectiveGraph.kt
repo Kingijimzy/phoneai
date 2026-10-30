@@ -82,7 +82,14 @@ internal object OrionObjectiveGraph {
         val old = load(context)
         val merged = if (old == null) proposed else {
             val oldById = old.nodes.associateBy { it.id }
-            val next = proposed.nodes.map { node -> oldById[node.id]?.let { prior -> node.copy(status = prior.status, evidence = prior.evidence) } ?: node }
+            val proposedIds = proposed.nodes.map { it.id }.toSet()
+            val next = proposed.nodes.map { node ->
+                val prior = oldById[node.id]
+                if (prior == null) node
+                else if (prior.status != Status.PENDING && prior.status != Status.READY) prior
+                else node.copy(status = prior.status, evidence = prior.evidence)
+            }.toMutableList()
+            old.nodes.filter { it.id !in proposedIds && it.status != Status.PENDING && it.status != Status.READY }.forEach { next += it }
             Graph(objective.trim().take(1000), topologicalOrder(next))
         }
         return if (save(context, merged)) ParseResult.Valid(merged) else ParseResult.Invalid("Objective graph could not be persisted.")
