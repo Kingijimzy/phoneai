@@ -354,9 +354,12 @@ class TaskCenterActivity : Activity() {
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (task.status == "running" || task.status == "in_progress") {
-            actions.addView(button("Pause") { change(task, "paused") })
-        } else if (task.status != "completed" && task.status != "done") {
-            actions.addView(button(if (task.status == "paused") "Resume" else "Start", true) { change(task, "running") })
+            actions.addView(button("Open run") { openTaskInChat(task) }, LinearLayout.LayoutParams(-2, dp(42)))
+            actions.addView(button("Pause") { change(task, "paused") }, LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
+        } else if (task.status != "completed" && task.status != "done" && task.status != "cancelled") {
+            actions.addView(button(if (task.status == "paused") "Resume in chat" else "Run in chat", true) {
+                openTaskInChat(task)
+            }, LinearLayout.LayoutParams(-2, dp(42)))
         }
         if (task.status != "completed" && task.status != "done") {
             actions.addView(button("Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
@@ -372,6 +375,33 @@ class TaskCenterActivity : Activity() {
         }
         card.addView(actionScroll, LinearLayout.LayoutParams(-1, -2))
         return card
+    }
+
+    /**
+     * The task board is a tracker, not an execution engine. "Run in chat" hands
+     * the saved goal to the real chat/agent dispatcher instead of falsely
+     * marking a task as running without doing any work.
+     */
+    private fun openTaskInChat(task: OrionTask) {
+        val prompt = buildString {
+            append("Work on saved task #").append(task.id).append(": ").append(task.title)
+            if (task.details.isNotBlank()) append("\\nDetails: ").append(task.details)
+            append("\\nPriority: ").append(task.priority)
+            append("\\nTreat this as an explicit request to carry out the task using available registered capabilities. First inspect what is possible, ask only for essential missing information or required approval, execute permitted steps, verify the result, and clearly report any blocker. Do not mark the task complete unless there is evidence.")
+        }
+        val previous = task.status
+        if (!TaskStore.update(this, task.id, status = "running")) {
+            errorToast()
+            return
+        }
+        try {
+            startActivity(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt))
+            refresh()
+        } catch (error: Exception) {
+            TaskStore.update(this, task.id, status = previous)
+            refresh()
+            Toast.makeText(this, "Could not open Orion chat to run this task: ${error.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun taskMenu(task: OrionTask) {
