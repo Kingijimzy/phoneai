@@ -50,6 +50,7 @@ object AgentCheckpointStore {
     fun markRunning(c: Context): Boolean = synchronized(lock) {
         val checkpoint = readCheckpoint(c) ?: return@synchronized false
         if (checkpoint.optBoolean("stopRequested")) return@synchronized false
+        checkpoint.remove("pauseRequested")
         checkpoint.put("status", "running").put("updatedAt", System.currentTimeMillis())
         save(c, checkpoint)
     }
@@ -127,7 +128,7 @@ object AgentCheckpointStore {
     /** Persist intent before executing any tool; never overwrite an unresolved action marker. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = synchronized(lock) {
         val existing = readCheckpoint(c) ?: return@synchronized false
-        if (existing.optBoolean("stopRequested") ||
+        if (existing.optBoolean("stopRequested") || existing.optBoolean("pauseRequested") ||
             !CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
         update(c) { o ->
             o.put("inFlight", JSONObject()
@@ -156,6 +157,7 @@ object AgentCheckpointStore {
             o.put("steps", steps)
             o.remove("inFlight")
             if (o.optBoolean("stopRequested")) o.put("status", "cancelled")
+            else if (o.optBoolean("pauseRequested")) o.put("status", "paused")
         }
     }
 
@@ -164,7 +166,7 @@ object AgentCheckpointStore {
             if (it.optBoolean("stopRequested")) {
                 it.put("status", if (it.optJSONObject("inFlight") != null) "recovery_required" else "cancelled")
             } else {
-                it.put("status", "paused")
+                it.put("pauseRequested", true).put("status", "paused")
             }
         }
         if (saved) runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
@@ -194,7 +196,7 @@ object AgentCheckpointStore {
     fun complete(c: Context): Boolean {
         // Never complete a stopped task or one whose action outcome is uncertain.
         val current = synchronized(lock) { readCheckpoint(c) }
-        if (current?.optBoolean("stopRequested") == true) return false
+        if (current?.optBoolean("stopRequested") == true || current?.optBoolean("pauseRequested") == true) return false
         if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return false
         val saved = update(c) {
             it.put("status", "completed")
