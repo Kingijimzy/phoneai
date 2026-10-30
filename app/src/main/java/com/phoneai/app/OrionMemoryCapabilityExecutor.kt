@@ -8,7 +8,7 @@ import org.json.JSONObject
  */
 internal object OrionMemoryCapabilityExecutor {
     private val supportedTools = setOf(
-        "remember", "update_memory", "forget", "recall", "discussion_search", "knowledge_search",
+        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search",
         "graph_link", "graph_query", "self_review", "undo_last", "undo_status"
     )
 
@@ -108,6 +108,8 @@ internal object OrionMemoryCapabilityExecutor {
         }
         "recall" -> tools.recall(args.optString("query"))
         "discussion_search" -> tools.discussionSearch(args.optString("query"))
+        "decision_history" -> tools.decisionHistory(args.optString("query"))
+        "record_decision" -> if (stopped()) "error: task was stopped before recording a decision." else tools.recordDecision(args)
         "knowledge_search" -> tools.knowledgeSearch(args.optString("query"))
         "graph_link" -> tools.graphLink(args.optString("a"), args.optString("relation"), args.optString("b"))
         "graph_query" -> tools.graphQuery(args.optString("entity"))
