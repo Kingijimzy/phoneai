@@ -65,7 +65,7 @@ internal object OrionCapabilityDiscovery {
         val facts = unique.map { tool ->
             val pack = AgentPolicy.packForTool(tool.name)
             val permissionKey = permissionRequirements[tool.name]
-            val permissionState = permissionKey?.let { permissionStates[it] }
+            val permissionState = permissionKey?.let { permissionStates[it] ?: PermissionState.UNKNOWN }
             val setupReason = when {
                 tool.name == "mcp_list_tools" && integrationStates["mcp_endpoint"] != "configured" ->
                     "no MCP endpoint configured; configure a remote MCP server in Connected services"
@@ -99,7 +99,7 @@ internal object OrionCapabilityDiscovery {
                     permissionNeeded = permissionReason,
                     setupNeeded = setupReason,
                     health = CapabilityRegistry.Health.UNKNOWN,
-                    limitation = disabledReason
+                    limitation = disabledReason ?: if (pack == null) "fail closed: tool is not mapped in AgentPolicy.packForTool" else null
                 )
             )
             ToolFact(tool.name, tool.access, entry)
