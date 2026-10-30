@@ -214,6 +214,9 @@ object AgentCheckpointStore {
         // Route learning is optional; it must never turn a completed task into a failed task.
         try {
             val checkpoint = readCheckpoint(c) ?: throw IllegalStateException("completed checkpoint could not be reopened")
+            // Preserve the failed cause and the later verified correction as a reusable lesson.
+            // This runs only after the durable task completion marker has been written.
+            ExperienceStore.resolveCompletedCheckpoint(c, checkpoint)
             RouteMemoryStore.recordCompleted(c, checkpoint)
             // Learning is downstream of the durable completion marker and can never change task outcome.
             SoulEngineState.learnFromCompletedCheckpoint(c, checkpoint)
