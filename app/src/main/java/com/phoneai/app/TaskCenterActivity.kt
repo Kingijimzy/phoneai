@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -383,6 +384,23 @@ class TaskCenterActivity : Activity() {
      * marking a task as running without doing any work.
      */
     private fun openTaskInChat(task: OrionTask) {
+        // Do not mark a task as running if the real execution service is unavailable.
+        // MainChatActivity would otherwise open, reject the prompt, and leave a false
+        // running state on the board.
+        if (PhoneAiService.instance == null) {
+            AlertDialog.Builder(this)
+                .setTitle("Orion phone control is not connected")
+                .setMessage("Enable Orion in Android Accessibility settings, then return here and run this task again. The task will remain saved and queued.")
+                .setNegativeButton("CLOSE", null)
+                .setPositiveButton("OPEN SETTINGS") { _, _ ->
+                    try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                    catch (_: Exception) {
+                        Toast.makeText(this, "Could not open Accessibility settings. Open Android Settings → Accessibility manually.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .show()
+            return
+        }
         val prompt = buildString {
             append("Work on saved task #").append(task.id).append(": ").append(task.title)
             if (task.details.isNotBlank()) append("\\nDetails: ").append(task.details)
