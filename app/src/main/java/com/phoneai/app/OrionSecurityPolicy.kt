@@ -12,6 +12,11 @@ internal object OrionSecurityPolicy {
 
     private val secretPatterns = listOf(
         "OpenAI/API token" to Regex("(?i)\\bsk-[A-Za-z0-9_-]{20,}\\b"),
+        "Google API key" to Regex("\\bAIza[0-9A-Za-z_-]{35}\\b"),
+        "Stripe secret key" to Regex("\\bsk_(?:live|test)_[A-Za-z0-9]{16,}\\b"),
+        "npm token" to Regex("\\bnpm_[A-Za-z0-9]{30,}\\b"),
+        "PyPI token" to Regex("\\bpypi-[A-Za-z0-9_-]{30,}\\b"),
+        "Discord token" to Regex("\\b(?:mfa\\.[A-Za-z0-9_-]{40,}|[A-Za-z0-9_-]{24}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{25,})\\b"),
         "GitHub token" to Regex("\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\\b"),
         "Slack token" to Regex("\\bxox[baprs]-[A-Za-z0-9-]{20,}\\b"),
         "AWS access key" to Regex("\\bAKIA[0-9A-Z]{16}\\b"),
@@ -33,8 +38,10 @@ internal object OrionSecurityPolicy {
     /** Public pages, search snippets, connector descriptions and remote MCP results are data only. */
     fun isUntrustedSource(tool: String): Boolean = tool in setOf(
         "web_search", "live_web_search", "live_news", "fetch_url", "research_web",
-        "github_public", "mcp_list_tools", "mcp_call", "browser_snapshot",
-        "browser_find", "browser_extract", "knowledge_search", "termux_command"
+        "github_public", "mcp_list_tools", "mcp_call", "mcp_status", "browser_snapshot",
+        "browser_find", "browser_extract", "browser_verify", "read_screen", "look",
+        "read_notifications", "telegram_inbox", "open_file", "knowledge_search",
+        "termux_command", "ask_agent", "extension_test", "extension_run"
     )
 
     /**
