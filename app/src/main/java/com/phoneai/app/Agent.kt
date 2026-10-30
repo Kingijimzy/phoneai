@@ -211,6 +211,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category, args) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        // Objective dependencies are enforced at the actual dispatch boundary, not trusted from planner prose.
+        val objectiveGraph = OrionObjectiveGraph.load(svc)
+        if (objectiveGraph != null) {
+            val objectiveId = activeObjectiveId.ifBlank { if (objectiveGraph.nodes.size == 1) objectiveGraph.nodes.first().id else "" }
+            if (objectiveId.isBlank()) return "error: this task has multiple objectives; the tool call must identify the objective_id it advances."
+            OrionObjectiveGraph.canExecute(objectiveGraph, objectiveId)?.let { reason -> return "error: objective dependency gate blocked dispatch: " + reason }
+            if (!OrionObjectiveGraph.startExecution(svc, objectiveId)) return "error: objective state could not be persisted before dispatch; no tool was run."
+        }
         // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
         // A model cannot call an unregistered tool or one the live registry marked unavailable.
         activeOrchestrationContext?.let { context ->
@@ -1878,6 +1886,17 @@ Rules:
                     }
                 }
             }
+            step.optJSONArray("complete_objectives")?.let { updates ->
+                for (i in 0 until updates.length()) {
+                    val update = updates.optJSONObject(i) ?: continue
+                    val id = update.optString("id")
+                    val evidenceId = update.optString("evidence_id")
+                    if (id.isNotBlank() && evidenceId.isNotBlank()) {
+                        val accepted = OrionObjectiveGraph.completeFromEvidence(svc, id, evidenceId)
+                        ui.note(if (accepted) "[TASK:OBJECTIVE] " + id + " completed from verified executor evidence." else "[TASK:OBJECTIVE] Rejected completion claim for " + id + ": no matching successful receipt or prerequisite remains incomplete.")
+                    }
+                }
+            }
             val say = step.optString("say")
             if (say.isNotBlank()) ui.say(say)
             if (!planAnnounced) {
@@ -1910,7 +1929,14 @@ Rules:
                     }
                     toolCalls++
                     ui.note("[TASK:RUNNING]\nRunning $bt")
-                    val br = executeWithRecoveryGuard(bt, batchArgs)
+                    val batchGraph = OrionObjectiveGraph.load(svc)
+                    activeObjectiveId = one.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" }
+                    var br = executeWithRecoveryGuard(bt, batchArgs)
+                    if (activeObjectiveId.isNotBlank()) {
+                        val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, bt, br)
+                        if (receipt != null) br += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
+                    }
+                    activeObjectiveId = ""
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
                     if (!OrionTasksCapabilityExecutor.recordStep(svc, bt, batchArgs, br)) {
@@ -2012,6 +2038,8 @@ Rules:
             }
             toolCalls++
             ui.note("[TASK:RUNNING]\nRunning $tool")
+            val currentGraph = OrionObjectiveGraph.load(svc)
+            activeObjectiveId = step.optString("objective_id").ifBlank { if (currentGraph?.nodes?.size == 1) currentGraph.nodes.first().id else "" }
             var result = executeWithRecoveryGuard(tool, args)
             var readRetries = 0
             if (isRetryableRead(tool, args)) {
@@ -2039,6 +2067,11 @@ Rules:
                     ui.note("[TASK:RECOVER]\n" + (if (ok) "Read recovered after $readRetries retr${if (readRetries == 1) "y" else "ies"}" else "Read still failing after $readRetries retr${if (readRetries == 1) "y" else "ies"}; changing approach"))
                 }
             }
+            if (activeObjectiveId.isNotBlank()) {
+                val receipt = OrionObjectiveGraph.recordExecution(svc, activeObjectiveId, tool, result)
+                if (receipt != null) result += "\n[ORION_EXECUTOR_EVIDENCE id=" + receipt + " objective=" + activeObjectiveId + "]"
+            }
+            activeObjectiveId = ""
             runTools++
             if (result.startsWith("error")) runFailed++
             ui.note(activityNote(tool, args, result))
