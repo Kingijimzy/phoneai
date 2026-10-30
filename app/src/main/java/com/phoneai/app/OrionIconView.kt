@@ -186,6 +186,8 @@ class OrionIconView @JvmOverloads constructor(
             "upload" -> { canvas.drawLine(12f, 21f, 12f, 8f, paint); path.moveTo(7f, 13f); path.lineTo(12f, 8f); path.lineTo(17f, 13f); canvas.drawPath(path, paint); canvas.drawLine(4f, 3f, 20f, 3f, paint) }
             "lock" -> { canvas.drawRoundRect(4f, 10f, 20f, 21f, 2f, 2f, paint); canvas.drawArc(7f, 3f, 17f, 15f, 180f, 180f, false, paint) }
             "globe", "language" -> { canvas.drawCircle(12f, 12f, 9f, paint); canvas.drawOval(7f, 3f, 17f, 21f, paint); canvas.drawLine(3f, 12f, 21f, 12f, paint) }
+            "chevron-down" -> { path.moveTo(5f, 9f); path.lineTo(12f, 16f); path.lineTo(19f, 9f); canvas.drawPath(path, paint) }
+            "chevron-right" -> { path.moveTo(9f, 5f); path.lineTo(16f, 12f); path.lineTo(9f, 19f); canvas.drawPath(path, paint) }
             else -> {
                 canvas.drawCircle(12f, 12f, 8f, paint)
                 canvas.drawCircle(12f, 12f, 2f, paint)

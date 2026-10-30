@@ -251,7 +251,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         commandRow.addView(agentPrompt, LinearLayout.LayoutParams(0, -2, 1f))
-        agentRun = pill("Run ↗") { runBrowserAgent() }.apply {
+        agentRun = pill("Run") { runBrowserAgent() }.apply {
             background = rounded(Theme.PANEL2)
             contentDescription = "Ask Orion to perform the entered browser task"
         }
