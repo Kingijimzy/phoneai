@@ -11,7 +11,7 @@ import java.util.Locale
  */
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
-        "ask_agent", "create_agent", "task_list", "task_add", "task_update", "task_delete",
+        "ask_agent", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
         "morning_brief", "standing_order"
     )
 
@@ -23,7 +23,8 @@ internal object OrionTasksCapabilityExecutor {
         service: PhoneAiService,
         tools: Tools,
         stopped: () -> Boolean,
-        confirm: (String) -> Boolean
+        confirm: (String) -> Boolean,
+        askUser: (String, List<String>, String) -> String
     ): String = when (tool) {
         "ask_agent" -> if (stopped()) "error: task was stopped before specialist delegation."
             else tools.askAgent(args.optString("agent"), args.optString("task"))
@@ -31,6 +32,26 @@ internal object OrionTasksCapabilityExecutor {
             else tools.createAgent(args.optString("id"), args.optString("name"), args.optString("tagline"), args.optString("persona"))
         "morning_brief" -> if (stopped()) "error: task was stopped before building the brief."
             else tools.morningBrief()
+        "ask_user" -> {
+            val rawOptions = args.optJSONArray("options")
+            val options = if (rawOptions == null) listOf("Continue", "Cancel") else
+                (0 until minOf(rawOptions.length(), 4)).map { rawOptions.optString(it).trim().take(64) }
+                    .filter { it.isNotBlank() }.distinct()
+            when {
+                stopped() -> "error: task was stopped before asking for user input."
+                options.size !in 2..4 -> "error: ask_user requires two to four distinct tap options."
+                else -> {
+                    val choice = askUser(
+                        args.optString("question", "What would you like me to do?").take(500),
+                        options,
+                        args.optString("access", "READ").uppercase()
+                    )
+                    if (stopped()) "error: task was stopped while waiting for user input."
+                    else if (choice.isBlank()) "user cancelled the choice. Do not continue."
+                    else "USER CHOICE: " + choice.take(64)
+                }
+            }
+        }
         "standing_order" -> {
             if (stopped()) "error: task was stopped before changing standing orders."
             else when (args.optString("action").trim().lowercase()) {
