@@ -162,8 +162,13 @@ object ExperienceStore {
             val failed = steps.optJSONObject(i) ?: continue
             val failedTool = failed.optString("tool").trim()
             val failedResult = failed.optString("result")
+            val priorFailure = list.indexOfLast {
+                it.kind == "failure" && it.tool == failedTool && MemoryRanking.similarity(it.task, task) >= 0.5
+            }
             val cause = ActionLearningPolicy.classifyFailure(failedResult).ifBlank {
-                if (failedResult.startsWith("error", true)) "other_failure" else ""
+                if (failedResult.startsWith("error", true) || failedResult.contains("[error;", true))
+                    list.getOrNull(priorFailure)?.category?.ifBlank { "other_failure" } ?: "other_failure"
+                else ""
             }
             if (failedTool.isBlank() || cause.isBlank()) continue
             val corrected = (i + 1 until steps.length()).mapNotNull { index ->
@@ -173,9 +178,7 @@ object ExperienceStore {
             if (corrected.isEmpty()) continue
             val correction = "After '$failedTool' failed, changed approach to the independently verified sequence: " + corrected.joinToString(" → ")
             val verification = "Later step(s) returned explicit verification evidence and the task-level completion gate passed."
-            val existing = list.indexOfLast {
-                it.kind == "failure" && it.tool == failedTool && MemoryRanking.similarity(it.task, task) >= 0.5
-            }
+            val existing = priorFailure
             if (existing >= 0) {
                 val old = list[existing]
                 list[existing] = old.copy(kind = "resolved_failure", correction = correction,
