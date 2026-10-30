@@ -183,8 +183,11 @@ class OrionConversationRepositoryTest {
     @Test fun fullTextSearchFindsArchivedConversationWithAdjacentTurnContext() {
         val transcript = listOf("me" to "Fix the Telegram delivery timeout", "ai" to "The Telegram bot timed out while sending a reply")
         repository.saveActive(context, transcript)
+        val beforeArchive = repository.searchHistory(context, "Telegram delivery", 5).single()
         repository.archiveAndClear(context, transcript)
         val hit = repository.searchHistory(context, "Telegram delivery", 5).single()
+        assertEquals(beforeArchive.sessionId, hit.sessionId)
+        assertEquals(beforeArchive.turnId, hit.turnId)
         assertTrue(hit.sessionId.isNotBlank())
         assertTrue(hit.turnId.isNotBlank())
         assertTrue(hit.title.contains("Fix the Telegram"))
