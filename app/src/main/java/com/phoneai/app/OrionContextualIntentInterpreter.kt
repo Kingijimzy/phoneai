@@ -55,7 +55,7 @@ internal object OrionContextualIntentInterpreter {
 
     private fun isFollowUpOnly(value: String): Boolean =
         continuation.matches(value) || followUpOnly.matches(value) ||
-            standaloneContextual.matches(value) ||
+            standaloneContextual.matches(value) || testRequest.matches(value) ||
             (value.length < 48 && (completeRemaining.containsMatchIn(value) || correction.containsMatchIn(value)))
 
     fun resolve(
