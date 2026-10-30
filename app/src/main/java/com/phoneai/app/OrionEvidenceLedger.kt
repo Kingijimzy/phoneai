@@ -40,7 +40,9 @@ internal object OrionEvidenceLedger {
     private fun safeSummary(tool: String, result: String): String {
         val privateTools = setOf("read_screen", "research_web", "fetch_url", "mcp_call",
             "telegram_inbox", "telegram_send", "sms", "type", "copy", "remember",
-            "update_memory", "recall", "look", "play", "python_exec")
+            "update_memory", "recall", "look", "play", "python_exec", "shell", "termux_command",
+            "open_file", "find_files", "workspace_read", "workspace_write", "browser_snapshot",
+            "browser_extract", "browser_find", "web_search", "live_web_search", "live_news")
         if (tool in privateTools) {
             val state = if (result.trimStart().startsWith("error", true)) "failed" else "returned"
             return "Private result omitted; $state; chars=${result.length}"
@@ -118,7 +120,8 @@ internal object OrionEvidenceLedger {
             atomic.finishWrite(stream)
             true
         } catch (_: Exception) {
-            if (stream != null) runCatching { atomic.failWrite(stream) }
+            val failedStream = stream
+            if (failedStream != null) runCatching { atomic.failWrite(failedStream) }
             false
         }
     }
