@@ -1986,7 +1986,7 @@ Rules:
     private fun authorizeDirectTool(tool: String, pack: String): Boolean {
         val publicReadOnly = tool in setOf(
             "web_search", "live_web_search", "live_news", "weather", "fetch_url",
-            "research_web", "github_public", "github_search_repositories", "bybit_public_ticker"
+            "research_web", "github_public", "github_search_repositories", "live_sports", "bybit_public_ticker"
         )
         if (publicReadOnly) {
             if (!AgentPolicy.enabled(svc, pack) || ToolPermissions.mode(svc, tool) == ToolMode.DENY) {
