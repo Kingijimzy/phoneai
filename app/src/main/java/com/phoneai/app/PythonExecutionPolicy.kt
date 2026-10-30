@@ -5,6 +5,7 @@ import android.content.Context
 /** Pure preflight policy for bundled Python. Profiles tune size only; execution approval is invariant. */
 internal object PythonExecutionPolicy {
     const val GUARDED_MAX_CODE_CHARS = 8_000
+    const val MAX_CODE_CHARS = GUARDED_MAX_CODE_CHARS // compatibility alias for existing tests/callers
     const val DEVELOPER_MAX_CODE_CHARS = 16_000
 
     fun rejection(code: String, explicitlyApproved: Boolean, maxCodeChars: Int = GUARDED_MAX_CODE_CHARS): String? = when {
