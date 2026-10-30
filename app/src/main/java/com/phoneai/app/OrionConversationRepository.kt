@@ -125,6 +125,55 @@ class OrionConversationRepository private constructor(context: Context) :
         return event
     }
 
+    /** Search active and archived sessions locally; every result includes stable session/turn references. */
+    @Synchronized
+    fun searchHistory(context: Context, query: String, limit: Int = 8): List<SearchHit> {
+        migrateLegacy(context)
+        val terms = Regex("[\\p{L}\\p{N}_-]{2,}").findAll(query.lowercase()).map { it.value.take(48) }.distinct().take(8).toList()
+        if (terms.isEmpty()) return emptyList()
+        val match = terms.joinToString(" AND ") { "\"" + it.replace("\"", "\"\"") + "\"" }
+        val db = readableDatabase
+        val result = ArrayList<SearchHit>()
+        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,snippet(messages_fts,1,'[',']',' … ',18),m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY m.created_at DESC LIMIT ?"
+        db.rawQuery(sql, arrayOf(match, limit.coerceIn(1, 12).toString())).use { c ->
+            while (c.moveToNext()) {
+                val sid = c.getString(0); val turn = c.getString(1); val order = c.getInt(6)
+                var before = ""; var after = ""
+                db.rawQuery("SELECT sort_order,role,content FROM messages WHERE session_id=? AND sort_order BETWEEN ? AND ? ORDER BY sort_order", arrayOf(sid,(order-1).toString(),(order+1).toString())).use { around ->
+                    while (around.moveToNext()) {
+                        val line = around.getString(1) + ": " + around.getString(2).take(420)
+                        if (around.getInt(0) < order) before = line
+                        if (around.getInt(0) > order) after = line
+                    }
+                }
+                result += SearchHit(sid,turn,c.getString(2),c.getLong(3),c.getString(4),c.getString(5),before,after)
+            }
+        }
+        return result
+    }
+
+    /** Record the actual executor result against the active session and objective ID. */
+    @Synchronized
+    fun recordObjectiveEvidence(context: Context, objectiveId: String, tool: String, outcome: String, summary: String, turnId: String? = null): ObjectiveEvidence? {
+        if (objectiveId.isBlank() || tool.isBlank()) return null
+        migrateLegacy(context)
+        val db = writableDatabase
+        val sid = db.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use { if (it.moveToFirst()) it.getString(0) else null } ?: return null
+        val evidence = ObjectiveEvidence(UUID.randomUUID().toString(),sid,turnId?.take(128),objectiveId.take(32),tool.take(80),outcome.take(24),sanitizeEventSummary(summary),System.currentTimeMillis())
+        val values = ContentValues().apply { put("id",evidence.id); put("session_id",sid); put("turn_id",evidence.turnId); put("objective_id",evidence.objectiveId); put("tool",evidence.tool); put("outcome",evidence.outcome); put("summary",evidence.summary); put("created_at",evidence.createdAt) }
+        return if (db.insert("objective_evidence",null,values) >= 0) evidence else null
+    }
+
+    @Synchronized
+    fun objectiveEvidence(context: Context, objectiveId: String): List<ObjectiveEvidence> {
+        migrateLegacy(context)
+        val out = ArrayList<ObjectiveEvidence>()
+        readableDatabase.rawQuery("SELECT id,session_id,turn_id,objective_id,tool,outcome,summary,created_at FROM objective_evidence WHERE objective_id=? ORDER BY created_at",arrayOf(objectiveId)).use { c ->
+            while (c.moveToNext()) out += ObjectiveEvidence(c.getString(0),c.getString(1),c.getString(2),c.getString(3),c.getString(4),c.getString(5),c.getString(6),c.getLong(7))
+        }
+        return out
+    }
+
     @Synchronized
     fun eventsForActive(context: Context): List<ChatEvent> {
         migrateLegacy(context)
@@ -359,7 +408,7 @@ class OrionConversationRepository private constructor(context: Context) :
 
     private fun insertMessage(db: SQLiteDatabase, sessionId: String, role: String, content: String, createdAt: Long, order: Int) {
         db.insert("messages", null, ContentValues().apply {
-            put("id", sessionId + ":" + order); put("session_id", sessionId); put("role", role)
+            put("id", UUID.randomUUID().toString()); put("session_id", sessionId); put("role", role)
             put("content", content.take(6000)); put("created_at", createdAt); put("sort_order", order)
         })
     }
