@@ -226,6 +226,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         orionRuntime?.pause("accessibility_interrupted")
     }
 
+    /** Called by optional system event sources; never starts the accessibility service. */
+    internal fun onExternalPresenceEvent(eventKey: String, safeDescription: String): Boolean {
+        val runtime = orionRuntime ?: return false
+        if (!AgentPolicy.enabled(this, "orion_core")) return false
+        val decision = decisionScheduler?.onExternalPresenceEvent(eventKey, safeDescription) ?: return false
+        if (decision.accepted) scheduleRuntimeDrain()
+        return decision.accepted
+    }
+
     /** WorkManager may request a drain only while this already-enabled service is connected. */
     internal fun requestRuntimeDrain(): Boolean {
         val runtime = orionRuntime ?: return false
