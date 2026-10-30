@@ -81,7 +81,7 @@ internal object OrionContextualIntentInterpreter {
         val isCorrection = correction.containsMatchIn(raw)
         val isTest = testRequest.containsMatchIn(raw)
         val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
-        val isHistorical = historicalReference.containsMatchIn(raw)
+        val isHistorical = explicitHistoricalLookup.containsMatchIn(raw)
         val contextual = isContinue || isComplete || isCorrection || isTest || isReferenceOnly || isHistorical
 
         // A historical search names its own target. Never replace it with the latest active task.
