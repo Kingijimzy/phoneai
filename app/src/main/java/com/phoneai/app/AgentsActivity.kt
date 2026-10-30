@@ -46,7 +46,7 @@ class AgentsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(22), dp(18), dp(28))
         }
-        scroll.addView(host, ScrollView.LayoutParams(-1, -2))
+        scroll.addView(host, -1, -2)
         setContentView(scroll)
 
         val back = label("‹  ORION", 11f, Theme.SILVER, true).apply {
@@ -81,7 +81,7 @@ class AgentsActivity : Activity() {
             setPadding(0, dp(4), 0, 0)
         })
         summary.addView(summaryText, LinearLayout.LayoutParams(0, -2, 1f))
-        summary.addView(label("OPEN AGENT  ›", 9f, Theme.SILVER, true))
+        summary.addView(label("SELECT A SPECIALIST", 9f, Theme.SILVER, true))
         host.addView(summary, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
 
         agents.forEachIndexed { index, agent ->
