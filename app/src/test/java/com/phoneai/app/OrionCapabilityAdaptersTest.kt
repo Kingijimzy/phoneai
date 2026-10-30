@@ -86,4 +86,36 @@ class OrionCapabilityAdaptersTest {
         device.forEach { assertTrue("Missing device executor for ${it.tool}", OrionDeviceCapabilityExecutor.supports(it.tool)) }
         mcp.forEach { assertTrue("Missing MCP executor for ${it.tool}", OrionMcpCapabilityExecutor.supports(it.tool)) }
     }
+    @Test fun everyIntegrationAndSkillRouteHasAConcreteDedicatedExecutor() {
+        val integrations = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.INTEGRATIONS }
+        val skills = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.SKILLS }
+
+        assertTrue("Integrations backend must not be empty", integrations.isNotEmpty())
+        assertTrue("Skills backend must not be empty", skills.isNotEmpty())
+        integrations.forEach {
+            assertTrue("Missing integrations executor for ${it.tool}", OrionIntegrationCapabilityExecutor.supports(it.tool))
+        }
+        skills.forEach {
+            assertTrue("Missing skills executor for ${it.tool}", OrionSkillsCapabilityExecutor.supports(it.tool))
+        }
+    }
+
+    @Test fun skillsExecutorValidatesManifestConstraints() {
+        val valid = PhoneAiSkill(
+            id = "test_skill",
+            version = "1.0.0",
+            description = "A bounded test skill.",
+            allowedTools = setOf("read_screen"),
+            maxCalls = 3,
+            maxDurationMs = 10_000L,
+            requiresApproval = true,
+            enabled = false
+        )
+        assertTrue(OrionSkillsCapabilityExecutor.validate(valid).allowed)
+        assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(allowedTools = setOf("not_a_tool"))).allowed)
+        assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(maxCalls = 21)).allowed)
+    }
+
 }

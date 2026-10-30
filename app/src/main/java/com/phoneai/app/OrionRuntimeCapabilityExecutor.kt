@@ -22,12 +22,15 @@ internal object OrionRuntimeCapabilityExecutor {
         verifySend: (JSONObject) -> String = { "error: send verification callback unavailable" },
         look: (String) -> String = { "error: screen interpretation callback unavailable" },
         play: (String, Int) -> String = { _, _ -> "error: game-control callback unavailable" },
-        readScreen: () -> String = { service.readScreen() }
+        readScreen: () -> String = { service.readScreen() },
+        githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" }
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
         )
         OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools, confirm)
+        OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.execute(tool, args, service, tools, githubAccountRead)
+        OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
