@@ -77,9 +77,9 @@ class RecoveryPolicyTest {
     }
 
     @Test fun backoffGrowsAndStaysBounded() {
-        assertEquals(800L, RecoveryPolicy.backoffMillis(1))
-        assertEquals(1600L, RecoveryPolicy.backoffMillis(2))
-        assertEquals(1600L, RecoveryPolicy.backoffMillis(9))
+        assertEquals(1_000L, RecoveryPolicy.backoffMillis(1))
+        assertEquals(2_000L, RecoveryPolicy.backoffMillis(2))
+        assertEquals(2_000L, RecoveryPolicy.backoffMillis(9))
     }
 
     @Test fun ownerConfiguredBackoffUsesBaseAndBoundedExponentialDelay() {
@@ -115,7 +115,7 @@ class RecoveryPolicyTest {
             { slept += it }, { n, _ -> seen += n }) { results.removeFirst() }
         assertEquals("ok: 3 results", out.result)
         assertEquals(1, out.retries)
-        assertEquals(listOf(800L), slept)
+        assertEquals(listOf(1_000L), slept)
         assertEquals(listOf(1), seen)
     }
 
