@@ -95,11 +95,11 @@ internal object OrionCentralBrain {
         if (isFollowUp && continuityObjective.isNotBlank()) {
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
-                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\\n" + resume.take(5200)
+                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(5200)
             }
             savedGraph?.let { graph ->
                 sections += OrionObjectiveGraph.prompt(graph) +
-                    "\\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+                    "\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
             }
             val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 5) }.getOrDefault(emptyList())
             if (discussion.isNotEmpty()) {
@@ -128,8 +128,8 @@ internal object OrionCentralBrain {
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
         val learnedExperience = runCatching { ExperienceStore.promptBlock(app, request, 5) }.getOrDefault("")
         if (learnedExperience.isNotBlank()) {
-            sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\\n" + learnedExperience +
-                "\\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
+            sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\n" + learnedExperience +
+                "\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
         }
 
         // Capability gap planning is derived from the same live registries as execution.
