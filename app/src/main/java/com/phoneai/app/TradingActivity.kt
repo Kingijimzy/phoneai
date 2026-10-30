@@ -7,8 +7,8 @@ import android.graphics.drawable.GradientDrawable
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
-import java.io.ByteArrayOutputStream
-import java.io.IOException
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -155,10 +155,11 @@ class TradingActivity : Activity() {
         if (requestCode != REQUEST_TRADE_IMPORT || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         try {
-            contentResolver.openInputStream(uri)?.use { input ->
-                val bytes = ByteArrayOutputStream().also { out -> input.copyTo(out) }.toByteArray()
-                TradeHistoryStore.importCsvBytes(this, bytes)
-            }
+            val name = uri.lastPathSegment ?: "import.csv"
+            val text = contentResolver.openInputStream(uri)?.use { input ->
+                BufferedReader(InputStreamReader(input)).readText()
+            } ?: throw IllegalStateException("Could not read file")
+            TradeHistoryStore.importCsv(this, text, name)
             Toast.makeText(this, "Import finished", Toast.LENGTH_SHORT).show()
             render()
         } catch (e: Exception) {
