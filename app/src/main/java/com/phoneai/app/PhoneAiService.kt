@@ -1828,7 +1828,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             } catch (e: Exception) {
                 say("Error: ${e.message}")
             } finally {
-                onAgentTaskRunEnded(t)
+                onAgentTaskRunEnded(agent.currentTaskCommand().ifBlank { t })
             }
             main.post { finishRun() }
         }
