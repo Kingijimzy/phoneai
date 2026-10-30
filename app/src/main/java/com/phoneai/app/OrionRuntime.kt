@@ -11,7 +11,7 @@ import java.util.UUID
 /** Event-driven coordinator: persists bounded work, but never calls providers or executes actions itself. */
 internal class OrionRuntime(context: Context, private val clock: () -> Long = { System.currentTimeMillis() }) {
     enum class State { STOPPED, ACTIVE, BUSY, PAUSED, DEGRADED }
-    enum class WorkType { LEARN_FROM_RESULT, CAPABILITY_RECHECK, RESTORE_PENDING, SOUL_WATCH }
+    enum class WorkType { LEARN_FROM_RESULT, CAPABILITY_RECHECK, RESTORE_PENDING, SOUL_WATCH, PRESENCE_EVENT }
     data class WorkItem(val id: String, val key: String, val type: WorkType, val priority: Int,
                         val createdAt: Long, val attempts: Int = 0, val notBefore: Long = 0L,
                         val goal: String = "", val checkpoint: String = "", val lastError: String = "")
