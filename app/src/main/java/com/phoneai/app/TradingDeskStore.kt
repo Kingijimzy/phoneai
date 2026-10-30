@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 /**
- * Local trading desk state: playbook rules/candidates + risk envelope bridged to Prefs.
+ * Local trading desk state: playbook candidates/rules + risk envelope bridged to Prefs.
  * Does not place orders.
  */
 object TradingDeskStore {
@@ -19,7 +19,6 @@ object TradingDeskStore {
             .toSet()
         return TradingRiskPolicy.Limits(
             killSwitch = Prefs.tradingReadOnly(c),
-            // Paper = testnet OR explicit read-only acts as no-live when read-only is on via killSwitch
             paperMode = Prefs.bybitTestnet(c),
             maxNotionalUsd = Prefs.maxOrderUsd(c).toDouble().coerceAtLeast(1.0),
             maxDailyLossUsd = Prefs.maxOrderUsd(c).toDouble().coerceAtLeast(1.0),
@@ -80,13 +79,30 @@ object TradingDeskStore {
         if (enabledRules.isEmpty()) return emptyList()
         val out = ArrayList<TradingMatcher.SetupCard>()
         for (sym in watchSymbols(c)) {
-            val px = runCatching { Bybit.price(c, sym) }.getOrNull()
-            val ch = runCatching { Bybit.change24h(c, sym) }.getOrNull()
+            val asset = TradingPlaybook.parseAssetClass(sym)
+            val px: Double?
+            val ch: Double?
+            if (asset == TradingPlaybook.AssetClass.FOREX || MarketQuotes.resolve(sym.replace("/", "")) != null) {
+                val resolved = MarketQuotes.resolve(sym.replace("/", ""))
+                if (resolved != null) {
+                    val q = runCatching { MarketQuotes.quote(resolved.first, resolved.second) }.getOrNull()
+                    px = q?.price
+                    ch = q?.let {
+                        if (it.prevClose != 0.0) ((it.price - it.prevClose) / it.prevClose) * 100.0 else null
+                    }
+                } else {
+                    px = null; ch = null
+                }
+            } else {
+                px = runCatching { Bybit.price(c, sym) }.getOrNull()
+                ch = runCatching { Bybit.change24h(c, sym) }.getOrNull()
+            }
             val snap = TradingMatcher.MarketSnapshot(
                 instrument = sym,
-                assetClass = TradingPlaybook.parseAssetClass(sym),
+                assetClass = asset,
                 lastPrice = px,
-                changePct = ch
+                changePct = ch,
+                session = TradingCalendar.sessionNameUtc()
             )
             out += TradingMatcher.match(enabledRules, snap)
         }

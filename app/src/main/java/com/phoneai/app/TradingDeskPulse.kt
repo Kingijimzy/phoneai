@@ -1,11 +1,9 @@
 package com.phoneai.app
 
 import android.content.Context
-import java.util.Calendar
 import java.util.Locale
-import java.util.TimeZone
 
-/** Live status lines for the Trading Desk workspace. Read-only; no orders. */
+/** Live desk status for the Trading Desk workspace pulse card. */
 object TradingDeskPulse {
     data class Snapshot(
         val headline: String,
@@ -14,21 +12,21 @@ object TradingDeskPulse {
         val packLine: String,
         val playbookLine: String,
         val sessionLine: String,
+        val macroLine: String,
         val aliveHint: String
     )
 
     fun snapshot(c: Context): Snapshot {
-        val hour = Calendar.getInstance(TimeZone.getTimeZone("UTC")).get(Calendar.HOUR_OF_DAY)
-        val session = TradeProposals.sessionAt(hour)
-        val testnet = Prefs.bybitTestnet(c)
+        val researchOn = AgentPolicy.enabled(c, "trading_research")
+        val execOn = AgentPolicy.enabled(c, "trading_execution")
         val readOnly = Prefs.tradingReadOnly(c)
         val hasKeys = Bybit.hasKeys(c)
-        val execOn = AgentPolicy.enabled(c, "trading_execution")
-        val researchOn = AgentPolicy.enabled(c, "trading_research")
+        val testnet = Prefs.bybitTestnet(c)
         val rules = TradingDeskStore.rules(c)
         val enabled = rules.count { it.enabled }
         val pending = TradingDeskStore.candidates(c).size
         val watch = TradingDeskStore.watchSymbols(c)
+        val session = TradingCalendar.sessionNameUtc()
 
         val modeLine = buildString {
             append(if (testnet) "TESTNET" else "REAL")
@@ -38,6 +36,7 @@ object TradingDeskPulse {
         val packLine = "Research ${if (researchOn) "ON" else "off"} · Execution ${if (execOn) "ON" else "off"}"
         val playbookLine = "$enabled rules live · $pending pending Accept · ${watch.size} watch symbols"
         val sessionLine = "Session: $session"
+        val macroLine = TradingCalendar.deskLine()
 
         val headline = when {
             !researchOn && !execOn -> "Desk is quiet"
@@ -49,12 +48,13 @@ object TradingDeskPulse {
         val detail = when {
             readOnly && execOn -> "Execution pack is on, but read-only still blocks orders."
             execOn && !readOnly && hasKeys -> "I can propose trades; you still confirm each order."
-            else -> "Chat with me, scan the list, or Accept a playbook candidate."
+            else -> "Chat with me, attach a chart, scan crypto/FX, or Accept a playbook candidate."
         }
         val aliveHint = listOf(
-            "Ask for a scan, a bias on BTC, or paste a chart note.",
-            "I stay in this desk — research first, orders only with your OK.",
-            "Match runs against your watchlist using public data."
+            "Attach a TradingView screenshot or paste a setup — I will draft a candidate for Accept.",
+            "I watch crypto on Bybit public data and FX via public quotes when you ask.",
+            "Orders stay permissioned: pack on + your confirm. Testnet first.",
+            "Ask for NFP/macro context, EURUSD bias, or a full watchlist scan."
         ).random()
 
         return Snapshot(
@@ -64,23 +64,34 @@ object TradingDeskPulse {
             packLine = packLine,
             playbookLine = playbookLine,
             sessionLine = sessionLine,
+            macroLine = macroLine,
             aliveHint = aliveHint
         )
     }
 
-    fun quickQuotes(c: Context, limit: Int = 4): String {
+    fun quickQuotes(c: Context, limit: Int = 5): String {
         val syms = TradingDeskStore.watchSymbols(c).ifEmpty {
-            listOf("BTCUSDT", "ETHUSDT")
+            listOf("BTCUSDT", "ETHUSDT", "EURUSD")
         }.take(limit)
         if (syms.isEmpty()) return "Watchlist empty."
         val parts = ArrayList<String>()
         for (s in syms) {
-            try {
-                val px = Bybit.price(c, s)
-                val ch = Bybit.change24h(c, s)
-                parts += String.format(Locale.US, "%s %.4g (%+.1f%%)", s.replace("USDT", ""), px, ch)
-            } catch (_: Exception) {
-                parts += "$s —"
+            val fx = MarketQuotes.resolve(s.replace("/", ""))
+            if (fx != null) {
+                try {
+                    val q = MarketQuotes.quote(fx.first, fx.second)
+                    parts += String.format(Locale.US, "%s %.5g", fx.second, q.price)
+                } catch (_: Exception) {
+                    parts += "$s —"
+                }
+            } else {
+                try {
+                    val px = Bybit.price(c, s)
+                    val ch = Bybit.change24h(c, s)
+                    parts += String.format(Locale.US, "%s %.4g (%+.1f%%)", s.replace("USDT", ""), px, ch)
+                } catch (_: Exception) {
+                    parts += "$s —"
+                }
             }
         }
         return parts.joinToString("  ·  ")
