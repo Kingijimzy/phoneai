@@ -27,22 +27,22 @@ internal object OrionContextualIntentInterpreter {
     )
 
     private val continuation = Regex(
-        """(?i)^\\s*(?:please\\s+)?(?:continue|resume|keep going|carry on|go on|proceed|pick up where you left off)(?:\\s+with\\s+(?:it|that|the work|the task))?[.! ]*$"""
+        """(?i)^\s*(?:please\s+)?(?:continue|resume|keep going|carry on|go on|proceed|pick up where you left off)(?:\s+(?:with\s+)?(?:it|that|the work|the task|the audit|the implementation))?[.! ]*$"""
     )
     private val completeRemaining = Regex(
-        """(?i)\\b(?:finish|complete|do|handle)\\b.{0,50}\\b(?:remaining|outstanding|unfinished|rest of|leftover)\\b|\\b(?:remaining|outstanding|unfinished)\\s+(?:work|tasks|items)\\b"""
+        """(?i)\b(?:finish|complete|do|handle)\b.{0,50}\b(?:remaining|outstanding|unfinished|rest of|leftover)\b|\b(?:remaining|outstanding|unfinished)\s+(?:work|tasks|items)\b"""
     )
     private val correction = Regex(
-        """(?i)^\\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\\b|^\\s*(?:that's|that is)\\s+(?:wrong|not right)"""
+        """(?i)^\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\s+(?:that|it|this|the previous task|the last change|the implementation)\b|^\s*(?:that's|that is)\s+(?:wrong|not right)"""
     )
     private val testRequest = Regex(
-        """(?i)\\b(?:test|verify|validate|audit|check)\\b.{0,80}\\b(?:everything|all|the rest|remaining|capabilities|features|work|it|that)\\b"""
+        """(?i)^\s*(?:please\s+)?(?:test|verify|validate|audit|check)\s+(?:everything|it all|all of it|the rest|the remaining work|the outstanding work|all remaining work)\b[.! ]*$"""
     )
     private val followUpOnly = Regex(
-        """(?i)^\\s*(?:and\\s+)?(?:it|that|this|those|them|the previous task|the outstanding work|the remaining work|everything|all of it)(?:\\s+(?:too|as well))?[.! ]*$"""
+        """(?i)^\s*(?:and\s+)?(?:it|that|this|those|them|the previous task|the outstanding work|the remaining work|everything|all of it)(?:\s+(?:too|as well))?[.! ]*$"""
     )
     private val standaloneContextual = Regex(
-        """(?i)^\\s*(?:fix that|fix it|improve that|improve it|test everything|test it all|finish it|finish that|complete it|complete that|continue|resume|keep going|carry on|proceed)\\s*[.! ]*$"""
+        """(?i)^\s*(?:fix that|fix it|improve that|improve it|test everything|test it all|finish it|finish that|complete it|complete that|continue|resume|keep going|carry on|proceed)\s*[.! ]*$"""
     )
 
     private fun substantiveUserTurns(turns: List<Pair<String, String>>): List<String> =
