@@ -4,6 +4,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionCommandIntentPolicyTest {
+    @Test fun explicitMultiObjectiveGraphRequestMustUseStructuredPlanning() {
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(
+            "I have one project with four objectives. Create a structured objective graph; they depend on one another in that order."
+        ))
+    }
+
+    @Test fun resumableMultiStepTaskMustUseStructuredPlanning() {
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(
+            "Create a three-step task and save its progress so it can be resumed if the app closes."
+        ))
+    }
+
+    @Test fun ordinaryThreeStepExplanationIsNotForcedIntoTaskExecution() {
+        assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(
+            "Explain three steps for understanding Android background restrictions."
+        ))
+    }
+
     @Test fun connectedGitHubRequestPrefersAuthenticatedAccountIntent() {
         val request = "inspect your connected GitHub account and identify your PhoneAI repository"
         assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(request))
