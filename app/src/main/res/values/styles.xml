@@ -5,9 +5,9 @@
         <item name="android:colorAccent">#BFC5CC</item>
         <item name="android:colorControlActivated">#BFC5CC</item>
         <item name="android:colorControlHighlight">#22BFC5CC</item>
-        <item name="android:windowBackground">#02080A</item>
-        <item name="android:statusBarColor">#02080A</item>
-        <item name="android:navigationBarColor">#02080A</item>
+        <item name="android:windowBackground">#080808</item>
+        <item name="android:statusBarColor">#080808</item>
+        <item name="android:navigationBarColor">#080808</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
@@ -16,10 +16,10 @@
     <!-- One consistent Orion appearance for remaining confirmation and information dialogs. -->
     <style name="Theme.Orion.Dialog" parent="@android:style/Theme.Material.Dialog.Alert">
         <item name="android:windowBackground">@drawable/orion_dialog_background</item>
-        <item name="android:colorAccent">#8DE0D1</item>
-        <item name="android:colorControlActivated">#8DE0D1</item>
-        <item name="android:textColorPrimary">#F0F5F5</item>
-        <item name="android:textColorSecondary">#9BA9AD</item>
+        <item name="android:colorAccent">#BFC5CC</item>
+        <item name="android:colorControlActivated">#BFC5CC</item>
+        <item name="android:textColorPrimary">#F5F5F5</item>
+        <item name="android:textColorSecondary">#999999</item>
         <item name="android:windowMinWidthMajor">88%</item>
         <item name="android:windowMinWidthMinor">88%</item>
     </style>

@@ -46,7 +46,7 @@ class SelfExtensionLabActivity : ComponentActivity() {
     private val line = Color(0xFF343434)
     private val white = Color(0xFFF4F5F6)
     private val muted = Color(0xFF9A9DA1)
-    private val blue = Color(Theme.SILVER)
+    private val silver = Color(Theme.SILVER)
     private val store by lazy { SelfExtendingExtensionStore(applicationContext) }
     private val sandbox by lazy {
         RestrictedPythonSandbox { source, inputJson ->
@@ -72,8 +72,8 @@ class SelfExtensionLabActivity : ComponentActivity() {
         refresh()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
-                primary = blue, onPrimary = ink, background = ink, surface = panel,
-                onSurface = white, secondary = blue
+                primary = silver, onPrimary = ink, background = ink, surface = panel,
+                onSurface = white, secondary = silver
             )) {
                 Surface(Modifier.fillMaxSize(), color = ink) {
                     SelfExtensionLabScreen(
@@ -274,17 +274,17 @@ class SelfExtensionLabActivity : ComponentActivity() {
             extensions.forEach { ext ->
                 PanelCard {
                     Text(ext.displayName, color = white, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("${ext.id} · ${ext.runtime} · ${if (ext.enabled && ext.verified) "ENABLED / VERIFIED" else "DRAFT / DISABLED"}", color = if (ext.enabled && ext.verified) blue else muted, fontSize = 10.sp)
+                    Text("${ext.id} · ${ext.runtime} · ${if (ext.enabled && ext.verified) "ENABLED / VERIFIED" else "DRAFT / DISABLED"}", color = if (ext.enabled && ext.verified) silver else muted, fontSize = 10.sp)
                     Text(ext.description.ifBlank { "No description provided." }, color = muted, fontSize = 12.sp, lineHeight = 17.sp)
                     Text("Source hash: ${ext.sourceSha256.take(12)}", color = muted, fontSize = 10.sp)
-                    reports[ext.id]?.let { Text("Last test: ${it.summary}", color = if (it.passed) blue else muted, fontSize = 11.sp) }
+                    reports[ext.id]?.let { Text("Last test: ${it.summary}", color = if (it.passed) silver else muted, fontSize = 11.sp) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { onTest(ext.id) }) { Text("Test") }
                         if (ext.enabled && ext.verified) {
                             Button(onClick = { onRun(ext.id) }) { Text("Run") }
                             TextButton(onClick = { onDisable(ext.id) }) { Text("Disable", color = muted) }
                         } else {
-                            TextButton(onClick = { onEnable(ext.id) }, enabled = reports[ext.id]?.passed == true) { Text("Enable", color = blue) }
+                            TextButton(onClick = { onEnable(ext.id) }, enabled = reports[ext.id]?.passed == true) { Text("Enable", color = silver) }
                         }
                     }
                 }
