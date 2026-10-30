@@ -348,6 +348,7 @@ fun OrionComposeChatScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     var editingOriginal by rememberSaveable { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var sessionSheetOpen by remember { mutableStateOf(false) }
     var inlineBrowserUrl by rememberSaveable { mutableStateOf<String?>(null) }
     val composerFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -701,7 +702,7 @@ fun OrionComposeChatScreen(
                         }), maxLines = 5
                     )
                 }
-                ComposerButton(Icons.Rounded.AddPhotoAlternate, "Attach image", onPickImage, secondary = true)
+                ComposerButton(Icons.Rounded.Add, "Add to session", { sessionSheetOpen = true }, secondary = true)
                 Spacer(Modifier.width(5.dp))
                 ComposerButton(
                     if (busy) Icons.Rounded.Stop else Icons.Rounded.Send,
@@ -748,6 +749,96 @@ fun OrionComposeChatScreen(
             onDismiss = { inlineBrowserUrl = null },
             onOpenFullBrowser = { target -> onBrowser(target) }
         )
+    }
+    if (sessionSheetOpen) {
+        AddToSessionSheet(
+            onDismiss = { sessionSheetOpen = false },
+            onAction = { action ->
+                sessionSheetOpen = false
+                when (action) {
+                    "photos" -> onPickImage()
+                    else -> onMenuAction(action)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddToSessionSheet(
+    onDismiss: () -> Unit,
+    onAction: (String) -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = .48f)),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                    .background(Color(0xFF171717))
+                    .border(1.dp, ChatHairline, RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                    .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 22.dp)
+            ) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.width(36.dp).height(4.dp).clip(CircleShape).background(Color(0xFF626262)))
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Add to session", color = ChatCopy, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f))
+                    Text("CLOSE", color = ChatMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(9.dp))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    SessionActionTile("Photos", "Attach images", "▧", Modifier.weight(1f)) { onAction("photos") }
+                    SessionActionTile("Files", "Text documents", "⇧", Modifier.weight(1f)) { onAction("attach_text") }
+                    SessionActionTile("Connections", "Services & apps", "⌘", Modifier.weight(1f)) { onAction("orion_hub") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.padding(top = 9.dp)) {
+                    SessionActionTile("Skills", "Agent access", "✳", Modifier.weight(1f)) { onAction("skills") }
+                    SessionActionTile("Tasks", "Work in progress", "☷", Modifier.weight(1f)) { onAction("tasks") }
+                    SessionActionTile("Tool catalog", "Available actions", "⚙", Modifier.weight(1f)) { onAction("capabilities") }
+                }
+                Text(
+                    "Only connected and supported features are shown here. Permissions remain under Android and Orion's approval controls.",
+                    color = ChatMuted, fontSize = 10.sp, lineHeight = 15.sp,
+                    modifier = Modifier.padding(top = 14.dp, start = 2.dp, end = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionActionTile(
+    title: String,
+    subtitle: String,
+    glyph: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF222222))
+            .border(1.dp, ChatHairline.copy(alpha = .8f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 7.dp, vertical = 13.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Box(
+            Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF303030)),
+            contentAlignment = Alignment.Center
+        ) { Text(glyph, color = ChatCopy, fontSize = 19.sp) }
+        Text(title, color = ChatCopy, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(subtitle, color = ChatMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
