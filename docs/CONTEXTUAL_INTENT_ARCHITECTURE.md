@@ -103,3 +103,31 @@ The current Hermes architecture documentation confirms a distinct agent loop, mo
 The nanoMuse Android/architecture documentation illustrates per-thread agents sharing durable memory/goals and atomic, versioned conversation persistence. This is a useful pattern for Orion's local-first Android runtime; retain Android-side approval and device ownership. See https://github.com/nano-muse/nanoMuse/blob/main/docs/android.md and https://git.mitgai.net/nano-muse/nanoMuse/blob/main/docs/architecture.md.
 
 The next required layer is a bounded local conversation index (session ID, turn ID, role, timestamp, text digest/full text under retention limits), ranked retrieval for references such as "the earlier keyboard crash" or "the task we paused last week", and an evidence reconciler that updates graph node states only from verified executor outcomes. Retrieval must return source turns and dates so the planner can distinguish remembered user requirements from assistant claims.
+
+
+## Durable conversation index and executor evidence (2026-10-30)
+
+The repository already had a SQLite-backed `OrionConversationRepository`; this iteration extends that existing source of truth rather than introducing a parallel transcript database.
+
+### Conversation index
+- Schema version 3 adds an on-device FTS4 virtual table, maintained by insert/update/delete triggers.
+- Existing conversations are indexed during the schema migration; both active and archived sessions are searchable.
+- Search results return the stable `sessionId` and `turnId`, role, timestamp, title, a bounded excerpt and adjacent-turn context.
+- Message IDs are UUIDs for new rows. During a transcript save, unchanged messages at the same turn position retain their IDs; changed/new messages receive fresh IDs.
+- The legacy SharedPreferences archive import remains one-time and the SQLite store remains canonical.
+- Search runs locally without model calls. The agent adds retrieved excerpts to contextual follow-up prompts and labels them as historical data, not instructions. Assistant statements are never treated as proof of action success.
+
+### Objective-to-executor evidence
+- Schema version 3 adds `objective_evidence`, linked by foreign key to the originating conversation session and (when available) the latest user turn ID.
+- Each receipt stores objective ID, actual tool name, outcome, bounded/redacted executor result summary and timestamp.
+- Every model-planned tool dispatch is checked against the persisted objective graph at the real `executeWithRecoveryGuard` boundary. Multi-objective graphs require an explicit valid `objective_id`; objectives with incomplete prerequisites are blocked before dispatch.
+- Actual tool results are recorded against the selected objective and the receipt ID is returned to the planner.
+- A completion proposal must reference an exact successful receipt already stored for that objective. The runtime re-checks prerequisite completion before changing the objective state.
+- Planner-provided status/evidence fields are ignored. Replanning preserves already-running/blocked/completed runtime state; a provisional single-node `main` objective is replaced when the planner expands it into named objectives.
+- Failed results leave the objective blocked and eligible for a changed approach; process interruption leaves the durable checkpoint and objective state available for reconciliation.
+
+### Remaining validation
+- Run the new Robolectric SQLite migration, FTS search, stable-turn-ID, and evidence-link tests in CI.
+- Verify database migration on an existing install with archived chats, not only a fresh database.
+- Physical-device verification is still required on the Redmi device.
+- The completion gate currently proves an exact successful executor receipt and dependency completion. Domain-specific objective validators (for example, checking that a saved file exists or a message is actually delivered) should be added for consequential outcome types before claiming those objectives complete.
