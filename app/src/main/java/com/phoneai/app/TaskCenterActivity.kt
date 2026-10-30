@@ -356,7 +356,7 @@ class TaskCenterActivity : Activity() {
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (task.status == "running" || task.status == "in_progress") {
             actions.addView(button("Open run") { openTaskInChat(task) }, LinearLayout.LayoutParams(-2, dp(42)))
-            actions.addView(button("Pause") { change(task, "paused") }, LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
+            actions.addView(button("Pause") { pauseTaskExecution(task) }, LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
         } else if (task.status != "completed" && task.status != "done" && task.status != "cancelled") {
             actions.addView(button(if (task.status == "paused") "Resume" else "Run in chat", true) {
                 openTaskInChat(task)
@@ -383,7 +383,36 @@ class TaskCenterActivity : Activity() {
      * the saved goal to the real chat/agent dispatcher instead of falsely
      * marking a task as running without doing any work.
      */
+    private fun pauseTaskExecution(task: OrionTask) {
+        val checkpoint = AgentCheckpointStore.pending(this)
+        val command = checkpoint?.optString("command").orEmpty()
+        if (checkpoint == null || !command.contains("saved task #" + task.id, ignoreCase = true)) {
+            Toast.makeText(this, "No resumable execution checkpoint is linked to this task. Open the current run to inspect it; Orion has not changed its status.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val service = PhoneAiService.instance
+        if (service == null) {
+            Toast.makeText(this, "Orion's execution service is not connected. The task was not marked paused.", Toast.LENGTH_LONG).show()
+            return
+        }
+        service.stopCurrentTask()
+        if (AgentCheckpointStore.pause(this) && TaskStore.update(this, task.id, status = "paused")) {
+            Toast.makeText(this, "Execution paused and checkpoint saved.", Toast.LENGTH_LONG).show()
+            refresh()
+        } else {
+            Toast.makeText(this, "Pause could not be confirmed. Inspect the saved run before retrying.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun openTaskInChat(task: OrionTask) {
+        // Opening an already-running task is navigation only; never submit its prompt twice.
+        if (task.status == "running" || task.status == "in_progress") {
+            try { startActivity(Intent(this, MainChatActivity::class.java)) }
+            catch (error: Exception) {
+                Toast.makeText(this, "Could not reopen the active chat: " + (error.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         // Do not mark a task as running if the real execution service is unavailable.
         // MainChatActivity would otherwise open, reject the prompt, and leave a false
         // running state on the board.
