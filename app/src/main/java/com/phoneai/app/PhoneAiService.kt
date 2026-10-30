@@ -278,9 +278,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 }
                             }
                         }
-                        runtime.complete(item)
-                    } catch (_: Exception) {
-                        runtime.fail(item)
+                        if (runtime.complete(item) && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                            OrionRuntimeNotifier.postResult(this, item, success = true)
+                        }
+                    } catch (error: Exception) {
+                        val retryQueued = runtime.fail(item, error.javaClass.simpleName + ": " + error.message.orEmpty())
+                        if (!retryQueued && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                            OrionRuntimeNotifier.postResult(this, item, success = false)
+                        }
                     }
                 }
             } finally {
