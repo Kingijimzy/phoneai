@@ -251,6 +251,18 @@ class SelfExtensionLabActivity : ComponentActivity() {
             Text("Build a new skill", color = white, fontSize = 27.sp, fontWeight = FontWeight.Bold)
             Text("Drafts are inert by default. Orion runs the constrained Python sandbox and checks expected results. Activation requires your explicit approval or the narrow owner pre-approval dial for exact-hash, sandbox-tested extensions.", color = muted, fontSize = 12.sp, lineHeight = 18.sp)
             PanelCard {
+                Text("WHAT THIS LAB CHANGES", color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(
+                    "Self-extensions add small, reusable data-processing skills to Orion's registered extension tool after sandbox tests and approval. They do not rewrite the Soul Engine, change its personality or core prompt, grant phone permissions, add arbitrary Android actions, or bypass policy.",
+                    color = muted, fontSize = 12.sp, lineHeight = 18.sp
+                )
+                Text("TO CHANGE THE SOUL ENGINE", color = white, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Text(
+                    "Open Soul Engine to change its saved goal and Talk / Command mode, pause or resume its core, review learning proposals, and inspect capability status. Use Settings and the Owner Control Center for the separate provider, permission and autonomy controls.",
+                    color = muted, fontSize = 12.sp, lineHeight = 18.sp
+                )
+            }
+            PanelCard {
                 Text("CREATE DRAFT", color = white, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 Field("Unique ID · lowercase", id, onId, "e.g. number_helper", singleLine = true)
                 Field("Display name", name, onName, "e.g. Number helper", singleLine = true)
