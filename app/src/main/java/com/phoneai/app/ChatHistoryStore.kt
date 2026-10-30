@@ -19,6 +19,9 @@ object ChatHistoryStore {
     private fun repo(context: Context) = OrionConversationRepository.get(context)
 
     @Synchronized
+    fun activeSessionId(context: Context): String? = repo(context).activeSessionId(context)
+
+    @Synchronized
     fun search(context: Context, query: String, limit: Int = 8): List<OrionConversationRepository.SearchHit> = repo(context).searchHistory(context, query, limit)
 
     @Synchronized
