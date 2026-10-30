@@ -39,6 +39,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
         OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.execute(tool, args, tools, stopped)
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)
+        OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
