@@ -78,6 +78,9 @@ internal fun SoulEngineComposeScreen(
     status: String,
     metrics: String,
     selfTest: String,
+    goal: String,
+    mode: SoulEngineState.Mode,
+    onSaveGoal: (String, SoulEngineState.Mode) -> Unit,
     onRefresh: () -> Unit,
     onSelfTest: () -> Unit,
     onOpenChat: () -> Unit,
@@ -98,6 +101,8 @@ internal fun SoulEngineComposeScreen(
 ) {
     var editingProposal by remember { mutableStateOf<SoulEngineState.Proposal?>(null) }
     var editedTitle by remember { mutableStateOf("") }
+    var goalDraft by remember(goal) { mutableStateOf(goal) }
+    var selectedMode by remember(mode) { mutableStateOf(mode) }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = EngineSilver,
         onPrimary = EngineInk,
@@ -134,6 +139,40 @@ internal fun SoulEngineComposeScreen(
                 }
 
                 EngineCoreToggle(coreEnabled, onCoreEnabledChange)
+
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
+                        .border(1.dp, EngineLine, RoundedCornerShape(18.dp)).padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    SectionTitle("SOUL CONFIGURATION", "Change Orion's active objective and interaction mode")
+                    OutlinedTextField(
+                        value = goalDraft,
+                        onValueChange = { goalDraft = it.take(180) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Current goal") },
+                        placeholder = { Text("What should Orion focus on?") },
+                        singleLine = false,
+                        minLines = 2,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EngineWhite, fontSize = 12.sp)
+                    )
+                    Text("INTERACTION MODE", color = EngineMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        EngineButton(if (selectedMode == SoulEngineState.Mode.TALK) "✓ TALK" else "TALK", Icons.Rounded.ChatBubbleOutline, Modifier.weight(1f)) {
+                            selectedMode = SoulEngineState.Mode.TALK
+                        }
+                        EngineButton(if (selectedMode == SoulEngineState.Mode.COMMAND) "✓ COMMAND" else "COMMAND", Icons.Rounded.TaskAlt, Modifier.weight(1f)) {
+                            selectedMode = SoulEngineState.Mode.COMMAND
+                        }
+                    }
+                    Text(
+                        if (selectedMode == SoulEngineState.Mode.TALK) "Talk prioritizes conversation and explanation. It does not disable approved tools." else "Command prioritizes explicit task execution. Existing policy gates and confirmations still apply.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                    EngineButton("Save Soul configuration", Icons.Rounded.CheckCircle, Modifier.fillMaxWidth()) {
+                        onSaveGoal(goalDraft, selectedMode)
+                    }
+                }
 
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
