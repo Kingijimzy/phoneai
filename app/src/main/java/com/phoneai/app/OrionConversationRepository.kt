@@ -247,6 +247,14 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    fun activeSessionId(context: Context): String? {
+        migrateLegacy(context)
+        return readableDatabase.rawQuery("SELECT id FROM sessions WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1", null).use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+    }
+
+    @Synchronized
     fun loadActive(context: Context): List<Pair<String, String>> {
         migrateLegacy(context)
         val db = readableDatabase
