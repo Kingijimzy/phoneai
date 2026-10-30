@@ -49,23 +49,33 @@ object AgentRunner {
             sb.append("\nPLAYBOOK: ").append(if (play.isEmpty()) "(empty: when the user shows or describes rules, propose a STRATEGY line)" else play.joinToString("; ") { it.name + " [" + TradingDesk.evidenceFor(c, it.name) + "]" })
             val pend = TradingDesk.pending(c)
             if (pend.isNotEmpty()) sb.append("\nProposed, waiting for the user to accept: ").append(pend.joinToString(", ") { it.name })
+            val wantsForecast = Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText)
+            val wantsSimulation = Regex("(?i)\\b(simulat|backtest|back-test|test my strategy|how would)\\b").containsMatchIn(userText)
+            val wantsConditions = Regex("(?i)\\b(conditions?|fundamentals?|forex factory|calendar|news|currency|currencies|cpi|nfp|fomc)\\b").containsMatchIn(userText)
+            val wantsScan = Regex("(?i)\\b(match|setups?|scan|find)\\b").containsMatchIn(userText)
             val cur = (userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.flatMap { MarketCalendar.currenciesFor(it) }).toSet()
-            sb.append("\nNEWS CALENDAR (next 24h): ").append(MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.MEDIUM, cur.ifEmpty { null }).take(6), now))
-            for (pair in userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.distinct().take(2)) {
-                val h1 = FxData.candles(pair, "1h"); val h4 = FxData.candles(pair, "4h")
-                if (h1.size > 30) sb.append("\n").append(Ta.summary(pair, "1h", h1.dropLast(1)))
-                if (h4.size > 30) sb.append("\n").append(Ta.summary(pair, "4h", h4.dropLast(1)))
+            // Network calendar/candle reads are performed only when the requested answer needs them.
+            if (wantsForecast || wantsSimulation || wantsConditions || wantsScan) {
+                sb.append("\\nNEWS CALENDAR (next 24h): ").append(MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.MEDIUM, cur.ifEmpty { null }).take(6), now))
+            }
+            val pairs = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.distinct().take(1)
+            if (wantsForecast || wantsSimulation || wantsScan) {
+                for (pair in pairs) {
+                    val h1 = FxData.candles(pair, "1h"); val h4 = FxData.candles(pair, "4h")
+                    if (h1.size > 30) sb.append("\\n").append(Ta.summary(pair, "1h", h1.dropLast(1)))
+                    if (h4.size > 30) sb.append("\\n").append(Ta.summary(pair, "4h", h4.dropLast(1)))
+                }
             }
             val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
-            if (target != null && Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText))
-                sb.append("\nFORECAST (computed now from technicals, playbook, simulation and news):\n").append(TradingDesk.forecast(c, target))
-            if (target != null && Regex("(?i)\\b(simulat|backtest|back-test|test my strategy|how would)\\b").containsMatchIn(userText))
-                sb.append("\nSIMULATION (history, costs charged):\n").append(TradingDesk.backtest(c, null, target, "1h").text)
-            if (Regex("(?i)\\b(conditions?|fundamentals?|forex factory|calendar|news|currency|currencies)\\b").containsMatchIn(userText))
-                sb.append("\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
-            if (Regex("(?i)\\b(match|setups?|scan|find|look)\\b").containsMatchIn(userText) && play.isNotEmpty()) {
-                sb.append("\nPLAYBOOK MATCHES NOW:\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
+            if (target != null && wantsForecast)
+                sb.append("\\nFORECAST (computed now from technicals, playbook, simulation and news):\\n").append(TradingDesk.forecast(c, target))
+            if (target != null && wantsSimulation)
+                sb.append("\\nSIMULATION (history, costs charged):\\n").append(TradingDesk.backtest(c, null, target, "1h").text)
+            if (wantsConditions)
+                sb.append("\\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
+            if (wantsScan && play.isNotEmpty()) {
+                sb.append("\\nPLAYBOOK MATCHES NOW:\\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
             }
         } catch (e: Exception) { sb.append("\n(desk data unavailable: ").append(e.javaClass.simpleName).append(")") }
         return sb.toString()
