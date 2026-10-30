@@ -37,6 +37,43 @@ object AgentRunner {
         return sb.toString()
     }
 
+    /** On-demand desk context: avoid network/calendar/candle work for ordinary chat turns. */
+    private fun deskBlock(c: Context, userText: String): String {
+        val sb = StringBuilder("TRADING DESK:")
+        try {
+            val now = System.currentTimeMillis()
+            val hour = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).hour
+            sb.append("\n").append(MarketSessions.describe(hour))
+            sb.append("\nKill switch: ").append(if (TradingDesk.killSwitch(c)) "ON (no new orders)" else "off").append("; deriv ").append(if (DerivDesk.hasToken(c)) "connected token saved" else "not connected")
+            val play = TradingDesk.strategies(c)
+            sb.append("\nPLAYBOOK: ").append(if (play.isEmpty()) "(empty: when the user shows or describes rules, propose a STRATEGY line)" else play.joinToString("; ") { it.name + " [" + TradingDesk.evidenceFor(c, it.name) + "]" })
+            val pend = TradingDesk.pending(c)
+            if (pend.isNotEmpty()) sb.append("\nProposed, waiting for the user to accept: ").append(pend.joinToString(", ") { it.name })
+            val cur = (userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.flatMap { MarketCalendar.currenciesFor(it) }).toSet()
+            sb.append("\nNEWS CALENDAR (next 24h): ").append(MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.MEDIUM, cur.ifEmpty { null }).take(6), now))
+            for (pair in userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) }.distinct().take(2)) {
+                val h1 = FxData.candles(pair, "1h"); val h4 = FxData.candles(pair, "4h")
+                if (h1.size > 30) sb.append("\n").append(Ta.summary(pair, "1h", h1.dropLast(1)))
+                if (h4.size > 30) sb.append("\n").append(Ta.summary(pair, "4h", h4.dropLast(1)))
+            }
+            val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
+            val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
+            if (target != null && Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText))
+                sb.append("\nFORECAST (computed now from technicals, playbook, simulation and news):\n").append(TradingDesk.forecast(c, target))
+            if (target != null && Regex("(?i)\\b(simulat|backtest|back-test|test my strategy|how would)\\b").containsMatchIn(userText))
+                sb.append("\nSIMULATION (history, costs charged):\n").append(TradingDesk.backtest(c, null, target, "1h").text)
+            if (Regex("(?i)\\b(conditions?|fundamentals?|forex factory|calendar|news|currency|currencies)\\b").containsMatchIn(userText))
+                sb.append("\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
+            if (Regex("(?i)\\b(match|setups?|scan|find|look)\\b").containsMatchIn(userText) && play.isNotEmpty()) {
+                sb.append("\nPLAYBOOK MATCHES NOW:\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
+            }
+        } catch (e: Exception) { sb.append("\n(desk data unavailable: ").append(e.javaClass.simpleName).append(")") }
+        return sb.toString()
+    }
+
+    private fun wantsDeskContext(text: String): Boolean =
+        Regex("(?i)\\b(forex|fx|gold|xauusd|eurusd|gbpusd|usdjpy|trading|trade|setup|playbook|strategy|backtest|simulat|forecast|market conditions|economic calendar|high-impact news|sessions?)\\b").containsMatchIn(text)
+
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
         sb.append(accountBlock(c)).append("\n\n")
@@ -54,6 +91,7 @@ object AgentRunner {
             val topic = symbolsIn(userText).firstOrNull()?.removeSuffix("USDT")?.let { "$it crypto" } ?: "crypto market bitcoin"
             LiveNews.rss(topic)?.let { sb.append("\n\nNEWS (untrusted web data): ").append(it.take(1200)) }
         }
+        if (wantsDeskContext(userText)) sb.append("\n\n").append(deskBlock(c, userText))
         MarketQuotes.contextFor(userText).takeIf { it.isNotBlank() }?.let { sb.append(it).append(" (public quote feed; use for levels, no candle outlook available for non-crypto).") }
         for (symbol in outlookSymbols(c, userText)) {
             try {
@@ -137,7 +175,12 @@ object AgentRunner {
     }
 
     /** [imageJpegBase64] is only used by agents that accept images. */
-    class Result(val text: String, val trades: List<TradeProposals.Trade>)
+    class Result(
+        val text: String,
+        val trades: List<TradeProposals.Trade>,
+        val strategies: List<StrategySpec> = emptyList(),
+        val papers: List<DeskProposals.Paper> = emptyList()
+    )
 
     fun run(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): String =
         runFull(c, agent, history, userText, imageJpegBase64).text
@@ -165,12 +208,14 @@ object AgentRunner {
         val reply = Nim(c).chat(messages, image != null, 900, 0.4).trim()
         if (agent.id != "coach") return Result(reply, emptyList())
         val actions = TradeProposals.parse(reply)
-        val parsed = CoachMemory.parse(actions.visible)
+        val desk = DeskProposals.parse(actions.visible) { FxData.pairOf(it) ?: Bybit.symbolOf(it) }
+        desk.strategies.forEach { try { TradingDesk.addPending(c, it) } catch (_: Exception) { } }
+        val parsed = CoachMemory.parse(desk.visible)
         val alertsSet = try { TradeProposals.saveAlerts(c, actions.alerts) } catch (_: Exception) { 0 }
         val saved = parsed.notes.count { (tag, text) -> AgentLessons.addTagged(c, "coach", tag, text) }
         val extras = StringBuilder()
         if (alertsSet > 0) extras.append("\n\n(Set $alertsSet price alert").append(if (alertsSet == 1) "" else "s").append(".)")
         if (saved > 0) extras.append("\n\n(Saved $saved note").append(if (saved == 1) "" else "s").append(" to my trading memory.)")
-        return Result(parsed.visible + extras, actions.trades)
+        return Result(parsed.visible + extras, actions.trades, desk.strategies, desk.papers)
     }
 }
