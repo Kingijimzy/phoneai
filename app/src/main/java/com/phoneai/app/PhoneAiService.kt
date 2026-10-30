@@ -1091,6 +1091,37 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun conversationContext(): List<Pair<String, String>> =
         transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
 
+    internal fun onAgentTaskRunEnded(task: String) {
+        val savedTaskId = Regex("(?i)^Work on saved task #(\\d+):").find(task.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: return
+        runCatching {
+            val saved = TaskStore.all(this).firstOrNull { it.id == savedTaskId } ?: return@runCatching
+            if (saved.status !in setOf("running", "in_progress")) return@runCatching
+            val checkpoint = AgentCheckpointStore.pending(this)
+            val checkpointCommand = checkpoint?.optString("command").orEmpty()
+            if (checkpoint != null && !checkpointCommand.contains("saved task #" + savedTaskId, ignoreCase = true)) {
+                // A different task owns the single global checkpoint. Leave this task untouched.
+                return@runCatching
+            }
+            if (checkpoint != null) {
+                if (checkpoint.optString("status") == "running") AgentCheckpointStore.pause(this)
+                val inFlight = checkpoint.optJSONObject("inFlight")
+                val detail = checkpoint.optString("recoveryNotice").ifBlank {
+                    if (inFlight != null) "Execution paused with an action outcome that still needs inspection."
+                    else "Execution paused before the evidence-based completion gate passed."
+                }
+                TaskStore.update(this, savedTaskId, status = "paused", resultSummary = detail)
+            } else {
+                TaskStore.update(
+                    this,
+                    savedTaskId,
+                    status = "failed",
+                    resultSummary = "The agent run ended without passing its evidence-based completion gate or saving a resumable checkpoint. Review the chat transcript; success was not recorded."
+                )
+            }
+        }
+    }
+
     internal fun onAgentTaskFinished(task: String, success: Boolean) {
         decisionScheduler?.onTaskFinished(task, success)
         // Saved Task Centre items opt into this bridge through the explicit task-id prefix
@@ -1796,6 +1827,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 agent.run(t)
             } catch (e: Exception) {
                 say("Error: ${e.message}")
+            } finally {
+                onAgentTaskRunEnded(t)
             }
             main.post { finishRun() }
         }
