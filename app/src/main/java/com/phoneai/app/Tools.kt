@@ -567,6 +567,68 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    /** Save user-requested text/code into the public Downloads/Orion folder and verify the row. */
+    fun saveFile(fileName: String, content: String): String {
+        val requestedName = fileName.trim().substringAfterLast('/').substringAfterLast('\\')
+        val safeName = requestedName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120)
+        if (safeName.isBlank() || safeName == "." || safeName == "..") {
+            return "error: save_file needs a valid filename such as calculator.py"
+        }
+        if (content.isEmpty()) return "error: refusing to save an empty file"
+        if (content.toByteArray(Charsets.UTF_8).size > 200 * 1024) {
+            return "error: file exceeds the 200 KB limit"
+        }
+        val resolver = svc.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, safeName)
+            put(MediaStore.MediaColumns.MIME_TYPE, when {
+                safeName.endsWith(".py", true) -> "text/x-python"
+                safeName.endsWith(".json", true) -> "application/json"
+                safeName.endsWith(".md", true) -> "text/markdown"
+                safeName.endsWith(".txt", true) -> "text/plain"
+                safeName.endsWith(".kt", true) -> "text/x-kotlin"
+                safeName.endsWith(".js", true) -> "text/javascript"
+                else -> "text/plain"
+            })
+            put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Orion")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        var uri: Uri? = null
+        return try {
+            uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: return "error: Android did not create the Downloads entry"
+            resolver.openOutputStream(uri!!, "w")?.use { output ->
+                output.write(content.toByteArray(Charsets.UTF_8))
+                output.flush()
+            } ?: throw IllegalStateException("Downloads output stream unavailable")
+            val published = android.content.ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+            }
+            if (resolver.update(uri!!, published, null, null) != 1) {
+                throw IllegalStateException("could not publish the Downloads entry")
+            }
+            val projection = arrayOf(
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.SIZE,
+                MediaStore.MediaColumns.RELATIVE_PATH
+            )
+            val verified = resolver.query(uri!!, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    Triple(cursor.getString(0), cursor.getLong(1), cursor.getString(2))
+                } else null
+            } ?: throw IllegalStateException("saved file could not be found for verification")
+            val expectedBytes = content.toByteArray(Charsets.UTF_8).size.toLong()
+            if (verified.first != safeName || verified.second != expectedBytes ||
+                verified.third != android.os.Environment.DIRECTORY_DOWNLOADS + "/Orion/") {
+                throw IllegalStateException("saved file metadata did not match the requested content")
+            }
+            "FILE SAVED AND VERIFIED: ${verified.first} | Downloads/Orion/${verified.first} | ${verified.second} bytes | uri=$uri"
+        } catch (e: Exception) {
+            uri?.let { runCatching { resolver.delete(it, null, null) } }
+            "error: file was not saved or verified (${e.javaClass.simpleName}: ${e.message.orEmpty().take(120)})"
+        }
+    }
+
     fun openFile(idText: String): String {
         val id = idText.trim().toLongOrNull() ?: return "error: open_file needs the numeric id returned by find_files"
         if (id < 0L) return "error: file id must be non-negative"
