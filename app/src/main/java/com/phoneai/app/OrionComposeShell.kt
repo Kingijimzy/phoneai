@@ -416,7 +416,7 @@ private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
         ActionRow("Integrations & MCP", "Telegram, MCP servers, connection checks and scopes", Icons.Rounded.Public) { onOpenSettings("integrations") }
         Text("DEVICE & PRIVACY", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         ActionRow("Permissions & device access", "Accessibility, microphone, notifications, keyboard and location access", Icons.Rounded.Shield) { onOpenSettings("permissions") }
-        ActionRow("Orion health & updates", "Installed version, permission checks, diagnostics and release status", Icons.Rounded.HealthAndSafety) { onOpenSettings("health") }
+        ActionRow("Orion health & updates", "Installed version, permission checks, diagnostics and release status", Icons.Rounded.Shield) { onOpenSettings("health") }
         Text("AUTOMATION & LOCAL TOOLS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         ActionRow("Screen recording", "Recording controls and saved screen-capture settings", Icons.Rounded.Settings) { onOpenSettings("recording") }
         ActionRow("Browser & automation", "Browser handoff and assisted navigation settings", Icons.Rounded.Public) { onOpenSettings("browser") }
