@@ -61,6 +61,19 @@ class TaskCenterActivityTest {
         assertEquals("queued", TaskStore.all(context).first { it.id == task.id }.status)
     }
 
+    @Test fun manualCompletionDoesNotReuseAnOldAgentEvidenceSummary() {
+        val task = TaskStore.add(context, "Manual completion ${UUID.randomUUID()}")!!
+        assertTrue(TaskStore.update(context, task.id, status = "failed", resultSummary = "Old failed run"))
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+
+        val complete = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim() == "Complete" }
+        assertNotNull("An unfinished task must expose a manual Complete control", complete)
+        complete!!.performClick()
+        val saved = TaskStore.all(context).first { it.id == task.id }
+        assertEquals("completed", saved.status)
+        assertEquals("", saved.resultSummary)
+    }
+
     @Test fun verifiedTaskOutcomeIsPersistedAndVisibleOnTheBoard() {
         val task = TaskStore.add(context, "Verified task ${UUID.randomUUID()}")!!
         val evidenceSummary = "Orion's task-level completion gate passed. Review the chat transcript."
