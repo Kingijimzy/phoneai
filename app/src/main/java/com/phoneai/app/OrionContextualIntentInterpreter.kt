@@ -50,8 +50,8 @@ internal object OrionContextualIntentInterpreter {
             .filter { it.first.equals("user", true) || it.first.equals("me", true) }
             .map { it.second.trim() }
             .filter { it.isNotBlank() && !isFollowUpOnly(it) }
-            .takeLast(8)
             .toList()
+            .takeLast(8)
 
     private fun isFollowUpOnly(value: String): Boolean =
         continuation.matches(value) || followUpOnly.matches(value) ||
