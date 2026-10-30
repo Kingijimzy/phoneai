@@ -27,6 +27,7 @@ import java.util.Date
 class SoulWatcherActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var transcript: LinearLayout
+    private lateinit var reportContainer: LinearLayout
     private lateinit var commandInput: EditText
     private lateinit var statusView: TextView
     private lateinit var detailView: TextView
@@ -40,9 +41,26 @@ class SoulWatcherActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = ink
         window.navigationBarColor = ink
-        buildUi()
-        renderSnapshot()
-        addMessage("WATCHER", "I can run the local capability audit, explain detected limitations, list learning proposals, and open the relevant report. I will tell you when a fix requires Android settings or your approval.")
+        try {
+            buildUi()
+            renderSnapshot()
+            addMessage("WATCHER", "I can run the local capability audit, explain detected limitations, list learning proposals, and open the relevant report. I will tell you when a fix requires Android settings or your approval.")
+        } catch (error: Exception) {
+            android.util.Log.e("SoulWatcherActivity", "Watcher screen failed during initialization", error)
+            val recovery = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(20), dp(24), dp(20), dp(24))
+                setBackgroundColor(ink)
+            }
+            recovery.addView(label("SOUL WATCHER COULD NOT START", white, 18f))
+            recovery.addView(label(
+                error.javaClass.simpleName + ": " + (error.message ?: "Unknown initialization error") +
+                    "\n\nNo watcher action was run. Open Orion diagnostics for the full stack trace.",
+                muted, 13f
+            ).apply { setPadding(0, dp(12), 0, dp(18)) })
+            recovery.addView(actionButton("Back") { finish() })
+            setContentView(recovery)
+        }
     }
 
     override fun onResume() {
@@ -80,8 +98,12 @@ class SoulWatcherActivity : Activity() {
 
         root.addView(label("WATCHER CONVERSATION", white, 13f).also { it.typeface = Typeface.DEFAULT_BOLD; it.setPadding(0, dp(16), 0, dp(8)) })
         val scroll = ScrollView(this).apply { isFillViewport = false }
+        val scrollContent = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         transcript = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(transcript)
+        reportContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scrollContent.addView(transcript, LinearLayout.LayoutParams(-1, -2))
+        scrollContent.addView(reportContainer, LinearLayout.LayoutParams(-1, -2))
+        scroll.addView(scrollContent)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
         commandInput = EditText(this).apply {
@@ -106,7 +128,8 @@ class SoulWatcherActivity : Activity() {
         statusView.text = "Watcher: $status" + if (!core) " · core paused" else ""
         val time = snapshot?.watcherAt?.takeIf { it > 0L }?.let { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)) } ?: "no recorded tick"
         val schedules = runCatching { StandingOrders.all(this) }.getOrDefault(emptyList())
-        val scheduleState = if (StandingOrders.storageError() != null) "unavailable" else "${schedules.count { it.enabled && it.consecutiveFailures < StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} active / ${schedules.count { !it.enabled || it.consecutiveFailures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} paused/limited"
+        val scheduleStorageError = runCatching { StandingOrders.storageError() }.getOrNull()
+        val scheduleState = if (scheduleStorageError != null) "unavailable" else "${schedules.count { it.enabled && it.consecutiveFailures < StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} active / ${schedules.count { !it.enabled || it.consecutiveFailures >= StandingOrderPolicy.MAX_CONSECUTIVE_FAILURES }} paused/limited"
         detailView.text = "Last check: $time\nLast action: ${snapshot?.watcherAction?.ifBlank { "none recorded" } ?: "state unavailable"}\nAccessibility service: ${if (service) "connected" else "not connected"}\nSchedules: $scheduleState\nPending proposals: ${snapshot?.proposals?.count { it.status == SoulEngineState.ProposalStatus.PENDING } ?: 0}"
     }
 
@@ -145,9 +168,8 @@ class SoulWatcherActivity : Activity() {
                     renderSnapshot()
                     val limits = if (r.limitations.isEmpty()) "No capability limitations were reported by this audit." else "Findings: " + r.limitations.joinToString(", ")
                     addMessage("WATCHER", "Audit finished. Status: ${r.status}. Action: ${r.action}. $limits\nNext step: ${r.nextStep}\nThis is a fresh audit result, not proof that every feature works.")
-                    showProposals()
-                    showMemoryNudges()
-                    showP3Reports()
+                    clearReportOutput()
+                    addMessage("WATCHER", "Choose one report above when needed. Each report replaces the previous report instead of stacking duplicate cards.")
                 }.onFailure { e ->
                     addMessage("WATCHER", "The local audit failed: ${e.message ?: e.javaClass.simpleName}. No repair is claimed. You can retry or open the Capability Report.")
                 }
@@ -174,6 +196,7 @@ class SoulWatcherActivity : Activity() {
     }
 
     private fun showSchedules() {
+        clearReportOutput()
         val orders = runCatching { StandingOrders.all(this) }.getOrElse {
             addMessage("WATCHER", "Could not read schedules: ${it.javaClass.simpleName}. No changes made.")
             return
@@ -186,7 +209,7 @@ class SoulWatcherActivity : Activity() {
         addMessage("WATCHER", "Persistent schedules are stored on this device. Checks run only while Orion's service gets execution time; Android/HyperOS may delay them. Consequential actions remain blocked by the shared policy gate.")
         if (orders.isEmpty()) addMessage("WATCHER", "No standing orders are configured yet.")
         orders.forEach { order ->
-            val cardView = card(transcript)
+            val cardView = card(reportContainer)
             val nextAt = StandingOrders.nextRunAt(order)
             val next = when {
                 !order.enabled -> "Paused"
@@ -211,9 +234,9 @@ class SoulWatcherActivity : Activity() {
             cardView.addView(row)
         }
         val addHeader = label("ADD A READ-ONLY SCHEDULE (60 MIN)", white, 12f).also { it.typeface = Typeface.DEFAULT_BOLD }
-        transcript.addView(addHeader)
+        reportContainer.addView(addHeader)
         StandingOrderPolicy.kinds.filterKeys { kind -> orders.none { it.kind == kind } }.forEach { (kind, description) ->
-            transcript.addView(actionButton("Add: $description") {
+            reportContainer.addView(actionButton("Add: $description") {
                 addMessage("WATCHER", StandingOrders.add(this, kind, 60))
                 showSchedules()
                 renderSnapshot()
@@ -222,6 +245,7 @@ class SoulWatcherActivity : Activity() {
     }
 
     private fun showCapabilities() {
+        clearReportOutput()
         addMessage("WATCHER", "Reading the shared live capability registry, enabled packs, Android permission state and saved integration metadata. A saved connection is not proof of a successful live request.")
         Thread {
             val snapshot = runCatching { OrionCapabilityHub.snapshot(applicationContext) }
@@ -229,7 +253,7 @@ class SoulWatcherActivity : Activity() {
                 snapshot.onSuccess { s ->
                     addMessage("WATCHER", "Capability snapshot at ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(s.checkedAt))}. Registered tools: ${s.registeredTools}; available under current policy: ${s.availableTools}.")
                     s.capabilities.forEach { capability ->
-                        val box = card(transcript)
+                        val box = card(reportContainer)
                         box.addView(label(capability.name, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
                         box.addView(label(OrionCapabilityHub.stateLabel(capability.state), when (capability.state) {
                             OrionCapabilityHub.State.READY -> Color.rgb(145, 205, 151)
@@ -285,8 +309,13 @@ class SoulWatcherActivity : Activity() {
     }
 
     private fun showP3Reports() {
-        showProbeReport()
-        showCompositionReport()
+        clearReportOutput()
+        val probe = runCatching { SoulP3Engine.probeReport(this) }
+            .getOrElse { "Probe report unavailable: " + it.javaClass.simpleName }
+        val composition = runCatching { SoulP3Engine.compositionReport(this) }
+            .getOrElse { "Composition report unavailable: " + it.javaClass.simpleName }
+        addReportSection("PROBE RESULTS", probe)
+        addReportSection("COMPOSITION DRAFTS", composition)
     }
 
     private fun runP3Probe() {
@@ -307,16 +336,19 @@ class SoulWatcherActivity : Activity() {
     private fun showProbeReport() {
         val report = runCatching { SoulP3Engine.probeReport(this) }
             .getOrElse { "Probe report unavailable: " + it.javaClass.simpleName }
-        addMessage("WATCHER", "PROBE RESULTS\n" + report)
+        clearReportOutput()
+        addReportSection("PROBE RESULTS", report)
     }
 
     private fun showCompositionReport() {
         val report = runCatching { SoulP3Engine.compositionReport(this) }
             .getOrElse { "Composition report unavailable: " + it.javaClass.simpleName }
-        addMessage("WATCHER", "COMPOSITION DRAFTS\n" + report)
+        clearReportOutput()
+        addReportSection("COMPOSITION DRAFTS", report)
     }
 
     private fun showProposals() {
+        clearReportOutput()
         val pending = runCatching { SoulEngineState.snapshot(this).proposals.filter { it.status == SoulEngineState.ProposalStatus.PENDING } }.getOrDefault(emptyList())
         if (pending.isEmpty()) {
             addMessage("WATCHER", "There are no pending proposals right now.")
@@ -324,7 +356,7 @@ class SoulWatcherActivity : Activity() {
         }
         addMessage("WATCHER", "Pending proposals (${pending.size}). Accepting records your decision only; it does not perform the repair.")
         pending.take(8).forEach { p ->
-            val box = card(transcript)
+            val box = card(reportContainer)
             box.addView(label(p.title, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
             box.addView(label(p.detail, muted, 12f).apply { setPadding(0, dp(6), 0, dp(8)) })
             box.addView(label("Evidence: ${p.evidenceCount} · Type: ${p.kind.name.lowercase()}", muted, 10f))
@@ -344,6 +376,7 @@ class SoulWatcherActivity : Activity() {
 
 
     private fun showMemoryNudges() {
+        clearReportOutput()
         val snapshot = runCatching { SoulEngineState.snapshot(this) }.getOrNull()
         if (snapshot == null) {
             addMessage("WATCHER", "Memory-nudge state could not be read. No memory was changed.")
@@ -356,7 +389,7 @@ class SoulWatcherActivity : Activity() {
             addMessage("WATCHER", "No memory suggestions are waiting for review.")
         } else {
             pending.take(8).forEach { n ->
-                val box = card(transcript)
+                val box = card(reportContainer)
                 box.addView(label(n.summary, white, 14f).also { it.typeface = Typeface.DEFAULT_BOLD })
                 box.addView(label("Category: ${n.category} · Suggested ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(n.createdAt))}", muted, 10f))
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -391,7 +424,19 @@ class SoulWatcherActivity : Activity() {
             addMessage("WATCHER", if (ok) "Cooldown set to ${next / 3_600_000L} hours." else "Could not update cooldown.")
             showMemoryNudges()
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(4) })
-        transcript.addView(settings)
+        reportContainer.addView(settings)
+    }
+
+    private fun clearReportOutput() {
+        if (::reportContainer.isInitialized) reportContainer.removeAllViews()
+    }
+
+    private fun addReportSection(title: String, body: String) {
+        val box = card(reportContainer)
+        box.addView(label(title, white, 13f).also { it.typeface = Typeface.DEFAULT_BOLD })
+        box.addView(label(body.ifBlank { "No report data is available yet." }, muted, 12f).apply {
+            setPadding(0, dp(6), 0, 0)
+        })
     }
 
     private fun openCapabilityReport() {
