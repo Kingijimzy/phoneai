@@ -24,6 +24,7 @@ class AgentCheckpointStoreTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         AgentCheckpointStore.clear(context)
+        ExperienceStore.clear(context)
     }
 
     @Test fun interruptedInFlightActionRequiresInspectionAndIsNotAutomaticallyReplayed() {
@@ -96,6 +97,32 @@ class AgentCheckpointStoreTest {
         assertTrue(resume!!.contains("Inspect Settings and report the current state"))
         assertTrue(resume.contains("open_app"))
         assertTrue(resume.contains("Opened Settings"))
+    }
+
+    @Test fun completedRecoveryStoresFailureCauseCorrectionAndVerificationForFutureTasks() {
+        val request = "Open Settings and inspect notification access"
+        assertTrue(AgentCheckpointStore.begin(context, request))
+
+        val failedArgs = JSONObject().put("name", "Settings")
+        assertTrue(AgentCheckpointStore.beginStep(context, "open_app", failedArgs))
+        assertTrue(AgentCheckpointStore.record(context, "open_app", failedArgs, "error: target not found"))
+        ExperienceStore.recordFailure(context, request, "open_app", "error: target not found")
+
+        val correctedArgs = JSONObject().put("text", "Notification access")
+        assertTrue(AgentCheckpointStore.beginStep(context, "click_text", correctedArgs))
+        assertTrue(AgentCheckpointStore.record(context, "click_text", correctedArgs,
+            "action returned\\nLOCAL VERIFY PASS: visible state changed after action."))
+        assertTrue(AgentCheckpointStore.complete(context))
+
+        val lesson = ExperienceStore.all(context).single()
+        assertEquals("resolved_failure", lesson.kind)
+        assertTrue(lesson.category.isNotBlank())
+        assertTrue(lesson.correction.contains("open_app") && lesson.correction.contains("click_text"))
+        assertTrue(lesson.verification.contains("completion gate passed"))
+        val prompt = ExperienceStore.promptBlock(context, request)
+        assertTrue(prompt.contains("LEARNED RESOLUTION"))
+        assertTrue(prompt.contains("click_text"))
+        assertTrue(prompt.contains("verification"))
     }
 
     @Test fun evidenceTaskIdentityIsUniqueAndStableAcrossResume() {
