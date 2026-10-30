@@ -1,0 +1,55 @@
+name: restore-agent-trading
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/trading-desk-phase-a]
+    paths:
+      - '.github/workflows/restore-agent-trading.yml'
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/trading-desk-phase-a
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore Agent.kt from main and inject trading tools
+        run: |
+          set -e
+          git config user.name "Kingi jimzy"
+          git config user.email "108807524+Kingijimzy@users.noreply.github.com"
+          git checkout origin/main -- app/src/main/java/com/phoneai/app/Agent.kt
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/phoneai/app/Agent.kt')
+          text = p.read_text()
+          needle = '            "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\\n\\nRecent imported records:\\n" + TradeHistoryStore.recentText(svc, 15) else ""'
+          insert = needle + '''
+            "trading_watchlist_list" -> TradingToolHandlers.watchlistList(svc)
+            "trading_watchlist_set" -> TradingToolHandlers.watchlistSet(svc, a.optString("symbols"))
+            "trading_playbook_list" -> TradingToolHandlers.playbookList(svc)
+            "trading_playbook_propose" -> TradingToolHandlers.playbookPropose(svc, a)
+            "trading_playbook_set_enabled" -> TradingToolHandlers.playbookSetEnabled(svc, a.optString("id"), a.optBoolean("enabled", true))
+            "trading_match_setups" -> TradingToolHandlers.matchSetups(svc)
+            "trading_strategy_note" -> TradingToolHandlers.strategyNote(svc, a)
+            "bybit_public_kline" -> TradingToolHandlers.publicKline(svc, a.optString("symbol"), a.optString("interval", "60"), a.optInt("limit", 50))
+            "bybit_place_order" -> TradingToolHandlers.placeOrder(svc, ui, a)
+            "bybit_cancel_order" -> TradingToolHandlers.cancelOrders(svc, ui)'''
+          if 'TradingToolHandlers.watchlistList' in text:
+              print('already patched')
+          elif needle not in text:
+              raise SystemExit('needle missing in Agent.kt')
+          else:
+              p.write_text(text.replace(needle, insert, 1))
+              print('patched')
+          PY
+          if git diff --quiet; then
+            echo "No changes"
+          else
+            git add app/src/main/java/com/phoneai/app/Agent.kt
+            git commit -m "Restore Agent.kt from main + trading desk tool dispatch"
+            git push origin feature/trading-desk-phase-a
+          fi
