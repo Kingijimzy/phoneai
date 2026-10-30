@@ -30,6 +30,9 @@ internal object OrionContextualIntentInterpreter {
     private val continuation = Regex(
         """(?i)^\s*(?:please\s+)?(?:continue|resume|keep going|carry on|go on|proceed|pick up where you left off)(?:\s+(?:with\s+)?(?:it|that|the work|the task|the audit|the implementation))?[.! ]*$"""
     )
+    private val namedContinuation = Regex(
+        """(?i)^\s*(?:please\s+)?(?:continue|resume|pick up|carry on|proceed with)\s+(?:the\s+)?(.{3,120}?)\s*[.! ]*$"""
+    )
     private val completeRemaining = Regex(
         """(?i)\b(?:finish|complete|do|handle)\b.{0,50}\b(?:remaining|outstanding|unfinished|rest of|leftover)\b|\b(?:remaining|outstanding|unfinished)\s+(?:work|tasks|items)\b"""
     )
@@ -77,7 +80,11 @@ internal object OrionContextualIntentInterpreter {
         val raw = request.trim()
         val prior = substantiveUserTurns(recentTurns).lastOrNull()
         val objective = activeObjective.trim().ifBlank { prior.orEmpty() }
-        val isContinue = continuation.matches(raw)
+        val namedTarget = namedContinuation.matchEntire(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+        val objectiveTokens = Regex("[\\p{L}\\p{N}]{3,}").findAll(objective.lowercase()).map { it.value }.toSet()
+        val namedTokens = Regex("[\\p{L}\\p{N}]{3,}").findAll(namedTarget.lowercase()).map { it.value }.toSet()
+        val namedTargetMatchesActive = namedTokens.isNotEmpty() && namedTokens.any { it in objectiveTokens }
+        val isContinue = continuation.matches(raw) || (namedTargetMatchesActive && objective.isNotBlank())
         val isComplete = completeRemaining.containsMatchIn(raw)
         val isCorrection = correction.containsMatchIn(raw)
         val isTest = testRequest.containsMatchIn(raw)
