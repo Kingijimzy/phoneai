@@ -2307,7 +2307,6 @@ Rules:
                 val id = a.optString("id").trim()
                 if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
             }
-            "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
             "gaming_session_summary" -> GameCoachStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent notes:\n" + GameCoachStore.all(svc).take(12).joinToString("\n") { "${it.game} · ${it.durationMinutes} min · ${it.result} · ${it.note}" } else ""
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
             "gaming_focus_preset" -> GamingFocus.start(svc, a.optInt("minutes", 0))
