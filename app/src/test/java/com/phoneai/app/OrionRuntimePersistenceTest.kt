@@ -23,6 +23,7 @@ class OrionRuntimePersistenceTest {
         stateFile = File(context.filesDir, "orion_runtime.json")
         stateFile.delete()
         File(context.filesDir, "orion_runtime.json.tmp").delete()
+        File(context.filesDir, "orion_runtime.json.bak").delete()
     }
 
     @After fun tearDown() {
@@ -65,6 +66,48 @@ class OrionRuntimePersistenceTest {
         assertEquals(claimed.id, recovered!!.id)
         assertTrue(afterDeath.complete(recovered))
         assertFalse(afterDeath.complete(recovered))
+    }
+
+
+    @Test fun interruptedStandingOrderIsReconciledButNeverBlindlyReplayed() {
+        val first = OrionRuntime(context)
+        first.start()
+        assertTrue(first.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "standing-order-tick", 2))
+        val claimed = first.claimNext()!!
+        assertEquals(OrionRuntime.WorkType.SOUL_WATCH, claimed.type)
+
+        val recovered = OrionRuntime(context)
+        val pending = recovered.pendingItems()
+        assertEquals(1, pending.size)
+        assertEquals(OrionRuntime.WorkType.CAPABILITY_RECHECK, pending.single().type)
+        assertTrue(pending.single().key.startsWith("reconcile:"))
+        assertTrue(pending.single().checkpoint.contains("do not replay external effects"))
+    }
+
+    @Test fun atomicSnapshotRemainsReadableAfterNormalRecreation() {
+        val first = OrionRuntime(context)
+        first.start()
+        assertTrue(first.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "atomic-restore", 3))
+        assertTrue(stateFile.isFile)
+        val json = org.json.JSONObject(stateFile.readText())
+        assertEquals(1, json.getJSONArray("queue").length())
+
+        val restored = OrionRuntime(context)
+        assertEquals("atomic-restore", restored.pendingItems().single().key)
+    }
+
+
+    @Test fun atomicBackupRestoresRuntimeQueueWhenBaseFileWasInterrupted() {
+        val first = OrionRuntime(context)
+        first.start()
+        assertTrue(first.enqueue(OrionRuntime.WorkType.RESTORE_PENDING, "backup-restore", 3))
+        val backup = File(stateFile.path + ".bak")
+        assertTrue(stateFile.copyTo(backup, overwrite = true).exists())
+        assertTrue(stateFile.delete())
+
+        val restored = OrionRuntime(context)
+        assertEquals("backup-restore", restored.pendingItems().single().key)
+        assertTrue(stateFile.isFile)
     }
 
     @Test fun staleAcknowledgementsCannotCompleteOrRetryAnotherTask() {

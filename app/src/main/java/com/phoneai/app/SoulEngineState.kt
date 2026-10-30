@@ -275,37 +275,53 @@ internal object SoulEngineState {
         write(context, o)
     }
 
-    /** Called only after a durable completed checkpoint; candidates never execute themselves. */
+    /**
+     * Learn only from a completed task whose individual steps contain explicit post-action
+     * verification markers. A non-error tool response or a completed checkpoint alone is not proof.
+     * The completion marker is written only after Agent's task-level completion gate passes.
+     */
     fun learnFromCompletedCheckpoint(context: Context, checkpoint: JSONObject): Boolean = synchronized(lock) {
         val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
         val tools = ArrayList<String>()
-        var successes = 0
+        var verifiedSteps = 0
+        val excluded = setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")
         for (i in 0 until steps.length()) {
             val step = steps.optJSONObject(i) ?: continue
             val tool = step.optString("tool").trim()
             val result = step.optString("result")
-            if (tool.isBlank() || result.startsWith("error", true)) continue
-            if (tool !in setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")) {
-                successes++
-                if (tool !in tools) tools += tool
-            }
+            val independentlyVerified = result.contains("LOCAL VERIFY PASS:", ignoreCase = true) ||
+                Regex("(?i)\\bPASS: (message sent|email sent|deleted successfully|completed successfully)\\b").containsMatchIn(result)
+            if (tool.isBlank() || tool in excluded || !independentlyVerified) continue
+            verifiedSteps++
+            if (tool !in tools) tools += tool
         }
         val label = safeText(checkpoint.optString("command"))
-        if (checkpoint.optString("status") != "completed" || label.isBlank() || label == "[sensitive content omitted]" || successes < 2 || tools.size < 2) return@synchronized true
+        if (checkpoint.optString("status") != "completed" || label.isBlank() ||
+            label == "[sensitive content omitted]" || verifiedSteps < 2 || tools.size < 2) return@synchronized true
         if (label.contains(Regex("(?i)\\b(bank|payment|transfer money|send money|withdraw|deposit|checkout|trade order|wallet|password|passcode|pin|otp|login|sign in|credential|recovery phrase)\\b"))) return@synchronized true
         val o = read(context)
-        val existing = proposals(o).firstOrNull { it.kind == ProposalKind.ROUTE && it.title.equals(label, true) && it.status == ProposalStatus.PENDING }
+        val existing = proposals(o).firstOrNull {
+            it.kind == ProposalKind.ROUTE && it.title.equals(label, true) &&
+                it.status in setOf(ProposalStatus.PENDING, ProposalStatus.ACCEPTED, ProposalStatus.EDITED)
+        }
         if (existing != null) {
-            replaceProposal(o, existing.copy(evidenceCount = existing.evidenceCount + 1, updatedAt = System.currentTimeMillis()))
+            replaceProposal(o, existing.copy(
+                evidenceCount = existing.evidenceCount + 1,
+                detail = "Independently verified completed run #${existing.evidenceCount + 1}. " +
+                    "Observed post-action UI verification on $verifiedSteps steps. " +
+                    "This measures repeat evidence, not a guarantee that future state will match. Re-check every step and goal.",
+                updatedAt = System.currentTimeMillis()
+            ))
         } else {
             val candidate = Proposal(java.util.UUID.randomUUID().toString(), ProposalKind.ROUTE, label,
-                "Observed a completed multi-step task. Candidate tool sequence: " + tools.take(8).joinToString(" → ") +
-                    ". Planning guidance only; each future action must be revalidated and pass the live policy gate.",
+                "Independently verified completed run. Post-action UI verification passed on $verifiedSteps steps; the task-level completion gate also passed. " +
+                    "Candidate sequence: " + tools.take(8).joinToString(" → ") +
+                    ". Evidence count measures distinct completed runs, not tool calls. Planning guidance only; re-check current state and the goal before reuse.",
                 tools.take(8), ProposalStatus.PENDING, 1, System.currentTimeMillis(), System.currentTimeMillis())
             val all = proposals(o).toMutableList().apply { add(candidate) }
             o.put("proposals", JSONArray().also { a -> all.takeLast(MAX_ITEMS).forEach { a.put(it.json()) } })
         }
-        o.put("lastOutcome", "verified multi-step task").put("lastTick", System.currentTimeMillis())
+        o.put("lastOutcome", "independently_verified_route_candidate").put("lastTick", System.currentTimeMillis())
         write(context, o)
     }
 

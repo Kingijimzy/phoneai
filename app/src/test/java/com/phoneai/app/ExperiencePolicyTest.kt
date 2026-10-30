@@ -39,10 +39,12 @@ class ExperiencePolicyTest {
         assertTrue(b.contains("AVOID") && b.contains("2d ago"))
     }
     @Test fun routineLearningRequiresCleanSuccessfulEvidence() {
-        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(emptyList(), 0))
-        assertTrue(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, true), 0))
-        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, false), 0))
-        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true), 1))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(emptyList(), emptyList(), 0))
+        assertTrue(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, true), listOf(true, true), 0))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, true), listOf(true, false), 0))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, false), listOf(true, true), 0))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true), listOf(true), 1))
+        assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true, true), listOf(true), 0))
     }
 
     @Test fun learnedTaskGistRedactsUrlsEmailsPhoneNumbersAndCredentialValues() {

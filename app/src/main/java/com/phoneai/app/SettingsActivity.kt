@@ -420,8 +420,8 @@ class SettingsActivity : Activity() {
         }
         add(col, sectionLabel, 5)
         add(col, button("‹  Back to Orion", false) { finish() }, 8)
-        add(col, button("Agent approval & capability packs", true) {
-            startActivity(Intent(this, AgentControlActivity::class.java))
+        add(col, button("Agent approval & capability packs · owner access", true) {
+            startActivity(Intent(this, OwnerControlCenterActivity::class.java))
         }, 8)
         add(col, button("Soul Engine · live system dashboard", true) {
             startActivity(Intent(this, SoulEngineActivity::class.java))
@@ -456,10 +456,24 @@ class SettingsActivity : Activity() {
             12f, Theme.MUTED
         ), 8)
         add(s1, button("Allow location", false) {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION), 75)
+            val missing = arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+                .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                .toTypedArray()
+            if (missing.isEmpty()) {
+                Toast.makeText(this, "Location permission is already granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                requestPermissions(missing, 75)
+            }
         }, 8)
         add(s1, button("Allow microphone and notifications", false) {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
+            val requested = mutableListOf(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33) requested += Manifest.permission.POST_NOTIFICATIONS
+            val missing = requested.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
+            if (missing.isEmpty()) {
+                Toast.makeText(this, "Microphone and notification runtime permissions are already granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                requestPermissions(missing, 1)
+            }
         }, 8)
         add(s1, button("Open Orion", true) {
             val s = PhoneAiService.instance
@@ -478,7 +492,12 @@ class SettingsActivity : Activity() {
         val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
-        add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
+        add(updateCard, button("OWNER CONTROL CENTRE · private", true) {
+            startActivity(android.content.Intent(this, OwnerControlCenterActivity::class.java))
+        }, 8)
+        add(updateCard, button("Tool permissions & autonomy · owner access", false) {
+            startActivity(android.content.Intent(this, OwnerControlCenterActivity::class.java))
+        }, 8)
         add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
         add(updateCard, button("Capability board (connect GitHub / Gmail)", false) { startActivity(android.content.Intent(this, CapabilityBoardActivity::class.java)) }, 8)
         add(updateCard, button("Run Orion self-test", true) {

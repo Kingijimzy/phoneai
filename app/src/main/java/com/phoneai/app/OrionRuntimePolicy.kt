@@ -21,6 +21,23 @@ internal object OrionRuntimePolicy {
     /** The final (MAX_ATTEMPTS-th) failure abandons that item. */
     fun shouldRetry(nextAttempt: Int): Boolean = nextAttempt in 1 until MAX_ATTEMPTS
 
+    /** External standing orders are not replayed automatically after an ambiguous process death. */
+    fun canReplayAfterProcessDeath(type: OrionRuntime.WorkType): Boolean =
+        type != OrionRuntime.WorkType.SOUL_WATCH
+
+    /** Create a bounded retry checkpoint while preserving the original goal and progress cursor. */
+    fun retryItem(item: OrionRuntime.WorkItem, now: Long, error: String, checkpoint: String = item.checkpoint): OrionRuntime.WorkItem? {
+        val attempts = item.attempts + 1
+        if (!shouldRetry(attempts)) return null
+        val safeError = error.trim().replace(Regex("\\s+"), " ").take(240).ifBlank { "unknown_failure" }
+        return item.copy(
+            attempts = attempts,
+            notBefore = now + retryDelayMs(attempts),
+            checkpoint = checkpoint.trim().take(500),
+            lastError = safeError
+        )
+    }
+
     /** Returns the time until the earliest queued item is eligible, or null for an empty queue. */
     fun nextEligibleDelayMs(now: Long, notBeforeTimes: List<Long>): Long? =
         notBeforeTimes.minOrNull()?.let { (it - now).coerceAtLeast(0L) }

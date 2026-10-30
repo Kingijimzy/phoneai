@@ -226,6 +226,27 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         orionRuntime?.pause("accessibility_interrupted")
     }
 
+    /** Called by optional system event sources; never starts the accessibility service. */
+    internal fun onExternalPresenceEvent(eventKey: String, safeDescription: String): Boolean {
+        val runtime = orionRuntime ?: return false
+        if (!AgentPolicy.enabled(this, "orion_core")) return false
+        val decision = decisionScheduler?.onExternalPresenceEvent(eventKey, safeDescription) ?: return false
+        if (decision.accepted) scheduleRuntimeDrain()
+        return decision.accepted
+    }
+
+    /** WorkManager may request a drain only while this already-enabled service is connected. */
+    internal fun requestRuntimeDrain(): Boolean {
+        val runtime = orionRuntime ?: return false
+        if (runtime.snapshot().state in setOf(
+                OrionRuntime.State.STOPPED,
+                OrionRuntime.State.PAUSED,
+                OrionRuntime.State.DEGRADED
+            )) return false
+        scheduleRuntimeDrain()
+        return true
+    }
+
     private fun scheduleRuntimeDrain() {
         if (runtimeDrainScheduled) {
             runtimeDrainRequested = true
@@ -277,10 +298,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     throw IllegalArgumentException("invalid_task_outcome_event")
                                 }
                             }
+                            OrionRuntime.WorkType.PRESENCE_EVENT -> {
+                                // Event awareness is local and privacy-minimal: only the sanitized source label
+                                // is retained. Notification bodies, sender names and message text never enter Soul.
+                                val source = item.goal.substringAfter("Record safe external event: ", "system")
+                                    .take(100)
+                                if (!SoulEngineState.recordWatcherStatus(this, "event_received", source)) {
+                                    throw IllegalStateException("presence_event_state_write_failed")
+                                }
+                            }
                         }
-                        runtime.complete(item)
-                    } catch (_: Exception) {
-                        runtime.fail(item)
+                        if (runtime.complete(item) && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                            OrionRuntimeNotifier.postResult(this, item, success = true)
+                        }
+                    } catch (error: Exception) {
+                        val retryQueued = runtime.fail(item, error.javaClass.simpleName + ": " + error.message.orEmpty())
+                        if (!retryQueued && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                            OrionRuntimeNotifier.postResult(this, item, success = false)
+                        }
                     }
                 }
             } finally {

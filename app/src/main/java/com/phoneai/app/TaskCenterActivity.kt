@@ -240,9 +240,32 @@ class TaskCenterActivity : Activity() {
                         ". Inspect the phone before retrying; Orion must not repeat it blindly."
                 add(card, label("RECOVERY CHECK REQUIRED\n" + warning.take(450), 12f, 0xFFFFCF70.toInt(), true), 8)
             }
+            add(card, button("Pause active run") {
+                // Pause halts the live worker but keeps a resumable checkpoint.
+                val service = PhoneAiService.instance
+                if (service != null) service.stopCurrentTask()
+                if (AgentCheckpointStore.pause(this)) {
+                    Toast.makeText(this, "Run paused. Progress saved; any in-flight action must be checked before resume.", Toast.LENGTH_LONG).show()
+                    refresh()
+                } else {
+                    Toast.makeText(this, "Could not save the paused checkpoint. Check the task before retrying.", Toast.LENGTH_LONG).show()
+                }
+            }, 8)
+            add(card, button("Stop active run") {
+                // Stop is terminal unless an in-flight action is uncertain; that case is
+                // retained as recovery_required so Orion cannot silently discard its outcome.
+                val service = PhoneAiService.instance
+                if (service != null) service.stopCurrentTask()
+                if (AgentCheckpointStore.stop(this)) {
+                    Toast.makeText(this, "Run stopped. If an action was in flight, inspect its outcome before any continuation.", Toast.LENGTH_LONG).show()
+                    refresh()
+                } else {
+                    Toast.makeText(this, "Could not save the stop state. Check the task before retrying.", Toast.LENGTH_LONG).show()
+                }
+            }, 8)
             add(card, button("Open chat to resume", true) {
                 startActivity(Intent(this, MainChatActivity::class.java))
-            }, 10)
+            }, 8)
             add(listHost, card, 16)
         }
 
@@ -301,6 +324,9 @@ class TaskCenterActivity : Activity() {
         block.addView(label("#" + task.id + "  " + task.title, 15f, Theme.TEXT, true))
         block.addView(label(statusName(task.status) + " · " + task.priority.uppercase(Locale.getDefault()),
             10f, statusColor(task.status), true).apply { setPadding(0, dp(4), 0, 0) })
+        block.addView(label(statusExplanation(task.status), 10f, Theme.MUTED).apply {
+            setPadding(0, dp(4), 0, 0)
+        })
         head.addView(block, LinearLayout.LayoutParams(0, -2, 1f))
         head.addView(button("⋯") { taskMenu(task) })
         card.addView(head)
@@ -414,6 +440,16 @@ class TaskCenterActivity : Activity() {
     private fun change(task: OrionTask, status: String) {
         if (TaskStore.update(this, task.id, status = status)) refresh() else errorToast()
     }
+    private fun statusExplanation(status: String) = when (status) {
+        "queued", "open" -> "Saved and waiting; this task is not executing."
+        "running", "in_progress" -> "Marked running on the task board; check the agent session for live execution."
+        "paused" -> "Paused; saved task details remain available to resume."
+        "completed", "done" -> "Marked complete here; confirm the actual goal in its evidence or result."
+        "failed" -> "Marked failed; inspect the activity log before retrying."
+        "cancelled" -> "Cancelled; no further task-board progress is expected."
+        else -> "Status is saved locally; inspect the task session for execution evidence."
+    }
+
     private fun statusName(status: String) = when (status) {
         "open" -> "Queued"; "in_progress" -> "Running"; "done" -> "Completed"; "cancelled" -> "Cancelled"
         else -> status.replaceFirstChar { it.uppercase() }
