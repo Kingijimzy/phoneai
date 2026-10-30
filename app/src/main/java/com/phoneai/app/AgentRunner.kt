@@ -77,8 +77,14 @@ object AgentRunner {
 
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
-        sb.append(accountBlock(c)).append("\n\n")
-        try { PredictionLog.evaluate(c) { symbol -> Bybit.price(c, symbol) } } catch (_: Exception) { }
+        val needsAccount = Regex("(?i)\\b(balance|equity|account|position|risk|size|sizing|order|margin|wallet|capital)\\b").containsMatchIn(userText)
+        if (needsAccount) sb.append(accountBlock(c)).append("\\n\\n")
+        else sb.append("ACCOUNT DATA: not fetched for this request; no live account details were used.\\n\\n")
+        val needsPredictionRefresh = wantsOutlook(userText) ||
+            Regex("(?i)\\b(review|track record|performance|stats|accuracy|weekly review|prediction history)\\b").containsMatchIn(userText)
+        if (needsPredictionRefresh) {
+            try { PredictionLog.evaluate(c) { symbol -> Bybit.price(c, symbol) } } catch (_: Exception) { }
+        }
         val strategy = AgentLessons.promptBlock(c, "coach", 40)
         sb.append("User's strategy and rules (their own words):\n").append(if (strategy.isBlank()) "(none saved yet; ask them to describe their strategy)" else strategy)
         sb.append("\n\nYour own track record: ").append(try { PredictionLog.statsText(c) } catch (_: Exception) { "unavailable" })
