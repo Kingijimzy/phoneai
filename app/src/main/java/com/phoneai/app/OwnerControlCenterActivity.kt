@@ -120,6 +120,7 @@ class OwnerControlCenterActivity : Activity() {
         section("POLICY & RESTRICTION REGISTER")
         addText("This register describes Orion app-level gates and their current configurability. It does not expose external model-provider or operating-system internal policies.", 12f, Theme.MUTED, false, 4)
         addButton("Inspect every registered app policy and hard limit") { showPolicyRegister() }
+        addButton("Inspect enforced security invariants") { showSecurityInvariants() }
 
         section("PRIVACY & SECRETS")
         addText(secretSummary(), 12f, Theme.TEXT, false, 4)
@@ -222,6 +223,14 @@ class OwnerControlCenterActivity : Activity() {
         )
         AlertDialog.Builder(this).setTitle("Orion app policy register")
             .setMessage(entries.mapIndexed { i, s -> "${i + 1}. $s" }.joinToString("\n\n"))
+            .setPositiveButton("Close", null).show()
+    }
+
+    private fun showSecurityInvariants() {
+        val entries = OrionSecurityPolicy.invariantStatus()
+        AlertDialog.Builder(this).setTitle("Enforced security invariants")
+            .setMessage(entries.mapIndexed { i, value -> "${i + 1}. $value" }.joinToString("\\n\\n") +
+                "\\n\\nThese checks are enforced by runtime code, not prompt instructions. Android OS permissions and external provider/platform safeguards remain outside Orion's control.")
             .setPositiveButton("Close", null).show()
     }
 
