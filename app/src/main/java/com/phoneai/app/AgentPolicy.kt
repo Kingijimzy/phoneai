@@ -17,7 +17,7 @@ object AgentPolicy {
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
         Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
+        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real orders remain separately gated and confirmed", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
@@ -110,7 +110,9 @@ object AgentPolicy {
         "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
-        "trade_history_summary" -> "trading_research"
+        "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
+        "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save",
+        "strategy_record_result", "paper_trade", "trading_kill_switch" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
         "weather", "live_news", "live_web_search", "live_sports", "web_search", "github_public", "github_search_repositories", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
