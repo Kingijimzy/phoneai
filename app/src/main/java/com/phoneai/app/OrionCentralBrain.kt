@@ -104,30 +104,30 @@ internal object OrionCentralBrain {
         if (isFollowUp && continuityObjective.isNotBlank()) {
             val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
             if (!resume.isNullOrBlank()) {
-                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(5200)
+                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(3600)
             }
             savedGraph?.let { graph ->
                 sections += OrionObjectiveGraph.prompt(graph) +
                     "\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
             }
-            val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 5) }.getOrDefault(emptyList())
+            val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 3) }.getOrDefault(emptyList())
             if (discussion.isNotEmpty()) {
                 sections += buildString {
                     appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE (durable transcript evidence)")
                     discussion.forEach { hit ->
-                        appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp} title=${hit.title}] ${hit.snippet}")
-                        if (hit.before.isNotBlank()) appendLine("preceding turn: ${hit.before}")
-                        if (hit.after.isNotBlank()) appendLine("following turn: ${hit.after}")
+                        appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp} title=${hit.title}] ${hit.snippet.take(420)}")
+                        if (hit.before.isNotBlank()) appendLine("preceding turn: ${hit.before.take(180)}")
+                        if (hit.after.isNotBlank()) appendLine("following turn: ${hit.after.take(180)}")
                     }
                     appendLine("User turns establish requests. Assistant turns provide context only and are never proof that an action succeeded.")
                 }
             }
-            val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(continuityObjective, 6) }.getOrDefault(emptyList())
+            val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(continuityObjective, 4) }.getOrDefault(emptyList())
             if (decisions.isNotEmpty()) {
                 sections += buildString {
                     appendLine("DECISIONS AND UNRESOLVED QUESTIONS FOR THIS OBJECTIVE")
                     decisions.forEach { d ->
-                        appendLine("- [${d.status}] ${d.topic}: ${d.statement}; rationale=${d.rationale}; rejected=${d.rejectedAlternative}; rejection_reason=${d.rejectionReason}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
+                        appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(300)}; rejected=${d.rejectedAlternative.take(180)}; rejection_reason=${d.rejectionReason.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
                     }
                     appendLine("Accepted decisions are user-backed constraints; proposals are not accepted. Superseded decisions are historical only. Unresolved questions remain open. Re-check the current request before applying any old decision.")
                 }
