@@ -21,7 +21,8 @@ internal object OrionObjectiveGraph {
         data class Invalid(val reason: String) : ParseResult()
     }
     private const val PREFS = "orion_objective_graph_v1"
-    private const val GRAPH_KEY = "active_graph"
+    private const val LAST_SESSION_KEY = "last_session"
+    private fun graphKey(sessionId: String) = "graph_session_" + sessionId
     private val idPattern = Regex("^[a-z][a-z0-9_-]{0,31}$")
 
     fun parse(raw: String, objective: String, restoreState: Boolean = false): ParseResult {
@@ -153,22 +154,34 @@ internal object OrionObjectiveGraph {
     }
 
     fun save(context: Context, graph: Graph): Boolean = runCatching {
-        val root = JSONObject().put("objective", graph.objective).put("updatedAt", graph.updatedAt)
+        val sessionId = ChatHistoryStore.activeSessionId(context) ?: return@runCatching false
+        val root = JSONObject().put("objective", graph.objective).put("sessionId", sessionId).put("updatedAt", graph.updatedAt)
         val array = JSONArray()
         graph.ordered().forEach { node ->
             array.put(JSONObject().put("id", node.id).put("title", node.title).put("dependsOn", JSONArray(node.dependsOn))
                 .put("status", node.status.name).put("evidence", node.evidence))
         }
         root.put("objectives", array)
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(GRAPH_KEY, root.toString()).commit()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(graphKey(sessionId), root.toString())
+            .putString(LAST_SESSION_KEY, sessionId)
+            .commit()
     }.getOrDefault(false)
 
     fun load(context: Context): Graph? {
-        val raw = runCatching { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(GRAPH_KEY, null) }.getOrNull() ?: return null
+        val sessionId = ChatHistoryStore.activeSessionId(context) ?: return null
+        val raw = runCatching {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(graphKey(sessionId), null)
+        }.getOrNull() ?: return null
         val objective = runCatching { JSONObject(raw).optString("objective") }.getOrDefault("")
         return (parse(raw, objective, restoreState = true) as? ParseResult.Valid)?.graph
     }
+
     fun clear(context: Context): Boolean = runCatching {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(GRAPH_KEY).commit()
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sessionId = ChatHistoryStore.activeSessionId(context) ?: prefs.getString(LAST_SESSION_KEY, null)
+        val editor = prefs.edit().remove(LAST_SESSION_KEY).remove("active_graph")
+        if (!sessionId.isNullOrBlank()) editor.remove(graphKey(sessionId))
+        editor.commit()
     }.getOrDefault(false)
 }
