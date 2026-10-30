@@ -69,8 +69,10 @@ object AgentPolicy {
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
     ): GatePolicy.Result {
-        val talkReadOnly = OrionAutonomySettings.read(c).mode == OrionMode.TALK &&
-            ToolRegistry.all.firstOrNull { it.name == toolId }?.access == ToolAccess.WRITE
+        val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
+            OrionAutonomySettings.read(c).mode,
+            ToolRegistry.all.firstOrNull { it.name == toolId }?.access
+        )
         val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
         return GatePolicy.decide(GatePolicy.Input(
         pack = pack,
