@@ -611,7 +611,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
-        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), currentTask)
+        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         talkNim.beginCommand()
         stopped = false
         setRequestScope(command)
@@ -878,6 +878,11 @@ Rules:
                 }
             }
         )
+    }
+
+    private fun contextualActiveObjective(): String = currentTask.ifBlank {
+        runCatching { OrionTasksCapabilityExecutor.pendingCheckpoint(svc)?.optString("command").orEmpty() }
+            .getOrDefault("")
     }
 
     private fun recentConversationTurns(): List<Pair<String, String>> = buildList {
@@ -1289,7 +1294,7 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
-        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), currentTask)
+        val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         activeIntentContext = intentResolution.contextBlock
         if (intentResolution.needsClarification) {
             ui.say("I understand this is a follow-up, but I cannot reliably identify what it refers to. Which previous task should I continue?")
