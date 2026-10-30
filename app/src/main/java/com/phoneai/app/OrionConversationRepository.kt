@@ -451,9 +451,9 @@ class OrionConversationRepository private constructor(context: Context) :
         turns.forEachIndexed { index, pair -> insertMessage(db, id, pair.first, pair.second, now + index, index) }
     }
 
-    private fun insertMessage(db: SQLiteDatabase, sessionId: String, role: String, content: String, createdAt: Long, order: Int) {
+    private fun insertMessage(db: SQLiteDatabase, sessionId: String, role: String, content: String, createdAt: Long, order: Int, messageId: String = UUID.randomUUID().toString()) {
         db.insert("messages", null, ContentValues().apply {
-            put("id", UUID.randomUUID().toString()); put("session_id", sessionId); put("role", role)
+            put("id", messageId); put("session_id", sessionId); put("role", role)
             put("content", content.take(6000)); put("created_at", createdAt); put("sort_order", order)
         })
     }
