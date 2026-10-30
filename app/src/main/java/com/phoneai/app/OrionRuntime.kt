@@ -5,6 +5,7 @@ import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileNotFoundException
 import java.util.UUID
 
 /** Event-driven coordinator: persists bounded work, but never calls providers or executes actions itself. */
@@ -128,8 +129,11 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
 
     private fun loadLocked() {
         try {
-            if (!file.isFile) return
-            val root = JSONObject(atomicFile.openRead().bufferedReader().use { it.readText() })
+            val root = try {
+                JSONObject(atomicFile.openRead().bufferedReader().use { it.readText() })
+            } catch (_: FileNotFoundException) {
+                return
+            }
             state = State.STOPPED
             lastEvent = root.optString("lastEvent", "recovered").take(80)
             lastChangedAt = root.optLong("lastChangedAt", clock())
