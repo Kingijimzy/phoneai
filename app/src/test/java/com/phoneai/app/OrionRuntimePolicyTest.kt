@@ -19,7 +19,7 @@ class OrionRuntimePolicyTest {
     @Test fun retryScheduleUsesBoundedExponentialBackoff() {
         assertEquals(0L, OrionRuntimePolicy.retryDelayMs(0))
         assertEquals(listOf(30_000L, 60_000L, 120_000L, 240_000L),
-            (1..4).map(OrionRuntimePolicy::retryDelayMs))
+            (1..4).map { OrionRuntimePolicy.retryDelayMs(it) })
         assertEquals(OrionRuntimePolicy.MAX_BACKOFF_MS, OrionRuntimePolicy.retryDelayMs(99))
     }
 
