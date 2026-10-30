@@ -313,6 +313,9 @@ class TaskCenterActivity : Activity() {
         block.addView(label("#" + task.id + "  " + task.title, 15f, Theme.TEXT, true))
         block.addView(label(statusName(task.status) + " · " + task.priority.uppercase(Locale.getDefault()),
             10f, statusColor(task.status), true).apply { setPadding(0, dp(4), 0, 0) })
+        block.addView(label(statusExplanation(task.status), 10f, Theme.MUTED).apply {
+            setPadding(0, dp(4), 0, 0)
+        })
         head.addView(block, LinearLayout.LayoutParams(0, -2, 1f))
         head.addView(button("⋯") { taskMenu(task) })
         card.addView(head)
@@ -426,6 +429,16 @@ class TaskCenterActivity : Activity() {
     private fun change(task: OrionTask, status: String) {
         if (TaskStore.update(this, task.id, status = status)) refresh() else errorToast()
     }
+    private fun statusExplanation(status: String) = when (status) {
+        "queued", "open" -> "Saved and waiting; this task is not executing."
+        "running", "in_progress" -> "Marked running on the task board; check the agent session for live execution."
+        "paused" -> "Paused; saved task details remain available to resume."
+        "completed", "done" -> "Marked complete here; confirm the actual goal in its evidence or result."
+        "failed" -> "Marked failed; inspect the activity log before retrying."
+        "cancelled" -> "Cancelled; no further task-board progress is expected."
+        else -> "Status is saved locally; inspect the task session for execution evidence."
+    }
+
     private fun statusName(status: String) = when (status) {
         "open" -> "Queued"; "in_progress" -> "Running"; "done" -> "Completed"; "cancelled" -> "Cancelled"
         else -> status.replaceFirstChar { it.uppercase() }
