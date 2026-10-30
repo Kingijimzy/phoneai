@@ -1903,7 +1903,7 @@ Rules:
                     managedTask = managedTask.block() ?: managedTask
                 }
                 moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Tool '$tool' failed verification or execution; inspect the recorded result before resuming")
-                OrionTasksCapabilityExecutor.pauseRun(svc)
+                OrionTasksCapabilityExecutor.pauseRun(svc, notifyFailure = true)
                 ui.phase("error")
                 val diagnosis = ToolResultPolicy.diagnose(result)
                 ui.note("[TASK:BLOCKED]\nFailure type: ${diagnosis.kind.name.lowercase()}\nSafe next step: ${diagnosis.safeNextStep}")
