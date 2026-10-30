@@ -117,11 +117,10 @@ internal object OrionObjectiveGraph {
             else -> "success"
         }
         val receipt = ChatHistoryStore.recordObjectiveEvidence(context, id, tool, outcome, result.take(700)) ?: return null
-        val graph = load(context) ?: return receipt.id
-        if (graph.nodes.none { it.id == id }) return receipt.id
+        val graph = load(context) ?: return null
+        if (graph.nodes.none { it.id == id }) return null
         val status = if (outcome == "success") Status.RUNNING else Status.BLOCKED
-        save(context, updateStatus(graph, id, status, receipt.id))
-        return receipt.id
+        return if (save(context, updateStatus(graph, id, status, receipt.id))) receipt.id else null
     }
 
     /** A model can request completion, but only an exact stored successful executor receipt can authorize it. */
