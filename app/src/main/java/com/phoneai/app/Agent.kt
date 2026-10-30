@@ -164,12 +164,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
         // A model cannot call an unregistered tool or one the live registry marked unavailable.
-        val orchestration = activeOrchestrationContext
-        if (orchestration != null) {
-            val capability = orchestration.capabilities.tools.firstOrNull { it.name == tool }
-                ?: return "error: dispatch blocked because '$tool' is not present in the request-time registered capability inventory."
-            if (!capability.available) return "error: dispatch blocked because capability '$tool' is ${capability.state.name.lowercase()}: ${capability.reason}"
-            if (orchestration.goal.needsClarification || !orchestration.goal.shouldAct) return "error: dispatch blocked because the current goal is not authorized for tool execution; resolve the goal before dispatch."
+        activeOrchestrationContext?.let { context ->
+            OrionTaskOrchestrator.dispatchBlockReason(context, tool)?.let { reason ->
+                return "error: dispatch blocked by the request-time task orchestrator: $reason"
+            }
         }
         // Cancellation is terminal for this dispatch attempt, including paths that would otherwise prompt for approval.
         if (stopped) {
