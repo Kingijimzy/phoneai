@@ -334,3 +334,13 @@ object McpConnector {
         return generator.generateKey()
     }
 }
+
+internal object McpReconnectPolicy {
+    fun shouldRetry(method: String, error: Exception): Boolean {
+        if (method !in setOf("initialize", "notifications/initialized", "tools/list")) return false
+        if (error is java.io.IOException) return true
+        val message = error.message.orEmpty().lowercase()
+        val status = Regex("http\\s+(\\d{3})").find(message)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        return status != null && status in setOf(408, 429, 500, 502, 503, 504)
+    }
+}
