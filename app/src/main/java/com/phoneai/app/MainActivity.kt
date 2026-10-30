@@ -36,6 +36,10 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
  * existing activities continue to own the agent, browser, settings, and device integrations.
  */
 class MainActivity : ComponentActivity() {
+    companion object {
+        @Volatile private var crashDiagnosticsInstalled = false
+    }
+
     private lateinit var content: FrameLayout
     private lateinit var statusLabel: TextView
     private var selectedTab = "Home"
@@ -253,6 +257,8 @@ class MainActivity : ComponentActivity() {
      * The default handler also records failures in secondary activities such as Chat and Settings.
      */
     private fun installCrashRecorder() {
+        if (crashDiagnosticsInstalled) return
+        crashDiagnosticsInstalled = true
         val app = applicationContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
