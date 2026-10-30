@@ -110,4 +110,18 @@ class AgentCheckpointStoreTest {
         assertNotNull(second)
         assertNotEquals(first, second)
     }
+    @Test fun tasksExecutorOwnsDurableCheckpointRecoveryBoundary() {
+        assertTrue(OrionTasksCapabilityExecutor.beginRun(context, "Inspect the app after restart"))
+        assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "open_app", JSONObject().put("name", "Settings")))
+        assertTrue(OrionTasksCapabilityExecutor.needsRecoveryConfirmation(context))
+        val pending = OrionTasksCapabilityExecutor.pendingCheckpoint(context)
+        assertNotNull(pending)
+        assertTrue(pending!!.has("inFlight"))
+
+        assertTrue(OrionTasksCapabilityExecutor.acknowledgeRecovery(context, "I checked the phone and Settings is open"))
+        assertFalse(OrionTasksCapabilityExecutor.needsRecoveryConfirmation(context))
+        assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "read_screen", JSONObject()))
+    }
+
+
 }
