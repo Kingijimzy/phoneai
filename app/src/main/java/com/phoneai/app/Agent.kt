@@ -108,6 +108,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var currentTask = ""
     private fun evidenceTaskId(): String = AgentCheckpointStore.evidenceTaskId(svc) ?: currentTask
+    private fun effectiveRecoveryMaxAttempts(): Int {
+        val autonomy = OrionAutonomySettings.read(svc).maxRetries
+        val owner = OrionOwnerDialSettings.read(svc).recoveryMaxAttempts
+        return minOf(autonomy, owner).coerceIn(0, 4)
+    }
+    private fun ownerRecoveryBackoffSeconds(): Int =
+        OrionOwnerDialSettings.read(svc).recoveryBackoffSeconds.coerceIn(15, 300)
     private val askApproved = HashSet<String>()
     @Volatile private var runStartedAt = 0L
     @Volatile private var runTools = 0
@@ -1818,14 +1825,14 @@ Rules:
                 // Anything else (writes, shell, consequential actions, permission errors) is never repeated here.
                 val outcome = RecoveryPolicy.retryRead(
                     first = result,
-                    maxReadRetries = OrionAutonomySettings.read(svc).maxRetries,
+                    maxReadRetries = effectiveRecoveryMaxAttempts(),\n                    baseBackoffSeconds = ownerRecoveryBackoffSeconds(),
                     isFailure = { ToolResultPolicy.failureReason(it) != null },
                     stopped = { stopped },
                     budgetExhausted = { budgetStopReason() != null },
                     sleep = { ms -> sleepUnlessStopped(ms) },
                     onRetry = { n, failure ->
                         ui.phase("recovering")
-                        ui.note("[TASK:RECOVER]\nRetry $n/${OrionAutonomySettings.read(svc).maxRetries} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
+                        ui.note("[TASK:RECOVER]\nRetry $n/${effectiveRecoveryMaxAttempts()} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
                         failedCallGuard.forget(tool, args)
                         toolCalls++
                     }
@@ -1865,7 +1872,7 @@ Rules:
             val toolFailure = ToolResultPolicy.failureReason(result)
             if (toolFailure != null) {
                 val failureKind = RecoveryPolicy.classify(result)
-                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries, OrionAutonomySettings.read(svc).maxRetries)
+                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries, effectiveRecoveryMaxAttempts())
                 val replanTask = managedTask.fail()
                 if (decision == RecoveryPolicy.Decision.REPLAN && replanTask?.phase == TaskLifecycle.Phase.RECOVER && !stopped && budgetStopReason() == null) {
                     // Recoverable: keep the saved progress, tell the model exactly what failed, and require a different action.
