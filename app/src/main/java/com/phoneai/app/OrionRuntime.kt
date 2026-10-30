@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -18,6 +19,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     private val appContext = context.applicationContext
     private val lock = Any()
     private val file get() = File(appContext.filesDir, "orion_runtime.json")
+    private val atomicFile get() = AtomicFile(file)
     private val maxQueue = OrionRuntimePolicy.MAX_QUEUE
     private var state = State.STOPPED
     private var lastEvent = "created"
@@ -122,7 +124,7 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
     private fun loadLocked() {
         try {
             if (!file.isFile) return
-            val root = JSONObject(file.readText())
+            val root = JSONObject(atomicFile.openRead().bufferedReader().use { it.readText() })
             state = State.STOPPED
             lastEvent = root.optString("lastEvent", "recovered").take(80)
             lastChangedAt = root.optLong("lastChangedAt", clock())
@@ -152,6 +154,21 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                 // SOUL_WATCH may process an opted-in standing order with an external effect.
                 // After a process death its outcome is ambiguous, so never replay that tick blindly.
                 if (!OrionRuntimePolicy.canReplayAfterProcessDeath(activeItem.type)) {
+                    // Never repeat an uncertain standing-order tick. Queue a read-only
+                    // reconciliation instead so the next service start can inspect state.
+                    val recoveryKey = "reconcile:" + activeItem.id.take(64)
+                    if (queue.none { it.type == WorkType.CAPABILITY_RECHECK && it.key == recoveryKey } && queue.size < maxQueue) {
+                        queue.add(WorkItem(
+                            id = UUID.randomUUID().toString(),
+                            key = recoveryKey,
+                            type = WorkType.CAPABILITY_RECHECK,
+                            priority = 7,
+                            createdAt = clock(),
+                            goal = "Reconcile standing-order state after an interrupted watcher tick",
+                            checkpoint = "original watcher outcome is unknown; do not replay external effects",
+                            lastError = "process_interrupted_outcome_unknown"
+                        ))
+                    }
                     lastEvent = "recovery_required:soul_watch_outcome_unknown"
                     lastChangedAt = clock()
                 } else if (queue.none { it.type == activeItem.type && it.key == activeItem.key } && queue.size < maxQueue) {
@@ -179,9 +196,18 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
                     .put("notBefore", w.notBefore).put("goal", w.goal).put("checkpoint", w.checkpoint)
                     .put("lastError", w.lastError))
             }
-            val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(root.toString())
-            if (!tmp.renameTo(file)) { file.writeText(root.toString()); tmp.delete() }
-        } catch (_: Exception) { /* Persistence must never crash the accessibility service. */ }
+            var stream: java.io.FileOutputStream? = null
+            try {
+                stream = atomicFile.startWrite()
+                stream.write(root.toString().toByteArray(Charsets.UTF_8))
+                atomicFile.finishWrite(stream)
+            } catch (e: Exception) {
+                if (stream != null) runCatching { atomicFile.failWrite(stream) }
+                throw e
+            }
+        } catch (_: Exception) {
+            // Persistence must never crash the accessibility service; AtomicFile retains
+            // the last complete snapshot if a write is interrupted.
+        }
     }
 }
