@@ -42,6 +42,15 @@ class OrionRuntimePolicyTest {
             OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.DEGRADED, false))
     }
 
+    @Test fun ownerRecoveryDialsCanDisableRetriesAndChangeBackoff() {
+        assertFalse(OrionRuntimePolicy.shouldRetry(1, 0))
+        assertTrue(OrionRuntimePolicy.shouldRetry(1, 2))
+        assertTrue(OrionRuntimePolicy.shouldRetry(2, 2))
+        assertFalse(OrionRuntimePolicy.shouldRetry(3, 2))
+        assertEquals(15_000L, OrionRuntimePolicy.retryDelayMs(1, 15_000L))
+        assertEquals(30_000L, OrionRuntimePolicy.retryDelayMs(2, 15_000L))
+    }
+
     @Test fun uncertainStandingOrderIsNotReplayedAfterProcessDeath() {
         assertFalse(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.SOUL_WATCH))
         assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.RESTORE_PENDING))
