@@ -136,3 +136,6 @@ The repository already had a SQLite-backed `OrionConversationRepository`; this i
 ### Vague-reference recovery
 
 When a follow-up contains no useful search terms (for example, "fix that" or "continue what we discussed last time"), the agent falls back to the most recently updated durable session and retrieves its last bounded turns. It re-runs contextual resolution against those source turns, excluding follow-up-only messages from becoming the objective. If the historical session still does not identify a substantive user objective, Orion asks for clarification rather than inventing one.
+
+
+Objective graphs are now keyed by the active conversation session ID. Switching between archived chats restores that session's own objective graph; clearing a chat removes its graph instead of leaking another thread's active task. Completion additionally requires that the evidence ID is the graph node's latest recorded receipt and belongs to the currently active session.
