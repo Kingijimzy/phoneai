@@ -134,7 +134,7 @@ class OrionConversationRepository private constructor(context: Context) :
         val match = terms.joinToString(" OR ") { "\"" + it.replace("\"", "\"\"") + "\"" }
         val db = readableDatabase
         val result = ArrayList<SearchHit>()
-        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,snippet(messages_fts,1,'[',']',' … ',18),m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY CASE WHEN f.role='me' OR f.role='user' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ?"
+        val sql = "SELECT f.session_id,f.message_id,f.role,m.created_at,s.title,m.content,m.sort_order FROM messages_fts f JOIN messages m ON m.id=f.message_id JOIN sessions s ON s.id=f.session_id WHERE messages_fts MATCH ? ORDER BY CASE WHEN f.role='me' OR f.role='user' THEN 0 ELSE 1 END, m.created_at DESC LIMIT ?"
         db.rawQuery(sql, arrayOf(match, limit.coerceIn(1, 12).toString())).use { c ->
             while (c.moveToNext()) {
                 val sid = c.getString(0); val turn = c.getString(1); val order = c.getInt(6)
@@ -146,7 +146,13 @@ class OrionConversationRepository private constructor(context: Context) :
                         if (around.getInt(0) > order) after = line
                     }
                 }
-                result += SearchHit(sid,turn,c.getString(2),c.getLong(3),c.getString(4),c.getString(5),before,after)
+                val content = c.getString(5)
+                val lower = content.lowercase()
+                val matchAt = terms.map { lower.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
+                val start = (matchAt - 100).coerceAtLeast(0)
+                val end = (start + 360).coerceAtMost(content.length)
+                val snippet = (if (start > 0) "…" else "") + content.substring(start, end) + if (end < content.length) "…" else ""
+                result += SearchHit(sid,turn,c.getString(2),c.getLong(3),c.getString(4),snippet,before,after)
             }
         }
         return result
