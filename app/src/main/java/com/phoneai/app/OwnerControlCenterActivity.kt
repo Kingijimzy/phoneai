@@ -229,8 +229,8 @@ class OwnerControlCenterActivity : Activity() {
     private fun showSecurityInvariants() {
         val entries = OrionSecurityPolicy.invariantStatus()
         AlertDialog.Builder(this).setTitle("Enforced security invariants")
-            .setMessage(entries.mapIndexed { i, value -> "${i + 1}. $value" }.joinToString("\\n\\n") +
-                "\\n\\nThese checks are enforced by runtime code, not prompt instructions. Android OS permissions and external provider/platform safeguards remain outside Orion's control.")
+            .setMessage(entries.mapIndexed { i, value -> "${i + 1}. $value" }.joinToString("\n\n") +
+                "\n\nThese checks are enforced by runtime code, not prompt instructions. Android OS permissions and external provider/platform safeguards remain outside Orion's control.")
             .setPositiveButton("Close", null).show()
     }
 
