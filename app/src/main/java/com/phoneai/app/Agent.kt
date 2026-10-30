@@ -2177,7 +2177,8 @@ Rules:
                     { input -> verifyAction(input) },
                     { input -> verifySend(input) },
                     { question -> look(question) },
-                    { goal, steps -> play(goal, steps) }
+                    { goal, steps -> play(goal, steps) },
+                    { svc.readScreen().also { lastScreenSnapshot = it } }
                 ) ?: dispatchLegacyTool(route.tool, args)
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
