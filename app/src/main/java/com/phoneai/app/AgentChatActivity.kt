@@ -95,7 +95,12 @@ class AgentChatActivity : Activity() {
         agent = AgentProfiles.find(intent.getStringExtra(EXTRA_AGENT)) ?: AgentProfiles.all.first()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG) }
 
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), statusBarPad(), dp(84), dp(10)) }
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), statusBarPad(), dp(14), dp(10)) }
+        header.addView(smallButton("‹") { finish() }.apply {
+            textSize = 27f
+            contentDescription = "Back to agent workspace"
+            minWidth = dp(42)
+        }, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(12) })
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(TextView(this).apply { text = agent.name; textSize = 20f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD })
         titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
@@ -119,8 +124,20 @@ class AgentChatActivity : Activity() {
                 chip("Market news") { quick("What is the latest market news today and what is moving crypto, gold and the dollar?") }
                 chip("Quote") { quoteDialog() }
             }
+            chip("Tasks") { startActivity(Intent(this, TaskCenterActivity::class.java)) }
+            chip("Memory") { startActivity(Intent(this, MemoryActivity::class.java)) }
             chip("Learned") { notesDialog() }
-            chip("Clear") { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() }
+            chip("Clear") {
+                AlertDialog.Builder(this).setTitle("Clear specialist chat?")
+                    .setMessage("This removes this specialist's saved conversation from this phone. Learned notes are kept.")
+                    .setNegativeButton("Keep", null)
+                    .setPositiveButton("Clear") { _, _ ->
+                        turns.clear()
+                        AgentChatStore.clear(this, agent.id)
+                        messages.removeAllViews()
+                        greet()
+                    }.show()
+            }
             chips.addView(row)
             root.addView(chips, -1, -2)
         }
