@@ -1340,10 +1340,10 @@ Rules:
             if (fast != null) {
                 ui.phase("acting")
                 val r = when (fast) {
-                    is FastIntents.Intent.PlayMedia -> exec(
+                    is FastIntents.Intent.PlayMedia -> executeWithRecoveryGuard(
                         "play_media", JSONObject().put("query", fast.query).put("app", fast.app)
                     )
-                    is FastIntents.Intent.ChromeSearch -> exec(
+                    is FastIntents.Intent.ChromeSearch -> executeWithRecoveryGuard(
                         "chrome_search", JSONObject().put("query", fast.query)
                     )
                 }
@@ -1449,7 +1449,7 @@ Rules:
                 return
             }
             ui.phase("acting")
-            val result = exec("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "run").put("run_id", runId))
+            val result = research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "run").put("run_id", runId))
             logShortcut("github_public_run", result)
             history.put(msg("assistant", JSONObject().put("say", result).put("tool", "done").toString()))
             ui.say(result)
@@ -1470,7 +1470,7 @@ Rules:
                 return
             }
             ui.phase("acting")
-            val searchResult = exec("github_search_repositories", JSONObject().put("query", requestedName))
+            val searchResult = research("github_search_repositories", JSONObject().put("query", requestedName))
             val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
                 .findAll(searchResult).toList()
             val exact = candidates.firstOrNull { it.groupValues[2].equals(requestedName, ignoreCase = true) }
@@ -1484,8 +1484,8 @@ Rules:
             }
             val owner = exact.groupValues[1]
             val repository = exact.groupValues[2]
-            val metadata = exec("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "repo"))
-            val readme = exec("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "readme"))
+            val metadata = research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "repo"))
+            val readme = research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "readme"))
             val answer = if (metadata.startsWith("error:") || readme.startsWith("error:")) {
                 "I found the public repository https://github.com/$owner/$repository, but couldn't retrieve all of its details.\n$metadata\n$readme"
             } else summarizeRepository(command, metadata, readme)
@@ -1965,7 +1965,7 @@ Rules:
                 suffix == "actions/runs" -> "runs"
                 else -> "repo"
             }
-            val fallback = exec(
+            val fallback = research(
                 "github_public",
                 JSONObject().put("owner", owner).put("repo", repository).put("section", section)
                     .put("run_id", runId.orEmpty())
@@ -1985,7 +1985,7 @@ Rules:
     private fun authorizeDirectTool(tool: String, pack: String): Boolean {
         val publicReadOnly = tool in setOf(
             "web_search", "live_web_search", "live_news", "weather", "fetch_url",
-            "research_web", "github_public", "bybit_public_ticker"
+            "research_web", "github_public", "github_search_repositories", "bybit_public_ticker"
         )
         if (publicReadOnly) {
             if (!AgentPolicy.enabled(svc, pack) || ToolPermissions.mode(svc, tool) == ToolMode.DENY) {
@@ -2163,8 +2163,46 @@ Rules:
         return if (x == null || y == null) "error: need $kx and $ky" else f(x, y)
     }
 
-    /** Direct shortcuts use the same preflight, owner policy, executor and evidence path as planned tools. */
-    private fun research(tool: String, args: JSONObject): String = exec(tool, args)
+    /**
+     * Deterministic public reads skip model planning, not runtime authorization. They still pass
+     * request scope, orchestration availability, owner pack/tool settings, cancellation, safety
+     * preflight, adapter routing and durable evidence before the public-read backend is called.
+     */
+    private fun research(tool: String, args: JSONObject): String {
+        val pack = AgentPolicy.packForTool(tool)
+            ?: return "error: public-read shortcut '$tool' has no registered capability pack."
+        if (stopped) return "error: task was stopped before '$tool' could start."
+        activeOrchestrationContext?.let { context ->
+            OrionTaskOrchestrator.dispatchBlockReason(context, tool)?.let {
+                recordDispatchBlocked(tool, args, "orchestrator_unavailable")
+                return "error: dispatch blocked by the request-time task orchestrator: $it"
+            }
+        }
+        if (!authorizeDirectTool(tool, pack)) {
+            recordDispatchBlocked(tool, args, "direct_read_authorization_denied")
+            return "error: '$tool' is disabled by the owner capability or per-tool policy."
+        }
+        ToolGate.preflightDenial(svc, tool)?.let {
+            recordDispatchBlocked(tool, args, "capability_preflight_denied")
+            return it
+        }
+        val scopeBlock = AgentDispatchPolicy.blockReason(
+            request = activeRequestScope,
+            tool = tool,
+            args = args,
+            currentPackage = svc.currentPackageName(),
+            currentLabel = svc.currentAppLabel(),
+            stopped = stopped,
+            executionMode = Prefs.executionMode(svc)
+        )
+        if (scopeBlock != null) {
+            recordDispatchBlocked(tool, args, "dispatch_safety_policy_denied")
+            return "error: $scopeBlock"
+        }
+        val preflight = preflightTool(tool, args)
+        if (preflight != null) return preflight
+        return exec(tool, args)
+    }
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
