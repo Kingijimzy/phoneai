@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity() {
         val intent: Intent
         when (route) {
             "settings.providers", "settings.voice", "settings.character", "settings.memory",
-            "settings.skills", "settings.knowledge", "settings.integrations", "settings.permissions",
+            "settings.skills", "settings.knowledge", "settings.integrations", "settings.permissions", "settings.routines",
             "settings.health", "settings.recording", "settings.browser", "settings.tools", "settings.all" -> {
                 destination = SettingsActivity::class.java
                 intent = Intent(this, destination)
