@@ -77,5 +77,6 @@ internal class OrionDecisionScheduler(
     companion object {
         const val WINDOW_DEBOUNCE_MS = 2_000L
         const val TASK_DEBOUNCE_MS = 5_000L
+        const val PRESENCE_DEDUPE_WINDOW_MS = 60_000L
     }
 }
