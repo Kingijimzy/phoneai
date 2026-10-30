@@ -168,6 +168,39 @@ class OrionConversationRepositoryTest {
         assertEquals(listOf(firstEvent.id), repository.eventsForActive(context).map { it.id })
     }
 
+    @Test fun fullTextSearchReturnsStableSessionAndTurnReferencesAcrossSaves() {
+        val transcript = listOf("me" to "The keyboard crashes after switching apps", "ai" to "I will inspect the keyboard crash and recovery path")
+        repository.saveActive(context, transcript)
+        val first = repository.searchHistory(context, "keyboard crashes", 5).single()
+        repository.saveActive(context, transcript)
+        val second = repository.searchHistory(context, "keyboard crashes", 5).single()
+        assertEquals(first.sessionId, second.sessionId)
+        assertEquals(first.turnId, second.turnId)
+        assertEquals("me", second.role)
+        assertTrue(second.snippet.contains("keyboard", ignoreCase = true))
+    }
+
+    @Test fun fullTextSearchFindsArchivedConversationWithAdjacentTurnContext() {
+        val transcript = listOf("me" to "Fix the Telegram delivery timeout", "ai" to "The Telegram bot timed out while sending a reply")
+        repository.saveActive(context, transcript)
+        repository.archiveAndClear(context, transcript)
+        val hit = repository.searchHistory(context, "Telegram delivery", 5).single()
+        assertTrue(hit.sessionId.isNotBlank())
+        assertTrue(hit.turnId.isNotBlank())
+        assertTrue(hit.title.contains("Fix the Telegram"))
+        assertTrue(hit.after.contains("timed out"))
+    }
+
+    @Test fun objectiveEvidenceIsBoundToActiveSessionAndLatestUserTurn() {
+        repository.saveActive(context, listOf("me" to "Finish the conversation index", "ai" to "I will add indexed recall"))
+        val evidence = repository.recordObjectiveEvidence(context, "history-index", "web_search", "success", "Search returned source-backed documentation")
+        assertNotNull(evidence)
+        assertEquals("history-index", evidence!!.objectiveId)
+        assertNotNull(evidence.turnId)
+        assertEquals(evidence.sessionId, repository.searchHistory(context, "conversation index", 1).single().sessionId)
+        assertEquals(evidence.id, repository.objectiveEvidence(context, "history-index").single().id)
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
