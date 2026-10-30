@@ -984,15 +984,30 @@ class SettingsActivity : Activity() {
                 if (!isFinishing && !isDestroyed) startOpenRouterSignIn()
             }
         } else {
-            when (intent.getStringExtra("open_section")) {
-                "knowledge" -> knowledgeDialog()
-                "memory" -> memoryDialog()
-                "skills" -> skillsDialog()
-                "routines" -> routinesDialog()
-                "character" -> characterDialog()
-                "voice" -> voiceDialog()
-                "providers" -> providerDialog(false)
-                "integrations" -> telegramDialog()
+            val requestedSection = intent.getStringExtra("open_section")
+            val target = when (requestedSection) {
+                "permissions" -> s1
+                "health" -> updateCard
+                "providers" -> s2
+                "knowledge" -> sk
+                "voice", "character" -> s3
+                "memory", "routines", "skills" -> s4
+                "recording" -> s5
+                "browser" -> browser
+                "tools" -> s6
+                "integrations" -> s7
+                else -> null
+            }
+            if (target != null) {
+                setCardExpanded(target, true)
+                window.decorView.post {
+                    if (!isFinishing && !isDestroyed) {
+                        sv.smoothScrollTo(0, (target.top - dp(16)).coerceAtLeast(0))
+                    }
+                }
+                if (requestedSection == "character") {
+                    window.decorView.postDelayed({ if (!isFinishing && !isDestroyed) characterDialog() }, 220)
+                }
             }
         }
     }

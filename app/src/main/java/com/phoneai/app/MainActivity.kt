@@ -169,27 +169,83 @@ class MainActivity : ComponentActivity() {
             setContent {
                 OrionComposeShell(
                     status = statusState.value,
-                    onOpenChat = { startActivity(Intent(this@MainActivity, MainChatActivity::class.java)) },
-                    onOpenVoice = { startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java)) },
-                    onOpenBrowser = { startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")) },
-                    onOpenTasks = { startActivity(Intent(this@MainActivity, TaskCenterActivity::class.java)) },
+                    onOpenChat = { launchDestination(Intent(this@MainActivity, MainChatActivity::class.java), "MainChatActivity") },
+                    onOpenVoice = { launchDestination(Intent(this@MainActivity, LiveConversationActivity::class.java), "LiveConversationActivity") },
+                    onOpenBrowser = { launchDestination(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"), "BrowserActivity") },
+                    onOpenTasks = { launchDestination(Intent(this@MainActivity, TaskCenterActivity::class.java), "TaskCenterActivity") },
                     onOpenSettings = { section ->
                         val intent = Intent(this@MainActivity, SettingsActivity::class.java)
                         if (section != null) intent.putExtra("open_section", section)
-                        startActivity(intent)
+                        launchDestination(intent, "SettingsActivity" + (section?.let { "/$it" } ?: ""))
                     },
-                    onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) },
-                    onOpenTrading = { startActivity(Intent(this@MainActivity, TradingActivity::class.java)) },
-                    onOpenMemory = { startActivity(Intent(this@MainActivity, MemoryActivity::class.java)) },
-                    onOpenAgents = { startActivity(Intent(this@MainActivity, AgentsActivity::class.java)) },
-                    onOpenSoulEngine = { startActivity(Intent(this@MainActivity, SoulEngineActivity::class.java)) },
-                    onOpenExtensions = { startActivity(Intent(this@MainActivity, SelfExtensionLabActivity::class.java)) }
+                    onOpenUtilities = { launchDestination(Intent(this@MainActivity, TeachModeActivity::class.java), "TeachModeActivity") },
+                    onOpenTrading = { launchDestination(Intent(this@MainActivity, TradingActivity::class.java), "TradingActivity") },
+                    onOpenMemory = { launchDestination(Intent(this@MainActivity, MemoryActivity::class.java), "MemoryActivity") },
+                    onOpenAgents = { launchDestination(Intent(this@MainActivity, AgentsActivity::class.java), "AgentsActivity") },
+                    onOpenSoulEngine = { launchDestination(Intent(this@MainActivity, SoulEngineActivity::class.java), "SoulEngineActivity") },
+                    onOpenExtensions = { launchDestination(Intent(this@MainActivity, SelfExtensionLabActivity::class.java), "SelfExtensionLabActivity") },
+                    onOpenFeature = { route -> openFeature(route) }
                 )
             }
         }
         setContentView(composeRoot)
         showPreviousCrashIfPresent()
         AccessibilityDisclosure.showFirstRun(this)
+    }
+    private fun launchDestination(intent: Intent, destination: String) {
+        val diagnostics = getSharedPreferences("orion_navigation_diagnostics", MODE_PRIVATE)
+        diagnostics.edit()
+            .putString("pending_destination", destination)
+            .putLong("launch_requested_at", System.currentTimeMillis())
+            .apply()
+        try {
+            startActivity(intent)
+        } catch (error: Exception) {
+            diagnostics.edit().remove("pending_destination").apply()
+            AgentPolicy.log(this, "navigation:$destination", "open", false, error.javaClass.simpleName + ": " + (error.message ?: "launch failed"))
+            Toast.makeText(this, "Orion could not open $destination. The error was recorded for diagnostics.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openFeature(route: String) {
+        val destination: Class<out android.app.Activity>
+        val intent: Intent
+        when (route) {
+            "settings.providers", "settings.voice", "settings.character", "settings.memory",
+            "settings.skills", "settings.knowledge", "settings.integrations", "settings.all" -> {
+                destination = SettingsActivity::class.java
+                intent = Intent(this, destination)
+                if (route != "settings.all") intent.putExtra("open_section", route.substringAfter("settings."))
+            }
+            "chat" -> { destination = MainChatActivity::class.java; intent = Intent(this, destination) }
+            "live" -> { destination = LiveConversationActivity::class.java; intent = Intent(this, destination) }
+            "browser" -> { destination = BrowserActivity::class.java; intent = Intent(this, destination).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/") }
+            "tasks" -> { destination = TaskCenterActivity::class.java; intent = Intent(this, destination) }
+            "agents" -> { destination = AgentsActivity::class.java; intent = Intent(this, destination) }
+            "teach" -> { destination = TeachModeActivity::class.java; intent = Intent(this, destination) }
+            "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
+            "knowledge_graph" -> { destination = KnowledgeGraphActivity::class.java; intent = Intent(this, destination) }
+            "proactive" -> { destination = ProactiveActivity::class.java; intent = Intent(this, destination) }
+            "trading" -> { destination = TradingActivity::class.java; intent = Intent(this, destination) }
+            "gaming" -> { destination = GamingCoachActivity::class.java; intent = Intent(this, destination) }
+            "device_utilities" -> { destination = DeviceUtilitiesActivity::class.java; intent = Intent(this, destination) }
+            "soul_engine" -> { destination = SoulEngineActivity::class.java; intent = Intent(this, destination) }
+            "watcher" -> { destination = SoulWatcherActivity::class.java; intent = Intent(this, destination) }
+            "extensions" -> { destination = SelfExtensionLabActivity::class.java; intent = Intent(this, destination) }
+            "terminal" -> { destination = TerminalActivity::class.java; intent = Intent(this, destination) }
+            "workspace" -> { destination = WorkspaceShellActivity::class.java; intent = Intent(this, destination) }
+            "cloud_coding" -> { destination = CursorCloudAgentActivity::class.java; intent = Intent(this, destination) }
+            "capabilities" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
+            "capability_report" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }
+            "owner_control" -> { destination = OwnerControlCenterActivity::class.java; intent = Intent(this, destination) }
+            "gemini_live" -> { destination = GeminiLiveActivity::class.java; intent = Intent(this, destination) }
+            else -> {
+                Toast.makeText(this, "This Orion destination is not registered yet: $route", Toast.LENGTH_LONG).show()
+                AgentPolicy.log(this, "navigation:$route", "resolve", false, "route is not registered")
+                return
+            }
+        }
+        launchDestination(intent, destination.simpleName)
     }
 
     /**
@@ -199,15 +255,34 @@ class MainActivity : ComponentActivity() {
     private fun installCrashRecorder() {
         val app = applicationContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
+        app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: android.app.Activity, state: Bundle?) {}
+            override fun onActivityStarted(activity: android.app.Activity) {}
+            override fun onActivityResumed(activity: android.app.Activity) {
+                app.getSharedPreferences("orion_navigation_diagnostics", Context.MODE_PRIVATE).edit()
+                    .putString("last_activity", activity.javaClass.simpleName)
+                    .putLong("last_resumed_at", System.currentTimeMillis())
+                    .remove("pending_destination")
+                    .apply()
+            }
+            override fun onActivityPaused(activity: android.app.Activity) {}
+            override fun onActivityStopped(activity: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: android.app.Activity) {}
+        })
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
                 val writer = StringWriter()
                 PrintWriter(writer).use { error.printStackTrace(it) }
+                val nav = app.getSharedPreferences("orion_navigation_diagnostics", Context.MODE_PRIVATE)
                 val report = buildString {
                     appendLine("Orion crash report")
                     appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date()))
                     appendLine("Thread: " + thread.name)
-                    appendLine("Android: " + android.os.Build.VERSION.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine("Android: " + android.os.Build.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine("Last resumed screen: " + nav.getString("last_activity", "unknown"))
+                    appendLine("Pending destination: " + nav.getString("pending_destination", "none"))
+                    appendLine("Launch requested at: " + nav.getLong("launch_requested_at", 0L))
                     appendLine()
                     append(writer.toString().take(24000))
                 }
