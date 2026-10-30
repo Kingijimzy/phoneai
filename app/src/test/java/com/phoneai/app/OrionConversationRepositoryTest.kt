@@ -194,6 +194,24 @@ class OrionConversationRepositoryTest {
         assertTrue(hit.after.contains("timed out"))
     }
 
+    @Test fun objectiveGraphsRemainScopedToTheirConversationSession() {
+        val firstTurns = listOf("me" to "First session task", "ai" to "First session response")
+        repository.saveActive(context, firstTurns)
+        val firstGraph = OrionObjectiveGraph.Graph("First session task", listOf(OrionObjectiveGraph.Objective("first", "First objective")))
+        assertTrue(OrionObjectiveGraph.save(context, firstGraph))
+        repository.archiveAndClear(context, firstTurns)
+
+        val secondTurns = listOf("me" to "Second session task", "ai" to "Second session response")
+        repository.saveActive(context, secondTurns)
+        val secondGraph = OrionObjectiveGraph.Graph("Second session task", listOf(OrionObjectiveGraph.Objective("second", "Second objective")))
+        assertTrue(OrionObjectiveGraph.save(context, secondGraph))
+        assertEquals("Second session task", OrionObjectiveGraph.load(context)?.objective)
+
+        val firstArchive = repository.archived(context).single { it.title == "First session task" }
+        assertEquals(firstTurns, repository.restoreArchivedById(context, firstArchive.id))
+        assertEquals("First session task", OrionObjectiveGraph.load(context)?.objective)
+    }
+
     @Test fun recentHistoryReturnsTurnReferencesFromTheMostRecentlyUpdatedSession() {
         val older = listOf("me" to "Older unrelated project", "ai" to "Older answer")
         repository.saveActive(context, older)
