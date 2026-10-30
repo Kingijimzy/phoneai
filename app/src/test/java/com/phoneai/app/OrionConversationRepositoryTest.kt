@@ -171,7 +171,7 @@ class OrionConversationRepositoryTest {
     @Test fun fullTextSearchReturnsStableSessionAndTurnReferencesAcrossSaves() {
         val transcript = listOf("me" to "The keyboard crashes after switching apps", "ai" to "I will inspect the keyboard crash and recovery path")
         repository.saveActive(context, transcript)
-        val first = repository.searchHistory(context, "keyboard crashes", 5).single()
+        val first = repository.searchHistory(context, "keyboard crashes", 5).first()
         repository.saveActive(context, transcript)
         val second = repository.searchHistory(context, "keyboard crashes", 5).single()
         assertEquals(first.sessionId, second.sessionId)
@@ -183,7 +183,7 @@ class OrionConversationRepositoryTest {
     @Test fun fullTextSearchFindsArchivedConversationWithAdjacentTurnContext() {
         val transcript = listOf("me" to "Fix the Telegram delivery timeout", "ai" to "The Telegram bot timed out while sending a reply")
         repository.saveActive(context, transcript)
-        val beforeArchive = repository.searchHistory(context, "Telegram delivery", 5).single()
+        val beforeArchive = repository.searchHistory(context, "Telegram delivery", 5).first()
         repository.archiveAndClear(context, transcript)
         val hit = repository.searchHistory(context, "Telegram delivery", 5).single()
         assertEquals(beforeArchive.sessionId, hit.sessionId)
