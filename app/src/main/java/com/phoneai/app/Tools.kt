@@ -1005,7 +1005,12 @@ class Tools(private val svc: PhoneAiService) {
 
     /** Record decisions only with explicit provenance; user agreement is never inferred from assistant text. */
     fun recordDecision(args: JSONObject): String {
-        val sessionId = runCatching { OrionConversationRepository.get(svc).activeSessionId(svc) }.getOrNull()
+        val role = args.optString("source_role")
+        val excerpt = args.optString("source_evidence")
+        val requestedTurn = args.optString("source_turn_id").takeIf { it.isNotBlank() }
+        val repository = OrionConversationRepository.get(svc)
+        val evidence = repository.findTranscriptEvidence(svc, role, excerpt, requestedTurn)
+            ?: return "error: source evidence was not found verbatim in a stored transcript turn with the declared speaker; no decision was recorded."
         return OrionDecisionHistoryStore.get(svc).record(
             topic = args.optString("topic"),
             statement = args.optString("decision"),
@@ -1013,10 +1018,10 @@ class Tools(private val svc: PhoneAiService) {
             rationale = args.optString("rationale"),
             rejectedAlternative = args.optString("rejected_alternative"),
             rejectionReason = args.optString("rejection_reason"),
-            sourceRole = args.optString("source_role"),
-            sessionId = sessionId,
-            turnId = args.optString("source_turn_id").takeIf { it.isNotBlank() },
-            sourceExcerpt = args.optString("source_evidence"),
+            sourceRole = role,
+            sessionId = evidence.first,
+            turnId = evidence.second,
+            sourceExcerpt = excerpt,
             supersedesId = args.optString("supersedes_id").takeIf { it.isNotBlank() }
         )
     }
