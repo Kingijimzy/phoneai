@@ -1405,8 +1405,8 @@ Rules:
         // Scores are structured live data: answer from the scoreboard feed, not a list of links.
         if (!resumeRequest && !browserActionTask && LiveSports.isScoreRequest(command)) {
             ui.phase("acting")
-            val scores = try { LiveSports.answer(command) } catch (_: Exception) { null }
-            if (scores != null) {
+            val scores = research("live_sports", JSONObject().put("query", command))
+            if (!scores.startsWith("error:", true)) {
                 logShortcut("live_sports", scores)
                 history.put(msg("assistant", JSONObject().put("say", scores).put("tool", "done").toString()))
                 ui.say(scores)
