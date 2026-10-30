@@ -616,6 +616,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         failedCallGuard.clear()
         activeIntentContext = ""
         activeObjectiveId = ""
+        OrionObjectiveGraph.clear(svc)
     }
 
     fun runConversation(input: String) {
