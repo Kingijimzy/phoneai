@@ -216,7 +216,8 @@ class MainActivity : ComponentActivity() {
         val intent: Intent
         when (route) {
             "settings.providers", "settings.voice", "settings.character", "settings.memory",
-            "settings.skills", "settings.knowledge", "settings.integrations", "settings.all" -> {
+            "settings.skills", "settings.knowledge", "settings.integrations", "settings.permissions",
+            "settings.health", "settings.recording", "settings.browser", "settings.tools", "settings.all" -> {
                 destination = SettingsActivity::class.java
                 intent = Intent(this, destination)
                 if (route != "settings.all") intent.putExtra("open_section", route.substringAfter("settings."))
