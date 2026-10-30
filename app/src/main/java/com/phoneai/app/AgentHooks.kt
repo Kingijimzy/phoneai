@@ -104,6 +104,11 @@ internal object AgentHooks {
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
   val definition = ToolRegistry.find(tool) ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
+  // A model-selected tool must match the user's actual intent. In particular, a weather
+  // lookup with an arbitrary phrase as its location must never hijack an engineering task.
+  if (tool == "weather" && !WeatherService.isWeatherRequest(request)) {
+   return "Weather lookup was blocked because the user's request is not a live weather request."
+  }
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"notification_action"->args.optString("action");else->""}
   val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
   val writeAction = definition.access == ToolAccess.WRITE
