@@ -46,6 +46,26 @@ class SoulEngineActivity : ComponentActivity() {
                                 Toast.makeText(this@SoulEngineActivity, "Could not save Soul Engine controls", Toast.LENGTH_LONG).show()
                             }
                         },
+                        onRunGoal = { goal ->
+                            val objective = goal.trim()
+                            if (objective.isBlank()) {
+                                Toast.makeText(this@SoulEngineActivity, "Enter an objective before running it", Toast.LENGTH_LONG).show()
+                            } else {
+                                val saved = runCatching {
+                                    SoulEngineState.setGoal(this@SoulEngineActivity, objective, SoulEngineState.Mode.COMMAND)
+                                }.getOrDefault(false)
+                                if (!saved) {
+                                    Toast.makeText(this@SoulEngineActivity, "Could not save the objective; it was not started", Toast.LENGTH_LONG).show()
+                                } else {
+                                    goalState.value = objective
+                                    modeState.value = SoulEngineState.Mode.COMMAND
+                                    val intent = Intent(this@SoulEngineActivity, MainChatActivity::class.java)
+                                        .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, objective)
+                                        .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true)
+                                    startActivity(intent)
+                                }
+                            }
+                        },
                         coreEnabled = coreEnabledState.value,
                         onCoreEnabledChange = { enabled ->
                             AgentPolicy.setEnabled(this@SoulEngineActivity, "orion_core", enabled)
