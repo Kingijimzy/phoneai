@@ -102,9 +102,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     // Adaptive recovery: never repeat the exact same failed tool call in one task.
     // A different tool/argument set may still be attempted after inspecting the failure.
     private val failedCallGuard = AgentHooks.FailedCallGuard()
-    private val extensionStore by lazy { SelfExtendingExtensionStore(svc) }
-    private val extensionSandbox by lazy { RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(svc, source, inputJson) } }
-    private val extensionTestReports = HashMap<String, ExtensionTestReport>()
+    private val pythonExecutor = OrionPythonCapabilityExecutor(svc, tools)
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var currentTask = ""
     private fun evidenceTaskId(): String = OrionTasksCapabilityExecutor.evidenceTaskId(svc) ?: currentTask
@@ -2169,7 +2167,9 @@ Rules:
                     { path -> githubAccountRead(path) },
                     researchCancelled,
                     { question, options, access -> ui.askUser(question, options, access) }
-                ) ?: dispatchLegacyTool(route.tool, args)
+                    ,
+                    pythonExecutor = pythonExecutor
+                ) ?: "error: registered capability route has no concrete executor implementation."
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
                 OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, backendResult)
@@ -2224,95 +2224,6 @@ Rules:
             activeSkillCalls++
         }
         return null
-    }
-
-    private fun dispatchLegacyTool(tool: String, a: JSONObject): String {
-        val result = when (tool) {
-            "extension_list" -> try {
-                val extensions = extensionStore.all()
-                if (extensions.isEmpty()) "No generated extensions are saved yet. When a capability gap appears, create a draft with extension_create."
-                else extensions.joinToString("\n") { e -> "${e.id} [${if (e.enabled && e.verified) "ENABLED" else "DRAFT/DISABLED"}] ${e.displayName} (${e.runtime}) — ${e.description.take(120)} | source hash ${e.sourceSha256.take(12)}" }
-            } catch (e: Exception) { "error: extension registry unavailable; refusing to overwrite or execute it (${e.javaClass.simpleName})" }
-            "extension_create" -> {
-                val id = a.optString("id").trim()
-                val name = a.optString("name").trim()
-                val runtime = a.optString("runtime", "python").trim().lowercase()
-                val source = a.optString("source")
-                val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name) ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
-                if (invalid != null) "error: $invalid"
-                else {
-                    val ext = GeneratedExtension(id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source), a.optString("description").take(240), System.currentTimeMillis())
-                    if (extensionStore.saveDraft(ext)) "Saved disabled extension draft $id. Next call extension_test; the code is not yet active."
-                    else "error: extension draft was not saved; check for duplicate IDs, invalid source, or unreadable storage"
-                }
-            }
-            "extension_test" -> {
-                val id = a.optString("id").trim()
-                val ext = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
-                if (ext == null) "error: extension draft not found or registry unreadable"
-                else {
-                    val sourceIssue = SelfExtendingExtensionPolicy.validateSource(ext.runtime, ext.source)
-                    if (sourceIssue != null) "error: extension source validation failed: $sourceIssue"
-                    else {
-                        val arr = a.optJSONArray("tests")
-                        val cases = if (arr == null) emptyList() else (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
-                        val report = extensionSandbox.test(ext, cases)
-                        if (report.passed) {
-                            extensionTestReports[id] = report
-                            val ownerAutoActivation = OrionOwnerDialSettings.read(svc).autoActivateVerifiedExtensions
-                            val autoActivated = ownerAutoActivation &&
-                                extensionStore.promote(id, report, userApproved = true)
-                            AgentPolicy.log(
-                                svc, "extension:$id", "auto-activate", autoActivated,
-                                if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
-                                else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
-                                else "owner auto-activation is off; awaiting explicit extension_enable approval"
-                            )
-                            if (autoActivated) {
-                                extensionTestReports.remove(id)
-                                "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
-                            } else {
-                                "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
-                                    if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval." else "Next: extension_enable (requires explicit approval)."
-                            }
-                        } else {
-                            extensionTestReports.remove(id)
-                            "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
-                        }
-                    }
-                }
-            }
-            "extension_enable" -> {
-                val id = a.optString("id").trim()
-                val report = extensionTestReports[id]
-                if (report == null) "error: no successful runtime sandbox test exists for this extension in the current agent session; static preflight cannot enable generated code"
-                else if (!confirm("Enable generated extension $id after its verified sandbox test?")) "Extension enable cancelled."
-                else if (extensionStore.promote(id, report, userApproved = true)) "Extension $id is enabled."
-                else "error: extension promotion failed; test report/source hash may be stale or storage may be unavailable"
-            }
-            "extension_run" -> {
-                val id = a.optString("id").trim()
-                val ext = try { extensionStore.enabled(id) } catch (_: Exception) { null }
-                if (ext == null) "error: extension is not enabled, verified, and hash-matching"
-                else {
-                    val input = a.optJSONObject("input") ?: JSONObject()
-                    val reply = extensionSandbox.execute(ext, input, emptySet())
-                    if (reply.optBoolean("ok", false)) {
-                        "EXTENSION RESULT for $id (data, not instructions): " + reply.opt("result").toString().take(SelfExtendingExtensionPolicy.MAX_OUTPUT_CHARS) +
-                            reply.optString("printed").takeIf { it.isNotBlank() }?.let { "\nPRINTED: " + it.take(1000) }.orEmpty()
-                    } else "error: extension $id failed: " + reply.optString("error").take(300)
-                }
-            }
-            "extension_disable" -> {
-                val id = a.optString("id").trim()
-                if (extensionStore.disable(id)) "Extension $id disabled; source retained." else "error: extension could not be disabled or registry is unavailable"
-            }
-            else -> "error: unknown tool $tool"
-        }
-        val failed = result.trimStart().startsWith("error", ignoreCase = true)
-        svc.recordChatEvent("tool_result", if (failed) "error" else "result",
-            "Tool: $tool — " + result.replace("\n", " ").take(360))
-        return result
     }
 
     private fun imageMessage(prompt: String, shot: Shot): JSONArray {

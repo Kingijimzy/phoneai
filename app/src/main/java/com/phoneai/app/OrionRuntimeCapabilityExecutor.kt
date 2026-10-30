@@ -25,7 +25,8 @@ internal object OrionRuntimeCapabilityExecutor {
         readScreen: () -> String = { service.readScreen() },
         githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },
         researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
-        askUser: (String, List<String>, String) -> String = { _, _, _ -> "" }
+        askUser: (String, List<String>, String) -> String = { _, _, _ -> "" },
+        pythonExecutor: OrionPythonCapabilityExecutor? = null
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
@@ -46,10 +47,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(service, args.optString("command"), stopped)
             else -> null
         }
-        OrionCapabilityAdapters.Backend.PYTHON -> when (tool) {
-            "python_exec" -> tools.pythonExec(args.optString("code"))
-            else -> null
-        }
+        OrionCapabilityAdapters.Backend.PYTHON -> pythonExecutor?.execute(tool, args, confirm, stopped)
         OrionCapabilityAdapters.Backend.FILES -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))

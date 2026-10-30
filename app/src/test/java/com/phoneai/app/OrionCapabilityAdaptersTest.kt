@@ -197,5 +197,18 @@ class OrionCapabilityAdaptersTest {
             assertTrue("Missing gaming executor for ${it.tool}", OrionGamingCapabilityExecutor.supports(it.tool))
         }
     }
+    
+    @Test fun everyPythonRouteHasAConcreteDedicatedExecutor() {
+        val python = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.PYTHON }
+        assertEquals(
+            setOf("python_exec", "extension_list", "extension_create", "extension_test",
+                "extension_enable", "extension_run", "extension_disable"),
+            python.map { it.tool }.toSet()
+        )
+        python.forEach {
+            assertTrue("Missing Python executor for ${it.tool}", OrionPythonCapabilityExecutor.supports(it.tool))
+        }
+    }
 
 }
