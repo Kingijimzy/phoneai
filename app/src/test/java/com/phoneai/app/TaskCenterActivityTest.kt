@@ -50,6 +50,25 @@ class TaskCenterActivityTest {
         assertEquals("paused", TaskStore.all(context).first { it.id == task.id }.status)
     }
 
+    @Test fun verifiedTaskOutcomeIsPersistedAndVisibleOnTheBoard() {
+        val task = TaskStore.add(context, "Verified task ${UUID.randomUUID()}")!!
+        val evidenceSummary = "Orion's task-level completion gate passed. Review the chat transcript."
+        assertTrue(TaskStore.update(context, task.id, status = "completed", resultSummary = evidenceSummary))
+        val restored = TaskStore.all(context).first { it.id == task.id }
+        assertEquals(evidenceSummary, restored.resultSummary)
+
+        val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
+        val rendered = mutableListOf<String>()
+        fun collect(view: View) {
+            if (view is android.widget.TextView) rendered += view.text.toString()
+            if (view is ViewGroup) for (i in 0 until view.childCount) collect(view.getChildAt(i))
+        }
+        collect(activity.window.decorView)
+        assertTrue("The task card must show its saved completion evidence", rendered.any { it.contains(evidenceSummary) })
+        assertTrue("The card must distinguish agent-verified completion from manual completion",
+            rendered.any { it.contains("Agent completion gate passed") })
+    }
+
     @Test fun stopControlMarksInflightActionForRecoveryInsteadOfDiscardingIt() {
         assertTrue(AgentCheckpointStore.begin(context, "Open Settings and inspect the Android version"))
         assertTrue(AgentCheckpointStore.beginStep(context, "open_app", JSONObject().put("package", "com.android.settings")))
