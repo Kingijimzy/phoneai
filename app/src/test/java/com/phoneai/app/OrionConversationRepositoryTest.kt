@@ -206,6 +206,28 @@ class OrionConversationRepositoryTest {
         assertTrue(hits.any { it.snippet.contains("backend executors") || it.snippet.contains("dispatchLegacyTool") })
     }
 
+
+    @Test fun discussionSearchRanksDenseTechnicalMatchesAboveRecentKeywordMentions() {
+        val specific = listOf(
+            "me" to "We investigated the Android 16 keyboard crash recovery root cause and agreed to preserve the checkpoint before resuming.",
+            "ai" to "The decision was to inspect the in-flight action before retrying."
+        )
+        repository.saveActive(context, specific)
+        repository.archiveAndClear(context, specific)
+
+        val vagueRecent = listOf(
+            "me" to "The keyboard crashed after opening Settings.",
+            "ai" to "I will look at the crash."
+        )
+        repository.saveActive(context, vagueRecent)
+
+        val hits = repository.searchHistory(context, "Android 16 keyboard crash recovery root cause", 8)
+        assertTrue(hits.isNotEmpty())
+        assertEquals("Android 16 keyboard crash recovery root cause", hits.first().title)
+        assertTrue(hits.first().snippet.contains("recovery root cause"))
+        assertTrue(hits.first().after.contains("inspect the in-flight action"))
+    }
+
     @Test fun objectiveCompletionRequiresLatestSuccessfulExecutorReceipt() {
         repository.saveActive(context, listOf("me" to "Complete the release objective", "ai" to "I am validating the release"))
         val graph = OrionObjectiveGraph.Graph("Release objective", listOf(OrionObjectiveGraph.Objective("release", "Release the build")))
