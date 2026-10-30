@@ -12,7 +12,7 @@ import org.json.JSONObject
  */
 internal object OrionCapabilityAdapters {
     enum class Backend {
-        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, CORE
+        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, TRADING_READONLY, GAMING, CORE
     }
 
     data class Route(val backend: Backend, val tool: String)
@@ -40,7 +40,22 @@ internal object OrionCapabilityAdapters {
             "swipe_path", "scroll", "type", "key", "look", "play", "device_location",
             "dial", "sms", "alarm", "timer", "volume", "flashlight", "copy", "record_screen"
         ),
-        Backend.SKILLS to setOf("skills_list")
+        Backend.SKILLS to setOf("skills_list"),
+        Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",
+            "github_public", "github_account_read", "github_account_read", "gmail_list_messages",
+            "standing_order", "vault_list", "vault_request", "vault_get", "capability_note"),
+        Backend.COMMUNICATION to setOf("telegram_status", "telegram_inbox", "telegram_send", "dial", "sms",
+            "resolve_contact", "read_notifications", "notification_action"),
+        Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "knowledge_search",
+            "graph_link", "graph_query", "self_review"),
+        Backend.TASKS to setOf("ask_agent", "create_agent", "task_list", "task_add", "task_update",
+            "task_delete", "undo_last", "undo_status", "ask_user", "morning_brief", "standing_order"),
+        Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
+            "weather", "github_public", "bybit_public_ticker"),
+        Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy",
+            "battery", "time", "wait", "device_info", "device_location"),
+        Backend.TRADING_READONLY to setOf("trade_history_summary"),
+        Backend.GAMING to setOf("gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset")
     )
 
     private val backendByTool: Map<String, Backend> = buildMap {
@@ -54,7 +69,8 @@ internal object OrionCapabilityAdapters {
     /** Resolve only tools that exist in the authoritative tool registry. */
     fun route(tool: String): Route? {
         if (ToolRegistry.find(tool) == null) return null
-        return Route(backendByTool[tool] ?: Backend.CORE, tool)
+        val backend = backendByTool[tool] ?: return null
+        return Route(backend, tool)
     }
 
     fun routes(): List<Route> = ToolRegistry.all.mapNotNull { route(it.name) }
