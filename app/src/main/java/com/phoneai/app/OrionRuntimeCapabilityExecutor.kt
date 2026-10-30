@@ -8,6 +8,34 @@ import org.json.JSONObject
  * for task planning, policy gates, approvals and evidence; Tasks owns durable checkpoint/recovery operations.
  */
 internal object OrionRuntimeCapabilityExecutor {
+    /**
+     * Static owner audit for every registered route. This is deliberately separate from dispatch:
+     * a route is considered implemented only when its exact tool has a concrete executor case.
+     */
+    fun supports(backend: OrionCapabilityAdapters.Backend, tool: String): Boolean = when (backend) {
+        OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "workspace_write", "workspace_read")
+        OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
+            "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
+            "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
+            "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
+            "browser_tabs", "browser_upload", "browser_close"
+        )
+        OrionCapabilityAdapters.Backend.CORE -> false
+    }
+
     fun execute(
         backend: OrionCapabilityAdapters.Backend,
         tool: String,
@@ -25,7 +53,8 @@ internal object OrionRuntimeCapabilityExecutor {
         readScreen: () -> String = { service.readScreen() },
         githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },
         researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
-        askUser: (String, List<String>, String) -> String = { _, _, _ -> "" }
+        askUser: (String, List<String>, String) -> String = { _, _, _ -> "" },
+        pythonExecutor: OrionPythonCapabilityExecutor? = null
     ): String? = when (backend) {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
@@ -46,10 +75,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(service, args.optString("command"), stopped)
             else -> null
         }
-        OrionCapabilityAdapters.Backend.PYTHON -> when (tool) {
-            "python_exec" -> tools.pythonExec(args.optString("code"))
-            else -> null
-        }
+        OrionCapabilityAdapters.Backend.PYTHON -> pythonExecutor?.execute(tool, args, confirm, stopped)
         OrionCapabilityAdapters.Backend.FILES -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
