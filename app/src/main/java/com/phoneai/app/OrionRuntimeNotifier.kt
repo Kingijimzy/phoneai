@@ -9,6 +9,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 
+/** Shared Android 13+ notification permission gate. */
+internal object OrionNotificationPolicy {
+    fun canPost(sdkInt: Int, permissionGranted: Boolean): Boolean = sdkInt < 33 || permissionGranted
+}
+
 /** Posts only user-configured standing-order outcome notifications. */
 internal object OrionRuntimeNotifier {
     private const val CHANNEL_ID = "orion_background_work"
@@ -18,8 +23,9 @@ internal object OrionRuntimeNotifier {
         val config = OrionAutonomySettings.read(context)
         if (success && !config.notifyOnCompletion) return
         if (!success && !config.notifyOnFailure) return
-        if (Build.VERSION.SDK_INT >= 33 &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val notificationGranted = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!OrionNotificationPolicy.canPost(Build.VERSION.SDK_INT, notificationGranted)) return
 
         runCatching {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
