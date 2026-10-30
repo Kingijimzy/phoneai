@@ -47,7 +47,6 @@ class TaskCenterActivityTest {
         assertNotNull("Paused task must expose a Resume control", resume)
         resume!!.performClick()
         assertEquals("running", TaskStore.all(context).first { it.id == task.id }.status)
-        activity.destroy()
     }
 
     @Test fun stopControlPausesCheckpointAndRetainsUncertainInflightEvidence() {
@@ -64,6 +63,5 @@ class TaskCenterActivityTest {
         assertEquals("paused", checkpoint!!.optString("status"))
         assertNotNull("Stop must retain the in-flight marker for safe reconciliation", checkpoint.optJSONObject("inFlight"))
         assertTrue(AgentCheckpointStore.resumeInstruction(context)!!.contains("outcome is unknown"))
-        activity.destroy()
     }
 }
