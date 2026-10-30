@@ -48,7 +48,7 @@ internal object TradingDesk {
     @Volatile private var cal: Pair<Long, List<MarketCalendar.Event>> = 0L to emptyList()
     fun events(now: Long = System.currentTimeMillis()): List<MarketCalendar.Event> {
         if (now - cal.first > 3_600_000L || cal.second.isEmpty() && now - cal.first > 300_000L) {
-            val fresh = MarketCalendar.fetchThisWeek()
+            val fresh = CalendarFeed.fetchThisWeek()
             if (fresh.isNotEmpty() || cal.second.isEmpty()) cal = now to fresh
         }
         return cal.second
@@ -253,6 +253,62 @@ internal object TradingDesk {
         }
     }
 
+    // ---- simulation, forecast and conditions
+    private fun tfCode(tf: String, bybit: Boolean) = when (tf) { "15m" -> if (bybit) "15" else "15m"; "4h" -> if (bybit) "240" else "4h"; "1d" -> if (bybit) "D" else "1d"; else -> if (bybit) "60" else "1h" }
+
+    private fun candlesFor(c: Context, raw: String, tf: String): Pair<String, List<Candle>> {
+        val fx = FxData.pairOf(raw)
+        return if (fx != null) fx to FxData.candles(fx, tf)
+        else (Bybit.symbolOf(raw) ?: raw.uppercase(Locale.US)).let { it to Bybit.candles(c, it, tfCode(tf, true), 1000) }
+    }
+
+    class Simulation(val text: String, val curve: List<Double>)
+
+    fun backtest(c: Context, strategyName: String?, symbol: String, tf: String = "1h"): Simulation {
+        val (sym, cs) = candlesFor(c, symbol, tf)
+        if (cs.size < 200) return Simulation("Not enough history for $sym $tf yet (${cs.size} candles).", emptyList())
+        val st = strategies(c).firstOrNull { strategyName != null && it.name.equals(strategyName, true) }
+            ?: strategies(c).firstOrNull { it.instruments.isEmpty() || it.instruments.any { i -> i.equals(sym, true) } }
+            ?: StrategySpec("default rules")
+        val r = StrategyBacktest.run(sym, tf, cs.dropLast(1), st)
+        return Simulation("Strategy '${st.name}'. " + r.text(), r.curve)
+    }
+
+    /** One lean for a symbol from technicals, the playbook, its simulated record and news or calendar tone. */
+    fun forecast(c: Context, symbol: String): String {
+        val now = System.currentTimeMillis()
+        val (sym, h1) = candlesFor(c, symbol, "1h")
+        val (_, h4) = candlesFor(c, symbol, "4h")
+        val (_, d1) = candlesFor(c, symbol, "1d")
+        val outlook = MarketOutlook.compute(sym, h1, h4, d1) ?: return "Not enough data to read $sym right now."
+        val live = match(c, listOf(sym)).matches.firstOrNull()
+        val sim = live?.let { m -> backtest(c, m.strategy, sym, m.setup.tf).let { s -> s } }
+        val strat = strategies(c).firstOrNull { it.name == live?.strategy } ?: StrategySpec("default rules")
+        val rs = if (live != null) StrategyBacktest.run(sym, live.setup.tf, (if (live.setup.tf == "4h") h4 else h1).dropLast(1), strat).rs else emptyList()
+        val summary = TradingStats.summarize(rs)
+        val fx = FxData.pairOf(sym) != null
+        val tilt = if (fx) CurrencyConditions.pairTilt(events(now), now, sym) else HeadlineSentiment.score(NewsDesk.cryptoHeadlines(sym)).tilt
+        val f = MarketForecast.forecast(MarketForecast.Input(sym, outlook.bias, outlook.confidence,
+            when (live?.setup?.side) { "long" -> 1; "short" -> -1; else -> 0 }, if (rs.isEmpty()) null else summary.expectancyR, rs.size, tilt))
+        return f.text(sym) + "\n" + outlook.text + (if (sim != null) "\n" + sim.text else "")
+    }
+
+    /** What the economic calendar and news say about a symbol (or the playbook's pairs when none is named). */
+    fun conditions(c: Context, symbol: String?): String {
+        val now = System.currentTimeMillis()
+        val ev = events(now)
+        val targets = if (symbol.isNullOrBlank()) followSymbols(c).take(4) else listOf(symbol)
+        return targets.joinToString("\n\n") { raw ->
+            val fx = FxData.pairOf(raw)
+            val sym = fx ?: (Bybit.symbolOf(raw) ?: raw.uppercase(Locale.US))
+            val heads = NewsDesk.headlinesFor(sym)
+            val tone = HeadlineSentiment.score(heads)
+            (if (fx != null) CurrencyConditions.pairText(ev, now, sym) else "$sym: macro calendar (USD) " + CurrencyConditions.assess(ev, now, "USD").text(now)) +
+                "\nNews tone: ${tone.label} (${tone.bullish} positive, ${tone.bearish} negative of ${tone.total})." +
+                (if (heads.isNotEmpty()) "\n" + heads.take(4).joinToString("\n") { "- $it" } else "")
+        }
+    }
+
     fun watchSymbols(c: Context): List<String> =
         (Prefs.watchlist(c).split(",").map { it.trim() }.filter { it.isNotEmpty() } + defaultFx.filter { false }).distinct()
 
@@ -335,6 +391,9 @@ internal object TradingDesk {
                 "reset" -> { savePaper(c, PaperBroker.start(a.optDouble("balance", 10_000.0).coerceAtLeast(100.0))); "Paper account reset." }
                 else -> updatePaper(c)
             }
+            "strategy_backtest" -> backtest(c, a.optString("strategy").ifBlank { null }, a.optString("symbol", followSymbols(c).firstOrNull() ?: "BTCUSDT"), a.optString("timeframe", "1h")).text
+            "market_forecast" -> forecast(c, a.optString("symbol", followSymbols(c).firstOrNull() ?: "BTCUSDT"))
+            "market_conditions" -> conditions(c, a.optString("symbol").ifBlank { null })
             "trading_kill_switch" -> { setKill(c, a.optBoolean("on", true)); "Kill switch is now ${if (killSwitch(c)) "ON: no new orders will pass the risk gate" else "OFF"}." }
             else -> "Unknown trading tool $tool."
         }

@@ -81,6 +81,8 @@ class AgentChatActivity : Activity() {
             if (agent.id == "coach") {
             chip("Match playbook") { quick("Match my playbook now: scan every instrument in it, rank what fits my rules, and warn me about news or session problems.") }
             chip("News & sessions") { quick("What high-impact news and which sessions matter for my playbook pairs in the next 24 hours?") }
+            chip("Simulate") { quick("Simulate my playbook on recent history for the pairs in it and tell me honestly whether the numbers show an edge.") }
+            chip("Forecast") { quick("Give me a forecast for the main pair in my playbook using my strategy, its simulated record, the news calendar and headlines.") }
             chip("Desk") { startActivity(Intent(this, TradingActivity::class.java)) }
             chip("Brain") { startActivity(Intent(this, SoulEngineActivity::class.java)) }
             chip("Find setups") { quick("Find me the best trade setups on my watchlist right now and judge them against my strategy.") }

@@ -23,6 +23,10 @@ import android.widget.Toast
 /** Trading control room: keys, practice/real mode, limits and the background market watch. Orion's monochrome card style. */
 class TradingActivity : Activity() {
     private lateinit var host: LinearLayout
+    private var firstRender = true
+    private var simStrategy = ""
+    private var simSymbol = ""
+    private var simTf = "1h"
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -72,14 +76,18 @@ class TradingActivity : Activity() {
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
         host.addView(label("Control room", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
         host.addView(row(
-            pill("Open trading workspace", true) { startActivity(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach")) },
-            pill("Orion brain", false) { startActivity(Intent(this, SoulEngineActivity::class.java)) }
+            pill("Open trading workspace", true) { openWithFade(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach")) },
+            pill("Orion brain", false) { openWithFade(Intent(this, SoulEngineActivity::class.java)) }
         ))
         host.addView(label("Chat with your trader, upload a TradingView chart or strategy screenshot, and accept the playbook it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
         host.addView(gap(12))
         host.addView(playbookCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
         host.addView(deskCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(simulateCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(conditionsCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
         val acc = card()
@@ -157,6 +165,71 @@ class TradingActivity : Activity() {
         host.addView(help, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(16))
         host.addView(label("Use a Read + Trade key. Never enable Withdraw.", 11f, Theme.MUTED))
+        if (firstRender) {
+            firstRender = false
+            for (i in 0 until host.childCount) if (host.getChildAt(i) is LinearLayout) Motion.enter(host.getChildAt(i), i / 2)
+        }
+    }
+
+    private fun openWithFade(i: Intent) {
+        startActivity(i)
+        @Suppress("DEPRECATION") overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    /** Pick a strategy, symbol and timeframe, then simulate it on history or ask for a forecast. */
+    private fun simulateCard(): LinearLayout {
+        val c = card()
+        c.addView(label("SIMULATE & FORECAST", 12f, Theme.MUTED, true))
+        val list = TradingDesk.strategies(this)
+        if (list.isEmpty()) {
+            c.addView(label("Accept a strategy in your playbook first, then simulate it on real history and see how it would have done.", 13f, Theme.TEXT).apply { setPadding(0, dp(6), 0, 0) })
+            return c
+        }
+        if (list.none { it.name == simStrategy }) simStrategy = list.first().name
+        val st = list.first { it.name == simStrategy }
+        val symbols = st.instruments.ifEmpty { TradingDesk.followSymbols(this) }.ifEmpty { listOf("BTCUSDT") }
+        if (simSymbol !in symbols) simSymbol = symbols.first()
+        c.addView(label("Strategy", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)) })
+        c.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false
+            addView(row(*list.map { x -> pill(x.name, x.name == simStrategy) { simStrategy = x.name; render() } }.toTypedArray())) })
+        c.addView(label("Symbol", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)) })
+        c.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false
+            addView(row(*symbols.map { x -> pill(x.removeSuffix("USDT"), x == simSymbol) { simSymbol = x; render() } }.toTypedArray())) })
+        c.addView(label("Timeframe", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)) })
+        c.addView(row(*listOf("15m", "1h", "4h", "1d").map { x -> pill(x, x == simTf) { simTf = x; render() } }.toTypedArray()))
+        val curve = EquityCurveView(this).apply { visibility = View.GONE }
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(10), 0, 0); visibility = View.GONE }
+        fun run(job: () -> Pair<String, List<Double>>) {
+            out.visibility = View.VISIBLE; out.text = "Working on it…"; curve.visibility = View.GONE
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) to emptyList<Double>() }
+                runOnUiThread { out.text = r.first; curve.show(r.second); Motion.enter(out) }
+            }.start()
+        }
+        c.addView(row(
+            pill("Simulate", true) { run { TradingDesk.backtest(this, simStrategy, simSymbol, simTf).let { it.text to it.curve } } },
+            pill("Forecast", false) { run { TradingDesk.forecast(this, simSymbol) to emptyList() } }
+        ).apply { setPadding(0, dp(12), 0, 0) })
+        c.addView(curve, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        c.addView(out)
+        c.addView(label("Simulations use past candles with trading costs; they show how the rules behaved, not what will happen.", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        return c
+    }
+
+    /** Economic calendar conditions per currency and headline tone, for forex and crypto. */
+    private fun conditionsCard(): LinearLayout {
+        val c = card()
+        c.addView(label("MARKET CONDITIONS", 12f, Theme.MUTED, true))
+        val out = label("Tap Refresh to read the Forex Factory calendar and the latest headlines for your playbook pairs.", 12f, Theme.TEXT).apply { setPadding(0, dp(8), 0, dp(8)) }
+        c.addView(out)
+        c.addView(row(pill("Refresh", true) {
+            out.text = "Reading the calendar and headlines…"
+            Thread {
+                val t = try { TradingDesk.conditions(this, null) } catch (e: Exception) { "Could not read conditions: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = t; Motion.enter(out) }
+            }.start()
+        }))
+        return c
     }
 
     private fun playbookCard(): LinearLayout {

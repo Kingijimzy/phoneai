@@ -56,6 +56,14 @@ object AgentRunner {
                 if (h1.size > 30) sb.append("\n").append(Ta.summary(pair, "1h", h1.dropLast(1)))
                 if (h4.size > 30) sb.append("\n").append(Ta.summary(pair, "4h", h4.dropLast(1)))
             }
+            val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
+            val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
+            if (target != null && Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText))
+                sb.append("\nFORECAST (computed now from technicals, playbook, simulation and news):\n").append(TradingDesk.forecast(c, target))
+            if (target != null && Regex("(?i)\\b(simulat|backtest|back-test|test my strategy|how would)\\b").containsMatchIn(userText))
+                sb.append("\nSIMULATION (history, costs charged):\n").append(TradingDesk.backtest(c, null, target, "1h").text)
+            if (Regex("(?i)\\b(conditions?|fundamentals?|forex factory|calendar|news|currency|currencies)\\b").containsMatchIn(userText))
+                sb.append("\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
             if (Regex("(?i)\\b(match|setups?|scan|find|look)\\b").containsMatchIn(userText) && play.isNotEmpty()) {
                 sb.append("\nPLAYBOOK MATCHES NOW:\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
             }
