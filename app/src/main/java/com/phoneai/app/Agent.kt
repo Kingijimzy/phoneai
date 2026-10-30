@@ -1346,6 +1346,10 @@ Rules:
         if (intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
             val recallQuery = intentResolution.resolvedObjective.orEmpty().ifBlank { command }
             recalled = runCatching { ChatHistoryStore.search(svc, recallQuery, 6) }.getOrDefault(emptyList())
+            if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP && recalled.isEmpty()) {
+                ui.say("I couldn't find a matching record in the indexed conversation history for that specific subject. I won't substitute a different task or guess what we discussed.")
+                return
+            }
             if (recalled.isEmpty() && intentResolution.needsClarification) {
                 recalled = runCatching { ChatHistoryStore.recent(svc, 8) }.getOrDefault(emptyList())
             }
