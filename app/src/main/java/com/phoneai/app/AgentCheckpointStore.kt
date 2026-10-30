@@ -160,6 +160,25 @@ object AgentCheckpointStore {
         return saved
     }
 
+    /**
+     * Stop is terminal when no action is in flight. If an action may have been interrupted,
+     * retain its marker and require reconciliation instead of hiding or replaying it.
+     */
+    fun stop(c: Context, reason: String = "User stopped the agent run"): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        val inFlight = checkpoint.optJSONObject("inFlight")
+        if (inFlight != null) {
+            checkpoint.put("status", "recovery_required")
+            checkpoint.put("recoveryNotice", reason.take(300) + "; the in-flight action outcome is unknown. Inspect current state before continuing.")
+        } else {
+            checkpoint.put("status", "cancelled")
+            checkpoint.put("stoppedAt", System.currentTimeMillis())
+            checkpoint.put("stopReason", reason.take(300))
+        }
+        checkpoint.put("updatedAt", System.currentTimeMillis())
+        save(c, checkpoint)
+    }
+
     fun complete(c: Context): Boolean {
         // Never mark a task complete while an action's outcome is still uncertain.
         if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return false
