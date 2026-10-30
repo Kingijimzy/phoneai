@@ -299,13 +299,14 @@ internal object SoulEngineState {
             replaceProposal(o, existing.copy(evidenceCount = existing.evidenceCount + 1, updatedAt = System.currentTimeMillis()))
         } else {
             val candidate = Proposal(java.util.UUID.randomUUID().toString(), ProposalKind.ROUTE, label,
-                "Observed a completed multi-step task. Candidate tool sequence: " + tools.take(8).joinToString(" → ") +
-                    ". Planning guidance only; each future action must be revalidated and pass the live policy gate.",
+                "Observed a completed checkpoint containing a multi-step tool sequence; this is not independently verified task success. Candidate sequence: " +
+                    tools.take(8).joinToString(" → ") +
+                    ". Planning guidance only; inspect current state and verify the goal independently before treating this route as successful. Each future action must be revalidated and pass the live policy gate.",
                 tools.take(8), ProposalStatus.PENDING, 1, System.currentTimeMillis(), System.currentTimeMillis())
             val all = proposals(o).toMutableList().apply { add(candidate) }
             o.put("proposals", JSONArray().also { a -> all.takeLast(MAX_ITEMS).forEach { a.put(it.json()) } })
         }
-        o.put("lastOutcome", "verified multi-step task").put("lastTick", System.currentTimeMillis())
+        o.put("lastOutcome", "completed checkpoint route candidate").put("lastTick", System.currentTimeMillis())
         write(context, o)
     }
 
