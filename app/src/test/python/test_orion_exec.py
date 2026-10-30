@@ -12,6 +12,25 @@ class OrionExecTests(unittest.TestCase):
     def test_basic_arithmetic_and_output(self):
         self.assertEqual(orion_exec.run("print(sum(range(5)))"), "10\n")
 
+    def test_agent_calculator_acceptance_script_executes(self):
+        code = """first = 25
+second = 17
+print("Inputs:", first, second)
+print("Addition:", first + second)
+print("Subtraction:", first - second)
+print("Multiplication:", first * second)
+if second != 0:
+    print("Division:", first / second)
+else:
+    print("Division: undefined (division by zero)")
+"""
+        output = orion_exec.run(code)
+        self.assertNotIn("error:", output)
+        self.assertIn("Addition: 42", output)
+        self.assertIn("Subtraction: 8", output)
+        self.assertIn("Multiplication: 425", output)
+        self.assertIn("Division:", output)
+
     def test_rejects_imports_and_attribute_access(self):
         self.assertIn("policy rejected", orion_exec.run("import os"))
         self.assertIn("policy rejected", orion_exec.run("print((1).__class__)"))
