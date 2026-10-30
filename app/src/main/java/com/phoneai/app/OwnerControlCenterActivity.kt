@@ -103,13 +103,15 @@ class OwnerControlCenterActivity : Activity() {
         setContentView(scroll)
 
         addText("ORION / OWNER ONLY", 10f, Theme.MUTED, true, 0)
-        addText("Owner Control Centre", 27f, Theme.TEXT, true, 5)
-        addText("Authenticated with the phone's device credential. Settings here control Orion's app-level behaviour; Android, provider and platform safeguards remain independently enforced.", 13f, Theme.MUTED, false, 8)
+        addText("Orion Full Control Panel", 27f, Theme.TEXT, true, 5)
+        addText("Owner-authenticated runtime controls. Every dial below is connected to an Orion policy or Android settings surface; hard security boundaries and OS controls remain independently enforced.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to Settings") { finish() }
 
         section("AUTONOMY & EXECUTION")
         val config = OrionAutonomySettings.read(this)
-        addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} retries", 13f, Theme.TEXT, true, 5)
+        val ownerDials = OrionOwnerDialSettings.read(this)
+        addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} read retries", 13f, Theme.TEXT, true, 5)
+        addText("Extension auto-activation: ${if (ownerDials.autoActivateVerifiedExtensions) "ON · tested drafts only" else "OFF"} · Python: ${ownerDials.pythonProfile.name} · Recovery: ${ownerDials.recoveryMaxAttempts} retries / ${ownerDials.recoveryBackoffSeconds}s base · Watcher: ${if (Prefs.watchOn(this)) "REQUESTED" else "OFF"}", 12f, Theme.MUTED, false, 3)
         addButton("Configure autonomy, limits and notifications", true) { showAutonomyControlCenter() }
         addButton("Extension activation dial") { showExtensionControls() }
         addButton("Python execution profile") { showPythonProfile() }
