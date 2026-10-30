@@ -1,0 +1,50 @@
+name: fix-agent-indent
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/trading-desk-phase-a]
+    paths:
+      - '.github/workflows/fix-agent-indent.yml'
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/trading-desk-phase-a
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Normalize trading tool branch indentation
+        run: |
+          set -e
+          git config user.name "Kingi jimzy"
+          git config user.email "108807524+Kingijimzy@users.noreply.github.com"
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/phoneai/app/Agent.kt')
+          t = p.read_text()
+          # Fix under-indented trading branches (2 spaces -> 12)
+          for name in [
+            'trading_watchlist_list',
+            'trading_watchlist_set',
+            'trading_playbook_list',
+            'trading_playbook_propose',
+            'trading_playbook_set_enabled',
+            'trading_match_setups',
+            'trading_strategy_note',
+            'bybit_public_kline',
+            'bybit_place_order',
+            'bybit_cancel_order',
+          ]:
+              bad = f'  "{name}"'
+              good = f'            "{name}"'
+              t = t.replace(bad, good)
+          p.write_text(t)
+          print('fixed')
+          PY
+          if git diff --quiet; then echo nochange; else
+            git add app/src/main/java/com/phoneai/app/Agent.kt
+            git commit -m "Style: indent trading tool dispatch branches in Agent.kt"
+            git push origin feature/trading-desk-phase-a
+          fi

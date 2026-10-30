@@ -1,0 +1,17 @@
+--- a/app/src/main/java/com/phoneai/app/Agent.kt
++++ b/app/src/main/java/com/phoneai/app/Agent.kt
+@@ tool dispatch after trade_history_summary
+             "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
++            "trading_watchlist_list" -> TradingToolHandlers.watchlistList(svc)
++            "trading_watchlist_set" -> TradingToolHandlers.watchlistSet(svc, a.optString("symbols"))
++            "trading_playbook_list" -> TradingToolHandlers.playbookList(svc)
++            "trading_playbook_propose" -> TradingToolHandlers.playbookPropose(svc, a)
++            "trading_playbook_set_enabled" -> TradingToolHandlers.playbookSetEnabled(svc, a.optString("id"), a.optBoolean("enabled", true))
++            "trading_match_setups" -> TradingToolHandlers.matchSetups(svc)
++            "trading_strategy_note" -> TradingToolHandlers.strategyNote(svc, a)
++            "bybit_public_kline" -> TradingToolHandlers.publicKline(svc, a.optString("symbol"), a.optString("interval", "60"), a.optInt("limit", 50))
++            "bybit_place_order" -> TradingToolHandlers.placeOrder(svc, ui, a)
++            "bybit_cancel_order" -> TradingToolHandlers.cancelOrders(svc, ui)
+
+Apply this 10-line insertion in Agent.kt tool when-branch (after trade_history_summary).
+TradingToolHandlers.kt is already on this branch.
