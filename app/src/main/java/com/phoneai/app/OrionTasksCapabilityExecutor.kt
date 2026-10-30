@@ -27,9 +27,11 @@ internal object OrionTasksCapabilityExecutor {
     fun resumeInstruction(service: Context): String? = AgentCheckpointStore.resumeInstruction(service)
     fun markRunning(service: Context): Boolean = AgentCheckpointStore.markRunning(service)
     fun beginRun(service: Context, command: String): Boolean = AgentCheckpointStore.begin(service, command)
-    fun pauseRun(service: Context): Boolean {
+    fun pauseRun(service: Context, notifyFailure: Boolean = false): Boolean {
         val paused = AgentCheckpointStore.pause(service)
-        if (paused) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = false) }
+        // A user stop, step-budget pause, or handoff is not a task failure.
+        // Only callers that classified an actual failed action opt into failure notification.
+        if (paused && notifyFailure) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = false) }
         return paused
     }
     fun beginStep(service: Context, tool: String, args: JSONObject): Boolean =
