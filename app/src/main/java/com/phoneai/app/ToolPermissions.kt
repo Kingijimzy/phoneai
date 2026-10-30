@@ -29,6 +29,15 @@ internal object ToolPermissionPolicy {
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode =
         if (tool in alwaysAllowed) ToolMode.ALLOW else map[tool] ?: ToolMode.ALLOW
 
+    /** Apply user overrides after the selected preset; explicit ALLOW is a real override too. */
+    fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> {
+        val registered = tools.map { it.name }.toSet() - alwaysAllowed
+        return preset(level, tools) + overrides.filterKeys { it in registered }
+    }
+
+    fun serializeOverrides(map: Map<String, ToolMode>): String =
+        JSONObject().also { o -> map.forEach { (k, v) -> if (k !in alwaysAllowed) o.put(k, v.name) } }.toString()
+
     fun next(m: ToolMode): ToolMode = when (m) { ToolMode.ALLOW -> ToolMode.ASK; ToolMode.ASK -> ToolMode.DENY; ToolMode.DENY -> ToolMode.ALLOW }
 
     fun serialize(map: Map<String, ToolMode>): String =
@@ -48,13 +57,52 @@ object ToolPermissions {
     internal fun map(c: Context): Map<String, ToolMode> = ToolPermissionPolicy.parse(sp(c).getString("tool_modes", "{}"))
     internal fun mode(c: Context, tool: String): ToolMode = ToolPermissionPolicy.modeOf(map(c), tool)
     internal fun set(c: Context, m: Map<String, ToolMode>) { sp(c).edit().putString("tool_modes", ToolPermissionPolicy.serialize(m)).apply() }
+
     fun level(c: Context): String = sp(c).getString("tool_level", "balanced") ?: "balanced"
-    internal fun applyLevel(c: Context, level: String) {
-        sp(c).edit().putString("tool_level", level).apply()
-        set(c, ToolPermissionPolicy.preset(level))
+
+    private fun baseLevel(c: Context): String {
+        val p = sp(c)
+        val saved = p.getString("tool_base_level", null)
+        if (!saved.isNullOrBlank()) return saved
+        val current = p.getString("tool_level", "balanced") ?: "balanced"
+        return if (current == "custom") "balanced" else current
     }
+
+    private fun overrides(c: Context): Map<String, ToolMode> {
+        val p = sp(c)
+        if (p.contains("tool_overrides")) return ToolPermissionPolicy.parse(p.getString("tool_overrides", "{}"))
+        // One-time migration: older builds stored a flattened effective map after the user
+        // edited a single tool. Preserve those choices rather than silently discarding them.
+        return if (p.getString("tool_level", "balanced") == "custom") {
+            ToolPermissionPolicy.parse(p.getString("tool_modes", "{}"))
+        } else emptyMap()
+    }
+
+    internal fun applyLevel(c: Context, level: String) {
+        val p = sp(c)
+        val selected = level.takeIf { it in ToolPermissionPolicy.levels } ?: "balanced"
+        val userOverrides = overrides(c)
+        val effective = ToolPermissionPolicy.applyPreset(selected, userOverrides)
+        p.edit()
+            .putString("tool_level", selected)
+            .putString("tool_base_level", selected)
+            .putString("tool_overrides", ToolPermissionPolicy.serializeOverrides(userOverrides))
+            .putString("tool_modes", ToolPermissionPolicy.serialize(effective))
+            .apply()
+    }
+
     internal fun cycle(c: Context, tool: String) {
-        val m = map(c).toMutableMap(); m[tool] = ToolPermissionPolicy.next(ToolPermissionPolicy.modeOf(m, tool)); set(c, m)
-        sp(c).edit().putString("tool_level", "custom").apply()
+        val p = sp(c)
+        val base = baseLevel(c)
+        val userOverrides = overrides(c).toMutableMap()
+        val effective = ToolPermissionPolicy.applyPreset(base, userOverrides)
+        userOverrides[tool] = ToolPermissionPolicy.next(ToolPermissionPolicy.modeOf(effective, tool))
+        val updated = ToolPermissionPolicy.applyPreset(base, userOverrides)
+        p.edit()
+            .putString("tool_level", "custom")
+            .putString("tool_base_level", base)
+            .putString("tool_overrides", ToolPermissionPolicy.serializeOverrides(userOverrides))
+            .putString("tool_modes", ToolPermissionPolicy.serialize(updated))
+            .apply()
     }
 }
