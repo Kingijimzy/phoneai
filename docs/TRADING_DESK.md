@@ -2,21 +2,19 @@
 
 Permissioned trader companion on top of existing `TradingActivity`, `Bybit`, `WatchService`, and `TradeHistoryStore`.
 
-## What already existed on main
+## Branch status (`feature/trading-desk-phase-a`)
 
-- Bybit V5 public tickers/klines + signed balance/positions/**order**/cancel/close
-- Trading settings UI (keys, testnet, read-only, max order, watchlist, CSV import)
-- Background market watch service
-
-## What this branch adds
-
-| Piece | Role |
-|--------|------|
-| `trading_research` vs `trading_execution` packs | Research default-on; execution opt-in |
-| GatePolicy | Research never places orders; execution needs approval/trust |
-| TradingPlaybook / TradingMatcher / TradingRiskPolicy | Pure strategy + setup match + risk envelope |
-| TradingDeskStore | Playbook candidates/rules + risk bridge to Prefs |
-| TradingExecution | **Only** gateway before `Bybit.order` |
+| Piece | Status |
+|--------|--------|
+| `trading_research` / `trading_execution` packs | Done |
+| GatePolicy order rules | Done |
+| Playbook / Matcher / Risk pure modules | Done |
+| `TradingDeskStore` + `TradingExecution` | Done |
+| `TradingToolHandlers` + `ToolRegistry` | Done |
+| **Agent.kt dispatch** | **Done** (wired to handlers) |
+| TradingActivity playbook UI | Done |
+| Forex execution | Not started |
+| Device testnet proof | Not done |
 
 ## How to trade safely
 
@@ -28,17 +26,19 @@ Permissioned trader companion on top of existing `TradingActivity`, `Bybit`, `Wa
 
 ## Strategy learning
 
-1. Describe a chart / result → `TradingPlaybook.candidateFromNote`
-2. Store via `TradingDeskStore.proposeCandidate`
-3. User Accept → enabled rule
-4. `TradingDeskStore.matchWatchlist` scores rules against live Bybit public data
+1. Chat: strategy note / chart note → `trading_strategy_note`
+2. Pending candidate stored locally
+3. Trading screen → **Accept** → enabled rule
+4. **Match now** or `trading_match_setups` scores vs watchlist
 
-## Forex
+## Agent tools (chat)
 
-Not live yet. Same packs/gates later with a real broker adapter — no password scrape.
+Research: `bybit_public_ticker`, `bybit_public_kline`, watchlist, playbook, match, strategy note, trade history.
+
+Execution (pack + confirm): `bybit_place_order`, `bybit_cancel_order`.
 
 ## Honesty
 
-- CI unit tests cover pure policy/matcher/risk.
-- Device verification of live orders is still on you (testnet first).
-- Do not claim auto-trade; confirmation remains required unless Trusted session covers execution.
+- Do not claim auto-trade.
+- Confirmation remains required unless Trusted session covers execution.
+- Testnet first on device before real money.
