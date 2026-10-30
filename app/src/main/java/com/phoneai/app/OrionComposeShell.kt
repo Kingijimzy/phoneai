@@ -404,10 +404,10 @@ private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
     ) {
         PageHeading("Settings", "Choose one settings area at a time. Each shortcut opens its own section.")
         Text("AI & MODELS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Providers & model selection", "API connections, chat model, vision model and fallback", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
+        ActionRow("Providers & model selection", "Dedicated controls for API connections, chat model, vision model and fallback", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
         Text("VOICE & INTERACTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        ActionRow("Voice, wake word & speech", "Microphone, offline speech, neural voice and live-call controls", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
-        ActionRow("Response style & character", "Personality, language and response presentation", Icons.Rounded.SmartToy) { onOpenSettings("character") }
+        ActionRow("Voice, wake word & speech", "Dedicated voice page for microphone, speech and live-call controls", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
+        ActionRow("Response style & character", "Dedicated character page for personality and response presentation", Icons.Rounded.SmartToy) { onOpenSettings("character") }
         Text("MEMORY & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         ActionRow("Memory & routines", "Review saved memory, routines and learning controls", Icons.Rounded.Memory) { onOpenSettings("memory") }
         ActionRow("Skill Studio", "Manage registered skills and reusable procedures", Icons.Rounded.AutoAwesome) { onOpenSettings("skills") }
