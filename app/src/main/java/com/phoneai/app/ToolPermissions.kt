@@ -58,7 +58,8 @@ object ToolPermissions {
     internal fun mode(c: Context, tool: String): ToolMode = ToolPermissionPolicy.modeOf(map(c), tool)
     internal fun set(c: Context, m: Map<String, ToolMode>) { sp(c).edit().putString("tool_modes", ToolPermissionPolicy.serialize(m)).apply() }
 
-    fun level(c: Context): String = sp(c).getString("tool_level", "balanced") ?: "balanced"
+    /** Return the selected preset even when the UI labels the effective per-tool map as custom. */
+    fun level(c: Context): String = baseLevel(c)
 
     private fun baseLevel(c: Context): String {
         val p = sp(c)

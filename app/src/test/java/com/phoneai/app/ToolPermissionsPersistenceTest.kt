@@ -48,6 +48,15 @@ class ToolPermissionsPersistenceTest {
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
+    @Test fun autonomousBaseRemainsActiveAfterPerToolOverride() {
+        ToolPermissions.applyLevel(context, "autonomous")
+        assertEquals("autonomous", ToolPermissions.level(context))
+
+        ToolPermissions.cycle(context, writeTool) // ALLOW -> ASK
+        assertEquals("autonomous", ToolPermissions.level(context))
+        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
+    }
+
     @Test fun legacyCustomToolMapIsMigratedAsOverrides() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
             .putString("tool_level", "custom")
