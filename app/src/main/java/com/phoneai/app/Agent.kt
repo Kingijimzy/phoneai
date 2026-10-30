@@ -2155,9 +2155,14 @@ Rules:
         return if (x == null || y == null) "error: need $kx and $ky" else f(x, y)
     }
 
-    /** Direct read-only research shortcuts share the same executor as model-planned tools. */
+    /** Direct read-only research shortcuts share the same adapter and executor path as model-planned tools. */
     private fun research(tool: String, args: JSONObject): String =
-        OrionResearchCapabilityExecutor.execute(tool, args, svc, tools, researchCancelled)
+        OrionCapabilityAdapters.dispatch(tool, args) { route, routedArgs ->
+            OrionRuntimeCapabilityExecutor.execute(
+                route.backend, route.tool, routedArgs, svc, tools, { stopped },
+                researchCancelled = researchCancelled
+            ) ?: "error: research route has no concrete runtime executor."
+        }
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
