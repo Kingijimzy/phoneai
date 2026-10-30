@@ -1303,6 +1303,10 @@ Rules:
         val contextualFollowUp = intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
         if (contextualFollowUp && !intentResolution.resolvedObjective.isNullOrBlank()) {
             command = intentResolution.resolvedObjective + "\n\nCURRENT FOLLOW-UP INSTRUCTION: " + command
+            if (currentTask.isBlank() && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
+                currentTask = intentResolution.resolvedObjective
+            }
+            if (runStartedAt <= 0L) runStartedAt = System.currentTimeMillis()
         }
         // Persist only actual tool-agent objectives; shared context generation is side-effect free.
 
@@ -1318,8 +1322,7 @@ Rules:
             }
             askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
-        val resumeRequest = Regex("(?i)^(continue|resume|continue task|resume task|keep going|continue where you left off)$").matches(inputCommand.trim()) &&
-            OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
+        val resumeRequest = contextualFollowUp && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
         if (!resumeRequest) {
             failedCallGuard.clear()
             // Proofs belong to one task only. Reusing a previous task's success could
@@ -1363,7 +1366,7 @@ Rules:
                 runTools = 0
                 runFailed = 0
             }
-            command = instruction
+            command = instruction + "\n\nCURRENT FOLLOW-UP INSTRUCTION: " + inputCommand.trim()
             if (!OrionTasksCapabilityExecutor.markRunning(svc)) {
                 ui.say("I found the saved task, but could not safely update its recovery checkpoint. I have not resumed actions. Check storage and try again.")
                 return
