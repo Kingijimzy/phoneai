@@ -250,6 +250,28 @@ object McpConnector {
         }
     }
     private fun post(c: Context, payload: JSONObject): JSONObject? {
+        val method = payload.optString("method")
+        val retrySafe = method in setOf("initialize", "notifications/initialized", "tools/list")
+        val maxAttempts = if (retrySafe) 2 else 1
+        var lastError: Exception? = null
+        for (attempt in 0 until maxAttempts) {
+            try {
+                return postOnce(c, payload)
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt + 1 >= maxAttempts || !McpReconnectPolicy.shouldRetry(method, e)) throw e
+                // One short reconnect attempt for handshake/catalogue reads only.
+                // Never retry tools/call: its remote side effect may already have happened.
+                try { Thread.sleep(350L) } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw interrupted
+                }
+            }
+        }
+        throw lastError ?: IllegalStateException("MCP request failed.")
+    }
+
+    private fun postOnce(c: Context, payload: JSONObject): JSONObject? {
         val conn = URL(endpoint(c)).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.connectTimeout = 8000
