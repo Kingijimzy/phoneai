@@ -49,6 +49,18 @@ class OrionEvidenceLedgerTest {
         assertFalse(contents.contains("private text"))
     }
 
+
+    @Test fun policyDenialsAreDurableButNeverCountAsExecutionOrVerification() {
+        val task = "ledger-denied-${System.nanoTime()}"
+        assertTrue(OrionEvidenceLedger.recordBlocked(context, task, "sms", "user_approval_denied",
+            JSONObject().put("text", "private message")))
+        val event = OrionEvidenceLedger.events(context, task).single()
+        assertEquals(OrionEvidenceLedger.Outcome.DENIED, event.outcome)
+        assertFalse(OrionEvidenceLedger.hasVerifiedEvidence(context, task))
+        assertTrue(event.summary.contains("user_approval_denied"))
+        assertFalse(event.summary.contains("private message"))
+    }
+
     @Test fun explicitVerifierPassIsDurableButUnverifiedPassIsNot() {
         val task = "ledger-explicit-pass-${System.nanoTime()}"
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "device", "verify_send", JSONObject(), 1L,
