@@ -107,6 +107,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val extensionTestReports = HashMap<String, ExtensionTestReport>()
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var currentTask = ""
+    private fun evidenceTaskId(): String = AgentCheckpointStore.evidenceTaskId(svc) ?: currentTask
     private val askApproved = HashSet<String>()
     @Volatile private var runStartedAt = 0L
     @Volatile private var runTools = 0
@@ -426,7 +427,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
             runCatching {
                 OrionEvidenceLedger.recordRecovery(
-                    svc, currentTask, tool,
+                    svc, evidenceTaskId(), tool,
                     recovery.strategy.name.lowercase().replace('_', '-'),
                     recovery.reason
                 )
@@ -1729,7 +1730,7 @@ Rules:
                     continue
                 }
                 val runEvidence = taskProofs.snapshot()
-                val durableEvidence = OrionEvidenceLedger.events(svc, currentTask)
+                val durableEvidence = OrionEvidenceLedger.events(svc, evidenceTaskId())
                 val completion = AgentHooks.completionDecision(command, runEvidence, durableEvidence)
                 val outcome = OrionTaskOutcome.reconcile(completion.allowed, runEvidence, runFailed)
                 if (!completion.allowed) {
@@ -2143,7 +2144,7 @@ Rules:
         return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val result = dispatchLegacyTool(route.tool, args)
             val saved = runCatching {
-                OrionEvidenceLedger.recordDispatch(svc, currentTask, route.backend.name.lowercase(), route.tool, args, startedAt, result)
+                OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, result)
             }.getOrDefault(false)
             if (!saved) {
                 // Evidence persistence failure must never be misreported as verified execution.
