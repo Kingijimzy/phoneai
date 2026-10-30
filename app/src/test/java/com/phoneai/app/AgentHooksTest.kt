@@ -6,6 +6,11 @@ import org.junit.Test
 
 class AgentHooksTest {
  @Test fun blocksUnrequestedSend(){assertNotNull(AgentHooks.scopeBlockReason("Open WhatsApp and draft a message","click_text",JSONObject().put("text","Send")))}
+ @Test fun weatherToolCannotHijackUnrelatedEngineeringRequests() {
+  val audit = "ORION full execution reliability audit: test all capabilities and integration tests wherever possible."
+  assertNotNull(AgentHooks.scopeBlockReason(audit, "weather", JSONObject().put("location", "all capabilities and integration tests wherever possible")))
+  assertNull(AgentHooks.scopeBlockReason("What's the weather in Lagos, Nigeria today?", "weather", JSONObject().put("location", "Lagos, Nigeria")))
+ }
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
  @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
   listOf("Do not send this message to Alex","Don't send this message to Alex","Never send this message","Draft a message to Amma without sending","Prepare a reply but do not send it").forEach { request ->
