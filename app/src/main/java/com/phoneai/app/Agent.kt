@@ -1729,7 +1729,8 @@ Rules:
                     continue
                 }
                 val runEvidence = taskProofs.snapshot()
-                val completion = AgentHooks.completionDecision(command, runEvidence)
+                val durableEvidence = OrionEvidenceLedger.events(svc, currentTask)
+                val completion = AgentHooks.completionDecision(command, runEvidence, durableEvidence)
                 val outcome = OrionTaskOutcome.reconcile(completion.allowed, runEvidence, runFailed)
                 if (!completion.allowed) {
                     managedTask = managedTask.block() ?: managedTask
