@@ -176,5 +176,14 @@ class OrionCapabilityAdaptersTest {
         assertEquals(OrionCapabilityAdapters.Backend.UTILITIES, OrionCapabilityAdapters.route("device_location")?.backend)
         assertEquals(OrionCapabilityAdapters.Backend.UTILITIES, OrionCapabilityAdapters.route("wait")?.backend)
     }
+    
+    @Test fun everyTradingReadOnlyRouteHasAConcreteDedicatedExecutor() {
+        val trading = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.TRADING_READONLY }
+        assertEquals(setOf("trade_history_summary"), trading.map { it.tool }.toSet())
+        trading.forEach {
+            assertTrue("Missing trading read-only executor for ${it.tool}", OrionTradingReadOnlyCapabilityExecutor.supports(it.tool))
+        }
+    }
 
 }
