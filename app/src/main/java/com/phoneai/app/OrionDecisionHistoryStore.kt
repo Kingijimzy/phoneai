@@ -85,18 +85,23 @@ internal class OrionDecisionHistoryStore private constructor(context: Context) :
 
     @Synchronized
     fun search(query: String, limit: Int = 12): List<Decision> {
-        val q = query.trim()
-        if (q.isBlank()) return emptyList()
-        val pattern = "%$q%"
+        val terms = Regex("[\\\\p{L}\\\\p{N}_-]{2,}")
+            .findAll(query.lowercase()).map { it.value.take(48) }.distinct().take(8).toList()
+        if (terms.isEmpty()) return emptyList()
+        val clauses = terms.joinToString(" OR ") {
+            "(topic LIKE ? OR statement LIKE ? OR rationale LIKE ? OR rejected_alternative LIKE ? OR rejection_reason LIKE ? OR source_excerpt LIKE ?)"
+        }
+        val args = ArrayList<String>()
+        terms.forEach { term -> repeat(6) { args += "%$term%" } }
+        args += limit.coerceIn(1, 30).toString()
         val out = ArrayList<Decision>()
         readableDatabase.rawQuery(
             """SELECT id,topic,statement,status,rationale,rejected_alternative,rejection_reason,
                source_role,source_session_id,source_turn_id,source_excerpt,supersedes_id,created_at
-               FROM decisions WHERE topic LIKE ? OR statement LIKE ? OR rationale LIKE ? OR rejected_alternative LIKE ?
-               OR rejection_reason LIKE ? OR source_excerpt LIKE ?
+               FROM decisions WHERE $clauses
                ORDER BY CASE status WHEN 'ACCEPTED' THEN 0 WHEN 'UNRESOLVED' THEN 1
                WHEN 'REJECTED' THEN 2 WHEN 'PROPOSED' THEN 3 ELSE 4 END, created_at DESC LIMIT ?""",
-            arrayOf(pattern, pattern, pattern, pattern, pattern, pattern, limit.coerceIn(1, 30).toString())
+            args.toTypedArray()
         ).use { c ->
             while (c.moveToNext()) out += Decision(
                 c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4),
