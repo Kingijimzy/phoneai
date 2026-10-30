@@ -288,12 +288,32 @@ class OwnerControlCenterActivity : Activity() {
             .setNegativeButton("CLOSE", null).show()
     }
 
+    private fun showRuntimeRecoveryQueue() {
+        val runtime = runCatching { OrionRuntime(applicationContext) }.getOrNull()
+        val snapshot = runtime?.snapshot()
+        val pending = runCatching { runtime?.pendingItems().orEmpty() }.getOrDefault(emptyList())
+        val body = buildString {
+            append("Runtime state: ").append(snapshot?.state?.name ?: "UNAVAILABLE")
+            append("\\nQueued items: ").append(snapshot?.queued ?: 0)
+            append("\\nLast event: ").append(snapshot?.lastEvent ?: "unknown")
+            append("\\n\\n")
+            append(pending.ifEmpty { emptyList() }.joinToString("\\n\\n") {
+                "${it.type.name} · ${it.key}\\nAttempts: ${it.attempts} · ${it.checkpoint.take(180)}"
+            }.ifBlank { "No durable runtime work is waiting." })
+            append("\\n\\nInterrupted external actions are reconciled, not blindly replayed.")
+        }
+        AlertDialog.Builder(this).setTitle("Durable recovery queue")
+            .setMessage(body).setPositiveButton("OPEN TASK CENTRE") { _, _ ->
+                startActivity(Intent(this, TaskCenterActivity::class.java))
+            }.setNegativeButton("CLOSE", null).show()
+    }
+
     private fun showRecoveryDials() {
         val current = OrionOwnerDialSettings.read(this)
         val rows = arrayOf(
             "Automatic retry limit: ${current.recoveryMaxAttempts}",
             "Base backoff: ${current.recoveryBackoffSeconds}s",
-            "Open pending recovery queue"
+            "Inspect durable recovery queue"
         )
         AlertDialog.Builder(this).setTitle("Recovery controls")
             .setItems(rows) { _, which ->
@@ -304,7 +324,7 @@ class OwnerControlCenterActivity : Activity() {
                     1 -> chooseInt("Base backoff seconds", listOf(15, 30, 60, 120, 300), current.recoveryBackoffSeconds) { v ->
                         OrionOwnerDialSettings.write(this, current.copy(recoveryBackoffSeconds = v)); AgentPolicy.log(this, "owner-recovery", "backoff", true, "base backoff=$v seconds"); showRecoveryDials()
                     }
-                    2 -> startActivity(Intent(this, TaskCenterActivity::class.java))
+                    2 -> showRuntimeRecoveryQueue()
                 }
             }.setNegativeButton("DONE", null).show()
     }
@@ -329,21 +349,25 @@ class OwnerControlCenterActivity : Activity() {
             .setPositiveButton(if (requested) "STOP WATCHER" else "START WATCHER") { _, _ ->
                 if (requested) {
                     WatchService.stop(this)
-                    OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(watcherEnabled = false))
                     AgentPolicy.log(this, "owner-watcher", "stop", true, "watcher stopped by owner")
                 } else {
                     WatchService.start(this)
                     val started = Prefs.watchOn(this)
-                    OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(watcherEnabled = started))
                     AgentPolicy.log(this, "owner-watcher", "start", started, if (started) "watcher start requested" else "watcher start failed")
                 }
                 showWatcherControls()
             }
-            .setNeutralButton("BACKGROUND SETTINGS") { _, _ ->
+            .setNeutralButton("INTERVAL") { _, _ ->
+                chooseInt("Watcher interval (minutes)", listOf(5, 10, 15, 30, 60, 120), Prefs.watchMinutes(this)) { minutes ->
+                    Prefs.setWatchMinutes(this, minutes)
+                    if (Prefs.watchOn(this)) { WatchService.stop(this); WatchService.start(this) }
+                    showWatcherControls()
+                }
+            }
+            .setNegativeButton("BACKGROUND SETTINGS") { _, _ ->
                 runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
                     .recoverCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
-            }
-            .setNegativeButton("CLOSE", null).show()
+            }.show()
     }
 
     private fun showRegistryAndExtensions() {
