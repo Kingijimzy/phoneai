@@ -159,6 +159,19 @@ class OrionConversationRepository private constructor(context: Context) :
         return result
     }
 
+    /** Most recent conversation turns, used only when a vague reference has no searchable terms. */
+    @Synchronized
+    fun recentHistory(context: Context, limit: Int = 8): List<SearchHit> {
+        migrateLegacy(context)
+        val db = readableDatabase
+        val rows = ArrayList<SearchHit>()
+        val sql = "SELECT m.session_id,m.id,m.role,m.created_at,s.title,m.content FROM messages m JOIN sessions s ON s.id=m.session_id WHERE m.session_id=(SELECT id FROM sessions ORDER BY updated_at DESC LIMIT 1) ORDER BY m.sort_order DESC LIMIT ?"
+        db.rawQuery(sql, arrayOf(limit.coerceIn(1, 12).toString())).use { c ->
+            while (c.moveToNext()) rows += SearchHit(c.getString(0),c.getString(1),c.getString(2),c.getLong(3),c.getString(4),c.getString(5).take(600),"","")
+        }
+        return rows
+    }
+
     /** Record the actual executor result against the active session and objective ID. */
     @Synchronized
     fun recordObjectiveEvidence(context: Context, objectiveId: String, tool: String, outcome: String, summary: String, turnId: String? = null): ObjectiveEvidence? {
