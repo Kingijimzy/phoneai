@@ -1231,6 +1231,17 @@ Rules:
                 ui.say("I could not read the saved task safely. No actions were resumed.")
                 return
             }
+            // Restore the original saved-task identity as well as its recovery instructions.
+            // A fresh Agent instance has no in-memory currentTask, but the checkpoint retains
+            // the exact task prompt needed to reconcile the Task Centre after completion.
+            if (currentTask.isBlank()) {
+                currentTask = AgentCheckpointStore.pending(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: instruction
+            }
+            if (runStartedAt <= 0L) {
+                runStartedAt = System.currentTimeMillis()
+                runTools = 0
+                runFailed = 0
+            }
             command = instruction
             if (!AgentCheckpointStore.markRunning(svc)) {
                 ui.say("I found the saved task, but could not safely update its recovery checkpoint. I have not resumed actions. Check storage and try again.")
