@@ -104,6 +104,26 @@ object RouteMemoryStore {
         .replace(Regex("(?<![A-Za-z0-9])(?:\\+?\\d[\\d ().-]{7,}\\d)(?![A-Za-z0-9])"), "[PHONE]")
         .replace(Regex("\\s+"), " ").trim().take(MAX_LABEL)
 
+    /**
+     * Return only distinct tools whose result contains a post-action verification marker.
+     * A completed checkpoint or non-error response alone is never sufficient learning evidence.
+     */
+    internal fun verifiedToolsForCheckpoint(checkpoint: JSONObject): List<String> {
+        if (checkpoint.optString("status") != "completed") return emptyList()
+        val excluded = setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")
+        val steps = checkpoint.optJSONArray("steps") ?: return emptyList()
+        val verified = linkedSetOf<String>()
+        for (i in 0 until steps.length()) {
+            val step = steps.optJSONObject(i) ?: continue
+            val tool = step.optString("tool").trim()
+            val result = step.optString("result")
+            val proof = result.contains("LOCAL VERIFY PASS:", ignoreCase = true) ||
+                Regex("(?i)\\bPASS: (message sent|email sent|deleted successfully|completed successfully)\\b").containsMatchIn(result)
+            if (proof && tool.isNotBlank() && tool !in excluded) verified += tool
+        }
+        return verified.take(8)
+    }
+
     /** Called only after a task checkpoint has been durably marked completed. */
     fun recordCompleted(c: Context, checkpoint: JSONObject): Boolean = synchronized(lock) {
         if (!Prefs.routeLearning(c)) return@synchronized true
@@ -113,23 +133,14 @@ object RouteMemoryStore {
             if (label.contains(Regex("(?i)\\b(bank|payment|pay money|transfer money|send money|withdraw money|withdrawal amount|deposit money|checkout|trade order|wallet address|password|passcode|enter pin|pin code|otp|login|log in|sign in|security|credential|recovery phrase)\\b"))) {
                 return@synchronized true
             }
-            val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
-            val tools = JSONArray()
-            for (i in 0 until steps.length()) {
-                val step = steps.optJSONObject(i) ?: continue
-                val tool = step.optString("tool", "")
-                val result = step.optString("result", "")
-                if (result.startsWith("error", ignoreCase = true)) continue
-                if (tool.isNotBlank() && tool !in setOf("remember", "update_memory", "forget", "recall", "type", "copy", "sms", "telegram_send", "mcp_call")) {
-                    if (tools.length() == 0 || tools.optString(tools.length() - 1) != tool) tools.put(tool.take(80))
-                }
-            }
-            // A one-tool observation is not enough to infer a reusable procedure.
-            // This remains an observed route candidate, not independently verified success.
-            if (label.isBlank() || tools.length() < 2) return@synchronized true
+            val verifiedTools = verifiedToolsForCheckpoint(checkpoint)
+            // Two distinct post-action verifications are the minimum for a reusable procedure.
+            if (label.isBlank() || verifiedTools.size < 2) return@synchronized true
+            val tools = JSONArray(verifiedTools.map { it.take(80) })
             val routes = read(c)
             routes.put(JSONObject().put("task", label).put("tools", tools)
-                .put("evidence", "completed_checkpoint_candidate").put("at", System.currentTimeMillis()))
+                .put("evidence", "independently_verified_completed_task")
+                .put("verificationCount", verifiedTools.size).put("at", System.currentTimeMillis()))
             while (routes.length() > MAX_ROUTES) routes.remove(0)
             write(c, routes)
         } catch (_: Exception) {
@@ -170,7 +181,7 @@ object RouteMemoryStore {
             try {
                 val words = request.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 3 }.toSet()
                 val routes = read(c)
-                val matches = (0 until routes.length()).mapNotNull { routes.optJSONObject(it) }
+                val matches = (0 until routes.length()).mapNotNull { routes.optJSONObject(it) }\n                    .filter { it.optString("evidence") == "independently_verified_completed_task" }
                     .mapNotNull { route ->
                         val label = route.optString("task")
                         val overlap = words.count { label.lowercase().contains(it) }
@@ -181,7 +192,7 @@ object RouteMemoryStore {
                 if (matches.isEmpty()) "" else matches.joinToString("\\n") { (route, _, _) ->
                     val names = route.optJSONArray("tools") ?: JSONArray()
                     val sequence = (0 until names.length()).joinToString(" → ") { names.optString(it) }
-                    "- Similar task with a completed checkpoint (route not independently verified): ${route.optString("task").take(MAX_LABEL)}; observed tool sequence: ${sequence.take(280)}"
+                    "- Similar task with independently verified completion evidence: ${route.optString("task").take(MAX_LABEL)}; observed verified tool sequence: ${sequence.take(280)}. Re-check live state before reuse."
                 }
             } catch (_: Exception) {
                 ""
