@@ -41,7 +41,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private lateinit var providerModelChip: TextView
     private lateinit var input: EditText
     private lateinit var send: TextView
-    private lateinit var stop: TextView
+    private lateinit var stop: LinearLayout
     private val selectedImageUris = mutableListOf<Uri>()
     private var selectedDocumentName: String? = null
     private var selectedDocumentText: String? = null
@@ -687,7 +687,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 background = rounded(0xFF151515.toInt(), 20, 0xFF303030.toInt())
             }
             empty.tag = "no saved conversations yet"
-            empty.addView(label("◷", 34f, 0xFFBDBDBD.toInt(), true).apply { gravity = Gravity.CENTER })
+            empty.addView(OrionIconView(this@MainChatActivity).apply {
+                icon = "history"
+                tint = Theme.SILVER
+                contentDescription = "Chat history"
+            }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { gravity = Gravity.CENTER })
             empty.addView(label("No saved conversations yet", 18f, 0xFFF1F1F1.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)) })
             empty.addView(label("When you start a new chat, Orion keeps the previous conversation here.", 13f, 0xFF9B9B9B.toInt()).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER })
             rows.addView(empty, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -1012,15 +1016,22 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         titleCol.addView(personality)
         refreshPersonalityLabel(personality)
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        stop = label("STOP", 9f, Theme.CYAN, true).apply {
+        stop = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
-            background = rounded(0xFF1D1D1D.toInt(), 14, 0xFF7B7B7B.toInt())
+            background = rounded(0xFF1D1D1D.toInt(), 14, Theme.LINE_STRONG)
             setPadding(dp(11), dp(10), dp(11), dp(10))
+            isClickable = true
+            isFocusable = true
             visibility = View.GONE
+            addView(OrionIconView(this@MainChatActivity).apply {
+                icon = "stop"
+                tint = Theme.SILVER
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(20), dp(20)))
             setOnClickListener {
                 PhoneAiService.instance?.stopCurrentTask()
-                text = "…"
                 isEnabled = false
                 Toast.makeText(this@MainChatActivity, "Asked Orion to stop.", Toast.LENGTH_SHORT).show()
             }
@@ -2063,7 +2074,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
-            stop.text = "■"
+            // The stop control keeps its vector stop glyph; only enabled state changes.
             if (busy) {
                 stop.animate().cancel()
                 stop.scaleX = .94f

@@ -74,7 +74,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
 
     private fun control(text: String, primary: Boolean = false, action: () -> Unit): TextView =
-        label(text, 13f, if (primary) Color.BLACK else 0xFFF3FFF9.toInt(), true).apply {
+        label(text, 13f, if (primary) Color.BLACK else Theme.TEXT, true).apply {
             minHeight = dp(48)
             setPadding(dp(18), dp(10), dp(18), dp(10))
             background = GradientDrawable().apply {
