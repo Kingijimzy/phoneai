@@ -351,7 +351,19 @@ class TaskCenterActivity : Activity() {
         card.addView(head)
         if (task.details.isNotBlank()) add(card, label(task.details, 12f, Theme.MUTED), 7)
         if (task.resultSummary.isNotBlank()) {
-            add(card, label("VERIFIED RESULT", 10f, Theme.OK, true), 8)
+            val resultLabel = when (task.status) {
+                "completed", "done" -> "VERIFIED RESULT"
+                "paused" -> "SAVED CHECKPOINT"
+                "failed" -> "EXECUTION OUTCOME"
+                else -> "LATEST RESULT"
+            }
+            val resultColor = when (task.status) {
+                "completed", "done" -> Theme.OK
+                "paused" -> 0xFFFFCF70.toInt()
+                "failed" -> 0xFFFF8D8D.toInt()
+                else -> Theme.MUTED
+            }
+            add(card, label(resultLabel, 10f, resultColor, true), 8)
             add(card, label(task.resultSummary, 12f, Theme.MUTED), 3)
         }
         add(card, label((task.dueAt?.let { "Due " + time(it) } ?: "No due date") + " · Updated " + time(task.updatedAt),
@@ -551,9 +563,9 @@ class TaskCenterActivity : Activity() {
     private fun statusExplanation(task: OrionTask) = when (task.status) {
         "queued", "open" -> "Saved and waiting; this task is not executing."
         "running", "in_progress" -> "Marked running on the task board; check the agent session for live execution."
-        "paused" -> "Paused; saved task details remain available to resume."
+        "paused" -> if (task.resultSummary.isNotBlank()) "Paused with a saved execution checkpoint; inspect any uncertain action before resuming." else "Paused; saved task details remain available to resume."
         "completed", "done" -> if (task.resultSummary.isNotBlank()) "Agent completion gate passed; review the attached result summary." else "Marked complete manually; no agent completion evidence is attached."
-        "failed" -> "Marked failed; inspect the activity log before retrying."
+        "failed" -> if (task.resultSummary.isNotBlank()) "Execution ended without verified completion; review the outcome before retrying." else "Marked failed; inspect the activity log before retrying."
         "cancelled" -> "Cancelled; no further task-board progress is expected."
         else -> "Status is saved locally; inspect the task session for execution evidence."
     }
