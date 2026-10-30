@@ -2188,17 +2188,18 @@ Rules:
             svc.currentPackageName(),
             svc.currentAppLabel()
         )
-        if (safetyBlock != null) return "error: safety gate blocked action. $safetyBlock"
+        if (safetyBlock != null) { recordDispatchBlocked(tool, a, "safety_gate_denied"); return "error: safety gate blocked action. $safetyBlock" }
         val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
         if (tool in screenSensitiveActions) {
             val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
             if (SafetyGate.isSensitiveActionScreen(currentScreen, svc.currentPackageName())) {
+                recordDispatchBlocked(tool, a, "sensitive_screen_interaction_denied")
                 return "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
             }
         }
         if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
             val browserBlock = BrowserAutomation.sensitivePageReason()
-            if (browserBlock != null) return "error: safety gate blocked browser action. $browserBlock"
+            if (browserBlock != null) { recordDispatchBlocked(tool, a, "sensitive_browser_page_denied"); return "error: safety gate blocked browser action. $browserBlock" }
         }
         val skillId = activeSkillId
         if (skillId != null) {
@@ -2206,11 +2207,12 @@ Rules:
             var decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, false)
             if (!decision.allowed && decision.reason.contains("approval", ignoreCase = true)) {
                 if (!confirm("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
+                    recordDispatchBlocked(tool, a, "skill_approval_declined")
                     return "error: user denied skill action"
                 }
                 decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, true)
             }
-            if (!decision.allowed) return "error: skill blocked: " + decision.reason
+            if (!decision.allowed) { recordDispatchBlocked(tool, a, "skill_authorization_denied"); return "error: skill blocked: " + decision.reason }
             activeSkillCalls++
         }
         val result = when (tool) {
