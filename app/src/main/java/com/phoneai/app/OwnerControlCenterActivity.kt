@@ -235,7 +235,7 @@ class OwnerControlCenterActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Autonomy budgets & notifications")
             .setItems(choices) { _, index ->
                 when (index) {
-                    0 -> chooseInt("Maximum tool steps", steps.toList(), current.maxToolSteps) { v -> OrionAutonomySettings.write(this, current.copy(maxToolSteps = v)); showAutonomyBudgets() }
+                    0 -> chooseInt("Maximum tool steps", steps.toList(), current.maxToolSteps) { v -> OrionAutonomySettings.write(this, current.copy(maxToolSteps = v)); AgentPolicy.setBudgets(this, v, AgentPolicy.maxCalls(this), AgentPolicy.maxMinutes(this)); showAutonomyBudgets() }
                     1 -> chooseInt("Maximum AI requests", requests.toList(), current.maxAiRequests) { v -> OrionAutonomySettings.write(this, current.copy(maxAiRequests = v)); showAutonomyBudgets() }
                     2 -> chooseInt("Maximum retries", retries.toList(), current.maxRetries) { v -> OrionAutonomySettings.write(this, current.copy(maxRetries = v)); showAutonomyBudgets() }
                     3 -> { OrionAutonomySettings.write(this, current.copy(notifyOnCompletion = !current.notifyOnCompletion)); showAutonomyBudgets() }
