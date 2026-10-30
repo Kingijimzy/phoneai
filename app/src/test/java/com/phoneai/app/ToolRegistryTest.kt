@@ -21,6 +21,16 @@ class ToolRegistryTest {
     }
 
 
+    @Test fun tradingDeskToolsAreRegisteredWithSafeAccess() {
+        listOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_list").forEach {
+            assertEquals(it, ToolAccess.READ, ToolRegistry.access(it))
+            assertEquals("trading_research", AgentPolicy.packForTool(it))
+        }
+        listOf("strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch").forEach {
+            assertEquals(it, ToolAccess.WRITE, ToolRegistry.access(it))
+        }
+    }
+
     @Test fun everyRegisteredToolMapsToAnExistingCapabilityPack() {
         val knownPacks = AgentPolicy.packs.map { it.id }.toSet()
         ToolRegistry.all.forEach { tool ->
