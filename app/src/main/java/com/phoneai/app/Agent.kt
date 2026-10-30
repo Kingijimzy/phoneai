@@ -2165,8 +2165,10 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
         return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
-            val backendResult = runCatching { dispatchLegacyTool(route.tool, args) }
-                .getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
+            val backendResult = runCatching {
+                OrionRuntimeCapabilityExecutor.execute(route.backend, route.tool, args, svc, tools) { stopped }
+                    ?: dispatchLegacyTool(route.tool, args)
+            }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
                 OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, backendResult)
             }.getOrDefault(false)
@@ -2329,8 +2331,6 @@ Rules:
             "media_status" -> OrionNotificationListener.mediaStatus()
             "media_control" -> OrionNotificationListener.controlMedia(a.optString("action"))
             "resolve_contact" -> tools.resolveContact(a.optString("name"))
-            "find_files" -> tools.findFiles(a.optString("query"))
-            "open_file" -> tools.openFile(a.optString("id"))
             "list_apps" -> tools.listApps()
             "list_app_deeplinks" -> tools.listAppDeepLinks(a.optString("scheme"))
             "read_screen" -> svc.readScreen().also { lastScreenSnapshot = it }
@@ -2468,7 +2468,6 @@ Rules:
             "copy" -> tools.copy(a.optString("text"))
             "battery" -> tools.battery()
             "time" -> tools.time()
-            "termux_command" -> TermuxBridgeRunner.executeReadOnly(svc, a.optString("command")) { stopped }
             "trade_history_summary" -> TradeHistoryStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent imported records:\n" + TradeHistoryStore.recentText(svc, 15) else ""
             "gaming_session_summary" -> GameCoachStore.summaryText(svc) + if (a.optBoolean("recent", false)) "\n\nRecent notes:\n" + GameCoachStore.all(svc).take(12).joinToString("\n") { "${it.game} · ${it.durationMinutes} min · ${it.result} · ${it.note}" } else ""
             "gaming_session_note_add" -> if (GameCoachStore.add(svc, a.optString("game"), a.optString("note"), a.optInt("duration_minutes", 0), a.optString("result"))) "Session note saved locally." else "error: could not save note; provide a game and a non-empty note."
@@ -2517,10 +2516,6 @@ Rules:
             "recall" -> tools.recall(a.optString("query"))
             "knowledge_search" -> tools.knowledgeSearch(a.optString("query"))
             "ask_agent" -> tools.askAgent(a.optString("agent"), a.optString("task"))
-            "shell" -> tools.shell(a.optString("command"), a.optString("where"))
-            "python_exec" -> tools.pythonExec(a.optString("code"))
-            "workspace_write" -> ShellRunner.writeFile(svc, a.optString("path"), a.optString("content"))
-            "workspace_read" -> ShellRunner.readFile(svc, a.optString("path"))
             "service_status" -> tools.serviceStatus()
             "connect_service" -> tools.connectService(a.optString("service"))
             "github_account_read" -> githubAccountRead(a.optString("path"))
