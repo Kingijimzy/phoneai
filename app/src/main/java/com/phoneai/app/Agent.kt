@@ -2266,7 +2266,8 @@ Rules:
     private fun play(goal: String, steps: Int): String {
         if (goal.isBlank()) return "error: a goal is required"
         var note = ""
-        val n = steps.coerceIn(1, 40)
+        val requestedSteps = steps.coerceIn(1, 40)
+        val n = minOf(requestedSteps, OrionAutonomySettings.read(svc).maxToolSteps.coerceIn(1, 40))
         for (i in 1..n) {
             if (stopped) return "stopped at step $i"
             if (!reserveVisionStep()) {
@@ -2296,7 +2297,7 @@ Rules:
                 when (actionText) {
                     "click" -> {
                         val id = stepText.optInt("id", -1)
-                        val result = svc.clickId(id)
+                        val result = executeWithRecoveryGuard("click", JSONObject().put("id", id))
                         if (result.startsWith("error", true)) return "screen-map action failed: $result"
                         note = "Previous step: clicked element $id"
                         Thread.sleep(700)
@@ -2335,21 +2336,26 @@ Rules:
                 "tap" -> {
                     val x = px("x", shot.w) ?: return "vision stopped: invalid tap coordinates"
                     val y = px("y", shot.h) ?: return "vision stopped: invalid tap coordinates"
-                    svc.tap(x, y)
+                    val result = executeWithRecoveryGuard("tap", JSONObject().put("x", x).put("y", y))
+                    if (result.startsWith("error", true)) return "vision tap was blocked or unverified: $result"
                 }
                 "swipe" -> {
                     val x1 = px("x", shot.w) ?: return "vision stopped: invalid swipe coordinates"
                     val y1 = px("y", shot.h) ?: return "vision stopped: invalid swipe coordinates"
                     val x2 = px("x2", shot.w) ?: return "vision stopped: invalid swipe coordinates"
                     val y2 = px("y2", shot.h) ?: return "vision stopped: invalid swipe coordinates"
-                    svc.swipe(x1, y1, x2, y2, 400L)
+                    val result = executeWithRecoveryGuard(
+                        "swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2).put("ms", 400L)
+                    )
+                    if (result.startsWith("error", true)) return "vision swipe was blocked or unverified: $result"
                 }
                 "key" -> {
                     val key = step.optString("key", "back").lowercase()
                     if (key !in setOf("back", "home", "enter")) {
                         return "vision stopped: unsupported key action; please handle the screen manually"
                     }
-                    svc.key(key)
+                    val result = executeWithRecoveryGuard("key", JSONObject().put("key", key))
+                    if (result.startsWith("error", true)) return "vision key action was blocked or unverified: $result"
                 }
                 "wait" -> Thread.sleep(700)
                 else -> return "vision stopped: unclear model action; please review the screen manually"
@@ -2358,6 +2364,10 @@ Rules:
             note = "Previous step: $act (${step.optString("thought")})"
             Thread.sleep(700)
         }
-        return "vision reached its $n-step safety limit; review the screen before continuing"
+        return if (n < requestedSteps) {
+            "vision paused at the owner-configured limit of $n action steps; review the screen and start a new run to continue."
+        } else {
+            "vision reached its $n-step safety limit; review the screen before continuing"
+        }
     }
 }
