@@ -194,6 +194,19 @@ class OrionConversationRepositoryTest {
         assertTrue(hit.after.contains("timed out"))
     }
 
+    @Test fun objectiveCompletionRequiresLatestSuccessfulExecutorReceipt() {
+        repository.saveActive(context, listOf("me" to "Complete the release objective", "ai" to "I am validating the release"))
+        val graph = OrionObjectiveGraph.Graph("Release objective", listOf(OrionObjectiveGraph.Objective("release", "Release the build")))
+        assertTrue(OrionObjectiveGraph.save(context, graph))
+        val first = OrionObjectiveGraph.recordExecution(context, "release", "build", "Build output confirms success")
+        assertNotNull(first)
+        val latest = OrionObjectiveGraph.recordExecution(context, "release", "verify_apk", "APK package and signature checks passed")
+        assertNotNull(latest)
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "release", first!!))
+        assertTrue(OrionObjectiveGraph.completeFromEvidence(context, "release", latest!!))
+        assertEquals(OrionObjectiveGraph.Status.COMPLETE, OrionObjectiveGraph.load(context)?.nodes?.single()?.status)
+    }
+
     @Test fun objectiveGraphsRemainScopedToTheirConversationSession() {
         val firstTurns = listOf("me" to "First session task", "ai" to "First session response")
         repository.saveActive(context, firstTurns)
