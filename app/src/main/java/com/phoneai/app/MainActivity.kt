@@ -555,7 +555,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, MemoryActivity::class.java))
         }, 8)
         gap(workspace, action("Skills studio", "Manage Orion's available capabilities") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
+            openSettingsSection("skills")
         }, 8)
 
         val statusCard = LinearLayout(this).apply {
@@ -663,19 +663,19 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, MainChatActivity::class.java))
         }, 15)
         gap(page, action("AI providers & models", "API keys, model selection, vision, quota saving") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "providers"))
+            openSettingsSection("providers")
         }, 15)
         gap(page, action("Voice & character", "Voice, speech speed, avatar, and personality") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "voice"))
+            openSettingsSection("voice")
         })
         gap(page, action("Memory & routines", "Search and manage Orion’s saved local memories") {
             startActivity(Intent(this, MemoryActivity::class.java))
         })
         gap(page, action("Integrations", "Telegram, remote MCP, connection status") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "integrations"))
+            openSettingsSection("integrations")
         })
         gap(page, action("Permissions & diagnostics", "Accessibility, microphone, network and device tools") {
-            startActivity(Intent(this, SettingsActivity::class.java))
+            openSettingsSection(null)
         })
         gap(page, action("Open full-screen chat", "A separate conversation from the quick-command panel") {
             startActivity(Intent(this, MainChatActivity::class.java))
