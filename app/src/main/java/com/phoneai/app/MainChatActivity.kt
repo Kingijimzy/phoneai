@@ -713,6 +713,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
+                top.addView(historyActionButton("Rename") {
+                    showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
+                }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
                 top.addView(historyActionButton("Delete") {
                     AlertDialog.Builder(this@MainChatActivity)
                         .setTitle("Delete this conversation?")
@@ -758,6 +761,50 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
         animateIn(root)
+    }
+
+    private fun showRenameArchivedChatDialog(sessionId: String, currentTitle: String, historyDialog: android.app.Dialog) {
+        val input = EditText(this).apply {
+            setText(currentTitle)
+            setSelection(text.length)
+            hint = "Conversation name"
+            setSingleLine(true)
+            setTextColor(0xFFF1F1F1.toInt())
+            setHintTextColor(0xFF858585.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(0xFF171717.toInt(), 12, 0xFF3A3A3A.toInt())
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), 0)
+            addView(label("Give this saved conversation a name you can recognise later.", 12f, 0xFF9B9B9B.toInt()))
+            addView(input, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(10) })
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Rename conversation")
+            .setView(wrap)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", null)
+            .create().also { renameDialog ->
+                renameDialog.setOnShowListener {
+                    renameDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val title = input.text.toString().trim()
+                        if (title.isBlank()) {
+                            input.error = "Enter a name"
+                            return@setOnClickListener
+                        }
+                        val saved = ChatHistoryStore.renameArchivedById(this, sessionId, title)
+                        if (saved) {
+                            Toast.makeText(this, "Conversation renamed", Toast.LENGTH_SHORT).show()
+                            renameDialog.dismiss()
+                            historyDialog.dismiss()
+                            showChatHistory()
+                        } else {
+                            Toast.makeText(this, "Could not rename this conversation", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }.show()
     }
 
     private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
