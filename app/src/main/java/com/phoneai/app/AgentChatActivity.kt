@@ -112,6 +112,13 @@ class AgentChatActivity : Activity() {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
             fun chip(label: String, click: () -> Unit) = row.addView(smallButton(label, click), LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
             if (agent.id == "coach") {
+            chip("Match playbook") { quick("Match my playbook now: scan every instrument in it, rank what fits my rules, and warn me about news or session problems.") }
+            chip("News & sessions") { quick("What high-impact news and which sessions matter for my playbook pairs in the next 24 hours?") }
+            chip("Simulate") { quick("Simulate my playbook on recent history for the pairs in it and tell me honestly whether the numbers show an edge.") }
+            chip("Forecast") { quick("Give me a forecast for the main pair in my playbook using my strategy, its simulated record, the news calendar and headlines.") }
+            chip("Desk") { startActivity(Intent(this, TradingActivity::class.java)) }
+            chip("Brain") { startActivity(Intent(this, SoulEngineActivity::class.java)) }
+
             chip("Find setups") { quick("Find me the best trade setups on my watchlist right now and judge them against my strategy.") }
             chip("Market outlook") { quick("Give me your outlook for my watchlist: bias, key levels and what would invalidate it.") }
             chip("Daily briefing") { quick("Give me my trading briefing: outlook for my watchlist, the best setups, and one risk to watch today.") }
@@ -316,6 +323,72 @@ class AgentChatActivity : Activity() {
         Motion.enter(card)
     }
 
+    private fun deskCard(title: String, body: String): Pair<LinearLayout, TextView> {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.CYAN) }
+        }
+        card.addView(TextView(this).apply { text = title; textSize = 11f; setTextColor(Theme.CYAN); typeface = Typeface.DEFAULT_BOLD })
+        card.addView(TextView(this).apply { text = body; textSize = 14f; setTextColor(Theme.TEXT); setPadding(0, dp(4), 0, dp(8)) })
+        val status = TextView(this).apply { textSize = 13f; setTextColor(Theme.MUTED); visibility = android.view.View.GONE }
+        return card to status
+    }
+
+    private fun addStrategyCard(st: StrategySpec) {
+        val (card, status) = deskCard("STRATEGY PROPOSAL · your playbook",
+            "${st.name}\n${st.instruments.ifEmpty { listOf("any instrument") }.joinToString(", ")} · ${st.timeframes.ifEmpty { listOf("any timeframe") }.joinToString(", ")} · " +
+                "${st.setupTypes.ifEmpty { listOf("any setup") }.joinToString(", ")} · min R:R ${st.minRewardToRisk}" + (if (st.notes.isNotBlank()) "\n${st.notes}" else ""))
+        fun say(t: String) { status.visibility = android.view.View.VISIBLE; status.text = t }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(smallButton("Accept") { TradingDesk.accept(this, st); say("Added to your playbook. I will track results and watch for matches.") }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+        row.addView(smallButton("Accept & match") {
+            TradingDesk.accept(this, st); say("Added. Matching now…")
+            Thread { val r = try { TradingDesk.scan(this, st.instruments.ifEmpty { TradingDesk.followSymbols(this) }) } catch (e: Exception) { "Match failed: " + (e.message ?: "") }; runOnUiThread { say(r) } }.start()
+        }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+        row.addView(smallButton("Dismiss") { TradingDesk.dismissPending(this, st.name); messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
+        card.addView(row); card.addView(status)
+        messages.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        Motion.enter(card)
+    }
+
+    /** Practice trade (no real money), or the same idea sent to Deriv after the risk gate and a confirmation. */
+    private fun addPaperCard(p: DeskProposals.Paper) {
+        val (card, status) = deskCard("PRACTICE TRADE · no real money", p.summary() + (if (p.note.isNotBlank()) "\n" + p.note else ""))
+        fun say(t: String) { status.visibility = android.view.View.VISIBLE; status.text = t }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(smallButton("Practise it") {
+            say("Opening…")
+            Thread {
+                val args = org.json.JSONObject().put("action", "open").put("symbol", p.symbol).put("side", if (p.long) "buy" else "sell").put("usd", p.usd).put("stop", p.stop).put("setup_type", "coach")
+                p.target?.let { args.put("target", it) }
+                val r = TradingDesk.run(this, "paper_trade", args)
+                runOnUiThread { say(r) }
+            }.start()
+        }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+        if (DerivDesk.hasToken(this) && DerivProtocol.symbolFor(p.symbol) != null) {
+            row.addView(smallButton("Send to Deriv") {
+                say("Checking limits…")
+                Thread {
+                    val r = DerivDesk.trade(this, p) { question ->
+                        val latch = java.util.concurrent.CountDownLatch(1); var ok = false
+                        runOnUiThread {
+                            AlertDialog.Builder(this).setTitle("Confirm Deriv trade").setMessage(question)
+                                .setPositiveButton("Place") { _, _ -> ok = true; latch.countDown() }
+                                .setNegativeButton("Cancel") { _, _ -> latch.countDown() }
+                                .setOnCancelListener { latch.countDown() }.show()
+                        }
+                        latch.await(120, java.util.concurrent.TimeUnit.SECONDS); ok
+                    }
+                    runOnUiThread { say(r) }
+                }.start()
+            }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+        }
+        row.addView(smallButton("Dismiss") { messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
+        card.addView(row); card.addView(status)
+        messages.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        Motion.enter(card)
+    }
+
     private fun pickImage() {
         val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -498,7 +571,13 @@ class AgentChatActivity : Activity() {
         val history = turns.toList()
         Thread {
             var trades: List<TradeProposals.Trade> = emptyList()
-            val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades }.text }
+            var strategies: List<StrategySpec> = emptyList()
+            var papers: List<DeskProposals.Paper> = emptyList()
+            val reply = try { AgentRunner.runFull(this, agent, history, text, image).also {
+                trades = it.trades
+                strategies = it.strategies
+                papers = it.papers
+            }.text }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
                 val finalReply = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
@@ -511,6 +590,8 @@ class AgentChatActivity : Activity() {
                     return@runOnUiThread
                 }
                 trades.forEach { addTradeCard(it) }
+                strategies.forEach { addStrategyCard(it) }
+                papers.forEach { addPaperCard(it) }
                 transitionReply(waiting, finalReply)
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
