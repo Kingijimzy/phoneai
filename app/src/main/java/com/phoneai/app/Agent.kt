@@ -1348,10 +1348,11 @@ Rules:
             return
         }
         val contextualFollowUp = intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE
-        if (contextualFollowUp && !intentResolution.resolvedObjective.isNullOrBlank()) {
-            command = intentResolution.resolvedObjective + "\n\nCURRENT FOLLOW-UP INSTRUCTION: " + command
+        val resolvedObjective = intentResolution.resolvedObjective
+        if (contextualFollowUp && !resolvedObjective.isNullOrBlank()) {
+            command = resolvedObjective + "\n\nCURRENT FOLLOW-UP INSTRUCTION: " + command
             if (currentTask.isBlank() && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
-                currentTask = intentResolution.resolvedObjective
+                currentTask = resolvedObjective
             }
             if (runStartedAt <= 0L) runStartedAt = System.currentTimeMillis()
         }
