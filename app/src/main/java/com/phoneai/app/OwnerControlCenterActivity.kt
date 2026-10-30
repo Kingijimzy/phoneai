@@ -111,6 +111,10 @@ class OwnerControlCenterActivity : Activity() {
         val config = OrionAutonomySettings.read(this)
         addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} retries", 13f, Theme.TEXT, true, 5)
         addButton("Configure autonomy, limits and notifications", true) { showAutonomyControlCenter() }
+        addButton("Extension activation dial") { showExtensionControls() }
+        addButton("Python execution profile") { showPythonProfile() }
+        addButton("Recovery retry and backoff dials") { showRecoveryDials() }
+        addButton("Watcher and Android background controls") { showWatcherControls() }
         addButton("Configure individual tool Allow / Ask / Deny rules") { showToolRules() }
         addButton("Configure agent approval modes and capability packs") {
             startActivity(Intent(this, AgentControlActivity::class.java))
@@ -185,6 +189,151 @@ class OwnerControlCenterActivity : Activity() {
             }
             .setNegativeButton("CLOSE", null)
             .show()
+    }
+
+    private fun showAutonomyControlCenter() {
+        val current = OrionAutonomySettings.read(this)
+        val modes = OrionMode.values()
+        val labels = modes.map { "${it.name} · ${OrionAutonomyPolicy.description(it)}" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Autonomy mode")
+            .setSingleChoiceItems(labels, modes.indexOf(current.mode)) { dialog, which ->
+                val selected = modes[which]
+                OrionAutonomySettings.write(this, current.copy(mode = selected))
+                ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(selected))
+                AgentPolicy.log(this, "owner-autonomy", "mode", true, "mode changed to ${selected.name}")
+                dialog.dismiss()
+                showAutonomyBudgets()
+            }
+            .setNegativeButton("CLOSE", null)
+            .setNeutralButton("BUDGETS") { _, _ -> showAutonomyBudgets() }
+            .show()
+    }
+
+    private fun showAutonomyBudgets() {
+        val current = OrionAutonomySettings.read(this)
+        val steps = intArrayOf(4, 8, 12, 20, 30, 40)
+        val requests = intArrayOf(3, 5, 10, 15, 20, 30)
+        val retries = intArrayOf(0, 1, 2, 3, 4)
+        val choices = arrayOf(
+            "Tool steps: ${current.maxToolSteps}",
+            "AI requests: ${current.maxAiRequests}",
+            "Retries: ${current.maxRetries}",
+            "Completion notifications: ${if (current.notifyOnCompletion) "ON" else "OFF"}",
+            "Failure notifications: ${if (current.notifyOnFailure) "ON" else "OFF"}",
+            "Approval notifications: ${if (current.notifyOnApproval) "ON" else "OFF"}"
+        )
+        AlertDialog.Builder(this).setTitle("Autonomy budgets & notifications")
+            .setItems(choices) { _, index ->
+                when (index) {
+                    0 -> chooseInt("Maximum tool steps", steps.toList(), current.maxToolSteps) { v -> OrionAutonomySettings.write(this, current.copy(maxToolSteps = v)); showAutonomyBudgets() }
+                    1 -> chooseInt("Maximum AI requests", requests.toList(), current.maxAiRequests) { v -> OrionAutonomySettings.write(this, current.copy(maxAiRequests = v)); showAutonomyBudgets() }
+                    2 -> chooseInt("Maximum retries", retries.toList(), current.maxRetries) { v -> OrionAutonomySettings.write(this, current.copy(maxRetries = v)); showAutonomyBudgets() }
+                    3 -> { OrionAutonomySettings.write(this, current.copy(notifyOnCompletion = !current.notifyOnCompletion)); showAutonomyBudgets() }
+                    4 -> { OrionAutonomySettings.write(this, current.copy(notifyOnFailure = !current.notifyOnFailure)); showAutonomyBudgets() }
+                    5 -> { OrionAutonomySettings.write(this, current.copy(notifyOnApproval = !current.notifyOnApproval)); showAutonomyBudgets() }
+                }
+            }.setNegativeButton("DONE", null).show()
+    }
+
+    private fun chooseInt(title: String, values: List<Int>, selected: Int, onChoose: (Int) -> Unit) {
+        AlertDialog.Builder(this).setTitle(title)
+            .setSingleChoiceItems(values.map { it.toString() }.toTypedArray(), values.indexOf(selected).coerceAtLeast(0)) { dialog, which ->
+                onChoose(values[which]); dialog.dismiss()
+            }.setNegativeButton("CANCEL", null).show()
+    }
+
+    private fun showExtensionControls() {
+        val current = OrionOwnerDialSettings.read(this)
+        AlertDialog.Builder(this).setTitle("Extension auto-activation")
+            .setMessage(
+                "Current: ${if (current.autoActivateVerifiedExtensions) "ON" else "OFF"}\n\n" +
+                "When ON, Orion may activate an extension automatically only after its exact source hash passes the restricted Python sandbox tests. " +
+                "This is your advance approval for that narrow promotion step. It does not allow arbitrary code, JavaScript execution, network, files, shell, phone actions, or unregistered tool dispatch. " +
+                "Any source change invalidates the test."
+            )
+            .setNegativeButton("CLOSE", null)
+            .setPositiveButton(if (current.autoActivateVerifiedExtensions) "TURN OFF" else "TURN ON") { _, _ ->
+                OrionOwnerDialSettings.write(this, current.copy(autoActivateVerifiedExtensions = !current.autoActivateVerifiedExtensions))
+                AgentPolicy.log(this, "owner-extension-policy", "auto-activate", true,
+                    if (!current.autoActivateVerifiedExtensions) "owner enabled exact-hash sandbox-tested extension auto-promotion" else "owner disabled extension auto-promotion")
+                Toast.makeText(this, "Extension activation dial updated.", Toast.LENGTH_SHORT).show()
+            }.show()
+    }
+
+    private fun showPythonProfile() {
+        val current = OrionOwnerDialSettings.read(this)
+        val options = arrayOf(
+            "GUARDED · 8,000 characters · explicit approval",
+            "DEVELOPER · 16,000 characters · explicit approval"
+        )
+        AlertDialog.Builder(this).setTitle("Python execution profile")
+            .setMessage("Both profiles retain the bundled restricted interpreter, import/host-access restrictions and explicit approval. There is no safety-off mode.")
+            .setSingleChoiceItems(options, if (current.pythonProfile == OrionPythonProfile.DEVELOPER) 1 else 0) { dialog, which ->
+                val profile = if (which == 1) OrionPythonProfile.DEVELOPER else OrionPythonProfile.GUARDED
+                OrionOwnerDialSettings.write(this, current.copy(pythonProfile = profile))
+                AgentPolicy.log(this, "owner-python-policy", "profile", true, "profile set to ${profile.name}")
+                dialog.dismiss()
+                Toast.makeText(this, "Python profile: ${profile.name}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CLOSE", null).show()
+    }
+
+    private fun showRecoveryDials() {
+        val current = OrionOwnerDialSettings.read(this)
+        val rows = arrayOf(
+            "Automatic retry limit: ${current.recoveryMaxAttempts}",
+            "Base backoff: ${current.recoveryBackoffSeconds}s",
+            "Open pending recovery queue"
+        )
+        AlertDialog.Builder(this).setTitle("Recovery controls")
+            .setItems(rows) { _, which ->
+                when (which) {
+                    0 -> chooseInt("Automatic retry limit", listOf(0, 1, 2, 3, 4), current.recoveryMaxAttempts) { v ->
+                        OrionOwnerDialSettings.write(this, current.copy(recoveryMaxAttempts = v)); AgentPolicy.log(this, "owner-recovery", "max-retries", true, "max retries=$v"); showRecoveryDials()
+                    }
+                    1 -> chooseInt("Base backoff seconds", listOf(15, 30, 60, 120, 300), current.recoveryBackoffSeconds) { v ->
+                        OrionOwnerDialSettings.write(this, current.copy(recoveryBackoffSeconds = v)); AgentPolicy.log(this, "owner-recovery", "backoff", true, "base backoff=$v seconds"); showRecoveryDials()
+                    }
+                    2 -> startActivity(Intent(this, TaskCenterActivity::class.java))
+                }
+            }.setNegativeButton("DONE", null).show()
+    }
+
+    private fun watcherRunning(): Boolean = runCatching {
+        @Suppress("DEPRECATION")
+        (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getRunningServices(Int.MAX_VALUE)
+            .any { it.service.className == WatchService::class.java.name }
+    }.getOrDefault(false)
+
+    private fun showWatcherControls() {
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val running = watcherRunning()
+        val requested = Prefs.watchOn(this)
+        val batteryExempt = if (android.os.Build.VERSION.SDK_INT >= 23) pm.isIgnoringBatteryOptimizations(packageName) else true
+        val message = "Watcher requested: ${if (requested) "ON" else "OFF"}\n" +
+            "Service process visible: ${if (running) "RUNNING" else "NOT RUNNING"}\n" +
+            "Battery optimization exemption: ${if (batteryExempt) "EXEMPT" else "NOT EXEMPT"}\n" +
+            "Android/HyperOS may still stop or defer background work. A running flag is not proof of uninterrupted execution."
+        AlertDialog.Builder(this).setTitle("Watcher & background status")
+            .setMessage(message)
+            .setPositiveButton(if (requested) "STOP WATCHER" else "START WATCHER") { _, _ ->
+                if (requested) {
+                    WatchService.stop(this)
+                    OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(watcherEnabled = false))
+                    AgentPolicy.log(this, "owner-watcher", "stop", true, "watcher stopped by owner")
+                } else {
+                    WatchService.start(this)
+                    val started = Prefs.watchOn(this)
+                    OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(watcherEnabled = started))
+                    AgentPolicy.log(this, "owner-watcher", "start", started, if (started) "watcher start requested" else "watcher start failed")
+                }
+                showWatcherControls()
+            }
+            .setNeutralButton("BACKGROUND SETTINGS") { _, _ ->
+                runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                    .recoverCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
+            }
+            .setNegativeButton("CLOSE", null).show()
     }
 
     private fun showToolRules() {
