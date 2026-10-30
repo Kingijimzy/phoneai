@@ -11,7 +11,7 @@ internal object OrionObjectiveGraph {
     data class Graph(val objective: String, val nodes: List<Objective>, val updatedAt: Long = System.currentTimeMillis()) {
         fun ordered(): List<Objective> = topologicalOrder(nodes)
         fun ready(): List<Objective> = ordered().filter { node ->
-            (node.status == Status.PENDING || node.status == Status.READY) &&
+            (node.status == Status.PENDING || node.status == Status.READY || node.status == Status.BLOCKED || node.status == Status.FAILED) &&
                 node.dependsOn.all { dep -> nodes.firstOrNull { it.id == dep }?.status == Status.COMPLETE }
         }
         fun isComplete(): Boolean = nodes.isNotEmpty() && nodes.all { it.status == Status.COMPLETE }
@@ -89,7 +89,7 @@ internal object OrionObjectiveGraph {
                 else if (prior.status != Status.PENDING && prior.status != Status.READY) prior
                 else node.copy(status = prior.status, evidence = prior.evidence)
             }.toMutableList()
-            old.nodes.filter { it.id !in proposedIds && it.status != Status.PENDING && it.status != Status.READY && !(it.id == "main" && old.nodes.size == 1 && proposed.nodes.size > 1) }.forEach { next += it }
+            old.nodes.filter { it.id !in proposedIds && it.status != Status.PENDING && it.status != Status.READY && !(it.id == "main" && old.nodes.size == 1 && it.status == Status.RUNNING) }.forEach { next += it }
             Graph(objective.trim().take(1000), topologicalOrder(next))
         }
         return if (save(context, merged)) ParseResult.Valid(merged) else ParseResult.Invalid("Objective graph could not be persisted.")
