@@ -119,6 +119,7 @@ internal class SelfExtendingExtensionStore(context: Context) {
     fun saveDraft(extension: GeneratedExtension): Boolean = synchronized(lock) {
         if (SelfExtendingExtensionPolicy.validateIdentity(extension.id, extension.displayName) != null) return@synchronized false
         if (SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source) != null) return@synchronized false
+        if (OrionSecurityPolicy.findEmbeddedSecret(extension.description) != null) return@synchronized false
         if (SelfExtendingExtensionPolicy.sha256(extension.source) != extension.sourceSha256) return@synchronized false
         val current = try { all() } catch (_: Exception) { return@synchronized false }
         if (current.any { it.id == extension.id }) return@synchronized false
