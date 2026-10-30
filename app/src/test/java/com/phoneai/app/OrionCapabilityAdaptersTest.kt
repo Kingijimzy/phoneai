@@ -54,4 +54,24 @@ class OrionCapabilityAdaptersTest {
         }
         assertTrue(result.startsWith("error: mcp adapter failed"))
     }
+
+    @Test fun everyRegisteredToolHasAnExplicitBackendOwner() {
+        assertEquals(ToolRegistry.all.map { it.name }.toSet(), OrionCapabilityAdapters.routes().map { it.tool }.toSet())
+        assertTrue(OrionCapabilityAdapters.routes().none { it.backend == OrionCapabilityAdapters.Backend.CORE })
+    }
+
+    @Test fun integrationMemoryTaskResearchAndUtilityFamiliesAreRoutedExplicitly() {
+        val expected = mapOf(
+            "connect_service" to OrionCapabilityAdapters.Backend.INTEGRATIONS,
+            "remember" to OrionCapabilityAdapters.Backend.MEMORY,
+            "task_add" to OrionCapabilityAdapters.Backend.TASKS,
+            "web_search" to OrionCapabilityAdapters.Backend.RESEARCH,
+            "alarm" to OrionCapabilityAdapters.Backend.UTILITIES,
+            "trade_history_summary" to OrionCapabilityAdapters.Backend.TRADING_READONLY,
+            "gaming_session_summary" to OrionCapabilityAdapters.Backend.GAMING
+        )
+        expected.forEach { (tool, backend) ->
+            assertEquals(tool, backend, OrionCapabilityAdapters.route(tool)?.backend)
+        }
+    }
 }
