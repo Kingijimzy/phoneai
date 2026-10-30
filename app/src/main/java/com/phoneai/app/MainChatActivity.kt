@@ -35,6 +35,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         const val EXTRA_INITIAL_PROMPT = "com.phoneai.app.EXTRA_INITIAL_PROMPT"
         const val EXTRA_FORCE_COMMAND = "com.phoneai.app.EXTRA_FORCE_COMMAND"
         private const val STATE_COMMAND_MODE = "orion_chat_command_mode"
+        private const val STATE_PENDING_INITIAL_PROMPT = "orion_pending_initial_prompt"
         const val EXTRA_OPEN_BROWSER_URL = "com.phoneai.app.EXTRA_OPEN_BROWSER_URL"
     }
     private lateinit var messages: LinearLayout
@@ -49,6 +50,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var selectedDocumentText: String? = null
     private var imagePreviewPanel: LinearLayout? = null
     private var commandMode = false
+    private var pendingInitialPrompt: String? = null
     private lateinit var talkModeChip: LinearLayout
     private lateinit var commandModeChip: LinearLayout
     private lateinit var talkModeIcon: OrionIconView
@@ -119,6 +121,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_COMMAND_MODE, commandMode)
+        pendingInitialPrompt?.let { outState.putString(STATE_PENDING_INITIAL_PROMPT, it) }
         super.onSaveInstanceState(outState)
     }
 
@@ -1050,6 +1053,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         super.onCreate(savedInstanceState)
         commandMode = savedInstanceState?.getBoolean(STATE_COMMAND_MODE)
             ?: intent.getBooleanExtra(EXTRA_FORCE_COMMAND, false)
+        pendingInitialPrompt = savedInstanceState?.getString(STATE_PENDING_INITIAL_PROMPT)
+            ?: intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }
         composeCommandMode.value = commandMode
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
@@ -1526,15 +1531,17 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         // Do not inject a fake assistant turn into a new conversation. Leaving the transcript
         // empty lets OrionComposeChatScreen render its actual welcome/prompts state; restored
         // sessions arrive through onTranscriptRestored from the service.
-        if (savedInstanceState == null) {
-            intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }?.let { initialPrompt ->
-                window.decorView.postDelayed({
-                    if (!isFinishing && !isDestroyed && ::input.isInitialized) {
-                        input.setText(initialPrompt)
-                        sendMessage()
-                    }
-                }, 500L)
-            }
+        pendingInitialPrompt?.let {
+            window.decorView.postDelayed({
+                val initialPrompt = pendingInitialPrompt
+                if (initialPrompt != null && !isFinishing && !isDestroyed && ::input.isInitialized) {
+                    // Clear only when the composer is ready to dispatch. If Android recreates
+                    // this Activity before the callback runs, the pending prompt is saved again.
+                    pendingInitialPrompt = null
+                    input.setText(initialPrompt)
+                    sendMessage()
+                }
+            }, 500L)
         }
         intent.getStringExtra(EXTRA_OPEN_BROWSER_URL)?.takeIf { it.isNotBlank() }?.let { target ->
             window.decorView.post { if (!isFinishing && !isDestroyed) showChatBrowserPopup(target) }
