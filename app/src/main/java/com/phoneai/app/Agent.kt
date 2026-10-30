@@ -1421,9 +1421,9 @@ Rules:
             ui.phase("acting")
             val result = executeWithRecoveryGuard("python_exec", JSONObject().put("code", code))
             val answer = if (result.startsWith("error:", true)) {
-                "I prepared the calculator, but Python execution did not complete: $result\\n\\nCode:\\n$code"
+                "I prepared the calculator, but Python execution did not complete: $result\n\nCode:\n$code"
             } else {
-                "Python calculator code:\\n$code\\n\\nExecution result:\\n$result"
+                "Python calculator code:\n$code\n\nExecution result:\n$result"
             }
             logShortcut("python_calculator_execution", result)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
