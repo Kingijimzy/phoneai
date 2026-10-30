@@ -494,6 +494,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 startActivityForResult(Intent.createChooser(picker, "Attach images to this chat"), 44)
             }
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
+            "orion_hub" -> startActivity(Intent(this, CapabilityBoardActivity::class.java))
             "capabilities" -> showToolCatalog()
             "feedback" -> showFeedbackDialog()
             "notifications" -> openNotificationSettings()
