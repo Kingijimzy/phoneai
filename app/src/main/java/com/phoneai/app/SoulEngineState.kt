@@ -21,9 +21,16 @@ internal object SoulEngineState {
         val createdAt: Long, val updatedAt: Long
     )
     data class Lesson(val id: String, val category: String, val summary: String, val outcome: String, val createdAt: Long)
+    enum class NudgeStatus { PENDING, SAVED, DISMISSED }
+    data class MemoryNudge(
+        val id: String, val category: String, val summary: String, val dedupeKey: String,
+        val status: NudgeStatus, val createdAt: Long, val updatedAt: Long
+    )
+    data class MemoryNudgeRules(val enabled: Boolean, val cooldownMillis: Long, val lastPromptAt: Long)
     data class Snapshot(
         val goal: String, val mode: Mode, val watching: List<String>, val proposals: List<Proposal>,
-        val lessons: List<Lesson>, val lastTick: Long, val lastOutcome: String,
+        val lessons: List<Lesson>, val memoryNudges: List<MemoryNudge>, val memoryNudgeRules: MemoryNudgeRules,
+        val lastTick: Long, val lastOutcome: String,
         val watcherStatus: String, val watcherAction: String, val watcherAt: Long
     )
 
@@ -81,7 +88,8 @@ internal object SoulEngineState {
     fun snapshot(context: Context): Snapshot = synchronized(lock) {
         val o = read(context)
         Snapshot(safeText(o.optString("goal")), runCatching { Mode.valueOf(o.optString("mode", "TALK")) }.getOrDefault(Mode.TALK),
-            strings(o, "watching"), proposals(o), lessons(o), o.optLong("lastTick"), safeText(o.optString("lastOutcome"), 100),
+            strings(o, "watching"), proposals(o), lessons(o), memoryNudges(o), memoryNudgeRules(o),
+            o.optLong("lastTick"), safeText(o.optString("lastOutcome"), 100),
             safeText(o.optString("watcherStatus"), 40), safeText(o.optString("watcherAction"), 100), o.optLong("watcherAt"))
     }
 
@@ -124,6 +132,118 @@ internal object SoulEngineState {
         o.put("lessons", a).put("lastOutcome", safeText(outcome, 60)).put("lastTick", System.currentTimeMillis())
         write(context, o)
     }
+
+
+    private fun memoryNudges(o: JSONObject): List<MemoryNudge> {
+        val a = o.optJSONArray("memoryNudges") ?: JSONArray()
+        return (0 until a.length()).mapNotNull { i ->
+            val n = a.optJSONObject(i) ?: return@mapNotNull null
+            runCatching {
+                MemoryNudge(
+                    n.optString("id"), safeText(n.optString("category"), 60),
+                    safeText(n.optString("summary"), 300), safeText(n.optString("dedupeKey"), 160),
+                    NudgeStatus.valueOf(n.optString("status")), n.optLong("createdAt"), n.optLong("updatedAt")
+                )
+            }.getOrNull()
+        }.takeLast(MAX_ITEMS)
+    }
+
+    private fun memoryNudgeRules(o: JSONObject): MemoryNudgeRules = MemoryNudgeRules(
+        enabled = o.optBoolean("memoryNudgesEnabled", true),
+        cooldownMillis = o.optLong("memoryNudgeCooldownMillis", DEFAULT_NUDGE_COOLDOWN).coerceIn(MIN_NUDGE_COOLDOWN, MAX_NUDGE_COOLDOWN),
+        lastPromptAt = o.optLong("memoryNudgeLastPromptAt", 0L).coerceAtLeast(0L)
+    )
+
+    private const val DEFAULT_NUDGE_COOLDOWN = 24L * 60L * 60L * 1000L
+    private const val MIN_NUDGE_COOLDOWN = 60L * 60L * 1000L
+    private const val MAX_NUDGE_COOLDOWN = 30L * 24L * 60L * 60L * 1000L
+
+
+    /**
+     * Conservative local detector: only explicit memory/preference language is eligible.
+     * It never sends text to a provider and the resulting candidate still requires user review.
+     */
+    fun detectExplicitMemoryCandidate(text: String): Pair<String, String>? {
+        val raw = text.trim()
+        if (raw.length !in 8..500) return null
+        val explicit = Regex("(?i)^(?:please\\s+)?(?:remember|keep in mind|note)\\s+(?:that\\s+)?(?:i\\s+)?|^(?:i\\s+(?:prefer|like|usually|always|want you to|need you to))\\b")
+        if (!explicit.containsMatchIn(raw)) return null
+        val clean = safeText(raw, 300)
+        if (clean.isBlank() || clean == "[sensitive content omitted]") return null
+        val category = when {
+            Regex("(?i)\\b(prefer|like|usually|always)\\b").containsMatchIn(raw) -> "preference"
+            else -> "user instruction"
+        }
+        return category to clean
+    }
+
+    /** Change nudge behavior without deleting existing saved lessons or review history. */
+    fun configureMemoryNudges(context: Context, enabled: Boolean, cooldownMillis: Long): Boolean = synchronized(lock) {
+        val o = read(context)
+        o.put("memoryNudgesEnabled", enabled)
+            .put("memoryNudgeCooldownMillis", cooldownMillis.coerceIn(MIN_NUDGE_COOLDOWN, MAX_NUDGE_COOLDOWN))
+        write(context, o)
+    }
+
+    /**
+     * Queue a sanitized, review-only memory suggestion. The caller should invoke this only for
+     * a candidate fact inferred from explicit user preference or repeated non-sensitive context,
+     * never for credentials, transient secrets, or raw conversation dumps.
+     */
+    fun proposeMemoryNudge(context: Context, category: String, summary: String, dedupeKey: String = summary): Boolean = synchronized(lock) {
+        val cleanSummary = safeText(summary, 300)
+        val cleanCategory = safeText(category, 60)
+        val cleanKey = safeText(dedupeKey, 160).lowercase(Locale.ROOT)
+        if (cleanSummary.isBlank() || cleanSummary == "[sensitive content omitted]" ||
+            cleanKey.isBlank() || cleanKey == "[sensitive content omitted]") return@synchronized false
+        if (Regex("(?i)\\b(bank account|account number|routing number|credit card|debit card|wallet address|seed phrase|recovery phrase|private key|password|passcode|secret|security answer|national id|passport number|one[- ]time code|otp|api[_ -]?key|access token|pin)\\b")
+                .containsMatchIn("$cleanCategory $cleanSummary $cleanKey")) return@synchronized false
+        val o = read(context)
+        val rules = memoryNudgeRules(o)
+        if (!rules.enabled) return@synchronized false
+        val all = memoryNudges(o)
+        // Never resurface a fact that is already pending, saved, or dismissed.
+        if (all.any { it.dedupeKey.equals(cleanKey, true) }) return@synchronized false
+        val now = System.currentTimeMillis()
+        if (rules.lastPromptAt > 0L && now - rules.lastPromptAt < rules.cooldownMillis) return@synchronized false
+        val nudge = MemoryNudge(
+            java.util.UUID.randomUUID().toString(), cleanCategory, cleanSummary, cleanKey,
+            NudgeStatus.PENDING, now, now
+        )
+        o.put("memoryNudges", JSONArray().also { a ->
+            (all + nudge).takeLast(MAX_ITEMS).forEach { a.put(it.json()) }
+        }).put("memoryNudgeLastPromptAt", now).put("lastTick", now)
+        write(context, o)
+    }
+
+    /** Saving converts the reviewed candidate into a sanitized durable lesson. */
+    fun reviewMemoryNudge(context: Context, id: String, status: NudgeStatus): Boolean = synchronized(lock) {
+        if (status !in setOf(NudgeStatus.SAVED, NudgeStatus.DISMISSED)) return@synchronized false
+        val o = read(context)
+        val all = memoryNudges(o)
+        val nudge = all.firstOrNull { it.id == id && it.status == NudgeStatus.PENDING } ?: return@synchronized false
+        val now = System.currentTimeMillis()
+        val updated = nudge.copy(status = status, updatedAt = now)
+        o.put("memoryNudges", JSONArray().also { a ->
+            all.map { if (it.id == id) updated else it }.takeLast(MAX_ITEMS).forEach { a.put(it.json()) }
+        })
+        if (status == NudgeStatus.SAVED) {
+            val old = lessons(o).toMutableList()
+            if (old.none { it.summary.equals(nudge.summary, true) }) {
+                old.add(Lesson(java.util.UUID.randomUUID().toString(), nudge.category, nudge.summary, "user_saved_memory", now))
+                o.put("lessons", JSONArray().also { a ->
+                    old.takeLast(MAX_ITEMS).forEach { a.put(JSONObject().put("id", it.id).put("category", it.category)
+                        .put("summary", it.summary).put("outcome", it.outcome).put("createdAt", it.createdAt)) }
+                })
+            }
+        }
+        o.put("lastOutcome", if (status == NudgeStatus.SAVED) "memory nudge saved" else "memory nudge dismissed")
+            .put("lastTick", now)
+        write(context, o)
+    }
+
+    private fun MemoryNudge.json() = JSONObject().put("id", id).put("category", category).put("summary", summary)
+        .put("dedupeKey", dedupeKey).put("status", status.name).put("createdAt", createdAt).put("updatedAt", updatedAt)
 
     /** Add a sanitized, review-only maintenance proposal from a real watcher finding. */
     fun proposeWatchIssue(context: Context, category: String, issue: String, suggestion: String): Boolean = synchronized(lock) {
