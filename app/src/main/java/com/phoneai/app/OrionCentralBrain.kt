@@ -75,6 +75,63 @@ internal object OrionCentralBrain {
         }.getOrNull()
         checkpointSummary?.let { sections += it }
 
+        // Resolve short follow-ups against the persisted objective before Talk or Command plans.
+        // This joins the original request, transcript evidence, objective graph, checkpoint,
+        // decisions and learned failure corrections into one provider-neutral continuity frame.
+        val pendingTask = runCatching { AgentCheckpointStore.pending(app) }.getOrNull()
+        val savedGraph = runCatching { OrionObjectiveGraph.load(app) }.getOrNull()
+        val savedSoulGoal = runCatching { SoulEngineState.snapshot(app).goal }.getOrDefault("")
+        val activeObjective = pendingTask?.optString("command")?.takeIf { it.isNotBlank() }
+            ?: savedGraph?.objective?.takeIf { it.isNotBlank() }
+            ?: savedSoulGoal
+        val continuity = runCatching {
+            OrionContextualIntentInterpreter.resolve(request, emptyList(), activeObjective)
+        }.getOrNull()
+        val isFollowUp = continuity != null && !continuity.needsClarification &&
+            continuity.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
+            continuity.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
+        val continuityObjective = continuity?.resolvedObjective?.takeIf { isFollowUp }
+            ?: activeObjective.takeIf { isFollowUp }.orEmpty()
+        if (isFollowUp && continuityObjective.isNotBlank()) {
+            val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
+            if (!resume.isNullOrBlank()) {
+                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\\n" + resume.take(5200)
+            }
+            savedGraph?.let { graph ->
+                sections += OrionObjectiveGraph.prompt(graph) +
+                    "\\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+            }
+            val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 5) }.getOrDefault(emptyList())
+            if (discussion.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE (durable transcript evidence)")
+                    discussion.forEach { hit ->
+                        appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp} title=${hit.title}] ${hit.snippet}")
+                        if (hit.before.isNotBlank()) appendLine("preceding turn: ${hit.before}")
+                        if (hit.after.isNotBlank()) appendLine("following turn: ${hit.after}")
+                    }
+                    appendLine("User turns establish requests. Assistant turns provide context only and are never proof that an action succeeded.")
+                }
+            }
+            val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(continuityObjective, 6) }.getOrDefault(emptyList())
+            if (decisions.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("DECISIONS AND UNRESOLVED QUESTIONS FOR THIS OBJECTIVE")
+                    decisions.forEach { d ->
+                        appendLine("- [${d.status}] ${d.topic}: ${d.statement}; rationale=${d.rationale}; rejected=${d.rejectedAlternative}; rejection_reason=${d.rejectionReason}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
+                    }
+                    appendLine("Accepted decisions are user-backed constraints; proposals are not accepted. Superseded decisions are historical only. Unresolved questions remain open. Re-check the current request before applying any old decision.")
+                }
+            }
+        }
+
+        // Retrieve task-specific failure lessons before a similar tool/action is planned.
+        val learnedExperience = runCatching { ExperienceStore.promptBlock(app, request, 5) }.getOrDefault("")
+        if (learnedExperience.isNotBlank()) {
+            sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\\n" + learnedExperience +
+                "\\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
+        }
+
         // Capability gap planning is derived from the same live registries as execution.
         // It prefers reuse and only instructs research/drafting when local evidence is weak.
         runCatching {
