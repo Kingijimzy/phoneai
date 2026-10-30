@@ -240,9 +240,21 @@ class TaskCenterActivity : Activity() {
                         ". Inspect the phone before retrying; Orion must not repeat it blindly."
                 add(card, label("RECOVERY CHECK REQUIRED\n" + warning.take(450), 12f, 0xFFFFCF70.toInt(), true), 8)
             }
+            add(card, button("Stop active run") {
+                // The service owns the live Agent instance. Stop it first, then persist a
+                // paused checkpoint; an in-flight marker is deliberately retained for recovery.
+                val service = PhoneAiService.instance
+                if (service != null) service.stopCurrentTask()
+                if (AgentCheckpointStore.pause(this)) {
+                    Toast.makeText(this, if (service != null) "Run stopped. Progress saved; inspect any in-flight action before resuming." else "Checkpoint paused. No active phone service was connected.", Toast.LENGTH_LONG).show()
+                    refresh()
+                } else {
+                    Toast.makeText(this, "Could not save the paused checkpoint. Check the task before retrying.", Toast.LENGTH_LONG).show()
+                }
+            }, 8)
             add(card, button("Open chat to resume", true) {
                 startActivity(Intent(this, MainChatActivity::class.java))
-            }, 10)
+            }, 8)
             add(listHost, card, 16)
         }
 
