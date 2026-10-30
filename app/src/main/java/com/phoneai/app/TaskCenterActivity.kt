@@ -407,10 +407,14 @@ class TaskCenterActivity : Activity() {
             return
         }
         if (checkpoint == null) {
-            // This task has no linked worker checkpoint. Pause only its board status;
-            // do not claim that an agent or phone action was stopped.
+            val activeService = PhoneAiService.instance
+            if (activeService?.isTaskRunning() == true) {
+                Toast.makeText(this, "Orion is still working, but this task has no linked checkpoint yet. Open chat and use Stop there; this button will not pretend the worker paused.", Toast.LENGTH_LONG).show()
+                return
+            }
+            // No worker is active and no checkpoint exists: this is a board-only status change.
             if (TaskStore.update(this, task.id, status = "paused")) {
-                Toast.makeText(this, "Task moved to Paused. No active execution checkpoint was linked, so no worker was stopped.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Task moved to Paused. No active worker was running.", Toast.LENGTH_LONG).show()
                 refresh()
             } else errorToast()
             return
@@ -432,6 +436,22 @@ class TaskCenterActivity : Activity() {
     private fun openTaskInChat(task: OrionTask) {
         // Opening an already-running task is navigation only; never submit its prompt twice.
         if (task.status == "running" || task.status == "in_progress") {
+            val service = PhoneAiService.instance
+            if (service?.isTaskRunning() != true) {
+                val checkpoint = AgentCheckpointStore.pending(this)
+                val command = checkpoint?.optString("command").orEmpty()
+                if (checkpoint == null) {
+                    if (TaskStore.update(this, task.id, status = "queued")) {
+                        refresh()
+                        Toast.makeText(this, "The previous run is no longer active and has no saved checkpoint. The task was returned to Queued; run it again when ready.", Toast.LENGTH_LONG).show()
+                    } else errorToast()
+                    return
+                }
+                if (!command.contains("saved task #" + task.id, ignoreCase = true)) {
+                    Toast.makeText(this, "A different task owns the saved agent checkpoint. Inspect that recovery session first.", Toast.LENGTH_LONG).show()
+                    return
+                }
+            }
             try { startActivity(Intent(this, MainChatActivity::class.java)) }
             catch (error: Exception) {
                 Toast.makeText(this, "Could not reopen the active chat: " + (error.message ?: "unknown error"), Toast.LENGTH_LONG).show()
