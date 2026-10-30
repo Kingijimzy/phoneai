@@ -95,4 +95,17 @@ class AgentCheckpointStoreTest {
         assertTrue(resume.contains("open_app"))
         assertTrue(resume.contains("Opened Settings"))
     }
+
+    @Test fun evidenceTaskIdentityIsUniqueAndStableAcrossResume() {
+        assertTrue(AgentCheckpointStore.begin(context, "repeatable request"))
+        val first = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(first)
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertEquals(first, AgentCheckpointStore.evidenceTaskId(context))
+        assertTrue(AgentCheckpointStore.clear(context))
+        assertTrue(AgentCheckpointStore.begin(context, "repeatable request"))
+        val second = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(second)
+        assertNotEquals(first, second)
+    }
 }
