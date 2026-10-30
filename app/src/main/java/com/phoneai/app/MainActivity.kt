@@ -177,11 +177,7 @@ class MainActivity : ComponentActivity() {
                     onOpenVoice = { launchDestination(Intent(this@MainActivity, LiveConversationActivity::class.java), "LiveConversationActivity") },
                     onOpenBrowser = { launchDestination(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"), "BrowserActivity") },
                     onOpenTasks = { launchDestination(Intent(this@MainActivity, TaskCenterActivity::class.java), "TaskCenterActivity") },
-                    onOpenSettings = { section ->
-                        val intent = Intent(this@MainActivity, SettingsActivity::class.java)
-                        if (section != null) intent.putExtra("open_section", section)
-                        launchDestination(intent, "SettingsActivity" + (section?.let { "/$it" } ?: ""))
-                    },
+                    onOpenSettings = { section -> openSettingsSection(section) },
                     onOpenUtilities = { launchDestination(Intent(this@MainActivity, TeachModeActivity::class.java), "TeachModeActivity") },
                     onOpenTrading = { launchDestination(Intent(this@MainActivity, TradingActivity::class.java), "TradingActivity") },
                     onOpenMemory = { launchDestination(Intent(this@MainActivity, MemoryActivity::class.java), "MemoryActivity") },
@@ -211,6 +207,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Send a settings shortcut to the feature that owns it. The legacy control
+     * room remains the fallback only for controls without a dedicated screen.
+     */
+    private fun openSettingsSection(section: String?) {
+        val destination: Class<out android.app.Activity>
+        val intent: Intent
+        when (section) {
+            "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
+            "routines" -> { destination = TaskCenterActivity::class.java; intent = Intent(this, destination) }
+            "skills" -> { destination = AgentControlActivity::class.java; intent = Intent(this, destination) }
+            "knowledge" -> { destination = KnowledgeGraphActivity::class.java; intent = Intent(this, destination) }
+            "integrations" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
+            "health" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }
+            "browser" -> {
+                destination = BrowserActivity::class.java
+                intent = Intent(this, destination).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")
+            }
+            "tools" -> { destination = DeviceUtilitiesActivity::class.java; intent = Intent(this, destination) }
+            else -> {
+                destination = SettingsActivity::class.java
+                intent = Intent(this, destination)
+                if (section != null) intent.putExtra("open_section", section)
+            }
+        }
+        launchDestination(intent, destination.simpleName + (section?.let { "/$it" } ?: ""))
+    }
+
     private fun openFeature(route: String) {
         val destination: Class<out android.app.Activity>
         val intent: Intent
@@ -218,9 +242,8 @@ class MainActivity : ComponentActivity() {
             "settings.providers", "settings.voice", "settings.character", "settings.memory",
             "settings.skills", "settings.knowledge", "settings.integrations", "settings.permissions", "settings.routines",
             "settings.health", "settings.recording", "settings.browser", "settings.tools", "settings.all" -> {
-                destination = SettingsActivity::class.java
-                intent = Intent(this, destination)
-                if (route != "settings.all") intent.putExtra("open_section", route.substringAfter("settings."))
+                openSettingsSection(route.substringAfter("settings.").takeUnless { it == "all" })
+                return
             }
             "chat" -> { destination = MainChatActivity::class.java; intent = Intent(this, destination) }
             "live" -> { destination = LiveConversationActivity::class.java; intent = Intent(this, destination) }
