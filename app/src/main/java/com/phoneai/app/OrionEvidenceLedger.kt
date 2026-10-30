@@ -14,7 +14,7 @@ import java.security.MessageDigest
  * acceptance as proof of goal completion.
  */
 internal object OrionEvidenceLedger {
-    enum class Outcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, RECOVERY }
+    enum class Outcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, DENIED, RECOVERY }
 
     private const val MAX_EVENTS = 240
     private const val MAX_TEXT = 320
@@ -84,6 +84,19 @@ internal object OrionEvidenceLedger {
         .put("summary", safeSummary(tool, result))
     )
 
+    /** Records policy/capability denials that happen before the backend is entered. */
+    fun recordBlocked(context: Context, taskId: String, tool: String, category: String, args: JSONObject = JSONObject()): Boolean =
+        append(context, JSONObject()
+            .put("id", digest(System.currentTimeMillis().toString() + "|denied|" + tool + "|" + safeTaskId(taskId)).take(24))
+            .put("taskId", safeTaskId(taskId))
+            .put("backend", "policy")
+            .put("tool", tool.take(80))
+            .put("outcome", Outcome.DENIED.name)
+            .put("startedAt", System.currentTimeMillis())
+            .put("finishedAt", System.currentTimeMillis())
+            .put("argsFingerprint", digest(args.toString()))
+            .put("summary", "Dispatch denied before execution: " + category.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48))
+        )
     /** Recovery is a first-class event; it never authorizes or replays an action. */
     fun recordRecovery(context: Context, taskId: String, tool: String, strategy: String, reason: String): Boolean =
         append(context, JSONObject()
@@ -95,7 +108,7 @@ internal object OrionEvidenceLedger {
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
             .put("argsFingerprint", "")
-            .put("summary", (strategy + ": " + reason).take(MAX_TEXT))
+            .put("summary", "Recovery selected: " + strategy.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48) + "; reason retained only in task context.")
         )
 
     private fun safeTaskId(taskId: String): String =
