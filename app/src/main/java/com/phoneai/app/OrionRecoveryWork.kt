@@ -25,12 +25,18 @@ internal class OrionRecoveryWorker(
         if (pending.isEmpty()) return Result.success()
 
         val service = PhoneAiService.instance
-        if (service?.requestRuntimeDrain() == true) return Result.success()
+        val accepted = service?.requestRuntimeDrain() == true
+        if (!OrionRecoveryPolicy.shouldNotifyUser(pending.isNotEmpty(), accepted)) return Result.success()
 
         // Do not start an AccessibilityService or replay work from a background Worker.
         OrionRuntimeNotifier.postRecoveryPending(applicationContext, pending.first())
         return Result.success()
     }
+}
+
+internal object OrionRecoveryPolicy {
+    fun shouldNotifyUser(hasPendingWork: Boolean, serviceAcceptedDrain: Boolean): Boolean =
+        hasPendingWork && !serviceAcceptedDrain
 }
 
 internal object OrionRecoveryWork {
