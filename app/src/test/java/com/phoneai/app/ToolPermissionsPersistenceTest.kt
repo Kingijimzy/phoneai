@@ -57,6 +57,20 @@ class ToolPermissionsPersistenceTest {
         assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
     }
 
+    @Test fun explicitAskOverrideStillPromptsUnderAutonomousPreset() {
+        ToolPermissions.applyLevel(context, "autonomous")
+        ToolPermissions.cycle(context, writeTool) // ALLOW -> ASK
+        assertEquals(true, ToolPermissions.hasOverride(context, writeTool))
+
+        AgentPolicy.setEnabled(context, "phone_control", true)
+        AgentPolicy.setMode(context, AgentPolicy.Mode.ASK)
+        val result = AgentPolicy.gate(
+            context, "phone_control", writeTool, dangerous = false,
+            toolMode = ToolPermissions.mode(context, writeTool), askedThisTask = false
+        )
+        assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
+    }
+
     @Test fun legacyCustomToolMapIsMigratedAsOverrides() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
             .putString("tool_level", "custom")

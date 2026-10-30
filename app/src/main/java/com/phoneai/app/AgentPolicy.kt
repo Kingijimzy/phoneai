@@ -80,7 +80,8 @@ object AgentPolicy {
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        autonomous = ToolPermissions.level(c) == "autonomous",
+        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
+        autonomous = ToolPermissions.level(c) == "autonomous" && !ToolPermissions.hasOverride(c, toolId),
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
