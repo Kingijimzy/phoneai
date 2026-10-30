@@ -9,12 +9,12 @@ import org.json.JSONObject
 internal object OrionMemoryCapabilityExecutor {
     private val supportedTools = setOf(
         "remember", "update_memory", "forget", "recall", "knowledge_search",
-        "graph_link", "graph_query", "self_review"
+        "graph_link", "graph_query", "self_review", "undo_last", "undo_status"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
-    fun execute(tool: String, args: JSONObject, service: PhoneAiService, tools: Tools): String =
+    fun learnFromRequest(service: PhoneAiService, request: String) {\n        if (request.isBlank()) return\n        runCatching { AgentLessons.learnFrom(service, "orion", request) }\n        runCatching { KnowledgeGraph.learnFrom(service, request) }\n    }\n\n    fun execute(tool: String, args: JSONObject, service: PhoneAiService, tools: Tools, stopped: () -> Boolean): String =
         when (tool) {
             "remember" -> {
                 val text = args.optString("text")
@@ -58,7 +58,7 @@ internal object OrionMemoryCapabilityExecutor {
             "knowledge_search" -> tools.knowledgeSearch(args.optString("query"))
             "graph_link" -> tools.graphLink(args.optString("a"), args.optString("relation"), args.optString("b"))
             "graph_query" -> tools.graphQuery(args.optString("entity"))
-            "self_review" -> tools.selfReview()
+            "self_review" -> tools.selfReview()\n            "undo_status" -> UndoStore.status(service)\n            "undo_last" -> if (stopped()) "error: task was stopped before undo." else UndoStore.undoLast(service)
             else -> "error: memory executor does not implement '$tool'."
         }
 }
