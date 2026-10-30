@@ -115,6 +115,13 @@ class OwnerControlCenterActivity : Activity() {
         addButton("Python execution profile") { showPythonProfile() }
         addButton("Recovery retry and backoff dials") { showRecoveryDials() }
         addButton("Watcher and Android background controls") { showWatcherControls() }
+        section("TOOLS, SKILLS & EXTENSIONS")
+        addText("Registered tools: ${ToolRegistry.all.size} · declarative skills: ${runCatching { SkillRegistry.list(this).size }.getOrDefault(0)} · generated extensions: ${runCatching { SelfExtendingExtensionStore(applicationContext).all().size }.getOrDefault(0)}", 12f, Theme.TEXT, true, 4)
+        addButton("Inspect registered tools and extension inventory") { showRegistryAndExtensions() }
+        addButton("Open self-extension builder") { startActivity(Intent(this, SelfExtensionLabActivity::class.java)) }
+        addButton("Manage declarative skills and capability packs") { startActivity(Intent(this, AgentControlActivity::class.java)) }
+
+        section("AUTONOMY & EXECUTION RULES")
         addButton("Configure individual tool Allow / Ask / Deny rules") { showToolRules() }
         addButton("Configure agent approval modes and capability packs") {
             startActivity(Intent(this, AgentControlActivity::class.java))
@@ -131,6 +138,9 @@ class OwnerControlCenterActivity : Activity() {
         addButton("Inspect / remove stored credentials") { showCredentialManager() }
         addButton("Add or rotate provider keys and integrations") { startActivity(Intent(this, SettingsActivity::class.java)) }
         addButton("View Android permission grants") { showPermissionStatus() }
+        addButton("Open Android app permission settings") { openAndroidSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName") }
+        addButton("Open Accessibility service settings") { openAndroidSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
+        addButton("Open notification access settings") { openAndroidSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }
         addButton("Review local action and policy audit") { showAudit() }
         addButton("Open memory and learning controls") { startActivity(Intent(this, MemoryActivity::class.java)) }
         addButton("Open Soul Engine and watcher status") { startActivity(Intent(this, SoulEngineActivity::class.java)) }
@@ -334,6 +344,30 @@ class OwnerControlCenterActivity : Activity() {
                     .recoverCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
             }
             .setNegativeButton("CLOSE", null).show()
+    }
+
+    private fun showRegistryAndExtensions() {
+        val registered = ToolRegistry.all.map { "${it.name} · ${it.access.name.lowercase()}" }.sorted()
+        val extensions = runCatching { SelfExtendingExtensionStore(applicationContext).all() }.getOrDefault(emptyList())
+        val extensionRows = extensions.map { ExtensionStatus.line(it) }
+        val message = buildString {
+            append("REGISTERED TOOL CONTRACTS (").append(registered.size).append(")\n")
+            append(registered.joinToString("\n"))
+            append("\n\nGENERATED EXTENSIONS (").append(extensions.size).append(")\n")
+            append(extensionRows.ifEmpty { listOf("No generated extensions saved.") }.joinToString("\n"))
+            append("\n\nA generated extension is invoked through Orion's already-registered extension tool contract. It does not create a new native tool or bypass capability mapping. New native tools require a reviewed app update and registry entry.")
+        }
+        AlertDialog.Builder(this).setTitle("Tool registry & extension inventory")
+            .setMessage(message).setPositiveButton("CLOSE", null)
+            .setNeutralButton("OPEN BUILDER") { _, _ -> startActivity(Intent(this, SelfExtensionLabActivity::class.java)) }
+            .show()
+    }
+
+    private fun openAndroidSettings(action: String, data: String? = null) {
+        val intent = Intent(action)
+        if (data != null) intent.data = android.net.Uri.parse(data)
+        runCatching { startActivity(intent) }
+            .onFailure { Toast.makeText(this, "Android did not open that settings screen. Open Settings manually.", Toast.LENGTH_LONG).show() }
     }
 
     private fun showToolRules() {
