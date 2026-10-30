@@ -89,7 +89,7 @@ internal object OrionObjectiveGraph {
                 else if (prior.status != Status.PENDING && prior.status != Status.READY) prior
                 else node.copy(status = prior.status, evidence = prior.evidence)
             }.toMutableList()
-            old.nodes.filter { it.id !in proposedIds && it.status != Status.PENDING && it.status != Status.READY }.forEach { next += it }
+            old.nodes.filter { it.id !in proposedIds && it.status != Status.PENDING && it.status != Status.READY && !(it.id == "main" && old.nodes.size == 1 && proposed.nodes.size > 1) }.forEach { next += it }
             Graph(objective.trim().take(1000), topologicalOrder(next))
         }
         return if (save(context, merged)) ParseResult.Valid(merged) else ParseResult.Invalid("Objective graph could not be persisted.")
