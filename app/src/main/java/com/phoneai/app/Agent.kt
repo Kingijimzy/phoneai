@@ -162,11 +162,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         while (left > 0 && !stopped) { val d = minOf(100L, left); try { Thread.sleep(d) } catch (_: InterruptedException) { return }; left -= d }
     }
 
+    private fun recordDispatchBlocked(tool: String, args: JSONObject, category: String) {
+        runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category, args) }
+    }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         // The request-time orchestrator is part of the real dispatch boundary, not just prompt text.
         // A model cannot call an unregistered tool or one the live registry marked unavailable.
         activeOrchestrationContext?.let { context ->
             OrionTaskOrchestrator.dispatchBlockReason(context, tool)?.let { reason ->
+                recordDispatchBlocked(tool, args, "orchestrator_unavailable")
                 return "error: dispatch blocked by the request-time task orchestrator: $reason"
             }
         }
@@ -174,18 +178,21 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (stopped) {
             val cancelled = "error: task was stopped before capability checks or approval; no action was dispatched."
             taskProofs.record(tool, cancelled)
+            recordDispatchBlocked(tool, args, "task_cancelled")
             return cancelled
         }
         // Consent is checked before querying the current screen or resolving a target.
         if (ToolRegistry.requiresAccessibility(tool) && !Prefs.accessibilityDisclosureAccepted(svc)) {
             val blocked = "error: screen access has not been accepted. Open Orion Settings > Permissions and accept the screen-access disclosure before using app-control or screen-reading tools."
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            recordDispatchBlocked(tool, args, "accessibility_disclosure_required")
             return blocked
         }
         // One pre-flight gate for user DENY and switched-off packs, before any prompt is shown.
         ToolGate.preflightDenial(svc, tool)?.let { denied ->
             try { ActionLogStore.record(svc, tool, denied) } catch (_: Exception) { }
             AgentPolicy.log(svc, tool, "dispatch", false, "preflight: " + denied.take(120))
+            recordDispatchBlocked(tool, args, "capability_preflight_denied")
             return denied
         }
         if (tool == "shell") {
@@ -206,6 +213,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
         }
         if (failedCallGuard.isBlocked(tool, args)) {
+            recordDispatchBlocked(tool, args, "repeated_failed_call_blocked")
             return "error: Orion blocked a repeated identical failed tool call. Inspect the previous error and choose a different safe method or gather more screen/context evidence."
         }
         val targetLabel = when (tool) {
