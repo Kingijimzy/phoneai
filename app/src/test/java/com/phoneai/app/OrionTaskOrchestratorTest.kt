@@ -72,4 +72,25 @@ class OrionTaskOrchestratorTest {
         assertTrue(context.goal.needsClarification)
         assertTrue(context.promptLines().any { it.contains("ask one focused clarification") })
     }
+    @Test fun dispatchGuardAllowsOnlyRegisteredAvailableToolsForActionableGoals() {
+        val context = OrionTaskOrchestrator.build(
+            "run a command in Linux terminal", listOf(tool("shell", ToolAccess.WRITE)), packs, termuxReady = true
+        )
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(context, "shell"))
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "invented_tool")!!.contains("not registered"))
+    }
+
+    @Test fun dispatchGuardBlocksToolsWhenTheirPackIsUnavailable() {
+        val context = OrionTaskOrchestrator.build(
+            "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
+        )
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "weather")!!.contains("disabled"))
+    }
+
+    @Test fun dispatchGuardBlocksNonActionableConversationAndAmbiguousGoals() {
+        val conversation = OrionTaskOrchestrator.build("hello", listOf(tool("weather")), packs, true)
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(conversation, "weather")!!.contains("not ready"))
+        val ambiguous = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(ambiguous, "connect_service")!!.contains("not ready"))
+    }
 }
