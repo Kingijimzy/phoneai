@@ -433,7 +433,7 @@ fun OrionComposeChatScreen(
                     onDismissRequest = { menuExpanded = false },
                     modifier = Modifier
                         .widthIn(min = 232.dp, max = 260.dp)
-                        .heightIn(max = 520.dp)
+                        .heightIn(max = 360.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xF2161616))
                         .border(1.dp, ChatHairline, RoundedCornerShape(18.dp))
@@ -452,16 +452,16 @@ fun OrionComposeChatScreen(
                             fontSize = 9.sp,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = 1.15.sp,
-                            modifier = Modifier.fillMaxWidth().padding(start = 15.dp, end = 12.dp, top = 9.dp, bottom = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 7.dp, bottom = 3.dp)
                         )
                     }
                     @Composable
                     fun action(title: String, key: String, destructive: Boolean = false) {
                         Row(
-                            Modifier.fillMaxWidth().height(41.dp)
+                            Modifier.fillMaxWidth().height(42.dp)
                                 .clip(RoundedCornerShape(9.dp))
                                 .clickable { choose(key) }
-                                .padding(horizontal = 15.dp),
+                                .padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
