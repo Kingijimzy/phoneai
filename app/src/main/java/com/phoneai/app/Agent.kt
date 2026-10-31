@@ -98,6 +98,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     // Adaptive recovery: never repeat the exact same failed tool call in one task.
     // A different tool/argument set may still be attempted after inspecting the failure.
     private val failedCallGuard = AgentHooks.FailedCallGuard()
+    // nanoMuse-derived sliding-window detector; one instance per Agent conversation.
+    private val toolLoopDetector = ToolLoopDetector()
     private val taskProofs = AgentHooks.ProofRecorder()
     @Volatile private var currentTask = ""
     private val askApproved = HashSet<String>()
@@ -124,6 +126,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenBeforeAction: String = ""
 
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
+        val loopCheck = toolLoopDetector.check(tool, loopParams(args))
+        if (loopCheck.level == ToolLoopDetector.Level.CRITICAL) {
+            val blocked = loopCheck.message ?: "error: repeated tool calls were blocked by the session circuit breaker."
+            taskProofs.record(tool, blocked)
+            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
+            return blocked
+        }
         // Consent is checked before querying the current screen or resolving a target.
         if (ToolRegistry.requiresAccessibility(tool) && !Prefs.accessibilityDisclosureAccepted(svc)) {
             val blocked = "error: screen access has not been accepted. Open Orion Settings > Permissions and accept the screen-access disclosure before using app-control or screen-reading tools."
@@ -336,6 +345,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             failedCallGuard.recordFailure(tool, args)
             try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
+        val loopRecord = toolLoopDetector.record(tool, loopParams(args), verifiedResult)
+        if (loopRecord.level == ToolLoopDetector.Level.WARNING && !loopRecord.message.isNullOrBlank()) {
+            verifiedResult += "\n" + loopRecord.message
+        }
         taskProofs.record(tool, verifiedResult)
         AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true),
             if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) "failed or unverified; details remain in the task transcript"
@@ -344,6 +357,30 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // stores only the tool name and success/error outcome, never arguments or payloads.
         try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
         return verifiedResult
+    }
+
+    /** Convert tool arguments to stable JSON-compatible values for the nanoMuse loop detector. */
+    private fun loopParams(value: JSONObject): Map<String, Any?> {
+        val out = linkedMapOf<String, Any?>()
+        val keys = value.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val raw = value.opt(key)
+            out[key] = when (raw) {
+                JSONObject.NULL -> null
+                is JSONObject -> loopParams(raw)
+                is JSONArray -> (0 until raw.length()).map { index ->
+                    when (val item = raw.opt(index)) {
+                        JSONObject.NULL -> null
+                        is JSONObject -> loopParams(item)
+                        is JSONArray -> item.toString()
+                        else -> item
+                    }
+                }
+                else -> raw
+            }
+        }
+        return out
     }
 
     private fun chatSystem(query: String? = null): String {
