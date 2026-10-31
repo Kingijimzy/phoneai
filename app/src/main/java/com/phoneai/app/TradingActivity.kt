@@ -76,7 +76,7 @@ class TradingActivity : Activity() {
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
         host.addView(label("Desk", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
         host.addView(row(
-            pill("Back to chat", true) { openWithFade(AgentChatActivity.workspaceIntent(this)) },
+            pill("Back to Orion chat", true) { openWithFade(Intent(this, MainChatActivity::class.java).putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, "Continue our trading discussion in the central Orion conversation. Keep the active trading objective and context.")) },
             pill("Orion brain", false) { openWithFade(Intent(this, SoulEngineActivity::class.java)) }
         ))
         host.addView(label("Settings, playbook, simulation and safety for your trading chat. The chat is the front door: talk to it, upload a chart, accept what it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
