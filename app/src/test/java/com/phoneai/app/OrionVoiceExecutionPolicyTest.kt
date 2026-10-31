@@ -31,6 +31,6 @@ class OrionVoiceExecutionPolicyTest {
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
         assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
         assertTrue(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")) ||
-            ToolRegistry.find("telegram_send")!!.promptLine.contains("explicit approval"))
+            ToolRegistry.find("telegram_send")!!.promptLine.contains("approval immediately before sending"))
     }
 }
