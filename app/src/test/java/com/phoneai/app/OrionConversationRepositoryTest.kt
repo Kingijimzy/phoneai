@@ -338,4 +338,21 @@ class OrionConversationRepositoryTest {
         assertEquals("completed", saved.status)
         assertTrue(saved.summary.contains("structural errors=0"))
     }
+
+    @Test fun voiceTranscriptTurnsPersistIntoTheSameSearchableConversationIndex() {
+        repository.saveActive(context, listOf(
+            "me" to "Earlier typed question about Orion memory",
+            "ai" to "We discussed persistent memory."
+        ))
+        val transcript = repository.loadActive(context).toMutableList()
+        transcript += "me" to "I usually review my trading journal after the London session"
+        transcript += "ai" to "I will keep that routine in context when you approve the memory proposal."
+        repository.saveActive(context, transcript)
+
+        val hit = repository.searchHistory(context, "trading journal London session", 5)
+            .first { it.snippet.contains("trading journal", ignoreCase = true) }
+        assertEquals("me", hit.role)
+        assertTrue(hit.title.contains("Earlier typed question"))
+        assertTrue(hit.after.contains("keep that routine"))
+    }
 }
