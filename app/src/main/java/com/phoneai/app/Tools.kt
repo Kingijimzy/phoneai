@@ -1018,7 +1018,7 @@ class Tools(private val svc: PhoneAiService) {
             if (!OrionAgentDelegation.finish(svc, manifest, answer, failed = answer.startsWith("error:", true))) {
                 "error: ${agent.name} returned, but its delegation receipt could not be saved. Result requires review before treating the delegation as complete."
             } else {
-                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\\n" + answer
+                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\n" + answer
             }
         } catch (e: Exception) {
             val failure = "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")"
