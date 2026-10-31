@@ -40,6 +40,7 @@ internal object MemoryAutoIndexer {
     /** Store as an unapproved proposal. The owner remains the only authority for durable truth. */
     fun observe(context: Context, message: String): Memory? {
         val candidate = extract(message) ?: return null
-        return if (candidate.ownerConfirmed) MemoryStore.addOwnerConfirmed(context, candidate.category, candidate.text)\n        else MemoryStore.addObservedProposal(context, candidate.category, candidate.text, candidate.confidence, candidate.reason)
+        return if (candidate.ownerConfirmed) MemoryStore.addOwnerConfirmed(context, candidate.category, candidate.text)
+        else MemoryStore.addObservedProposal(context, candidate.category, candidate.text, candidate.confidence, candidate.reason)
     }
 }
