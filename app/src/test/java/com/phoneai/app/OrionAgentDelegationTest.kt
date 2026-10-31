@@ -236,6 +236,21 @@ class OrionAgentDelegationTest {
         assertNull(OrionAgentDelegation.restore(context, manifest.id))
     }
 
+    @Test fun fullManifestLedgerNeverEvictsAnActiveBackgroundReceipt() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val profile = AgentProfiles.find("coder")!!
+        val manifests = (0 until 40).map { index ->
+            OrionAgentDelegation.create(profile, "parent-$index", "Keep receipt $index").also {
+                assertTrue(OrionAgentDelegation.begin(context, it))
+            }
+        }
+        val overflow = OrionAgentDelegation.create(profile, "parent-overflow", "Do not evict active receipts")
+        assertFalse(OrionAgentDelegation.begin(context, overflow))
+        assertNotNull(OrionAgentDelegation.restore(context, manifests.first().id))
+        assertEquals(40, OrionAgentDelegation.latest(context, 50).size)
+    }
+
     @Test fun idempotencyMatchRequiresExactSpecialistTaskAndObjectiveNode() {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
         OrionAgentDelegation.clearForTest(context)
