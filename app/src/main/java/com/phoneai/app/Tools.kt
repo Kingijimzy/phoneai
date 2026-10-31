@@ -1009,11 +1009,22 @@ class Tools(private val svc: PhoneAiService) {
 
     fun askAgent(agentName: String, task: String): String {
         val agent = AgentProfiles.resolveFor(svc, agentName)
-            ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
+            ?: return "error: unknown agent \\"$agentName\\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
+        val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task)
+        if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
-            "AGENT ${agent.name} ANSWER (relay faithfully; it is analysis, not an action taken):\n" + AgentRunner.run(svc, agent, emptyList(), task)
-        } catch (e: Exception) { "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")" }
+            val answer = AgentRunner.runDelegated(svc, agent, task, manifest)
+            if (!OrionAgentDelegation.finish(svc, manifest, answer, failed = answer.startsWith("error:", true))) {
+                "error: ${agent.name} returned, but its delegation receipt could not be saved. Result requires review before treating the delegation as complete."
+            } else {
+                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\\n" + answer
+            }
+        } catch (e: Exception) {
+            val failure = "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")"
+            OrionAgentDelegation.finish(svc, manifest, failure, failed = true)
+            failure
+        }
     }
 
     fun pythonExec(code: String): String =
