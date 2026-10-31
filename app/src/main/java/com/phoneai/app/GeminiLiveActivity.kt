@@ -348,6 +348,16 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         val clean = text.trim().take(4_000)
         if (clean.isBlank() || MemoryGovernancePolicy.sensitivity(clean) == "sensitive") return
         runCatching {
+            if (!fromModel) {
+                MemoryAutoIndexer.observe(this, clean)
+                    ?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }
+                    ?.let { proposal ->
+                        OrionConversationRepository.get(this).recordEvent(
+                            this, null, "memory_proposal", "pending",
+                            "Suggested memory from Gemini Live for owner review: category=${proposal.category}"
+                        )
+                    }
+            }
             val transcript = ChatHistoryStore.load(this).toMutableList()
             val turn = (if (fromModel) "ai" else "me") to clean
             if (transcript.lastOrNull() != turn) {
