@@ -1030,6 +1030,9 @@ class Tools(
         val key = idempotencyKey.trim().take(100).ifBlank { java.util.UUID.nameUUIDFromBytes("$parentTaskId|${agent.id}|${AgentPrivacyFilter.safeCommand(task).trim().lowercase()}".toByteArray()).toString() }
         val previous = store.all().firstOrNull { it.parentTaskId == parentTaskId && it.idempotencyKey == key }
         if (previous != null) {
+            if (previous.manifestId?.let { OrionAgentDelegation.matches(svc, it, agent.id, task) } != true) {
+                return "error: this idempotency key already belongs to a different specialist or task; use a new key for a distinct job."
+            }
             if (previous.status == OrionWorkerJobStore.Status.QUEUED && !OrionSpecialistScheduler.enqueue(svc, previous.id)) {
                 return "error: existing queued job could not be scheduled; it remains queued for recovery."
             }
