@@ -1020,7 +1020,7 @@ class Tools(
         val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
             ?: return "error: start a durable Orion objective before queuing background specialist work."
         val checkpoint = AgentCheckpointStore.pending(svc)
-        if (checkpoint?.optString("status") !in setOf("running", "waiting_for_children") ||
+        if (checkpoint?.optString("status").orEmpty() !in setOf("running", "waiting_for_children") ||
             AgentCheckpointStore.cancellationRequested(svc, parentTaskId)) {
             return "error: the exact parent objective is not active; no background work was queued."
         }
