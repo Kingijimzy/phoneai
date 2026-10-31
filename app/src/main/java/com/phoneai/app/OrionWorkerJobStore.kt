@@ -33,7 +33,9 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         val updatedAt: Long,
         val attempts: Int,
         val result: String = "",
-        val lastError: String = ""
+        val lastError: String = "",
+        val manifestId: String? = null,
+        val conversationId: String? = null
     )
 
     private val app = context.applicationContext
@@ -58,7 +60,9 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         objective: String,
         kind: Kind = Kind.ANALYSIS,
         idempotencyKey: String = UUID.randomUUID().toString(),
-        parentObjectiveId: String? = null
+        parentObjectiveId: String? = null,
+        manifestId: String? = null,
+        conversationId: String? = null
     ): Job? = synchronized(lock) {
         loadLocked()
         val parent = parentTaskId.trim().take(80)
@@ -72,9 +76,14 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             jobs.removeAt(removable)
         }
         val now = clock()
+        val safeManifestId = manifestId?.trim()?.takeIf { it.matches(Regex("^[A-Fa-f0-9-]{16,80}$")) }
+        val safeConversationId = conversationId?.trim()?.takeIf { it.matches(Regex("^[A-Za-z0-9_-]{8,128}$")) }
+        if (manifestId != null && safeManifestId == null) return@synchronized null
+        if (conversationId != null && safeConversationId == null) return@synchronized null
         val job = Job(UUID.randomUUID().toString(), key, parent,
             parentObjectiveId?.trim()?.takeIf { Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it) },
-            kind, clean, Status.QUEUED, now, now, 0)
+            kind, clean, Status.QUEUED, now, now, 0,
+            manifestId = safeManifestId, conversationId = safeConversationId)
         jobs.add(job)
         if (!persistLocked()) { jobs.remove(job); return@synchronized null }
         job
@@ -227,7 +236,9 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
                 kind, o.optString("objective").take(700), restoredStatus,
                 o.optLong("createdAt"), clock(), o.optInt("attempts").coerceIn(0, 3),
                 o.optString("result").take(1200), if (recoverInterrupted && status == Status.RUNNING)
-                    "process_interrupted_outcome_must_be_reviewed" else o.optString("lastError").take(240))
+                    "process_interrupted_outcome_must_be_reviewed" else o.optString("lastError").take(240),
+                o.optString("manifestId").takeIf { it.isNotBlank() && it != "null" && it.matches(Regex("^[A-Fa-f0-9-]{16,80}$")) },
+                o.optString("conversationId").takeIf { it.isNotBlank() && it != "null" && it.matches(Regex("^[A-Za-z0-9_-]{8,128}$")) })
         }.takeLast(maxJobs).toMutableList()
         if (recoverInterrupted && jobs.any { it.status == Status.NEEDS_REVIEW }) persistLocked()
     }
@@ -239,7 +250,8 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
                 .put("parentTaskId", j.parentTaskId).put("parentObjectiveId", j.parentObjectiveId)
                 .put("kind", j.kind.name).put("objective", j.objective).put("status", j.status.name)
                 .put("createdAt", j.createdAt).put("updatedAt", j.updatedAt).put("attempts", j.attempts)
-                .put("result", j.result).put("lastError", j.lastError))
+                .put("result", j.result).put("lastError", j.lastError)
+                .put("manifestId", j.manifestId).put("conversationId", j.conversationId))
         }
         var stream: FileOutputStream? = null
         return try {
