@@ -2103,6 +2103,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun note(text: String) {
+        // Specialist lifecycle messages are durable chat events, not transient UI-only notes.
+        // The event is committed to the active conversation before the open chat is notified.
+        val specialist = Regex("^\\[SPECIALIST:(ASSIGNED|RETURNED|FAILED)]\\s*\\n?([\\s\\S]*)$")
+            .find(text.trim())
+        if (specialist != null) {
+            val status = specialist.groupValues[1].lowercase()
+            val summary = specialist.groupValues[2].trim().take(1100)
+            recordChatEvent("specialist", status, summary)
+            return
+        }
         appendTranscript("note", text)
         main.post {
             mainChatListener?.onMessage("note", text)
@@ -2112,6 +2122,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 showStrip(text)
             }
         }
+    }
+
+    /** Compact runtime truth for the central Agent; never implies Android can keep a process alive forever. */
+    internal fun runtimeBriefForBrain(): String {
+        val runtime = orionRuntime ?: return "runtime=not_connected; durable recovery is delegated to WorkManager when available"
+        val snapshot = runtime.snapshot()
+        val pending = runtime.pendingItems().take(5).joinToString("; ") {
+            it.type.name.lowercase() + ":" + it.key.take(48) + if (it.checkpoint.isNotBlank()) "@" + it.checkpoint.take(64) else ""
+        }.ifBlank { "none" }
+        return "runtime=" + snapshot.state.name.lowercase() + "; queued=" + snapshot.queued +
+            "; last_event=" + snapshot.lastEvent.take(64) + "; pending=[" + pending +
+            "]. Android/HyperOS may suspend or kill the process; persisted checkpoints and recovery wake-ups are best-effort, not guaranteed continuous execution."
     }
 
     override fun phase(p: String) {
