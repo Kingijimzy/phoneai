@@ -345,7 +345,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             failedCallGuard.recordFailure(tool, args)
             try { ExperienceStore.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
         }
-        val loopRecord = toolLoopDetector.record(tool, loopParams(args), verifiedResult)
+        val loopRecord = toolLoopDetector.record(tool, loopParams(args), verifiedResult, errorMessage = if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) verifiedResult else null)
         if (loopRecord.level == ToolLoopDetector.Level.WARNING && !loopRecord.message.isNullOrBlank()) {
             verifiedResult += "\n" + loopRecord.message
         }
