@@ -1906,19 +1906,28 @@ Rules:
             OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command)) {
             val requestedName = OrionCommandIntentPolicy.requestedGitHubRepositoryName(command)
             ui.phase("acting")
-            val account = executeWithRecoveryGuard(
-                "github_account_read", JSONObject().put("path", "/user")
+            // Account identity and repository listing are one durable research task.
+            // Both reads are checkpointed before/after guarded dispatch; a failed first read
+            // prevents the second from running and an uncertain receipt requires recovery.
+            val accountAndRepositories = researchShortcut(
+                command,
+                listOf(
+                    OrionResearchShortcutLifecycle.Step(
+                        "github_account_read", JSONObject().put("path", "/user")
+                    ),
+                    OrionResearchShortcutLifecycle.Step(
+                        "github_account_read", JSONObject().put("path", "/user/repos?per_page=100&sort=updated")
+                    )
+                )
             )
+            val account = accountAndRepositories.substringBefore("\n\n")
+            val repositories = accountAndRepositories.substringAfter("\n\n", "")
             val answer = if (account.startsWith("error:", true)) {
                 "I could not inspect the connected GitHub account: $account"
+            } else if (repositories.isBlank() || repositories.startsWith("error:", true)) {
+                "I could read the GitHub account, but could not list its repositories: " +
+                    repositories.ifBlank { "the repository-list step was not completed" }
             } else {
-                val repositories = executeWithRecoveryGuard(
-                    "github_account_read",
-                    JSONObject().put("path", "/user/repos?per_page=100&sort=updated")
-                )
-                if (repositories.startsWith("error:", true)) {
-                    "I could read the GitHub account, but could not list its repositories: $repositories"
-                } else {
                     val accountLine = account.lineSequence()
                         .map { it.trim() }
                         .firstOrNull { it.isNotBlank() && !it.startsWith("GITHUB DATA", true) }
@@ -1956,7 +1965,12 @@ Rules:
                 var owner = target.owner
                 val repository = target.repository
                 if (owner.isBlank()) {
-                    val searchResult = research("github_search_repositories", JSONObject().put("query", repository))
+                    val searchResult = researchShortcut(
+                        command,
+                        listOf(OrionResearchShortcutLifecycle.Step(
+                            "github_search_repositories", JSONObject().put("query", repository)
+                        ))
+                    )
                     val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
                         .findAll(searchResult).toList()
                     val exact = candidates.firstOrNull { it.groupValues[2].equals(repository, ignoreCase = true) }
@@ -1971,14 +1985,20 @@ Rules:
                 } else {
                     when (target.section) {
                         GitHubRequestPolicy.Section.REPOSITORY -> readGitHubRepository(command, owner, repository)
-                        GitHubRequestPolicy.Section.RUNS -> research(
-                            "github_public",
-                            JSONObject().put("owner", owner).put("repo", repository).put("section", "runs")
+                        GitHubRequestPolicy.Section.RUNS -> researchShortcut(
+                            command,
+                            listOf(OrionResearchShortcutLifecycle.Step(
+                                "github_public",
+                                JSONObject().put("owner", owner).put("repo", repository).put("section", "runs")
+                            ))
                         )
-                        GitHubRequestPolicy.Section.RUN -> research(
-                            "github_public",
-                            JSONObject().put("owner", owner).put("repo", repository)
-                                .put("section", "run").put("run_id", target.runId.orEmpty())
+                        GitHubRequestPolicy.Section.RUN -> researchShortcut(
+                            command,
+                            listOf(OrionResearchShortcutLifecycle.Step(
+                                "github_public",
+                                JSONObject().put("owner", owner).put("repo", repository)
+                                    .put("section", "run").put("run_id", target.runId.orEmpty())
+                            ))
                         )
                     }
                 }
