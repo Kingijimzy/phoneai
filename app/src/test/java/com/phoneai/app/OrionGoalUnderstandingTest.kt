@@ -62,4 +62,13 @@ class OrionGoalUnderstandingTest {
         assertTrue(line.contains("verify"))
         assertFalse(line.contains("connect my GitHub account"))
     }
+
+    @Test fun suppliedUrlInspectionBecomesResearchGoalWithoutClarification() {
+        val goal = OrionGoalUnderstanding.understand("Go and check this page https://example.com/docs and explain the workflow")
+        assertEquals(OrionGoalUnderstanding.Kind.RESEARCH, goal.kind)
+        assertEquals("example.com", goal.target)
+        assertTrue(goal.shouldAct)
+        assertFalse(goal.needsClarification)
+    }
+
 }
