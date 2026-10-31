@@ -178,7 +178,14 @@ object AgentRunner {
         } else {
             messages.put(JSONObject().put("role", "user").put("content", userText))
         }
-        val reply = Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        val tier = if (agent.id == "coach") ModelRouter.tierFor(userText, image != null) else ModelRouter.Tier.CHAT
+        val reply = try {
+            Nim(c).also { it.tier = tier }.chat(messages, image != null, 900, 0.4).trim()
+        } catch (e: Exception) {
+            // The routed model may be unavailable for this key; retry once with the person's own model.
+            if (tier == ModelRouter.Tier.CHAT) throw e
+            Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        }
         if (agent.id != "coach") return Result(reply, emptyList())
         val actions = TradeProposals.parse(reply)
         val desk = DeskProposals.parse(actions.visible) { FxData.pairOf(it) ?: Bybit.symbolOf(it) }
