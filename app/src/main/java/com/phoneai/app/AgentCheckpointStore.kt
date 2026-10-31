@@ -244,6 +244,7 @@ object AgentCheckpointStore {
     }
 
     fun pause(c: Context): Boolean {
+        val parentTaskId = evidenceTaskId(c)
         val saved = update(c) {
             if (it.optBoolean("stopRequested")) {
                 it.put("status", if (it.optJSONObject("inFlight") != null) "recovery_required" else "cancelled")
@@ -251,7 +252,10 @@ object AgentCheckpointStore {
                 it.put("pauseRequested", true).put("status", "paused")
             }
         }
-        if (saved) runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        if (saved) {
+            parentTaskId?.let { id -> runCatching { OrionWorkerJobStore(c).cancelParent(id, "parent_paused") } }
+            runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        }
         return saved
     }
 
@@ -272,7 +276,13 @@ object AgentCheckpointStore {
             checkpoint.put("stopReason", reason.take(300))
         }
         checkpoint.put("updatedAt", System.currentTimeMillis())
-        save(c, checkpoint)
+        val saved = save(c, checkpoint)
+        if (saved) {
+            checkpoint.optString("taskId").takeIf { it.isNotBlank() }?.let { id ->
+                runCatching { OrionWorkerJobStore(c).cancelParent(id, "parent_stopped") }
+            }
+        }
+        saved
     }
 
     fun complete(c: Context): Boolean = synchronized(lock) {
