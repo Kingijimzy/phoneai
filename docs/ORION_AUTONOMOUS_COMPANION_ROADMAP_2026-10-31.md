@@ -184,8 +184,8 @@ Tasks:
 | Stage | Status | Evidence / blocker |
 |---|---|---|
 | Stage 0 — integration baseline | IN PROGRESS | PR #132 draft; upstream stack is not yet on main; exact-head CI/review must be checked |
-| Stage 1 — central lifecycle | PARTIAL | shared coordinator/boundary exists; Agent still owns most control flow; voice, specialist and background paths remain split |
-| Stage 2 — capability intelligence | PARTIAL | live registry/discovery exists; full tool contracts still inflate context; latency baseline needed |
+| Stage 1 — central lifecycle | PARTIAL — first voice bridge added | actionable live-voice requests now route into the same guarded Command/task lifecycle; deterministic research shortcuts and specialist/background continuity still need consolidation |
+| Stage 2 — capability intelligence | IN PROGRESS — request-scoped contracts added | relevant capability families receive full contracts while all other tools remain discoverable by compact signatures; exact-head CI and latency/token comparison are pending |
 | Stage 3 — specialist delegation | PARTIAL | specialist profiles exist; not yet a unified least-privilege delegated execution lifecycle |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
 | Stage 5 — proactive background | PARTIAL | watcher/runtime/standing-order foundations exist; event pipeline and device delivery need proof |
@@ -193,3 +193,11 @@ Tasks:
 | Stage 7 — verification | BLOCKED | CI can be inspected remotely; physical Redmi acceptance has not been evidenced |
 
 **Completion policy:** a stage is complete only when its exit gate is met and its evidence is recorded. Source presence, a green older CI run, or an untested APK is not sufficient.
+
+
+## Implementation notes — PR #145
+
+- Request-scoped tool contracts: `ToolRegistry.promptSection(request)` now supplies full descriptions for relevant request families and compact name/argument signatures for every other registered tool. The no-argument full snapshot remains available for diagnostics. Selection is only a prompt optimization; runtime authorization is unchanged.
+- Voice execution bridge: `OrionVoiceExecutionPolicy` routes actionable and contextual follow-up utterances from live voice into `runInternal`, reusing the same task planner, checkpoint, capability registry, owner policy, confirmation and evidence gates as chat. Ordinary conversation remains on the low-cost voice conversation path.
+- Regression tests cover prompt discoverability/selection and voice action routing/contextual follow-ups.
+- PR #145 exact head is tracked in GitHub Actions. CI and Redmi device validation are not yet complete.
