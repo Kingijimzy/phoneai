@@ -40,7 +40,9 @@ internal object OrionResearchCapabilityExecutor {
             args.optString("owner"),
             args.optString("repo"),
             args.optString("section", "repo"),
-            args.optString("run_id").takeIf { it.isNotBlank() }
+            args.optString("run_id").takeIf { it.isNotBlank() },
+            args.optString("branch", "main"),
+            args.optString("path")
         )
         "bybit_public_ticker" -> tools.bybitPublicTicker(args.optString("symbol"))
         else -> "error: research executor does not implement '$tool'."
