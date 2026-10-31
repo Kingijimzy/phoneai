@@ -203,6 +203,23 @@ class AgentCheckpointStoreTest {
         assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
     }
 
+    @Test fun replacingWaitingParentInvalidatesItsQueuedChildren() {
+        assertTrue(AgentCheckpointStore.begin(context, "Delegate a background analysis"))
+        val oldParent = AgentCheckpointStore.evidenceTaskId(context)!!
+        val child = OrionWorkerJobStore(context).enqueue(
+            oldParent, "Analyse the saved task", OrionWorkerJobStore.Kind.ANALYSIS
+        )
+        assertNotNull(child)
+        assertTrue(AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+
+        assertTrue(AgentCheckpointStore.begin(context, "A new unrelated user objective"))
+        assertTrue("An archived waiting parent must never authorize its queued child",
+            AgentCheckpointStore.cancellationRequested(context, oldParent))
+        assertEquals(OrionWorkerJobStore.Status.QUEUED,
+            OrionWorkerJobStore(context).all().first { it.id == child!!.id }.status)
+    }
+
     @Test fun tasksExecutorOwnsDurableCheckpointRecoveryBoundary() {
         assertTrue(OrionTasksCapabilityExecutor.beginRun(context, "Inspect the app after restart"))
         assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "open_app", JSONObject().put("name", "Settings")))
