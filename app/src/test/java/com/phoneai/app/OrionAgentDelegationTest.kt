@@ -56,6 +56,39 @@ class OrionAgentDelegationTest {
         assertNull(manifest.parentObjectiveId)
     }
 
+    @Test fun persistedManifestCanBeRestoredForBackgroundProcessRecreation() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val original = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!,
+            "parent-task-restore",
+            "Research durable Android background execution",
+            parentObjectiveId = "research"
+        ).copy(maxCapabilityCalls = 2)
+        assertTrue(OrionAgentDelegation.begin(context, original))
+
+        val restored = OrionAgentDelegation.restore(context, original.id)
+        assertNotNull(restored)
+        assertEquals(original.id, restored!!.id)
+        assertEquals(original.parentTaskId, restored.parentTaskId)
+        assertEquals(original.parentObjectiveId, restored.parentObjectiveId)
+        assertEquals(original.agentId, restored.agentId)
+        assertEquals(original.objective, restored.objective)
+        assertEquals(original.access, restored.access)
+        assertEquals(original.allowedTools, restored.allowedTools)
+        assertEquals(original.memoryScope, restored.memoryScope)
+        assertEquals(original.maxModelCalls, restored.maxModelCalls)
+        assertEquals(2, restored.maxCapabilityCalls)
+    }
+
+    @Test fun restoreRejectsUnknownManifestAndMalformedIds() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        assertNull(OrionAgentDelegation.restore(context, "missing"))
+        assertNull(OrionAgentDelegation.restore(context, "x".repeat(81)))
+        assertNull(OrionAgentDelegation.restore(context, ""))
+    }
+
     @Test fun customSpecialistDefaultsToAnalysisOnlyWithNoToolCapabilities() {
         val custom = AgentProfile("social_helper", "Social Helper", "Plans social content", "Create content plans and drafts.")
         val manifest = OrionAgentDelegation.create(custom, "parent-task-7", "Prepare a content calendar")
