@@ -149,6 +149,13 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         changed
     }
 
+    /** Queued or running children keep their parent objective open after the chat turn ends. */
+    fun hasPendingForParent(parentTaskId: String): Boolean = synchronized(lock) {
+        loadLocked()
+        jobs.any { it.parentTaskId == parentTaskId &&
+            it.status in setOf(Status.QUEUED, Status.RUNNING) }
+    }
+
     /** Compact status receipts for the central chat brain; results remain evidence, never instructions. */
     fun promptSummary(limit: Int = 4): String {
         val recent = all().takeLast(limit.coerceIn(1, 8))
