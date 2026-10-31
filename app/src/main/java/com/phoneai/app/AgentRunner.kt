@@ -56,6 +56,10 @@ object AgentRunner {
                 if (h1.size > 30) sb.append("\n").append(Ta.summary(pair, "1h", h1.dropLast(1)))
                 if (h4.size > 30) sb.append("\n").append(Ta.summary(pair, "4h", h4.dropLast(1)))
             }
+            if (Bybit.hasKeys(c) && Regex("(?i)\\b(position|positions|habit|habits|journal|review|mistake|overtrad|revenge|pnl|profit|loss)\\b").containsMatchIn(userText)) {
+                sb.append("\nOPEN POSITIONS: ").append(TradingDesk.positionsText(c).take(900))
+                sb.append("\nHABIT REVIEW: ").append(TradingDesk.habits(c).text().take(1200))
+            }
             val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
             if (target != null && Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText))

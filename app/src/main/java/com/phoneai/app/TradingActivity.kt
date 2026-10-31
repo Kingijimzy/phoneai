@@ -85,6 +85,8 @@ class TradingActivity : Activity() {
         host.addView(gap(12))
         host.addView(deskCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
+        host.addView(positionsCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
         host.addView(simulateCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
         host.addView(conditionsCard(), LinearLayout.LayoutParams(-1, -2))
@@ -169,6 +171,28 @@ class TradingActivity : Activity() {
             firstRender = false
             for (i in 0 until host.childCount) if (host.getChildAt(i) is LinearLayout) Motion.enter(host.getChildAt(i), i / 2)
         }
+    }
+
+    /** Open positions with risk flags, trade sync with habit review, and crypto funding and open interest. */
+    private fun positionsCard(): LinearLayout {
+        val c = card()
+        c.addView(label("POSITIONS, HABITS & DERIVATIVES", 12f, Theme.MUTED, true))
+        val out = label("Watch runs these in the background too: alerts for missing stops, near stop or target, big losses, news before a trade, crowded funding, and a habit check after trades close.", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, dp(10)) }
+        c.addView(out)
+        fun run(wait: String, job: () -> String) {
+            out.setTextColor(Theme.TEXT); out.text = wait
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r; Motion.enter(out) }
+            }.start()
+        }
+        val sym = TradingDesk.followSymbols(this).firstOrNull { FxData.pairOf(it) == null } ?: "BTCUSDT"
+        c.addView(row(
+            pill("Positions", true) { run("Reading your positions…") { TradingDesk.positionsText(this) } },
+            pill("Sync & habits", false) { run("Syncing your Bybit trades and reviewing habits…") { TradingDesk.habits(this).text() } },
+            pill("Funding " + sym.removeSuffix("USDT"), false) { run("Reading funding and open interest…") { TradingDesk.derivatives(this, sym)?.text ?: "No derivatives data right now." } }
+        ))
+        return c
     }
 
     private fun openWithFade(i: Intent) {
