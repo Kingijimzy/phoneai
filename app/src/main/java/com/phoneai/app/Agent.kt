@@ -811,9 +811,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         OrionObjectiveGraph.clear(svc)
     }
 
-    fun runConversation(input: String) {
-        val command = input.trim()
-        if (command.isEmpty()) return
     private fun indexMemoryObservation(text: String, sourceLabel: String) {
         runCatching {
             MemoryAutoIndexer.observe(svc, text)?.let { memory ->
@@ -829,6 +826,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
     }
 
+    fun runConversation(input: String) {
+        val command = input.trim()
+        if (command.isEmpty()) return
         indexMemoryObservation(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
