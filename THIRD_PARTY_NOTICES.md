@@ -15,6 +15,21 @@ PhoneAI is licensed as a whole under the GNU General Public License, version 3 o
 
 Keep this notice and the provenance header in redistributed source and binaries. When distributing an APK or other object-code build, provide recipients access to the corresponding source and comply with GPLv3 section 6.
 
+## Hermes Agent — adapted response and tool-output guards
+
+- Project: [Hermes Agent](https://github.com/NousResearch/hermes-agent)
+- Upstream license: MIT License; full notice is included at `licenses/HERMES-MIT-LICENSE.txt`.
+- Upstream files:
+  - `agent/repetition_guard.py`
+  - `tools/tool_output_truncate.py`
+- PhoneAI adaptations:
+  - `app/src/main/java/com/phoneai/app/HermesRepetitionGuard.kt` is a dependency-free Kotlin adaptation of the conservative repeated-output detection algorithm. It is used to reject runaway completed model responses before they are saved as chat history or dispatched as task JSON.
+  - `app/src/main/java/com/phoneai/app/HermesToolOutputTruncation.kt` preserves the upstream 40% head / 60% tail truncation policy and explicit omitted-character notice. It is used for oversized untrusted external results so trailing evidence is not silently discarded.
+- Copyright: Copyright (c) 2025 Nous Research.
+- Upstream source: https://github.com/NousResearch/hermes-agent
+
+Keep the MIT copyright, permission, and warranty-disclaimer notice with redistributed copies and substantial portions of these adaptations. The MIT-licensed adaptations are included in this GPL-3.0-or-later PhoneAI distribution.
+
 ## Existing third-party components
 
 ## Android UI Detection YOLOv8 weights
