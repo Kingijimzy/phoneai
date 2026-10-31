@@ -64,7 +64,7 @@ class OrionAgentDelegationTest {
             "parent-task-restore",
             "Research durable Android background execution",
             parentObjectiveId = "research"
-        ).copy(maxCapabilityCalls = 2)
+        )
         assertTrue(OrionAgentDelegation.begin(context, original))
 
         val restored = OrionAgentDelegation.restore(context, original.id)
@@ -78,7 +78,7 @@ class OrionAgentDelegationTest {
         assertEquals(original.allowedTools, restored.allowedTools)
         assertEquals(original.memoryScope, restored.memoryScope)
         assertEquals(original.maxModelCalls, restored.maxModelCalls)
-        assertEquals(2, restored.maxCapabilityCalls)
+        assertEquals(1, restored.maxCapabilityCalls)
     }
 
     @Test fun restoreRejectsUnknownManifestAndMalformedIds() {
@@ -219,6 +219,33 @@ class OrionAgentDelegationTest {
         )
         assertTrue(OrionAgentDelegation.begin(context, orphaned))
         assertNull(OrionAgentDelegation.restore(context, orphaned.id))
+    }
+
+    @Test fun restoreRejectsPersistedCapabilityBudgetWidening() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-budget-tamper", "Research a public Android topic"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        val prefs = context.getSharedPreferences("orion_agent_delegation_ledger", android.content.Context.MODE_PRIVATE)
+        val runs = org.json.JSONArray(prefs.getString("runs", "[]"))
+        runs.getJSONObject(0).put("maxCapabilityCalls", 4)
+        prefs.edit().putString("runs", runs.toString()).commit()
+
+        assertNull(OrionAgentDelegation.restore(context, manifest.id))
+    }
+
+    @Test fun specialistReceiptCannotBeFinishedTwiceOrResurrected() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-finish-once", "Research a public Android topic"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        assertTrue(OrionAgentDelegation.finish(context, manifest, "completed"))
+        assertFalse(OrionAgentDelegation.finish(context, manifest, "late replacement"))
+        assertEquals("completed", OrionAgentDelegation.latest(context, 1).single().optString("status"))
     }
 
 }
