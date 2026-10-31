@@ -158,6 +158,30 @@ class AgentCheckpointStoreTest {
         assertNotNull(second)
         assertNotEquals(first, second)
     }
+    @Test fun parentPauseAndStopAreVisibleToChildDelegationByExactTaskId() {
+        assertTrue(AgentCheckpointStore.begin(context, "Coordinate a research specialist"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(parentId)
+        assertFalse(AgentCheckpointStore.cancellationRequested(context, parentId))
+        assertFalse(AgentCheckpointStore.cancellationRequested(context, "different-task"))
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+
+        assertTrue(AgentCheckpointStore.clear(context))
+        assertTrue(AgentCheckpointStore.begin(context, "Coordinate another specialist"))
+        val stoppedParent = AgentCheckpointStore.evidenceTaskId(context)
+        assertTrue(AgentCheckpointStore.stop(context, "User cancelled parent objective"))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, stoppedParent))
+    }
+
+    @Test fun archivedPausedParentRemainsCancelledForItsDelegatedWorker() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent objective"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertTrue(AgentCheckpointStore.begin(context, "Unrelated new objective"))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+    }
+
     @Test fun tasksExecutorOwnsDurableCheckpointRecoveryBoundary() {
         assertTrue(OrionTasksCapabilityExecutor.beginRun(context, "Inspect the app after restart"))
         assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "open_app", JSONObject().put("name", "Settings")))
