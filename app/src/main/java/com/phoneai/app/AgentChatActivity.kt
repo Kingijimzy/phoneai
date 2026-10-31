@@ -63,6 +63,7 @@ class AgentChatActivity : Activity() {
     private val turns = mutableListOf<AgentRunner.Turn>()
     private var pendingImage: String? = null
     @Volatile private var busy = false
+    @Volatile private var screenDestroyed = false
     private var deskStatus: TextView? = null
     private var pnlText: TextView? = null
     private var moodText: TextView? = null
@@ -133,7 +134,7 @@ class AgentChatActivity : Activity() {
             val t = try { TradingDesk.statusLine(this) } catch (_: Exception) { "Desk status unavailable" }
             val snap = try { TradingDesk.pnlSnapshot(this) } catch (_: Exception) { null }
             runOnUiThread {
-                if (isDestroyed) return@runOnUiThread
+                if (uiUnavailable()) return@runOnUiThread
                 deskStatus?.text = t
                 if (snap != null) {
                     strip.text = snap.strip; moodText?.text = snap.state.line; mascot?.setMood(snap.state.mood)
@@ -217,8 +218,8 @@ class AgentChatActivity : Activity() {
     private fun startWake() {
         if (!wakeOn || wake != null || listeningNow || speakingNow || busy || !resumed) return
         val d = OfflineWakeWordDetector(applicationContext, onWake = {
-            runOnUiThread { stopWake(); if (wakeOn && resumed) micTap() }
-        }, onError = { m -> runOnUiThread { wakeOn = false; stopWake(); android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show(); selectGroup(currentGroup) } })
+            postUiIfAlive { stopWake(); if (wakeOn && resumed) micTap() }
+        }, onError = { m -> postUiIfAlive { wakeOn = false; stopWake(); android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show(); selectGroup(currentGroup) } })
         if (d.start()) wake = d else { wakeOn = false; selectGroup(currentGroup) }
     }
 
@@ -247,7 +248,7 @@ class AgentChatActivity : Activity() {
                 val wait = addBubble(false, "Checking your setup…")
                 Thread {
                     val t = try { DeskHealth.text(TradingDesk.healthItems(this)) } catch (_: Exception) { "I could not run the setup check." }
-                    runOnUiThread { if (!isDestroyed) { wait.text = Markdown.render(t) } }
+                    postUiIfAlive { wait.text = Markdown.render(t) }
                 }.start()
             }
             "learned" -> notesDialog()
@@ -302,9 +303,18 @@ class AgentChatActivity : Activity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    override fun onDestroy() { ticker.removeCallbacks(tick); stopWake(); holo?.destroy(); holo = null; voice?.shutdown(); voice = null; super.onDestroy() }
+    override fun onDestroy() { screenDestroyed = true; ticker.removeCallbacks(tick); stopWake(); holo?.destroy(); holo = null; voice?.shutdown(); voice = null; super.onDestroy() }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun uiUnavailable(): Boolean = screenDestroyed || isFinishing || isDestroyed
+
+    private fun postUiIfAlive(action: () -> Unit) {
+        runOnUiThread {
+            if (uiUnavailable()) return@runOnUiThread
+            action()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -458,7 +468,7 @@ class AgentChatActivity : Activity() {
                             else -> "I don't recognise \"$sym\". Try a Bybit symbol, a forex pair such as EURUSD, or gold, oil, SPX."
                         }
                     } catch (e: Exception) { "Quote failed: " + (e.message ?: e.javaClass.simpleName).take(120) }
-                    runOnUiThread { AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show() }
+                    postUiIfAlive { AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show() }
                 }.start()
             }.setNegativeButton("Cancel", null).show()
     }
@@ -520,6 +530,7 @@ class AgentChatActivity : Activity() {
                 val result = Trading.placeProposal(this, t) { question ->
                     val latch = java.util.concurrent.CountDownLatch(1); var ok = false
                     runOnUiThread {
+                        if (uiUnavailable()) { latch.countDown(); return@runOnUiThread }
                         AlertDialog.Builder(this).setTitle("Confirm order").setMessage(question)
                             .setPositiveButton("Place") { _, _ -> ok = true; latch.countDown() }
                             .setNegativeButton("Cancel") { _, _ -> latch.countDown() }
@@ -528,7 +539,7 @@ class AgentChatActivity : Activity() {
                     latch.await(120, java.util.concurrent.TimeUnit.SECONDS); ok
                 }
                 if (result.startsWith("Order placed")) AgentLessons.addTagged(this, "coach", "trade", result.take(200))
-                runOnUiThread { status.text = result }
+                postUiIfAlive { status.text = result }
             }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Dismiss") { messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
@@ -558,7 +569,7 @@ class AgentChatActivity : Activity() {
         row.addView(smallButton("Accept") { TradingDesk.accept(this, st); say("Added to your playbook. I will track results and watch for matches.") }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Accept & match") {
             TradingDesk.accept(this, st); say("Added. Matching now…")
-            Thread { val r = try { TradingDesk.scan(this, st.instruments.ifEmpty { TradingDesk.followSymbols(this) }) } catch (e: Exception) { "Match failed: " + (e.message ?: "") }; runOnUiThread { say(r) } }.start()
+            Thread { val r = try { TradingDesk.scan(this, st.instruments.ifEmpty { TradingDesk.followSymbols(this) }) } catch (e: Exception) { "Match failed: " + (e.message ?: "") }; postUiIfAlive { say(r) } }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Dismiss") { TradingDesk.dismissPending(this, st.name); messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
         card.addView(row); card.addView(status)
@@ -577,7 +588,7 @@ class AgentChatActivity : Activity() {
                 val args = org.json.JSONObject().put("action", "open").put("symbol", p.symbol).put("side", if (p.long) "buy" else "sell").put("usd", p.usd).put("stop", p.stop).put("setup_type", "coach")
                 p.target?.let { args.put("target", it) }
                 val r = TradingDesk.run(this, "paper_trade", args)
-                runOnUiThread { say(r) }
+                postUiIfAlive { say(r) }
             }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         if (DerivDesk.hasToken(this) && DerivProtocol.symbolFor(p.symbol) != null) {
@@ -587,6 +598,7 @@ class AgentChatActivity : Activity() {
                     val r = DerivDesk.trade(this, p) { question ->
                         val latch = java.util.concurrent.CountDownLatch(1); var ok = false
                         runOnUiThread {
+                            if (uiUnavailable()) { latch.countDown(); return@runOnUiThread }
                             AlertDialog.Builder(this).setTitle("Confirm Deriv trade").setMessage(question)
                                 .setPositiveButton("Place") { _, _ -> ok = true; latch.countDown() }
                                 .setNegativeButton("Cancel") { _, _ -> latch.countDown() }
@@ -615,7 +627,7 @@ class AgentChatActivity : Activity() {
         val uri = data?.data ?: return
         Thread {
             val encoded = try { encodeImage(uri) } catch (e: Exception) { null }
-            runOnUiThread {
+            postUiIfAlive {
                 if (encoded == null) {
                     Toast.makeText(this, "Could not read that image. Try a screenshot or a smaller picture.", Toast.LENGTH_LONG).show()
                 } else {
@@ -687,6 +699,11 @@ class AgentChatActivity : Activity() {
             }
             runOnUiThread {
                 val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
+                if (uiUnavailable()) {
+                    val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shown)) }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@runOnUiThread
+                }
                 waiting.text = Markdown.render(shown)
                 turns.add(AgentRunner.Turn("assistant", shown))
                 AgentChatStore.save(this, agent.id, turns)
@@ -745,11 +762,18 @@ class AgentChatActivity : Activity() {
             }
             service.executeSharedToolRequest(text, "specialist agent " + agent.name) { result ->
                 val shownResult = result.ifBlank { "The tool executor returned no final response. Check Orion's task transcript." }
-                transitionReply(waiting, shownResult)
-                turns.add(AgentRunner.Turn("assistant", shownResult))
-                AgentChatStore.save(this, agent.id, turns)
-                busy = false
-                scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                runOnUiThread {
+                    if (uiUnavailable()) {
+                        val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shownResult)) }
+                        AgentChatStore.save(applicationContext, agent.id, recovered)
+                        return@runOnUiThread
+                    }
+                    transitionReply(waiting, shownResult)
+                    turns.add(AgentRunner.Turn("assistant", shownResult))
+                    AgentChatStore.save(this, agent.id, turns)
+                    busy = false
+                    scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                }
             }
             return
         }
@@ -771,13 +795,22 @@ class AgentChatActivity : Activity() {
             val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades; strategies = it.strategies; papers = it.papers }.text }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
+                val finalReply = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
+                if (uiUnavailable()) {
+                    val recovered = history.toMutableList().apply {
+                        add(AgentRunner.Turn("user", shown.trim()))
+                        add(AgentRunner.Turn("assistant", finalReply))
+                    }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@runOnUiThread
+                }
                 trades.forEach { addTradeCard(it) }
                 strategies.forEach { addStrategyCard(it) }
                 papers.forEach { addPaperCard(it) }
-                transitionReply(waiting, reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
+                transitionReply(waiting, finalReply)
                 setLive(CompanionView.Activity.IDLE)
                 val talk = agent.id == "coach" && (Prefs.companionVoice(this) || handsFree) && reply.isNotBlank()
-                if (talk) voiceOut().speak(reply.take(400)) { runOnUiThread { if (handsFree && resumed) micTap() } }
+                if (talk) voiceOut().speak(reply.take(400)) { postUiIfAlive { if (handsFree && resumed) micTap() } }
                 else if (handsFree && resumed) ticker.postDelayed({ if (handsFree && resumed && !busy) micTap() }, 600L)
                 else ticker.postDelayed({ startWake() }, 1500L)
                 // The image is not stored in history; only the text turn is.
