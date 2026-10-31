@@ -41,11 +41,67 @@ object AgentCheckpointStore {
             .replace(Regex("(?i)\\bpasswd\\s*[:=]\\s*[^\\s,;]+")) { "passwd=[redacted]" }
             .replace(Regex("(?i)\\bauthorization\\s*[:=]\\s*(?:bearer\\s+)?[^\\s,;]+"), "authorization=[redacted]")
     )
+    private fun archiveDirectory(c: Context): File =
+        File(c.filesDir, "orion_agent_checkpoints").also { it.mkdirs() }
+
+    private fun isPending(o: JSONObject): Boolean =
+        o.optString("status") in setOf("running", "paused", "recovery_required")
+
+    /** Archive an independent unfinished task without copying it into chat history. */
+    private fun archive(c: Context, checkpoint: JSONObject): Boolean {
+        val taskId = checkpoint.optString("taskId").ifBlank { java.util.UUID.randomUUID().toString() }
+            .replace(Regex("[^A-Za-z0-9_-]"), "")
+        val target = File(archiveDirectory(c), "${checkpoint.optLong("startedAt", System.currentTimeMillis())}_$taskId.json")
+        if (target.exists()) return true
+        val atomic = AtomicFile(target)
+        var stream: FileOutputStream? = null
+        return try {
+            stream = atomic.startWrite()
+            stream.write(checkpoint.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+            true
+        } catch (_: Exception) {
+            if (stream != null) runCatching { atomic.failWrite(stream) }
+            false
+        }
+    }
+
+    private fun archivedPending(c: Context): List<Pair<File, JSONObject>> =
+        archiveDirectory(c).listFiles { f -> f.isFile && f.name.endsWith(".json") }
+            .orEmpty().mapNotNull { f ->
+                val value = runCatching { AtomicFile(f).openRead().bufferedReader().use { JSONObject(it.readText()) } }.getOrNull()
+                if (value != null && isPending(value)) f to value else null
+            }.sortedBy { it.second.optLong("startedAt", Long.MAX_VALUE) }
+
+    fun hasArchivedPending(c: Context): Boolean = synchronized(lock) { archivedPending(c).isNotEmpty() }
+
+    /**
+     * On an explicit Continue, switch to the oldest preserved unfinished task. If the current
+     * task is also paused, archive it first. A running task is never displaced.
+     */
+    fun activateOldestArchived(c: Context): Boolean = synchronized(lock) {
+        val current = readCheckpoint(c)
+        if (current?.optString("status") == "running") return@synchronized false
+        val candidates = archivedPending(c)
+        if (candidates.isEmpty()) return@synchronized false
+        if (current != null && isPending(current) && !archive(c, current)) return@synchronized false
+        val selected = archivedPending(c).firstOrNull() ?: return@synchronized false
+        if (!save(c, selected.second)) return@synchronized false
+        selected.first.delete()
+        true
+    }
+
+    fun archivedPendingSummaries(c: Context): List<String> = synchronized(lock) {
+        archivedPending(c).map { (_, value) ->
+            value.optString("taskId") + "|" + value.optString("status") + "|" +
+                value.optString("command").take(160)
+        }
+    }
+
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
-        // There is one active execution checkpoint. Never replace work that is still resumable
-        // or whose last action needs reconciliation; the caller must resume or explicitly stop it.
         val existing = readCheckpoint(c)
-        if (existing != null && existing.optString("status") in setOf("running", "paused", "recovery_required")) return@synchronized false
+        if (existing?.optString("status") == "running") return@synchronized false
+        if (existing != null && isPending(existing) && !archive(c, existing)) return@synchronized false
         val now = System.currentTimeMillis()
         val o = JSONObject()
             .put("command", safeCommand(command))
@@ -243,6 +299,7 @@ object AgentCheckpointStore {
     fun clear(c: Context): Boolean = synchronized(lock) {
         try {
             AtomicFile(file(c)).delete()
+            archiveDirectory(c).listFiles()?.forEach { it.delete() }
             true
         } catch (_: Exception) {
             false
