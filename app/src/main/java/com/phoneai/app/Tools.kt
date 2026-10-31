@@ -1010,6 +1010,57 @@ class Tools(
         if (MemoryStore.delete(svc, id)) "forgot memory $id"
         else "error: memory $id was not deleted; it may not exist or device storage may be unavailable"
 
+    fun queueAgent(agentName: String, task: String, parentObjectiveId: String = "", idempotencyKey: String = ""): String {
+        val agent = AgentProfiles.resolveFor(svc, agentName)
+            ?: return "error: unknown specialist. Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
+        if (task.isBlank()) return "error: specialist task is required"
+        if (agent.id !in setOf("coder", "writer", "planner") || AgentProfiles.find(agent.id) == null) {
+            return "error: background execution currently supports only the built-in coder, writer and planner with no external capabilities; use ask_agent for other specialists."
+        }
+        val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
+            ?: return "error: start a durable Orion objective before queuing background specialist work."
+        val checkpoint = AgentCheckpointStore.pending(svc)
+        if (checkpoint?.optString("status") !in setOf("running", "waiting_for_children") ||
+            AgentCheckpointStore.cancellationRequested(svc, parentTaskId)) {
+            return "error: the exact parent objective is not active; no background work was queued."
+        }
+        val sessionId = OrionConversationRepository.get(svc).activeSessionId(svc)
+            ?: return "error: no originating chat session could be identified; no background work was queued."
+        val store = OrionWorkerJobStore(svc)
+        val key = idempotencyKey.trim().take(100).ifBlank { java.util.UUID.randomUUID().toString() }
+        val previous = store.all().firstOrNull { it.parentTaskId == parentTaskId && it.idempotencyKey == key }
+        if (previous != null) {
+            if (previous.status == OrionWorkerJobStore.Status.QUEUED && !OrionSpecialistScheduler.enqueue(svc, previous.id)) {
+                return "error: existing queued job could not be scheduled; it remains queued for recovery."
+            }
+            return "SPECIALIST JOB ${previous.id} [${previous.status.name.lowercase()}]: duplicate request matched the existing durable job; no second job was created."
+        }
+        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
+        if (manifest.access !in setOf(OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING) ||
+            manifest.allowedTools.isNotEmpty()) return "error: specialist manifest is not eligible for background execution."
+        if (!OrionAgentDelegation.begin(svc, manifest)) return "error: specialist policy receipt could not be saved."
+        val kind = if (manifest.access == OrionAgentDelegation.Access.TASK_PLANNING)
+            OrionWorkerJobStore.Kind.TASK_PLANNING else OrionWorkerJobStore.Kind.ANALYSIS
+        val job = store.enqueue(
+            parentTaskId, manifest.objective, kind, key, parentObjectiveId,
+            manifestId = manifest.id, conversationId = sessionId
+        )
+        if (job == null) {
+            OrionAgentDelegation.finish(svc, manifest, "error: durable job record could not be saved", failed = true)
+            return "error: durable specialist job could not be saved; nothing was scheduled."
+        }
+        if (!OrionSpecialistScheduler.enqueue(svc, job.id)) {
+            store.cancel(job.id, "workmanager_schedule_failed")
+            OrionAgentDelegation.finish(svc, manifest, "error: background scheduler unavailable", failed = true)
+            return "error: Android background scheduler could not accept the job; it was not started."
+        }
+        OrionConversationRepository.get(svc).recordEventForSession(
+            svc, sessionId, "specialist-queued-${job.id}", "specialist_job", "queued",
+            "Orion queued ${agent.name} for: ${manifest.objective.take(180)}"
+        )
+        "SPECIALIST JOB ${job.id} [queued]: ${agent.name} will return a bounded analysis to this conversation. Android may defer execution; no phone action or trade is authorized."
+    }
+
     fun askAgent(agentName: String, task: String, parentObjectiveId: String = ""): String {
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
