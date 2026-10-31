@@ -181,4 +181,25 @@ internal object OrionRuntimeNotifier {
             )
         }
     }
+
+    /** Routine reminders contain only owner-approved, non-sensitive routine memory text. */
+    fun postRoutineReminder(context: Context, title: String) {
+        if (!allowed(context)) return
+        runCatching {
+            val body = title.trim().take(160).ifBlank { "A routine you asked Orion to remind you about." }
+            val id = NOTIFICATION_BASE + (body.hashCode() and 0x1fff)
+            manager(context).notify(
+                id,
+                builder(context)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("Orion routine reminder")
+                    .setContentText(body)
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(body))
+                    .setContentIntent(openIntent(context, id))
+                    .setAutoCancel(true)
+                    .build()
+            )
+        }
+    }
+
 }
