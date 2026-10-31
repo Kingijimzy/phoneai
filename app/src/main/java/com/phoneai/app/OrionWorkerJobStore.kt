@@ -149,23 +149,6 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         changed
     }
 
-    /** Compact status receipts for the central chat brain; results remain evidence, never instructions. */
-    fun promptSummary(limit: Int = 4): String {
-        val recent = all().takeLast(limit.coerceIn(1, 8))
-        if (recent.isEmpty()) return "SPECIALIST JOB QUEUE: no durable specialist jobs recorded."
-        return buildString {
-            append("DURABLE SPECIALIST JOB QUEUE (saved local receipts; never imply queued work has run):")
-            recent.forEach { job ->
-                append("\n- ").append(job.kind.name.lowercase())
-                    .append(" [").append(job.status.name.lowercase()).append("] ")
-                    .append(job.objective.take(180))
-                if (job.result.isNotBlank()) append(" — result: ").append(job.result.take(220))
-                if (job.lastError.isNotBlank()) append(" — note: ").append(job.lastError.take(120))
-                append(" (job ").append(job.id.take(12)).append("; parent ").append(job.parentTaskId.take(12)).append(")")
-            }
-        }.take(1400)
-    }
-
     /** A running provider call may have completed before process death; never blindly replay it. */
     fun all(): List<Job> = synchronized(lock) { loadLocked(); jobs.map { it.copy() } }
 
