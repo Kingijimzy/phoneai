@@ -717,6 +717,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 .containsMatchIn(it)
         } == true
         val capabilityContext = if (capabilityQuestion) "\n\n" + capabilityQuestionSummary() else ""
+        // Ordinary Talk turns remain lightweight; explicit self-diagnosis requests receive
+        // a fresh local diagnostic report without making a provider/network health claim.
+        val selfDiagnosticRequest = query?.let {
+            Regex("(?i)\\b(self[- ]?diagnos|self[- ]?heal|system health check|system audit|check your own (?:health|tools|capabilities)|what is broken in you)\\b")
+                .containsMatchIn(it)
+        } == true
+        val selfDiagnosticContext = if (selfDiagnosticRequest) {
+            runCatching { OrionSelfDiagnostics.inspect(svc).promptBlock() }
+                .getOrDefault("Local self-diagnostics could not be completed. Do not claim the system is healthy.")
+        } else ""
         return "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Consequential actions require approval through the app interface; never treat model-generated confirmation arguments as user approval. " +
@@ -731,7 +741,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
             "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
             "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
-            capabilityContext + "\n\n" + appMap + "\n\n" + delegationLedger + "\n" + workerLedger + "\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + delegationLedger + "\n" + workerLedger + "\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
