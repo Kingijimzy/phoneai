@@ -67,6 +67,20 @@ class OrionTaskOrchestratorTest {
         assertTrue(prompt.contains("is not proof permission is missing"))
     }
 
+    @Test fun plannerPrefersDirectCapabilitiesBeforeGuiAndCompletesResearchFileTasks() {
+        val context = OrionTaskOrchestrator.build(
+            "Search for ten ways to think faster and save the findings in a file.",
+            listOf(tool("live_web_search"), tool("save_file"), tool("read_screen")),
+            packs, termuxReady = true
+        )
+        val prompt = context.promptLines().joinToString("\n")
+        assertTrue(prompt.contains("ALTERNATIVE ROUTING CONTRACT"))
+        assertTrue(prompt.contains("direct API or registered integration first"))
+        assertTrue(prompt.contains("screen automation only when the task truly requires the phone UI"))
+        assertTrue(prompt.contains("COMPOUND RESEARCH-AND-FILE CONTRACT"))
+        assertTrue(prompt.contains("Research without the requested file is incomplete"))
+    }
+
     @Test fun clarificationMustPrecedeDispatch() {
         val context = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
         assertTrue(context.goal.needsClarification)
