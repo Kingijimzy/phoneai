@@ -216,7 +216,7 @@ class AgentCheckpointStoreTest {
         assertTrue(AgentCheckpointStore.begin(context, "A new unrelated user objective"))
         assertTrue("An archived waiting parent must never authorize its queued child",
             AgentCheckpointStore.cancellationRequested(context, oldParent))
-        assertEquals(OrionWorkerJobStore.Status.QUEUED,
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED,
             OrionWorkerJobStore(context).all().first { it.id == child!!.id }.status)
     }
 
