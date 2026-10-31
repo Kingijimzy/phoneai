@@ -19,7 +19,7 @@ import java.util.UUID
  */
 internal class OrionWorkerJobStore(context: Context, private val clock: () -> Long = { System.currentTimeMillis() }) {
     enum class Kind { ANALYSIS, READ_ONLY_RESEARCH, TRADING_ANALYSIS, TASK_PLANNING }
-    enum class Status { QUEUED, RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED, NEEDS_REVIEW }
+    enum class Status { QUEUED, RUNNING, RESULT_PENDING, PAUSED, COMPLETED, FAILED, CANCELLED, NEEDS_REVIEW }
 
     data class Job(
         val id: String,
@@ -98,7 +98,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         // intentionally acquire the checkpoint lock before cancelling child jobs.
         val candidate = synchronized(lock) {
             loadLocked()
-            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
             jobs.firstOrNull { it.status == Status.QUEUED }?.copy()
         } ?: return null
         val parentRunning = runCatching { parentIsRunning(candidate.parentTaskId) }.getOrDefault(false)
@@ -124,8 +124,13 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         }
     }
 
+    fun stageResult(jobId: String, result: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
+        it.copy(status = Status.RESULT_PENDING, updatedAt = clock(),
+            result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\\\s+"), " ").take(1200), lastError = "")
+    }
+
     fun complete(jobId: String, result: String, closeParent: Boolean = true): Boolean {
-        val completed = transition(jobId, setOf(Status.RUNNING)) {
+        val completed = transition(jobId, setOf(Status.RUNNING, Status.RESULT_PENDING)) {
             it.copy(status = Status.COMPLETED, updatedAt = clock(),
                 result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(1200), lastError = "")
         }
@@ -150,7 +155,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     }
 
     fun cancel(jobId: String, reason: String = "cancelled_by_parent"): Boolean = transition(
-        jobId, setOf(Status.QUEUED, Status.RUNNING, Status.PAUSED)
+        jobId, setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED)
     ) {
         it.copy(status = Status.CANCELLED, updatedAt = clock(),
             lastError = AgentPrivacyFilter.safeCommand(reason).take(240))
