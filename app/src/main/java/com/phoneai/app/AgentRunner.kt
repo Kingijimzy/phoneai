@@ -223,7 +223,7 @@ object AgentRunner {
                 OrionAgentDelegation.Access.TASK_PLANNING -> "This specialist has no external data capabilities."
             }
         }
-        runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence).text
+        return runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence).text
     }
 
     internal fun runFull(
