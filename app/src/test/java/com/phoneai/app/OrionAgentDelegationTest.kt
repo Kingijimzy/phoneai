@@ -4,6 +4,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionAgentDelegationTest {
+    @Test fun cancelledParentPreventsSpecialistCapabilityDispatch() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-task-cancelled", "Research Android background scheduling"
+        )
+        var dispatched = false
+        val result = AgentRunner.runDelegated(
+            org.robolectric.RuntimeEnvironment.getApplication(),
+            AgentProfiles.find("research")!!,
+            manifest.objective,
+            manifest,
+            { _, _ -> dispatched = true; "unexpected data" },
+            { true }
+        )
+        assertTrue(result.startsWith("error:"))
+        assertTrue(result.contains("paused or stopped"))
+        assertFalse(dispatched)
+    }
+
     @Test fun researchSpecialistReceivesOnlyPublicReadCapabilities() {
         val manifest = OrionAgentDelegation.create(
             AgentProfiles.find("research")!!, "parent-task-42", "Research recent Android agent frameworks"
