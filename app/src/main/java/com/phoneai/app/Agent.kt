@@ -2467,9 +2467,15 @@ Rules:
             "github_public",
             JSONObject().put("owner", owner).put("repo", repository).put("section", "readme")
         )
-        return if (metadata.startsWith("error:", true) || readme.startsWith("error:", true)) {
-            "Public repository https://github.com/$owner/$repository was identified, but one or more reads failed.\n$metadata\n$readme"
-        } else summarizeRepository(command, metadata, readme)
+        if (metadata.startsWith("error:", true)) {
+            return "I could not read public repository metadata for https://github.com/$owner/$repository. " +
+                "This is the actual GitHub response, not proof that the repository is private or missing.\n$metadata"
+        }
+        val readmeContext = if (readme.startsWith("error:", true)) {
+            "README STATUS: GitHub did not provide a readable README for this public repository. " +
+                "A missing README does not mean the repository itself is inaccessible or private.\n$readme"
+        } else readme
+        return summarizeRepository(command, metadata, readmeContext)
     }
 
     /** Deterministic read shortcuts skip model planning, never the shared dispatch lifecycle. */
