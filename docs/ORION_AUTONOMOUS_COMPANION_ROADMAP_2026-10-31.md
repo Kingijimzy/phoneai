@@ -480,3 +480,6 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - task_list exposes the same queue state, while specialist_job_status returns the full bounded saved result for an exact ID.
 - MainChatActivity now loads lifecycle events directly from the SQLite conversation repository, rather than depending on PhoneAiService being alive. It refreshes events on chat resume, so background results remain visible when the user returns.
 - A completion notification is emitted only after the result event has been persisted. It directs the user back to the original Orion conversation and explicitly says the parent task is not yet complete.
+
+
+- Hardened the bounded manifest ledger so it evicts historical terminal receipts first and refuses new work if every slot is occupied by a running manifest. A queued worker's active policy receipt can no longer be silently evicted by later synchronous specialist calls.
