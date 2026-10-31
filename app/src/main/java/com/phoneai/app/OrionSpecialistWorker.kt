@@ -30,7 +30,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val parentIsLive: (String) -> Boolean = { parentId ->
             val checkpoint = AgentCheckpointStore.pending(applicationContext)
             AgentCheckpointStore.evidenceTaskId(applicationContext) == parentId &&
-                checkpoint?.optString("status") in setOf("running", "waiting_for_children") &&
+                checkpoint?.optString("status").orEmpty() in setOf("running", "waiting_for_children") &&
                 !AgentCheckpointStore.cancellationRequested(applicationContext, parentId)
         }
         val manifestId = existing.manifestId ?: run {
