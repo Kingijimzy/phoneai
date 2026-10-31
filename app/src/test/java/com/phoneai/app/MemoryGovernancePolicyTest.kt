@@ -29,49 +29,62 @@ class MemoryGovernancePolicyTest {
 
 
 class OrionSelfHealingPolicyTest {
-    @Test fun permissionFailuresAskOwnerInsteadOfRetrying() {
-        val signal = OrionSelfHealingPolicy.Signal("phone_control", "SecurityException: permission not granted")
-        val diagnosis = OrionSelfHealingPolicy.diagnose(signal)
-        assertEquals(OrionSelfHealingPolicy.Domain.PERMISSION, diagnosis.domain)
-        assertEquals(OrionSelfHealingPolicy.Recovery.REQUEST_OWNER_PERMISSION, diagnosis.recovery)
-        assertFalse(OrionSelfHealingPolicy.mayAutoRecover(diagnosis, signal))
+    private fun completeDraft(status: OrionExtensionStatus = OrionExtensionStatus.AWAITING_OWNER) =
+        OrionExtensionDraft(
+            id = "calendar-helper", name = "Calendar helper", purpose = "Parse a calendar reminder",
+            sourceUrls = listOf("https://example.org/source"), licenseId = "MIT",
+            licenseEvidence = "Repository LICENSE file reviewed",
+            declaredCapabilities = setOf("calendar.read"), sandboxTestRunId = "test-run-1",
+            sandboxTestsPassed = true, rollbackPlan = "Disable the extension and restore prior manifest",
+            status = status
+        )
+
+    @Test fun autoRetryRequiresReversibleIdempotentAndRollback() {
+        assertTrue(OrionSelfHealingPolicy.mayAutoRetry(OrionRepairRisk.REVERSIBLE, true, true, 0, OrionFindingSeverity.ERROR))
+        assertFalse(OrionSelfHealingPolicy.mayAutoRetry(OrionRepairRisk.REVERSIBLE, true, true, 1, OrionFindingSeverity.ERROR))
+        assertFalse(OrionSelfHealingPolicy.mayAutoRetry(OrionRepairRisk.DATA_AFFECTING, true, true, 0, OrionFindingSeverity.ERROR))
+        assertFalse(OrionSelfHealingPolicy.mayAutoRetry(OrionRepairRisk.REVERSIBLE, false, true, 0, OrionFindingSeverity.ERROR))
+        assertFalse(OrionSelfHealingPolicy.mayAutoRetry(OrionRepairRisk.REVERSIBLE, true, false, 0, OrionFindingSeverity.ERROR))
+        assertFalse(OrionSelfHealingPolicy.mayAutoRetry(OrionRepairRisk.REVERSIBLE, true, true, 0, OrionFindingSeverity.CRITICAL))
     }
 
-    @Test fun providerFailureUsesOnlyConfiguredFallbackAndIsBounded() {
-        val first = OrionSelfHealingPolicy.Signal("provider", "HTTP 429 rate limit", retryCount = 0)
-        val diagnosis = OrionSelfHealingPolicy.diagnose(first)
-        assertEquals(OrionSelfHealingPolicy.Recovery.USE_CONFIGURED_PROVIDER_FALLBACK, diagnosis.recovery)
-        assertTrue(OrionSelfHealingPolicy.mayAutoRecover(diagnosis, first))
-        assertEquals(OrionSelfHealingPolicy.Recovery.OWNER_INTERVENTION, OrionSelfHealingPolicy.diagnose(first.copy(retryCount = 1)).recovery)
+    @Test fun modelGeneratedRepairCannotAutoApplyWithoutTestEvidence() {
+        val proposal = OrionRepairProposal(
+            id = "repair-1", findingId = "finding-1", summary = "Fix a null guard",
+            risk = OrionRepairRisk.REVERSIBLE, isIdempotent = true, hasRollback = true,
+            requiredOwnerApproval = false, status = OrionRepairStatus.TEST_PASSED,
+            testRunId = "ci-123", testPassed = true
+        )
+        assertTrue(OrionSelfHealingPolicy.mayAutoApply(proposal))
+        assertFalse(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(testPassed = false)))
+        assertFalse(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(requiredOwnerApproval = true)))
+        assertFalse(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(risk = OrionRepairRisk.SECURITY_SENSITIVE)))
     }
 
-    @Test fun uncertainWritesAreNeverAutomaticallyRetried() {
-        val signal = OrionSelfHealingPolicy.Signal("telegram_send", "timeout after dispatch", operationWasReadOnly = false, sideEffectMayHaveOccurred = true)
-        val diagnosis = OrionSelfHealingPolicy.diagnose(signal)
-        assertEquals(OrionSelfHealingPolicy.Recovery.RECONCILE_UNCERTAIN_WRITE, diagnosis.recovery)
-        assertFalse(OrionSelfHealingPolicy.mayAutoRecover(diagnosis, signal))
+    @Test fun failedTestsCannotAdvanceRepairToApplied() {
+        assertEquals(OrionRepairStatus.TEST_FAILED,
+            OrionSelfHealingPolicy.nextRepairStatus(OrionRepairStatus.TESTING, false, false, false, false))
+        assertEquals(null,
+            OrionSelfHealingPolicy.nextRepairStatus(OrionRepairStatus.TEST_FAILED, true, true, true, true))
+        assertEquals(OrionRepairStatus.VERIFIED,
+            OrionSelfHealingPolicy.nextRepairStatus(OrionRepairStatus.APPLIED, true, true, true, true))
+        assertEquals(OrionRepairStatus.ROLLED_BACK,
+            OrionSelfHealingPolicy.nextRepairStatus(OrionRepairStatus.APPLIED, true, true, true, false))
     }
 
-    @Test fun interruptedWorkerCanResumeOnlyFromVerifiedCheckpoint() {
-        val signal = OrionSelfHealingPolicy.Signal("worker", "process died after checkpoint")
-        val diagnosis = OrionSelfHealingPolicy.diagnose(signal)
-        assertEquals(OrionSelfHealingPolicy.Recovery.RESUME_VERIFIED_CHECKPOINT, diagnosis.recovery)
-        assertTrue(OrionSelfHealingPolicy.mayAutoRecover(diagnosis, signal))
+    @Test fun extensionDraftRequiresSourceLicenseTestsAndRollbackEvidence() {
+        val valid = completeDraft()
+        assertTrue(OrionSelfHealingPolicy.validateExtension(valid).isEmpty())
+        assertTrue(OrionSelfHealingPolicy.validateExtension(valid.copy(sourceUrls = listOf("http://insecure.example"))).isNotEmpty())
+        assertTrue(OrionSelfHealingPolicy.validateExtension(valid.copy(licenseId = null)).isNotEmpty())
+        assertTrue(OrionSelfHealingPolicy.validateExtension(valid.copy(sandboxTestRunId = null)).isNotEmpty())
+        assertTrue(OrionSelfHealingPolicy.validateExtension(valid.copy(rollbackPlan = "")).isNotEmpty())
     }
 
-    @Test fun extensionMustPassEvidenceTestsAndOwnerApprovalBeforeActivation() {
-        val base = OrionSelfHealingPolicy.ExtensionEvidence(true, true, "MIT", true, 2, 2, false, false, false)
-        assertEquals(OrionSelfHealingPolicy.ExtensionDecision.READY_FOR_OWNER_REVIEW, OrionSelfHealingPolicy.extensionDecision(base))
-        assertEquals(OrionSelfHealingPolicy.ExtensionDecision.ENABLE, OrionSelfHealingPolicy.extensionDecision(base.copy(ownerApproved = true)))
-        assertEquals(OrionSelfHealingPolicy.ExtensionDecision.DRAFT_ONLY, OrionSelfHealingPolicy.extensionDecision(base.copy(licenseId = "unknown")))
-        assertEquals(OrionSelfHealingPolicy.ExtensionDecision.REJECT, OrionSelfHealingPolicy.extensionDecision(base.copy(modifiesPolicyOrPermissions = true)))
-        assertEquals(OrionSelfHealingPolicy.ExtensionDecision.DRAFT_ONLY, OrionSelfHealingPolicy.extensionDecision(base.copy(passedTests = 1)))
-    }
-
-    @Test fun cycleBudgetStopsRunawaySelfRepair() {
-        assertTrue(OrionSelfHealingPolicy.mayStartAnotherCycle(0, 3))
-        assertTrue(OrionSelfHealingPolicy.mayStartAnotherCycle(2, 3))
-        assertFalse(OrionSelfHealingPolicy.mayStartAnotherCycle(3, 3))
-        assertFalse(OrionSelfHealingPolicy.mayStartAnotherCycle(-1, 3))
+    @Test fun extensionActivationRequiresOwnerApprovalAndReviewState() {
+        val awaiting = completeDraft()
+        assertFalse(OrionSelfHealingPolicy.canActivateExtension(awaiting, false))
+        assertTrue(OrionSelfHealingPolicy.canActivateExtension(awaiting, true))
+        assertFalse(OrionSelfHealingPolicy.canActivateExtension(completeDraft(OrionExtensionStatus.TESTED), true))
     }
 }
