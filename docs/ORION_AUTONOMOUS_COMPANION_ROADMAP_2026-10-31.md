@@ -184,7 +184,7 @@ Tasks:
 | Stage | Status | Evidence / blocker |
 |---|---|---|
 | Stage 0 — integration baseline | IN PROGRESS | PR #132 draft; upstream stack is not yet on main; exact-head CI/review must be checked |
-| Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness and market-quote shortcuts now persist task begin/step/result/completion receipts; GitHub/account shortcuts and specialist/background continuity remain |
+| Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness, market-quote, GitHub account, repository-name search, Actions run/list and public repository inspection now persist task/step/result receipts; parent-child cancellation/recovery and background continuity remain |
 | Stage 2 — capability intelligence | IN PROGRESS — request-scoped contracts added | relevant capability families receive full contracts while all other tools remain discoverable by compact signatures; exact-head CI and latency/token comparison are pending |
 | Stage 3 — specialist delegation | IN PROGRESS — scoped manifests and receipts added | each ask_agent call now receives a parent-linked, least-privilege manifest and a durable delegation receipt; specialist tools are still analysis/read-only and lifecycle controls/independent delegated execution remain |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
@@ -207,8 +207,11 @@ Tasks:
 
 - Added `OrionResearchShortcutLifecycle`, a bounded adapter that creates a durable task checkpoint before a direct research shortcut, persists each read-only step before/after dispatch, records errors, pauses safely on cancellation, requires recovery if evidence cannot be saved, and reports completion only when the completion marker persists.
 - Routed weather, live news, live sports, explicit web search, freshness-dependent web lookup and public market quote shortcuts through that lifecycle. Each action still calls the existing guarded `research` dispatch path; this adapter does not grant permissions or bypass policy.
-- Added unit tests for successful receipts, existing-task begin failure, read errors, uncertain evidence writes, cancellation boundaries and failed completion persistence.
-- Remaining direct GitHub/account shortcuts are still guarded at dispatch but have not yet been migrated to this checkpoint wrapper.
+- Added `runDynamic` for bounded research sequences whose later inputs depend on earlier recorded outputs. Every dynamic step is checkpointed before dispatch and recorded before the next step is selected; individual read-only steps may explicitly tolerate a missing README/source file without hiding the failure.
+- Migrated connected GitHub account identity + repository listing, public repository-name search, exact Actions run/list reads, and public repository inspection into the same task lifecycle. Repository inspection records metadata, README outcome, default-branch tree and up to six selected source-file reads under a 12-step ceiling.
+- Metadata/tree failures stop the sequence; failed evidence writes require recovery; incomplete/cancelled work is not reported as complete. All GitHub calls still pass through the guarded Research/dispatch path.
+- Added tests for successful receipts, existing-task begin failure, read errors, uncertain evidence writes, cancellation boundaries, failed completion persistence, dynamic dependent steps, tolerated read failures and hard-stop behavior.
+- Remaining Stage 1 work is durable parent/child cancellation and recovery, plus continuity across specialist, voice and background work.
 
 
 ## Implementation notes — specialist delegation foundation
