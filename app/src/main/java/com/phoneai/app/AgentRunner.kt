@@ -56,11 +56,11 @@ object AgentRunner {
             val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
             if (Bybit.hasKeys(c) && Regex("(?i)\\b(position|positions|habit|habits|journal|review|mistake|overtrad|revenge|pnl|profit|loss)\\b").containsMatchIn(userText)) {
-                sb.append("\\nOPEN POSITIONS: ").append(TradingDesk.positionsText(c).take(900))
-                sb.append("\\nHABIT REVIEW: ").append(TradingDesk.habits(c).text().take(1200))
+                sb.append("\nOPEN POSITIONS: ").append(TradingDesk.positionsText(c).take(900))
+                sb.append("\nHABIT REVIEW: ").append(TradingDesk.habits(c).text().take(1200))
             }
             if (Regex("(?i)\\b(memecoin|meme coin|memecoins|wallet|wallets|dex|rug|rugpull|shitcoin|pump\\.fun)\\b").containsMatchIn(userText)) {
-                sb.append("\\nCHAIN WATCH (public data, read-only):\\n").append(ChainDesk.overview(c).take(1800))
+                sb.append("\nCHAIN WATCH (public data, read-only):\n").append(ChainDesk.overview(c).take(1800))
             }
             // Each operation owns its own cached market inputs; avoid fetching the same calendar/candles twice.
             if (wantsConditions) {
@@ -78,7 +78,7 @@ object AgentRunner {
     }
 
     private fun wantsDeskContext(text: String): Boolean =
-        Regex("(?i)\\b(forex|fx|gold|xauusd|eurusd|gbpusd|usdjpy|trading|trade|setup|playbook|strategy|backtest|simulat|forecast|market conditions|economic calendar|news|calendar|cpi|nfp|fomc|fundamentals|sessions?)\\b").containsMatchIn(text)
+        Regex("(?i)\\b(forex|fx|gold|xauusd|eurusd|gbpusd|usdjpy|trading|trade|setup|playbook|strategy|backtest|simulat|forecast|market conditions|economic calendar|news|calendar|cpi|nfp|fomc|fundamentals|sessions?|crypto|memecoins?|wallets?|dex|positions?|habits?|derivatives|pnl)\\b").containsMatchIn(text)
 
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
