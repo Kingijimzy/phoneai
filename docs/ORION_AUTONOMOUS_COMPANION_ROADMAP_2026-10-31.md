@@ -184,7 +184,7 @@ Tasks:
 | Stage | Status | Evidence / blocker |
 |---|---|---|
 | Stage 0 — integration baseline | IN PROGRESS | PR #132 draft; upstream stack is not yet on main; exact-head CI/review must be checked |
-| Stage 1 — central lifecycle | PARTIAL — first voice bridge added | actionable live-voice requests now route into the same guarded Command/task lifecycle; deterministic research shortcuts and specialist/background continuity still need consolidation |
+| Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness and market-quote shortcuts now persist task begin/step/result/completion receipts; GitHub/account shortcuts and specialist/background continuity remain |
 | Stage 2 — capability intelligence | IN PROGRESS — request-scoped contracts added | relevant capability families receive full contracts while all other tools remain discoverable by compact signatures; exact-head CI and latency/token comparison are pending |
 | Stage 3 — specialist delegation | PARTIAL | specialist profiles exist; not yet a unified least-privilege delegated execution lifecycle |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
@@ -201,3 +201,11 @@ Tasks:
 - Voice execution bridge: `OrionVoiceExecutionPolicy` routes actionable and contextual follow-up utterances from live voice into `runInternal`, reusing the same task planner, checkpoint, capability registry, owner policy, confirmation and evidence gates as chat. Ordinary conversation remains on the low-cost voice conversation path.
 - Regression tests cover prompt discoverability/selection and voice action routing/contextual follow-ups.
 - PR #145 exact head is tracked in GitHub Actions. CI and Redmi device validation are not yet complete.
+
+
+## Implementation notes — deterministic research lifecycle
+
+- Added `OrionResearchShortcutLifecycle`, a bounded adapter that creates a durable task checkpoint before a direct research shortcut, persists each read-only step before/after dispatch, records errors, pauses safely on cancellation, requires recovery if evidence cannot be saved, and reports completion only when the completion marker persists.
+- Routed weather, live news, live sports, explicit web search, freshness-dependent web lookup and public market quote shortcuts through that lifecycle. Each action still calls the existing guarded `research` dispatch path; this adapter does not grant permissions or bypass policy.
+- Added unit tests for successful receipts, existing-task begin failure, read errors, uncertain evidence writes, cancellation boundaries and failed completion persistence.
+- Remaining direct GitHub/account shortcuts are still guarded at dispatch but have not yet been migrated to this checkpoint wrapper.
