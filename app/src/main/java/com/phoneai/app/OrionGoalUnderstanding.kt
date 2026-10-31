@@ -52,6 +52,7 @@ internal object OrionGoalUnderstanding {
     )
     private val urlInspection = Regex("(?i)https?://[^\\s<>\\\"]+")
     private val urlActionWords = Regex("(?i)\\b(check|inspect|open|visit|read|review|summari[sz]e|analy[sz]e|audit|scan|fetch|look at|look into|what is in|tell me about|explain)\\b")
+    private val researchWords = Regex(
         "(?i)\\b(research|look up|search the web|find out|compare|latest|current information)\\b"
     )
     private val deviceWords = Regex(
