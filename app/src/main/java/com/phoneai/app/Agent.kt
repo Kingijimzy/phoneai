@@ -1692,61 +1692,45 @@ Rules:
             return
         }
 
-        // Exact public GitHub Actions run URLs are a deterministic read-only route.
-        // Do not send a known owner/repository/run URL through account identity or generic browser intent.
-        val githubRunMatch = Regex(
-            "(?i)https?://(?:www\\.)?github\\.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})/actions/runs/([0-9]{1,20})"
-        ).find(command)
-        if (!resumeRequest && !browserActionTask && githubRunMatch != null) {
-            val owner = githubRunMatch.groupValues[1]
-            val repository = githubRunMatch.groupValues[2]
-            val runId = githubRunMatch.groupValues[3]
-            if (!authorizeDirectTool("github_public", "trading_research")) {
-                ui.say("I couldn't read that public GitHub Actions run because the public research capability is disabled or this tool was explicitly denied.")
-                return
-            }
+        // URL-first GitHub routing: exact supplied URLs take precedence over prose/name heuristics.
+        // All reads use the unified Research executor so capability policy, cancellation, preflight,
+        // adapter ownership and durable evidence stay connected to the same task.
+        val githubTargets = if (!resumeRequest && !browserActionTask) GitHubRequestPolicy.resolveAll(command) else emptyList()
+        if (githubTargets.isNotEmpty()) {
             ui.phase("acting")
-            val result = research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "run").put("run_id", runId))
-            logShortcut("github_public_run", result)
-            history.put(msg("assistant", JSONObject().put("say", result).put("tool", "done").toString()))
-            ui.say(result)
-            return
-        }
-        // Named public GitHub repositories are discovered and read without requiring account-scope access.
-        val namedRepo = Regex("(?i)\\b(?:my\\s+)?(?:github\\s+)?(?:repo|repository|project)\\s+(?:(?:called|named|is)\\s+)?([A-Za-z0-9_.-]{2,100})\\b").find(command)
-        val trailingNamedRepo = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
-        val requestedRepoName = namedRepo?.groupValues?.getOrNull(1)
-            ?: trailingNamedRepo?.groupValues?.getOrNull(1)
-        if (!resumeRequest && !browserActionTask && requestedRepoName != null) {
-            val requestedName = requestedRepoName
-            if (!authorizeDirectTool("github_public", "trading_research")) {
-                val answer = "I couldn't search public GitHub because the GitHub public-read capability is disabled or this tool was explicitly denied. Enable the public GitHub capability and retry; public repository reads do not need a separate approval prompt."
-                logShortcut("github_repository_search", answer)
-                history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
-                ui.say(answer)
-                return
+            val reports = githubTargets.map { target ->
+                var owner = target.owner
+                val repository = target.repository
+                if (owner.isBlank()) {
+                    val searchResult = research("github_search_repositories", JSONObject().put("query", repository))
+                    val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
+                        .findAll(searchResult).toList()
+                    val exact = candidates.firstOrNull { it.groupValues[2].equals(repository, ignoreCase = true) }
+                    if (searchResult.startsWith("error:", true)) {
+                        "Repository search failed for '$repository': $searchResult"
+                    } else if (exact == null) {
+                        "I searched public GitHub for '$repository' but could not verify an exact repository-name match. Share its owner/repository URL if you want me to inspect a specific project."
+                    } else {
+                        owner = exact.groupValues[1]
+                        readGitHubRepository(command, owner, repository)
+                    }
+                } else {
+                    when (target.section) {
+                        GitHubRequestPolicy.Section.REPOSITORY -> readGitHubRepository(command, owner, repository)
+                        GitHubRequestPolicy.Section.RUNS -> research(
+                            "github_public",
+                            JSONObject().put("owner", owner).put("repo", repository).put("section", "runs")
+                        )
+                        GitHubRequestPolicy.Section.RUN -> research(
+                            "github_public",
+                            JSONObject().put("owner", owner).put("repo", repository)
+                                .put("section", "run").put("run_id", target.runId.orEmpty())
+                        )
+                    }
+                }
             }
-            ui.phase("acting")
-            val searchResult = research("github_search_repositories", JSONObject().put("query", requestedName))
-            val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
-                .findAll(searchResult).toList()
-            val exact = candidates.firstOrNull { it.groupValues[2].equals(requestedName, ignoreCase = true) }
-            if (searchResult.startsWith("error:") || exact == null) {
-                val answer = if (searchResult.startsWith("error:")) searchResult else
-                    "I searched public GitHub for '$requestedName' but could not verify an exact repository-name match. Please share its GitHub URL or owner/repository name.\n\n" + searchResult.take(1800)
-                logShortcut("github_repository_search", answer)
-                history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
-                ui.say(answer)
-                return
-            }
-            val owner = exact.groupValues[1]
-            val repository = exact.groupValues[2]
-            val metadata = research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "repo"))
-            val readme = research("github_public", JSONObject().put("owner", owner).put("repo", repository).put("section", "readme"))
-            val answer = if (metadata.startsWith("error:") || readme.startsWith("error:")) {
-                "I found the public repository https://github.com/$owner/$repository, but couldn't retrieve all of its details.\n$metadata\n$readme"
-            } else summarizeRepository(command, metadata, readme)
-            logShortcut("github_public_repository", answer)
+            val answer = reports.joinToString("\n\n")
+            logShortcut("github_public_url_audit", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
             return
@@ -2489,6 +2473,20 @@ Rules:
      * request scope, orchestration availability, owner pack/tool settings, cancellation, safety
      * preflight, adapter routing and durable evidence before the public-read backend is called.
      */
+    private fun readGitHubRepository(command: String, owner: String, repository: String): String {
+        val metadata = research(
+            "github_public",
+            JSONObject().put("owner", owner).put("repo", repository).put("section", "repo")
+        )
+        val readme = research(
+            "github_public",
+            JSONObject().put("owner", owner).put("repo", repository).put("section", "readme")
+        )
+        return if (metadata.startsWith("error:", true) || readme.startsWith("error:", true)) {
+            "Public repository https://github.com/$owner/$repository was identified, but one or more reads failed.\n$metadata\n$readme"
+        } else summarizeRepository(command, metadata, readme)
+    }
+
     private fun research(tool: String, args: JSONObject): String {
         val pack = AgentPolicy.packForTool(tool)
             ?: return "error: public-read shortcut '$tool' has no registered capability pack."
