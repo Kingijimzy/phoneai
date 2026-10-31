@@ -75,6 +75,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeStatus get() = chatUiState.status
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
+    private val composeCompanionLook = mutableStateOf(0)
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
@@ -1493,6 +1494,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
+        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
         composeChatTitle.value = getSharedPreferences("orion_chat_history", MODE_PRIVATE).getString("active_title", "Orion")?.take(48)?.ifBlank { "Orion" } ?: "Orion"
         val composeRoot = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
@@ -1500,6 +1502,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionComposeChatScreen(
                     lines = composeLines,
                     status = composeStatus.value,
+                    companionLook = composeCompanionLook.value,
+                    onCompanionLookChanged = { look ->
+                        val safeLook = look.coerceIn(0, 2)
+                        composeCompanionLook.value = safeLook
+                        Prefs.setCompanionChar(this@MainChatActivity, safeLook)
+                    },
                     chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
                     selectedImages = composeSelectedImages.value,
