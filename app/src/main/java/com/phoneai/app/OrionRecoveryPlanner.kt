@@ -47,11 +47,9 @@ internal object OrionRecoveryPlanner {
         val preferred = when {
             listOf("target not found", "ambiguous", "stale", "invalid target").any(text::contains) ->
                 listOf("read_screen", "wait_for", "click_text", "validate_action")
-            listOf("verification", "unverified", "no visible screen change", "timeout", "timed out").any(text::contains) ->
-                listOf("read_screen", "verify_action", "wait_for")
-            listOf("permission", "accessibility", "not enabled", "setup").any(text::contains) ->
-                listOf("read_screen", "list_apps")
-            listOf("provider", "network", "http 5", "503", "429", "rate limit", "timeout", "timed out").any(text::contains) ->
+            (listOf("provider", "network", "http 5", "503", "429", "rate limit").any(text::contains) ||
+                (failedTool in setOf("live_web_search", "web_search", "research_web", "fetch_url", "live_news", "github_public", "github_account_read", "weather") &&
+                    listOf("timeout", "timed out").any(text::contains))) ->
                 when (failedTool) {
                     "live_web_search", "web_search" -> listOf("research_web", "fetch_url", "live_news", "github_public")
                     "research_web" -> listOf("live_web_search", "fetch_url", "web_search", "live_news")
@@ -62,6 +60,11 @@ internal object OrionRecoveryPlanner {
                     "weather" -> listOf("live_web_search", "research_web", "fetch_url")
                     else -> listOf("research_web", "live_web_search", "fetch_url", "web_search")
                 }
+            listOf("verification", "unverified", "no visible screen change", "timeout", "timed out").any(text::contains) ->
+                listOf("read_screen", "verify_action", "wait_for")
+            listOf("permission", "accessibility", "not enabled", "setup").any(text::contains) ->
+                listOf("read_screen", "list_apps")
+
             else -> listOf("read_screen", "verify_action", "wait_for", "lookup_app", "list_apps")
         }
         return preferred.asSequence()
