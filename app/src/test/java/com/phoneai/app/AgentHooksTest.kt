@@ -98,6 +98,15 @@ class AgentHooksTest {
   assertFalse(guard.isBlocked("click_text",JSONObject().put("text","Retry")))
   assertFalse(guard.isBlocked("read_screen",same)); guard.clear(); assertFalse(guard.isBlocked("click_text",same))
  }
+
+ @Test fun failedCallGuardIgnoresJsonObjectKeyOrderIncludingNestedObjects() {
+  val guard=AgentHooks.FailedCallGuard()
+  val first=JSONObject().put("query","weather").put("options",JSONObject().put("lang","en").put("limit",5))
+  val reordered=JSONObject().put("options",JSONObject().put("limit",5).put("lang","en")).put("query","weather")
+  guard.recordFailure("web_search",first)
+  assertTrue("Equivalent JSON arguments must not bypass duplicate-call protection",
+   guard.isBlocked("web_search",reordered))
+ }
  @Test fun screenComparisonIgnoresIndexAndDetectorNoiseButDetectsMeaningfulChange() {
   val before="Screen map\n1: WhatsApp\n2: Amma\nDetector 7 ms"
   val sameContent="Screen map\nWhatsApp\nAmma\nDetector 14 ms"

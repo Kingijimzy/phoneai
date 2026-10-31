@@ -12,11 +12,17 @@ internal object OrionCommandIntentPolicy {
     private val negativeExecution = Regex(
         "(?i)\\b(?:do not|don't|dont|never|without)\\b.{0,35}\\b(?:run|execute|test|verify)\\b"
     )
+    // Treat ordinary ownership language as an account-scoped GitHub request. Requiring
+    // the user to say "connected/authenticated" caused public name search to select strangers'
+    // repositories when they asked for "my GitHub repo".
     private val connectedGitHub = Regex(
-        "(?i)\\b(?:my|your|the)\\s+(?:connected|linked|authenticated)\\s+github\\s+account\\b|\\b(?:connected|linked|authenticated)\\s+github\\s+account\\b"
+        "(?i)\\b(?:my|your|the)\\s+(?:(?:connected|linked|authenticated)\\s+)?github\\s+account\\b|\\bgithub\\s+account\\s+(?:is\\s+)?(?:connected|linked|authenticated)\\b|\\b(?:connected|linked|authenticated)\\s+github\\s+account\\b"
+    )
+    private val ownGitHubRepository = Regex(
+        "(?i)\\b(?:my|our)\\s+(?:github\\s+)?(?:repo|repository|project)\\b|\\b(?:my|our)\\s+github\\s+repo\\b"
     )
     private val inspectVerb = Regex(
-        "(?i)\\b(?:inspect|check|identify|find|list|show|read|review|look\\s+at|look\\s+up|which|what)\\b"
+        "(?i)\\b(?:is|am|are|do|does|have|has|inspect|check|identify|find|list|show|read|review|look\\s+at|look\\s+up|which|what)\\b"
     )
 
     fun requiresPythonExecution(command: String): Boolean =
@@ -28,7 +34,8 @@ internal object OrionCommandIntentPolicy {
         requiresPythonExecution(command) && Regex("(?i)\\bcalculator\\b").containsMatchIn(command)
 
     fun isConnectedGitHubAccountRequest(command: String): Boolean =
-        connectedGitHub.containsMatchIn(command) && inspectVerb.containsMatchIn(command)
+        (connectedGitHub.containsMatchIn(command) || ownGitHubRepository.containsMatchIn(command)) &&
+            (inspectVerb.containsMatchIn(command) || ownGitHubRepository.containsMatchIn(command))
 
     private val explicitObjectiveGraph = Regex(
         "(?i)\\b(?:objective graph|dependency graph|depends on one another|in that order)\\b"
@@ -78,8 +85,12 @@ internal object OrionCommandIntentPolicy {
     fun requestedGitHubRepositoryName(command: String): String {
         val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
         val named = Regex("(?i)\\b(?:repo|repository|project)\\s+(?:called|named|for)\\s+([A-Za-z0-9_.-]{2,100})\\b").find(command)
-        return trailing?.groupValues?.getOrNull(1)
-            ?: named?.groupValues?.getOrNull(1)
+        val direct = Regex("(?i)\\b(?:github\\s+)?(?:repo|repository|project)\\s+([A-Za-z0-9_.-]{2,100})\\b").find(command)
+        // Prefer explicit repository-name forms. The trailing pattern can mistake
+        // "GitHub" or "my" for the repository name in ordinary ownership wording.
+        return named?.groupValues?.getOrNull(1)
+            ?: direct?.groupValues?.getOrNull(1)
+            ?: trailing?.groupValues?.getOrNull(1)
             ?: "PhoneAI"
     }
 }

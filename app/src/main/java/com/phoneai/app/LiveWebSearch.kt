@@ -8,7 +8,7 @@ import java.util.regex.Pattern
 
 /** Lightweight public web search via DuckDuckGo HTML results; no AI API key or model call. */
 object LiveWebSearch {
-    private const val TIMEOUT_MS = 8_000
+    private const val TIMEOUT_MS = 12_000
     private val anchorPattern = Pattern.compile("(?is)<a\\b[^>]*>.*?</a>")
     private val hrefPattern = Pattern.compile("(?i)href\\s*=\\s*[\"']([^\"']+)[\"']")
     private val titlePattern = Pattern.compile("(?is)<a\\b[^>]*>(.*?)</a>")
@@ -48,18 +48,27 @@ object LiveWebSearch {
         val q = query.trim().take(160)
         if (q.isBlank()) return "What should I search for?"
         val retrievedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date())
+        // Independent provider fallback matters on mobile networks where one search host
+        // may be blocked, rate-limited, or return a changed HTML layout.
         val endpoints = listOf(
             "https://html.duckduckgo.com/html/?q=",
-            "https://lite.duckduckgo.com/lite/?q="
+            "https://lite.duckduckgo.com/lite/?q=",
+            "https://www.google.com/search?q="
         )
         val failures = mutableListOf<String>()
+        val deadline = System.currentTimeMillis() + TIMEOUT_MS
         for ((endpointIndex, endpoint) in endpoints.withIndex()) {
+            val remainingMs = (deadline - System.currentTimeMillis()).toInt()
+            if (remainingMs <= 0) {
+                failures.add("overall search time budget exhausted")
+                break
+            }
             try {
                 val url = endpoint + URLEncoder.encode(q, "UTF-8")
                 val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
-                    connectTimeout = 4500
-                    readTimeout = 5500
+                    connectTimeout = minOf(3000, remainingMs)
+                    readTimeout = minOf(4000, remainingMs)
                     setRequestProperty("Accept", "text/html")
                     setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36")
                     setRequestProperty("Accept-Language", "en-US,en;q=0.9")
@@ -88,9 +97,12 @@ object LiveWebSearch {
                     if (link.contains("duckduckgo.com/l/?")) {
                         val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
                         if (target != null) link = try { URLDecoder.decode(target, "UTF-8") } catch (_: Exception) { link }
+                    } else if (link.startsWith("/url?")) {
+                        val target = Regex("[?&](?:q|url)=([^&]+)").find(link)?.groupValues?.get(1)
+                        if (target != null) link = try { URLDecoder.decode(target, "UTF-8") } catch (_: Exception) { link }
                     }
                     if (!link.startsWith("https://") || link.contains("duckduckgo.com") ||
-                        link.contains("javascript:") || link in seen) continue
+                        link.contains("google.com/url") || link.contains("javascript:") || link in seen) continue
                     val titleMatch = titlePattern.matcher(tag)
                     if (!titleMatch.find()) continue
                     val title = decodeHtml(titleMatch.group(1).replace(Regex("(?is)<[^>]+>"), " "))
@@ -99,7 +111,8 @@ object LiveWebSearch {
                     // Prefer marked result links, but accept valid external anchors on the lite layout.
                     val marked = tag.contains("result__a", ignoreCase = true) ||
                         tag.contains("result-link", ignoreCase = true) ||
-                        tag.contains("result__url", ignoreCase = true)
+                        tag.contains("result__url", ignoreCase = true) ||
+                        (endpointIndex == 2 && tag.contains("LC20lb", ignoreCase = true))
                     if (!marked) continue
                     seen.add(link)
                     count++
@@ -116,7 +129,7 @@ object LiveWebSearch {
                         idx++
                     }
                     out.append("\n\nSource: DuckDuckGo public search results (")
-                        .append(if (endpointIndex == 0) "HTML" else "lite fallback")
+                        .append(when (endpointIndex) { 0 -> "HTML"; 1 -> "lite fallback"; else -> "Google fallback" })
                         .append("). Search availability and layout can change.")
                     return out.toString()
                 }
@@ -125,7 +138,7 @@ object LiveWebSearch {
                 failures.add(e.message?.take(90) ?: "network error")
             }
         }
-        return "I couldn't retrieve parseable web results after trying both public search layouts. " +
+        return "I couldn't retrieve parseable web results after trying all public search providers. " +
             "Details: " + failures.joinToString("; ") + ". No AI quota was used; try again or open a browser search."
     }
 

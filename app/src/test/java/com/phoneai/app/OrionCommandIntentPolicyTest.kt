@@ -55,6 +55,28 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun ordinaryOwnedGitHubRepositoryLanguageUsesAccountLookup() {
+        val request = "check my GitHub repo phoneai"
+        assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertEquals("phoneai", OrionCommandIntentPolicy.requestedGitHubRepositoryName(request))
+    }
+
+    @Test fun reversedGitHubConnectionQuestionUsesAccountLookup() {
+        assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(
+            "is my GitHub account connected"
+        ))
+    }
+
+    @Test fun ownedRepositoryWithoutExplicitGitHubWordStillUsesAccountLookup() {
+        assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(
+            "find my repository called PhoneAI"
+        ))
+        assertEquals("PhoneAI", OrionCommandIntentPolicy.requestedGitHubRepositoryName(
+            "find my repository called PhoneAI"
+        ))
+    }
+
     @Test fun unrelatedPublicRepositoryLookupDoesNotBecomeAnAccountLookup() {
         assertFalse(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(
             "Find the public repository PhoneAI on GitHub"
@@ -92,6 +114,27 @@ class OrionCommandIntentPolicyTest {
         val request = "Research the latest Android on-device AI developments."
         assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
         assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+    }
+
+    @Test fun researchAndSaveRequestUsesStructuredTaskPlanning() {
+        val request = "Go and search for 10 ways to think fast and save it in a file."
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
+    @Test fun directSearchForRequestIsRecognizedAsResearch() {
+        assertTrue(LiveWebSearch.isSearchRequest(
+            "Go and search for 10 ways to think fast"
+        ))
+    }
+
+    @Test fun naturalSearchRequestGetsResearchGoalClassification() {
+        assertEquals(
+            OrionGoalUnderstanding.Kind.RESEARCH,
+            OrionGoalUnderstanding.understand(
+                "Go and search for 10 ways to think fast and save it in a file."
+            ).kind
+        )
     }
 
     @Test fun calculatorWriteSaveAndExecuteUsesOneDeterministicVerifiedWorkflow() {

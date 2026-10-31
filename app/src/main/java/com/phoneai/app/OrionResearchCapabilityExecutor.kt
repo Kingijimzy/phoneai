@@ -22,9 +22,20 @@ internal object OrionResearchCapabilityExecutor {
         tools: Tools,
         cancelled: AtomicBoolean
     ): String = when (tool) {
-        "web_search" -> tools.webSearch(args.optString("query"))
+        // Both public-search tool names must return actual search results, not merely open a
+        // browser URL. The old web_search route returned an "opened" status that the planner
+        // could mistake for research failure and retry indefinitely.
+        "web_search", "live_web_search" -> {
+            val query = args.optString("query").trim()
+            if (query.isBlank()) "error: search query is required."
+            else {
+                val result = LiveWebSearch.search(query)
+                if (result.startsWith("I couldn't retrieve parseable web results", ignoreCase = true))
+                    "error: public web search failed: " + result
+                else result
+            }
+        }
         "live_news" -> LiveNews.search(args.optString("query"))
-        "live_web_search" -> LiveWebSearch.search(args.optString("query"))
         "fetch_url", "research_web" -> {
             val result = BrowserResearch.fetch(args.optString("url"), cancelled)
             val page = result.page
