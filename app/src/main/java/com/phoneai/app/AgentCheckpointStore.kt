@@ -45,7 +45,7 @@ object AgentCheckpointStore {
         // There is one active execution checkpoint. Never replace work that is still resumable
         // or whose last action needs reconciliation; the caller must resume or explicitly stop it.
         val existing = readCheckpoint(c)
-        if (existing?.optString("status") in setOf("running", "paused", "recovery_required")) return@synchronized false
+        if (existing != null && existing.optString("status") in setOf("running", "paused", "recovery_required")) return@synchronized false
         val now = System.currentTimeMillis()
         val o = JSONObject()
             .put("command", safeCommand(command))
