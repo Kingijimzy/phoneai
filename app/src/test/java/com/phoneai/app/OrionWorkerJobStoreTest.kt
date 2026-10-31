@@ -145,6 +145,30 @@ class OrionWorkerJobStoreTest {
         assertEquals("parent_stopped", saved.lastError)
     }
 
+    @Test fun jobRetainsManifestAndOriginConversationAcrossProcessRestart() {
+        val store = OrionWorkerJobStore(context)
+        val manifestId = "12345678-abcd-4321-abcd-1234567890ab"
+        val conversationId = "conversation_123456789"
+        val job = store.enqueue(
+            "parent-1", "Summarise the research findings",
+            idempotencyKey = "origin-bound",
+            manifestId = manifestId,
+            conversationId = conversationId
+        )!!
+        OrionWorkerJobStore.simulateProcessRestartForTest(context)
+        val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(manifestId, restored.manifestId)
+        assertEquals(conversationId, restored.conversationId)
+        assertEquals(OrionWorkerJobStore.Status.QUEUED, restored.status)
+    }
+
+    @Test fun malformedOriginReferencesAreRejected() {
+        val store = OrionWorkerJobStore(context)
+        assertNull(store.enqueue("parent-1", "Analysis", manifestId = "../bad"))
+        assertNull(store.enqueue("parent-1", "Analysis", conversationId = "bad/id"))
+        assertTrue(store.all().isEmpty())
+    }
+
     @Test fun jobKindsCannotRepresentPhoneActionsOrTradingOrders() {
         assertEquals(setOf("ANALYSIS", "READ_ONLY_RESEARCH", "TRADING_ANALYSIS", "TASK_PLANNING"),
             OrionWorkerJobStore.Kind.values().map { it.name }.toSet())
