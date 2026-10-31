@@ -66,7 +66,7 @@ internal object OrionAppAwareness {
 
     internal fun isArchitectureRequest(request: String?): Boolean =
         !request.isNullOrBlank() && Regex(
-            "(?i)\\b(what can you do|what features|all features|capabilities|app architecture|system map|teach me (the )?app|teach me how to use|how (do i|can i) use (orion|this app)|how to use (orion|this app)|walk me through (orion|the app)|show me around (orion|the app)|what screens|what modules|how is orion built|explain (your|the) app|list (your )?(tools|features|capabilities)|what is installed|your architecture)\\b
+            "(?i)\\b(what can you do|what features|all features|capabilities|app architecture|system map|teach me (the )?app|teach me how to use|how (do i|can i) use (orion|this app)|how to use (orion|this app)|walk me through (orion|the app)|show me around (orion|the app)|what screens|what modules|how is orion built|explain (your|the) app|list (your )?(tools|features|capabilities)|what is installed|your architecture)\\b"
         ).containsMatchIn(request)
 
     private fun compactContext(c: Context): String = runCatching {
