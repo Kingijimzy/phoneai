@@ -3,7 +3,7 @@ package com.phoneai.app
 /** Stable owner/repository identity for named first-party projects the agent is expected to inspect. */
 internal object ProjectRepositoryContext {
     private val phoneAiMention = Regex(
-        """(?i)\\b(?:my\\s+)?phoneai\\s+(?:project|repo|repository)\\b"""
+        """(?i)\b(?:my\s+)?phoneai\s+(?:project|repo|repository)\b"""
     )
 
     fun forRequest(request: String?): String? {
