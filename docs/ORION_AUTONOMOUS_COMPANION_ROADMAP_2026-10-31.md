@@ -264,3 +264,12 @@ Tasks:
 - Specialist prompt envelopes identify the parent objective node. The main chat's bounded worker ledger displays that objective association alongside the checkpoint ID, so Orion can tell which part of a multi-step goal each worker served.
 - Added tests for valid/invalid objective association and persisted receipt continuity. This is linkage and observability, not permission inheritance: specialists remain read-only/analysis-only and the parent retains dispatch and approval authority.
 - Exact-head CI is required for these latest changes. The next slice is to surface parent objective and specialist receipt events directly in the main chat timeline and make pause/cancel/recovery semantics explicit across the parent and child records.
+
+
+## Implementation notes — specialist activity is visible in the main conversation
+
+- The central Agent now emits a chat timeline event immediately before a single or batched `ask_agent` dispatch, identifying the worker, bounded assignment and parent objective ID where available.
+- When the specialist call returns, Orion emits a separate RETURNED or FAILED event with a bounded result excerpt. A returned result is explicitly labelled for parent review; it is not described as completed parent work.
+- These events use the existing chat note channel, so they appear in the same conversation rather than requiring the user to open Task Centre or a specialist screen. The saved specialist ledger remains the cross-turn continuity source.
+- Delegation is currently synchronous within the parent Agent call. The visible assignment/return events do not imply independent background execution or live percentage progress. True asynchronous workers, cancellation propagation and durable child recovery remain future work and must not be represented as already implemented.
+- Exact-head CI for the new timeline events is pending.
