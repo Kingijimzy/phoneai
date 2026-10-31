@@ -46,19 +46,32 @@ internal object OrionCommandIntentPolicy {
     private val explicitMemoryWrite = Regex(
         "(?i)\\b(?:remember|record|save|store)\\b.{0,100}\\b(?:this\\s+)?(?:decision|preference|fact|rule|lesson)\\b|\\b(?:decision|preference|fact|rule|lesson)\\b.{0,80}\\b(?:remember|record|save|store)\\b"
     )
+    // Detect requests spanning independent executor families. Keep these on the task planner.
+    private val compoundActionFamilies = listOf(
+        Regex("(?i)\\b(research|investigate|search|browse|look up|fetch|inspect|review)\\b"),
+        Regex("(?i)\\b(remember|recall|forget|save|store|record|update)\\b.{0,70}\\b(memory|lesson|fact|decision|preference|knowledge|note)\\b"),
+        Regex("(?i)\\b(remind|reminder|schedule|alarm|timer)\\b"),
+        Regex("(?i)\\b(write|create|generate|build)\\b.{0,90}\\b(code|script|calculator|document|report|summary|file|pdf|apk)\\b"),
+        Regex("(?i)\\b(save|download|extract|write)\\b.{0,70}\\b(file|filename|document|report|pdf|apk|script)\\b"),
+        Regex("(?i)\\b(run|execute|test|verify|compile)\\b"),
+        Regex("(?i)\\b(send|message|text|email|telegram|sms|call|reply|publish|post)\\b"),
+        Regex("(?i)\\b(open|launch|tap|click|press|install|uninstall|change|turn on|turn off)\\b")
+    )
 
     /** Explicit multi-objective plans and memory writes must enter the guarded executor directly. */
     fun requiresStructuredTaskPlanning(command: String): Boolean =
         explicitObjectiveGraph.containsMatchIn(command) ||
             createMultiStepTask.containsMatchIn(command) ||
-            (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command))
+            (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command)) ||
+            compoundActionFamilies.count { it.containsMatchIn(command) } >= 2
 
     fun requiresDirectActionRouting(command: String): Boolean =
         explicitMemoryWrite.containsMatchIn(command) ||
             requiresStructuredTaskPlanning(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
             requiresPythonExecution(command) ||
-            isConnectedGitHubAccountRequest(command)
+            isConnectedGitHubAccountRequest(command) ||
+            TaskScopePolicy.modeFor(command) == TaskMode.RESEARCH
 
     fun requestedGitHubRepositoryName(command: String): String {
         val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
@@ -666,7 +679,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command)
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
             directActionRoute) {
-            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)) OrionObjectiveGraph.clear(svc)
+            if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
+                taskProofs.clear()
+                OrionObjectiveGraph.clear(svc)
+            }
             chatHist.put(msg("user", command))
             while (chatHist.length() > 12) chatHist.remove(0)
             svc.notifyModeSwitch(true)
@@ -1435,6 +1451,7 @@ Rules:
         // BrowserActivity tags these requests so general web-search shortcuts cannot steal
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
+        val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
         if (resumeRequest) {
             if (OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
                 ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
@@ -1510,9 +1527,9 @@ Rules:
             ui.say(question)
             return
         }
-        if (!resumeRequest && !browserActionTask && runSavedRoutineCommand(command)) return
+        if (!resumeRequest && !browserActionTask && !structuredTask && runSavedRoutineCommand(command)) return
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
-        if (!resumeRequest && !browserActionTask) {
+        if (!resumeRequest && !browserActionTask && !structuredTask) {
             val fast = FastIntents.parse(command)
             if (fast != null) {
                 ui.phase("acting")
@@ -1541,7 +1558,7 @@ Rules:
         }
         // A calculator request that explicitly asks for execution is a real Python task, not chat.
         // Use a small deterministic script so this common acceptance case proves the bundled runtime.
-        if (!resumeRequest && !browserActionTask &&
+        if (!resumeRequest && !browserActionTask && !structuredTask &&
             OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)) {
             val code = """
                 first = 25
@@ -1578,7 +1595,7 @@ Rules:
         // Chart analysis is a deliberate vision fallback: send a screenshot only when the user
         // explicitly asks Orion to inspect a chart, rather than sending screenshots on every turn.
         val chartCommand = command.lowercase()
-        if (!resumeRequest && !browserActionTask &&
+        if (!resumeRequest && !browserActionTask && !structuredTask &&
             Regex("\\bchart\\b").containsMatchIn(chartCommand) &&
             Regex("analy|study|read|look|see|opportunit|trade|setup|learn").containsMatchIn(chartCommand)) {
             ui.phase("thinking")
@@ -1596,7 +1613,7 @@ Rules:
         // explicit place so a follow-up like "weather" does not lose the user's context.
         val rememberedWeatherPlace = WeatherService.lastPlace(svc)
         val weatherFollowUp = WeatherService.isWeatherTopic(command) && rememberedWeatherPlace.isNotBlank()
-        if (!resumeRequest && !browserActionTask && (WeatherService.isWeatherRequest(command) || weatherFollowUp)) {
+        if (!resumeRequest && !browserActionTask && !structuredTask && (WeatherService.isWeatherRequest(command) || weatherFollowUp)) {
             ui.phase("acting")
             val extractedPlace = WeatherService.requestedPlace(command)
             val place = extractedPlace.ifBlank { rememberedWeatherPlace }
@@ -1608,7 +1625,7 @@ Rules:
             return
         }
         // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
-        if (!resumeRequest && !browserActionTask && LiveNews.isNewsRequest(command)) {
+        if (!resumeRequest && !browserActionTask && !structuredTask && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
             val answer = research("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))
             logShortcut("live_news", answer)
@@ -1617,7 +1634,7 @@ Rules:
             return
         }
         // Scores are structured live data: answer from the scoreboard feed, not a list of links.
-        if (!resumeRequest && !browserActionTask && LiveSports.isScoreRequest(command)) {
+        if (!resumeRequest && !browserActionTask && !structuredTask && LiveSports.isScoreRequest(command)) {
             ui.phase("acting")
             val scores = research("live_sports", JSONObject().put("query", command))
             if (!scores.startsWith("error:", true)) {
@@ -1652,7 +1669,7 @@ Rules:
         // Connected-account intent must be handled before the public repository-name shortcut.
         // This prevents a phrase like "my connected GitHub account ... PhoneAI repository" from
         // searching public GitHub and selecting an unrelated repository with the same name.
-        if (!resumeRequest && !browserActionTask &&
+        if (!resumeRequest && !browserActionTask && !structuredTask &&
             OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command)) {
             val requestedName = OrionCommandIntentPolicy.requestedGitHubRepositoryName(command)
             ui.phase("acting")
@@ -1699,7 +1716,7 @@ Rules:
         // URL-first GitHub routing: exact supplied URLs take precedence over prose/name heuristics.
         // All reads use the unified Research executor so capability policy, cancellation, preflight,
         // adapter ownership and durable evidence stay connected to the same task.
-        val githubTargets = if (!resumeRequest && !browserActionTask) GitHubRequestPolicy.resolveAll(command) else emptyList()
+        val githubTargets = if (!resumeRequest && !browserActionTask && !structuredTask) GitHubRequestPolicy.resolveAll(command) else emptyList()
         if (githubTargets.isNotEmpty()) {
             ui.phase("acting")
             val reports = githubTargets.map { target ->
@@ -1740,12 +1757,8 @@ Rules:
             return
         }
         // Explicit web-search requests use a public search endpoint directly instead of consuming model quota.
-        if (!resumeRequest && !browserActionTask && !explicitAppAction &&
+        if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
-            if (!authorizeDirectTool("web_search", "trading_research")) {
-                ui.say("Web search was not run because the Trading research capability is disabled or this tool was explicitly denied. Enable the capability or change its tool setting; public read-only searches do not need a separate approval prompt.")
-                return
-            }
             ui.phase("acting")
             val answer = summarizeSearch(command, research("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))
             logShortcut("web_search", answer)
@@ -1754,11 +1767,7 @@ Rules:
             return
         }
         // Freshness-dependent questions should use live web results, not a model's stale training data.
-        if (!resumeRequest && !browserActionTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
-            if (!authorizeDirectTool("live_web_search", "trading_research")) {
-                ui.say("Live lookup was not run. Enable the Trading research pack and approve the action, or change the approval mode.")
-                return
-            }
+        if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
             val raw = research("live_web_search", JSONObject().put("query", query))
@@ -1771,11 +1780,7 @@ Rules:
         // Common public crypto spot quotes can be fetched directly, without spending an LLM request.
         val quoteIntent = Regex("(?i)\\b(price|quote|ticker|trading at|current value)\\b").containsMatchIn(command)
         val quoteMatch = Regex("(?i)\\b(BTC|BITCOIN|ETH|ETHEREUM|SOL|SOLANA|XRP|RIPPLE|BNB|DOGE|ADA|AVAX|DOT|LINK|LTC|TRX|TON)(USDT)?\\b").find(command)
-        if (!resumeRequest && !browserActionTask && quoteIntent && quoteMatch != null) {
-            if (!authorizeDirectTool("bybit_public_ticker", "trading_research")) {
-                ui.say("The quote was not fetched. Enable the Trading research pack and approve the lookup, or change the approval mode.")
-                return
-            }
+        if (!resumeRequest && !browserActionTask && !structuredTask && quoteIntent && quoteMatch != null) {
             ui.phase("acting")
             val rawSymbol = quoteMatch.groupValues[1].uppercase()
             val baseSymbol = when (rawSymbol) {
@@ -1795,7 +1800,7 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
+            if (!resumeRequest && !browserActionTask && !structuredTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
@@ -2291,37 +2296,6 @@ Rules:
      * an explicitly DENYed tool and a disabled capability pack. Mutating/consequential tools
      * continue through the normal policy and approval flow.
      */
-    private fun authorizeDirectTool(tool: String, pack: String): Boolean {
-        // Deterministic reads skip model planning, not the owner's real permission mode.
-        // In particular, Plan mode blocks them and an explicit per-tool ASK still prompts.
-        val gate = AgentPolicy.gate(
-            svc,
-            pack,
-            tool,
-            dangerous = false,
-            toolMode = ToolPermissions.mode(svc, tool),
-            askedThisTask = tool in askApproved
-        )
-        return when (gate.verdict) {
-            GatePolicy.Verdict.ALLOW -> {
-                AgentPolicy.log(svc, tool, "direct-dispatch", null, gate.reason)
-                true
-            }
-            GatePolicy.Verdict.ASK_TOOL, GatePolicy.Verdict.NEED_APPROVAL -> {
-                val approved = confirm(
-                    "Approve live tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\nRun this lookup once?"
-                )
-                if (approved) askApproved.add(tool)
-                AgentPolicy.log(svc, tool, "direct-dispatch", approved, if (approved) "user approved lookup" else "user declined lookup")
-                approved
-            }
-            GatePolicy.Verdict.PLAN_ONLY, GatePolicy.Verdict.DENY -> {
-                AgentPolicy.log(svc, tool, "direct-dispatch", false, gate.reason)
-                false
-            }
-        }
-    }
-
     /** Record deterministic shortcuts too, so activity history covers more than model-planned tools. */
     private fun logShortcut(name: String, result: String) {
         try { ActionLogStore.record(svc, name, result) } catch (_: Exception) { }
@@ -2491,41 +2465,9 @@ Rules:
         } else summarizeRepository(command, metadata, readme)
     }
 
-    private fun research(tool: String, args: JSONObject): String {
-        val pack = AgentPolicy.packForTool(tool)
-            ?: return "error: public-read shortcut '$tool' has no registered capability pack."
-        if (stopped) return "error: task was stopped before '$tool' could start."
-        activeOrchestrationContext?.let { context ->
-            OrionTaskOrchestrator.dispatchBlockReason(context, tool)?.let {
-                recordDispatchBlocked(tool, args, "orchestrator_unavailable")
-                return "error: dispatch blocked by the request-time task orchestrator: $it"
-            }
-        }
-        if (!authorizeDirectTool(tool, pack)) {
-            recordDispatchBlocked(tool, args, "direct_read_authorization_denied")
-            return "error: '$tool' is disabled by the owner capability or per-tool policy."
-        }
-        ToolGate.preflightDenial(svc, tool)?.let {
-            recordDispatchBlocked(tool, args, "capability_preflight_denied")
-            return it
-        }
-        val scopeBlock = AgentDispatchPolicy.blockReason(
-            request = activeRequestScope,
-            tool = tool,
-            args = args,
-            currentPackage = svc.currentPackageName(),
-            currentLabel = svc.currentAppLabel(),
-            stopped = stopped,
-            executionMode = Prefs.executionMode(svc)
-        )
-        if (scopeBlock != null) {
-            recordDispatchBlocked(tool, args, "dispatch_safety_policy_denied")
-            return "error: $scopeBlock"
-        }
-        val preflight = preflightTool(tool, args)
-        if (preflight != null) return preflight
-        return exec(tool, args)
-    }
+    /** Deterministic read shortcuts skip model planning, never the shared dispatch lifecycle. */
+    private fun research(tool: String, args: JSONObject): String =
+        executeWithRecoveryGuard(tool, args)
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
