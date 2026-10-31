@@ -14,6 +14,25 @@ class OrionAgentDelegationTest {
         assertFalse(manifest.allowedTools.any { it in setOf("telegram_send", "sms", "shell", "python_exec", "paper_trade") })
     }
 
+    @Test fun specialistManifestCarriesCanonicalParentObjectiveNode() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!,
+            "checkpoint-42",
+            "Research Android agent scheduling",
+            parentObjectiveId = "research"
+        )
+        assertEquals("checkpoint-42", manifest.parentTaskId)
+        assertEquals("research", manifest.parentObjectiveId)
+        assertTrue(manifest.promptBlock().contains("Parent objective node ID: research"))
+    }
+
+    @Test fun invalidParentObjectiveIdIsNotPersistedAsAnAssociation() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research scheduling", parentObjectiveId = "../wrong"
+        )
+        assertNull(manifest.parentObjectiveId)
+    }
+
     @Test fun customSpecialistDefaultsToAnalysisOnlyWithNoToolCapabilities() {
         val custom = AgentProfile("social_helper", "Social Helper", "Plans social content", "Create content plans and drafts.")
         val manifest = OrionAgentDelegation.create(custom, "parent-task-7", "Prepare a content calendar")
