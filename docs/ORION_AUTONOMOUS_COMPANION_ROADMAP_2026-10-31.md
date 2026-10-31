@@ -189,7 +189,7 @@ Tasks:
 | Stage 3 — specialist delegation | IN PROGRESS — scoped manifests and receipts added | each ask_agent call now receives a parent-linked, least-privilege manifest and a durable delegation receipt; specialist tools are still analysis/read-only and lifecycle controls/independent delegated execution remain |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
 | Stage 5 — proactive background | PARTIAL | watcher/runtime/standing-order foundations exist; event pipeline and device delivery need proof |
-| Stage 6 — companion experience | PARTIAL | chat, voice and Trading Desk surfaces exist; they do not yet share one execution lifecycle |
+| Stage 6 — companion experience | IN PROGRESS — central chat awareness and deterministic entry routing added | Orion Chat now receives the compact/detailed runtime app map and sends explicit repository, terminal/runtime and website tasks into the guarded Agent path; broader screen/workflow ownership and task/voice continuity still need implementation and device proof |
 | Stage 7 — verification | BLOCKED | CI can be inspected remotely; physical Redmi acceptance has not been evidenced |
 
 **Completion policy:** a stage is complete only when its exit gate is met and its evidence is recorded. Source presence, a green older CI run, or an untested APK is not sufficient.
@@ -235,3 +235,11 @@ Tasks:
 - Delegated objectives are sanitized before they are passed to the specialist model. Empty responses and failed provider responses are recorded as failures, not successful delegations.
 - Delegated specialists do not update agent lessons or process Trading Coach action tags. Delegated coaching receives public market context and saved strategy/journal context, not private account balances/positions or order controls.
 - Research manifest capability names now match the actual read-only context sources supplied by the research specialist.
+
+
+## Implementation notes — central chat as the companion hub
+
+- `Agent.runConversation` now combines the normal deterministic action-intent policy with `ConversationAutoRoutePolicy`, so explicit public repository inspection, terminal/runtime checks, terminal code execution and website visits enter the guarded `runInternal` path without waiting for the conversational model to emit `ACTION`.
+- `Agent.chatSystem` now injects `OrionAppAwareness.context(svc, query)`. Ordinary chat receives the compact runtime map; explicit architecture/capability questions receive the detailed map, including registered READ/WRITE tools, specialist profiles, skills, capability-pack settings, locally recorded service connection state, installed Android activities/services/receivers, local task/memory/knowledge counts and the execution gate.
+- The awareness map is descriptive, not an authorization grant. The central Agent still dispatches through the existing guarded path; registered, configured, permission-granted, running and verified remain distinct states.
+- Existing tests in `ConversationAutoRoutePolicyTest` cover terminal/runtime, code execution, public repository inspection, explicit website visits and ordinary-conversation non-routing. Exact-head CI for the new chat wiring is tracked by Actions run `41208677709`; physical Redmi verification remains pending.
