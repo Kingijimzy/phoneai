@@ -182,7 +182,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     fun claim(jobId: String, parentIsRunning: (String) -> Boolean): Job? {
         val candidate = synchronized(lock) {
             loadLocked()
-            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
             jobs.firstOrNull { it.id == jobId && it.status == Status.QUEUED }?.copy()
         } ?: return null
         val parentRunning = runCatching { parentIsRunning(candidate.parentTaskId) }.getOrDefault(false)
