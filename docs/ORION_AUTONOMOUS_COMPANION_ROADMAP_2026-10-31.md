@@ -506,3 +506,12 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Extension validation requires HTTPS source evidence, license identity/evidence, declared capabilities, a successful sandbox test run and a rollback plan. Activation is separately gated on the awaiting-owner state and explicit approval.
 - Added unit coverage for retry restrictions, repair test evidence, failure/rollback transitions, extension source/license/test/rollback requirements and owner approval.
 - This is the deterministic policy foundation, not yet the complete autonomous repair runner. Remaining work: connect findings to actual provider/tool/worker failures; persist repair cases and evidence; surface diagnosis and approval activity in main chat; invoke the real extension sandbox from the lifecycle; and verify rollback/disable behaviour end-to-end.
+
+
+## Follow-up — central-brain local self-diagnostics
+
+- Added `OrionSelfDiagnostics`, a provider-free, observational inspection of the live tool registry/policy-pack mapping, enabled skill tool references, generated-extension source-hash integrity, service runtime summary and unresolved task checkpoint state.
+- Wired its bounded report into `OrionCentralBrain.contextFor`, so Talk/Command's shared executive context can see local structural faults before planning. The report is explicitly scoped: it does not claim remote provider health, network reachability, Android permission grants, or physical-device reliability.
+- Diagnostics do not instantiate a new runtime, schedule WorkManager jobs, mutate state, change permissions or execute repairs. They only surface evidence and instruct the brain to verify any repair with a real test.
+- Added tests for finding evidence requirements and report severity/health semantics.
+- Remaining: persist findings/repair attempts in a user-visible repair ledger; emit findings directly from failed dispatch/provider/worker paths; add a chat-visible self-diagnosis and repair activity timeline; invoke real extension sandbox tests and verify activation/rollback receipts.
