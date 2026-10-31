@@ -1036,7 +1036,7 @@ class Tools(
             return "SPECIALIST JOB ${previous.id} [${previous.status.name.lowercase()}]: duplicate request matched the existing durable job; no second job was created."
         }
         val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
-        if (manifest.access !in setOf(OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING) ||
+        if (manifest.access !in setOf(OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING, OrionAgentDelegation.Access.READ_ONLY_RESEARCH, OrionAgentDelegation.Access.TRADING_ANALYSIS) ||
             manifest.allowedTools.isNotEmpty()) return "error: specialist manifest is not eligible for background execution."
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: specialist policy receipt could not be saved."
         val kind = when (manifest.access) {
