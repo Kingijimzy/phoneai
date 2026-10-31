@@ -60,6 +60,8 @@ object AgentRunner {
                 sb.append("\nOPEN POSITIONS: ").append(TradingDesk.positionsText(c).take(900))
                 sb.append("\nHABIT REVIEW: ").append(TradingDesk.habits(c).text().take(1200))
             }
+            if (Regex("(?i)\\b(memecoin|meme coin|memecoins|wallet|wallets|dex|rug|rugpull|shitcoin|pump\\.fun)\\b").containsMatchIn(userText))
+                sb.append("\nCHAIN WATCH (public data, read-only):\n").append(ChainDesk.overview(c).take(1800))
             val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
             if (target != null && Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText))
