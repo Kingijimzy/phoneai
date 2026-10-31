@@ -37,7 +37,7 @@ internal object OrionContextualIntentInterpreter {
         """(?i)\b(?:finish|complete|do|handle)\b.{0,50}\b(?:remaining|outstanding|unfinished|rest of|leftover)\b|\b(?:remaining|outstanding|unfinished)\s+(?:work|tasks|items)\b"""
     )
     private val correction = Regex(
-        """(?i)^\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\s+(?:that|it|this|the previous task|the last change|the implementation)\b|^\s*(?:that's|that is)\s+(?:wrong|not right)"""
+        """(?i)^\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\s+(?:that|it|this|integration|the integration|the existing integration|the previous task|the last change|the implementation|the architecture)\b|^\s*(?:that's|that is)\s+(?:wrong|not right)"""
     )
     // Broad "fix everything" wording is a correction to the active objective when one exists,
     // not a brand-new chat question that should be answered without continuing the work.
