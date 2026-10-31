@@ -817,7 +817,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Index explicit preferences, habits and project facts as owner-reviewable proposals.
         // This is deterministic and local; it does not retain arbitrary conversation text.
         runCatching {
-            MemoryAutoIndexer.observe(svc, command)?.let { proposal ->
+            MemoryAutoIndexer.observe(svc, command)?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }?.let { proposal ->
                 OrionConversationRepository.get(svc).recordEvent(
                     svc, null, "memory_proposal", "pending",
                     "Suggested memory for owner review: category=${proposal.category}, source=user_observation"
