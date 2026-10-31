@@ -186,7 +186,7 @@ Tasks:
 | Stage 0 — integration baseline | IN PROGRESS | PR #132 draft; upstream stack is not yet on main; exact-head CI/review must be checked |
 | Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness and market-quote shortcuts now persist task begin/step/result/completion receipts; GitHub/account shortcuts and specialist/background continuity remain |
 | Stage 2 — capability intelligence | IN PROGRESS — request-scoped contracts added | relevant capability families receive full contracts while all other tools remain discoverable by compact signatures; exact-head CI and latency/token comparison are pending |
-| Stage 3 — specialist delegation | PARTIAL | specialist profiles exist; not yet a unified least-privilege delegated execution lifecycle |
+| Stage 3 — specialist delegation | IN PROGRESS — scoped manifests and receipts added | each ask_agent call now receives a parent-linked, least-privilege manifest and a durable delegation receipt; specialist tools are still analysis/read-only and lifecycle controls/independent delegated execution remain |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
 | Stage 5 — proactive background | PARTIAL | watcher/runtime/standing-order foundations exist; event pipeline and device delivery need proof |
 | Stage 6 — companion experience | PARTIAL | chat, voice and Trading Desk surfaces exist; they do not yet share one execution lifecycle |
@@ -209,3 +209,13 @@ Tasks:
 - Routed weather, live news, live sports, explicit web search, freshness-dependent web lookup and public market quote shortcuts through that lifecycle. Each action still calls the existing guarded `research` dispatch path; this adapter does not grant permissions or bypass policy.
 - Added unit tests for successful receipts, existing-task begin failure, read errors, uncertain evidence writes, cancellation boundaries and failed completion persistence.
 - Remaining direct GitHub/account shortcuts are still guarded at dispatch but have not yet been migrated to this checkpoint wrapper.
+
+
+## Implementation notes — specialist delegation foundation
+
+- Added `OrionAgentDelegation` manifests with a stable delegation ID, parent objective ID, sanitized objective, access class, allowed read-only data capabilities, memory scope and bounded model-call budget.
+- Research specialists are limited to public read-only research inputs; trading coaches receive public ticker context only; planners and custom specialists default to analysis-only with no tool capabilities.
+- Updated `Tools.askAgent` to persist a delegation start receipt before calling the specialist, inject the manifest into the specialist system context, and persist the result/failure receipt before returning it to the parent.
+- A failed receipt write is surfaced as an error; the parent must not treat the delegation as completed.
+- Specialist output remains advisory. The parent Agent retains all dispatch, policy, approval and external-action authority. This is not yet independent multi-agent tool execution, parallel delegation, or a complete agent lifecycle UI.
+- Added tests for parent linkage, scope restrictions, custom-agent defaults, forbidden external actions, call budget and objective sanitization.
