@@ -326,4 +326,16 @@ class OrionConversationRepositoryTest {
         assertNull(repository.findTranscriptEvidence(context, "user", "I accept a decision that was never said here."))
     }
 
+
+    @Test fun selfDiagnosticActivityIsPersistedInTheActiveChatTimeline() {
+        repository.saveActive(context, listOf("me" to "Orion, self diagnose"))
+        val event = repository.recordEvent(
+            context, null, "self_diagnostic", "completed",
+            "Local self-diagnostic completed: tools=137, structural errors=0"
+        )
+        assertNotNull(event)
+        val saved = repository.eventsForActive(context).single { it.type == "self_diagnostic" }
+        assertEquals("completed", saved.status)
+        assertTrue(saved.summary.contains("structural errors=0"))
+    }
 }
