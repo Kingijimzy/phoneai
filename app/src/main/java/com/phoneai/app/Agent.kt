@@ -803,7 +803,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val command = input.trim()
         if (command.isEmpty()) return
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
-        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command)
+        // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
+        // must enter the same guarded Agent path instead of being answered as plain conversation.
+        val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
+            ConversationAutoRoutePolicy.requiresToolAgent(command)
         val contextualActionRoute = intentResolution.kind in setOf(
             OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
             OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
