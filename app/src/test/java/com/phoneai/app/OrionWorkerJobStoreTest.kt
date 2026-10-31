@@ -23,6 +23,7 @@ class OrionWorkerJobStoreTest {
         File(file.path + ".bak").delete()
         File(file.path + ".tmp").delete()
         AgentCheckpointStore.clear(context)
+        OrionWorkerJobStore.simulateProcessRestartForTest(context)
     }
 
     @Test fun separateStoreInstancesReloadSharedDurableState() {
