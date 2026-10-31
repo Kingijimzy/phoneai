@@ -2258,6 +2258,7 @@ Rules:
                     ui.note("[TASK:RUNNING]\nRunning $bt")
                     val batchGraph = OrionObjectiveGraph.load(svc)
                     activeObjectiveId = one.optString("objective_id").ifBlank { step.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" } }
+                    if (activeObjectiveId.isNotBlank()) batchArgs.put("objective_id", activeObjectiveId)
                     var br = executeWithRecoveryGuard(bt, batchArgs)
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
@@ -2368,6 +2369,7 @@ Rules:
             ui.note("[TASK:RUNNING]\nRunning $tool")
             val currentGraph = OrionObjectiveGraph.load(svc)
             activeObjectiveId = step.optString("objective_id").ifBlank { if (currentGraph?.nodes?.size == 1) currentGraph.nodes.first().id else "" }
+            if (activeObjectiveId.isNotBlank()) args.put("objective_id", activeObjectiveId)
             var result = executeWithRecoveryGuard(tool, args)
             var readRetries = 0
             if (isRetryableRead(tool, args)) {
