@@ -45,6 +45,16 @@ class OrionWorkerJobStoreTest {
         assertEquals(1, first.all().count { it.status == OrionWorkerJobStore.Status.RUNNING })
     }
 
+    @Test fun brainSummaryReportsSavedJobStateWithoutClaimingQueuedWorkRan() {
+        val store = OrionWorkerJobStore(context)
+        store.enqueue("parent-1", "Compare two architecture options", idempotencyKey = "summary")
+        val summary = store.promptSummary()
+        assertTrue(summary.contains("durable specialist job queue"))
+        assertTrue(summary.contains("[queued]"))
+        assertTrue(summary.contains("Compare two architecture options"))
+        assertFalse(summary.contains("completed"))
+    }
+
     @Test fun jobsPersistAndDuplicateIdempotencyKeyReturnsOriginal() {
         val store = OrionWorkerJobStore(context)
         val first = store.enqueue("parent-1", "Research Android background workers", idempotencyKey = "research-1")!!
