@@ -245,8 +245,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Objective dependencies are enforced at the actual dispatch boundary, not trusted from planner prose.
         val objectiveGraph = OrionObjectiveGraph.load(svc)
         if (objectiveGraph != null) {
-            val objectiveId = activeObjectiveId.ifBlank { if (objectiveGraph.nodes.size == 1) objectiveGraph.nodes.first().id else "" }
-            if (objectiveId.isBlank()) return "error: this task has multiple objectives; the tool call must identify the objective_id it advances."
+            val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId)
+                ?: return "error: the planner's objective_id does not match this multi-objective task. Valid IDs: " +
+                    objectiveGraph.nodes.joinToString(", ") { it.id } + ". No tool was dispatched."
+            // Keep the canonical persisted ID for the evidence receipt written after execution.
+            activeObjectiveId = objectiveId
             OrionObjectiveGraph.canExecute(objectiveGraph, objectiveId)?.let { reason -> return "error: objective dependency gate blocked dispatch: " + reason }
             if (!OrionObjectiveGraph.startExecution(svc, objectiveId)) return "error: objective state could not be persisted before dispatch; no tool was run."
         }
