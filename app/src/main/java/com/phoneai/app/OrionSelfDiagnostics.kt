@@ -10,7 +10,7 @@ internal data class OrionDiagnosticReport(
     val enabledSkillCount: Int,
     val enabledVerifiedExtensionCount: Int,
     val runtimeState: String,
-    val queuedBackgroundWork: Int
+    val queuedBackgroundWork: Int?
 ) {
     val healthy: Boolean get() = findings.none {
         it.severity == OrionFindingSeverity.ERROR || it.severity == OrionFindingSeverity.CRITICAL
@@ -35,7 +35,7 @@ internal object OrionSelfDiagnostics {
         fun add(component: String, title: String, detail: String, severity: OrionFindingSeverity, evidence: String) {
             val safeComponent = component.take(60)
             val safeEvidence = evidence.take(180)
-            val id = "diag-" + safeComponent.lowercase().replace(Regex("[^a-z0-9]+"), "-") + "-" + detail.hashCode().toUInt().toString(16)
+            val id = "diag-" + safeComponent.lowercase().replace(Regex("[^a-z0-9]+"), "-") + "-" + detail.hashCode().toString()
             findings += OrionDiagnosticFinding(
                 id = id.take(100), component = safeComponent, title = title.take(100),
                 detail = detail.replace(Regex("\\s+"), " ").take(300), severity = severity,
@@ -69,15 +69,11 @@ internal object OrionSelfDiagnostics {
             add("extension_registry", "Enabled extension failed integrity check", "Extension '${it.id}' is enabled but is not verified against its current source hash.", OrionFindingSeverity.CRITICAL, "Extension:${it.id}")
         }
 
-        val runtime = runCatching { OrionRuntime(app) }
-        val runtimeSnapshot = runtime.getOrNull()?.snapshot()
-        val pendingWork = runtime.getOrNull()?.pendingItems()?.size ?: 0
-        val runtimeState = runtimeSnapshot?.state?.name ?: "UNAVAILABLE"
-        if (runtimeSnapshot?.state == OrionRuntime.State.DEGRADED) {
-            add("background_runtime", "Background runtime is degraded", "The durable work runtime reports DEGRADED; inspect the last event and pending work before resuming.", OrionFindingSeverity.WARNING, "OrionRuntime:${runtimeSnapshot.lastEvent}")
-        }
-        if (pendingWork > 0 && runtimeSnapshot?.state == OrionRuntime.State.STOPPED) {
-            add("background_runtime", "Background work is waiting for service", "$pendingWork durable work item(s) are pending while the runtime is stopped. Android/HyperOS may defer execution.", OrionFindingSeverity.WARNING, "OrionRuntime:pending=$pendingWork")
+        val runtimeState = runCatching { PhoneAiService.instance?.runtimeBriefForBrain() }.getOrNull()
+            ?.take(300).orEmpty().ifBlank { "SERVICE_DISCONNECTED_OR_UNAVAILABLE" }
+        val pendingWork: Int? = null
+        if (runtimeState.contains("DEGRADED", ignoreCase = true)) {
+            add("background_runtime", "Background runtime is degraded", "The connected service reports a degraded runtime; inspect its persisted queue and last event before resuming.", OrionFindingSeverity.WARNING, "PhoneAiService.runtimeBriefForBrain")
         }
 
         val checkpoint = runCatching { AgentCheckpointStore.pending(app) }.getOrNull()
