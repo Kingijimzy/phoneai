@@ -13,7 +13,7 @@ class Memory(
 
 /** Orion's long-term memory. Saved in a file on the phone, so it survives closing the app. */
 object MemoryStore {
-    val CATEGORIES = listOf("preference", "project", "decision", "task", "conversation", "fact")
+    val CATEGORIES = listOf("preference", "routine", "project", "decision", "task", "conversation", "fact")
     private val lock = Any()
     private var cache: MutableList<Memory>? = null
 
@@ -97,9 +97,18 @@ object MemoryStore {
     fun addOwnerConfirmed(c: Context, category: String?, text: String): Memory? =
         addWithProvenance(c, category, text, "owner", 1.0, "approved", "general", "entered directly by owner")
 
+    /** Explicit self-descriptions are indexed as proposals, never silently approved. */
+    fun addObservedProposal(c: Context, category: String?, text: String, confidence: Double, reason: String): Memory? = synchronized(lock) {
+        val clean = text.trim().replace("\\n", " ").take(300)
+        if (clean.isEmpty() || MemoryGovernancePolicy.sensitivity(clean) == "sensitive") return@synchronized null
+        val existing = load(c).firstOrNull { it.text.equals(clean, true) }
+        if (existing != null) return@synchronized copyOf(existing)
+        addWithProvenance(c, category, clean, "user_observation", confidence, "pending", "general", reason, replaceSimilar = false)
+    }
+
     private fun addWithProvenance(
         c: Context, category: String?, text: String, sourceRole: String, confidence: Double,
-        reviewStatus: String, sensitivity: String, evidence: String
+        reviewStatus: String, sensitivity: String, evidence: String, replaceSimilar: Boolean = true
     ): Memory? = synchronized(lock) {
         val t = text.trim().replace("\n", " ").take(300)
         if (t.isEmpty()) return@synchronized null
@@ -118,7 +127,7 @@ object MemoryStore {
             if (!save(c)) { restoreFields(dup, old); return@synchronized null }
             return@synchronized copyOf(dup)
         }
-        val replaced = MemoryRanking.findSuperseded(list, cat(category), t)
+        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
         if (replaced != null) {
             val old = copyOf(replaced)
             replaced.text = t
@@ -272,9 +281,11 @@ object MemoryStore {
 
     /** Text added to the AI's instructions: pinned and request-relevant memories first, then recent ones. */
     fun promptBlock(c: Context, query: String? = null): String {
-        val items = MemoryRanking.select(all(c), query)
-        if (items.isEmpty()) return "(nothing saved yet)"
-        return items.filter { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) }.joinToString("\n") {
+        // Filter before ranking: unreviewed pinned proposals must not crowd trusted memories out.
+        val approved = all(c).filter { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) }
+        val items = MemoryRanking.select(approved, query)
+        if (items.isEmpty()) return "(no owner-approved, non-sensitive memories yet; proposals require review)"
+        return items.joinToString("\n") {
             "[${it.id}] (${it.category}, source=${it.sourceRole}, confidence=${(it.confidence * 100).toInt()}%" +
                 (if (it.pinned) ", pinned" else "") + ") " + it.text
         }.ifBlank { "(no owner-approved, non-sensitive memories yet; proposals require review)" }
