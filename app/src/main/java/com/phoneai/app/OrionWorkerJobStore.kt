@@ -124,12 +124,12 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         }
     }
 
-    fun complete(jobId: String, result: String): Boolean {
+    fun complete(jobId: String, result: String, closeParent: Boolean = true): Boolean {
         val completed = transition(jobId, setOf(Status.RUNNING)) {
             it.copy(status = Status.COMPLETED, updatedAt = clock(),
                 result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(1200), lastError = "")
         }
-        if (completed) {
+        if (completed && closeParent) {
             // The child receipt is durable before the parent is allowed to close. If other
             // children remain, AgentCheckpointStore.complete() leaves the parent waiting.
             val parentId = all().firstOrNull { it.id == jobId }?.parentTaskId
@@ -171,6 +171,39 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         }.toMutableList()
         if (changed > 0 && !persistLocked()) { jobs = before.toMutableList(); return@synchronized 0 }
         changed
+    }
+
+    /** Claim one exact durable job ID; WorkManager must never accidentally claim a sibling. */
+    fun claim(jobId: String, parentIsRunning: (String) -> Boolean): Job? {
+        val candidate = synchronized(lock) {
+            loadLocked()
+            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            jobs.firstOrNull { it.id == jobId && it.status == Status.QUEUED }?.copy()
+        } ?: return null
+        val parentRunning = runCatching { parentIsRunning(candidate.parentTaskId) }.getOrDefault(false)
+        return synchronized(lock) {
+            loadLocked()
+            val current = jobs.firstOrNull { it.id == candidate.id && it.status == Status.QUEUED }
+                ?: return@synchronized null
+            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            if (!parentRunning) {
+                val cancelled = current.copy(status = Status.CANCELLED, updatedAt = clock(),
+                    lastError = "parent_not_running_or_unverifiable")
+                if (!replaceLocked(current, cancelled)) return@synchronized null
+                if (!persistLocked()) replaceLocked(cancelled, current)
+                return@synchronized null
+            }
+            val running = current.copy(status = Status.RUNNING, updatedAt = clock(), attempts = current.attempts + 1)
+            if (!replaceLocked(current, running)) return@synchronized null
+            if (!persistLocked()) { replaceLocked(running, current); return@synchronized null }
+            running
+        }
+    }
+
+    /** An interrupted/ambiguous provider outcome is terminal for automatic scheduling. */
+    fun needsReview(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
+        it.copy(status = Status.NEEDS_REVIEW, updatedAt = clock(),
+            lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
     }
 
     /** Queued or running children keep their parent objective open after the chat turn ends. */
