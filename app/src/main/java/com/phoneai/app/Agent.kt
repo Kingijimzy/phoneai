@@ -1833,7 +1833,14 @@ Rules:
         }
         // Only agent/tool tasks reach this point. Save a checkpoint so process death or the step cap does not erase progress.
         if (!resumeRequest && !OrionTasksCapabilityExecutor.beginRun(svc, command)) {
-            ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
+            val previous = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
+            if (previous != null) {
+                val previousTitle = previous.optString("command").ifBlank { "the previous task" }.take(140)
+                val previousStatus = previous.optString("status", "unfinished")
+                ui.say("I kept your previous task intact: \"$previousTitle\" ($previousStatus). Say continue to resume it, or stop that task before starting a different one. I did not start the new task.")
+            } else {
+                ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
+            }
             return
         }
         // TaskLifecycle governs this live tool-task path. Individual calls remain inside EXECUTE;
