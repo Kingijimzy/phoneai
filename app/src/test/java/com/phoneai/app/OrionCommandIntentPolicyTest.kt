@@ -55,6 +55,28 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun ordinaryOwnedGitHubRepositoryLanguageUsesAccountLookup() {
+        val request = "check my GitHub repo phoneai"
+        assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertEquals("phoneai", OrionCommandIntentPolicy.requestedGitHubRepositoryName(request))
+    }
+
+    @Test fun reversedGitHubConnectionQuestionUsesAccountLookup() {
+        assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(
+            "is my GitHub account connected"
+        ))
+    }
+
+    @Test fun ownedRepositoryWithoutExplicitGitHubWordStillUsesAccountLookup() {
+        assertTrue(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(
+            "find my repository called PhoneAI"
+        ))
+        assertEquals("PhoneAI", OrionCommandIntentPolicy.requestedGitHubRepositoryName(
+            "find my repository called PhoneAI"
+        ))
+    }
+
     @Test fun unrelatedPublicRepositoryLookupDoesNotBecomeAnAccountLookup() {
         assertFalse(OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(
             "Find the public repository PhoneAI on GitHub"
