@@ -52,7 +52,9 @@ class OrionWorkerJobStoreTest {
         assertTrue(summary.contains("durable specialist job queue", ignoreCase = true))
         assertTrue(summary.contains("[queued]"))
         assertTrue(summary.contains("Compare two architecture options"))
-        assertFalse(summary.contains("completed"))
+        assertTrue(summary.contains(job.id))
+        assertTrue(summary.contains("specialist_job_status"))
+        assertFalse(summary.contains("[completed]"))
     }
 
     @Test fun ordinaryReloadInSameProcessDoesNotTreatLiveJobAsInterrupted() {
