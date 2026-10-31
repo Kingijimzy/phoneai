@@ -247,12 +247,13 @@ class Tools(private val svc: PhoneAiService) {
             conn.setRequestProperty("User-Agent", "PhoneAI-ReadOnly-Integration")
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val responseLimit = if (normalizedSection in setOf("tree", "file")) 1_000_000 else 80_000
             val raw = stream?.use { input ->
                 val out = java.io.ByteArrayOutputStream()
                 val buffer = ByteArray(4096)
                 var total = 0
-                while (total < 80_000) {
-                    val n = input.read(buffer, 0, minOf(buffer.size, 80_000 - total))
+                while (total < responseLimit) {
+                    val n = input.read(buffer, 0, minOf(buffer.size, responseLimit - total))
                     if (n < 0) break
                     out.write(buffer, 0, n)
                     total += n
