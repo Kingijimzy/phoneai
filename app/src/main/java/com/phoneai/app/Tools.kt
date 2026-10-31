@@ -1079,7 +1079,7 @@ class Tools(
             svc, sessionId, "specialist-queued-${job.id}", "specialist_job", "queued",
             "Orion queued ${agent.name} for: ${manifest.objective.take(180)}"
         )
-        "SPECIALIST JOB ${job.id} [queued]: ${agent.name} will return a bounded analysis to this conversation. Android may defer execution; no phone action or trade is authorized."
+        return "SPECIALIST JOB ${job.id} [queued]: ${agent.name} will return a bounded analysis to this conversation. Android may defer execution; no phone action or trade is authorized."
     }
 
     fun askAgent(agentName: String, task: String, parentObjectiveId: String = ""): String {
