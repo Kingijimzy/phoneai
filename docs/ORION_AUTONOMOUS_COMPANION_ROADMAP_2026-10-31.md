@@ -281,3 +281,7 @@ Tasks:
 - The central Agent's compact and detailed app-awareness context now includes the live runtime state, queued work count, bounded pending-work identifiers/checkpoints and last runtime event. This lets Orion answer from current runtime evidence instead of relying on conversational memory.
 - The runtime status explicitly warns that Android/HyperOS can suspend or kill the process. WorkManager recovery is a best-effort wake-up path; it does not guarantee an always-running process or silently replay uncertain external effects.
 - Exact-head CI and device verification are required before release. Remaining work includes durable parent/child cancellation and recovery semantics, surfacing runtime transitions as first-class timeline events, and testing service/process death and voice/chat continuity on the Redmi device.
+
+
+- The service now writes durable `runtime/started`, `runtime/completed` and retry/failure events for meaningful queued work (standing-order checks, safe presence events, task outcomes and conversation restoration). The active chat can restore these events after reattachment.
+- Each central Agent turn receives the latest bounded durable activity receipts alongside the live runtime snapshot. These are evidence summaries, not instructions or proof of work beyond the recorded status.
