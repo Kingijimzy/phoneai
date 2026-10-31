@@ -176,6 +176,23 @@ class OrionCapabilityReportActivity : Activity() {
                     ?.contains(packageName) == true
             ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
+        val accessibilityState = if (disclosureAccepted && accessibilityReady)
+            OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        val locationState = runCatching {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.ACCESS_FINE_LOCATION
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
+        val cameraState = runCatching {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.CAMERA
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
         val termuxReady = runCatching { TermuxBridgeRunner.readiness(this) == null }.getOrDefault(false)
         val mcpEndpointState = runCatching { if (McpConnector.configured(this)) "configured" else "not-configured" }.getOrDefault("unknown")
         val mcpPairingState = runCatching { if (McpConnector.isPaired(this)) "paired" else "not-paired" }.getOrDefault("unknown")
@@ -186,7 +203,10 @@ class OrionCapabilityReportActivity : Activity() {
                 termuxReady,
                 permissionStates = mapOf(
                     "contacts" to contactsState,
-                    "notification_access" to notificationState
+                    "notification_access" to notificationState,
+                    "accessibility" to accessibilityState,
+                    "location" to locationState,
+                    "camera" to cameraState
                 ),
                 integrationStates = mapOf(
                     "mcp_endpoint" to mcpEndpointState,
