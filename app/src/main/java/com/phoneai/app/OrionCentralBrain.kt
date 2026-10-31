@@ -195,6 +195,6 @@ internal object OrionCentralBrain {
             ?.takeIf { it.isNotBlank() }
             ?.let { sections += it }
 
-        return sections.joinToString("\n\n").take(MAX_CONTEXT_CHARS)
+        return ContextWindowBudget.pack(sections, MAX_CONTEXT_CHARS / 4).text
     }
 }
