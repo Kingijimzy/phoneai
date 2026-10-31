@@ -203,4 +203,22 @@ class OrionAgentDelegationTest {
         assertEquals(1, dispatched)
     }
 
+    @Test fun restoreRejectsTerminalReceiptsAndOrphanedManifests() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val completed = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-terminal", "Research a public Android topic"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, completed))
+        assertTrue(OrionAgentDelegation.finish(context, completed, "Research completed"))
+        assertNull(OrionAgentDelegation.restore(context, completed.id))
+
+        OrionAgentDelegation.clearForTest(context)
+        val orphaned = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a public Android topic"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, orphaned))
+        assertNull(OrionAgentDelegation.restore(context, orphaned.id))
+    }
+
 }
