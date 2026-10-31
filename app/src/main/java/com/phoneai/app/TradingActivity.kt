@@ -74,16 +74,22 @@ class TradingActivity : Activity() {
         host.removeAllViews()
         val test = Prefs.bybitTestnet(this)
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
-        host.addView(label("Control room", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
+        host.addView(label("Desk", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
         host.addView(row(
-            pill("Open trading workspace", true) { openWithFade(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach")) },
+            pill("Back to chat", true) { openWithFade(AgentChatActivity.workspaceIntent(this)) },
             pill("Orion brain", false) { openWithFade(Intent(this, SoulEngineActivity::class.java)) }
         ))
-        host.addView(label("Chat with your trader, upload a TradingView chart or strategy screenshot, and accept the playbook it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        host.addView(label("Settings, playbook, simulation and safety for your trading chat. The chat is the front door: talk to it, upload a chart, accept what it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
         host.addView(gap(12))
         host.addView(playbookCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
         host.addView(deskCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(positionsCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(chainCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(backupCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
         host.addView(simulateCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
@@ -169,6 +175,120 @@ class TradingActivity : Activity() {
             firstRender = false
             for (i in 0 until host.childCount) if (host.getChildAt(i) is LinearLayout) Motion.enter(host.getChildAt(i), i / 2)
         }
+    }
+
+    /** Open positions with risk flags, trade sync with habit review, and crypto funding and open interest. */
+    private fun positionsCard(): LinearLayout {
+        val c = card()
+        c.addView(label("POSITIONS, HABITS & DERIVATIVES", 12f, Theme.MUTED, true))
+        val out = label("Watch runs these in the background too: alerts for missing stops, near stop or target, big losses, news before a trade, crowded funding, and a habit check after trades close.", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, dp(10)) }
+        c.addView(out)
+        fun run(wait: String, job: () -> String) {
+            out.setTextColor(Theme.TEXT); out.text = wait
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r; Motion.enter(out) }
+            }.start()
+        }
+        val sym = TradingDesk.followSymbols(this).firstOrNull { FxData.pairOf(it) == null } ?: "BTCUSDT"
+        c.addView(row(
+            pill("Positions", true) { run("Reading your positions…") { TradingDesk.positionsText(this) } },
+            pill("Sync & habits", false) { run("Syncing your Bybit trades and reviewing habits…") { TradingDesk.habits(this).text() } },
+            pill("Funding " + sym.removeSuffix("USDT"), false) { run("Reading funding and open interest…") { TradingDesk.derivatives(this, sym)?.text ?: "No derivatives data right now." } }
+        ))
+        return c
+    }
+
+    private fun askText(title: String, hint: String, secondHint: String? = null, done: (String, String) -> Unit) {
+        val a = EditText(this).apply { this.hint = hint; setSingleLine(true) }
+        val b = secondHint?.let { h -> EditText(this).apply { this.hint = h; setSingleLine(true) } }
+        val w = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0); addView(a); b?.let { addView(it) } }
+        AlertDialog.Builder(this).setTitle(title).setView(w)
+            .setPositiveButton("Add") { _, _ -> done(a.text.toString(), b?.text?.toString().orEmpty()) }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    /** Public wallets and memecoins, read-only. No keys, no signing, no transactions. */
+    private fun chainCard(): LinearLayout {
+        val c = card()
+        c.addView(label("MEMECOINS & WALLETS (read-only)", 12f, Theme.MUTED, true))
+        val watching = ChainDesk.memes(this).joinToString(", ") { it.symbol }.ifBlank { "no memecoins" } + " · " +
+            ChainDesk.wallets(this).let { if (it.isEmpty()) "no wallets" else it.joinToString(", ") { w -> w.label } }
+        c.addView(label("Watching: $watching", 13f, Theme.TEXT, true).apply { setPadding(0, dp(6), 0, dp(4)) })
+        c.addView(label("Public addresses and market data only. Never paste a private key or seed phrase anywhere; Orion refuses them.", 11f, Theme.MUTED))
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(8), 0, 0); visibility = View.GONE }
+        fun run(wait: String, job: () -> String) {
+            out.visibility = View.VISIBLE; out.text = wait
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r; Motion.enter(out) }
+            }.start()
+        }
+        c.addView(row(
+            pill("Add memecoin", false) { askText("Watch a memecoin", "Name, symbol or contract address") { q, _ -> run("Searching…") { ChainDesk.addMeme(this, q).also { runOnUiThread { render() } } } } },
+            pill("Add wallet", false) { askText("Watch a wallet", "Public address (Solana or 0x…)", "Label (optional)") { a, l -> run("Checking…") { ChainDesk.addWallet(this, a, l).also { runOnUiThread { render() } } } } },
+            pill("Check now", true) { run("Reading the chain…") { ChainDesk.overview(this) } }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+        c.addView(out)
+        return c
+    }
+
+    /** Smart model routing switch and a versioned JSON backup of the desk. No keys or safety state are saved or restored. */
+    private fun backupCard(): LinearLayout {
+        val c = card()
+        c.addView(label("MODEL & BACKUP", 12f, Theme.MUTED, true))
+        c.addView(label("Smart model routing: " + (if (Prefs.modelRouting(this)) "on" else "off"), 13f, Theme.TEXT, true).apply { setPadding(0, dp(6), 0, dp(4)) })
+        c.addView(label("On NVIDIA, short simple questions use a light model, weekly reviews use the largest one, everything else your chosen model. Other providers are unchanged.", 11f, Theme.MUTED))
+        c.addView(label("Backup saves your playbook, practice account, watchlists and trade journal as one JSON file. It never contains API keys or tokens, and restoring never touches the kill switch or loss limits.", 11f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) })
+        c.addView(row(
+            pill(if (Prefs.modelRouting(this)) "Routing: on" else "Routing: off", Prefs.modelRouting(this)) { Prefs.setModelRouting(this, !Prefs.modelRouting(this)); render() },
+            pill("Export backup", false) {
+                val i = Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"; putExtra(Intent.EXTRA_TITLE, "orion-desk-backup.json") }
+                startActivityForResult(i, REQUEST_BACKUP_EXPORT)
+            },
+            pill("Restore", false) {
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }
+                startActivityForResult(i, REQUEST_BACKUP_RESTORE)
+            }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+        return c
+    }
+
+    private fun exportBackup(uri: Uri) {
+        Thread {
+            val msg = try {
+                val prefs = DeskBackup.FILES.associateWith { getSharedPreferences(it, MODE_PRIVATE).all as Map<String, Any?> }
+                val text = DeskBackup.build(prefs, TradeHistoryStore.exportJson(this), System.currentTimeMillis())
+                (contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Could not open the file.")).use { it.write(text.toByteArray()) }
+                "Backup saved."
+            } catch (e: Exception) { "Backup failed: " + (e.message ?: e.javaClass.simpleName) }
+            runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+        }.start()
+    }
+
+    private fun restoreBackup(uri: Uri) {
+        val parsed = try {
+            val bytes = (contentResolver.openInputStream(uri) ?: throw IOException("Could not open the file.")).use { it.readBytes() }
+            DeskBackup.parse(String(bytes))
+        } catch (e: Exception) { Toast.makeText(this, e.message ?: "Could not read that file.", Toast.LENGTH_LONG).show(); return }
+        AlertDialog.Builder(this).setTitle("Restore this backup?")
+            .setMessage("Contains ${DeskBackup.summary(parsed)}. Matching desk settings are replaced; journal trades are merged. Keys and safety limits are not touched.")
+            .setPositiveButton("Restore") { _, _ ->
+                for ((file, map) in parsed.prefs) {
+                    val e = getSharedPreferences(file, MODE_PRIVATE).edit()
+                    for ((k, v) in map) when (v) {
+                        is String -> e.putString(k, v)
+                        is Boolean -> e.putBoolean(k, v)
+                        is Int -> e.putInt(k, v)
+                        is Long -> e.putLong(k, v)
+                        is Float -> e.putFloat(k, v)
+                    }
+                    e.apply()
+                }
+                val added = TradeHistoryStore.importJson(this, parsed.journal)
+                Toast.makeText(this, "Restored. $added new journal trades.", Toast.LENGTH_LONG).show()
+                render()
+            }.setNegativeButton("Cancel", null).show()
     }
 
     private fun openWithFade(i: Intent) {
@@ -346,6 +466,8 @@ class TradingActivity : Activity() {
     @Deprecated("Uses the platform document picker for broad Android compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == RESULT_OK && requestCode == REQUEST_BACKUP_EXPORT) { data?.data?.let { exportBackup(it) }; return }
+        if (resultCode == RESULT_OK && requestCode == REQUEST_BACKUP_RESTORE) { data?.data?.let { restoreBackup(it) }; return }
         if (requestCode != REQUEST_TRADE_IMPORT || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         try {
@@ -414,6 +536,8 @@ class TradingActivity : Activity() {
 
     companion object {
         private const val REQUEST_TRADE_IMPORT = 9501
+        private const val REQUEST_BACKUP_EXPORT = 9502
+        private const val REQUEST_BACKUP_RESTORE = 9503
     }
 
     private fun toggleMode() {
