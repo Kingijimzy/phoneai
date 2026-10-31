@@ -45,9 +45,9 @@ object AgentCheckpointStore {
                 active.optBoolean("stopRequested") || active.optBoolean("pauseRequested") ||
                     active.optString("status") !in setOf("running", "waiting_for_children")
             } else {
-                archivedPending(c).firstOrNull { it.second.optString("taskId") == taskId }
-                    ?.second?.let { it.optBoolean("stopRequested") || it.optBoolean("pauseRequested") ||
-                        it.optString("status") !in setOf("running", "waiting_for_children") } ?: true
+                // An archived checkpoint is never an execution authority, even if it was
+                // waiting for children when a newer chat objective replaced it.
+                true
             }
         }
     }
