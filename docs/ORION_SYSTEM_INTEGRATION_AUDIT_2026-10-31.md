@@ -63,7 +63,7 @@ The central brain assembles provider-neutral context from multiple durable store
 However, these stores have different identifiers and persistence owners:
 
 - `TaskStore`: user-facing task definitions, integer IDs, JSON file.
-- `AgentCheckpointStore`: one resumable execution checkpoint, UUID task ID, AtomicFile.
+- `AgentCheckpointStore`: one active execution checkpoint plus independently archived unfinished checkpoints, each with a UUID task ID and AtomicFile persistence. Paused/recovery-required work is archived before a separate planned task starts; explicit Continue restores the oldest preserved task. A running in-flight task is never displaced.
 - `OrionObjectiveGraph`: objective IDs scoped to the active chat session, stored in SharedPreferences.
 - `OrionEvidenceLedger`: dispatch events with a hashed task ID and argument fingerprint, stored separately.
 - `ChatHistoryStore`: transcript and objective evidence receipts.
@@ -90,19 +90,19 @@ These layers overlap. That is safe but makes it difficult to understand why a to
 - For multi-step planning, the model proposes `objective_graph` nodes and later supplies `objective_id` for each tool step.
 - `OrionObjectiveGraph` validates IDs/dependencies, persists by active chat session, enforces prerequisite status, and accepts completion only from an exact successful evidence receipt in the same session.
 - `AgentCheckpointStore.begin` creates a separate UUID task ID; each step is checkpointed before execution and recorded afterward.
-- The checkpoint start boundary now refuses to overwrite a `running`, `paused` or `recovery_required` task. The Agent explains that the previous task must be resumed or explicitly stopped. Regression tests verify that normal progress and uncertain in-flight actions survive an attempted new task.
+- The checkpoint start boundary refuses to overwrite a `running` task, but now archives `paused` and `recovery_required` tasks before starting another planned task. On explicit Continue, Orion restores the oldest archived unfinished task and restores its task identity/counters. Uncertain in-flight actions remain marked for recovery confirmation. Regression tests cover paused-task preservation, starting a second task, restoring the first, and recovery-required state.
 - The evidence ledger associates dispatches with the checkpoint UUID (hashed for storage).
 - User-visible Task Centre tasks have separate integer IDs in `TaskStore`.
 
 **Confirmed bug fixed in this branch:** the dispatcher previously accepted any nonblank model-supplied `objective_id` before checking the graph. A one-node graph named `main` could therefore reject a model alias such as `calc_write` with “Unknown objective ID”. The shared dispatch boundary now resolves an unknown/blank ID to the only node when and only when the graph has exactly one node. Multi-node graphs still require an exact ID and fail closed otherwise. Regression tests cover both cases.
 
-The remaining design issue is the number of separate IDs/stores and the fact that deterministic research shortcuts do not complete the checkpoint/objective receipt lifecycle.
+The remaining design issue is the number of separate IDs/stores and incomplete checkpoint/objective receipt handling in some deterministic shortcuts. The multi-task checkpoint queue is a practical continuity layer, not yet a transactionally unified task identity model.
 
 ## 7. Feature maturity
 
 **Implemented in source with concrete routes:** device/accessibility actions, browser automation, shell/files, constrained Python and extension sandbox, research/news/weather/sports, GitHub repository metadata/README/releases/issues/Actions runs, memory and knowledge operations, task records/checkpoints, MCP, Telegram/SMS/dial intents, utilities, trading research/paper operations, gaming notes/focus, skills and background runtime queue.
 
-**GitHub inspection gap:** the public `github_public` executor does not expose repository tree listing, source-file contents, workflow YAML files or commit diffs. The deterministic repository URL path reads metadata and README; the Actions path reads runs, not workflow definitions. Therefore the test request to inspect code and workflow files is not fully supported through the public GitHub executor today, even though repository/README/Actions-run reads exist. A connected account read may cover some private/authenticated paths, but it is a different integration and is not a substitute for a complete public read contract.
+**GitHub source inspection:** the public `github_public` executor now supports bounded recursive source-tree listing and safe repository-relative text-file reads, in addition to metadata, README, releases, issues and Actions runs. The repository audit path reads the default branch tree and selected source/configuration files before summarizing; a missing README is reported as missing documentation, not as an inaccessible repository. Exact workflow YAML files can be read through the file path operation. Commit diffs and arbitrary large-file retrieval remain unsupported/bounded; source excerpts are capped and must be cited by file path. Private account reads remain a separate authenticated integration.
 
 **Partially integrated:** shared central context, memory/learning, objective graph + checkpoint continuity, specialist-agent coordination, background standing orders, capability discovery and recovery. The components exist, but cross-surface state transitions are not uniformly driven by one orchestrator.
 
@@ -112,7 +112,7 @@ The remaining design issue is the number of separate IDs/stores and the fact tha
 
 ## 8. Tests and end-to-end proof
 
-The integration branch contains 126 Kotlin test files under `app/src/test` and no `androidTest` tree. The suite includes useful Robolectric integration coverage for continuity, runtime persistence, adapter ownership, objective graph rules, permissions and checkpoint recovery.
+The integration branch contains 126 Kotlin test files under `app/src/test` and no `androidTest` tree. The latest verified CI run (#2879, commit `3bd70fc94f4711315706a340a394a631d37d26dd`) passed all 827 unit tests, built the debug APK, validated its package/signature and uploaded the APK artifact. Coverage now includes repository-intent routing, source-capability honesty, integration correction routing, calculator save-and-run classification, and multi-task checkpoint preservation.
 
 The CI workflow builds the pinned runtime, runs restricted-Python checks, runs Kotlin unit tests, assembles a debug APK, validates its package/signature and uploads an artifact.
 
@@ -130,8 +130,8 @@ The central brain also adds up to 16,000 characters of executive context, includ
 ## 10. Recommended engineering order
 
 1. Finish routing every deterministic shortcut through one managed task lifecycle, including checkpoint steps and objective evidence.
-2. Expand the public GitHub reader with bounded tree, file-content, workflow-definition and commit-diff reads so repository audits can inspect actual source, not only README and Actions run summaries.
-3. Replace the single active checkpoint with a multi-task checkpoint index; keep the new no-overwrite rule until that storage migration is proven.
+2. Extend public GitHub reads with bounded commit-diff support and deeper directory-scoped source retrieval; tree, selected file, and workflow-file reads are now implemented.
+3. Unify the active/archive checkpoint index with Task Centre task records so the same stable task identity links user-visible tasks, checkpoints, objective graphs and evidence. The current archive queue supports oldest-first resume but does not yet provide full task-ID selection from every UI surface.
 4. Unify the task identity model: one stable task/session ID should link Task Centre record, checkpoint, objective graph and evidence ledger.
 5. Make live voice use the same intent router and guarded execution loop, with hands-free confirmation behavior for consequential actions.
 6. Give specialists a bounded way to request registered capabilities through the central dispatcher instead of independent model-only paths.
@@ -140,4 +140,4 @@ The central brain also adds up to 16,000 characters of executive context, includ
 
 ## Current status
 
-The objective-ID recovery, compound-action routing, direct research routing, shared guarded-research dispatch, and unfinished-checkpoint preservation changes are committed to the PR #132 integration branch, with regression tests. The new exact-head CI run must pass before these changes are considered build-verified. No merge to `main` and no physical-device success is claimed by this audit.
+The objective-ID recovery, compound-action routing, standalone GitHub inspection, bounded public source reads, missing-README handling, calculator save-and-run workflow, integration correction routing, capability eligibility reporting, permission-aware capability inventory, and multi-task checkpoint archive/resume changes are committed to the PR #132 integration branch with regression tests. Exact-head CI run #2879 passed 827 tests and validated/uploaded the APK artifact. The PR remains unmerged and physical Redmi verification is still outstanding.
