@@ -111,6 +111,8 @@ object AgentPolicy {
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
+        "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
+        "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview",
         "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save",
         "strategy_record_result", "paper_trade", "trading_kill_switch" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"

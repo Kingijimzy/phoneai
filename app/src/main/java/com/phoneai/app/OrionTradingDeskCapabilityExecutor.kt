@@ -8,7 +8,9 @@ internal object OrionTradingDeskCapabilityExecutor {
     private val supportedTools = setOf(
         "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
         "strategy_backtest", "market_forecast", "market_conditions", "strategy_list",
-        "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch"
+        "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch",
+        "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
+        "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview"
     )
     fun supports(tool: String): Boolean = tool in supportedTools
     fun execute(tool: String, args: JSONObject, context: Context, stopped: () -> Boolean = { false }): String? {

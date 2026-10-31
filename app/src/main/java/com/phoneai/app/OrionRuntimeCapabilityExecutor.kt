@@ -81,7 +81,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.FILES -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
-            "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"))
+            "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
             "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
             else -> null

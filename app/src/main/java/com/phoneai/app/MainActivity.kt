@@ -179,7 +179,7 @@ class MainActivity : ComponentActivity() {
                     onOpenTasks = { launchDestination(Intent(this@MainActivity, TaskCenterActivity::class.java), "TaskCenterActivity") },
                     onOpenSettings = { section -> openSettingsSection(section) },
                     onOpenUtilities = { launchDestination(Intent(this@MainActivity, TeachModeActivity::class.java), "TeachModeActivity") },
-                    onOpenTrading = { launchDestination(Intent(this@MainActivity, TradingActivity::class.java), "TradingActivity") },
+                    onOpenTrading = { launchDestination(AgentChatActivity.workspaceIntent(this@MainActivity), "Trading Coach") },
                     onOpenMemory = { launchDestination(Intent(this@MainActivity, MemoryActivity::class.java), "MemoryActivity") },
                     onOpenAgents = { launchDestination(Intent(this@MainActivity, AgentsActivity::class.java), "AgentsActivity") },
                     onOpenSoulEngine = { launchDestination(Intent(this@MainActivity, SoulEngineActivity::class.java), "SoulEngineActivity") },
@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
             "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
             "knowledge_graph" -> { destination = KnowledgeGraphActivity::class.java; intent = Intent(this, destination) }
             "proactive" -> { destination = ProactiveActivity::class.java; intent = Intent(this, destination) }
-            "trading" -> { destination = TradingActivity::class.java; intent = Intent(this, destination) }
+            "trading" -> { startActivity(AgentChatActivity.workspaceIntent(this)); return }
             "gaming" -> { destination = GamingCoachActivity::class.java; intent = Intent(this, destination) }
             "device_utilities" -> { destination = DeviceUtilitiesActivity::class.java; intent = Intent(this, destination) }
             "soul_engine" -> { destination = SoulEngineActivity::class.java; intent = Intent(this, destination) }
