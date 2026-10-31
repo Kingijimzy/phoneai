@@ -200,7 +200,7 @@ object AgentRunner {
     ): Result {
         AgentLessons.learnFrom(c, agent.id, userText)
         val scopedPrompt = systemPrompt(c, agent, userText) +
-            (delegation?.let { "\\n\\n" + it.promptBlock() } ?: "")
+            (delegation?.let { "\n\n" + it.promptBlock() } ?: "")
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", scopedPrompt))
         // Keep the prompt lean on mobile/free-tier providers. Code Agent needs enough
         // recent context to patch code, but resending twenty long turns burns token quota
