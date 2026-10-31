@@ -179,7 +179,7 @@ class MainActivity : ComponentActivity() {
                     onOpenTasks = { launchDestination(Intent(this@MainActivity, TaskCenterActivity::class.java), "TaskCenterActivity") },
                     onOpenSettings = { section -> openSettingsSection(section) },
                     onOpenUtilities = { launchDestination(Intent(this@MainActivity, TeachModeActivity::class.java), "TeachModeActivity") },
-                    onOpenTrading = { launchDestination(AgentChatActivity.workspaceIntent(this@MainActivity), "Trading Coach") },
+                    onOpenTrading = { launchDestination(TradingDeskActivity.intent(this@MainActivity), "Trading Desk") },
                     onOpenMemory = { launchDestination(Intent(this@MainActivity, MemoryActivity::class.java), "MemoryActivity") },
                     onOpenAgents = { launchDestination(Intent(this@MainActivity, AgentsActivity::class.java), "AgentsActivity") },
                     onOpenSoulEngine = { launchDestination(Intent(this@MainActivity, SoulEngineActivity::class.java), "SoulEngineActivity") },
