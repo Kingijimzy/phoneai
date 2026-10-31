@@ -1049,6 +1049,11 @@ class Tools(
             OrionAgentDelegation.finish(svc, manifest, "error: durable job record could not be saved", failed = true)
             return "error: durable specialist job could not be saved; nothing was scheduled."
         }
+        if (job.manifestId != manifest.id) {
+            OrionAgentDelegation.finish(svc, manifest, "cancelled: idempotency key already belongs to an existing job", cancelled = true)
+            if (job.status == OrionWorkerJobStore.Status.QUEUED) OrionSpecialistScheduler.enqueue(svc, job.id)
+            return "SPECIALIST JOB ${job.id} [${job.status.name.lowercase()}]: concurrent duplicate matched the existing durable job; no second provider execution was created."
+        }
         if (!OrionSpecialistScheduler.enqueue(svc, job.id)) {
             store.cancel(job.id, "workmanager_schedule_failed")
             OrionAgentDelegation.finish(svc, manifest, "error: background scheduler unavailable", failed = true)
