@@ -21,6 +21,9 @@ internal object OrionTasksCapabilityExecutor {
     // Durable execution checkpoint ownership stays here; Agent supplies the control-flow decisions.
     fun evidenceTaskId(service: Context): String? = AgentCheckpointStore.evidenceTaskId(service)
     fun pendingCheckpoint(service: Context): JSONObject? = AgentCheckpointStore.pending(service)
+    fun hasArchivedPending(service: Context): Boolean = AgentCheckpointStore.hasArchivedPending(service)
+    fun activateOldestArchived(service: Context): Boolean = AgentCheckpointStore.activateOldestArchived(service)
+    fun archivedPendingSummaries(service: Context): List<String> = AgentCheckpointStore.archivedPendingSummaries(service)
     fun needsRecoveryConfirmation(service: Context): Boolean = AgentCheckpointStore.needsRecoveryConfirmation(service)
     fun acknowledgeRecovery(service: Context, confirmation: String): Boolean =
         AgentCheckpointStore.acknowledgeRecovery(service, confirmation)
