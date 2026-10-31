@@ -54,13 +54,13 @@ internal object OrionAppAwareness {
             append("Installed activities/screens (").append(activities.size).append("): ")
                 .append(activities.take(36).joinToString(", ").ifBlank { "none" })
             if (activities.size > 36) append(" … +").append(activities.size - 36)
-            append("\\nInstalled services (").append(services.size).append("): ")
+            append("\nInstalled services (").append(services.size).append("): ")
                 .append(services.take(24).joinToString(", ").ifBlank { "none" })
             if (services.size > 24) append(" … +").append(services.size - 24)
-            append("\\nInstalled receivers (").append(receivers.size).append("): ")
+            append("\nInstalled receivers (").append(receivers.size).append("): ")
                 .append(receivers.take(20).joinToString(", ").ifBlank { "none" })
             if (receivers.size > 20) append(" … +").append(receivers.size - 20)
-            append("\\nIMPORTANT: manifest-enabled means declared/enabled in the installed package; it does not prove a service is running, permission is granted, or a screen can currently launch.")
+            append("\nIMPORTANT: manifest-enabled means declared/enabled in the installed package; it does not prove a service is running, permission is granted, or a screen can currently launch.")
         }
     }.getOrDefault("Installed component inventory unavailable; do not infer screens or service state.")
 
