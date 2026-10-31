@@ -127,7 +127,14 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             nim.cancel()
             providerThread.interrupt()
             providerThread.join(5000)
+            if (parentCancelled()) {
+                store.cancel(jobId, "parent_cancelled_during_interrupted_request")
+                OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: parent stopped", cancelled = true)
+                return Result.success()
+            }
             store.needsReview(jobId, "worker_interrupted_during_provider_request")
+            OrionAgentDelegation.finish(applicationContext, manifest,
+                "error: worker interruption left provider outcome uncertain", failed = true)
             return Result.failure()
         }
 
