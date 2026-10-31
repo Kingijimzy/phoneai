@@ -18,6 +18,12 @@ class HermesAdoptionTest {
         assertFalse(HermesRepetitionGuard.isRunawayRepetition(distinct))
     }
 
+    @Test fun streamWatcherDetectsRunawayAndBoundsItsRetainedTail() {
+        val watch = HermesRepetitionGuard.RunawayStreamWatch()
+        val repeated = "This is a repeated streamed response fragment with enough text to be detected. ".repeat(240)
+        assertTrue(watch.feed(repeated))
+    }
+
     @Test fun truncationPreservesHeadAndTailWithExplicitNotice() {
         val input = "HEAD-" + "x".repeat(100) + "-TAIL"
         val result = HermesToolOutputTruncation.truncateHeadTail(input, 40, "TEST")
