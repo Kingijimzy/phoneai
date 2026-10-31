@@ -50,7 +50,10 @@ internal object OrionCapabilityDiscovery {
         "media_status" to "notification_access",
         "media_control" to "notification_access",
         "resolve_contact" to "contacts",
-        "device_location" to "location"
+        "device_location" to "location",
+        "flashlight" to "camera",
+        "camera_capture" to "camera",
+        "record_screen" to "screen_capture"
     )
 
     fun discover(
@@ -66,7 +69,7 @@ internal object OrionCapabilityDiscovery {
         val unique = registeredTools.distinctBy { it.name }
         val facts = unique.map { tool ->
             val pack = AgentPolicy.packForTool(tool.name)
-            val permissionKey = permissionRequirements[tool.name]
+            val permissionKey = permissionRequirements[tool.name] ?: if (ToolRegistry.requiresAccessibility(tool.name)) "accessibility" else null
             val permissionState = permissionKey?.let { permissionStates[it] ?: PermissionState.UNKNOWN }
             val setupReason = when {
                 tool.name == "mcp_list_tools" && integrationStates["mcp_endpoint"] != "configured" ->
