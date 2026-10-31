@@ -186,7 +186,7 @@ Tasks:
 | Stage 0 — integration baseline | IN PROGRESS | PR #132 draft; upstream stack is not yet on main; exact-head CI/review must be checked |
 | Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness, market-quote, GitHub account, repository-name search and Actions run/list shortcuts persist receipts; full repository source inspection remains direct guarded research; parent-child cancellation/recovery and background continuity remain |
 | Stage 2 — capability intelligence | IN PROGRESS — request-scoped contracts added | relevant capability families receive full contracts while all other tools remain discoverable by compact signatures; exact-head CI and latency/token comparison are pending |
-| Stage 3 — specialist delegation | IN PROGRESS — scoped manifests and receipts added | each ask_agent call now receives a parent-linked, least-privilege manifest and a durable delegation receipt; specialist tools are still analysis/read-only and lifecycle controls/independent delegated execution remain |
+| Stage 3 — specialist delegation | IN PROGRESS — scoped manifests, receipts and durable child-job ledger added | specialist calls still execute synchronously; the new bounded job store adds idempotent enqueue, one-at-a-time claims, exact-parent fail-closed checks, parent cancellation and interrupted-call NEEDS_REVIEW recovery; provider-backed background execution and UI controls remain |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
 | Stage 5 — proactive background | PARTIAL | watcher/runtime/standing-order foundations exist; event pipeline and device delivery need proof |
 | Stage 6 — companion experience | IN PROGRESS — central chat awareness and deterministic entry routing added | Orion Chat now receives the compact/detailed runtime app map and sends explicit repository, terminal/runtime and website tasks into the guarded Agent path; broader screen/workflow ownership and task/voice continuity still need implementation and device proof |
@@ -297,3 +297,15 @@ Tasks:
 - Added tests for active parent pause/stop visibility, archived parent cancellation, cancelled delegation receipts and blocking capability dispatch when cancellation is already present.
 - Limitation: the current provider request is synchronous and cannot yet be forcibly interrupted mid-HTTP call. The late response is discarded when it returns; bounded provider timeouts/interruptible transport and genuinely asynchronous child workers remain follow-up work.
 - A child does not inherit parent write permissions. Parent authorization, confirmation and evidence gates remain authoritative.
+
+
+## Implementation notes — durable specialist worker job ledger
+
+- Added `OrionWorkerJobStore`, a separate AtomicFile-backed ledger for bounded specialist jobs linked to an exact parent checkpoint and optional parent objective node.
+- Job kinds are intentionally limited to analysis, read-only research, trading analysis and task planning. This ledger cannot represent phone actions, messaging, shell commands, account mutation or exchange orders.
+- Enqueue uses a parent-scoped idempotency key; duplicate submissions return the original job rather than creating a second provider charge.
+- Claims are serialized and limited to one active job on-device. The caller must verify that the exact parent checkpoint is still running immediately before execution; an unverifiable parent cancels the queued job.
+- Parent cancellation marks its queued/running/paused child jobs cancelled. Terminal transitions reject stale or duplicate completion.
+- A process restart converts a persisted RUNNING job to NEEDS_REVIEW. It is not automatically re-run because the provider may have completed before the process died.
+- Added Robolectric tests for idempotent enqueue, persistence, single-worker claims, fail-closed parent checks, parent cancellation, duplicate completion and interrupted-provider recovery.
+- This is durable job orchestration state, not yet an independent model executor. The next implementation slice must connect a bounded worker runner, provider timeout/budget controls and chat timeline events without allowing background workers to bypass the parent Agent's capability/approval policy.
