@@ -84,6 +84,29 @@ internal object OrionCommandIntentPolicy {
     }
 }
 
+/**
+ * Voice is an interaction surface, not a reduced-capability assistant.
+ * Action-shaped utterances enter the same guarded command/task lifecycle as chat.
+ */
+internal object OrionVoiceExecutionPolicy {
+    private val contextualActionKinds = setOf(
+        OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
+        OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
+        OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
+        OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
+        OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
+        OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
+    )
+
+    fun shouldRouteToCommand(
+        command: String,
+        recentTurns: List<Pair<String, String>>,
+        activeObjective: String
+    ): Boolean =
+        OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
+            OrionContextualIntentInterpreter.resolve(command, recentTurns, activeObjective).kind in contextualActionKinds
+}
+
 /** What the agent uses to talk to the person. */
 interface AgentUi {
     fun say(text: String)
@@ -907,6 +930,14 @@ RESPONSE QUALITY AND FORMAT:
     fun runLiveConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        // Route actionable voice requests through the exact same planner, checkpoint,
+        // capability registry, owner policy, confirmation and evidence gates as chat.
+        if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
+                command, recentConversationTurns(), contextualActiveObjective()
+            )) {
+            runInternal(command, reuseCommandBudget = false)
+            return
+        }
         talkNim.beginCommand()
         stopped = false
         researchCancelled.set(false)
