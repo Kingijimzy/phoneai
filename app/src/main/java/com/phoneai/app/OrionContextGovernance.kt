@@ -250,4 +250,19 @@ internal object OrionMemoryLifecycle {
     fun clearExpiry(context: Context, memoryId: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("expiry_$memoryId").apply()
     }
+
+    fun forgetHistory(context: Context, memoryId: Int) {
+        val prefs = context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
+        val history = runCatching { JSONArray(prefs.getString("entries", "[]") ?: "[]") }.getOrDefault(JSONArray())
+        val kept = JSONArray()
+        for (i in 0 until history.length()) {
+            val item = history.optJSONObject(i) ?: continue
+            if (item.optInt("memoryId") != memoryId) kept.put(item)
+        }
+        prefs.edit().putString("entries", kept.toString()).apply()
+    }
+
+    fun clearHistory(context: Context) {
+        context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE).edit().remove("entries").apply()
+    }
 }
