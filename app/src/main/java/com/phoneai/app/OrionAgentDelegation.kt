@@ -33,6 +33,7 @@ internal object OrionAgentDelegation {
             append("\nAllowed data capabilities: ").append(allowedTools.sorted().joinToString().ifBlank { "none" })
             append("\nMemory scope: ").append(memoryScope)
             append("\nModel-call budget: ").append(maxModelCalls)
+            append("\nCapability-call budget: ").append(maxCapabilityCalls.coerceIn(0, 4))
             append("\nYou are a specialist worker, not the owner of Orion. Return analysis, sources, drafts or recommendations to the parent. Do not claim to execute phone actions, send messages, publish content, change accounts, run shell commands or place trades. The parent Agent must review your result and dispatch any approved action through its shared policy and task lifecycle.")
         }
     }
