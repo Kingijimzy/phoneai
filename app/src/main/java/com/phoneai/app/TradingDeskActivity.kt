@@ -20,6 +20,7 @@ class TradingDeskActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
     private lateinit var pulse: TextView
+    private lateinit var tabBar: LinearLayout
     private var selected = Tab.DESK
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -67,11 +68,9 @@ class TradingDeskActivity : Activity() {
         pulse = text("Loading trading workspace status…", 11f, Theme.MUTED)
         root.addView(card().apply { addView(pulse) }); root.addView(gap(10))
         val tabs = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf(Tab.DESK to "Desk", Tab.PLAYBOOK to "Playbook", Tab.EVIDENCE to "Performance").forEach { (tab, label) ->
-            row.addView(action(label, selected == tab) { render(tab) }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
-        }
-        tabs.addView(row); root.addView(tabs); root.addView(gap(10))
+        tabBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tabs.addView(tabBar); root.addView(tabs); root.addView(gap(10))
+        refreshTabBar()
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val scroll = ScrollView(this).apply { isFillViewport = true; addView(body, -1, -2) }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -83,8 +82,17 @@ class TradingDeskActivity : Activity() {
             runOnUiThread { if (!isFinishing && !isDestroyed) pulse.text = line }
         }.start()
     }
+    private fun refreshTabBar() {
+        tabBar.removeAllViews()
+        listOf(Tab.DESK to "Desk", Tab.PLAYBOOK to "Playbook", Tab.EVIDENCE to "Performance").forEach { (tab, label) ->
+            tabBar.addView(action(label, selected == tab) { render(tab) }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
+        }
+    }
+
     private fun render(tab: Tab) {
-        selected = tab; body.removeAllViews()
+        selected = tab
+        refreshTabBar()
+        body.removeAllViews()
         when (tab) { Tab.DESK -> renderDesk(); Tab.PLAYBOOK -> renderPlaybook(); Tab.EVIDENCE -> renderEvidence() }
     }
 
