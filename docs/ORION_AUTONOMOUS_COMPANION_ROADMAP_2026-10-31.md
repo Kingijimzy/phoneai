@@ -372,3 +372,27 @@ Tasks:
 - WorkManager persistent work and execution limits: https://developer.android.com/reference/androidx/work/WorkManager
 
 **Honest status:** this commit restructures the home screen and wires the already-existing chat, tasks, agents, trading and memory destinations into one workspace model. It does not yet complete the live task dashboard, unified chat activity receipts, navigation consolidation or physical-device acceptance.
+
+## Trading Desk + central Trading Coach chat integration
+
+Claude's trading work is preserved as two complementary layers, not collapsed into a single chat destination:
+
+- The canonical trading backend already present on this branch is `TradingDesk.kt`, routed through `OrionTradingDeskCapabilityExecutor` and the shared `OrionCapabilityAdapters`. This owns strategy state, market/calendar research, setup scans, backtests, forecasts, conditions/news, paper trading, position monitoring, trade-history sync, habit evidence, derivatives and chain research. It remains the source of truth; the new UI must not create a second playbook or watchlist database.
+- Claude's PR #121 introduced a separate `TradingDeskActivity` built around an older `TradingDeskStore` / `TradingPlaybook` model and a specialist-only coach transcript. That implementation is not copied wholesale because doing so would fork strategy/watchlist state and keep the user outside the central Orion brain.
+- Added a dedicated `TradingDeskActivity` workspace using the existing canonical `TradingDesk` model. It provides desk status, watchlist context, on-demand read-only setup scans, market/news conditions, position review, paper-trade settlement, accepted/pending strategy views, performance evidence and a link to account/execution controls.
+- The workspace's coaching actions open `MainChatActivity` with a task-specific initial prompt. This reuses the central Orion conversation, current provider routing, chat history, image/chart attachment flow, main capability dispatcher and parent-objective lifecycle; it does not create a parallel coach chat history.
+- The home workspace Trading entry now opens the dedicated desk. The old coach activity's desk-status link opens the new desk. The older trading controls screen returns to central Orion Chat rather than the legacy specialist transcript.
+- Strategy acceptance is an explicit user action and only changes the saved strategy playbook. It does not place an order. Real order execution remains separately gated by the execution capability, read-only preference, risk controls and per-order confirmation.
+
+### Trading integration acceptance gates (still open)
+
+- [ ] Verify the exact-head CI build and trading capability integration tests after the new Activity/manifest/navigation changes.
+- [ ] Verify every desk action uses the canonical `TradingDesk` store and shared capability route; no legacy duplicate TradingDeskStore is introduced.
+- [ ] Verify chart upload from the central chat, with trading analysis context and no separate coach transcript.
+- [ ] Verify forex and crypto market data failure states, stale-data labels, timezone/session handling and macro-calendar freshness; built-in calendar hints must never be presented as a verified live economic calendar.
+- [ ] Verify position, history, habit and derivatives actions with no API key, testnet keys, and read-only real-account keys.
+- [ ] Verify strategy proposal → user accept/reject → matcher/backtest evidence, without silently enabling execution.
+- [ ] Verify execution remains blocked when the pack is off, read-only is enabled, risk gate fails, or explicit confirmation is declined.
+- [ ] Test all screens and chart-chat handoff on the Redmi device; remote CI is not device acceptance.
+
+**Honest status:** the dedicated desk surface and central-chat handoff are now implemented on the roadmap branch. This is not yet a verified end-to-end trading release; exact-head CI and the device/account acceptance matrix remain outstanding.
