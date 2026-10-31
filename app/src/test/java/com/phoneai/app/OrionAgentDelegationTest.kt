@@ -243,7 +243,9 @@ class OrionAgentDelegationTest {
             AgentProfiles.find("research")!!, "parent-finish-once", "Research a public Android topic"
         )
         assertTrue(OrionAgentDelegation.begin(context, manifest))
+        assertFalse(OrionAgentDelegation.isCompleted(context, manifest.id))
         assertTrue(OrionAgentDelegation.finish(context, manifest, "completed"))
+        assertTrue(OrionAgentDelegation.isCompleted(context, manifest.id))
         assertFalse(OrionAgentDelegation.finish(context, manifest, "late replacement"))
         assertEquals("completed", OrionAgentDelegation.latest(context, 1).single().optString("status"))
     }
