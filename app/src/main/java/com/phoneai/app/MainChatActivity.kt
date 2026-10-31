@@ -1732,6 +1732,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onResume() {
         super.onResume()
+        runCatching {
+            onChatEvents(OrionConversationRepository.get(this).eventsForActive(this))
+        }
         refreshProviderModelChip()
         if (livePulse?.isStarted != true) livePulse?.start()
         val service = PhoneAiService.instance
