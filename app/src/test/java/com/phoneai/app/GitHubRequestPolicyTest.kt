@@ -62,6 +62,18 @@ class GitHubRequestPolicyTest {
         assertEquals(GitHubRequestPolicy.Section.REPOSITORY, target.section)
     }
 
+    @Test fun standaloneProjectInspectionRoutesDirectlyEvenWithConjunctions() {
+        assertTrue(GitHubRequestPolicy.shouldRouteDirectly(
+            "Investigate my PhoneAI project and identify its weaknesses."
+        ))
+    }
+
+    @Test fun repositoryInspectionWithMemoryAndReminderRemainsCompound() {
+        assertTrue(!GitHubRequestPolicy.shouldRouteDirectly(
+            "Investigate my PhoneAI project, save important lessons to memory and remind me tomorrow."
+        ))
+    }
+
     @Test fun nonGithubAndUnsafeSchemesAreIgnored() {
         assertTrue(GitHubRequestPolicy.resolveAll("https://example.com/owner/repo").isEmpty())
         assertTrue(GitHubRequestPolicy.resolveAll("javascript://github.com/owner/repo").isEmpty())
