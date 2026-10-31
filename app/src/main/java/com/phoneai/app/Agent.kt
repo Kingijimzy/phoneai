@@ -1388,7 +1388,9 @@ Rules:
         val explicitResumeRequest = Regex("(?i)^(?:continue|resume|keep going)(?:\\s|$)").containsMatchIn(command)
         // A new task may start while older work is paused. On an explicit Continue, restore
         // the oldest archived unfinished checkpoint before resolving conversational context.
-        if (explicitResumeRequest && OrionTasksCapabilityExecutor.hasArchivedPending(svc)) {
+        val activeCheckpointStatus = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)?.optString("status").orEmpty()
+        if (explicitResumeRequest && activeCheckpointStatus != "running" &&
+            OrionTasksCapabilityExecutor.hasArchivedPending(svc)) {
             if (!OrionTasksCapabilityExecutor.activateOldestArchived(svc)) {
                 ui.say("I found older unfinished work, but could not safely switch its checkpoint. No actions were resumed.")
                 return
