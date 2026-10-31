@@ -1010,11 +1010,11 @@ class Tools(
         if (MemoryStore.delete(svc, id)) "forgot memory $id"
         else "error: memory $id was not deleted; it may not exist or device storage may be unavailable"
 
-    fun askAgent(agentName: String, task: String): String {
+    fun askAgent(agentName: String, task: String, parentObjectiveId: String = ""): String {
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
-        val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task)
+        val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task, parentObjectiveId)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
             val answer = AgentRunner.runDelegated(
