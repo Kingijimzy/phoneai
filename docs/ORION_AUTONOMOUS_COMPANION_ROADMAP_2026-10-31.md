@@ -323,3 +323,52 @@ Tasks:
 - Child completion is persisted first. The worker ledger then checks for remaining queued/running siblings and asks the active matching parent checkpoint to complete only after the final child receipt is durable. If siblings remain, the parent stays waiting.
 - Added a Robolectric lifecycle test covering chat-turn completion with a queued child, parent waiting state, exact-parent validity, child claim/completion, and final parent closure.
 - A true asynchronous provider-backed worker is still not enabled. The durable lifecycle is now prepared for it, but the next slice must implement the bounded WorkManager executor, provider timeout/request budgets, cancellation checks immediately before and after provider calls, and same-conversation result delivery. Do not claim independent background AI execution until that executor is implemented and verified.
+
+## UI/UX restructuring — central companion workspace
+
+**Product rule:** the main chat is the single conversational front door and the home screen is its operational overview. Feature destinations remain available, but they must not fragment Orion into unrelated assistants or imply that a tile is a working integration.
+
+### Design system and reference research
+
+- Use an opaque black / graphite / silver / white palette, restrained borders, clear typography and conventional card surfaces. Do not reintroduce teal as the primary accent, oversized floating controls or liquid-glass surfaces.
+- Follow Jetpack Compose unidirectional data flow: UI renders state and emits intents; durable repositories and the shared task coordinator own state transitions. Avoid a second UI-only task state.
+- Use Google's **Now in Android** (Apache-2.0) as an architectural reference for Compose screen structure, state ownership, accessibility, responsive layouts and testability. Do not copy its product UI wholesale; adapt the patterns to Orion's single-brain workflow.
+- Follow Android's Material 3 adaptive navigation guidance when supporting larger windows. Keep the compact phone navigation deliberately small and thumb-reachable; add the adaptive navigation dependency only when the expanded-window layout is implemented and tested, rather than increasing APK/dependency cost speculatively.
+- Keep the UI light for the Redmi A3 Pro (4 GB RAM): avoid continuously animated dashboards, expensive blurred layers, eager loading of every destination and unnecessary background polling.
+
+### Main information architecture
+
+1. **Orion Chat** — default home action and single conversation for questions, commands, images, voice handoff, approvals and results.
+2. **Work** — active objective, step timeline, delegated specialist jobs, waiting/blocked/approval states, recovery and completed receipts. All cards deep-link back to the originating chat/task.
+3. **Trading Desk** — market context, watchlists, chart/analysis, journal and proposals. Read-only analysis can be delegated; real-money orders stay behind risk checks and explicit confirmation.
+4. **Specialists** — agent roster, scoped assignments, progress, results, pause/stop and permission boundaries. The UI must distinguish a registered agent from an executing worker.
+5. **Memory & learning** — review and correct durable memory, task lessons and provenance; no silent promotion of uncertain observations.
+6. **Explore / capabilities** — research, browser, device tools and integrations, grouped by task rather than a long unstructured list.
+7. **Settings & trust** — provider connections, permissions, capability grants, privacy, background execution and diagnostics.
+
+### Home-screen implementation slice
+
+- Replaced the generic assistant landing page with a central-brain entry surface and an explicit **Open Orion Chat** primary action.
+- Added direct workspace entries for Tasks & Workflows, Specialist Team, Trading Desk and Memory & Learning, using the already-wired destination callbacks.
+- Kept voice as a secondary interaction surface labelled as using the same brain.
+- Added research, teach-workflow and system-access entry points under connected capabilities.
+- Added explanatory copy separating local setup status from proof of live service/background-worker health.
+- Preserved the existing black/graphite/silver visual language and compact bottom dock.
+
+### UI completion gates (still open)
+
+- [ ] Replace the static home workspace tiles with live, repository-backed objective, child-worker, approval and recovery summaries. No fabricated counts or generic READY indicators.
+- [ ] Make the chat timeline render durable plan/step/specialist events as compact, expandable activity receipts, with retry/stop/review actions bound to real task IDs.
+- [ ] Make Work, Specialists and Trading Desk detail screens share the same objective and event models; avoid duplicate task stores.
+- [ ] Consolidate chat/voice navigation and conversation identity so switching surfaces does not create a second conversation or lose the active objective.
+- [ ] Add accessible semantics, large-text support, keyboard/IME handling, loading/empty/error states and screenshot/UI tests.
+- [ ] Validate on 720×1640 Android 15/16 and low-memory conditions; remote CI does not replace Redmi device testing.
+
+### External engineering references
+
+- Android Compose UI architecture: https://developer.android.com/develop/ui/compose/architecture
+- Material 3 adaptive navigation: https://developer.android.com/develop/adaptive-apps/guides/build-adaptive-navigation
+- Now in Android reference implementation (Apache-2.0): https://github.com/android/nowinandroid
+- WorkManager persistent work and execution limits: https://developer.android.com/reference/androidx/work/WorkManager
+
+**Honest status:** this commit restructures the home screen and wires the already-existing chat, tasks, agents, trading and memory destinations into one workspace model. It does not yet complete the live task dashboard, unified chat activity receipts, navigation consolidation or physical-device acceptance.
