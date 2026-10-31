@@ -258,6 +258,8 @@ object MemoryStore {
         removed.forEach {
             runCatching { OrionKnowledgeGraph.forgetMemory(c, it.id) }
             OrionMemoryLifecycle.clearExpiry(c, it.id)
+            OrionMemoryLifecycle.forgetHistory(c, it.id)
+            runCatching { OrionRoutineReminderWorker.cancel(c, it.id) }
         }
         true
     }
@@ -271,7 +273,11 @@ object MemoryStore {
             return@synchronized false
         }
         runCatching { OrionKnowledgeGraph.clear(c) }
-        previous.forEach { OrionMemoryLifecycle.clearExpiry(c, it.id) }
+        previous.forEach {
+            OrionMemoryLifecycle.clearExpiry(c, it.id)
+            runCatching { OrionRoutineReminderWorker.cancel(c, it.id) }
+        }
+        OrionMemoryLifecycle.clearHistory(c)
         true
     }
 
