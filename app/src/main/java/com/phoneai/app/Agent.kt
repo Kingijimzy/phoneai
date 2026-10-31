@@ -2750,6 +2750,37 @@ Rules:
     private fun research(tool: String, args: JSONObject): String =
         executeWithRecoveryGuard(tool, args)
 
+    /**
+     * Runs a deterministic, read-only shortcut through the same durable checkpoint and evidence
+     * receipt used by model-planned tasks. Each read is still dispatched through the guarded
+     * adapter; this wrapper only owns task begin/step/record/complete transitions.
+     */
+    private fun researchShortcut(command: String, steps: List<OrionResearchShortcutLifecycle.Step>): String {
+        val result = OrionResearchShortcutLifecycle.run(
+            command = command,
+            steps = steps,
+            checkpoint = object : OrionResearchShortcutLifecycle.Checkpoint {
+                override fun begin(command: String) = OrionTasksCapabilityExecutor.beginRun(svc, command)
+                override fun beginStep(tool: String, args: JSONObject) =
+                    OrionTasksCapabilityExecutor.beginStep(svc, tool, args)
+                override fun recordStep(tool: String, args: JSONObject, result: String) =
+                    OrionTasksCapabilityExecutor.recordStep(svc, tool, args, result)
+                override fun pause() { OrionTasksCapabilityExecutor.pauseRun(svc) }
+                override fun requireRecovery(reason: String) {
+                    OrionTasksCapabilityExecutor.requireRecovery(svc, reason)
+                }
+                override fun complete() = OrionTasksCapabilityExecutor.completeRun(svc)
+            },
+            cancelled = { stopped || researchCancelled.get() },
+            execute = { tool, args -> research(tool, args) }
+        )
+        if (result.completed) {
+            try { svc.onAgentTaskFinished(command, true) } catch (_: Exception) { }
+            return result.output
+        }
+        return result.output
+    }
+
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
