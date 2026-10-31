@@ -535,3 +535,17 @@ Orion's Android implementation deliberately adapts these concepts to its existin
 - The diagnostic run writes a bounded `self_diagnostic` lifecycle event into the active conversation. The existing chat event renderer displays the receipt in the same timeline as tool and approval activity; it does not create a separate dashboard-only record.
 - The event records counts and diagnostic scope, not raw arguments, credentials, source code or private payloads. The report clearly states that external provider health and Android permission/device reliability were not tested.
 - Added regression coverage for explicit diagnostic intent and durable event persistence in the real SQLite conversation repository.
+
+
+## Persistent personal memory, auto-indexing and context-window upgrade
+
+- Added a first-class routine memory category and a deterministic local auto-indexer for explicit user preferences, repeated routines, ongoing projects and goals from typed and voice turns.
+- Auto-indexed observations are stored as pending owner-review proposals with source role, confidence and reason. Sensitive candidates are rejected before storage; exact duplicates do not downgrade an already approved memory. This is not passive surveillance and does not save arbitrary chat messages as semantic memories.
+- Fixed prompt selection so unreviewed or sensitive pinned entries are filtered before ranking; they can no longer crowd approved memories out of the context window.
+- The existing SQLite FTS4 triggers already index every persisted message. The central brain now also retrieves a few relevant archived conversations for substantive new requests, while excluding the active session to avoid duplicating current turns.
+- Added ContextWindowBudget, which prioritizes active objective/checkpoint, central contract, relevant memory and episodic evidence before lower-priority inventory. Its token estimate is intentionally conservative and provider-neutral; exact provider tokenization and output-token reservation remain future work.
+- Increased the approved profile-memory allowance in typed chat and voice context.
+- Added unit tests for extraction, sensitive rejection, context priority, budget clipping and omission handling.
+- Detailed architecture and open-source research choices are in docs/ORION_MEMORY_CONTEXT_MULTIMODAL_ARCHITECTURE.md.
+- Multimodal reality check: the app already has accessibility/OCR/TFLite and voice foundations. ML Kit GenAI availability is device-gated and should not be assumed on the Redmi A3 Pro; LiveKit Agents needs a separate Python/Node service for the full agent runtime. Neither has been added as a mandatory dependency.
+- Remaining: temporal fact validity/correction history, retention/expiry, provider-specific token budgets, stable cross-provider attachment/perception references, optional on-device semantic embeddings, and physical-device realtime voice/perception acceptance.
