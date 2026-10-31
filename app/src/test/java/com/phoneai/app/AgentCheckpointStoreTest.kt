@@ -172,4 +172,34 @@ class AgentCheckpointStoreTest {
     }
 
 
+
+    @Test fun newTaskCannotOverwriteAnUnfinishedCheckpoint() {
+        assertTrue(AgentCheckpointStore.begin(context, "Research Android AI and save the findings"))
+        val originalId = AgentCheckpointStore.evidenceTaskId(context)
+        val args = JSONObject().put("query", "Android on-device AI")
+        assertTrue(AgentCheckpointStore.beginStep(context, "live_web_search", args))
+        assertTrue(AgentCheckpointStore.record(context, "live_web_search", args, "Search results returned"))
+        assertTrue(AgentCheckpointStore.pause(context))
+
+        assertFalse("A new task must not replace resumable work",
+            AgentCheckpointStore.begin(context, "Create an unrelated calculator"))
+        val preserved = AgentCheckpointStore.pending(context)
+        assertNotNull(preserved)
+        assertEquals("Research Android AI and save the findings", preserved!!.optString("command"))
+        assertEquals(originalId, AgentCheckpointStore.evidenceTaskId(context))
+        assertEquals(1, preserved.optJSONArray("steps")?.length())
+    }
+
+    @Test fun recoveryRequiredCheckpointCannotBeReplacedUntilExplicitlyStopped() {
+        assertTrue(AgentCheckpointStore.begin(context, "Send a message and inspect delivery"))
+        assertTrue(AgentCheckpointStore.beginStep(context, "telegram_send", JSONObject().put("message", "hello")))
+        assertTrue(AgentCheckpointStore.stop(context, "Process interrupted during send"))
+
+        assertEquals("recovery_required", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertFalse(AgentCheckpointStore.begin(context, "Start another task"))
+        assertTrue(AgentCheckpointStore.acknowledgeRecovery(context, "I checked the Telegram state"))
+        assertTrue(AgentCheckpointStore.stop(context, "User explicitly stopped the previous task"))
+        assertTrue(AgentCheckpointStore.begin(context, "Start another task"))
+        assertEquals("Start another task", AgentCheckpointStore.pending(context)?.optString("command"))
+    }
 }
