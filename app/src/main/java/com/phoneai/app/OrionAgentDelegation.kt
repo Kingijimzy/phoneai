@@ -16,6 +16,7 @@ internal object OrionAgentDelegation {
     data class Manifest(
         val id: String,
         val parentTaskId: String?,
+        val parentObjectiveId: String?,
         val agentId: String,
         val objective: String,
         val access: Access,
@@ -27,7 +28,8 @@ internal object OrionAgentDelegation {
         fun promptBlock(): String = buildString {
             append("SPECIALIST DELEGATION ENVELOPE:")
             append("\nDelegation ID: ").append(id)
-            append("\nParent objective ID: ").append(parentTaskId ?: "not attached")
+            append("\nParent checkpoint ID: ").append(parentTaskId ?: "not attached")
+            append("\nParent objective node ID: ").append(parentObjectiveId ?: "not attached")
             append("\nYour assigned objective: ").append(objective)
             append("\nAccess scope: ").append(access.name)
             append("\nAllowed data capabilities: ").append(allowedTools.sorted().joinToString().ifBlank { "none" })
@@ -81,7 +83,7 @@ internal object OrionAgentDelegation {
     private const val KEY = "runs"
     private const val MAX_RUNS = 40
 
-    fun create(agent: AgentProfile, parentTaskId: String?, objective: String): Manifest {
+    fun create(agent: AgentProfile, parentTaskId: String?, objective: String, parentObjectiveId: String? = null): Manifest {
         val id = UUID.randomUUID().toString()
         val access = when (agent.id) {
             "research" -> Access.READ_ONLY_RESEARCH
@@ -100,6 +102,7 @@ internal object OrionAgentDelegation {
         return Manifest(
             id = id,
             parentTaskId = parentTaskId?.takeIf { it.isNotBlank() },
+            parentObjectiveId = parentObjectiveId?.trim()?.takeIf { Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it) },
             agentId = agent.id,
             objective = safeObjective,
             access = access,
@@ -120,6 +123,7 @@ internal object OrionAgentDelegation {
         val record = JSONObject()
             .put("id", manifest.id)
             .put("parentTaskId", manifest.parentTaskId)
+            .put("parentObjectiveId", manifest.parentObjectiveId)
             .put("agentId", manifest.agentId)
             .put("objective", manifest.objective)
             .put("access", manifest.access.name)
@@ -166,8 +170,10 @@ internal object OrionAgentDelegation {
                     .append(record.optString("objective", "objective unavailable").take(180))
                 val summary = record.optString("summary").take(260)
                 if (summary.isNotBlank()) append(" — ").append(summary)
+                val parentObjective = record.optString("parentObjectiveId")
+                if (parentObjective.isNotBlank() && parentObjective != "null") append(" [objective ").append(parentObjective.take(32)).append("]")
                 val parent = record.optString("parentTaskId")
-                if (parent.isNotBlank() && parent != "null") append(" (parent ").append(parent.take(48)).append(")")
+                if (parent.isNotBlank() && parent != "null") append(" (checkpoint ").append(parent.take(48)).append(")")
             }
         }.take(1800)
     }
