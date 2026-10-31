@@ -255,7 +255,10 @@ object MemoryStore {
             list.addAll(removed)
             return@synchronized false
         }
-        removed.forEach { runCatching { OrionKnowledgeGraph.forgetMemory(c, it.id) } }
+        removed.forEach {
+            runCatching { OrionKnowledgeGraph.forgetMemory(c, it.id) }
+            OrionMemoryLifecycle.clearExpiry(c, it.id)
+        }
         true
     }
 
@@ -267,6 +270,8 @@ object MemoryStore {
             list.addAll(previous)
             return@synchronized false
         }
+        runCatching { OrionKnowledgeGraph.clear(c) }
+        previous.forEach { OrionMemoryLifecycle.clearExpiry(c, it.id) }
         true
     }
 
