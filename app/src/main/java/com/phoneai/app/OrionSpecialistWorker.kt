@@ -117,9 +117,11 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                         "live_news" -> LiveNews.search(args.optString("query").take(120))
                         "bybit_public_ticker" -> {
                             val symbol = Bybit.symbolOf(args.optString("symbol"))
-                                ?: return@Thread "error: invalid public market symbol."
-                            val price = Bybit.price(applicationContext, symbol)
-                            "PUBLIC BYBIT LINEAR TICKER (mainnet, unauthenticated): $symbol last price=$price. No account or position data was accessed."
+                            if (symbol == null) "error: invalid public market symbol."
+                            else {
+                                val price = Bybit.price(applicationContext, symbol)
+                                "PUBLIC BYBIT LINEAR TICKER (mainnet, unauthenticated): $symbol last price=$price. No account or position data was accessed."
+                            }
                         }
                         else -> "error: background worker does not implement public capability '$tool'."
                     }
