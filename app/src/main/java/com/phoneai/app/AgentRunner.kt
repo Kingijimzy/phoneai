@@ -237,8 +237,10 @@ object AgentRunner {
         agent: AgentProfile,
         userText: String,
         manifest: OrionAgentDelegation.Manifest,
-        capabilityDispatch: ((String, JSONObject) -> String)? = null
+        capabilityDispatch: ((String, JSONObject) -> String)? = null,
+        cancelled: () -> Boolean = { false }
     ): String {
+        if (cancelled()) return "error: parent task was paused or stopped before specialist execution."
         val needsCapability = manifest.access == OrionAgentDelegation.Access.READ_ONLY_RESEARCH ||
             (manifest.access == OrionAgentDelegation.Access.TRADING_ANALYSIS && symbolsIn(userText).isNotEmpty())
         if (needsCapability && capabilityDispatch == null) {
@@ -264,8 +266,11 @@ object AgentRunner {
                 OrionAgentDelegation.Access.TASK_PLANNING -> "This specialist has no external data capabilities."
             }
         }
+        if (cancelled()) return "error: parent task was paused or stopped; specialist work was cancelled before model analysis."
         if (isDelegatedCapabilityFailure(evidence)) return evidence
-        return runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence).text
+        val answer = runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence).text
+        return if (cancelled()) "error: parent task was paused or stopped while the specialist request was in flight; its late result was discarded."
+        else answer
     }
 
     internal fun runFull(
