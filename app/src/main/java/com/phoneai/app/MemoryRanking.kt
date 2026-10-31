@@ -52,6 +52,20 @@ internal object MemoryRanking {
         return chosen.values.toList()
     }
 
+    /** Filter first, then rank. Pinned memories outside the allowlist must never bypass a specialist scope. */
+    fun selectCategories(
+        memories: List<Memory>,
+        allowedCategories: Set<String>,
+        query: String?,
+        limit: Int = 25,
+        relevantLimit: Int = 10
+    ): List<Memory> = select(
+        memories.filter { it.category in allowedCategories },
+        query,
+        limit,
+        relevantLimit
+    )
+
     /**
      * Local hybrid retrieval, in the spirit of vector + keyword search with reciprocal rank fusion:
      * TF-IDF cosine similarity (semantic-ish, order of rarity) fused with BM25 keyword ranking.
