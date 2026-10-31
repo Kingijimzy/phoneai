@@ -497,11 +497,12 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Hardened the bounded manifest ledger so it evicts historical terminal receipts first and refuses new work if every slot is occupied by a running manifest. A queued worker's active policy receipt can no longer be silently evicted by later synchronous specialist calls.
 
 
-## Implementation notes — autonomous diagnosis and bounded self-healing policy
+## Implementation notes — autonomous repair and extension lifecycle policy
 
-- Added `OrionSelfHealingPolicy` as a deterministic decision layer for the central brain's diagnose → recover → verify loop. It classifies observed failures into provider, tool, permission, network, storage, worker, extension or unknown domains and records severity, confidence, evidence and a bounded recovery recommendation.
-- Recovery is evidence-sensitive: permission failures request the owner; uncertain writes require reconciliation and are never automatically replayed; provider failures may use only the configured fallback and only once; network retries are limited to read-only work; interrupted background work may resume only from a verified checkpoint; storage failures require owner intervention.
-- Added a hard cycle budget so repeated self-repair cannot spin indefinitely.
-- Added an extension promotion gate. A generated extension remains a draft without a source URL and a known license; it cannot activate without all sandbox tests passing, no privileged access/policy mutation, and owner approval. A failed test remains a draft; attempts to modify security policy or permissions are rejected.
-- Added unit coverage for permission, provider, uncertain-write, worker-recovery and extension-approval paths.
-- This commit is the deterministic policy foundation, not yet the complete autonomous repair runner. Remaining work: connect diagnosis signals to actual provider/tool/worker failures; build a durable repair case and evidence ledger; expose diagnosis and approval activity in main chat; invoke real test runners for extension drafts; and verify rollback/disable behaviour end-to-end.
+- Added a deterministic repair/extension state model: diagnostic findings carry component, severity, evidence references, timestamp and status; repair proposals carry risk class, idempotency, rollback, approval and test-run evidence; extension drafts carry source URLs, license evidence, declared capabilities, sandbox test receipt and rollback plan.
+- Automatic retry is limited to one attempt and only for reversible, idempotent work with a rollback path; critical findings are never auto-retried.
+- Model-generated repairs cannot auto-apply unless they are reversible, idempotent, rollback-capable, have a passing test receipt and do not require owner approval.
+- Repair lifecycle transitions distinguish test failure, test pass, owner review, applied, verified and rolled back states. A failed verification after application resolves to rollback rather than success.
+- Extension validation requires HTTPS source evidence, license identity/evidence, declared capabilities, a successful sandbox test run and a rollback plan. Activation is separately gated on the awaiting-owner state and explicit approval.
+- Added unit coverage for retry restrictions, repair test evidence, failure/rollback transitions, extension source/license/test/rollback requirements and owner approval.
+- This is the deterministic policy foundation, not yet the complete autonomous repair runner. Remaining work: connect findings to actual provider/tool/worker failures; persist repair cases and evidence; surface diagnosis and approval activity in main chat; invoke the real extension sandbox from the lifecycle; and verify rollback/disable behaviour end-to-end.
