@@ -86,9 +86,11 @@ internal object OrionCommandIntentPolicy {
         val trailing = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
         val named = Regex("(?i)\\b(?:repo|repository|project)\\s+(?:called|named|for)\\s+([A-Za-z0-9_.-]{2,100})\\b").find(command)
         val direct = Regex("(?i)\\b(?:github\\s+)?(?:repo|repository|project)\\s+([A-Za-z0-9_.-]{2,100})\\b").find(command)
-        return trailing?.groupValues?.getOrNull(1)
-            ?: named?.groupValues?.getOrNull(1)
+        // Prefer explicit repository-name forms. The trailing pattern can mistake
+        // "GitHub" or "my" for the repository name in ordinary ownership wording.
+        return named?.groupValues?.getOrNull(1)
             ?: direct?.groupValues?.getOrNull(1)
+            ?: trailing?.groupValues?.getOrNull(1)
             ?: "PhoneAI"
     }
 }
