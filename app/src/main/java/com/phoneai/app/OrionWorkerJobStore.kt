@@ -115,9 +115,24 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         }
     }
 
-    fun complete(jobId: String, result: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
-        it.copy(status = Status.COMPLETED, updatedAt = clock(),
-            result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(1200), lastError = "")
+    fun complete(jobId: String, result: String): Boolean {
+        val completed = transition(jobId, setOf(Status.RUNNING)) {
+            it.copy(status = Status.COMPLETED, updatedAt = clock(),
+                result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(1200), lastError = "")
+        }
+        if (completed) {
+            // The child receipt is durable before the parent is allowed to close. If other
+            // children remain, AgentCheckpointStore.complete() leaves the parent waiting.
+            val parentId = all().firstOrNull { it.id == jobId }?.parentTaskId
+            if (!parentId.isNullOrBlank() && !hasPendingForParent(parentId)) {
+                runCatching {
+                    if (AgentCheckpointStore.evidenceTaskId(app) == parentId) {
+                        AgentCheckpointStore.complete(app)
+                    }
+                }
+            }
+        }
+        return completed
     }
 
     fun fail(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
