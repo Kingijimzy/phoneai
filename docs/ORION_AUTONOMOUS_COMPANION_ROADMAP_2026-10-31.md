@@ -396,3 +396,27 @@ Claude's trading work is preserved as two complementary layers, not collapsed in
 - [ ] Test all screens and chart-chat handoff on the Redmi device; remote CI is not device acceptance.
 
 **Honest status:** the dedicated desk surface and central-chat handoff are now implemented on the roadmap branch. This is not yet a verified end-to-end trading release; exact-head CI and the device/account acceptance matrix remain outstanding.
+
+## Claude Trading Desk companion integration (PR #148 ported in PR #152)
+
+Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanomuse-chat-foundation`. PR #152 ports the companion and desk additions onto this autonomous-companion roadmap line while retaining the newer central-brain and objective architecture.
+
+- The Trading Coach surface now includes the animated character with idle/thinking/listening/speaking states, finger-following eyes and mood reactions; the dot-matrix orb and hologram head remain selectable companion looks.
+- Voice controls include one-shot microphone input, hands-free Talk, spoken replies and the optional offline wake-word path. These controls remain subject to Android microphone permission and installed wake-word model availability; no always-on background listening is claimed.
+- The Trading Desk now has a setup-health card, activity feed, section jump navigation and the companion's richer PnL/mood snapshot.
+- Desk backup/restore now carries coach learning notes as well as the playbook, practice data and journal. Import deduplicates notes and rejects credential-like content. API keys, tokens and safety-state controls remain excluded.
+- Coach-screen desk links, home navigation and Soul Engine navigation now open the canonical `TradingDeskActivity`. Trading discussion actions from the desk continue in `MainChatActivity`; the legacy coach activity remains available as a specialist surface, not the canonical brain.
+- The background desk watcher remains disabled by default. Claude's source branch had changed that preference default to enabled; this was intentionally not adopted because merging must not silently activate background monitoring.
+- Existing real-order controls, per-order confirmation, read-only preference, policy packs and risk gates remain unchanged.
+
+### Verified integration status
+
+- [x] PR #148 confirmed merged into `upgrade/nanomuse-chat-foundation`.
+- [x] Companion UI, activity feed, setup-health checks, memory backup/restore and navigation ported into the roadmap integration branch.
+- [x] Exact-head PR #152 CI passed: Kotlin unit tests, debug APK build, APK package/signature validation and artifact staging.
+- [ ] Port the companion's visual/voice state into the canonical `MainChatActivity` without creating a second transcript or objective store.
+- [ ] Verify microphone permission, Talk stop/resume, wake-word model availability, interruption recovery and background restrictions on the Redmi A3 Pro.
+- [ ] Verify backup export/import on-device with existing coach notes and a journal containing duplicate records.
+- [ ] Complete end-to-end trading account matrix and confirm every live-data view shows stale/unavailable states honestly.
+
+**Honest status:** Claude's companion/desk additions are now integrated and CI-verified on the roadmap line. The companion visuals currently live in the coach specialist surface while desk coaching itself uses the central Orion chat. The final visual consolidation into the central chat and physical Redmi acceptance are still open.

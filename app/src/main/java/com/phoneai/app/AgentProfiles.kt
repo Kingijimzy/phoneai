@@ -215,6 +215,20 @@ object AgentLessons {
         true
     }
 
+    /** Restores notes from a backup, skipping near-duplicates and anything that looks like a credential. Returns how many were new. */
+    fun importNotes(c: Context, agentId: String, notes: List<String>): Int = synchronized(lock) {
+        val root = load(c)
+        val list = (root.optJSONArray(agentId) ?: JSONArray()).let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
+        var added = 0
+        for (n in notes.map { it.trim().replace(Regex("\\s+"), " ").take(260) }.filter { it.length >= 5 && !SafetyGate.containsSensitiveCredentialText(it) }) {
+            if (list.none { MemoryRanking.similarity(it, n) >= 0.6 }) { list.add(n); added++ }
+        }
+        while (list.size > (if (agentId == "coach") MAX_COACH else MAX_PER_AGENT)) list.removeAt(0)
+        root.put(agentId, JSONArray(list))
+        save(c, root)
+        added
+    }
+
     /** Notes for the prompt, most recent last; treated as the user's own statements. */
     fun promptBlock(c: Context, agentId: String, max: Int = 12): String =
         list(c, agentId).takeLast(max).joinToString("\n") { "- $it" }
