@@ -161,7 +161,7 @@ internal object OrionAgentDelegation {
             .replace(Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+"), "[redacted]")
             .replace(Regex("\\s+"), " ").trim().take(700)
         record.optString("agentId") == agentId && record.optString("objective") == safeObjective &&
-            record.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" } == parentObjectiveId?.trim()?.takeIf { it.isNotBlank() }
+            record.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" } == parentObjectiveId?.trim()?.takeIf { Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it) }
     }
 
     fun isCompleted(context: Context, manifestId: String): Boolean = synchronized(this) {
