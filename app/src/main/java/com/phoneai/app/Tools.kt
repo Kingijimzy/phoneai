@@ -1064,6 +1064,9 @@ class Tools(
         }
         if (job.manifestId != manifest.id) {
             OrionAgentDelegation.finish(svc, manifest, "cancelled: idempotency key already belongs to an existing job", cancelled = true)
+            if (job.manifestId?.let { OrionAgentDelegation.matches(svc, it, agent.id, task) } != true) {
+                return "error: concurrent idempotency-key collision belongs to a different specialist or task; no second job was created."
+            }
             if (job.status == OrionWorkerJobStore.Status.QUEUED) OrionSpecialistScheduler.enqueue(svc, job.id)
             return "SPECIALIST JOB ${job.id} [${job.status.name.lowercase()}]: concurrent duplicate matched the existing durable job; no second provider execution was created."
         }
