@@ -1747,11 +1747,12 @@ Rules:
             // This script intentionally stays within Orion's restricted Python sandbox:
             // it is executable, but not an interactive terminal program (input()/imports are unavailable).
             val expressions = CalculatorRequestParser.parse(command)
+            val requestedFolder = CalculatorRequestParser.requestedFolder(command)
             val fileCode = CalculatorRequestParser.script(expressions)
             ui.phase("acting")
             val saveResult = executeWithRecoveryGuard(
                 "save_file",
-                JSONObject().put("filename", "calculator.py").put("content", fileCode)
+                JSONObject().put("filename", "calculator.py").put("folder", requestedFolder).put("content", fileCode)
             )
             val saved = !saveResult.startsWith("error:", true)
             val savedSource = if (saved) tools.readSavedFile(saveResult) else
@@ -1771,7 +1772,7 @@ Rules:
                 append(if (saved) "Calculator saved and content-verified: $saveResult" else "Calculator was not saved: $saveResult")
                 append(if (executed) "\nExecution of the saved file: $executionResult" else "\nExecution of the saved file was not verified: $executionResult")
                 append("\n\nSaved file: calculator.py")
-                append("\nLocation: Downloads/Orion")
+                append("\nLocation: Downloads/$requestedFolder")
                 append("\nThis is a non-interactive calculator script. Orion's in-app Python sandbox does not provide terminal input(), so the saved file uses editable operands and verifies its arithmetic operations.")
             }
             logShortcut("python_calculator_save", saveResult)
