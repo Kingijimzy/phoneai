@@ -126,7 +126,7 @@ object AgentPolicy {
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "record_screen" -> "phone_control"
-        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "undo_last", "undo_status",
+        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
         "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
         else -> null
     }
