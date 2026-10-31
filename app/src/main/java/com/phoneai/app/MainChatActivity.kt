@@ -75,6 +75,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeStatus get() = chatUiState.status
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
+    private val composeCompanionLook = mutableStateOf(0)
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
@@ -114,6 +115,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (this.commandMode == commandMode) return@runOnUiThread
             this.commandMode = commandMode
             composeCommandMode.value = commandMode
+        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
             refreshModeSelector()
             Toast.makeText(this, if (commandMode) "Switched to Command mode for this task" else "Back to Talk mode", Toast.LENGTH_SHORT).show()
         }
@@ -1500,6 +1502,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionComposeChatScreen(
                     lines = composeLines,
                     status = composeStatus.value,
+                    companionLook = composeCompanionLook.value,
+                    onCompanionLookChanged = { look ->
+                        val safeLook = look.coerceIn(0, 2)
+                        composeCompanionLook.value = safeLook
+                        Prefs.setCompanionChar(this@MainChatActivity, safeLook)
+                    },
                     chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
                     selectedImages = composeSelectedImages.value,

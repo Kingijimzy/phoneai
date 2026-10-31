@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.net.Uri
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -311,6 +312,16 @@ private val ChatCopy = Color(0xFFF7FAF9)
 private val ChatMuted = Color(0xFF9B9B9B)
 private val ChatHairline = Color(0xFF303030)
 
+internal fun companionActivityForChatStatus(status: String): CompanionView.Activity = when {
+    status.contains("listen", ignoreCase = true) -> CompanionView.Activity.LISTENING
+    status.contains("speak", ignoreCase = true) -> CompanionView.Activity.SPEAKING
+    status.contains("think", ignoreCase = true) ||
+        status.contains("work", ignoreCase = true) ||
+        status.contains("act", ignoreCase = true) ||
+        status.contains("approval", ignoreCase = true) -> CompanionView.Activity.THINKING
+    else -> CompanionView.Activity.IDLE
+}
+
 data class OrionChatLine(
     val id: Long,
     val kind: String,
@@ -322,6 +333,8 @@ data class OrionChatLine(
 fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     status: String,
+    companionLook: Int,
+    onCompanionLookChanged: (Int) -> Unit,
     chatTitle: String,
     commandMode: Boolean,
     selectedImages: List<Uri>,
@@ -400,7 +413,24 @@ fun OrionComposeChatScreen(
                     .border(1.dp, ChatHairline, CircleShape).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Rounded.ArrowBack, null, tint = ChatCopy, modifier = Modifier.size(18.dp)) }
-            Spacer(Modifier.width(12.dp))
+            AndroidView(
+                factory = { context ->
+                    CompanionView(context).apply {
+                        character = companionLook
+                        onCharacterChanged = onCompanionLookChanged
+                    }
+                },
+                modifier = Modifier.size(42.dp).semantics {
+                    contentDescription = "Orion companion. Tap to change its appearance."
+                    role = Role.Button
+                },
+                update = { view ->
+                    view.character = companionLook
+                    view.activity = companionActivityForChatStatus(status)
+                    view.onCharacterChanged = onCompanionLookChanged
+                }
+            )
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(chatTitle, color = ChatCopy, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
