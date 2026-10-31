@@ -686,7 +686,7 @@ class Tools(private val svc: PhoneAiService) {
                 output.toByteArray()
             } ?: throw IllegalStateException("saved file could not be reopened for content verification")
 
-            if (!expectedBytes.contentEquals(actualBytes)) {
+            if (!SavedFileContentVerifier.matches(expectedBytes, actualBytes)) {
                 throw IllegalStateException("read-back content did not match the requested bytes")
             }
             "FILE SAVED AND CONTENT VERIFIED: $safeName | Downloads/Orion/$safeName | ${actualBytes.size} bytes | uri=$target"
