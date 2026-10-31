@@ -168,6 +168,8 @@ class ToolRegistryPromptAvailabilityTest {
     }
 
     @Test fun requestFamiliesSelectTheirRelevantCapabilityContracts() {
+        val launchOnly = ToolRegistry.detailedToolNames("Open WhatsApp")
+        assertTrue("A direct app-launch request must include open_app's full contract", launchOnly.contains("open_app"))
         val phone = ToolRegistry.detailedToolNames("open WhatsApp and tap the search box")
         assertTrue(phone.containsAll(setOf("open_app", "read_screen", "click", "type")))
         val research = ToolRegistry.detailedToolNames("research the latest OpenAI news and verify sources")
