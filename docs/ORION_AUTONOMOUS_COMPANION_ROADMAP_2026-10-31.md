@@ -448,3 +448,12 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Manifest restoration rejects persisted capability-call budgets above the canonical specialist profile budget.
 - Regression tests cover widened capability budgets and duplicate completion, in addition to terminal receipts, orphaned manifests, and widened tool scopes.
 - Source and test changes are committed. Gradle/CI and physical-device verification have not yet been observed. Background specialist execution remains incomplete until the scheduled executor, guarded provider path, cancellation handling, and parent-chat result delivery are implemented and tested.
+
+
+### Specialist job-to-chat continuity foundation (2026-10-31)
+
+- Extended the durable specialist job receipt with optional, validated references to its exact delegation manifest and originating conversation session. Older ledger records remain readable because both fields are optional.
+- The references are persisted and restored with the job, so a future process-independent executor can recover the correct policy receipt and return its result to the originating chat rather than whichever conversation happens to be active later.
+- Malformed manifest/session references are rejected at enqueue time; restored references are validated before being exposed. These identifiers are routing metadata only and do not grant execution permission.
+- Added Robolectric regression tests for process-restart preservation and malformed-reference rejection.
+- This is a continuity prerequisite, not the worker itself. No WorkManager provider execution or chat delivery is claimed. The next slice must implement a real, idempotent scheduler/worker that loads these references, validates the live parent checkpoint and manifest, uses the existing bounded/cancellable provider transport, then writes a durable result event to the recorded session.
