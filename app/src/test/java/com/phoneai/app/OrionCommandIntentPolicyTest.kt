@@ -116,6 +116,18 @@ class OrionCommandIntentPolicyTest {
         assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
     }
 
+    @Test fun researchAndSaveRequestUsesStructuredTaskPlanning() {
+        val request = "Go and search for 10 ways to think fast and save it in a file."
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
+    @Test fun directSearchForRequestIsRecognizedAsResearch() {
+        assertTrue(LiveWebSearch.isSearchRequest(
+            "Go and search for 10 ways to think fast"
+        ))
+    }
+
     @Test fun calculatorWriteSaveAndExecuteUsesOneDeterministicVerifiedWorkflow() {
         val request = "Write a Python calculator, save it as a file and execute it."
         assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
