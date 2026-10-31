@@ -50,6 +50,7 @@ class AgentChatActivity : Activity() {
         const val EXTRA_AGENT = "agent_id"
 
         /** The trading workspace: the coach chat is the front door of the desk. */
+        private const val LOOKS = 5 // orb, fox, robot (drawn), dot-matrix orb, hologram head
         fun workspaceIntent(c: Context): Intent = Intent(c, AgentChatActivity::class.java).putExtra(EXTRA_AGENT, "coach")
         private const val REQUEST_IMAGE = 7422
     }
@@ -66,6 +67,16 @@ class AgentChatActivity : Activity() {
     private var pnlText: TextView? = null
     private var moodText: TextView? = null
     private var mascot: CompanionView? = null
+    private var orb: OrbView? = null
+    private var holo: HologramView? = null
+    private var look = 0
+    private var liveState = CompanionView.Activity.IDLE
+    private var lastStrip = "ORION"
+    private var lastLine = ""
+    private var listeningNow = false
+    private var speakingNow = false
+    private var wakeOn = false
+    private var wake: OfflineWakeWordDetector? = null
     private var voice: Voice? = null
     private var lastMood: CompanionMood.Mood? = null
     private var lastSpokeAt = 0L
@@ -78,11 +89,42 @@ class AgentChatActivity : Activity() {
     private var tabsHolder: android.widget.HorizontalScrollView? = null
     private var resumed = false
     private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
-    private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); ticker.postDelayed(this, 20_000L) } } }
+    private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); startWake(); ticker.postDelayed(this, 20_000L) } } }
 
     private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
-        v.onSpeaking = { on -> mascot?.activity = if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE }
+        v.onSpeaking = { on -> speakingNow = on; setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) }
+        v.onLevel = { l -> orb?.level = l; holo?.mic(l) }
         voice = v
+    }
+
+    /** One place that moves every visual (drawn character, dot-matrix orb, hologram) to the same state. */
+    private fun setLive(a: CompanionView.Activity) {
+        liveState = a
+        mascot?.activity = a
+        orb?.mode = when (a) {
+            CompanionView.Activity.IDLE -> OrbView.Mode.IDLE
+            CompanionView.Activity.THINKING -> OrbView.Mode.THINKING
+            CompanionView.Activity.LISTENING -> OrbView.Mode.LISTENING
+            CompanionView.Activity.SPEAKING -> OrbView.Mode.SPEAKING
+        }
+        pushHolo()
+    }
+
+    private fun pushHolo() {
+        val h = holo ?: return
+        if (h.visibility == android.view.View.VISIBLE) h.show(h.stateName(liveState), lastStrip, lastLine)
+    }
+
+    /** 0 to 2: drawn characters, 3: dot-matrix orb, 4: human-head hologram banner. Tap the character to cycle. */
+    private fun applyLook(i: Int) {
+        look = i.coerceIn(0, LOOKS - 1)
+        Prefs.setCompanionChar(this, look)
+        mascot?.visibility = if (look <= 2) android.view.View.VISIBLE else android.view.View.GONE
+        if (look <= 2) mascot?.character = look
+        orb?.visibility = if (look == 3) android.view.View.VISIBLE else android.view.View.GONE
+        holo?.visibility = if (look == 4) android.view.View.VISIBLE else android.view.View.GONE
+        mascot?.let { if (look <= 2) Motion.enter(it) }
+        pushHolo()
     }
 
     private fun refreshDesk() {
@@ -95,8 +137,11 @@ class AgentChatActivity : Activity() {
                 deskStatus?.text = t
                 if (snap != null) {
                     strip.text = snap.strip; moodText?.text = snap.state.line; mascot?.setMood(snap.state.mood)
+                    lastStrip = snap.strip; lastLine = snap.state.line; pushHolo()
                     val now = System.currentTimeMillis()
-                    mascot?.react(CompanionLife.reactionTo(prevRealized, snap.realized, snap.equity, lastMood, snap.state.mood))
+                    val reaction = CompanionLife.reactionTo(prevRealized, snap.realized, snap.equity, lastMood, snap.state.mood)
+                    mascot?.react(reaction)
+                    if (reaction != CompanionLife.Reaction.NONE) { holo?.pulse(0.9f); orb?.pulseMouth() }
                     prevRealized = snap.realized
                     if (Prefs.companionVoice(this) && CompanionMood.shouldSpeak(lastMood, snap.state.mood, lastSpokeAt, now)) {
                         lastSpokeAt = now; voiceOut().speak(snap.state.line)
@@ -123,19 +168,22 @@ class AgentChatActivity : Activity() {
             requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 91); return
         }
         if (busy) return
+        listeningNow = true
         input.hint = "Listening…"
-        mascot?.activity = CompanionView.Activity.LISTENING
+        setLive(CompanionView.Activity.LISTENING)
         voiceOut().listen(
             onText = { t ->
                 input.hint = "Ask, or upload a chart…"
-                mascot?.activity = CompanionView.Activity.IDLE
+                listeningNow = false
+                setLive(CompanionView.Activity.IDLE)
                 if (!t.isNullOrBlank()) { input.setText(t); send() }
                 else if (handsFree) ticker.postDelayed({ if (handsFree && resumed && !busy) micTap() }, 700L)
             },
             onPartial = { input.setText(it); input.setSelection(input.text.length) },
             onProblem = { m ->
                 android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show()
-                mascot?.activity = CompanionView.Activity.IDLE
+                listeningNow = false
+                setLive(CompanionView.Activity.IDLE)
                 if (handsFree) { handsFree = false; selectGroup(currentGroup) }
             }
         )
@@ -149,9 +197,32 @@ class AgentChatActivity : Activity() {
             android.widget.Toast.makeText(this, "Hands-free on. Speak after the character starts listening. Tap Talk again to stop.", android.widget.Toast.LENGTH_LONG).show()
             micTap()
         } else {
-            voice?.stopSpeaking(); mascot?.activity = CompanionView.Activity.IDLE
+            voice?.stopSpeaking(); setLive(CompanionView.Activity.IDLE)
         }
     }
+
+    /** In-chat wake word: say "Orion" and the mic opens. Uses the offline model installed in Settings; audio stays on the device until it fires. */
+    private fun toggleWake() {
+        if (wakeOn) { wakeOn = false; stopWake(); selectGroup(currentGroup); return }
+        when {
+            Prefs.wake(this) -> android.widget.Toast.makeText(this, "The global wake word is on in Settings and the microphone can only serve one. Turn it off there first.", android.widget.Toast.LENGTH_LONG).show()
+            !WakeWordModelInstaller.isInstalled(this) -> android.widget.Toast.makeText(this, "Install the offline wake-word model in Settings first. The wake word is \"Orion\".", android.widget.Toast.LENGTH_LONG).show()
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 92)
+            else -> { wakeOn = true; startWake(); selectGroup(currentGroup)
+                android.widget.Toast.makeText(this, "Say \"Orion\", then your request.", android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    private fun startWake() {
+        if (!wakeOn || wake != null || listeningNow || speakingNow || busy || !resumed) return
+        val d = OfflineWakeWordDetector(applicationContext, onWake = {
+            runOnUiThread { stopWake(); if (wakeOn && resumed) micTap() }
+        }, onError = { m -> runOnUiThread { wakeOn = false; stopWake(); android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show(); selectGroup(currentGroup) } })
+        if (d.start()) wake = d else { wakeOn = false; selectGroup(currentGroup) }
+    }
+
+    private fun stopWake() { wake?.stop(); wake = null }
 
     private fun toggleVoice() {
         val on = !Prefs.companionVoice(this); Prefs.setCompanionVoice(this, on)
@@ -169,6 +240,7 @@ class AgentChatActivity : Activity() {
             "voice" -> toggleVoice()
             "talk" -> toggleHandsFree()
             "mic" -> micTap()
+            "wake" -> toggleWake()
             "learned" -> notesDialog()
             "clear" -> { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() }
         }
@@ -177,6 +249,7 @@ class AgentChatActivity : Activity() {
     private fun chipLabel(c: ChatGroups.Chip): String = when (c.action) {
         "voice" -> "Voice: " + (if (Prefs.companionVoice(this)) "on" else "off")
         "talk" -> if (handsFree) "Talk: on" else "Talk"
+        "wake" -> if (wakeOn) "Wake: on" else "Wake"
         else -> c.label
     }
 
@@ -202,13 +275,16 @@ class AgentChatActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 91 && grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) micTap()
+        val granted = grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (requestCode == 91 && granted) micTap()
+        if (requestCode == 92 && granted) toggleWake()
     }
 
     override fun onPause() {
         resumed = false; ticker.removeCallbacks(tick)
         if (agent.id == "coach") Prefs.setLastChatSeen(this, System.currentTimeMillis())
-        if (handsFree) { handsFree = false; voice?.stopSpeaking(); mascot?.activity = CompanionView.Activity.IDLE }
+        if (handsFree) { handsFree = false; voice?.stopSpeaking(); setLive(CompanionView.Activity.IDLE) }
+        stopWake()
         super.onPause()
     }
 
@@ -217,7 +293,7 @@ class AgentChatActivity : Activity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    override fun onDestroy() { ticker.removeCallbacks(tick); voice?.shutdown(); voice = null; super.onDestroy() }
+    override fun onDestroy() { ticker.removeCallbacks(tick); stopWake(); holo?.destroy(); holo = null; voice?.shutdown(); voice = null; super.onDestroy() }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -233,13 +309,24 @@ class AgentChatActivity : Activity() {
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(header, -1, -2)
         if (agent.id == "coach") {
-            val top = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(14), dp(8))
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
                 background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Theme.LINE) }
+                clipToOutline = true
             }
-            val face = CompanionView(this).apply { character = Prefs.companionChar(this@AgentChatActivity); onCharacterChanged = { Prefs.setCompanionChar(this@AgentChatActivity, it) } }
+            val holoView = HologramView(this).apply { visibility = android.view.View.GONE; setOnClickListener { applyLook((look + 1) % LOOKS) } }
+            holo = holoView
+            card.addView(holoView, LinearLayout.LayoutParams(-1, dp(190)))
+            val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(14), dp(8)) }
+            card.addView(top, -1, -2)
+            val face = CompanionView(this).apply { setOnClickListener { applyLook((look + 1) % LOOKS) } }
             mascot = face
-            top.addView(face, LinearLayout.LayoutParams(dp(88), dp(88)))
+            val orbView = OrbView(this).apply { visibility = android.view.View.GONE; setOnClickListener { applyLook((look + 1) % LOOKS) } }
+            orb = orbView
+            val holder = android.widget.FrameLayout(this)
+            holder.addView(face, android.widget.FrameLayout.LayoutParams(-1, -1))
+            holder.addView(orbView, android.widget.FrameLayout.LayoutParams(-1, -1))
+            top.addView(holder, LinearLayout.LayoutParams(dp(88), dp(88)))
             val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
             pnlText = TextView(this).apply { textSize = 15f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD; text = "Live PnL: loading…" }
             moodText = TextView(this).apply { textSize = 12f; setTextColor(Theme.TEXT); setPadding(0, dp(2), 0, 0) }
@@ -250,8 +337,9 @@ class AgentChatActivity : Activity() {
             }
             col.addView(pnlText); col.addView(moodText); col.addView(deskStatus)
             top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
-            root.addView(top, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(14), 0, dp(14), dp(8)) })
-            Motion.enter(top)
+            root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(14), 0, dp(14), dp(8)) })
+            Motion.enter(card)
+            applyLook(Prefs.companionChar(this).coerceIn(0, LOOKS - 1))
         }
 
         run {
@@ -665,7 +753,7 @@ class AgentChatActivity : Activity() {
         addBubble(true, shown.trim())
         val waiting = addBubble(false, "Thinking…")
         busy = true
-        mascot?.activity = CompanionView.Activity.THINKING
+        setLive(CompanionView.Activity.THINKING)
         val history = turns.toList()
         Thread {
             var trades: List<TradeProposals.Trade> = emptyList()
@@ -678,10 +766,11 @@ class AgentChatActivity : Activity() {
                 strategies.forEach { addStrategyCard(it) }
                 papers.forEach { addPaperCard(it) }
                 transitionReply(waiting, reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
-                mascot?.activity = CompanionView.Activity.IDLE
+                setLive(CompanionView.Activity.IDLE)
                 val talk = agent.id == "coach" && (Prefs.companionVoice(this) || handsFree) && reply.isNotBlank()
                 if (talk) voiceOut().speak(reply.take(400)) { runOnUiThread { if (handsFree && resumed) micTap() } }
                 else if (handsFree && resumed) ticker.postDelayed({ if (handsFree && resumed && !busy) micTap() }, 600L)
+                else ticker.postDelayed({ startWake() }, 1500L)
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
                 turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))

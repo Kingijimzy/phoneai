@@ -272,7 +272,7 @@ class TradingActivity : Activity() {
         c.addView(label("MODEL & BACKUP", 12f, Theme.MUTED, true))
         c.addView(label("Smart model routing: " + (if (Prefs.modelRouting(this)) "on" else "off"), 13f, Theme.TEXT, true).apply { setPadding(0, dp(6), 0, dp(4)) })
         c.addView(label("On NVIDIA, short simple questions use a light model, weekly reviews use the largest one, everything else your chosen model. Other providers are unchanged.", 11f, Theme.MUTED))
-        c.addView(label("Backup saves your playbook, practice account, watchlists and trade journal as one JSON file. It never contains API keys or tokens, and restoring never touches the kill switch or loss limits.", 11f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) })
+        c.addView(label("Backup saves your playbook, practice account, watchlists, trade journal and what the coach has learned about you as one JSON file. It never contains API keys or tokens, and restoring never touches the kill switch or loss limits.", 11f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) })
         c.addView(row(
             pill(if (Prefs.modelRouting(this)) "Routing: on" else "Routing: off", Prefs.modelRouting(this)) { Prefs.setModelRouting(this, !Prefs.modelRouting(this)); render() },
             pill("Export backup", false) {
@@ -291,7 +291,7 @@ class TradingActivity : Activity() {
         Thread {
             val msg = try {
                 val prefs = DeskBackup.FILES.associateWith { getSharedPreferences(it, MODE_PRIVATE).all as Map<String, Any?> }
-                val text = DeskBackup.build(prefs, TradeHistoryStore.exportJson(this), System.currentTimeMillis())
+                val text = DeskBackup.build(prefs, TradeHistoryStore.exportJson(this), System.currentTimeMillis(), AgentLessons.list(this, "coach"))
                 (contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Could not open the file.")).use { it.write(text.toByteArray()) }
                 "Backup saved."
             } catch (e: Exception) { "Backup failed: " + (e.message ?: e.javaClass.simpleName) }
@@ -319,7 +319,8 @@ class TradingActivity : Activity() {
                     e.apply()
                 }
                 val added = TradeHistoryStore.importJson(this, parsed.journal)
-                Toast.makeText(this, "Restored. $added new journal trades.", Toast.LENGTH_LONG).show()
+                val notes = AgentLessons.importNotes(this, "coach", parsed.memory)
+                Toast.makeText(this, "Restored. $added new journal trades, $notes new memory notes.", Toast.LENGTH_LONG).show()
                 render()
             }.setNegativeButton("Cancel", null).show()
     }

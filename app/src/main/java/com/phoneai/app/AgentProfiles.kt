@@ -200,6 +200,20 @@ object AgentLessons {
         similar < 0
     }
 
+    /** Restores notes from a backup, skipping near-duplicates and anything that looks like a credential. Returns how many were new. */
+    fun importNotes(c: Context, agentId: String, notes: List<String>): Int = synchronized(lock) {
+        val root = load(c)
+        val list = (root.optJSONArray(agentId) ?: JSONArray()).let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
+        var added = 0
+        for (n in notes.map { it.trim().replace(Regex("\\s+"), " ").take(260) }.filter { it.length >= 5 && !SafetyGate.containsSensitiveCredentialText(it) }) {
+            if (list.none { MemoryRanking.similarity(it, n) >= 0.6 }) { list.add(n); added++ }
+        }
+        while (list.size > (if (agentId == "coach") MAX_COACH else MAX_PER_AGENT)) list.removeAt(0)
+        root.put(agentId, JSONArray(list))
+        if (added > 0) save(c, root)
+        added
+    }
+
     fun list(c: Context, agentId: String): List<String> = synchronized(lock) {
         val a = load(c).optJSONArray(agentId) ?: return@synchronized emptyList()
         (0 until a.length()).map { a.getString(it) }
