@@ -159,7 +159,21 @@ object AgentRunner {
         "Shared task board: currently unavailable."
     }
 
-    fun systemPrompt(c: Context, agent: AgentProfile, userText: String): String {
+    /** A delegated coach receives public market context and saved lessons, never private account state or write-side desk hooks. */
+    private fun delegatedCoachContext(c: Context, userText: String): String = buildString {
+        append("DELEGATED TRADING ANALYSIS (read-only):\\n")
+        append("Account balances, private positions and order controls were not accessed for this delegation.\\n")
+        val strategy = AgentLessons.promptBlock(c, "coach", 30)
+        append("Saved user strategy and rules: ").append(if (strategy.isBlank()) "(none saved)" else strategy)
+        append("\\nJournal performance by setup type: ").append(runCatching { Journal.statsText(c) }.getOrDefault("unavailable"))
+        for (symbol in symbolsIn(userText)) {
+            val quote = runCatching { "price ${Bybit.price(c, symbol)}, 24h ${String.format(Locale.US, "%+.2f", Bybit.change24h(c, symbol))}%" }.getOrDefault("public quote unavailable")
+            append("\\nPublic market quote for ").append(symbol).append(": ").append(quote)
+        }
+        MarketQuotes.contextFor(userText).takeIf { it.isNotBlank() }?.let { append("\\n").append(it) }
+    }
+
+    fun systemPrompt(c: Context, agent: AgentProfile, userText: String, delegation: OrionAgentDelegation.Manifest? = null): String {
         val sb = StringBuilder(agent.persona)
         val name = Prefs.userName(c)
         if (name.isNotEmpty()) sb.append("\nUser name: ").append(name)
@@ -198,8 +212,8 @@ object AgentRunner {
         imageJpegBase64: String? = null,
         delegation: OrionAgentDelegation.Manifest? = null
     ): Result {
-        AgentLessons.learnFrom(c, agent.id, userText)
-        val scopedPrompt = systemPrompt(c, agent, userText) +
+        if (delegation == null) AgentLessons.learnFrom(c, agent.id, userText)
+        val scopedPrompt = systemPrompt(c, agent, userText, delegation) +
             (delegation?.let { "\n\n" + it.promptBlock() } ?: "")
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", scopedPrompt))
         // Keep the prompt lean on mobile/free-tier providers. Code Agent needs enough
@@ -227,7 +241,7 @@ object AgentRunner {
             if (tier == ModelRouter.Tier.CHAT) throw e
             Nim(c).chat(messages, image != null, 900, 0.4).trim()
         }
-        if (agent.id != "coach") return Result(reply, emptyList())
+        if (agent.id != "coach" || delegation != null) return Result(reply, emptyList())
         val actions = TradeProposals.parse(reply)
         val desk = DeskProposals.parse(actions.visible) { FxData.pairOf(it) ?: Bybit.symbolOf(it) }
         desk.strategies.forEach { try { TradingDesk.addPending(c, it) } catch (_: Exception) { } }
