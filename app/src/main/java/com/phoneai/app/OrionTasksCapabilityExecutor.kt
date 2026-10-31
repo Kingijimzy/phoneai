@@ -133,7 +133,7 @@ internal object OrionTasksCapabilityExecutor {
                         "- ${item.optString("agentId")} [${item.optString("status")}]: ${item.optString("objective").take(100)}" +
                             (item.optString("parentTaskId").takeIf { it.isNotBlank() }?.let { " (parent $it)" } ?: "")
                     }
-            taskLines + recovery + archivedText + delegationText + "\\n" + OrionWorkerJobStore(service).promptSummary()
+            taskLines + recovery + archivedText + delegationText + "\n" + OrionWorkerJobStore(service).promptSummary()
         }
         "specialist_job_status" -> {
             val id = args.optString("job_id").trim()
