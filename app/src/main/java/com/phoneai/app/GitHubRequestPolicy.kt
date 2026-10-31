@@ -34,6 +34,8 @@ internal object GitHubRequestPolicy {
         val explicit = Regex(
             "(?i)\\b(?:my\\s+)?(?:github\\s+)?(?:repo|repository|project)\\s+(?:(?:called|named|is)\\s+)?([A-Za-z0-9_.-]{2,100})\\b"
         ).find(command)?.groupValues?.getOrNull(1)?.trim()
+            ?: Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b")
+                .find(command)?.groupValues?.getOrNull(1)?.trim()
         if (!explicit.isNullOrBlank() && explicit.lowercase() !in reservedNames && safePart.matches(explicit)) {
             return listOf(Target("", explicit, Section.REPOSITORY))
         }
