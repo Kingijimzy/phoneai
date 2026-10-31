@@ -117,7 +117,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Local command shortcuts may not bypass the selected approval mode or enabled capability packs. */
     private fun requiresToolPolicy(command: String): Boolean =
-        AgentHooks.isPhoneActionRequest(command) ||
+        TaskScopePolicy.modeFor(command) != TaskMode.CHAT ||
+            AgentHooks.isPhoneActionRequest(command) ||
             Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|trading|trade|bybit|watchlist|portfolio|position|balance|alert|market|crypto|forex|symbol|buy|sell|place order|trade now|where am i|my location|current location|device location|gps|send (a )?(message|sms|email)|telegram|github|repository|repo|python version|python3|linux runtime|apkvision|apk size|file size|bitcoin headline|latest headline|search the web|look up)\\b").containsMatchIn(command)
 
     /** Every entry point (chat, command, resume) must set the scope, or a stale one blocks real tools. */
