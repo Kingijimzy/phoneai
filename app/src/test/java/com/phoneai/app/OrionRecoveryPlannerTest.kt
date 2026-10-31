@@ -69,4 +69,14 @@ class OrionRecoveryPlannerTest {
         assertEquals(listOf("read_screen", "verify_action"), selected)
     }
 
+    @Test fun researchProviderFailureChoosesDifferentRegisteredResearchSources() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "live_web_search",
+            result = "error: provider request timed out",
+            registeredAndPermitted = setOf("live_web_search", "research_web", "fetch_url", "read_screen"),
+            alreadyAttempted = setOf("read_screen")
+        )
+        assertEquals(listOf("research_web", "fetch_url"), selected)
+    }
+
 }
