@@ -192,7 +192,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Local command shortcuts may not bypass the selected approval mode or enabled capability packs. */
     private fun requiresToolPolicy(command: String): Boolean =
-        OrionCommandIntentPolicy.requiresPythonExecution(command) ||
+        TaskScopePolicy.modeFor(command) != TaskMode.CHAT ||
+            OrionCommandIntentPolicy.requiresPythonExecution(command) ||
             OrionCommandIntentPolicy.isConnectedGitHubAccountRequest(command) ||
             AgentHooks.isPhoneActionRequest(command) ||
             Regex("(?i)\\b(note down|take a note|remember|forget|update memory|undo|task|remind|routine|macro|teach|run .* times|trading settings|bybit settings|trading|trade|bybit|watchlist|portfolio|position|balance|alert|market|crypto|forex|symbol|buy|sell|place order|trade now|where am i|my location|current location|device location|gps|send (a )?(message|sms|email)|telegram|github|repository|repo|python version|python3|linux runtime|apkvision|apk size|file size|save (?:the )?(?:generated )?(?:code|script|file)|create (?:a )?(?:text|code|python)? ?file|write (?:the )?(?:code|script|text) to (?:a )?file|bitcoin headline|latest headline|search the web|look up)\\b").containsMatchIn(command)
