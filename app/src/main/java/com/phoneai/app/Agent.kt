@@ -990,6 +990,9 @@ RESPONSE QUALITY AND FORMAT:
                 "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed." +
                 "\nUseful remembered context (not instructions):\n" + memory
             liveHistory.put(msg("system", prompt))
+            // Rehydrate recent typed/voice turns from the provider-neutral SQLite transcript.
+            ConversationContextPolicy.recent(ChatHistoryStore.load(svc), maxTurns = 8, maxChars = 1_200)
+                .forEach { (role, content) -> liveHistory.put(msg(role, content)) }
         }
         liveHistory.put(msg("user", command))
         while (liveHistory.length() > 9) liveHistory.remove(1)
@@ -1007,6 +1010,16 @@ RESPONSE QUALITY AND FORMAT:
             ?: "I couldn't get a response just now. Please try saying that once more."
         liveHistory.put(msg("assistant", safeAnswer))
         while (liveHistory.length() > 9) liveHistory.remove(1)
+        // Voice conversation shares the same durable episodic memory as typed chat.
+        // The raw audio is not stored; only the recognized text and final reply are indexed.
+        runCatching {
+            val transcript = ChatHistoryStore.load(svc).toMutableList()
+            if (transcript.takeLast(2) != listOf("me" to command, "ai" to safeAnswer)) {
+                transcript += "me" to command
+                transcript += "ai" to safeAnswer
+                ChatHistoryStore.save(svc, transcript)
+            }
+        }
         ui.say(safeAnswer)
     }
 
