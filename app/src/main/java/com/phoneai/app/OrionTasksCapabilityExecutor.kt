@@ -62,7 +62,7 @@ internal object OrionTasksCapabilityExecutor {
         askUser: (String, List<String>, String) -> String
     ): String = when (tool) {
         "ask_agent" -> if (stopped()) "error: task was stopped before specialist delegation."
-            else tools.askAgent(args.optString("agent"), args.optString("task"))
+            else tools.askAgent(args.optString("agent"), args.optString("task"), args.optString("objective_id"))
         "create_agent" -> if (stopped()) "error: task was stopped before specialist creation."
             else tools.createAgent(args.optString("id"), args.optString("name"), args.optString("tagline"), args.optString("persona"))
         "morning_brief" -> if (stopped()) "error: task was stopped before building the brief."
