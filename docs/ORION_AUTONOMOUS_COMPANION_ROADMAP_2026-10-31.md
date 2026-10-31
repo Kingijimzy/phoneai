@@ -515,3 +515,15 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Diagnostics do not instantiate a new runtime, schedule WorkManager jobs, mutate state, change permissions or execute repairs. They only surface evidence and instruct the brain to verify any repair with a real test.
 - Added tests for finding evidence requirements and report severity/health semantics.
 - Remaining: persist findings/repair attempts in a user-visible repair ledger; emit findings directly from failed dispatch/provider/worker paths; add a chat-visible self-diagnosis and repair activity timeline; invoke real extension sandbox tests and verify activation/rollback receipts.
+
+
+## External architecture research consulted
+
+These sources informed the design patterns; Orion's implementation remains Kotlin-native and does not copy their runtime code:
+
+- LangGraph fault tolerance: retry only classified failures, apply bounded timeouts/retries and route exhausted failures into explicit recovery handlers — https://github.com/langchain-ai/docs/blob/main/docs/src/oss/langgraph/fault-tolerance.mdx
+- LangGraph interrupts: persist workflow state before pausing for owner input, then resume the same thread/checkpoint — https://github.com/langchain-ai/docs/blob/main/docs/src/oss/langgraph/interrupts.mdx
+- LangGraph functional execution: isolate side effects, persist task outputs and use idempotency so a resumed workflow does not repeat completed writes — https://github.com/langchain-ai/docs/blob/main/docs/src/oss/langgraph/functional-api.mdx
+- OpenHands agent architecture: keep the reasoning/action loop, tool orchestration, context management and security validation as explicit responsibilities — https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx
+
+Orion's Android implementation deliberately adapts these concepts to its existing AgentCheckpointStore, ToolGate, AgentPolicy, WorkManager, restricted Python extension sandbox and owner approval controls rather than introducing a second agent runtime.
