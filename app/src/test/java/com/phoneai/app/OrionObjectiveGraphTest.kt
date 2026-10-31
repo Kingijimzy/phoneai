@@ -80,4 +80,26 @@ class OrionObjectiveGraphTest {
         val updated = OrionObjectiveGraph.updateStatus(parsed.graph, "a", OrionObjectiveGraph.Status.COMPLETE, "test output confirms")
         assertEquals(listOf("b"), updated.ready().map { it.id })
     }
+
+    @Test fun resolvesModelGeneratedAliasToTheOnlyPersistedObjective() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Write and execute a calculator",
+            nodes = listOf(OrionObjectiveGraph.Objective(id = "main", title = "Complete calculator workflow"))
+        )
+        assertEquals("main", OrionObjectiveGraph.resolveDispatchId(graph, "calc_write"))
+        assertEquals("main", OrionObjectiveGraph.resolveDispatchId(graph, ""))
+    }
+
+    @Test fun multiObjectiveDispatchRequiresAnExactKnownId() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Research then summarize",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective(id = "research", title = "Research"),
+                OrionObjectiveGraph.Objective(id = "summarize", title = "Summarize", dependsOn = listOf("research"))
+            )
+        )
+        assertEquals("research", OrionObjectiveGraph.resolveDispatchId(graph, "research"))
+        assertNull(OrionObjectiveGraph.resolveDispatchId(graph, "research_step"))
+        assertNull(OrionObjectiveGraph.resolveDispatchId(graph, ""))
+    }
 }
