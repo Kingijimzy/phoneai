@@ -387,6 +387,8 @@ object Prefs {
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
     /** Use the installed English Piper neural voice instead of Android TTS. */
+    fun modelRouting(c: Context): Boolean = sp(c).getBoolean("model_routing", true)
+    fun setModelRouting(c: Context, v: Boolean) = sp(c).edit().putBoolean("model_routing", v).apply()
     fun companionChar(c: Context): Int = sp(c).getInt("companion_char", 0)
     fun setCompanionChar(c: Context, v: Int) = sp(c).edit().putInt("companion_char", v).apply()
     fun companionVoice(c: Context): Boolean = sp(c).getBoolean("companion_voice", false)

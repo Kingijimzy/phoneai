@@ -97,8 +97,11 @@ object TradeHistoryStore {
     private fun decode(c: Context): MutableList<ImportedTrade> {
         val f = file(c)
         if (!f.exists()) return mutableListOf()
+        return try { fromJson(JSONArray(f.readText())) } catch (_: Exception) { mutableListOf() }
+    }
+
+    private fun fromJson(arr: JSONArray): MutableList<ImportedTrade> {
         return try {
-            val arr = JSONArray(f.readText())
             MutableList(arr.length()) { i ->
                 val o = arr.getJSONObject(i)
                 ImportedTrade(
@@ -139,6 +142,12 @@ object TradeHistoryStore {
             false
         }
     }
+
+    /** The whole journal as JSON, for backups. */
+    internal fun exportJson(c: Context): JSONArray = synchronized(lock) { JSONArray().also { a -> decode(c).forEach { a.put(encode(it)) } } }
+
+    /** Merges a backed-up journal, skipping trades already present. Returns how many were new. */
+    internal fun importJson(c: Context, arr: JSONArray): Int = addRecords(c, fromJson(arr).filter { it.fingerprint.isNotBlank() })
 
     fun all(c: Context): List<ImportedTrade> = synchronized(lock) { decode(c).sortedByDescending { it.importedAt } }
 
