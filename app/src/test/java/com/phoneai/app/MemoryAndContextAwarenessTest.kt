@@ -9,6 +9,7 @@ class MemoryAutoIndexerTest {
     @Test fun extractsOnlyExplicitPreferencesRoutinesProjectsAndGoals() {
         assertEquals("preference", MemoryAutoIndexer.extract("I prefer concise answers with clear examples")?.category)
         assertEquals("routine", MemoryAutoIndexer.extract("I usually review forex charts before the London session")?.category)
+        assertEquals("routine", MemoryAutoIndexer.extract("I often journal my trading decisions after market close")?.category)
         assertEquals("project", MemoryAutoIndexer.extract("I'm building Orion as a personal Android companion")?.category)
         assertEquals("task", MemoryAutoIndexer.extract("My goal is to become a consistent full-time trader")?.category)
         assertEquals("fact", MemoryAutoIndexer.extract("Remember that my preferred coding language is Kotlin")?.category)
