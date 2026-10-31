@@ -35,7 +35,7 @@ Make Orion feel like one consistent personal companion across typed chat, Comman
 
 - **Screen**: retain the existing accessibility tree, ML Kit OCR and optional TFLite detector. Prefer structured UI nodes; use OCR when the tree is sparse; use a detector only when it adds information.
 - **Images**: preserve original attachment bytes/URI for the active turn and route them through a provider that explicitly supports image input. Store only a short derived caption or user-approved fact in long-term memory.
-- **Voice**: transcript and turn metadata should join the same conversation/task context. Voice must use the same central memory and action policy as typed chat. Keep hands-free conversation-only restrictions separate from Command execution.
+- **Voice**: recognized text and assistant replies now rehydrate from and persist to the same provider-neutral SQLite conversation transcript as typed chat. Raw audio is not stored by this path. Voice uses the same persistent profile memory and central context, while hands-free conversation-only restrictions remain separate from Command execution.
 - **Realtime audio/video**: keep transport/session state separate from the central brain. Stream media to a supported provider or optional LiveKit agent service; send timestamped, bounded observations and transcript segments to the executive context. Do not persist raw audio/video by default.
 - **On-device fallback**: existing OCR and local perception remain the dependable baseline. Android ML Kit GenAI APIs use AICore/Gemini Nano and are available only on a defined set of supported devices; do not assume the Redmi A3 Pro supports them. Check runtime availability before offering local image/audio generation.
 - **LiveKit**: an optional future transport for realtime audio/video and interruption-aware sessions. Its Android SDK is a client; the full Agents framework expects a Python or Node agent service. Do not add it as a mandatory local dependency or imply offline capability.
@@ -55,6 +55,7 @@ Make Orion feel like one consistent personal companion across typed chat, Comman
 - [x] Retrieve relevant archived conversations automatically from the existing local FTS index.
 - [x] Pack central context by priority under a conservative estimated token ceiling.
 - [x] Increase the approved memory allowance in the chat system prompt.
+- [x] Rehydrate and persist voice transcript turns in the same searchable conversation history as typed chat.
 - [x] Add unit coverage for extraction, sensitive rejection, context priority and budget limits.
 
 ## Remaining acceptance work
