@@ -1460,7 +1460,8 @@ Rules:
         // BrowserActivity tags these requests so general web-search shortcuts cannot steal
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
-        val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command)
+        val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command) &&
+            !OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)
         if (resumeRequest) {
             if (OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
                 ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
