@@ -87,7 +87,11 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             return@synchronized null
         }
         val running = next.copy(status = Status.RUNNING, updatedAt = clock(), attempts = next.attempts + 1)
-        if (!replaceLocked(next, running) || !persistLocked()) return@synchronized null
+        if (!replaceLocked(next, running)) return@synchronized null
+        if (!persistLocked()) {
+            replaceLocked(running, next)
+            return@synchronized null
+        }
         running
     }
 
