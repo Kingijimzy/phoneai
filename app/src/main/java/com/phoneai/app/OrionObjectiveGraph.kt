@@ -104,6 +104,20 @@ internal object OrionObjectiveGraph {
         return null
     }
 
+    /**
+     * Resolve the planner's objective_id at dispatch time.
+     *
+     * Models sometimes invent a descriptive ID (for example "calc_write") even when the
+     * persisted graph contains one canonical node ("main"). A single-node graph is unambiguous,
+     * so safely bind the call to that node. Multi-node graphs must supply an exact known ID;
+     * guessing there could execute work against the wrong dependency.
+     */
+    fun resolveDispatchId(graph: Graph, requestedId: String?): String? {
+        val candidate = requestedId?.trim()?.lowercase().orEmpty()
+        return graph.nodes.firstOrNull { it.id == candidate }?.id
+            ?: graph.nodes.singleOrNull()?.id
+    }
+
     fun startExecution(context: Context, id: String): Boolean {
         val graph = load(context) ?: return false
         if (canExecute(graph, id) != null) return false
