@@ -1014,11 +1014,13 @@ class Tools(private val svc: PhoneAiService) {
         val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
-            val answer = AgentRunner.runDelegated(svc, agent, task, manifest)
-            if (!OrionAgentDelegation.finish(svc, manifest, answer, failed = answer.startsWith("error:", true))) {
+            val answer = AgentRunner.runDelegated(svc, agent, manifest.objective, manifest)
+            val failed = answer.isBlank() || answer.startsWith("error:", true)
+            val safeAnswer = if (answer.isBlank()) "error: specialist returned an empty response" else answer
+            if (!OrionAgentDelegation.finish(svc, manifest, safeAnswer, failed = failed)) {
                 "error: ${agent.name} returned, but its delegation receipt could not be saved. Result requires review before treating the delegation as complete."
             } else {
-                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\n" + answer
+                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\n" + safeAnswer
             }
         } catch (e: Exception) {
             val failure = "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")"
