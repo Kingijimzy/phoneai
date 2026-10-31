@@ -1402,6 +1402,11 @@ Rules:
                 ui.say("I found older unfinished work, but could not safely switch its checkpoint. No actions were resumed.")
                 return
             }
+            currentTask = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
+                ?.optString("command")?.takeIf { it.isNotBlank() } ?: currentTask
+            runStartedAt = 0L
+            runTools = 0
+            runFailed = 0
         }
         var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         var recalled = emptyList<OrionConversationRepository.SearchHit>()
