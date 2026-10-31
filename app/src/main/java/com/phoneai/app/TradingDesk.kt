@@ -404,6 +404,55 @@ internal object TradingDesk {
         return try { Bybit.derivativesInput(c, sym)?.let { DerivativesRead.read(it) } } catch (_: Exception) { null }
     }
 
+    // ---- live PnL strip and companion mood
+    internal class Snap(val strip: String, val state: CompanionMood.State)
+
+    private fun localMidnight(now: Long): Long {
+        val tz = java.util.TimeZone.getDefault()
+        return now - ((now + tz.getOffset(now)) % 86_400_000L + 86_400_000L) % 86_400_000L
+    }
+
+    /** Numbers behind the strip: Bybit when keys are saved, otherwise the practice account. Network work, call off the main thread. */
+    internal fun pnlSnapshot(c: Context): Snap {
+        val now = System.currentTimeMillis()
+        val news = MarketCalendar.upcoming(events(now), now, 1, MarketCalendar.Impact.HIGH).firstOrNull()
+            ?.let { ((it.atMillis - now) / 60_000L).toInt() }
+        val kill = killSwitch(c)
+        var open = 0.0; var realized = 0.0; var equity = 0.0; var count = 0; var noStop = 0; var streak = 0; var has = false; var practice = false
+        try {
+            val live = livePositions(c)
+            if (live != null) {
+                has = true; open = live.positions.sumOf { it.unrealisedPnl }; count = live.positions.size
+                equity = live.equity; noStop = live.positions.count { it.stop == null }
+                val rows = cachedClosed(c, now)
+                val mid = localMidnight(now)
+                val pnls = (0 until rows.length()).mapNotNull { BybitParse.fill(rows.getJSONObject(it)) }
+                realized = pnls.filter { it.closedAt >= mid }.sumOf { it.pnl }
+                streak = pnls.takeWhile { it.pnl < 0 }.size
+            } else {
+                practice = true
+                val s = paper(c)
+                has = s.open.isNotEmpty() || s.closed.isNotEmpty()
+                count = s.open.size; equity = s.balance
+                open = s.open.sumOf { p ->
+                    val px = lastPrice(c, p.symbol) ?: p.entry
+                    (if (p.long) 1 else -1) * (px - p.entry) / p.entry * p.usd
+                }
+                val mid = localMidnight(now)
+                realized = s.closed.filter { it.closedAt >= mid }.sumOf { it.pnlUsd }
+                streak = s.closed.asReversed().takeWhile { it.pnlUsd < 0 }.size
+            }
+        } catch (_: Exception) { }
+        val mood = CompanionMood.from(CompanionMood.Input(open, realized, equity, streak, news, kill, practice, noStop, has))
+        return Snap(if (has) PnlStrip.text(open, realized, equity, count, practice) else "No live numbers yet", mood)
+    }
+
+    @Volatile private var closedCache: Pair<Long, JSONArray>? = null
+    private fun cachedClosed(c: Context, now: Long): JSONArray {
+        closedCache?.let { if (now - it.first < 60_000L) return it.second }
+        return Bybit.closedPnl(c, 100).also { closedCache = now to it }
+    }
+
     /** One line for the top of the trading workspace: mode, kill switch, session, next high-impact news, playbook size. */
     fun statusLine(c: Context): String {
         val now = System.currentTimeMillis()

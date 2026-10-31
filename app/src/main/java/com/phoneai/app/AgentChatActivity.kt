@@ -63,6 +63,64 @@ class AgentChatActivity : Activity() {
     private var pendingImage: String? = null
     @Volatile private var busy = false
     private var deskStatus: TextView? = null
+    private var pnlText: TextView? = null
+    private var moodText: TextView? = null
+    private var companion: CompanionView? = null
+    private var voice: Voice? = null
+    private var lastMood: CompanionMood.Mood? = null
+    private var lastSpokeAt = 0L
+    private var resumed = false
+    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
+    private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); ticker.postDelayed(this, 20_000L) } } }
+
+    private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
+        v.onSpeaking = { on -> companion?.speaking = on }
+        voice = v
+    }
+
+    private fun refreshDesk() {
+        val strip = pnlText ?: return
+        Thread {
+            val t = try { TradingDesk.statusLine(this) } catch (_: Exception) { "Desk status unavailable" }
+            val snap = try { TradingDesk.pnlSnapshot(this) } catch (_: Exception) { null }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                deskStatus?.text = t
+                if (snap != null) {
+                    strip.text = snap.strip; moodText?.text = snap.state.line; companion?.setMood(snap.state.mood)
+                    val now = System.currentTimeMillis()
+                    if (Prefs.companionVoice(this) && CompanionMood.shouldSpeak(lastMood, snap.state.mood, lastSpokeAt, now)) {
+                        lastSpokeAt = now; voiceOut().speak(snap.state.line)
+                    }
+                    lastMood = snap.state.mood
+                }
+            }
+        }.start()
+    }
+
+    private fun micTap() {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 91); return
+        }
+        input.hint = "Listening…"
+        voiceOut().listen(
+            onText = { t ->
+                input.hint = "Ask, or upload a chart…"
+                if (!t.isNullOrBlank()) { input.setText(t); send() }
+            },
+            onPartial = { input.setText(it); input.setSelection(input.text.length) },
+            onProblem = { m -> android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show() }
+        )
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 91 && grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) micTap()
+    }
+
+    override fun onPause() { resumed = false; ticker.removeCallbacks(tick); super.onPause() }
+
+    override fun onDestroy() { ticker.removeCallbacks(tick); voice?.shutdown(); voice = null; super.onDestroy() }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -78,12 +136,21 @@ class AgentChatActivity : Activity() {
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(header, -1, -2)
         if (agent.id == "coach") {
+            val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(14), dp(6)) }
+            val face = CompanionView(this).apply { character = Prefs.companionChar(this@AgentChatActivity); onCharacterChanged = { Prefs.setCompanionChar(this@AgentChatActivity, it) } }
+            companion = face
+            top.addView(face, LinearLayout.LayoutParams(dp(72), dp(72)))
+            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+            pnlText = TextView(this).apply { textSize = 14f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD; text = "Live PnL: loading…" }
+            moodText = TextView(this).apply { textSize = 12f; setTextColor(Theme.MUTED) }
             deskStatus = TextView(this).apply {
-                textSize = 12f; setTextColor(Theme.MUTED); setPadding(dp(18), 0, dp(18), dp(8))
+                textSize = 11f; setTextColor(Theme.MUTED); setPadding(0, dp(2), 0, 0)
                 text = "Desk: loading…"
                 setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
             }
-            root.addView(deskStatus, -1, -2)
+            col.addView(pnlText); col.addView(moodText); col.addView(deskStatus)
+            top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+            root.addView(top, -1, -2)
         }
 
         run {
@@ -99,6 +166,12 @@ class AgentChatActivity : Activity() {
             chip("Memecoins & wallets") { quick("Check my memecoin watchlist and watched wallets and tell me what needs attention, including any rug or dump warning signs.") }
             chip("Simulate") { quick("Simulate my playbook on recent history for the pairs in it and tell me honestly whether the numbers show an edge.") }
             chip("Forecast") { quick("Give me a forecast for the main pair in my playbook using my strategy, its simulated record, the news calendar and headlines.") }
+            chip("Voice: " + (if (Prefs.companionVoice(this)) "on" else "off")) {
+                val on = !Prefs.companionVoice(this); Prefs.setCompanionVoice(this, on)
+                if (!on) voice?.stopSpeaking()
+                android.widget.Toast.makeText(this, if (on) "Companion will speak alerts and replies. Reopen to refresh this label." else "Companion voice off.", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            chip("Mic") { micTap() }
             chip("Desk") { startActivity(Intent(this, TradingActivity::class.java)) }
             chip("Brain") { startActivity(Intent(this, SoulEngineActivity::class.java)) }
             chip("Find setups") { quick("Find me the best trade setups on my watchlist right now and judge them against my strategy.") }
@@ -146,11 +219,8 @@ class AgentChatActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        val v = deskStatus ?: return
-        Thread {
-            val t = try { TradingDesk.statusLine(this) } catch (_: Exception) { "Desk status unavailable" }
-            runOnUiThread { v.text = t }
-        }.start()
+        resumed = true
+        if (deskStatus != null) { ticker.removeCallbacks(tick); tick.run() }
     }
 
     private fun statusBarPad(): Int {
@@ -512,6 +582,7 @@ class AgentChatActivity : Activity() {
                 strategies.forEach { addStrategyCard(it) }
                 papers.forEach { addPaperCard(it) }
                 transitionReply(waiting, reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
+                if (agent.id == "coach" && Prefs.companionVoice(this) && reply.isNotBlank()) voiceOut().speak(reply.take(400))
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
                 turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))
