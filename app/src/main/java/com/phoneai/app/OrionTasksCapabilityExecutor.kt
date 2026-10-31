@@ -126,8 +126,8 @@ internal object OrionTasksCapabilityExecutor {
                 } + "\nSay 'continue' to resume the oldest preserved task. Uncertain in-flight actions still require inspection."
             val delegated = OrionAgentDelegation.latest(service, 5)
             val delegationText = if (delegated.isEmpty()) "" else
-                "\\nRECENT SPECIALIST DELEGATIONS (read-only workers; parent task retains action authority):\\n" +
-                    delegated.asReversed().joinToString("\\n") { item ->
+                "\nRECENT SPECIALIST DELEGATIONS (read-only workers; parent task retains action authority):\n" +
+                    delegated.asReversed().joinToString("\n") { item ->
                         "- ${item.optString("agentId")} [${item.optString("status")}]: ${item.optString("objective").take(100)}" +
                             (item.optString("parentTaskId").takeIf { it.isNotBlank() }?.let { " (parent $it)" } ?: "")
                     }
