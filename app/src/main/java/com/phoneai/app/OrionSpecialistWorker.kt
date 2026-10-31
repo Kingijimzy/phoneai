@@ -23,23 +23,29 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val store = OrionWorkerJobStore(applicationContext)
         val existing = store.all().firstOrNull { it.id == jobId } ?: return Result.failure()
 
-        // A crash after result commit but before event delivery must not repeat the provider call.
+        // Result delivery and finalization are independently retryable and never re-run the model.
         if (existing.status == OrionWorkerJobStore.Status.COMPLETED) return deliverResult(existing)
-        if (existing.status != OrionWorkerJobStore.Status.QUEUED) return Result.success()
+        if (existing.status !in setOf(OrionWorkerJobStore.Status.QUEUED, OrionWorkerJobStore.Status.RESULT_PENDING)) return Result.success()
 
-        val manifestId = existing.manifestId ?: run {
-            store.cancel(jobId, "missing_delegation_manifest")
-            return Result.failure()
-        }
-        val manifest = OrionAgentDelegation.restore(applicationContext, manifestId) ?: run {
-            store.cancel(jobId, "delegation_manifest_not_restorable")
-            return Result.failure()
-        }
         val parentIsLive: (String) -> Boolean = { parentId ->
             val checkpoint = AgentCheckpointStore.pending(applicationContext)
             AgentCheckpointStore.evidenceTaskId(applicationContext) == parentId &&
                 checkpoint?.optString("status") in setOf("running", "waiting_for_children") &&
                 !AgentCheckpointStore.cancellationRequested(applicationContext, parentId)
+        }
+        val manifestId = existing.manifestId ?: run {
+            store.cancel(jobId, "missing_delegation_manifest")
+            return Result.failure()
+        }
+        val manifest = OrionAgentDelegation.restore(applicationContext, manifestId)
+        if (manifest == null && existing.status == OrionWorkerJobStore.Status.RESULT_PENDING &&
+            OrionAgentDelegation.isCompleted(applicationContext, manifestId)) {
+            if (!store.complete(jobId, existing.result, closeParent = false)) return Result.failure()
+            return deliverResult(store.all().first { it.id == jobId })
+        }
+        if (manifest == null) {
+            store.needsReview(jobId, "delegation_manifest_not_restorable_for_recovery")
+            return Result.failure()
         }
         val expectedKind = if (manifest.access == OrionAgentDelegation.Access.TASK_PLANNING)
             OrionWorkerJobStore.Kind.TASK_PLANNING else OrionWorkerJobStore.Kind.ANALYSIS
@@ -52,11 +58,30 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: background scope rejected", cancelled = true)
             return Result.success()
         }
+        if (existing.status == OrionWorkerJobStore.Status.RESULT_PENDING) {
+            if (!parentIsLive(existing.parentTaskId)) {
+                store.cancel(jobId, "parent_cancelled_before_result_finalization")
+                OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: parent no longer active", cancelled = true)
+                return Result.success()
+            }
+            if (!OrionAgentDelegation.finish(applicationContext, manifest, existing.result)) {
+                store.needsReview(jobId, "staged_result_could_not_finish_manifest")
+                return Result.failure()
+            }
+            if (!store.complete(jobId, existing.result, closeParent = false)) {
+                store.needsReview(jobId, "staged_result_could_not_finalize_job")
+                return Result.failure()
+            }
+            return deliverResult(store.all().first { it.id == jobId })
+        }
         val agent = AgentProfiles.find(manifest.agentId) ?: run {
             store.cancel(jobId, "canonical_specialist_profile_missing")
             return Result.failure()
         }
-        val claimed = store.claim(jobId, parentIsLive) ?: return Result.success()
+        val claimed = store.claim(jobId, parentIsLive) ?: run {
+            val latest = store.all().firstOrNull { it.id == jobId }
+            return if (latest?.status == OrionWorkerJobStore.Status.QUEUED) Result.retry() else Result.success()
+        }
         val nim = Nim(applicationContext, sharedBudget = CommandRequestBudget(maxRequests = 3))
         val answer = AtomicReference<String?>(null)
         val failure = AtomicReference<Throwable?>(null)
@@ -113,8 +138,14 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
         }
-        // Commit the manifest receipt before the job result. A crash in this gap cannot re-run
-        // because restoration accepts only running manifests and interrupted jobs become review-only.
+        // Persist output while the manifest is still running. Recovery can finish these receipts
+        // without a second provider request, even if the process dies between the two commits.
+        if (!store.stageResult(jobId, result)) {
+            store.needsReview(jobId, "staged_result_commit_failed_after_provider_completion")
+            OrionAgentDelegation.finish(applicationContext, manifest,
+                "error: result persistence failed; inspect before retrying", failed = true)
+            return Result.failure()
+        }
         if (!OrionAgentDelegation.finish(applicationContext, manifest, result)) {
             store.needsReview(jobId, "delegation_receipt_commit_failed")
             return Result.failure()
