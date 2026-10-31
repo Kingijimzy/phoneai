@@ -37,7 +37,8 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     )
 
     private val app = context.applicationContext
-    private val lock = Any()
+    // All instances in this process coordinate through one lock; each operation reloads disk state.
+    private val lock = PROCESS_LOCK
     private val file = File(app.filesDir, "orion_worker_jobs.json")
     private val atomic = AtomicFile(file)
     private val maxJobs = 32
@@ -54,6 +55,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         idempotencyKey: String = UUID.randomUUID().toString(),
         parentObjectiveId: String? = null
     ): Job? = synchronized(lock) {
+        loadLocked()
         val parent = parentTaskId.trim().take(80)
         val key = idempotencyKey.trim().take(100)
         val clean = AgentPrivacyFilter.safeCommand(objective).replace(Regex("\\s+"), " ").trim().take(700)
@@ -77,22 +79,35 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
      * Claims at most one job. A missing, paused, stopped or replaced parent fails closed and
      * cancels that queued child rather than allowing an orphan to execute.
      */
-    fun claimNext(parentIsRunning: (String) -> Boolean): Job? = synchronized(lock) {
-        if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
-        val next = jobs.firstOrNull { it.status == Status.QUEUED } ?: return@synchronized null
-        if (!runCatching { parentIsRunning(next.parentTaskId) }.getOrDefault(false)) {
-            replaceLocked(next, next.copy(status = Status.CANCELLED, updatedAt = clock(),
-                lastError = "parent_not_running_or_unverifiable"))
-            persistLocked()
-            return@synchronized null
+    fun claimNext(parentIsRunning: (String) -> Boolean): Job? {
+        // Never call into AgentCheckpointStore while holding this store's lock: pause/stop
+        // intentionally acquire the checkpoint lock before cancelling child jobs.
+        val candidate = synchronized(lock) {
+            loadLocked()
+            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            jobs.firstOrNull { it.status == Status.QUEUED }?.copy()
+        } ?: return null
+        val parentRunning = runCatching { parentIsRunning(candidate.parentTaskId) }.getOrDefault(false)
+        return synchronized(lock) {
+            loadLocked()
+            val current = jobs.firstOrNull { it.id == candidate.id && it.status == Status.QUEUED }
+                ?: return@synchronized null
+            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            if (!parentRunning) {
+                val cancelled = current.copy(status = Status.CANCELLED, updatedAt = clock(),
+                    lastError = "parent_not_running_or_unverifiable")
+                if (!replaceLocked(current, cancelled)) return@synchronized null
+                if (!persistLocked()) replaceLocked(cancelled, current)
+                return@synchronized null
+            }
+            val running = current.copy(status = Status.RUNNING, updatedAt = clock(), attempts = current.attempts + 1)
+            if (!replaceLocked(current, running)) return@synchronized null
+            if (!persistLocked()) {
+                replaceLocked(running, current)
+                return@synchronized null
+            }
+            running
         }
-        val running = next.copy(status = Status.RUNNING, updatedAt = clock(), attempts = next.attempts + 1)
-        if (!replaceLocked(next, running)) return@synchronized null
-        if (!persistLocked()) {
-            replaceLocked(running, next)
-            return@synchronized null
-        }
-        running
     }
 
     fun complete(jobId: String, result: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
@@ -113,6 +128,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     }
 
     fun cancelParent(parentTaskId: String, reason: String = "parent_cancelled"): Int = synchronized(lock) {
+        loadLocked()
         val parent = parentTaskId.trim()
         if (parent.isBlank()) return@synchronized 0
         val safeReason = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(120)
@@ -129,10 +145,11 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     }
 
     /** A running provider call may have completed before process death; never blindly replay it. */
-    fun all(): List<Job> = synchronized(lock) { jobs.map { it.copy() } }
+    fun all(): List<Job> = synchronized(lock) { loadLocked(); jobs.map { it.copy() } }
 
     private fun transition(jobId: String, allowed: Set<Status>, update: (Job) -> Job): Boolean =
         synchronized(lock) {
+            loadLocked()
             val current = jobs.firstOrNull { it.id == jobId && it.status in allowed } ?: return@synchronized false
             val changed = update(current)
             if (!replaceLocked(current, changed)) return@synchronized false
@@ -148,6 +165,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     }
 
     private fun loadLocked() {
+        jobs = mutableListOf()
         val root = try { JSONObject(atomic.openRead().bufferedReader().use { it.readText() }) }
         catch (_: FileNotFoundException) { return }
         catch (_: Exception) { return }
@@ -192,6 +210,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     }
 
     companion object {
+        private val PROCESS_LOCK = Any()
         private val TERMINAL = setOf(Status.COMPLETED, Status.FAILED, Status.CANCELLED)
     }
 }
