@@ -173,7 +173,7 @@ object AgentRunner {
         MarketQuotes.contextFor(userText).takeIf { it.isNotBlank() }?.let { append("\n").append(it) }
     }
 
-    fun systemPrompt(c: Context, agent: AgentProfile, userText: String, delegation: OrionAgentDelegation.Manifest? = null): String {
+    internal fun systemPrompt(c: Context, agent: AgentProfile, userText: String, delegation: OrionAgentDelegation.Manifest? = null): String {
         val sb = StringBuilder(agent.persona)
         val name = Prefs.userName(c)
         if (name.isNotEmpty()) sb.append("\nUser name: ").append(name)
@@ -201,10 +201,10 @@ object AgentRunner {
     fun run(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): String =
         runFull(c, agent, history, userText, imageJpegBase64).text
 
-    fun runDelegated(c: Context, agent: AgentProfile, userText: String, manifest: OrionAgentDelegation.Manifest): String =
+    internal fun runDelegated(c: Context, agent: AgentProfile, userText: String, manifest: OrionAgentDelegation.Manifest): String =
         runFull(c, agent, emptyList(), userText, delegation = manifest).text
 
-    fun runFull(
+    internal fun runFull(
         c: Context,
         agent: AgentProfile,
         history: List<Turn>,
