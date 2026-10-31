@@ -256,6 +256,12 @@ internal object ToolRegistry {
         return selected.intersect(byName.keys)
     }
 
+    private fun signatureOf(tool: ToolDefinition): String {
+        val endOfArguments = tool.promptLine.indexOf("}:")
+        return if (endOfArguments >= 0) tool.promptLine.substring(0, endOfArguments + 1)
+        else tool.promptLine.substringBefore(":")
+    }
+
     fun promptSection(request: String?, status: String = ""): String {
         val detailedNames = detailedToolNames(request)
         val detailed = all.filter { it.name in detailedNames }
@@ -270,7 +276,7 @@ internal object ToolRegistry {
         append(tools.joinToString("\n") { "- " + it.promptLine })
         if (omitted.isNotEmpty()) {
             append("\n- Also available, signatures only (use only when the request needs them): ")
-            append(omitted.joinToString("; ") { it.promptLine.substringBefore(":") })
+            append(omitted.joinToString("; ") { signatureOf(it) })
         }
         if (status.isNotBlank()) append("\n\n").append(status)
         append("\n\nTool-use guidance:\n")
