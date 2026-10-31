@@ -128,6 +128,15 @@ class OrionCommandIntentPolicyTest {
         ))
     }
 
+    @Test fun naturalSearchRequestGetsResearchGoalClassification() {
+        assertEquals(
+            OrionGoalUnderstanding.Kind.RESEARCH,
+            OrionGoalUnderstanding.understand(
+                "Go and search for 10 ways to think fast and save it in a file."
+            ).kind
+        )
+    }
+
     @Test fun calculatorWriteSaveAndExecuteUsesOneDeterministicVerifiedWorkflow() {
         val request = "Write a Python calculator, save it as a file and execute it."
         assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
