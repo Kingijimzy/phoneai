@@ -219,3 +219,10 @@ Tasks:
 - A failed receipt write is surfaced as an error; the parent must not treat the delegation as completed.
 - Specialist output remains advisory. The parent Agent retains all dispatch, policy, approval and external-action authority. This is not yet independent multi-agent tool execution, parallel delegation, or a complete agent lifecycle UI.
 - Added tests for parent linkage, scope restrictions, custom-agent defaults, forbidden external actions, call budget and objective sanitization.
+
+
+## Delegation hardening follow-up
+
+- Delegated coach runs now receive a separate read-only market/strategy context; they do not fetch private account balances/positions through the normal coach context.
+- Delegated specialist calls do not write new agent lessons or process coach action tags into local alerts/strategy proposals. Specialist output is returned to the parent for review.
+- Added Robolectric persistence tests proving child delegation receipts retain their parent task ID and record completed/failed status.
