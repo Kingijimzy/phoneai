@@ -125,6 +125,41 @@ class OrionConversationRepository private constructor(context: Context) :
         return event
     }
 
+    /** Idempotently append a lifecycle receipt to its original session, including archived sessions. */
+    @Synchronized
+    fun recordEventForSession(
+        context: Context,
+        sessionId: String,
+        eventId: String,
+        type: String,
+        status: String,
+        summary: String
+    ): ChatEvent? {
+        migrateLegacy(context)
+        val sid = sessionId.trim().take(128)
+        val id = eventId.trim().take(128)
+        if (sid.isBlank() || id.isBlank()) return null
+        val db = writableDatabase
+        if (!sessionExists(db, sid)) return null
+        val event = ChatEvent(id, sid, null, type.take(48), status.take(32),
+            sanitizeEventSummary(summary), System.currentTimeMillis())
+        val values = ContentValues().apply {
+            put("id", event.id); put("session_id", event.sessionId); putNull("message_id")
+            put("event_type", event.type); put("status", event.status)
+            put("summary", event.summary); put("created_at", event.createdAt)
+        }
+        val inserted = db.insertWithOnConflict("chat_events", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+        if (inserted >= 0) return event
+        // A retry after a crash returns the already-persisted event, never a duplicate.
+        return db.rawQuery(
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at FROM chat_events WHERE id=? AND session_id=?",
+            arrayOf(id, sid)
+        ).use { c ->
+            if (c.moveToFirst()) ChatEvent(c.getString(0), c.getString(1), c.getString(2),
+                c.getString(3), c.getString(4), c.getString(5), c.getLong(6)) else null
+        }
+    }
+
     /** Verify provenance against an actual stored transcript turn before recording a decision. */
     @Synchronized
     fun findTranscriptEvidence(context: Context, sourceRole: String, excerpt: String, turnId: String? = null): Pair<String, String>? {
