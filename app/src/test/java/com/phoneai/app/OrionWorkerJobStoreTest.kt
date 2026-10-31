@@ -221,6 +221,16 @@ class OrionWorkerJobStoreTest {
         assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
     }
 
+    @Test fun parentStopCancelsAStagedResultBeforeDelivery() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Finish a specialist analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.stageResult(job.id, "Staged evidence"))
+        assertEquals(1, store.cancelParent("parent-1", "parent_stopped"))
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED, store.all().single().status)
+        assertFalse(store.complete(job.id, "late completion", closeParent = false))
+    }
+
     @Test fun jobKindsCannotRepresentPhoneActionsOrTradingOrders() {
         assertEquals(setOf("ANALYSIS", "READ_ONLY_RESEARCH", "TRADING_ANALYSIS", "TASK_PLANNING"),
             OrionWorkerJobStore.Kind.values().map { it.name }.toSet())
