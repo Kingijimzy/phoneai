@@ -118,7 +118,13 @@ internal object OrionTasksCapabilityExecutor {
                     (inFlightTool?.let { "; uncertain_in_flight_tool=$it" } ?: "") +
                     ". Continue only through the normal resume/recovery flow; verify uncertain outcomes and never blindly replay an in-flight action."
             }.orEmpty()
-            taskLines + recovery
+            val archived = AgentCheckpointStore.archivedPendingSummaries(service)
+            val archivedText = if (archived.isEmpty()) "" else
+                "\nPRESERVED UNFINISHED TASKS (oldest first):\n" + archived.joinToString("\n") { row ->
+                    val parts = row.split("|", limit = 3)
+                    "- ${parts.getOrNull(1).orEmpty()}: ${parts.getOrNull(2).orEmpty()} (task id ${parts.firstOrNull().orEmpty()})"
+                } + "\nSay 'continue' to resume the oldest preserved task. Uncertain in-flight actions still require inspection."
+            taskLines + recovery + archivedText
         }
         "task_add" -> {
             if (stopped()) "error: task was stopped before saving the task."
