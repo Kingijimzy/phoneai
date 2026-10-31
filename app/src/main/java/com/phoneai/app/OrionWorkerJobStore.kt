@@ -126,7 +126,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
 
     fun stageResult(jobId: String, result: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
         it.copy(status = Status.RESULT_PENDING, updatedAt = clock(),
-            result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\\\s+"), " ").take(1200), lastError = "")
+            result = AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(1200), lastError = "")
     }
 
     fun complete(jobId: String, result: String, closeParent: Boolean = true): Boolean {
@@ -206,7 +206,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     }
 
     /** An interrupted/ambiguous provider outcome is terminal for automatic scheduling. */
-    fun needsReview(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING)) {
+    fun needsReview(jobId: String, reason: String): Boolean = transition(jobId, setOf(Status.RUNNING, Status.RESULT_PENDING)) {
         it.copy(status = Status.NEEDS_REVIEW, updatedAt = clock(),
             lastError = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(240))
     }
