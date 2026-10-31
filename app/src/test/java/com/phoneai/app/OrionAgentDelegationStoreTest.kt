@@ -53,6 +53,23 @@ class OrionAgentDelegationStoreTest {
         assertEquals("review_routing", saved.optString("parentObjectiveId"))
     }
 
+    @Test fun parentCancellationIsRecordedAsCancelledNotCompletedOrFailed() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent with delegated worker"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, parentId, "Research a public API"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        assertTrue(AgentCheckpointStore.stop(context, "User cancelled parent"))
+        assertTrue(OrionAgentDelegation.finish(
+            context, manifest, "late result discarded", failed = false, cancelled = true
+        ))
+        val receipt = OrionAgentDelegation.latest(context).last()
+        assertEquals("cancelled", receipt.optString("status"))
+        assertFalse(receipt.optString("status") == "completed")
+        assertTrue(receipt.optString("summary").contains("late result discarded"))
+    }
+
     @Test fun failedSpecialistRunIsRecordedAsFailedNotCompleted() {
         val manifest = OrionAgentDelegation.create(
             AgentProfiles.find("research")!!, null, "Research one source"
