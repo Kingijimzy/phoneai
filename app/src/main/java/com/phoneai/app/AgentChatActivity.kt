@@ -241,6 +241,15 @@ class AgentChatActivity : Activity() {
             "talk" -> toggleHandsFree()
             "mic" -> micTap()
             "wake" -> toggleWake()
+            "caps" -> addBubble(false, "Here is what I can do for you:\n" + DeskCapabilities.items.joinToString("\n") { "- ${it.name}: ${it.does}" })
+            "tour" -> addBubble(false, DeskTour.text)
+            "health" -> {
+                val wait = addBubble(false, "Checking your setup…")
+                Thread {
+                    val t = try { DeskHealth.text(TradingDesk.healthItems(this)) } catch (_: Exception) { "I could not run the setup check." }
+                    runOnUiThread { if (!isDestroyed) { wait.text = Markdown.render(t) } }
+                }.start()
+            }
             "learned" -> notesDialog()
             "clear" -> { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() }
         }
@@ -467,7 +476,7 @@ class AgentChatActivity : Activity() {
 
     private fun greet() {
         val hello = when (agent.id) {
-            "coach" -> "Tell me your strategy in your own words, upload a chart, or say \"find me setups\". I'll judge trades against your rules and your journal."
+            "coach" -> "Tell me your strategy in your own words, upload a chart, or say \"find me setups\". I'll judge trades against your rules and your journal.\n\nNew here? Open the Start tab for a tour, what I can do, and a setup check."
             "research" -> "Ask me anything that needs current facts. I'll search, answer first, and show sources."
             "coder" -> "Paste code or an error and tell me what you want."
             "planner" -> "Give me a goal and a deadline."
