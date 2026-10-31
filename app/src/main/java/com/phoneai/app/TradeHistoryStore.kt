@@ -142,6 +142,15 @@ object TradeHistoryStore {
 
     fun all(c: Context): List<ImportedTrade> = synchronized(lock) { decode(c).sortedByDescending { it.importedAt } }
 
+    /** Adds already-normalised records (for example from a broker sync), skipping ones seen before. Returns how many were new. */
+    fun addRecords(c: Context, incoming: List<ImportedTrade>): Int = synchronized(lock) {
+        val records = decode(c)
+        val seen = records.map { it.fingerprint }.toHashSet()
+        var added = 0
+        for (r in incoming) if (seen.add(r.fingerprint)) { records.add(r); added++ }
+        if (added > 0 && !save(c, records)) 0 else added
+    }
+
     fun importCsv(c: Context, csv: String, sourceName: String): TradeImportResult = synchronized(lock) {
         if (csv.isBlank()) return@synchronized TradeImportResult(0, 0, 0, decode(c).size, "The selected file is empty.")
         if (csv.length > 10 * 1024 * 1024) return@synchronized TradeImportResult(0, 0, 0, decode(c).size, "CSV exceeds the 10 MB safety limit.")
