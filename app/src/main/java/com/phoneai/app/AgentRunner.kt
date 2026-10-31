@@ -187,9 +187,21 @@ object AgentRunner {
     fun run(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): String =
         runFull(c, agent, history, userText, imageJpegBase64).text
 
-    fun runFull(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): Result {
+    fun runDelegated(c: Context, agent: AgentProfile, userText: String, manifest: OrionAgentDelegation.Manifest): String =
+        runFull(c, agent, emptyList(), userText, delegation = manifest).text
+
+    fun runFull(
+        c: Context,
+        agent: AgentProfile,
+        history: List<Turn>,
+        userText: String,
+        imageJpegBase64: String? = null,
+        delegation: OrionAgentDelegation.Manifest? = null
+    ): Result {
         AgentLessons.learnFrom(c, agent.id, userText)
-        val messages = JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt(c, agent, userText)))
+        val scopedPrompt = systemPrompt(c, agent, userText) +
+            (delegation?.let { "\\n\\n" + it.promptBlock() } ?: "")
+        val messages = JSONArray().put(JSONObject().put("role", "system").put("content", scopedPrompt))
         // Keep the prompt lean on mobile/free-tier providers. Code Agent needs enough
         // recent context to patch code, but resending twenty long turns burns token quota
         // and can cause rate limits before a task is finished.
