@@ -226,7 +226,7 @@ internal object ToolRegistry {
             "record_decision", "knowledge_search", "graph_link", "graph_query", "self_review", "undo_last", "undo_status"
         ),
         Regex("(?i)\\b(agent|subagent|sub-agent|delegate|delegat(e|ion)|specialist|team|researcher|coder|writer|planner)\\b") to setOf(
-            "ask_agent", "create_agent", "task_list", "task_add", "task_update", "skills_list"
+            "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "skills_list"
         ),
         Regex("(?i)\\b(code|coding|program|python|script|calculator|file|folder|save|download|build|compile|test|apk|linux|termux|shell|extension|skill)\\b") to setOf(
             "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run",
@@ -239,7 +239,7 @@ internal object ToolRegistry {
             "vault_list", "vault_request", "vault_get"
         ),
         Regex("(?i)\\b(task|todo|remind|reminder|schedule|deadline|routine|standing order|watch|monitor|brief)\\b") to setOf(
-            "task_list", "task_add", "task_update", "task_delete", "standing_order", "morning_brief",
+            "task_list", "task_add", "task_update", "task_delete", "specialist_job_status", "standing_order", "morning_brief",
             "alarm", "timer", "wait", "positions_monitor", "memecoin_watch", "wallet_watch"
         ),
         Regex("(?i)\\b(game|gaming|fc mobile|play|fps|hobby|session)\\b") to setOf(
