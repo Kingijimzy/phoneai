@@ -133,11 +133,12 @@ internal object OrionAgentDelegation {
             .put("maxCapabilityCalls", manifest.maxCapabilityCalls.coerceIn(0, 4))
             .put("status", "running")
             .put("startedAt", System.currentTimeMillis())
-        // Never evict a running manifest: its queued WorkManager job needs this exact
+        // Never evict a running or needs-review manifest: its queued WorkManager job needs this exact
         // policy receipt after process recreation. If every slot is active, fail closed.
         while (runs.length() >= MAX_RUNS) {
             val removable = (0 until runs.length()).firstOrNull { index ->
-                runs.optJSONObject(index)?.optString("status") != "running"
+                val status = runs.optJSONObject(index)?.optString("status").orEmpty()
+                status.isBlank() || status in setOf("completed", "failed", "cancelled")
             } ?: return@synchronized false
             runs.remove(removable)
         }
