@@ -60,10 +60,12 @@ internal object OrionCommandIntentPolicy {
 
     /** Explicit multi-objective plans and memory writes must enter the guarded executor directly. */
     fun requiresStructuredTaskPlanning(command: String): Boolean =
-        explicitObjectiveGraph.containsMatchIn(command) ||
-            createMultiStepTask.containsMatchIn(command) ||
-            (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command)) ||
-            compoundActionFamilies.count { it.containsMatchIn(command) } >= 2
+        !isCalculatorExecutionRequest(command) && (
+            explicitObjectiveGraph.containsMatchIn(command) ||
+                createMultiStepTask.containsMatchIn(command) ||
+                (multiStepTask.containsMatchIn(command) && resumableProgress.containsMatchIn(command)) ||
+                compoundActionFamilies.count { it.containsMatchIn(command) } >= 2
+        )
 
     fun requiresDirectActionRouting(command: String): Boolean =
         explicitMemoryWrite.containsMatchIn(command) ||
