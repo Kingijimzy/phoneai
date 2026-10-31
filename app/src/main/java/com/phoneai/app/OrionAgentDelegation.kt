@@ -143,6 +143,9 @@ internal object OrionAgentDelegation {
         val runs = try { JSONArray(prefs.getString(KEY, "[]") ?: "[]") } catch (_: Exception) { return@synchronized false }
         val record = (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
             .firstOrNull { it.optString("id") == manifest.id } ?: return@synchronized false
+        // A receipt is a one-way lifecycle transition. Late or duplicate completions cannot
+        // overwrite a terminal outcome or turn a cancelled worker back into a completed one.
+        if (record.optString("status") != "running") return@synchronized false
         record.put("status", when { cancelled -> "cancelled"; failed -> "failed"; else -> "completed" })
             .put("finishedAt", System.currentTimeMillis())
             .put("summary", AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(500))
@@ -194,7 +197,8 @@ internal object OrionAgentDelegation {
         if (memoryScope.isBlank() || memoryScope != canonical.memoryScope) return@synchronized null
         val modelCalls = record.optInt("maxModelCalls", 1)
         val capabilityCalls = record.optInt("maxCapabilityCalls", 0)
-        if (modelCalls !in 1..canonical.maxModelCalls || capabilityCalls !in 0..4) return@synchronized null
+        if (modelCalls !in 1..canonical.maxModelCalls ||
+            capabilityCalls !in 0..canonical.maxCapabilityCalls) return@synchronized null
         Manifest(
             id = id,
             parentTaskId = parentTaskId,
