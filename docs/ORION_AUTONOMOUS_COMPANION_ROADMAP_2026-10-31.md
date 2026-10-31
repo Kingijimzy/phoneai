@@ -309,3 +309,13 @@ Tasks:
 - A process restart converts a persisted RUNNING job to NEEDS_REVIEW. It is not automatically re-run because the provider may have completed before the process died.
 - Added Robolectric tests for idempotent enqueue, persistence, single-worker claims, fail-closed parent checks, parent cancellation, duplicate completion and interrupted-provider recovery.
 - This is durable job orchestration state, not yet an independent model executor. The next implementation slice must connect a bounded worker runner, provider timeout/budget controls and chat timeline events without allowing background workers to bypass the parent Agent's capability/approval policy.
+
+
+## Follow-up hardening — shared ledger and brain visibility
+
+- Worker-store instances now share one process lock and reload the AtomicFile ledger before each operation, preventing stale per-instance caches from overwriting another instance's enqueue/cancel/claim.
+- Parent-state callbacks are evaluated outside the worker-store lock. This avoids lock inversion with AgentCheckpointStore pause/stop, which persists the parent transition before cancelling its child jobs.
+- Interrupted RUNNING jobs are converted to NEEDS_REVIEW once when the file is first opened in a new app process. Ordinary reads and state transitions in the same process no longer misclassify a live RUNNING job as interrupted.
+- Added tests for multiple store instances, one-active-job enforcement across instances, simulated process restart, and central-chat status summaries.
+- Orion's central chat system prompt now receives a compact durable worker-job receipt summary alongside the existing specialist delegation ledger. It is explicitly told not to imply queued work has executed.
+- A true asynchronous provider-backed worker is still not enabled. The existing parent checkpoint currently treats completion of the chat turn as completion of its task; the lifecycle must be redesigned to keep an objective alive while children run, preserve follow-up chat continuity, enforce provider budgets/timeouts, and safely deliver results to the same chat before enabling background model calls.
