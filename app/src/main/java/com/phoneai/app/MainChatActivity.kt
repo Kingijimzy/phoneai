@@ -2109,7 +2109,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             // Lifecycle events are stored separately from transcript messages. Reload them
             // after the active-session pointer changes so restored chats show only their own events.
             val activeEvents = runCatching {
-                PhoneAiService.instance?.activeChatEvents().orEmpty()
+                OrionConversationRepository.get(this@MainChatActivity).eventsForActive(this@MainChatActivity)
             }.getOrDefault(emptyList())
             onChatEvents(activeEvents)
         }
