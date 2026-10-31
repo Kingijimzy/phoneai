@@ -259,6 +259,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 repeat(4) {
                     val runtime = orionRuntime ?: return@repeat
                     val item = runtime.claimNext() ?: return@repeat
+                    val brainTracked = item.type in setOf(
+                        OrionRuntime.WorkType.SOUL_WATCH,
+                        OrionRuntime.WorkType.PRESENCE_EVENT,
+                        OrionRuntime.WorkType.LEARN_FROM_RESULT,
+                        OrionRuntime.WorkType.RESTORE_PENDING
+                    )
+                    if (brainTracked) recordChatEvent(
+                        "runtime", "started",
+                        "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                            "; checkpoint=" + item.checkpoint.take(100) + "; attempt=" + item.attempts
+                    )
                     try {
                         when (item.type) {
                             OrionRuntime.WorkType.RESTORE_PENDING -> {
@@ -308,11 +319,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 }
                             }
                         }
-                        if (runtime.complete(item) && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                        val completed = runtime.complete(item)
+                        if (completed && brainTracked) recordChatEvent(
+                            "runtime", "completed",
+                            "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                                "; checkpoint=" + item.checkpoint.take(100)
+                        )
+                        if (completed && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = true)
                         }
                     } catch (error: Exception) {
                         val retryQueued = runtime.fail(item, error.javaClass.simpleName + ": " + error.message.orEmpty())
+                        if (brainTracked) recordChatEvent(
+                            "runtime", if (retryQueued) "retry_scheduled" else "failed",
+                            "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                                "; attempt=" + (item.attempts + 1) + "; retry=" + retryQueued +
+                                "; error=" + error.javaClass.simpleName
+                        )
                         if (!retryQueued && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = false)
                         }
