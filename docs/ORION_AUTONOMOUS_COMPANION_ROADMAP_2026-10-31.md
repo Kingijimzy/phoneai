@@ -273,3 +273,11 @@ Tasks:
 - These events use the existing chat note channel, so they appear in the same conversation rather than requiring the user to open Task Centre or a specialist screen. The saved specialist ledger remains the cross-turn continuity source.
 - Delegation is currently synchronous within the parent Agent call. The visible assignment/return events do not imply independent background execution or live percentage progress. True asynchronous workers, cancellation propagation and durable child recovery remain future work and must not be represented as already implemented.
 - Exact-head CI for the new timeline events is pending.
+
+
+## Implementation notes — durable specialist events and live runtime awareness
+
+- Specialist ASSIGNED, RETURNED and FAILED notes are now committed through the existing SQLite chat-event repository before the open chat is notified. They therefore survive activity recreation and process restart, follow the active conversation when it is archived/restored, and remain separate from user/assistant transcript turns.
+- The central Agent's compact and detailed app-awareness context now includes the live runtime state, queued work count, bounded pending-work identifiers/checkpoints and last runtime event. This lets Orion answer from current runtime evidence instead of relying on conversational memory.
+- The runtime status explicitly warns that Android/HyperOS can suspend or kill the process. WorkManager recovery is a best-effort wake-up path; it does not guarantee an always-running process or silently replay uncertain external effects.
+- Exact-head CI and device verification are required before release. Remaining work includes durable parent/child cancellation and recovery semantics, surfacing runtime transitions as first-class timeline events, and testing service/process death and voice/chat continuity on the Redmi device.
