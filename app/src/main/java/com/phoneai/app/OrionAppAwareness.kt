@@ -66,7 +66,7 @@ internal object OrionAppAwareness {
 
     internal fun isArchitectureRequest(request: String?): Boolean =
         !request.isNullOrBlank() && Regex(
-            "(?i)\\b(what can you do|what features|all features|capabilities|app architecture|system map|teach me (the )?app|how is orion built|explain (your|the) app|list (your )?(tools|features|capabilities)|what is installed|your architecture)\\b"
+            "(?i)\\b(what can you do|what features|all features|capabilities|app architecture|system map|teach me (the )?app|teach me how to use|how (do i|can i) use (orion|this app)|how to use (orion|this app)|walk me through (orion|the app)|show me around (orion|the app)|what screens|what modules|how is orion built|explain (your|the) app|list (your )?(tools|features|capabilities)|what is installed|your architecture)\\b
         ).containsMatchIn(request)
 
     private fun compactContext(c: Context): String = runCatching {
@@ -87,7 +87,7 @@ internal object OrionAppAwareness {
             append("ORION APP AWARENESS (compact live map; detailed inventory is available when asked): ")
             append("tools=").append(tools.size).append(" (READ ").append(tools.count { it.access == ToolAccess.READ })
                 .append(", WRITE ").append(tools.count { it.access == ToolAccess.WRITE }).append("); domains=").append(domains).append(". ")
-            append("agents=").append(AgentProfiles.rosterBlock(c).replace("\\n", "; ").take(420)).append(". ")
+            append("agents=").append(AgentProfiles.rosterBlock(c).replace("\n", "; ").take(420)).append(". ")
             append("skills=").append(skills.size).append("; installed components: ").append(componentInventory(c).take(420)).append(". ")
             append("services=").append(connected).append(". ")
             append("packs=").append(AgentPolicy.packs.joinToString("; ") { it.id + "=" + if (AgentPolicy.enabled(c, it.id)) "on" else "off" })
