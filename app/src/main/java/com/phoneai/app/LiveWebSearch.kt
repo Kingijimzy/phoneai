@@ -48,9 +48,12 @@ object LiveWebSearch {
         val q = query.trim().take(160)
         if (q.isBlank()) return "What should I search for?"
         val retrievedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", java.util.Locale.US).format(java.util.Date())
+        // Independent provider fallback matters on mobile networks where one search host
+        // may be blocked, rate-limited, or return a changed HTML layout.
         val endpoints = listOf(
             "https://html.duckduckgo.com/html/?q=",
-            "https://lite.duckduckgo.com/lite/?q="
+            "https://lite.duckduckgo.com/lite/?q=",
+            "https://www.google.com/search?q="
         )
         val failures = mutableListOf<String>()
         for ((endpointIndex, endpoint) in endpoints.withIndex()) {
@@ -88,9 +91,12 @@ object LiveWebSearch {
                     if (link.contains("duckduckgo.com/l/?")) {
                         val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
                         if (target != null) link = try { URLDecoder.decode(target, "UTF-8") } catch (_: Exception) { link }
+                    } else if (link.startsWith("/url?")) {
+                        val target = Regex("[?&](?:q|url)=([^&]+)").find(link)?.groupValues?.get(1)
+                        if (target != null) link = try { URLDecoder.decode(target, "UTF-8") } catch (_: Exception) { link }
                     }
                     if (!link.startsWith("https://") || link.contains("duckduckgo.com") ||
-                        link.contains("javascript:") || link in seen) continue
+                        link.contains("google.com/url") || link.contains("javascript:") || link in seen) continue
                     val titleMatch = titlePattern.matcher(tag)
                     if (!titleMatch.find()) continue
                     val title = decodeHtml(titleMatch.group(1).replace(Regex("(?is)<[^>]+>"), " "))
@@ -99,7 +105,8 @@ object LiveWebSearch {
                     // Prefer marked result links, but accept valid external anchors on the lite layout.
                     val marked = tag.contains("result__a", ignoreCase = true) ||
                         tag.contains("result-link", ignoreCase = true) ||
-                        tag.contains("result__url", ignoreCase = true)
+                        tag.contains("result__url", ignoreCase = true) ||
+                        (endpointIndex == 2 && tag.contains("LC20lb", ignoreCase = true))
                     if (!marked) continue
                     seen.add(link)
                     count++
@@ -116,7 +123,7 @@ object LiveWebSearch {
                         idx++
                     }
                     out.append("\n\nSource: DuckDuckGo public search results (")
-                        .append(if (endpointIndex == 0) "HTML" else "lite fallback")
+                        .append(when (endpointIndex) { 0 -> "HTML"; 1 -> "lite fallback"; else -> "Google fallback" })
                         .append("). Search availability and layout can change.")
                     return out.toString()
                 }
@@ -125,7 +132,7 @@ object LiveWebSearch {
                 failures.add(e.message?.take(90) ?: "network error")
             }
         }
-        return "I couldn't retrieve parseable web results after trying both public search layouts. " +
+        return "I couldn't retrieve parseable web results after trying all public search providers. " +
             "Details: " + failures.joinToString("; ") + ". No AI quota was used; try again or open a browser search."
     }
 
