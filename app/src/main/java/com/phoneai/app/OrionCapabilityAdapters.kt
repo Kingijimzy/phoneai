@@ -44,7 +44,7 @@ internal object OrionCapabilityAdapters {
         Backend.COMMUNICATION to setOf("telegram_status", "telegram_inbox", "telegram_send", "dial", "sms", "notification_action"),
         Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search",
             "graph_link", "graph_query", "self_review", "undo_last", "undo_status"),
-        Backend.TASKS to setOf("ask_agent", "create_agent", "task_list", "task_add", "task_update",
+        Backend.TASKS to setOf("ask_agent", "queue_agent", "create_agent", "task_list", "task_add", "task_update",
             "task_delete", "ask_user", "morning_brief", "standing_order"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
             "weather", "github_public", "github_search_repositories", "bybit_public_ticker", "live_sports"),
