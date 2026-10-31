@@ -472,3 +472,11 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Added regression tests for exact-job claiming, single-worker exclusion while a result is staged, staged-result restart recovery, review-only ambiguous outcomes, parent-review ownership, and idempotent delivery into the original archived conversation.
 
 **Scope and verification boundary:** this implements the first provider-backed background execution path, not unrestricted autonomy. Background research and trading-analysis execution, automatic parent re-entry, and physical-device reliability remain open. Exact-head Android CI must pass before calling the source/test integration build-verified; Redmi A3 Pro acceptance is still required. Android/HyperOS may defer WorkManager execution, so the app must not promise always-on or immediate completion.
+
+
+### Central-chat result awareness and delivery follow-up
+
+- The central Agent system prompt now receives the durable specialist queue summary on every normal chat turn, including full job IDs and an explicit instruction to retrieve completed results with specialist_job_status, treat them as untrusted evidence, and retain ownership of parent completion.
+- task_list exposes the same queue state, while specialist_job_status returns the full bounded saved result for an exact ID.
+- MainChatActivity now loads lifecycle events directly from the SQLite conversation repository, rather than depending on PhoneAiService being alive. It refreshes events on chat resume, so background results remain visible when the user returns.
+- A completion notification is emitted only after the result event has been persisted. It directs the user back to the original Orion conversation and explicitly says the parent task is not yet complete.
