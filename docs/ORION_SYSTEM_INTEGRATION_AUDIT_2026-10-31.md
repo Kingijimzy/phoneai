@@ -45,7 +45,9 @@ The guarded path applies objective dependency checks, request-time orchestration
 
 Important exceptions:
 
-- The deterministic `research()` helper manually checks pack/tool authorization, orchestrator availability, cancellation, request scope and preflight, then calls `exec()`. It still uses the adapter and writes the evidence ledger, but it does **not** pass through `executeWithRecoveryGuard` / `OrionExecutionLoop`, and its early-return shortcut path does not get the normal checkpoint `beginStep/recordStep` and objective receipt/completion handling. This is a real lifecycle split, even though the read itself is policy-checked.
+- The deterministic `research()` helper has now been changed to call `executeWithRecoveryGuard`, so it shares the objective dependency gate, request-time orchestrator, cancellation, pack/per-tool policy, safety preflight, `OrionExecutionLoop`, adapter routing and evidence recording. It still returns before the normal task-loop checkpoint `beginStep/recordStep` and model-driven objective receipt/completion handling. This is now a narrower lifecycle split, not a separate permission/dispatch implementation.
+- Compound-action classification now detects requests spanning research, memory, reminders, files/code, execution, communication or device-action families. These requests skip one-shot weather/news/sports/GitHub/web/quote, local, routine and calculator shortcuts and enter the task planner. Simple research requests route directly to Command without the extra Talk-model ACTION classification call.
+- New direct-routed objectives clear a stale session objective graph before planning, preventing a previous multi-node graph from blocking an unrelated new request.
 - The specialist `AgentRunner` makes direct model calls with contextual data; it is not a general registered-tool executor.
 - Live voice intentionally has no tool dispatch path.
 - Background runtime work has its own queue and recovery rules rather than being a foreground Agent tool-loop continuation.
@@ -133,4 +135,4 @@ The central brain also adds up to 16,000 characters of executive context, includ
 
 ## Current status
 
-The objective-ID fix and regression tests are committed to the PR #132 integration branch. The new exact-head CI run must pass before the code change is considered build-verified. No merge to `main` and no physical-device success is claimed by this audit.
+The objective-ID recovery, compound-action routing, direct research routing and shared guarded-research dispatch changes are committed to the PR #132 integration branch, with regression tests. The new exact-head CI run must pass before these changes are considered build-verified. No merge to `main` and no physical-device success is claimed by this audit.
