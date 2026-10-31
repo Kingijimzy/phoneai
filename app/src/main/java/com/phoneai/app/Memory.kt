@@ -168,19 +168,20 @@ object MemoryStore {
 
     fun update(c: Context, id: Int, category: String?, text: String?): Boolean = synchronized(lock) {
         val m = load(c).firstOrNull { it.id == id } ?: return@synchronized false
-        val oldText = m.text
-        val oldCategory = m.category
-        val oldUpdated = m.updated
+        val old = copyOf(m)
         if (text != null) {
-            val t = text.trim().replace("\n", " ").take(300)
+            val t = text.trim().replace("\\n", " ").take(300)
             if (t.isNotEmpty()) m.text = t
         }
         if (category != null) m.category = cat(category)
         m.updated = System.currentTimeMillis()
+        m.sourceRole = "agent"
+        m.confidence = 0.65
+        m.sensitivity = MemoryGovernancePolicy.sensitivity(m.text)
+        m.reviewStatus = "pending"
+        m.evidence = "agent/tool update requires owner review"
         if (!save(c)) {
-            m.text = oldText
-            m.category = oldCategory
-            m.updated = oldUpdated
+            restoreFields(m, old)
             return@synchronized false
         }
         true
