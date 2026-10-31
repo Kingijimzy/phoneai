@@ -527,3 +527,11 @@ These sources informed the design patterns; Orion's implementation remains Kotli
 - OpenHands agent architecture: keep the reasoning/action loop, tool orchestration, context management and security validation as explicit responsibilities — https://github.com/OpenHands/docs/blob/main/sdk/arch/agent.mdx
 
 Orion's Android implementation deliberately adapts these concepts to its existing AgentCheckpointStore, ToolGate, AgentPolicy, WorkManager, restricted Python extension sandbox and owner approval controls rather than introducing a second agent runtime.
+
+
+## Follow-up — Talk diagnostics and visible activity receipt
+
+- Explicit phrases such as "self diagnose", "self-heal" and "system audit" now request a fresh local diagnostic snapshot from the main Talk chat. Ordinary greetings and unrelated questions do not trigger the inspection.
+- The diagnostic run writes a bounded `self_diagnostic` lifecycle event into the active conversation. The existing chat event renderer displays the receipt in the same timeline as tool and approval activity; it does not create a separate dashboard-only record.
+- The event records counts and diagnostic scope, not raw arguments, credentials, source code or private payloads. The report clearly states that external provider health and Android permission/device reliability were not tested.
+- Added regression coverage for explicit diagnostic intent and durable event persistence in the real SQLite conversation repository.
