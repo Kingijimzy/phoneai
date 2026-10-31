@@ -181,7 +181,7 @@ class TradingActivity : Activity() {
     private fun positionsCard(): LinearLayout {
         val c = card()
         c.addView(label("POSITIONS, HABITS & DERIVATIVES", 12f, Theme.MUTED, true))
-        val out = label("Watch runs these in the background too: alerts for missing stops, near stop or target, big losses, news before a trade, crowded funding, and a habit check after trades close.", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, dp(10)) }
+        val out = label("On-demand checks for missing stops, near stop or target, large losses, upcoming news, crowded funding and trading habits. Refresh or sync to inspect current data; no background alert is claimed.", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, dp(10)) }
         c.addView(out)
         fun run(wait: String, job: () -> String) {
             out.setTextColor(Theme.TEXT); out.text = wait
