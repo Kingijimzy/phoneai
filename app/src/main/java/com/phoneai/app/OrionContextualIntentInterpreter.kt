@@ -28,7 +28,7 @@ internal object OrionContextualIntentInterpreter {
     )
 
     private val continuation = Regex(
-        """(?i)^\s*(?:please\s+)?(?:continue|resume|keep going|carry on|go on|proceed|pick up where you left off)(?:\s+(?:with\s+)?(?:it|that|the work|the task|the audit|the implementation))?[.! ]*$"""
+        """(?i)^\s*(?:please\s+)?(?:continue|resume|keep going|carry on|go on|proceed|pick up where you left off)(?:\s+(?:with\s+)?(?:it|that|the work|the task|the audit|the implementation|the first|the first task|the oldest|the oldest task))?[.! ]*$"""
     )
     private val namedContinuation = Regex(
         """(?i)^\s*(?:please\s+)?(?:continue|resume|pick up|carry on|proceed with)\s+(?:the\s+)?(.{3,120}?)\s*[.! ]*$"""
