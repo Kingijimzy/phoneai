@@ -48,6 +48,8 @@ internal object AgentChatStore {
 class AgentChatActivity : Activity() {
     companion object {
         const val EXTRA_AGENT = "agent_id"
+        /** Trading workspace entry: open the specialist coach chat as the desk front door. */
+        fun workspaceIntent(c: Context): Intent = Intent(c, AgentChatActivity::class.java).putExtra(EXTRA_AGENT, "coach")
         private const val REQUEST_IMAGE = 7422
     }
 
