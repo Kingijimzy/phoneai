@@ -73,8 +73,24 @@ class MemoryActivity : Activity() {
             meta.addView(text(memory.category.uppercase(Locale.ROOT), 10f, 0xFFBEBEBE.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
             if (memory.pinned) meta.addView(text("PINNED", 10f, Theme.SILVER, true).apply { setPadding(0, 0, dp(8), 0) })
             meta.addView(text("#${memory.id}", 10f, 0xFF777777.toInt())); card.addView(meta)
-            card.addView(text(memory.text, 14f, 0xFFEAEAEA.toInt()).apply { setPadding(0, dp(7), 0, dp(9)) })
+            card.addView(text(memory.text, 14f, 0xFFEAEAEA.toInt()).apply { setPadding(0, dp(7), 0, dp(7)) })
+            card.addView(text("SOURCE: ${memory.sourceRole.uppercase(Locale.ROOT)}  ·  CONFIDENCE: ${(memory.confidence * 100).toInt()}%  ·  ${memory.reviewStatus.uppercase(Locale.ROOT)}" +
+                if (memory.sensitivity == "sensitive") "  ·  SENSITIVE (excluded from AI context)" else "",
+                10f, if (memory.reviewStatus == "pending" || memory.sensitivity == "sensitive") 0xFFFFC27A.toInt() else 0xFF888888.toInt())
+                .apply { setPadding(0, 0, 0, dp(9)) })
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+            if (memory.reviewStatus == "pending") {
+                actions.addView(button("Approve") {
+                    val ok = MemoryStore.setReviewStatus(this, memory.id, "approved")
+                    Toast.makeText(this, if (ok) "Memory approved" else "Could not approve memory", Toast.LENGTH_SHORT).show()
+                    render()
+                })
+                actions.addView(button("Reject") {
+                    val ok = MemoryStore.setReviewStatus(this, memory.id, "rejected")
+                    Toast.makeText(this, if (ok) "Memory rejected" else "Could not reject memory", Toast.LENGTH_SHORT).show()
+                    render()
+                }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+            }
             actions.addView(button(if (memory.pinned) "Unpin" else "Pin") {
                 val ok = MemoryStore.setPinned(this, memory.id, !memory.pinned)
                 val message = if (!ok) "Could not update memory" else if (memory.pinned) "Memory unpinned" else "Memory pinned"
@@ -100,8 +116,8 @@ class MemoryActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE; minLines = 3; maxLines = 6
         }; body.addView(input)
         AlertDialog.Builder(this).setView(body).setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
-            val ok = if (existing == null) MemoryStore.add(this, category.selectedItem?.toString(), input.text.toString()) != null
-            else MemoryStore.update(this, existing.id, category.selectedItem?.toString(), input.text.toString())
+            val ok = if (existing == null) MemoryStore.addOwnerConfirmed(this, category.selectedItem?.toString(), input.text.toString()) != null
+            else MemoryStore.updateOwnerConfirmed(this, existing.id, category.selectedItem?.toString(), input.text.toString())
             Toast.makeText(this, if (ok) "Memory saved" else "Could not save memory. Check that the text is not empty.", Toast.LENGTH_SHORT).show(); render()
         }.show()
     }
