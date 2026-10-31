@@ -9,7 +9,7 @@ internal object MemoryAutoIndexer {
 
     private val rules = listOf(
         Rule(Regex("(?i)\\b(?:remember that|keep in mind that)\\s+(.{8,260})"), "fact", 0.95, "explicit remember request"),
-        Rule(Regex("(?i)\\b(?:i prefer|my preference is|i like|i dislike|i do not like|i want you to)\\s+(.{5,250})"), "preference", 0.82, "explicit preference"),
+        Rule(Regex("(?i)\\b(?:i prefer|my preference is|i like|i dislike|i do not like|i want orion to)\\s+(.{5,250})"), "preference", 0.82, "explicit preference"),
         Rule(Regex("(?i)\\b(?:i usually|i normally|i always|every day|every morning|every evening|each weekday|my daily routine is)\\s+(.{5,240})"), "routine", 0.82, "explicit routine or habit"),
         Rule(Regex("(?i)\\b(?:i am building|i'm building|i am working on|i'm working on|my current project is)\\s+(.{5,240})"), "project", 0.82, "explicit ongoing project"),
         Rule(Regex("(?i)\\b(?:my goal is|i am trying to|i'm trying to|i aim to)\\s+(.{5,240})"), "task", 0.78, "explicit goal")
