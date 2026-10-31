@@ -198,8 +198,8 @@ class AgentCheckpointStoreTest {
         assertTrue(store.claimNext { it == parentId } != null)
         assertTrue(store.complete(child!!.id, "Findings saved"))
         assertFalse(store.hasPendingForParent(parentId))
-        assertTrue("Final child receipt should allow parent completion", AgentCheckpointStore.complete(context))
-        assertEquals("completed", AgentCheckpointStore.pending(context)?.optString("status") ?: "completed")
+        assertTrue("Final child receipt should allow parent completion", AgentCheckpointStore.pending(context) == null)
+        assertEquals(parentId, AgentCheckpointStore.evidenceTaskId(context))
         assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
     }
 
