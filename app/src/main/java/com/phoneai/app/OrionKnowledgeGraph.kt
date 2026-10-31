@@ -82,4 +82,10 @@ internal object OrionKnowledgeGraph {
         db.delete("edges", "memory_id=?", arrayOf(memoryId.toString()))
         db.delete("nodes", "id=?", arrayOf("memory:$memoryId"))
     }
+
+    fun clear(context: Context) {
+        val db = GraphDb(context.applicationContext).writableDatabase
+        db.delete("edges", null, null)
+        db.delete("nodes", null, null)
+    }
 }
