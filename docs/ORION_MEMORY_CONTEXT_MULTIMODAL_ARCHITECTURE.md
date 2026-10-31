@@ -19,8 +19,8 @@ Make Orion feel like one consistent personal companion across typed chat, Comman
 
 - Every saved conversation turn is indexed by the existing SQLite FTS4 triggers. The central brain now retrieves a few relevant archived conversations on substantive new requests, excluding the active session to avoid duplicating the live transcript.
 - A deterministic local detector recognizes only explicit durable self-descriptions: stated preferences, recurring routines, ongoing projects, goals and direct remember requests.
-- It creates a user_observation proposal with source reason and confidence. It does not call a model, retain arbitrary chat, or infer habits from passive surveillance.
-- Proposed memories are pending. They are not included in prompts until the owner approves them. Sensitive candidates are rejected before storage. Exact duplicates are not allowed to downgrade or overwrite an already approved memory.
+- It creates a user_observation proposal with source reason and confidence. Direct 'remember that' requests are treated as explicit owner confirmation; inferred preferences, routines, projects and goals remain pending. It does not call a model, retain arbitrary chat, or infer habits from passive surveillance.
+- Inferred proposals are pending and are not included in prompts until the owner approves them. Direct remember requests are owner-confirmed. Sensitive candidates are rejected before storage. Exact duplicates are not allowed to downgrade or overwrite an already approved memory.
 - The Memory screen remains the review/edit/delete surface. Routine is a first-class memory category.
 - Automatic extraction is intentionally conservative. A later phase can add model-assisted extraction behind a review queue, but never auto-approve inferred facts.
 
@@ -51,7 +51,7 @@ Make Orion feel like one consistent personal companion across typed chat, Comman
 
 - [x] Add routine to persistent memory categories.
 - [x] Automatically propose explicit preferences, routines, projects and goals from typed and voice turns.
-- [x] Keep auto-indexed facts pending owner review; reject sensitive candidates and preserve approved duplicates.
+- [x] Keep inferred auto-indexed facts pending owner review; honor direct remember requests; reject sensitive candidates and preserve approved duplicates.
 - [x] Retrieve relevant archived conversations automatically from the existing local FTS index.
 - [x] Pack central context by priority under a conservative estimated token ceiling.
 - [x] Increase the approved memory allowance in the chat system prompt.
