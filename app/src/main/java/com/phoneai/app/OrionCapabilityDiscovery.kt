@@ -26,9 +26,10 @@ internal object OrionCapabilityDiscovery {
     ) {
         fun promptLines(): List<String> {
             val lines = mutableListOf<String>()
-            lines += "LIVE CAPABILITY DISCOVERY: registered=$registeredCount; currently available=$availableCount."
-            val available = tools.filter { it.available }.joinToString { "${it.name}(${it.access.name.lowercase()},${it.state.name.lowercase()})" }
-            lines += "Available registered tools: ${available.ifBlank { "none" }}."
+            val runtimeVerified = tools.count { it.entry.facts.health == CapabilityRegistry.Health.OK }
+            lines += "LIVE CAPABILITY DISCOVERY: registered=$registeredCount; eligible under current settings=$availableCount; runtime health verified=$runtimeVerified."
+            val available = tools.filter { it.available }.joinToString { "${it.name}(${it.access.name.lowercase()},${it.state.name.lowercase()},not-live-tested)" }
+            lines += "Eligible registered tools (not proof of live execution): ${available.ifBlank { "none" }}."
             val blocked = tools.filterNot { it.available }.take(16)
             if (blocked.isNotEmpty()) {
                 lines += "Unavailable tool blockers: " + blocked.joinToString("; ") { "${it.name}: ${it.state.name.lowercase()} — ${it.reason}" } + "."
@@ -37,6 +38,7 @@ internal object OrionCapabilityDiscovery {
             if (integrationStates.isNotEmpty()) {
                 lines += "Observed integration states: " + integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" } + "."
             }
+            lines += "CAPABILITY HONESTY: eligibility means registration, enabled pack and known prerequisites only. It does not prove the backend is reachable, healthy, permission-ready, or able to complete the requested action. Never describe an eligible tool as tested or successfully executable until a real dispatch returns and its outcome is verified."
             lines += "Capability rule: only registered capabilities whose registry state is available or available_limited may be selected. Unknown permission or connection state is not permission to act. Verify each action with observable output."
             lines += "GRANTED CAPABILITY RULE: when a tool is registered, its pack is enabled, and its declared prerequisites are satisfied, use it fully for the requested task. Do not invent extra application-level restrictions, silently narrow its documented functions, or ask for duplicate consent. Still honor actual Android OS/runtime permissions, real connection/authentication requirements, explicit confirmations required for consequential actions, cancellation, and tool errors. If unavailable, name the exact unmet prerequisite and continue with a compatible registered alternative when possible."
             return lines
