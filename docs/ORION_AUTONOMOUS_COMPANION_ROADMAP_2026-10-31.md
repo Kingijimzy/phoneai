@@ -255,3 +255,12 @@ Tasks:
 
 
 - The parent brain and Talk chat now receive a compact, bounded specialist-work ledger (latest three receipts): worker identity, status, assigned objective, saved result summary and parent task link. This lets Orion maintain continuity across turns and review previous delegated work without relying on the model to remember transient output. Ledger entries are explicitly marked as evidence, not instructions.
+
+
+## Implementation notes — specialist jobs belong to parent objective nodes
+
+- Specialist delegation manifests and saved receipts now carry both the durable parent checkpoint ID and a separately validated parent objective-node ID. These IDs are no longer conflated.
+- The Agent injects the canonical active objective ID into both ordinary and batched tool arguments before guarded dispatch. The task capability executor passes it into `Tools.askAgent`, and the specialist manifest persists it before the worker starts.
+- Specialist prompt envelopes identify the parent objective node. The main chat's bounded worker ledger displays that objective association alongside the checkpoint ID, so Orion can tell which part of a multi-step goal each worker served.
+- Added tests for valid/invalid objective association and persisted receipt continuity. This is linkage and observability, not permission inheritance: specialists remain read-only/analysis-only and the parent retains dispatch and approval authority.
+- Exact-head CI is required for these latest changes. The next slice is to surface parent objective and specialist receipt events directly in the main chat timeline and make pause/cancel/recovery semantics explicit across the parent and child records.
