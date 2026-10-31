@@ -18,4 +18,15 @@ class OrionAppAwarenessTest {
     @Test fun unknownToolsRemainVisibleInsteadOfBeingDropped() {
         assertTrue(OrionAppAwareness.domainForTool("future_capability").contains("Other registered"))
     }
+    @Test fun explicitArchitectureRequestsEnableDetailedInventory() {
+        assertTrue(OrionAppAwareness.isArchitectureRequest("Explain your app architecture and capabilities"))
+        assertTrue(OrionAppAwareness.isArchitectureRequest("Teach me the app"))
+        assertTrue(OrionAppAwareness.isArchitectureRequest("List your tools"))
+    }
+
+    @Test fun ordinaryRequestsUseCompactAwareness() {
+        assertTrue(!OrionAppAwareness.isArchitectureRequest("What is the weather today?"))
+        assertTrue(!OrionAppAwareness.isArchitectureRequest("Help me analyse EURUSD"))
+    }
 }
+

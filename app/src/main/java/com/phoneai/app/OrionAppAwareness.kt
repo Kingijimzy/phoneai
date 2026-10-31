@@ -64,7 +64,40 @@ internal object OrionAppAwareness {
         }
     }.getOrDefault("Installed component inventory unavailable; do not infer screens or service state.")
 
-    fun context(c: Context): String = runCatching {
+    internal fun isArchitectureRequest(request: String?): Boolean =
+        !request.isNullOrBlank() && Regex(
+            "(?i)\\b(what can you do|what features|all features|capabilities|app architecture|system map|teach me (the )?app|how is orion built|explain (your|the) app|list (your )?(tools|features|capabilities)|what is installed|your architecture)\\b"
+        ).containsMatchIn(request)
+
+    private fun compactContext(c: Context): String = runCatching {
+        val tools = ToolRegistry.all
+        val domains = tools.groupBy { domainForTool(it.name) }.entries
+            .sortedBy { it.key }
+            .joinToString("; ") { it.key + "=" + it.value.size }
+        val skills = runCatching { OrionSkillsCapabilityExecutor.list(c) }.getOrDefault(emptyList())
+        val connected = ServiceCatalog.all.joinToString("; ") { service ->
+            val state = OrionConnectionStore.get(c, service.id)
+            service.id + "=" + when {
+                state?.secretAvailable != true -> "not connected"
+                state.verified -> "verified locally"
+                else -> "saved, not verified"
+            }
+        }
+        buildString {
+            append("ORION APP AWARENESS (compact live map; detailed inventory is available when asked): ")
+            append("tools=").append(tools.size).append(" (READ ").append(tools.count { it.access == ToolAccess.READ })
+                .append(", WRITE ").append(tools.count { it.access == ToolAccess.WRITE }).append("); domains=").append(domains).append(". ")
+            append("agents=").append(AgentProfiles.rosterBlock(c).replace("\\n", "; ").take(420)).append(". ")
+            append("skills=").append(skills.size).append("; installed components: ").append(componentInventory(c).take(420)).append(". ")
+            append("services=").append(connected).append(". ")
+            append("packs=").append(AgentPolicy.packs.joinToString("; ") { it.id + "=" + if (AgentPolicy.enabled(c, it.id)) "on" else "off" })
+            append(". execution gate=").append(runCatching { ToolGate.statusFor(c) }.getOrDefault("unavailable").take(420))
+            append(". This map describes registration/configuration, not proof of live execution. Route through current tools and guards.")
+        }.take(2600)
+    }.getOrDefault("Orion app awareness is unavailable; do not guess at installed components or capabilities.")
+
+    fun context(c: Context, request: String? = null): String = runCatching {
+        if (!isArchitectureRequest(request)) return@runCatching compactContext(c)
         val sb = StringBuilder("ORION APP ARCHITECTURE MAP — generated from installed registries and local state; this is an inventory, not proof that an action succeeded.")
         sb.append("\nCONTROL FLOW: chat/voice → central Agent → intent/task orchestration → registered Tools/Local adapters → ToolGate + permissions + approval → guarded dispatcher → action log and verification. Specialist agents return analysis to the parent; they do not own phone execution.")
         sb.append("\nCORE SUBSYSTEMS: Agent/AgentRunner (conversation and reasoning); ToolRegistry/Tools (tool contracts and adapters); ToolGate/ToolPermissions/AgentPolicy (permission and pack gates); OrionTaskOrchestrator/TaskStore/OrionTasksCapabilityExecutor (task planning and execution); OrionResearchShortcutLifecycle (checkpointed read workflows); OrionRuntime/OrionRecoveryWork (background recovery); MemoryStore/AgentLessons/OrionMemoryCapabilityExecutor (personal memory); KnowledgeStore/KnowledgeGraph (documents and relations); OrionSkillsCapabilityExecutor/SkillRegistry (declarative skills); CapabilityRegistry/OrionCapabilityDiscovery (capability truth); ServiceCatalog/OrionConnectionStore/McpConnector (integrations).")
