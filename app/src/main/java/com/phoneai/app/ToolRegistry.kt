@@ -198,7 +198,7 @@ internal object ToolRegistry {
     )
 
     private val requestFamilies: List<Pair<Regex, Set<String>>> = listOf(
-        Regex("(?i)\\b(phone|screen|tap|click|swipe|scroll|type|keyboard|open app|launch|notification|device|settings|flashlight|volume|alarm|timer)\\b") to setOf(
+        Regex("(?i)\\b(phone|screen|tap|click|swipe|scroll|type|keyboard|open|launch|start|switch|go to|install|uninstall|notification|device|settings|flashlight|volume|alarm|timer)\\b") to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "notification_action",
             "media_status", "media_control", "play_media", "chrome_search", "list_apps", "read_screen",
             "validate_action", "verify_action", "click", "click_text", "wait_for", "tap", "long_press",
