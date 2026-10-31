@@ -152,6 +152,19 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(prompt.contains("explicit confirmations required for consequential actions"))
     }
 
+    @Test fun promptNeverConfusesEligibilityWithLiveExecutionVerification() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("weather")),
+            setOf("trading_research"),
+            termuxReady = true
+        )
+        val prompt = snapshot.promptLines().joinToString("\n")
+        assertTrue(prompt.contains("eligible under current settings"))
+        assertTrue(prompt.contains("runtime health verified=0"))
+        assertTrue(prompt.contains("not proof of live execution"))
+        assertTrue(prompt.contains("Never describe an eligible tool as tested"))
+    }
+
     @Test fun integrationStateIsReportedAsSuppliedAndNotInvented() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
