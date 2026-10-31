@@ -1,5 +1,6 @@
 package com.phoneai.app
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 internal object AgentHooks {
@@ -37,7 +38,20 @@ internal object AgentHooks {
  class FailedCallGuard(private val maxEntries: Int = 80) {
   init { require(maxEntries >= 1) }
   private val signatures = LinkedHashSet<String>()
-  private fun signature(tool: String, args: JSONObject) = tool + "|" + args.toString()
+  // JSON object key order is not meaningful. Canonicalize nested objects so a model cannot
+  // evade duplicate-failure detection by emitting the same arguments in a different key order.
+  private fun canonical(value: Any?): String = when (value) {
+   is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(
+    prefix = "{", postfix = "}", separator = ","
+   ) { key -> JSONObject.quote(key) + ":" + canonical(value.opt(key)) }
+   is JSONArray -> (0 until value.length()).joinToString(
+    prefix = "[", postfix = "]", separator = ","
+   ) { index -> canonical(value.opt(index)) }
+   null, JSONObject.NULL -> "null"
+   is String -> JSONObject.quote(value)
+   else -> value.toString()
+  }
+  private fun signature(tool: String, args: JSONObject) = tool + "|" + canonical(args)
   @Synchronized fun isBlocked(tool: String, args: JSONObject): Boolean = signature(tool, args) in signatures
   @Synchronized fun recordFailure(tool: String, args: JSONObject) {
    signatures.add(signature(tool, args))
