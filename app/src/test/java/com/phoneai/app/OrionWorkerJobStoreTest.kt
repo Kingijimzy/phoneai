@@ -169,6 +169,28 @@ class OrionWorkerJobStoreTest {
         assertTrue(store.all().isEmpty())
     }
 
+    @Test fun exactClaimNeverClaimsAnotherQueuedJob() {
+        val store = OrionWorkerJobStore(context)
+        val first = store.enqueue("parent-1", "First")!!
+        val second = store.enqueue("parent-1", "Second")!!
+        val claimed = store.claim(second.id) { it == "parent-1" }!!
+        assertEquals(second.id, claimed.id)
+        assertEquals(OrionWorkerJobStore.Status.QUEUED, store.all().first { it.id == first.id }.status)
+        assertEquals(OrionWorkerJobStore.Status.RUNNING, store.all().first { it.id == second.id }.status)
+    }
+
+    @Test fun backgroundCompletionCanLeaveParentForCentralBrainReview() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent objective awaiting specialist review"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue(parentId, "Specialist analysis")!!
+        assertNotNull(store.claim(job.id) { it == parentId })
+        assertTrue(AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertTrue(store.complete(job.id, "Evidence ready", closeParent = false))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+    }
+
     @Test fun jobKindsCannotRepresentPhoneActionsOrTradingOrders() {
         assertEquals(setOf("ANALYSIS", "READ_ONLY_RESEARCH", "TRADING_ANALYSIS", "TASK_PLANNING"),
             OrionWorkerJobStore.Kind.values().map { it.name }.toSet())
