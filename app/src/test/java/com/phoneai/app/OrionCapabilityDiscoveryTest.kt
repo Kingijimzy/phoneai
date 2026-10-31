@@ -85,6 +85,25 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.all { it.available })
     }
 
+    @Test fun screenControlIsNotEligibleUntilAccessibilityAndDisclosureAreVerified() {
+        val pack = AgentPolicy.packForTool("tap") ?: "phone_control"
+        val unknown = OrionCapabilityDiscovery.discover(
+            listOf(tool("tap", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true
+        )
+        assertFalse(unknown.tools.single().available)
+        assertTrue(unknown.tools.single().reason.contains("accessibility"))
+
+        val granted = OrionCapabilityDiscovery.discover(
+            listOf(tool("tap", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            permissionStates = mapOf("accessibility" to OrionCapabilityDiscovery.PermissionState.GRANTED)
+        )
+        assertTrue(granted.tools.single().available)
+    }
+
     @Test fun missingLocationPermissionNamesTheExactPrerequisite() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("device_location")),
