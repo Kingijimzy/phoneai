@@ -49,7 +49,8 @@ internal object TaskScopePolicy {
         val informationalAppQuestion = Regex("(?i)^(what|why|how|when|where|who|explain|describe|tell me about|compare|list the advantages of)\\b.*\\b(whatsapp|telegram|chrome|youtube|instagram|facebook)\\b.*$|^(what|why|how|when|where|who|explain|describe|tell me about|compare)\\b.*\\b(advantages|features|purpose|used for|difference)\\b.*$" )
         if (informationalAppQuestion.containsMatchIn(text) && !Regex("(?i)\\b(open|launch|close|send|message|text|reply|call|tap|click|type|install|uninstall)\\b").containsMatchIn(text)) return TaskMode.CHAT
         if (readOnlyIntent.containsMatchIn(text)) return TaskMode.READ_ONLY
-        if (explicitUrl.containsMatchIn(text) && urlInspectionIntent.containsMatchIn(text)) return TaskMode.RESEARCH\n        // Explicit phone/device intent takes precedence over incidental mentions of websites.
+        if (explicitUrl.containsMatchIn(text) && urlInspectionIntent.containsMatchIn(text)) return TaskMode.RESEARCH
+        // Explicit phone/device intent takes precedence over incidental mentions of websites.
         if (phoneIntent.containsMatchIn(text) || explicitAppAction.containsMatchIn(text) ||
             memoryActionIntent.containsMatchIn(text) || taskActionIntent.containsMatchIn(text) ||
             contentActionIntent.containsMatchIn(text) || integrationIntent.containsMatchIn(text)) {
