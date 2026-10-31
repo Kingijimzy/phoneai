@@ -124,6 +124,12 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.failure()
         }
 
+        if (cancelled()) {
+            nim.cancel()
+            store.cancel(jobId, "parent_cancelled_before_result_commit")
+            OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
+            return Result.success()
+        }
         if (failure.get() != null) {
             store.needsReview(jobId, "provider_outcome_uncertain:${failure.get()!!.javaClass.simpleName}")
             OrionAgentDelegation.finish(applicationContext, manifest,
@@ -149,6 +155,11 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             OrionAgentDelegation.finish(applicationContext, manifest,
                 "error: result persistence failed; inspect before retrying", failed = true)
             return Result.failure()
+        }
+        if (cancelled()) {
+            store.cancel(jobId, "parent_cancelled_after_result_staging")
+            OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: staged result discarded after parent stop", cancelled = true)
+            return Result.success()
         }
         if (!OrionAgentDelegation.finish(applicationContext, manifest, result)) {
             store.needsReview(jobId, "delegation_receipt_commit_failed")
