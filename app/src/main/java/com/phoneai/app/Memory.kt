@@ -138,6 +138,11 @@ object MemoryStore {
             replaced.reviewStatus = reviewStatus
             replaced.evidence = evidence.take(240)
             if (!save(c)) { restoreFields(replaced, old); return@synchronized null }
+            if (!OrionMemoryLifecycle.archiveBeforeChange(c, old, "superseded by a newer memory")) {
+                restoreFields(replaced, old)
+                save(c)
+                return@synchronized null
+            }
             return@synchronized copyOf(replaced)
         }
         val id = (list.maxOfOrNull { it.id } ?: 0) + 1
@@ -191,6 +196,11 @@ object MemoryStore {
         m.evidence = "agent/tool update requires owner review"
         if (!save(c)) {
             restoreFields(m, old)
+            return@synchronized false
+        }
+        if (!OrionMemoryLifecycle.archiveBeforeChange(c, old, "memory edited; previous version retained")) {
+            restoreFields(m, old)
+            save(c)
             return@synchronized false
         }
         true
@@ -282,7 +292,10 @@ object MemoryStore {
     /** Text added to the AI's instructions: pinned and request-relevant memories first, then recent ones. */
     fun promptBlock(c: Context, query: String? = null): String {
         // Filter before ranking: unreviewed pinned proposals must not crowd trusted memories out.
-        val approved = all(c).filter { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) }
+        val approved = all(c).filter {
+            MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
+                OrionMemoryLifecycle.isActive(c, it.id)
+        }
         val items = MemoryRanking.select(approved, query)
         if (items.isEmpty()) return "(no owner-approved, non-sensitive memories yet; proposals require review)"
         return items.joinToString("\n") {
