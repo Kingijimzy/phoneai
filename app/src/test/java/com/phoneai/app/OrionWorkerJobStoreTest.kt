@@ -22,6 +22,7 @@ class OrionWorkerJobStoreTest {
         file.delete()
         File(file.path + ".bak").delete()
         File(file.path + ".tmp").delete()
+        AgentCheckpointStore.clear(context)
     }
 
     @Test fun jobsPersistAndDuplicateIdempotencyKeyReturnsOriginal() {
