@@ -216,8 +216,9 @@ internal object TradingDesk {
         (strategies(c).flatMap { it.instruments }.ifEmpty { watchSymbols(c) }).distinct().take(12)
 
     /** One automated pass for the background watcher: settle practice trades, warn before big news, alert matches, morning brief. */
-    fun watchCycle(c: Context, notify: (Int, String, String) -> Unit) {
+    fun watchCycle(c: Context, notifyRaw: (Int, String, String) -> Unit) {
         if (!Prefs.deskAuto(c)) return
+        val notify: (Int, String, String) -> Unit = { id, title, text -> logActivity(c, title, text); notifyRaw(id, title, text) }
         val now = System.currentTimeMillis()
         val hour = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).hour
         val ev = events(now)
@@ -402,6 +403,18 @@ internal object TradingDesk {
     fun derivatives(c: Context, symbol: String): DerivativesRead.Read? {
         val sym = Bybit.symbolOf(symbol) ?: return null
         return try { Bybit.derivativesInput(c, sym)?.let { DerivativesRead.read(it) } } catch (_: Exception) { null }
+    }
+
+    // ---- activity feed
+    internal fun activity(c: Context): List<ActivityLog.Entry> = ActivityLog.decode(sp(c).getString("activity", null))
+
+    private fun logActivity(c: Context, title: String, text: String) {
+        try {
+            synchronized(this) {
+                val l = ActivityLog.add(activity(c), ActivityLog.Entry(System.currentTimeMillis(), title, text.take(300)))
+                sp(c).edit().putString("activity", ActivityLog.encode(l)).apply()
+            }
+        } catch (_: Exception) { }
     }
 
     // ---- live PnL strip and companion mood

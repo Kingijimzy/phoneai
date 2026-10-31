@@ -89,6 +89,10 @@ class TradingActivity : Activity() {
         host.addView(gap(12))
         host.addView(chainCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
+        host.addView(activityCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(capabilitiesCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
         host.addView(backupCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
         host.addView(simulateCard(), LinearLayout.LayoutParams(-1, -2))
@@ -230,6 +234,35 @@ class TradingActivity : Activity() {
             pill("Check now", true) { run("Reading the chain…") { ChainDesk.overview(this) } }
         ).apply { setPadding(0, dp(10), 0, 0) })
         c.addView(out)
+        return c
+    }
+
+    /** What the background watcher has done lately, newest first. */
+    private fun activityCard(): LinearLayout {
+        val c = card()
+        c.addView(label("WATCHER ACTIVITY", 12f, Theme.MUTED, true))
+        val items = TradingDesk.activity(this).take(12)
+        if (items.isEmpty()) {
+            c.addView(label(if (Prefs.deskAuto(this)) "Nothing yet. Alerts, matches, closed trades and checks will be listed here as the watcher runs." else "Automation is off, so the watcher is not running desk checks.", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) })
+        } else {
+            val now = System.currentTimeMillis()
+            items.forEach {
+                c.addView(label(it.title + "  ·  " + ActivityLog.ago(now, it.at), 13f, Theme.TEXT, true).apply { setPadding(0, dp(10), 0, 0) })
+                c.addView(label(it.text, 12f, Theme.MUTED))
+            }
+        }
+        return c
+    }
+
+    /** Plain-language list of what the trading chat can do. */
+    private fun capabilitiesCard(): LinearLayout {
+        val c = card()
+        c.addView(label("WHAT ORION CAN DO HERE", 12f, Theme.MUTED, true))
+        c.addView(label("Everything is read-only or waits for your approval. Real-money orders always need your tap and pass the risk gate.", 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+        DeskCapabilities.items.forEach {
+            c.addView(label(it.name, 13f, Theme.TEXT, true).apply { setPadding(0, dp(8), 0, 0) })
+            c.addView(label(it.does, 12f, Theme.MUTED))
+        }
         return c
     }
 
