@@ -52,6 +52,18 @@ class OrionContextualIntentInterpreterTest {
         assertTrue(result.contextBlock.contains("resume path drops the latest correction"))
         assertTrue(result.contextBlock.contains("not, by themselves, authorization"))
     }
+    @Test fun improveTheIntegrationPreservesTheActiveEngineeringObjective() {
+        val objective = "Audit PhoneAI executor integration, task recovery and runtime verification."
+        val result = OrionContextualIntentInterpreter.resolve(
+            "No, improve the integration, not add another feature.",
+            listOf("user" to objective, "assistant" to "The audit found disconnected execution paths."),
+            objective
+        )
+        assertEquals(OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS, result.kind)
+        assertEquals(objective, result.resolvedObjective)
+        assertTrue(result.contextBlock.contains("apply the user's correction"))
+    }
+
     @Test fun testEverythingInheritsThePriorSubject() {
         val result = OrionContextualIntentInterpreter.resolve(
             "test everything",
