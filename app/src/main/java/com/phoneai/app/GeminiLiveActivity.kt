@@ -339,6 +339,21 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             transcripts.addLast(prefix + text.trim())
             while (transcripts.size > 6) transcripts.removeFirst()
             transcriptView.text = transcripts.joinToString("\\n")
+            persistLiveTurn(fromModel, text)
+        }
+    }
+
+    /** Persist final live transcripts as text in the shared SQLite conversation index. Raw audio is never stored. */
+    private fun persistLiveTurn(fromModel: Boolean, text: String) {
+        val clean = text.trim().take(4_000)
+        if (clean.isBlank() || MemoryGovernancePolicy.sensitivity(clean) == "sensitive") return
+        runCatching {
+            val transcript = ChatHistoryStore.load(this).toMutableList()
+            val turn = (if (fromModel) "ai" else "me") to clean
+            if (transcript.lastOrNull() != turn) {
+                transcript += turn
+                ChatHistoryStore.save(this, transcript)
+            }
         }
     }
 
