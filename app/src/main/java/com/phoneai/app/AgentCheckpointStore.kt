@@ -61,7 +61,7 @@ object AgentCheckpointStore {
             atomic.finishWrite(stream)
             true
         } catch (_: Exception) {
-            if (stream != null) runCatching { atomic.failWrite(stream) }
+            stream?.let { runCatching { atomic.failWrite(it) } }
             false
         }
     }
