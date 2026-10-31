@@ -138,12 +138,12 @@ internal object OrionAgentDelegation {
         prefs.edit().putString(KEY, runs.toString()).commit()
     }
 
-    fun finish(context: Context, manifest: Manifest, result: String, failed: Boolean = false): Boolean = synchronized(this) {
+    fun finish(context: Context, manifest: Manifest, result: String, failed: Boolean = false, cancelled: Boolean = false): Boolean = synchronized(this) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val runs = try { JSONArray(prefs.getString(KEY, "[]") ?: "[]") } catch (_: Exception) { return@synchronized false }
         val record = (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
             .firstOrNull { it.optString("id") == manifest.id } ?: return@synchronized false
-        record.put("status", if (failed) "failed" else "completed")
+        record.put("status", when { cancelled -> "cancelled"; failed -> "failed"; else -> "completed" })
             .put("finishedAt", System.currentTimeMillis())
             .put("summary", AgentPrivacyFilter.safeCommand(result).replace(Regex("\\s+"), " ").take(500))
         prefs.edit().putString(KEY, runs.toString()).commit()
