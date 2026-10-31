@@ -149,6 +149,60 @@ internal object OrionAgentDelegation {
         prefs.edit().putString(KEY, runs.toString()).commit()
     }
 
+    /**
+     * Reconstruct a specialist manifest from its durable receipt after process recreation.
+     *
+     * This is intentionally fail-closed: unknown agents/access levels, malformed identifiers,
+     * oversized objectives, invalid tool names, and out-of-range budgets are rejected. A worker
+     * must still validate the exact parent checkpoint and intersect tools with the live registry
+     * immediately before execution.
+     */
+    fun restore(context: Context, manifestId: String): Manifest? = synchronized(this) {
+        val id = manifestId.trim()
+        if (id.isBlank() || id.length > 80) return@synchronized null
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val runs = try { JSONArray(prefs.getString(KEY, "[]") ?: "[]") }
+            catch (_: Exception) { return@synchronized null }
+        val record = (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
+            .lastOrNull { it.optString("id") == id } ?: return@synchronized null
+        val agentId = record.optString("agentId").take(64)
+        if (AgentProfiles.find(agentId) == null) return@synchronized null
+        val access = runCatching { Access.valueOf(record.optString("access")) }.getOrNull()
+            ?: return@synchronized null
+        val objective = AgentPrivacyFilter.safeCommand(record.optString("objective"))
+            .replace(Regex("\\s+"), " ").trim().take(700)
+        if (objective.isBlank()) return@synchronized null
+        val parentTaskId = record.optString("parentTaskId").takeIf {
+            it.isNotBlank() && it != "null" && it.length <= 80
+        }
+        val parentObjectiveId = record.optString("parentObjectiveId").takeIf {
+            it.isNotBlank() && it != "null" && Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it)
+        }
+        val toolsArray = record.optJSONArray("allowedTools") ?: JSONArray()
+        if (toolsArray.length() > 12) return@synchronized null
+        val tools = (0 until toolsArray.length()).mapNotNull { index ->
+            toolsArray.optString(index).takeIf { it.matches(Regex("^[a-z][a-z0-9_]{0,63}$")) }
+        }.toSet()
+        if (tools.size != toolsArray.length()) return@synchronized null
+        val memoryScope = AgentPrivacyFilter.safeCommand(record.optString("memoryScope")).take(180)
+        if (memoryScope.isBlank()) return@synchronized null
+        val modelCalls = record.optInt("maxModelCalls", 1)
+        val capabilityCalls = record.optInt("maxCapabilityCalls", 0)
+        if (modelCalls !in 1..3 || capabilityCalls !in 0..4) return@synchronized null
+        Manifest(
+            id = id,
+            parentTaskId = parentTaskId,
+            parentObjectiveId = parentObjectiveId,
+            agentId = agentId,
+            objective = objective,
+            access = access,
+            allowedTools = tools,
+            memoryScope = memoryScope,
+            maxModelCalls = modelCalls,
+            maxCapabilityCalls = capabilityCalls
+        )
+    }
+
     fun latest(context: Context, limit: Int = 10): List<JSONObject> = synchronized(this) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val runs = try { JSONArray(prefs.getString(KEY, "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
