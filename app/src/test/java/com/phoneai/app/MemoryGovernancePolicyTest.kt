@@ -87,4 +87,29 @@ class OrionSelfHealingPolicyTest {
         assertTrue(OrionSelfHealingPolicy.canActivateExtension(awaiting, true))
         assertFalse(OrionSelfHealingPolicy.canActivateExtension(completeDraft(OrionExtensionStatus.TESTED), true))
     }
+
+    @Test fun diagnosticReportSeparatesWarningsFromStructuralErrors() {
+        val warning = OrionDiagnosticFinding(
+            id = "finding-1", component = "background_runtime", title = "Queue waiting",
+            detail = "Service is stopped", severity = OrionFindingSeverity.WARNING,
+            evidenceRefs = listOf("runtime snapshot"), detectedAtEpochMs = 100L
+        )
+        val report = OrionDiagnosticReport(100L, listOf(warning), 120, 2, 1, "STOPPED", null)
+        assertTrue(report.healthy)
+        assertTrue(report.promptBlock().contains("does not prove provider/network health"))
+        val broken = report.copy(findings = listOf(warning.copy(severity = OrionFindingSeverity.CRITICAL)))
+        assertFalse(broken.healthy)
+        assertTrue(broken.promptBlock().contains("ISSUES NEED ATTENTION"))
+    }
+
+    @Test fun diagnosticFindingsRequireEvidenceAndTimestampBeforeAction() {
+        val finding = OrionDiagnosticFinding(
+            id = "finding-2", component = "tool_registry", title = "Missing route",
+            detail = "Tool route missing", severity = OrionFindingSeverity.ERROR,
+            evidenceRefs = listOf("ToolRegistry:missing"), detectedAtEpochMs = 200L
+        )
+        assertTrue(finding.isActionable())
+        assertFalse(finding.copy(evidenceRefs = emptyList()).isActionable())
+        assertFalse(finding.copy(detectedAtEpochMs = 0L).isActionable())
+    }
 }
