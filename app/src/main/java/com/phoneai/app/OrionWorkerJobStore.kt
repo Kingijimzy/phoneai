@@ -190,7 +190,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             loadLocked()
             val current = jobs.firstOrNull { it.id == candidate.id && it.status == Status.QUEUED }
                 ?: return@synchronized null
-            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
             if (!parentRunning) {
                 val cancelled = current.copy(status = Status.CANCELLED, updatedAt = clock(),
                     lastError = "parent_not_running_or_unverifiable")
