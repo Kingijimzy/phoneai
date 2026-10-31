@@ -364,7 +364,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Unknown tools fail closed; the model cannot select a capability pack for itself.
         val pack = AgentPolicy.packForTool(tool)
         if (pack == null) {
-            val blocked = "error: tool is not registered in an enabled capability pack."
+            val blocked = "error: unknown tool '$tool' is not registered in an enabled capability pack."
+            // Record unavailable tool names so the consecutive unknown-tool detector
+            // can stop the planner from retrying a hallucinated tool indefinitely.
+            toolLoopDetector.record(tool, loopParams(args), blocked, errorMessage = blocked)
             AgentPolicy.log(svc, tool, "dispatch", false, "unknown tool-to-pack mapping; denied")
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             recordDispatchBlocked(tool, args, "tool_pack_mapping_denied")
