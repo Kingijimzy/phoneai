@@ -5,7 +5,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-class Memory(val id: Int, var category: String, var text: String, val created: Long, var updated: Long, var pinned: Boolean = false)
+class Memory(
+    val id: Int, var category: String, var text: String, val created: Long, var updated: Long,
+    var pinned: Boolean = false, var sourceRole: String = "agent", var confidence: Double = 0.65,
+    var sensitivity: String = "general", var reviewStatus: String = "pending", var evidence: String = ""
+)
 
 /** Orion's long-term memory. Saved in a file on the phone, so it survives closing the app. */
 object MemoryStore {
@@ -33,7 +37,10 @@ object MemoryStore {
                     out.add(
                         Memory(
                             o.getInt("id"), cat(o.optString("category", "fact")), o.optString("text", ""),
-                            o.optLong("created", 0L), o.optLong("updated", 0L), o.optBoolean("pinned", false)
+                            o.optLong("created", 0L), o.optLong("updated", 0L), o.optBoolean("pinned", false),
+                            o.optString("sourceRole", "legacy"), o.optDouble("confidence", 0.5),
+                            o.optString("sensitivity", "general"), o.optString("reviewStatus", "pending"),
+                            o.optString("evidence", "")
                         )
                     )
                 }
@@ -52,6 +59,9 @@ object MemoryStore {
             arr.put(
                 JSONObject().put("id", m.id).put("category", m.category).put("text", m.text)
                      .put("created", m.created).put("updated", m.updated).put("pinned", m.pinned)
+                     .put("sourceRole", m.sourceRole).put("confidence", MemoryGovernancePolicy.normalizeConfidence(m.confidence))
+                     .put("sensitivity", m.sensitivity).put("reviewStatus", m.reviewStatus)
+                     .put("evidence", m.evidence.take(240))
             )
         }
         val target = file(c)
@@ -72,44 +82,58 @@ object MemoryStore {
         }
     }
 
-    private fun copyOf(m: Memory) = Memory(m.id, m.category, m.text, m.created, m.updated, m.pinned)
+    private fun copyOf(m: Memory) = Memory(
+        m.id, m.category, m.text, m.created, m.updated, m.pinned,
+        m.sourceRole, m.confidence, m.sensitivity, m.reviewStatus, m.evidence
+    )
 
     fun all(c: Context): List<Memory> = synchronized(lock) { load(c).map { copyOf(it) }.sortedWith(compareByDescending<Memory> { it.pinned }.thenByDescending { it.updated }) }
 
-    fun add(c: Context, category: String?, text: String): Memory? = synchronized(lock) {
-        val t = text.trim().replace("\n", " ").take(300)
+    /** Model/tool-originated writes remain proposals until the owner reviews them. */
+    fun add(c: Context, category: String?, text: String): Memory? =
+        addWithProvenance(c, category, text, "agent", 0.65, "pending", "general", "model/tool proposal")
+
+    /** Direct entries typed into the Memory screen are owner-confirmed. */
+    fun addOwnerConfirmed(c: Context, category: String?, text: String): Memory? =
+        addWithProvenance(c, category, text, "owner", 1.0, "approved", "general", "entered directly by owner")
+
+    private fun addWithProvenance(
+        c: Context, category: String?, text: String, sourceRole: String, confidence: Double,
+        reviewStatus: String, sensitivity: String, evidence: String
+    ): Memory? = synchronized(lock) {
+        val t = text.trim().replace("\\n", " ").take(300)
         if (t.isEmpty()) return@synchronized null
         val list = load(c)
         val now = System.currentTimeMillis()
+        val safeSensitivity = MemoryGovernancePolicy.sensitivity(t, sensitivity)
         val dup = list.firstOrNull { it.text.equals(t, true) }
         if (dup != null) {
-            val oldCategory = dup.category
-            val oldUpdated = dup.updated
+            val old = copyOf(dup)
             dup.updated = now
-            if (category != null) dup.category = cat(category)
-            if (!save(c)) {
-                dup.category = oldCategory
-                dup.updated = oldUpdated
-                return@synchronized null
-            }
+            dup.sourceRole = sourceRole
+            dup.confidence = MemoryGovernancePolicy.normalizeConfidence(confidence)
+            dup.sensitivity = safeSensitivity
+            dup.reviewStatus = reviewStatus
+            dup.evidence = evidence.take(240)
+            if (!save(c)) { restoreFields(dup, old); return@synchronized null }
             return@synchronized copyOf(dup)
         }
-        // A changed fact replaces the old note instead of sitting beside its contradiction.
         val replaced = MemoryRanking.findSuperseded(list, cat(category), t)
         if (replaced != null) {
-            val oldText = replaced.text
-            val oldUpdated = replaced.updated
+            val old = copyOf(replaced)
             replaced.text = t
             replaced.updated = now
-            if (!save(c)) {
-                replaced.text = oldText
-                replaced.updated = oldUpdated
-                return@synchronized null
-            }
+            replaced.sourceRole = sourceRole
+            replaced.confidence = MemoryGovernancePolicy.normalizeConfidence(confidence)
+            replaced.sensitivity = safeSensitivity
+            replaced.reviewStatus = reviewStatus
+            replaced.evidence = evidence.take(240)
+            if (!save(c)) { restoreFields(replaced, old); return@synchronized null }
             return@synchronized copyOf(replaced)
         }
         val id = (list.maxOfOrNull { it.id } ?: 0) + 1
-        val m = Memory(id, cat(category), t, now, now)
+        val m = Memory(id, cat(category), t, now, now, false, sourceRole,
+            MemoryGovernancePolicy.normalizeConfidence(confidence), safeSensitivity, reviewStatus, evidence.take(240))
         list.add(m)
         val removed = mutableListOf<Memory>()
         while (list.size > 300) removed.add(list.removeAt(0))
@@ -119,6 +143,27 @@ object MemoryStore {
             return@synchronized null
         }
         copyOf(m)
+    }
+
+    private fun restoreFields(target: Memory, source: Memory) {
+        target.category = source.category
+        target.text = source.text
+        target.updated = source.updated
+        target.pinned = source.pinned
+        target.sourceRole = source.sourceRole
+        target.confidence = source.confidence
+        target.sensitivity = source.sensitivity
+        target.reviewStatus = source.reviewStatus
+        target.evidence = source.evidence
+    }
+
+    fun setReviewStatus(c: Context, id: Int, status: String): Boolean = synchronized(lock) {
+        if (status !in setOf("approved", "rejected")) return@synchronized false
+        val memory = load(c).firstOrNull { it.id == id } ?: return@synchronized false
+        val old = memory.reviewStatus
+        memory.reviewStatus = status
+        if (!save(c)) { memory.reviewStatus = old; return@synchronized false }
+        true
     }
 
     fun update(c: Context, id: Int, category: String?, text: String?): Boolean = synchronized(lock) {
@@ -181,7 +226,7 @@ object MemoryStore {
         if (id < 1 || clean.isEmpty()) return@synchronized false
         val list = load(c)
         if (list.any { it.id == id || it.text.equals(clean, true) }) return@synchronized false
-        val memory = Memory(id, cat(category), clean, created, updated)
+        val memory = Memory(id, cat(category), clean, created, updated, false, "restored", 0.5, "general", "pending", "restored from undo history")
         list.add(memory)
         if (!save(c)) {
             list.remove(memory)
@@ -206,6 +251,8 @@ object MemoryStore {
     fun promptBlock(c: Context, query: String? = null): String {
         val items = MemoryRanking.select(all(c), query)
         if (items.isEmpty()) return "(nothing saved yet)"
-        return items.joinToString("\n") { (if (it.pinned) "[${it.id}] (${it.category}, pinned) " else "[${it.id}] (${it.category}) ") + it.text }
+        return items.filter { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus) }.joinToString("\\n") {
+            (if (it.pinned) "[${it.id}] (${it.category}, pinned) " else "[${it.id}] (${it.category}) ") + it.text
+        }.ifBlank { "(no owner-approved memories yet; proposals require review)" }
     }
 }
