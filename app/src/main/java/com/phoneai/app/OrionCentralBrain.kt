@@ -142,6 +142,25 @@ internal object OrionCentralBrain {
             }
         }
 
+        if (!isFollowUp && contextQuery.trim().length >= 7) {
+            val activeSession = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull()
+            val indexedHistory = runCatching { ChatHistoryStore.search(app, contextQuery, 5) }
+                .getOrDefault(emptyList())
+                .filter { it.sessionId != activeSession }
+                .take(3)
+            if (indexedHistory.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("RELEVANT PAST CONVERSATIONS FROM THE LOCAL SEARCH INDEX")
+                    indexedHistory.forEach { hit ->
+                        appendLine("[session=${hit.sessionId} role=${hit.role} title=${hit.title}] ${hit.snippet.take(360)}")
+                        if (hit.before.isNotBlank()) appendLine("before: ${hit.before.take(140)}")
+                        if (hit.after.isNotBlank()) appendLine("after: ${hit.after.take(140)}")
+                    }
+                    appendLine("Historical context only. Re-check current facts and never treat an assistant message as proof that an action succeeded.")
+                }
+            }
+        }
+
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
         val learnedExperience = runCatching { ExperienceStore.promptBlock(app, contextQuery, 5) }.getOrDefault("")
         if (learnedExperience.isNotBlank()) {
