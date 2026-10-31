@@ -8,7 +8,7 @@ import android.content.Context
  */
 internal object TradingDeskContext {
     private val tradingIntent = Regex(
-        "(?i)\\b(trad(?:e|ing)|forex|fx|crypto|bitcoin|btc|ethereum|eth|bybit|deriv|setup|watchlist|playbook|position|portfolio|market bias|liquidity|smc|order block|fair value gap|fvg|journal|trade review|risk reward|\br:r\b)\\b"
+        "(?i)\\b(trad(?:e|ing)|forex|fx|crypto|bitcoin|btc|ethereum|eth|bybit|deriv|setup|watchlist|playbook|position|portfolio|market bias|liquidity|smc|order block|fair value gap|fvg|journal|trade review|risk reward)\\b"
     )
     private val reviewIntent = Regex("(?i)\\b(journal|review|mistake|habit|performance|results|history|win rate|drawdown)\\b")
 
