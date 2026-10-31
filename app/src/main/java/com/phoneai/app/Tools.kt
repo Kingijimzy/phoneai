@@ -1036,8 +1036,14 @@ class Tools(
             return "SPECIALIST JOB ${previous.id} [${previous.status.name.lowercase()}]: duplicate request matched the existing durable job; no second job was created."
         }
         val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
-        if (manifest.access !in setOf(OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING, OrionAgentDelegation.Access.READ_ONLY_RESEARCH, OrionAgentDelegation.Access.TRADING_ANALYSIS) ||
-            manifest.allowedTools.isNotEmpty()) return "error: specialist manifest is not eligible for background execution."
+        val permittedTools = when (manifest.access) {
+            OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING -> emptySet()
+            OrionAgentDelegation.Access.READ_ONLY_RESEARCH -> setOf("live_web_search", "live_news", "bybit_public_ticker")
+            OrionAgentDelegation.Access.TRADING_ANALYSIS -> setOf("bybit_public_ticker")
+        }
+        if (!permittedTools.containsAll(manifest.allowedTools)) {
+            return "error: specialist manifest requests a capability outside the background read-only allowlist."
+        }
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: specialist policy receipt could not be saved."
         val kind = when (manifest.access) {
             OrionAgentDelegation.Access.ANALYSIS_ONLY -> OrionWorkerJobStore.Kind.ANALYSIS
