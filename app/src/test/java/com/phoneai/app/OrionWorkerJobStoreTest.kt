@@ -47,7 +47,7 @@ class OrionWorkerJobStoreTest {
 
     @Test fun brainSummaryReportsSavedJobStateWithoutClaimingQueuedWorkRan() {
         val store = OrionWorkerJobStore(context)
-        store.enqueue("parent-1", "Compare two architecture options", idempotencyKey = "summary")
+        val job = store.enqueue("parent-1", "Compare two architecture options", idempotencyKey = "summary")!!
         val summary = store.promptSummary()
         assertTrue(summary.contains("durable specialist job queue", ignoreCase = true))
         assertTrue(summary.contains("[queued]"))
