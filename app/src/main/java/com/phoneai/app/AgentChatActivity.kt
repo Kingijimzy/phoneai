@@ -93,8 +93,8 @@ class AgentChatActivity : Activity() {
     private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); startWake(); ticker.postDelayed(this, 20_000L) } } }
 
     private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
-        v.onSpeaking = { on -> speakingNow = on; setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) }
-        v.onLevel = { l -> orb?.level = l; holo?.mic(l) }
+        v.onSpeaking = { on -> speakingNow = on; postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) } }
+        v.onLevel = { l -> postUiIfAlive { orb?.level = l; holo?.mic(l) } }
         voice = v
     }
 
@@ -173,20 +173,20 @@ class AgentChatActivity : Activity() {
         input.hint = "Listening…"
         setLive(CompanionView.Activity.LISTENING)
         voiceOut().listen(
-            onText = { t ->
+            onText = { t -> postUiIfAlive {
                 input.hint = "Ask, or upload a chart…"
                 listeningNow = false
                 setLive(CompanionView.Activity.IDLE)
                 if (!t.isNullOrBlank()) { input.setText(t); send() }
-                else if (handsFree) ticker.postDelayed({ if (handsFree && resumed && !busy) micTap() }, 700L)
-            },
-            onPartial = { input.setText(it); input.setSelection(input.text.length) },
-            onProblem = { m ->
+                else if (handsFree) ticker.postDelayed({ if (handsFree && resumed && !busy && !uiUnavailable()) micTap() }, 700L)
+            } },
+            onPartial = { partial -> postUiIfAlive { input.setText(partial); input.setSelection(input.text.length) } },
+            onProblem = { m -> postUiIfAlive {
                 android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show()
                 listeningNow = false
                 setLive(CompanionView.Activity.IDLE)
                 if (handsFree) { handsFree = false; selectGroup(currentGroup) }
-            }
+            } }
         )
     }
 
