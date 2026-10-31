@@ -2,11 +2,15 @@
 import ast
 import contextlib
 import io
+import json
 
 MAX_SOURCE = 8000
 MAX_NODES = 500
 MAX_OUTPUT = 5000
 MAX_RANGE = 1000
+MAX_SEQ = 10000
+MAX_INT_BITS = 4096
+MAX_INPUT = 8000
 
 class Rejected(Exception):
     pass
@@ -68,6 +72,62 @@ def _validate(tree):
     if loops > 2:
         raise Rejected("at most two for loops are allowed")
 
+def _is_seq(x):
+    return isinstance(x, (list, tuple, str))
+
+def _check_seq(n):
+    if n > MAX_SEQ:
+        raise Rejected("a list or text grew beyond " + str(MAX_SEQ) + " items")
+
+def _add(a, b):
+    if _is_seq(a) and _is_seq(b):
+        _check_seq(len(a) + len(b))
+    return a + b
+
+def _mul(a, b):
+    if _is_seq(a) and isinstance(b, int) and not isinstance(b, bool):
+        _check_seq(len(a) * max(b, 0))
+    elif _is_seq(b) and isinstance(a, int) and not isinstance(a, bool):
+        _check_seq(len(b) * max(a, 0))
+    elif isinstance(a, int) and isinstance(b, int):
+        if abs(a).bit_length() + abs(b).bit_length() > MAX_INT_BITS:
+            raise Rejected("a number grew too large")
+    return a * b
+
+class _Guard(ast.NodeTransformer):
+    """Routes + and * through size-checked helpers so a short loop cannot grow data without bound."""
+    @staticmethod
+    def _call(name, left, right):
+        return ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=[left, right], keywords=[])
+
+    def visit_BinOp(self, node):
+        self.generic_visit(node)
+        if isinstance(node.op, ast.Add):
+            return ast.copy_location(self._call("_add", node.left, node.right), node)
+        if isinstance(node.op, ast.Mult):
+            return ast.copy_location(self._call("_mul", node.left, node.right), node)
+        return node
+
+    def visit_AugAssign(self, node):
+        self.generic_visit(node)
+        if isinstance(node.op, (ast.Add, ast.Mult)):
+            name = "_add" if isinstance(node.op, ast.Add) else "_mul"
+            load = ast.Name(id=node.target.id, ctx=ast.Load()) if isinstance(node.target, ast.Name) else node.target
+            return ast.copy_location(ast.Assign(targets=[node.target], value=self._call(name, load, node.value)), node)
+        return node
+
+def _prepare(source):
+    tree = ast.parse(source, mode="exec")
+    _validate(tree)
+    tree = ast.fix_missing_locations(_Guard().visit(tree))
+    return compile(tree, "<orion-approved-python>", "exec")
+
+def _scope(extra=None):
+    scope = {"__builtins__": _SAFE, "_add": _add, "_mul": _mul}
+    if extra:
+        scope.update(extra)
+    return scope
+
 def run(source):
     if not isinstance(source, str):
         return "error: Python code must be text"
@@ -76,15 +136,43 @@ def run(source):
     if not source.strip():
         return "error: Python code is required"
     try:
-        tree = ast.parse(source, mode="exec")
-        _validate(tree)
+        code = _prepare(source)
         output = io.StringIO()
-        scope = {"__builtins__": _SAFE}
+        scope = _scope()
         with contextlib.redirect_stdout(output):
-            exec(compile(tree, "<orion-approved-python>", "exec"), scope, scope)
+            exec(code, scope, scope)
         result = output.getvalue()
         return result[:MAX_OUTPUT] if result else "Python completed (no printed output)."
     except Rejected as exc:
         return "error: Python policy rejected code: " + str(exc)
     except Exception as exc:
         return "error: Python execution failed: " + type(exc).__name__ + ": " + str(exc)[:180]
+
+
+def run_extension(source, input_json):
+    """Runs a generated extension in the same whitelist sandbox. The script reads INPUT, may print,
+    and sets RESULT. Returns a JSON string: {"ok":true,"result":...,"printed":"..."} or {"ok":false,"error":"..."}."""
+    def fail(message):
+        return json.dumps({"ok": False, "error": message[:300]})
+    if not isinstance(source, str) or not source.strip():
+        return fail("extension source is required")
+    if len(source) > MAX_SOURCE:
+        return fail("extension source exceeds 8000 characters")
+    if not isinstance(input_json, str) or len(input_json) > MAX_INPUT:
+        return fail("input must be JSON text of at most 8000 characters")
+    try:
+        data = json.loads(input_json) if input_json.strip() else {}
+        code = _prepare(source)
+        output = io.StringIO()
+        scope = _scope({"INPUT": data})
+        with contextlib.redirect_stdout(output):
+            exec(code, scope, scope)
+        result = scope.get("RESULT")
+        printed = output.getvalue()[:MAX_OUTPUT]
+        return json.dumps({"ok": True, "result": result, "printed": printed})
+    except Rejected as exc:
+        return fail("policy rejected the extension: " + str(exc))
+    except (TypeError, ValueError) as exc:
+        return fail("extension failed: " + type(exc).__name__ + ": " + str(exc))
+    except Exception as exc:
+        return fail("extension failed: " + type(exc).__name__ + ": " + str(exc))

@@ -93,4 +93,13 @@ class AgentHooksTest {
   assertFalse(AgentHooks.screenChanged(before,sameContent)); assertTrue(AgentHooks.screenChanged(before,after))
   assertEquals(AgentHooks.screenFingerprint(before),AgentHooks.screenFingerprint(sameContent))
  }
+
+    @Test fun forgetLetsOnlyThatExactCallRunAgain() {
+        val g = AgentHooks.FailedCallGuard()
+        val a = org.json.JSONObject("{\"q\":\"x\"}"); val b = org.json.JSONObject("{\"q\":\"y\"}")
+        g.recordFailure("web_search", a); g.recordFailure("web_search", b)
+        g.forget("web_search", a)
+        assertFalse(g.isBlocked("web_search", a))
+        assertTrue(g.isBlocked("web_search", b))
+    }
 }

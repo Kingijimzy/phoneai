@@ -5,6 +5,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolRegistryTest {
+    @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
+        assertTrue(ToolRegistry.all.any { it.name == "device_location" })
+        assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
+    }
+
     @Test fun registryNamesAreUniqueAndContainEveryRuntimeToolFamily() {
         val names = ToolRegistry.all.map { it.name }
         assertEquals("Each tool name must have exactly one definition.", names.size, names.toSet().size)
@@ -15,6 +20,36 @@ class ToolRegistryTest {
         )))
     }
 
+
+    @Test fun tradingDeskToolsAreRegisteredWithSafeAccess() {
+        listOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_list").forEach {
+            assertEquals(it, ToolAccess.READ, ToolRegistry.access(it))
+            assertEquals("trading_research", AgentPolicy.packForTool(it))
+        }
+        listOf("strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch").forEach {
+            assertEquals(it, ToolAccess.WRITE, ToolRegistry.access(it))
+        }
+    }
+
+    @Test fun everyRegisteredToolMapsToAnExistingCapabilityPack() {
+        val knownPacks = AgentPolicy.packs.map { it.id }.toSet()
+        ToolRegistry.all.forEach { tool ->
+            val pack = AgentPolicy.packForTool(tool.name)
+            assertNotNull("Registered tool ${tool.name} has no capability-pack mapping", pack)
+            assertTrue(
+                "Tool ${tool.name} maps to an unknown capability pack: $pack",
+                pack != null && knownPacks.contains(pack)
+            )
+        }
+    }
+
+    @Test fun corePhoneAndMessagingPacksAreAvailableByDefaultButOptionalBridgesStayOptIn() {
+        assertTrue(AgentPolicy.defaultOn("phone_control"))
+        assertTrue(AgentPolicy.defaultOn("messaging"))
+        assertFalse(AgentPolicy.defaultOn("termux_bridge"))
+        assertFalse(AgentPolicy.defaultOn("remote_computer"))
+        assertFalse(AgentPolicy.defaultOn("proactive"))
+    }
 
     @Test fun browserNavigationUsesTheInAppBrowserWithoutExternalBrowserPrerequisites() {
         val contract = ToolRegistry.all.single { it.name == "browser_navigate" }.promptLine.lowercase()
@@ -56,6 +91,10 @@ class ToolRegistryTest {
         }
         assertTrue(prompt.contains("Tool-use guidance:"))
         assertTrue(prompt.contains("SCREEN TARGET RULE"))
+        assertTrue(prompt.contains("SHELL BACKEND RULE"))
+        assertTrue(prompt.contains("LIVE RESEARCH RULE"))
+        assertTrue(prompt.contains("DOWNLOAD SIZE RULE"))
+        assertTrue(prompt.contains("GOAL COMPLETION RULE"))
     }
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
@@ -63,7 +102,8 @@ class ToolRegistryTest {
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
-        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("termux_command"))
+        assertTrue(ToolRegistry.find("termux_command")!!.promptLine.contains("read-only diagnostic"))
         assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
         assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))

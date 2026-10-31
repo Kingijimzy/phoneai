@@ -68,6 +68,38 @@ internal object RecoveryPolicy {
             "Do not repeat this action unchanged. Diagnose the cause from the evidence, then choose a different, " +
             "safe action or a revised plan. If the cause needs permission, a credential, or the user's judgment, say so and stop."
 
+    /** Outcome of [retryRead]: the last result and how many retries ran. */
+    data class ReadOutcome(val result: String, val retries: Int)
+
+    /**
+     * Runs a read-only step again after a transient or timed-out failure, within [MAX_READ_RETRIES] and the live budgets.
+     * [attempt] performs one dispatch; it is only called again when the policy says a read may be repeated.
+     * Cancellation and budget exhaustion stop further attempts immediately.
+     */
+    fun retryRead(
+        first: String,
+        isFailure: (String) -> Boolean,
+        stopped: () -> Boolean,
+        budgetExhausted: () -> Boolean,
+        sleep: (Long) -> Unit,
+        onRetry: (attempt: Int, failure: Failure) -> Unit,
+        attempt: () -> String
+    ): ReadOutcome {
+        var result = first
+        var retries = 0
+        while (isFailure(result)) {
+            val failure = classify(result)
+            if (decide(Risk.READ_ONLY, failure, retries) != Decision.RETRY_READ) break
+            if (!canRetryRead(stopped(), budgetExhausted(), retries)) break
+            retries++
+            onRetry(retries, failure)
+            sleep(backoffMillis(retries))
+            if (stopped()) break
+            result = attempt()
+        }
+        return ReadOutcome(result, retries)
+    }
+
     fun pauseMessage(tool: String, failure: Failure): String = when (failure) {
         Failure.PERMISSION -> "The step '$tool' needs permission or approval before it can run. Grant it, then say continue."
         Failure.AMBIGUOUS -> "The step '$tool' timed out or was interrupted, so it may already have changed something. I have not repeated it. Check the current state first, then tell me whether to continue."

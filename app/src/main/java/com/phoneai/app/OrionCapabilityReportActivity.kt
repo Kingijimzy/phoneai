@@ -107,12 +107,144 @@ class OrionCapabilityReportActivity : Activity() {
         addLine(core, "Capability packs", implementedPacks.toString() + " implemented in source · " + enabledPacks + " enabled in settings. Disabled packs are not automatically enabled.", enabledPacks > 0)
         page.addView(core)
 
+        // Show the real routing configuration and transcript availability, without implying
+        // that a saved provider key or selected model has passed a live network test.
+        val contextCard = card()
+        contextCard.addView(label("CONVERSATION & ROUTING", 10f, 0xFFAAAAAA.toInt(), true))
+        val executionMode = runCatching { Prefs.executionMode(this) }.getOrDefault("UNKNOWN")
+        val modeDescription = when (executionMode) {
+            "PLAN" -> "Plan mode: prepare and reason about actions; execution is restricted by mode policy."
+            "ACT" -> "Act mode: execute supported actions through Orion's normal permission and safety gates."
+            "FULL" -> "Full mode: broader action policy may apply, but approvals and safety gates still apply."
+            else -> "Mode could not be read."
+        }
+        addLine(contextCard, "Execution mode", "${executionMode} — ${modeDescription}", executionMode != "UNKNOWN")
+        val selectedProvider = runCatching { Prefs.provider(this, false) }.getOrNull()
+        val selectedModel = selectedProvider?.let { runCatching { Prefs.model(this, it, false) }.getOrNull() }.orEmpty()
+        addLine(
+            contextCard,
+            "Chat provider / model",
+            if (selectedProvider == null) "Could not read selected provider." else
+                "${selectedProvider.label} · ${selectedModel.ifBlank { selectedProvider.textModel }}. Selection is not proof of live connectivity or remaining quota.",
+            selectedProvider != null
+        )
+        val commandProvider = runCatching { Prefs.commandProviderId(this)?.let { Providers.find(it) } ?: Prefs.defaultCommandProvider(this) }.getOrNull()
+        val commandModel = runCatching { Prefs.commandModelId(this) }.getOrNull()
+        addLine(
+            contextCard,
+            "Command planner",
+            if (commandProvider == null) "Could not resolve the command provider." else
+                "${commandProvider.label} · ${commandModel?.takeIf { it.isNotBlank() } ?: commandProvider.textModel}. Command mode may share or override the chat provider.",
+            commandProvider != null
+        )
+        val transcriptCount = runCatching { service?.conversationContext()?.size }.getOrNull()
+        addLine(
+            contextCard,
+            "Saved conversation context",
+            transcriptCount?.let { "${it} transcript row(s) available to restore. The active request still uses a bounded recent context; this does not prove every follow-up is interpreted correctly." }
+                ?: "Conversation storage could not be checked while the service is unavailable.",
+            transcriptCount != null
+        )
+        addLine(
+            contextCard,
+            "Live tool verification",
+            "This screen does not yet run an end-to-end test for every tool. Registered tools, enabled packs, selected models and saved credentials are not proof of successful execution.",
+            false
+        )
+        page.addView(contextCard)
+
         val integrations = card()
         integrations.addView(label("INTEGRATIONS", 10f, 0xFFAAAAAA.toInt(), true))
         addLine(integrations, "AI provider keys", providerKeys.toString() + " of " + Providers.all.size + " providers have a saved key. This does not validate the key, model, credits, quota, or network.", providerKeys > 0)
         addLine(integrations, "Service credentials", savedServices.toString() + " credential(s) saved in the local connection store. Saved is not the same as provider-verified.", null)
         addLine(integrations, "Speech recognition", if (speechAvailable) "Android reports a recognizer is available; microphone capture and transcription still need a real test." else "Android reports no speech recognizer available.", speechAvailable)
         page.addView(integrations)
+
+        // Per-tool inventory: eligibility is derived from the registry, enabled packs and known
+        // prerequisites. It is deliberately labelled as NOT a live backend health test.
+        val enabledPackIds = AgentPolicy.packs
+            .filter { it.implemented && AgentPolicy.enabled(this, it.id) }
+            .map { it.id }.toSet()
+        val contactsState = runCatching {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.READ_CONTACTS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
+        val notificationState = runCatching {
+            if (android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                    ?.contains(packageName) == true
+            ) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        }.getOrDefault(OrionCapabilityDiscovery.PermissionState.UNKNOWN)
+        val termuxReady = runCatching { TermuxBridgeRunner.readiness(this) == null }.getOrDefault(false)
+        val mcpEndpointState = runCatching { if (McpConnector.configured(this)) "configured" else "not-configured" }.getOrDefault("unknown")
+        val mcpPairingState = runCatching { if (McpConnector.isPaired(this)) "paired" else "not-paired" }.getOrDefault("unknown")
+        val inventory = runCatching {
+            OrionCapabilityDiscovery.discover(
+                ToolRegistry.all,
+                enabledPackIds,
+                termuxReady,
+                permissionStates = mapOf(
+                    "contacts" to contactsState,
+                    "notification_access" to notificationState
+                ),
+                integrationStates = mapOf(
+                    "mcp_endpoint" to mcpEndpointState,
+                    "mcp_pairing" to mcpPairingState,
+                    "mcp_live_discovery" to "not-run-by-capability-report"
+                )
+            )
+        }.getOrNull()
+        val toolsCard = card()
+        toolsCard.addView(label("TOOL-BY-TOOL AVAILABILITY", 10f, 0xFFAAAAAA.toInt(), true))
+        toolsCard.addView(label(
+            "Eligible means registered, pack enabled and known prerequisites satisfied. It does NOT mean the backend has been live-tested or that an action will succeed.",
+            12f, 0xFFAAAAAA.toInt()
+        ))
+        if (inventory == null) {
+            toolsCard.addView(label("Tool availability could not be calculated.", 12f, 0xFFFFC078.toInt()))
+        } else {
+            toolsCard.addView(label(
+                "${inventory.availableCount} of ${inventory.registeredCount} tools eligible to attempt · ${inventory.registeredCount - inventory.availableCount} blocked",
+                13f, 0xFFF0F0F0.toInt(), true
+            ))
+            inventory.tools.sortedWith(compareBy<OrionCapabilityDiscovery.ToolFact> { !it.available }.thenBy { it.name })
+                .forEach { tool ->
+                    addLine(
+                        toolsCard,
+                        "${if (tool.available) "ELIGIBLE" else "BLOCKED"} · ${tool.name} (${tool.access.name.lowercase()})",
+                        if (tool.available) "Prerequisites look satisfied; execution not live-verified." else tool.reason,
+                        if (tool.available) null else false
+                    )
+                }
+            if (inventory.blockers.isNotEmpty()) {
+                toolsCard.addView(label("Runtime notes: " + inventory.blockers.joinToString("; "), 11f, 0xFFFFC078.toInt()))
+            }
+        }
+        page.addView(toolsCard)
+
+        // The same grouped snapshot is shown in the Watcher and here so both destinations agree.
+        val shared = runCatching { OrionCapabilityHub.snapshot(this, service) }.getOrNull()
+        if (shared != null) {
+            val sharedCard = card()
+            sharedCard.addView(label("CONNECTED CAPABILITY HUB", 10f, 0xFFAAAAAA.toInt(), true))
+            sharedCard.addView(label("${shared.registeredTools} registered tools · ${shared.availableTools} eligible under current policy", 12f, 0xFFCCCCCC.toInt()))
+            shared.capabilities.forEach { capability ->
+                val good = capability.state == OrionCapabilityHub.State.READY
+                val color = when (capability.state) {
+                    OrionCapabilityHub.State.READY -> 0xFF9ED6A2.toInt()
+                    OrionCapabilityHub.State.LIMITED -> 0xFFFFC078.toInt()
+                    OrionCapabilityHub.State.DISABLED, OrionCapabilityHub.State.SETUP_REQUIRED -> 0xFFFF8585.toInt()
+                    OrionCapabilityHub.State.UNKNOWN -> 0xFFAAAAAA.toInt()
+                }
+                sharedCard.addView(label("${OrionCapabilityHub.stateLabel(capability.state)} · ${capability.name}", 13f, color, true))
+                sharedCard.addView(label(capability.detail, 11f, 0xFFBBBBBB.toInt()))
+            }
+            if (shared.integrationStates.isNotEmpty()) {
+                sharedCard.addView(label("Connection metadata only: " + shared.integrationStates.entries.joinToString("; ") { "${it.key}=${it.value}" }, 10f, 0xFFAAAAAA.toInt()))
+            }
+            page.addView(sharedCard)
+        }
 
         val limits = card()
         limits.addView(label("WHAT NEEDS ATTENTION", 10f, 0xFFAAAAAA.toInt(), true))
@@ -123,6 +255,25 @@ class OrionCapabilityReportActivity : Activity() {
         if (messages.isEmpty()) messages += "No core blocker was detected. Run real chat, voice, screen-action, and provider tests before treating the app as fully verified."
         messages.distinct().forEach { limits.addView(label("• " + it, 12f, 0xFFE0E0E0.toInt())) }
         page.addView(limits)
+
+        val activityCard = card()
+        activityCard.addView(label("RECENT TOOL ACTIVITY", 10f, 0xFFAAAAAA.toInt(), true))
+        activityCard.addView(label("Local audit history records tool names and generic outcomes only; it does not store tool arguments or prove the user's goal was achieved.", 12f, 0xFFAAAAAA.toInt()))
+        val recentEvents = runCatching { ActionLogStore.all(this).take(8) }.getOrDefault(emptyList())
+        if (recentEvents.isEmpty()) {
+            activityCard.addView(label("No tool attempts are recorded yet.", 12f, 0xFFAAAAAA.toInt()))
+        } else {
+            recentEvents.forEach { event ->
+                val stamp = runCatching {
+                    SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date(event.at))
+                }.getOrDefault("time unknown")
+                val isError = event.outcome.equals("error returned", ignoreCase = true)
+                val status = if (isError) "ERROR RETURNED" else "RESULT RETURNED · NOT PROOF OF SUCCESS"
+                val detail = if (event.failureCategory.isBlank()) status else "$status · ${event.failureCategory}"
+                addLine(activityCard, "${event.tool} · $stamp", detail, if (isError) false else null)
+            }
+        }
+        page.addView(activityCard)
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         actions.addView(Button(this).apply {

@@ -50,13 +50,27 @@ class TaskLifecycleTest {
         assertNull(TaskLifecycle(phase = Phase.PLAN).fail())
     }
 
-    @Test fun blockedRemembersWhereToResume() {
+    @Test fun blockedExecutionResumesByReplanningNotReplayingAnAction() {
         val exec = TaskLifecycle(phase = Phase.EXECUTE)
         val blocked = exec.block()!!
         assertEquals(Phase.BLOCKED, blocked.phase)
         assertEquals(Phase.EXECUTE, blocked.blockedFrom)
-        assertEquals(Phase.EXECUTE, blocked.resume()!!.phase)
+        val resumed = blocked.resume()!!
+        assertEquals(Phase.PLAN, resumed.phase)
+        assertNull(resumed.blockedFrom)
+        assertFalse(resumed.verified)
         assertNull("only a blocked task can resume", exec.resume())
+    }
+
+    @Test fun blockedAuthorizationResumesAtAuthorizationAndCancellationIsTerminal() {
+        val blocked = TaskLifecycle(phase = Phase.AUTHORIZE).block()!!
+        assertEquals(Phase.AUTHORIZE, blocked.resume()!!.phase)
+
+        val cancelled = blocked.cancel()!!
+        assertEquals(Phase.CANCELLED, cancelled.phase)
+        assertTrue(cancelled.isTerminal)
+        assertNull(cancelled.resume())
+        assertNull(cancelled.advance())
     }
 
     @Test fun cannotBlockTerminalOrRecoveringTasks() {

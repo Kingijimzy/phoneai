@@ -105,9 +105,9 @@ object Providers {
             "https://opencode.ai/zen/v1/models", false, false, requiresPaidOptIn = true
         ),
         Provider(
-            "local", "Local AI (Ollama in Termux)", "http://127.0.0.1:11434/v1",
+            "local", "Local AI (Ollama endpoint)", "http://127.0.0.1:11434/v1",
             "llama3.2:3b", null, "",
-            "FREE and unlimited, runs on this phone inside Termux. Slower, text only.",
+            "Local OpenAI-compatible endpoint at 127.0.0.1:11434; requires a separately running Ollama service. Availability and speed depend on the device.",
             null, false, true
         )
     )
@@ -206,6 +206,15 @@ object Prefs {
     }
 
     /** Practice money by default. Real money must be switched on on purpose. */
+    fun derivToken(c: Context): String = ApiKeyVault.read(c, "enc_deriv_token", "deriv_token")
+    fun setDerivToken(c: Context, token: String): Boolean = ApiKeyVault.write(c, "enc_deriv_token", "deriv_token", token)
+    fun derivAppId(c: Context): String = sp(c).getString("deriv_app_id", DerivProtocol.DEFAULT_APP_ID) ?: DerivProtocol.DEFAULT_APP_ID
+    fun setDerivAppId(c: Context, v: String) = sp(c).edit().putString("deriv_app_id", v.filter { it.isDigit() }.ifBlank { DerivProtocol.DEFAULT_APP_ID }).apply()
+    fun derivRealAllowed(c: Context): Boolean = sp(c).getBoolean("deriv_real_ok", false)
+    fun setDerivRealAllowed(c: Context, v: Boolean) = sp(c).edit().putBoolean("deriv_real_ok", v).apply()
+    fun deskAuto(c: Context): Boolean = sp(c).getBoolean("desk_auto", true)
+    fun setDeskAuto(c: Context, v: Boolean) = sp(c).edit().putBoolean("desk_auto", v).apply()
+
     fun bybitTestnet(c: Context): Boolean = sp(c).getBoolean("bybit_test", true)
     fun setBybitTestnet(c: Context, v: Boolean) = sp(c).edit().putBoolean("bybit_test", v).apply()
 
@@ -235,12 +244,12 @@ object Prefs {
     fun commandModelId(c: Context): String? = sp(c).getString("command_model_id", null)
         ?.takeIf { it.isNotBlank() }
 
-    /** Prefer configured fast/free command providers; otherwise inherit the user's chat provider. */
-    fun defaultCommandProvider(c: Context): Provider {
-        val fast = listOf("groq", "cerebras").mapNotNull { Providers.find(it) }
-            .firstOrNull { hasKey(c, it.id) && (!it.requiresPaidOptIn || allowPaidProviders(c)) }
-        return fast ?: provider(c, false)
-    }
+    /**
+     * Command mode inherits the provider the user selected for chat unless they explicitly
+     * configure a separate command provider. Never silently switch providers just because
+     * another key is present: provider selection is a user preference, not a speed heuristic.
+     */
+    fun defaultCommandProvider(c: Context): Provider = provider(c, false)
 
     fun setCommandProvider(c: Context, providerId: String, modelId: String) {
         val provider = Providers.find(providerId) ?: return
@@ -378,6 +387,12 @@ object Prefs {
     fun setOfflineVoiceOnly(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_voice_only", v).apply()
 
     /** Use the installed English Piper neural voice instead of Android TTS. */
+    fun modelRouting(c: Context): Boolean = sp(c).getBoolean("model_routing", true)
+    fun setModelRouting(c: Context, v: Boolean) = sp(c).edit().putBoolean("model_routing", v).apply()
+    fun companionChar(c: Context): Int = sp(c).getInt("companion_char", 0)
+    fun setCompanionChar(c: Context, v: Int) = sp(c).edit().putInt("companion_char", v).apply()
+    fun companionVoice(c: Context): Boolean = sp(c).getBoolean("companion_voice", false)
+    fun setCompanionVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("companion_voice", v).apply()
     fun neuralVoice(c: Context): Boolean = sp(c).getBoolean("neural_voice", false)
     fun setNeuralVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("neural_voice", v).apply()
 
