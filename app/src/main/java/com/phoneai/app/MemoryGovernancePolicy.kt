@@ -8,7 +8,7 @@ internal object MemoryGovernancePolicy {
         return if (risky.containsMatchIn(text)) "sensitive" else "general"
     }
 
-    fun canUseInPrompt(reviewStatus: String): Boolean = reviewStatus == "approved"
+    fun canUseInPrompt(reviewStatus: String, sensitivity: String = "general"): Boolean = reviewStatus == "approved" && sensitivity == "general"
 
     fun normalizeConfidence(value: Double): Double =
         if (value.isFinite()) value.coerceIn(0.0, 1.0) else 0.0
