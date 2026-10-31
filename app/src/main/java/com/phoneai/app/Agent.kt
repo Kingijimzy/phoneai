@@ -1383,6 +1383,15 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
+        val explicitResumeRequest = Regex("(?i)^(?:continue|resume|keep going)(?:\\s|$)").containsMatchIn(command)
+        // A new task may start while older work is paused. On an explicit Continue, restore
+        // the oldest archived unfinished checkpoint before resolving conversational context.
+        if (explicitResumeRequest && OrionTasksCapabilityExecutor.hasArchivedPending(svc)) {
+            if (!OrionTasksCapabilityExecutor.activateOldestArchived(svc)) {
+                ui.say("I found older unfinished work, but could not safely switch its checkpoint. No actions were resumed.")
+                return
+            }
+        }
         var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         var recalled = emptyList<OrionConversationRepository.SearchHit>()
         if (intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
@@ -1441,7 +1450,7 @@ Rules:
             }
             askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
-        val resumeRequest = contextualFollowUp && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
+        val resumeRequest = explicitResumeRequest && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
         if (!resumeRequest && !contextualFollowUp) {
             failedCallGuard.clear()
             // Proofs belong to one task only. Reusing a previous task's success could
