@@ -620,10 +620,9 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
-    /** Save user-requested text/code into the public Downloads/Orion folder and verify the row. */
     /** Save user-requested text/code into Downloads/Orion and verify the actual bytes by reading them back. */
     fun saveFile(fileName: String, content: String): String {
-        val requestedName = fileName.trim().substringAfterLast('/').substringAfterLast('\\\\')
+        val requestedName = fileName.trim().substringAfterLast('/').substringAfterLast('\\')
         val safeName = requestedName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120)
         if (safeName.isBlank() || safeName == "." || safeName == "..") {
             return "error: save_file needs a valid filename such as calculator.py"
