@@ -389,6 +389,8 @@ object Prefs {
     /** Use the installed English Piper neural voice instead of Android TTS. */
     fun modelRouting(c: Context): Boolean = sp(c).getBoolean("model_routing", true)
     fun setModelRouting(c: Context, v: Boolean) = sp(c).edit().putBoolean("model_routing", v).apply()
+    fun lastChatSeen(c: Context): Long = sp(c).getLong("chat_last_seen", 0L)
+    fun setLastChatSeen(c: Context, v: Long) = sp(c).edit().putLong("chat_last_seen", v).apply()
     fun companionChar(c: Context): Int = sp(c).getInt("companion_char", 0)
     fun setCompanionChar(c: Context, v: Int) = sp(c).edit().putInt("companion_char", v).apply()
     fun companionVoice(c: Context): Boolean = sp(c).getBoolean("companion_voice", false)
