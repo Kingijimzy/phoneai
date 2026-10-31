@@ -165,6 +165,9 @@ internal object OrionAgentDelegation {
             catch (_: Exception) { return@synchronized null }
         val record = (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
             .lastOrNull { it.optString("id") == id } ?: return@synchronized null
+        // Only an explicitly running receipt can be resumed. Completed, failed and cancelled
+        // work is historical evidence, never an execution grant.
+        if (record.optString("status") != "running") return@synchronized null
         val agentId = record.optString("agentId").take(64)
         val profile = AgentProfiles.find(agentId) ?: return@synchronized null
         val access = runCatching { Access.valueOf(record.optString("access")) }.getOrNull()
@@ -174,7 +177,7 @@ internal object OrionAgentDelegation {
         if (objective.isBlank()) return@synchronized null
         val parentTaskId = record.optString("parentTaskId").takeIf {
             it.isNotBlank() && it != "null" && it.length <= 80
-        }
+        } ?: return@synchronized null
         val parentObjectiveId = record.optString("parentObjectiveId").takeIf {
             it.isNotBlank() && it != "null" && Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it)
         }
