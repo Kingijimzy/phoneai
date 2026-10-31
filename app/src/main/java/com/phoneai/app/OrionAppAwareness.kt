@@ -35,6 +35,35 @@ internal object OrionAppAwareness {
                 }
             }
 
+    private fun componentInventory(c: Context): String = runCatching {
+        // PackageManager reflects components in the installed APK, not a guessed feature catalogue.
+        @Suppress("DEPRECATION")
+        val info = c.packageManager.getPackageInfo(
+            c.packageName,
+            android.content.pm.PackageManager.GET_ACTIVITIES or
+                android.content.pm.PackageManager.GET_SERVICES or
+                android.content.pm.PackageManager.GET_RECEIVERS
+        )
+        fun shortName(value: String): String = value.substringAfterLast('.')
+        val activities = (info.activities ?: emptyArray()).map { shortName(it.name) }.distinct().sorted()
+        val services = (info.services ?: emptyArray()).map {
+            shortName(it.name) + if (it.enabled) "[manifest-enabled]" else "[manifest-disabled]"
+        }.sorted()
+        val receivers = (info.receivers ?: emptyArray()).map { shortName(it.name) }.distinct().sorted()
+        buildString {
+            append("Installed activities/screens (").append(activities.size).append("): ")
+                .append(activities.take(36).joinToString(", ").ifBlank { "none" })
+            if (activities.size > 36) append(" … +").append(activities.size - 36)
+            append("\\nInstalled services (").append(services.size).append("): ")
+                .append(services.take(24).joinToString(", ").ifBlank { "none" })
+            if (services.size > 24) append(" … +").append(services.size - 24)
+            append("\\nInstalled receivers (").append(receivers.size).append("): ")
+                .append(receivers.take(20).joinToString(", ").ifBlank { "none" })
+            if (receivers.size > 20) append(" … +").append(receivers.size - 20)
+            append("\\nIMPORTANT: manifest-enabled means declared/enabled in the installed package; it does not prove a service is running, permission is granted, or a screen can currently launch.")
+        }
+    }.getOrDefault("Installed component inventory unavailable; do not infer screens or service state.")
+
     fun context(c: Context): String = runCatching {
         val sb = StringBuilder("ORION APP ARCHITECTURE MAP — generated from installed registries and local state; this is an inventory, not proof that an action succeeded.")
         sb.append("\nCONTROL FLOW: chat/voice → central Agent → intent/task orchestration → registered Tools/Local adapters → ToolGate + permissions + approval → guarded dispatcher → action log and verification. Specialist agents return analysis to the parent; they do not own phone execution.")
