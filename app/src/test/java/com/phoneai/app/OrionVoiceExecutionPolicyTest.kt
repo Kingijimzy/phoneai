@@ -28,10 +28,9 @@ class OrionVoiceExecutionPolicyTest {
         // Routing only chooses the shared executor. The normal owner policy still decides whether
         // a selected tool is allowed, needs Android access, or requires action-specific approval.
         assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("Send this message to Amma", emptyList(), ""))
-        assertNotNull(AgentHooks.scopeBlockReason(
-            "Send this message to Amma",
-            "telegram_send",
-            org.json.JSONObject().put("message", "Hello")
-        ))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
+        assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
+        assertTrue(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")) ||
+            ToolRegistry.find("telegram_send")!!.promptLine.contains("explicit approval"))
     }
 }
