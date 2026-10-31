@@ -20,9 +20,10 @@
 - Version history is a local audit trail, not a substitute for a user-facing history UI. Expiry controls still need to be surfaced in Memory settings.
 
 ### Sensor-aware context and personal routines
-- OrionSensorConsent stores separate, revocable scopes for motion, device state, location, screen context, microphone, notifications and app usage. Grants can expire and default to foreground-only.
-- This is a consent/policy layer only. It does not bypass Android runtime permissions, special app access, foreground-service requirements, notification listener approval, or OEM battery restrictions.
-- OrionRoutinePolicy turns only owner-approved, non-sensitive, sufficiently confident routine memories into bounded suggestions. It does not schedule or send reminders yet.
+- OrionSensorConsent stores separate, revocable scopes for motion, device state, location, screen context, microphone, notifications, app usage and routine reminders. Grants can expire and default to foreground-only.
+- OrionSensorContextSampler reads accelerometer/gyroscope only while explicitly granted and started by a foreground owner; it emits a coarse, throttled motion hint and stops on revocation. It does not start itself or run an always-on background sensor service.
+- This does not bypass Android runtime permissions, special app access, foreground-service requirements, notification listener approval, or OEM battery restrictions. Location, notification, app-usage and screen scopes still need their dedicated permission-backed collectors.
+- OrionRoutinePolicy turns only owner-approved, non-sensitive, sufficiently confident routine memories into suggestions. OrionRoutineReminderWorker can schedule a one-time reminder only after a separate ROUTINE_REMINDERS grant and an explicit owner-selected timestamp. It does not infer reminder times from routine prose.
 - Continuous “monitor everything” is intentionally not enabled. Each sensor/data source needs its own Android permission, visible status, collection cadence, retention rule and pause/revoke control. Android does not provide an unrestricted app-wide observer for every phone activity.
 
 ### MCP governance
