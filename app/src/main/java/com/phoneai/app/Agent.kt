@@ -982,6 +982,30 @@ Rules:
         runCatching { OrionObjectiveGraph.load(svc)?.objective.orEmpty() }.getOrDefault("")
     }
 
+    /**
+     * Integration corrections often arrive after unrelated tests or a new chat session.
+     * Prefer the most recent matching engineering objective from this conversation/history
+     * over a stale calculator/device task; fall back to the active objective only if needed.
+     */
+    private fun contextualObjectiveForRequest(request: String): String {
+        val integrationCorrection = Regex(
+            "(?i)^\\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\\s+(?:the\\s+)?integration\\b"
+        ).containsMatchIn(request)
+        if (!integrationCorrection) return contextualActiveObjective()
+        val relevant = Regex("(?i)\\b(phoneai|integration|executor|dispatch|orchestration|task recovery)\\b")
+        val recent = recentConversationTurns().asReversed().firstOrNull { (role, text) ->
+            (role.equals("user", true) || role.equals("me", true)) &&
+                !text.trim().equals(request.trim(), true) && relevant.containsMatchIn(text)
+        }?.second
+        val historical = runCatching {
+            ChatHistoryStore.search(svc, "PhoneAI integration executor orchestration", 8)
+                .firstOrNull { it.role.equals("user", true) && relevant.containsMatchIn(it.snippet) }
+                ?.snippet
+        }.getOrNull()
+        val current = currentTask.takeIf { relevant.containsMatchIn(it) }
+        return current ?: recent ?: historical ?: contextualActiveObjective()
+    }
+
     private fun recentConversationTurns(): List<Pair<String, String>> = buildList {
         for (i in 0 until chatHist.length()) {
             val turn = runCatching { chatHist.getJSONObject(i) }.getOrNull() ?: continue
@@ -1408,7 +1432,13 @@ Rules:
             runTools = 0
             runFailed = 0
         }
-        var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
+        val contextualObjective = contextualObjectiveForRequest(command)
+        var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualObjective)
+        if (Regex("(?i)^\\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\\s+(?:the\\s+)?integration\\b").containsMatchIn(command) &&
+            intentResolution.kind == OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS &&
+            !intentResolution.resolvedObjective.isNullOrBlank()) {
+            currentTask = intentResolution.resolvedObjective
+        }
         var recalled = emptyList<OrionConversationRepository.SearchHit>()
         if (intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
             val recallQuery = intentResolution.resolvedObjective.orEmpty().ifBlank { command }
