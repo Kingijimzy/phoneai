@@ -1069,7 +1069,7 @@ Rules:
             sb.append("\n\n").append(presetInstruction)
             if (!request.isNullOrBlank()) OrionMemoryCapabilityExecutor.learnFromRequest(svc, request)
             sb.append(OrionMemoryCapabilityExecutor.promptContext(svc, request))
-            sb.append("\n\nYour specialist team (delegate with ask_agent when the user wants that specialty; they also have their own screen under Tools → Agents):\n")
+            sb.append("\n\nYour specialist team (use ask_agent for synchronous delegation or queue_agent for eligible background work; specialist screens remain optional under Tools → Agents):\n")
                 .append(AgentProfiles.rosterBlock(svc))
             sb.append("\n\n").append(OrionAgentDelegation.promptSummary(svc, 3))
             sb.append("\n\n").append(OrionWorkerJobStore(svc).promptSummary())
