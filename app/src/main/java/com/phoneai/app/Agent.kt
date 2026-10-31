@@ -1746,29 +1746,8 @@ Rules:
             OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)) {
             // This script intentionally stays within Orion's restricted Python sandbox:
             // it is executable, but not an interactive terminal program (input()/imports are unavailable).
-            val fileCode = """
-                # Orion calculator verification script
-                # Change these operands to calculate different values.
-                first = 25
-                second = 17
-
-                print("Addition:", first + second)
-                print("Subtraction:", first - second)
-                print("Multiplication:", first * second)
-
-                if second != 0:
-                    print("Division:", first / second)
-                else:
-                    print("Division error: cannot divide by zero")
-
-                zero = 0
-                if zero == 0:
-                    print("PASS: division-by-zero guard")
-                else:
-                    print("FAIL: division-by-zero guard")
-
-                print("PASS: arithmetic operations executed")
-            """.trimIndent()
+            val expressions = CalculatorRequestParser.parse(command)
+            val fileCode = CalculatorRequestParser.script(expressions)
             ui.phase("acting")
             val saveResult = executeWithRecoveryGuard(
                 "save_file",
@@ -1782,8 +1761,11 @@ Rules:
                 // separately reconstructed test snippet.
                 executeWithRecoveryGuard("python_exec", JSONObject().put("code", savedSource))
             } else savedSource
+            val expectedChecks = expressions.map { "PASS: ${it.display}" }
             val executed = executionResult.contains("PASS: arithmetic operations executed", ignoreCase = true) &&
                 executionResult.contains("PASS: division-by-zero guard", ignoreCase = true) &&
+                expectedChecks.all { executionResult.contains(it, ignoreCase = true) } &&
+                !executionResult.contains("FAIL:", ignoreCase = true) &&
                 !executionResult.startsWith("error:", true)
             val answer = buildString {
                 append(if (saved) "Calculator saved and content-verified: $saveResult" else "Calculator was not saved: $saveResult")
