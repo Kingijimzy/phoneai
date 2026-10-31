@@ -158,11 +158,15 @@ internal object ChainDesk {
         if (!sp(c).contains("start_$k")) sp(c).edit().putFloat("start_$k", s.totalUsd.toFloat()).apply()
     }
 
-    private fun loadSnap(c: Context, address: String): WalletDiff.Snapshot? = try {
-        val o = JSONObject(sp(c).getString("snap_" + address.lowercase(Locale.US), "") ?: return null)
-        val h = o.getJSONArray("h")
-        WalletDiff.Snapshot(o.getDouble("t"), (0 until h.length()).map { val x = h.getJSONObject(it); WalletDiff.Holding(x.getString("k"), x.getString("s"), x.getDouble("a"), x.getDouble("u")) })
-    } catch (_: Exception) { null }
+    private fun loadSnap(c: Context, address: String): WalletDiff.Snapshot? {
+        return try {
+            val raw = sp(c).getString("snap_" + address.lowercase(Locale.US), "").orEmpty()
+            if (raw.isEmpty()) return null
+            val o = JSONObject(raw)
+            val h = o.getJSONArray("h")
+            WalletDiff.Snapshot(o.getDouble("t"), (0 until h.length()).map { val x = h.getJSONObject(it); WalletDiff.Holding(x.getString("k"), x.getString("s"), x.getDouble("a"), x.getDouble("u")) })
+        } catch (_: Exception) { null }
+    }
 
     fun overview(c: Context): String {
         val sb = StringBuilder()
