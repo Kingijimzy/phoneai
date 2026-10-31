@@ -22,6 +22,32 @@ internal object HermesRepetitionGuard {
     private const val MAX_ANCHOR_SAMPLES = 32
     private const val MAX_ANCHOR_MATCHES = 8
     private const val RUNAWAY_DISTINCT_LINE_RATIO = 0.5
+    private const val STOP_PATH_MIN_CHARS = 16_000
+    private const val STREAM_TAIL_CHARS = 4 * STOP_PATH_MIN_CHARS
+
+    /**
+     * Bounded incremental watcher ported from Hermes RunawayStreamWatch. Checks become less
+     * frequent as the stream grows and retained text is trimmed to a fixed tail window.
+     */
+    class RunawayStreamWatch {
+        private val parts = StringBuilder()
+        private var chars = 0
+        private var nextCheck = STOP_PATH_MIN_CHARS
+
+        @Synchronized
+        fun feed(delta: String?): Boolean {
+            if (delta.isNullOrEmpty()) return false
+            parts.append(delta)
+            chars += delta.length
+            if (chars < nextCheck) return false
+            nextCheck = chars + minOf(chars, STREAM_TAIL_CHARS)
+            val current = parts.toString()
+            val tail = if (current.length > STREAM_TAIL_CHARS) current.takeLast(STREAM_TAIL_CHARS) else current
+            parts.setLength(0)
+            parts.append(tail)
+            return isRunawayRepetition(tail)
+        }
+    }
 
     fun isRepetitionDominated(text: String?): Boolean {
         if (text == null || text.length < MIN_FRAGMENT_LENGTH) return false
