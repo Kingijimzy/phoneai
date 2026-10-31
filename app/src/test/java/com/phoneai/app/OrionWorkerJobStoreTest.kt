@@ -87,6 +87,7 @@ class OrionWorkerJobStoreTest {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Analyze market structure")!!
         assertNotNull(store.claimNext { true })
+        OrionWorkerJobStore.simulateProcessRestartForTest(context)
         val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
         assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW, restored.status)
         assertTrue(restored.lastError.contains("must_be_reviewed"))
