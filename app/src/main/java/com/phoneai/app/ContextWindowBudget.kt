@@ -10,7 +10,7 @@ internal object ContextWindowBudget {
             "task resume instructions" in s || "active objective" in s -> 110
             "orion central brain" in s || "shared executive contract" in s -> 105
             "relevant persistent memory" in s || "long-term memory" in s || "things you have learned about how this user" in s -> 100
-            "previous discussions for this objective" in s || "decisions and unresolved questions" in s -> 95
+            "previous discussions for this objective" in s || "relevant past conversations" in s || "decisions and unresolved questions" in s -> 95
             "orion local self-diagnostic" in s || "self-diagnostic" in s -> 90
             "relevant execution lessons" in s || "lessons from your own past runs" in s -> 85
             "capability gap" in s || "extension" in s -> 75
