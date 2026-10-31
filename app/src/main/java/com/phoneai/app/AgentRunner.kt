@@ -238,7 +238,8 @@ object AgentRunner {
         userText: String,
         manifest: OrionAgentDelegation.Manifest,
         capabilityDispatch: ((String, JSONObject) -> String)? = null,
-        cancelled: () -> Boolean = { false }
+        cancelled: () -> Boolean = { false },
+        nim: Nim? = null
     ): String {
         // Cancellation is cooperative: never start a child stage after parent pause/stop.
         if (cancelled()) return "error: parent task was paused or stopped before specialist execution."
@@ -269,7 +270,7 @@ object AgentRunner {
         }
         if (cancelled()) return "error: parent task was paused or stopped; specialist work was cancelled before model analysis."
         if (isDelegatedCapabilityFailure(evidence)) return evidence
-        val answer = runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence).text
+        val answer = runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence, nim = nim).text
         return if (cancelled()) "error: parent task was paused or stopped while the specialist request was in flight; its late result was discarded."
         else answer
     }
@@ -281,7 +282,8 @@ object AgentRunner {
         userText: String,
         imageJpegBase64: String? = null,
         delegation: OrionAgentDelegation.Manifest? = null,
-        delegatedEvidence: String? = null
+        delegatedEvidence: String? = null,
+        nim: Nim? = null
     ): Result {
         if (delegation == null) AgentLessons.learnFrom(c, agent.id, userText)
         val scopedPrompt = systemPrompt(c, agent, userText, delegation) +
@@ -307,7 +309,7 @@ object AgentRunner {
         }
         val tier = if (agent.id == "coach") ModelRouter.tierFor(userText, image != null) else ModelRouter.Tier.CHAT
         val reply = try {
-            Nim(c).also { it.tier = tier }.chat(messages, image != null, 900, 0.4).trim()
+            (nim ?: Nim(c)).also { it.tier = tier }.chat(messages, image != null, 900, 0.4).trim()
         } catch (e: Exception) {
             // If the optional routed model is unavailable for this key, retry once with the selected default model.
             if (tier == ModelRouter.Tier.CHAT) throw e
