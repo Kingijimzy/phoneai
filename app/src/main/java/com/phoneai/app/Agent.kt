@@ -1948,7 +1948,6 @@ Rules:
                             }
                     }
                 }
-            }
             logShortcut("github_connected_account_lookup", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
