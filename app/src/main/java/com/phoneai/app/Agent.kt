@@ -1431,6 +1431,9 @@ Rules:
             runStartedAt = 0L
             runTools = 0
             runFailed = 0
+        } else if (explicitResumeRequest && activeCheckpointStatus in setOf("paused", "recovery_required")) {
+            currentTask = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
+                ?.optString("command")?.takeIf { it.isNotBlank() } ?: currentTask
         }
         val contextualObjective = contextualObjectiveForRequest(command)
         var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualObjective)
@@ -1535,9 +1538,8 @@ Rules:
             // Restore the original saved-task identity as well as its recovery instructions.
             // A fresh Agent instance has no in-memory currentTask, but the checkpoint retains
             // the exact task prompt needed to reconcile the Task Centre after completion.
-            if (currentTask.isBlank()) {
-                currentTask = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: instruction
-            }
+            currentTask = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
+                ?.optString("command")?.takeIf { it.isNotBlank() } ?: instruction
             if (runStartedAt <= 0L) {
                 runStartedAt = System.currentTimeMillis()
                 runTools = 0
