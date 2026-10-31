@@ -184,7 +184,7 @@ class ToolRegistryPromptAvailabilityTest {
 
     @Test fun baselineAndFullRegistrySnapshotsRemainAvailableForDiagnostics() {
         val prompt = ToolRegistry.promptSection()
-        assertTrue(prompt.startsWith("Tools:\\n"))
+        assertTrue(prompt.startsWith("Tools:\n"))
         ToolRegistry.all.forEach { tool -> assertTrue(prompt.contains("- " + tool.promptLine)) }
         assertTrue(prompt.contains("Tool-use guidance:"))
         assertTrue(prompt.contains("SCREEN TARGET RULE"))
