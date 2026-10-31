@@ -32,7 +32,7 @@ internal object CalculatorRequestParser {
             val b = expression.right.toDoubleOrNull()
             if (a == null || b == null || !a.isFinite() || !b.isFinite() ||
                 kotlin.math.abs(a) > 1.0e12 || kotlin.math.abs(b) > 1.0e12) null
-            else expression.takeIf { it.expected() != null || (it.operator == "/" && b == 0.0) }
+            else expression.takeIf { it.expected() != null }
         }
         .distinctBy { it.display }
         .take(12)
