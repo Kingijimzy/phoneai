@@ -55,6 +55,13 @@ object AgentRunner {
             val wantsScan = Regex("(?i)\\b(match|setups?|scan|find)\\b").containsMatchIn(userText)
             val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
             val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
+            if (Bybit.hasKeys(c) && Regex("(?i)\\b(position|positions|habit|habits|journal|review|mistake|overtrad|revenge|pnl|profit|loss)\\b").containsMatchIn(userText)) {
+                sb.append("\\nOPEN POSITIONS: ").append(TradingDesk.positionsText(c).take(900))
+                sb.append("\\nHABIT REVIEW: ").append(TradingDesk.habits(c).text().take(1200))
+            }
+            if (Regex("(?i)\\b(memecoin|meme coin|memecoins|wallet|wallets|dex|rug|rugpull|shitcoin|pump\\.fun)\\b").containsMatchIn(userText)) {
+                sb.append("\\nCHAIN WATCH (public data, read-only):\\n").append(ChainDesk.overview(c).take(1800))
+            }
             // Each operation owns its own cached market inputs; avoid fetching the same calendar/candles twice.
             if (wantsConditions) {
                 sb.append("\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
@@ -200,7 +207,14 @@ object AgentRunner {
         } else {
             messages.put(JSONObject().put("role", "user").put("content", userText))
         }
-        val reply = Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        val tier = if (agent.id == "coach") ModelRouter.tierFor(userText, image != null) else ModelRouter.Tier.CHAT
+        val reply = try {
+            Nim(c).also { it.tier = tier }.chat(messages, image != null, 900, 0.4).trim()
+        } catch (e: Exception) {
+            // If the optional routed model is unavailable for this key, retry once with the selected default model.
+            if (tier == ModelRouter.Tier.CHAT) throw e
+            Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        }
         if (agent.id != "coach") return Result(reply, emptyList())
         val actions = TradeProposals.parse(reply)
         val desk = DeskProposals.parse(actions.visible) { FxData.pairOf(it) ?: Bybit.symbolOf(it) }
