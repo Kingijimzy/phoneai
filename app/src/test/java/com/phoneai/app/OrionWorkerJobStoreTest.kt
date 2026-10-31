@@ -82,6 +82,28 @@ class OrionWorkerJobStoreTest {
         assertFalse(store.complete(job.id, "duplicate completion"))
     }
 
+    @Test fun pausingParentCancelsItsQueuedSpecialistJobs() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent research objective"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue(parentId, "Research supporting evidence")!!
+        assertTrue(AgentCheckpointStore.pause(context))
+        val saved = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED, saved.status)
+        assertEquals("parent_paused", saved.lastError)
+    }
+
+    @Test fun stoppingParentCancelsItsQueuedSpecialistJobs() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent coding objective"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue(parentId, "Inspect test failures")!!
+        assertTrue(AgentCheckpointStore.stop(context, "User stopped parent"))
+        val saved = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED, saved.status)
+        assertEquals("parent_stopped", saved.lastError)
+    }
+
     @Test fun jobKindsCannotRepresentPhoneActionsOrTradingOrders() {
         assertEquals(setOf("ANALYSIS", "READ_ONLY_RESEARCH", "TRADING_ANALYSIS", "TASK_PLANNING"),
             OrionWorkerJobStore.Kind.values().map { it.name }.toSet())
