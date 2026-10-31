@@ -4,7 +4,7 @@ import android.content.Context
 
 /** Extracts only explicit, durable self-descriptions. No model call and no background surveillance. */
 internal object MemoryAutoIndexer {
-    data class Candidate(val category: String, val text: String, val confidence: Double, val reason: String)
+    data class Candidate(val category: String, val text: String, val confidence: Double, val reason: String, val ownerConfirmed: Boolean = false)
     private data class Rule(val pattern: Regex, val category: String, val confidence: Double, val reason: String)
 
     private val rules = listOf(
@@ -34,12 +34,12 @@ internal object MemoryAutoIndexer {
             "task" -> "User goal: $normalized"
             else -> normalized
         }
-        return Candidate(rule.category, text.take(300), rule.confidence, rule.reason)
+        return Candidate(rule.category, text.take(300), rule.confidence, rule.reason, ownerConfirmed = rule.reason == "explicit remember request")
     }
 
     /** Store as an unapproved proposal. The owner remains the only authority for durable truth. */
     fun observe(context: Context, message: String): Memory? {
         val candidate = extract(message) ?: return null
-        return MemoryStore.addObservedProposal(context, candidate.category, candidate.text, candidate.confidence, candidate.reason)
+        return if (candidate.ownerConfirmed) MemoryStore.addOwnerConfirmed(context, candidate.category, candidate.text)\n        else MemoryStore.addObservedProposal(context, candidate.category, candidate.text, candidate.confidence, candidate.reason)
     }
 }
