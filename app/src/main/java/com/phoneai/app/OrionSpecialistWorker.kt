@@ -40,6 +40,10 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val manifest = OrionAgentDelegation.restore(applicationContext, manifestId)
         if (manifest == null && existing.status == OrionWorkerJobStore.Status.RESULT_PENDING &&
             OrionAgentDelegation.isCompleted(applicationContext, manifestId)) {
+            if (!parentIsLive(existing.parentTaskId)) {
+                store.cancel(jobId, "parent_cancelled_before_result_delivery")
+                return Result.success()
+            }
             if (!store.complete(jobId, existing.result, closeParent = false)) return Result.failure()
             return deliverResult(store.all().first { it.id == jobId })
         }
