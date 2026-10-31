@@ -94,10 +94,13 @@ class OrionCommandIntentPolicyTest {
         assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
     }
 
-    @Test fun compoundPythonWriteSaveAndExecuteRequestUsesStructuredPlanning() {
+    @Test fun calculatorWriteSaveAndExecuteUsesOneDeterministicVerifiedWorkflow() {
         val request = "Write a Python calculator, save it as a file and execute it."
         assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
-        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+        assertTrue(OrionCommandIntentPolicy.isCalculatorExecutionRequest(request))
+        assertFalse("Calculator save-and-run is a single deterministic workflow, not a planner-only compound task",
+            OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
     }
 
     @Test fun investigationRequestsSkipTheChatOnlyActionClassifier() {
