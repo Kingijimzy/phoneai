@@ -8,7 +8,7 @@ import java.util.regex.Pattern
 
 /** Lightweight public web search via DuckDuckGo HTML results; no AI API key or model call. */
 object LiveWebSearch {
-    private const val TIMEOUT_MS = 8_000
+    private const val TIMEOUT_MS = 12_000
     private val anchorPattern = Pattern.compile("(?is)<a\\b[^>]*>.*?</a>")
     private val hrefPattern = Pattern.compile("(?i)href\\s*=\\s*[\"']([^\"']+)[\"']")
     private val titlePattern = Pattern.compile("(?is)<a\\b[^>]*>(.*?)</a>")
@@ -56,13 +56,19 @@ object LiveWebSearch {
             "https://www.google.com/search?q="
         )
         val failures = mutableListOf<String>()
+        val deadline = System.currentTimeMillis() + TIMEOUT_MS
         for ((endpointIndex, endpoint) in endpoints.withIndex()) {
+            val remainingMs = (deadline - System.currentTimeMillis()).toInt()
+            if (remainingMs <= 0) {
+                failures.add("overall search time budget exhausted")
+                break
+            }
             try {
                 val url = endpoint + URLEncoder.encode(q, "UTF-8")
                 val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
-                    connectTimeout = 4500
-                    readTimeout = 5500
+                    connectTimeout = minOf(3000, remainingMs)
+                    readTimeout = minOf(4000, remainingMs)
                     setRequestProperty("Accept", "text/html")
                     setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36")
                     setRequestProperty("Accept-Language", "en-US,en;q=0.9")
