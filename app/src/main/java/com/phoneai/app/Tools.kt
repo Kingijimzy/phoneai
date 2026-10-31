@@ -1014,8 +1014,8 @@ class Tools(
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown specialist. Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: specialist task is required"
-        if (agent.id !in setOf("coder", "writer", "planner") || AgentProfiles.find(agent.id) == null) {
-            return "error: background execution currently supports only the built-in coder, writer and planner with no external capabilities; use ask_agent for other specialists."
+        if (agent.id !in setOf("coder", "writer", "planner", "research", "coach") || AgentProfiles.find(agent.id) == null) {
+            return "error: background execution supports only built-in coder, writer and planner (no external tools), research (public web/news search), and coach (public ticker only); no private account data or trading writes are available."
         }
         val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
             ?: return "error: start a durable Orion objective before queuing background specialist work."
@@ -1039,8 +1039,12 @@ class Tools(
         if (manifest.access !in setOf(OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING) ||
             manifest.allowedTools.isNotEmpty()) return "error: specialist manifest is not eligible for background execution."
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: specialist policy receipt could not be saved."
-        val kind = if (manifest.access == OrionAgentDelegation.Access.TASK_PLANNING)
-            OrionWorkerJobStore.Kind.TASK_PLANNING else OrionWorkerJobStore.Kind.ANALYSIS
+        val kind = when (manifest.access) {
+            OrionAgentDelegation.Access.ANALYSIS_ONLY -> OrionWorkerJobStore.Kind.ANALYSIS
+            OrionAgentDelegation.Access.TASK_PLANNING -> OrionWorkerJobStore.Kind.TASK_PLANNING
+            OrionAgentDelegation.Access.READ_ONLY_RESEARCH -> OrionWorkerJobStore.Kind.READ_ONLY_RESEARCH
+            OrionAgentDelegation.Access.TRADING_ANALYSIS -> OrionWorkerJobStore.Kind.TRADING_ANALYSIS
+        }
         val job = store.enqueue(
             parentTaskId, manifest.objective, kind, key, parentObjectiveId,
             manifestId = manifest.id, conversationId = sessionId
