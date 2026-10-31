@@ -99,4 +99,10 @@ class OrionCommandIntentPolicyTest {
         assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
         assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
     }
+
+    @Test fun investigationRequestsSkipTheChatOnlyActionClassifier() {
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(
+            "I want you to investigate my PhoneAI project, understand its condition and identify its weaknesses."
+        ))
+    }
 }
