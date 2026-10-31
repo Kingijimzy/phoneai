@@ -719,10 +719,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val capabilityContext = if (capabilityQuestion) "\n\n" + capabilityQuestionSummary() else ""
         // Ordinary Talk turns remain lightweight; explicit self-diagnosis requests receive
         // a fresh local diagnostic report without making a provider/network health claim.
-        val selfDiagnosticRequest = query?.let {
-            Regex("(?i)\\b(self[- ]?diagnos|self[- ]?heal|system health check|system audit|check your own (?:health|tools|capabilities)|what is broken in you)\\b")
-                .containsMatchIn(it)
-        } == true
+        val selfDiagnosticRequest = OrionSelfDiagnostics.isExplicitRequest(query)
         val selfDiagnosticContext = if (selfDiagnosticRequest) {
             runCatching { OrionSelfDiagnostics.inspect(svc).promptBlock() }
                 .getOrDefault("Local self-diagnostics could not be completed. Do not claim the system is healthy.")
