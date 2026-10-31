@@ -187,6 +187,14 @@ internal object OrionCentralBrain {
             ?.takeIf { it.isNotBlank() }
             ?.let { sections += it }
 
+        // Run a provider-free, observational diagnostic snapshot for the executive brain.
+        // This reads the real registries and durable checkpoint; it does not schedule work,
+        // change permissions, mutate extensions, or make network/provider calls.
+        runCatching { OrionSelfDiagnostics.inspect(app).promptBlock() }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
         return sections.joinToString("\n\n").take(MAX_CONTEXT_CHARS)
     }
 }
