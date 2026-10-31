@@ -115,7 +115,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             if (this.commandMode == commandMode) return@runOnUiThread
             this.commandMode = commandMode
             composeCommandMode.value = commandMode
-        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
             refreshModeSelector()
             Toast.makeText(this, if (commandMode) "Switched to Command mode for this task" else "Back to Talk mode", Toast.LENGTH_SHORT).show()
         }
@@ -1495,6 +1494,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
+        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
         composeChatTitle.value = getSharedPreferences("orion_chat_history", MODE_PRIVATE).getString("active_title", "Orion")?.take(48)?.ifBlank { "Orion" } ?: "Orion"
         val composeRoot = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
