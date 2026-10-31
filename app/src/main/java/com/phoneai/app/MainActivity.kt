@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
             "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
             "knowledge_graph" -> { destination = KnowledgeGraphActivity::class.java; intent = Intent(this, destination) }
             "proactive" -> { destination = ProactiveActivity::class.java; intent = Intent(this, destination) }
-            "trading" -> { destination = TradingActivity::class.java; intent = Intent(this, destination) }
+            "trading" -> { startActivity(AgentChatActivity.workspaceIntent(this)); return }
             "gaming" -> { destination = GamingCoachActivity::class.java; intent = Intent(this, destination) }
             "device_utilities" -> { destination = DeviceUtilitiesActivity::class.java; intent = Intent(this, destination) }
             "soul_engine" -> { destination = SoulEngineActivity::class.java; intent = Intent(this, destination) }
