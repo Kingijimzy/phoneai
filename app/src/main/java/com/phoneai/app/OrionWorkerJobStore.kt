@@ -45,7 +45,12 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     private val maxActive = 1
     private var jobs = mutableListOf<Job>()
 
-    init { synchronized(lock) { loadLocked() } }
+    init {
+        synchronized(lock) {
+            val firstOpenInProcess = initializedFiles.add(file.absolutePath)
+            loadLocked(recoverInterrupted = firstOpenInProcess)
+        }
+    }
 
     /** Duplicate keys return the original job; they never create a second provider charge. */
     fun enqueue(
@@ -164,7 +169,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         return true
     }
 
-    private fun loadLocked() {
+    private fun loadLocked(recoverInterrupted: Boolean = false) {
         jobs = mutableListOf()
         val root = try { JSONObject(atomic.openRead().bufferedReader().use { it.readText() }) }
         catch (_: FileNotFoundException) { return }
@@ -178,14 +183,14 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             val parent = o.optString("parentTaskId").take(80)
             val key = o.optString("idempotencyKey").take(100)
             if (id.isBlank() || parent.isBlank() || key.isBlank()) return@mapNotNull null
-            val restoredStatus = if (status == Status.RUNNING) Status.NEEDS_REVIEW else status
+            val restoredStatus = if (recoverInterrupted && status == Status.RUNNING) Status.NEEDS_REVIEW else status
             Job(id, key, parent, o.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" },
                 kind, o.optString("objective").take(700), restoredStatus,
                 o.optLong("createdAt"), clock(), o.optInt("attempts").coerceIn(0, 3),
-                o.optString("result").take(1200), if (status == Status.RUNNING)
+                o.optString("result").take(1200), if (recoverInterrupted && status == Status.RUNNING)
                     "process_interrupted_outcome_must_be_reviewed" else o.optString("lastError").take(240))
         }.takeLast(maxJobs).toMutableList()
-        if (jobs.any { it.status == Status.NEEDS_REVIEW }) persistLocked()
+        if (recoverInterrupted && jobs.any { it.status == Status.NEEDS_REVIEW }) persistLocked()
     }
 
     private fun persistLocked(): Boolean {
@@ -211,6 +216,14 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
 
     companion object {
         private val PROCESS_LOCK = Any()
+        private val initializedFiles = mutableSetOf<String>()
+
+        /** Test hook to model a new Android process without resetting the durable job file. */
+        internal fun simulateProcessRestartForTest(context: Context) {
+            val path = File(context.applicationContext.filesDir, "orion_worker_jobs.json").absolutePath
+            synchronized(PROCESS_LOCK) { initializedFiles.remove(path) }
+        }
+
         private val TERMINAL = setOf(Status.COMPLETED, Status.FAILED, Status.CANCELLED)
     }
 }
