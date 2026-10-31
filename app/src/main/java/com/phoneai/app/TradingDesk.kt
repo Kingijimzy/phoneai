@@ -405,6 +405,21 @@ internal object TradingDesk {
         return try { Bybit.derivativesInput(c, sym)?.let { DerivativesRead.read(it) } } catch (_: Exception) { null }
     }
 
+    // ---- setup check
+    internal fun healthItems(c: Context): List<DeskHealth.Item> {
+        val now = System.currentTimeMillis()
+        val events = try { events(now).size } catch (_: Exception) { 0 }
+        return DeskHealth.check(DeskHealth.Inputs(
+            aiConfigured = Providers.all.any { Prefs.hasKey(c, it.id) || it.noKey },
+            bybitKeys = Bybit.hasKeys(c), bybitTestnet = Prefs.bybitTestnet(c), readOnly = Prefs.tradingReadOnly(c),
+            derivToken = Prefs.derivToken(c).isNotEmpty(), derivRealAllowed = Prefs.derivRealAllowed(c),
+            calendarEvents = events, playbook = strategies(c).size, journal = TradeHistoryStore.all(c).size,
+            automation = Prefs.deskAuto(c),
+            micPermission = c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+            voiceOn = Prefs.companionVoice(c), wakeModel = WakeWordModelInstaller.isInstalled(c)
+        ))
+    }
+
     // ---- activity feed
     internal fun activity(c: Context): List<ActivityLog.Entry> = ActivityLog.decode(sp(c).getString("activity", null))
 

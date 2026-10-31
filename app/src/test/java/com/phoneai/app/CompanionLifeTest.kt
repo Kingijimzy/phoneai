@@ -30,6 +30,7 @@ class CompanionLifeTest {
             assertTrue(g.name, g.chips.isNotEmpty() && g.chips.size <= 8)
             g.chips.forEach { assertTrue(it.label, (it.prompt != null) != (it.action != null)) }
         }
-        assertEquals(5, ChatGroups.coach.size)
+        assertEquals(6, ChatGroups.coach.size)
+        assertEquals("Start", ChatGroups.coach.first().name)
     }
 }

@@ -23,6 +23,8 @@ import android.widget.Toast
 /** Trading control room: keys, practice/real mode, limits and the background market watch. Orion's monochrome card style. */
 class TradingActivity : Activity() {
     private lateinit var host: LinearLayout
+    private var scrollView: ScrollView? = null
+    private val sections = ArrayList<Pair<String, View>>()
     private var firstRender = true
     private var simStrategy = ""
     private var simSymbol = ""
@@ -54,6 +56,7 @@ class TradingActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG); isFillViewport = true }
+        scrollView = scroll
         host = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(40), dp(18), dp(28)) }
         scroll.addView(host, -1, -2)
         setContentView(scroll)
@@ -81,24 +84,28 @@ class TradingActivity : Activity() {
         ))
         host.addView(label("Settings, playbook, simulation and safety for your trading chat. The chat is the front door: talk to it, upload a chart, accept what it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
         host.addView(gap(12))
-        host.addView(playbookCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(deskCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(positionsCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(chainCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(activityCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(capabilitiesCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(backupCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(simulateCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
-        host.addView(conditionsCard(), LinearLayout.LayoutParams(-1, -2))
-        host.addView(gap(12))
+        sections.clear()
+        val health = healthCard()
+        host.addView(health, LinearLayout.LayoutParams(-1, -2)); host.addView(gap(12))
+        val jump = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val jumpHolder = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(jump) }
+        host.addView(jumpHolder, LinearLayout.LayoutParams(-1, -2)); host.addView(gap(12))
+        fun section(name: String, v: View) {
+            host.addView(v, LinearLayout.LayoutParams(-1, -2)); host.addView(gap(12)); sections.add(name to v)
+            Motion.enter(v, sections.size)
+        }
+        section("Playbook", playbookCard())
+        section("Automation", deskCard())
+        section("Positions", positionsCard())
+        section("Chain", chainCard())
+        section("Activity", activityCard())
+        section("Skills", capabilitiesCard())
+        section("Backup", backupCard())
+        section("Simulate", simulateCard())
+        section("Market", conditionsCard())
+        sections.forEach { (name, v) ->
+            jump.addView(pill(name, false) { scrollView?.smoothScrollTo(0, (v.top - dp(12)).coerceAtLeast(0)) }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(8) })
+        }
 
         val acc = card()
         acc.addView(label("Account", 12f, Theme.MUTED))
@@ -234,6 +241,30 @@ class TradingActivity : Activity() {
             pill("Check now", true) { run("Reading the chain…") { ChainDesk.overview(this) } }
         ).apply { setPadding(0, dp(10), 0, 0) })
         c.addView(out)
+        return c
+    }
+
+    /** What is connected and what is not. Filled in after a short background check. */
+    private fun healthCard(): LinearLayout {
+        val c = card()
+        c.addView(label("SETUP CHECK", 12f, Theme.MUTED, true))
+        val body = label("Checking…", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) }
+        c.addView(body)
+        Thread {
+            val items = try { TradingDesk.healthItems(this) } catch (_: Exception) { emptyList() }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                c.removeView(body)
+                if (items.isEmpty()) { c.addView(label("Could not run the check.", 12f, Theme.MUTED)); return@runOnUiThread }
+                c.addView(label(DeskHealth.summary(items), 15f, Theme.TEXT, true).apply { setPadding(0, dp(6), 0, dp(4)) })
+                items.forEach {
+                    val color = when (it.level) { DeskHealth.Level.OK -> Theme.TEXT; DeskHealth.Level.WARN -> Theme.DANGER; else -> Theme.MUTED }
+                    c.addView(label("${DeskHealth.mark(it.level)}  ${it.name}", 13f, color, true).apply { setPadding(0, dp(8), 0, 0) })
+                    c.addView(label(it.detail, 11f, Theme.MUTED))
+                }
+                Motion.enter(c)
+            }
+        }.start()
         return c
     }
 

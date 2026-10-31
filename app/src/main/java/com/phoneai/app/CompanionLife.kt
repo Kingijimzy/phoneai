@@ -45,6 +45,11 @@ internal object ChatGroups {
     class Group(val name: String, val chips: List<Chip>)
 
     val coach = listOf(
+        Group("Start", listOf(
+            Chip("What can you do?", action = "caps"),
+            Chip("Setup check", action = "health"),
+            Chip("Tour", action = "tour")
+        )),
         Group("Market", listOf(
             Chip("Find setups", "Find me the best trade setups on my watchlist right now and judge them against my strategy."),
             Chip("Outlook", "Give me your outlook for my watchlist: bias, key levels and what would invalidate it."),
