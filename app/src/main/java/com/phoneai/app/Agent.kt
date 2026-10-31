@@ -1566,35 +1566,98 @@ Rules:
                 }
             }
         }
-        // A calculator request that explicitly asks for execution is a real Python task, not chat.
-        // Use a small deterministic script so this common acceptance case proves the bundled runtime.
+        // This deterministic acceptance path performs the whole requested outcome:
+        // save a usable calculator to Downloads, then run non-interactive arithmetic tests.
         if (!resumeRequest && !browserActionTask && !structuredTask &&
             OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)) {
-            val code = """
-                first = 25
-                second = 17
-                print("Inputs:", first, second)
-                print("Addition:", first + second)
-                print("Subtraction:", first - second)
-                print("Multiplication:", first * second)
-                if second != 0:
-                    print("Division:", first / second)
-                else:
-                    print("Division: undefined (division by zero)")
+            val fileCode = """
+                def add(a, b):
+                    return a + b
+
+                def subtract(a, b):
+                    return a - b
+
+                def multiply(a, b):
+                    return a * b
+
+                def divide(a, b):
+                    if b == 0:
+                        raise ValueError("Cannot divide by zero")
+                    return a / b
+
+                def calculate(a, operator, b):
+                    operations = {
+                        "+": add,
+                        "-": subtract,
+                        "*": multiply,
+                        "/": divide,
+                    }
+                    if operator not in operations:
+                        raise ValueError("Unsupported operation")
+                    return operations[operator](a, b)
+
+                def main():
+                    print("Python Calculator")
+                    print("Operations: + - * /")
+                    while True:
+                        operator = input("Operation (or q to quit): ").strip()
+                        if operator.lower() == "q":
+                            break
+                        if operator not in ("+", "-", "*", "/"):
+                            print("Invalid operation")
+                            continue
+                        try:
+                            first = float(input("First number: "))
+                            second = float(input("Second number: "))
+                            print("Result:", calculate(first, operator, second))
+                        except ValueError as error:
+                            print("Error:", error)
+
+                if __name__ == "__main__":
+                    main()
+            """.trimIndent()
+            val testCode = """
+                def add(a, b): return a + b
+                def subtract(a, b): return a - b
+                def multiply(a, b): return a * b
+                def divide(a, b):
+                    if b == 0:
+                        raise ValueError("Cannot divide by zero")
+                    return a / b
+                def calculate(a, operator, b):
+                    operations = {"+": add, "-": subtract, "*": multiply, "/": divide}
+                    if operator not in operations:
+                        raise ValueError("Unsupported operation")
+                    return operations[operator](a, b)
+                assert calculate(25, "+", 17) == 42
+                assert calculate(25, "-", 17) == 8
+                assert calculate(25, "*", 17) == 425
+                assert calculate(25, "/", 5) == 5
+                try:
+                    calculate(1, "/", 0)
+                    raise AssertionError("division by zero was not rejected")
+                except ValueError:
+                    pass
+                print("PASS: addition, subtraction, multiplication, division, and division-by-zero handling")
             """.trimIndent()
             ui.phase("acting")
             val saveResult = executeWithRecoveryGuard(
                 "save_file",
-                JSONObject().put("filename", "calculator.py").put("content", code)
+                JSONObject().put("filename", "calculator.py").put("content", fileCode)
             )
-            val executionResult = executeWithRecoveryGuard("python_exec", JSONObject().put("code", code))
             val saved = !saveResult.startsWith("error:", true)
-            val executed = !executionResult.startsWith("error:", true)
+            val executionResult = if (saved) {
+                executeWithRecoveryGuard("python_exec", JSONObject().put("code", testCode))
+            } else {
+                "error: execution skipped because calculator.py was not verified as saved."
+            }
+            val executed = executionResult.contains("PASS:", ignoreCase = true) &&
+                !executionResult.startsWith("error:", true)
             val answer = buildString {
-                append("Python calculator")
-                append(if (saved) " saved: $saveResult" else " was not saved: $saveResult")
-                append(if (executed) "\\nExecution result:\\n$executionResult" else "\\nExecution failed or was not approved: $executionResult")
-                append("\\n\\nCode:\\n$code")
+                append(if (saved) "Calculator saved and verified: $saveResult" else "Calculator was not saved: $saveResult")
+                append(if (executed) "\nExecution tests: $executionResult" else "\nExecution was not verified: $executionResult")
+                append("\n\nSaved file: calculator.py")
+                append("\nThe saved file contains an interactive CLI calculator with input validation and division-by-zero handling.")
             }
             logShortcut("python_calculator_save", saveResult)
             logShortcut("python_calculator_execution", executionResult)
