@@ -552,3 +552,6 @@ Orion's Android implementation deliberately adapts these concepts to its existin
 
 
 - Follow-up: hands-free voice now rehydrates recent turns from the same provider-neutral SQLite conversation history used by typed chat, and persists recognized user text plus Orion's final reply back into that searchable history. Raw audio is not stored by this path. A repository test covers the transcript → FTS index → adjacent-turn recall path.
+
+
+- Follow-up: optional Gemini Live now receives approved profile memories and recent non-sensitive typed/voice turns as data-only context. Its final user/model transcript segments are persisted into the same SQLite full-text index, and explicit user preferences/routines can create reviewable proposals. Raw microphone audio remains unpersisted. This remains an audio-first Live mode; camera/video streaming has not been implemented.
