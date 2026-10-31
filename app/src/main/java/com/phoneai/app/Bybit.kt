@@ -173,7 +173,7 @@ object Bybit {
             .getJSONObject("result").getJSONArray("list")
 
     /** Funding rate, open interest (now and about 24h ago), 24h price change and the long share of accounts. Public data, no key. */
-    fun derivativesInput(c: Context, symbol: String): DerivativesRead.Input? {
+    internal fun derivativesInput(c: Context, symbol: String): DerivativesRead.Input? {
         val t = call(c, MAIN, "GET", "/v5/market/tickers", "category=linear&symbol=$symbol", null, false)
             .getJSONObject("result").getJSONArray("list").let { if (it.length() == 0) return null else it.getJSONObject(0) }
         val funding = t.optString("fundingRate", "").toDoubleOrNull() ?: return null
