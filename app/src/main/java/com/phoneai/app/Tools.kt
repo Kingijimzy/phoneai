@@ -1027,7 +1027,7 @@ class Tools(
         val sessionId = OrionConversationRepository.get(svc).activeSessionId(svc)
             ?: return "error: no originating chat session could be identified; no background work was queued."
         val store = OrionWorkerJobStore(svc)
-        val key = idempotencyKey.trim().take(100).ifBlank { java.util.UUID.randomUUID().toString() }
+        val key = idempotencyKey.trim().take(100).ifBlank { java.util.UUID.nameUUIDFromBytes("$parentTaskId|${agent.id}|${AgentPrivacyFilter.safeCommand(task).trim().lowercase()}".toByteArray()).toString() }
         val previous = store.all().firstOrNull { it.parentTaskId == parentTaskId && it.idempotencyKey == key }
         if (previous != null) {
             if (previous.status == OrionWorkerJobStore.Status.QUEUED && !OrionSpecialistScheduler.enqueue(svc, previous.id)) {
