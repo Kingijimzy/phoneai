@@ -152,6 +152,13 @@ internal object OrionAgentDelegation {
         prefs.edit().putString(KEY, runs.toString()).commit()
     }
 
+    fun isCompleted(context: Context, manifestId: String): Boolean = synchronized(this) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val runs = try { JSONArray(prefs.getString(KEY, "[]") ?: "[]") } catch (_: Exception) { return@synchronized false }
+        (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
+            .lastOrNull { it.optString("id") == manifestId }?.optString("status") == "completed"
+    }
+
     /**
      * Reconstruct a specialist manifest from its durable receipt after process recreation.
      *
