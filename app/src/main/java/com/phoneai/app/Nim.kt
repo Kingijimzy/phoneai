@@ -791,7 +791,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
             else -> maxTokens
         }
-        val queue = mutableListOf(selectedModel(p, vision))
+        val initialModel = selectedModel(p, vision)
+        val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, initialModel)
+        val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, tokens)
+        val queue = mutableListOf(initialModel)
         val tried = HashSet<String>()
         val rateLimitRetried = HashSet<String>()
         var refilled = false
@@ -817,12 +820,12 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val payload: String
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, messages, tokens, temperature)
+                payload = anthropicBody(model, requestMessages, tokens, temperature)
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
-                for (i in 0 until messages.length()) {
-                    val message = messages.optJSONObject(i) ?: continue
+                for (i in 0 until requestMessages.length()) {
+                    val message = requestMessages.optJSONObject(i) ?: continue
                     input.put(JSONObject().put("role", message.optString("role", "user"))
                         .put("content", message.opt("content") ?: ""))
                 }
@@ -832,7 +835,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
                     .put("model", model)
-                    .put("messages", messages)
+                    .put("messages", requestMessages)
                     .put("temperature", temperature)
                     .put("max_tokens", tokens)
                 if (onDelta != null && !vision) requestBody.put("stream", true)
