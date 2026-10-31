@@ -1452,7 +1452,7 @@ Rules:
             }
             askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
-        val resumeRequest = explicitResumeRequest && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
+        val resumeRequest = contextualFollowUp && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
         if (!resumeRequest && !contextualFollowUp) {
             failedCallGuard.clear()
             // Proofs belong to one task only. Reusing a previous task's success could
