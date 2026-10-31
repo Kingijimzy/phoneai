@@ -37,6 +37,19 @@ class OrionAgentDelegationStoreTest {
         assertTrue(completed.optString("summary").contains("Compared framework docs"))
     }
 
+    @Test fun parentPromptCanSeeBoundedWorkerReceiptsAcrossTurns() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("coder")!!, "parent-123", "Review the Kotlin routing change"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        assertTrue(OrionAgentDelegation.finish(context, manifest, "Found a routing edge case and proposed a fix"))
+        val summary = OrionAgentDelegation.promptSummary(context)
+        assertTrue(summary.contains("SPECIALIST WORK LEDGER"))
+        assertTrue(summary.contains("coder [completed]"))
+        assertTrue(summary.contains("Found a routing edge case"))
+        assertTrue(summary.contains("parent-123"))
+    }
+
     @Test fun failedSpecialistRunIsRecordedAsFailedNotCompleted() {
         val manifest = OrionAgentDelegation.create(
             AgentProfiles.find("research")!!, null, "Research one source"
