@@ -81,4 +81,22 @@ class OrionCommandIntentPolicyTest {
             "Explain how Python calculators work"
         ))
     }
+
+    @Test fun compoundResearchMemoryAndReminderRequestUsesStructuredPlanning() {
+        val request = "Create a task to research the latest Android AI developments, summarize the findings, save the important lessons to memory and remind me tomorrow."
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+    }
+
+    @Test fun simpleResearchRoutesDirectlyWithoutBecomingAMultiStepTask() {
+        val request = "Research the latest Android on-device AI developments."
+        assertTrue(OrionCommandIntentPolicy.requiresDirectActionRouting(request))
+        assertFalse(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+    }
+
+    @Test fun compoundPythonWriteSaveAndExecuteRequestUsesStructuredPlanning() {
+        val request = "Write a Python calculator, save it as a file and execute it."
+        assertTrue(OrionCommandIntentPolicy.requiresPythonExecution(request))
+        assertTrue(OrionCommandIntentPolicy.requiresStructuredTaskPlanning(request))
+    }
 }
