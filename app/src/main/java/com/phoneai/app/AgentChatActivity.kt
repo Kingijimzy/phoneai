@@ -128,7 +128,7 @@ class AgentChatActivity : Activity() {
                 setTextColor(Theme.MUTED)
                 setPadding(dp(18), 0, dp(18), dp(8))
                 contentDescription = "Trading desk status; tap to open desk"
-                setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
+                setOnClickListener { startActivity(TradingDeskActivity.intent(this@AgentChatActivity)) }
             }
             root.addView(deskStatus, -1, -2)
         }
