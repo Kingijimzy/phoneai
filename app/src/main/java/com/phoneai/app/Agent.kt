@@ -706,7 +706,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
         // Select memories relevant to this request instead of injecting the same recent notes into every chat turn.
-        val mem = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, query, 900)
+        val mem = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, query, 1_600)
         // Keep the central chat brain aware of the real installed app map, not just the tool names.
         // Compact context is used for ordinary turns; architecture questions receive the detailed map.
         val appMap = OrionAppAwareness.context(svc, query)
@@ -814,6 +814,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        // Index explicit preferences, habits and project facts as owner-reviewable proposals.
+        // This is deterministic and local; it does not retain arbitrary conversation text.
+        runCatching {
+            MemoryAutoIndexer.observe(svc, command)?.let { proposal ->
+                OrionConversationRepository.get(svc).recordEvent(
+                    svc, null, "memory_proposal", "pending",
+                    "Suggested memory for owner review: category=${proposal.category}, source=user_observation"
+                )
+            }
+        }
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
@@ -945,6 +955,14 @@ RESPONSE QUALITY AND FORMAT:
     fun runLiveConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        runCatching {
+            MemoryAutoIndexer.observe(svc, command)?.let { proposal ->
+                OrionConversationRepository.get(svc).recordEvent(
+                    svc, null, "memory_proposal", "pending",
+                    "Suggested memory from voice conversation for owner review: category=${proposal.category}"
+                )
+            }
+        }
         talkNim.beginCommand()
         // Route actionable voice requests through the exact same planner, checkpoint,
         // capability registry, owner policy, confirmation and evidence gates as chat.
@@ -959,7 +977,7 @@ RESPONSE QUALITY AND FORMAT:
         talkNim.resume()
         if (liveHistory.length() == 0) {
             val name = Prefs.userName(svc).ifBlank { "friend" }
-            val memory = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, input, 700)
+            val memory = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, input, 1_000)
             val prompt = "You are Orion, a calm, warm, sharp personal AI co-pilot in a hands-free voice conversation. " +
                 "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
                 "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
