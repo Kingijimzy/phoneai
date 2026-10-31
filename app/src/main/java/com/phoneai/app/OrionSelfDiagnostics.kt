@@ -33,7 +33,7 @@ internal object OrionSelfDiagnostics {
         "(?i)\\b(self[- ]?diagnos|self[- ]?heal|system health check|system audit|check your own (?:health|tools|capabilities)|what is broken in you)\\b"
     ).containsMatchIn(request)
 
-    fun inspect(context: Context, now: Long = System.currentTimeMillis()): OrionDiagnosticReport {
+    fun inspect(context: Context, now: Long = System.currentTimeMillis(), recordActivity: Boolean = false): OrionDiagnosticReport {
         val app = context.applicationContext
         val findings = mutableListOf<OrionDiagnosticFinding>()
         fun add(component: String, title: String, detail: String, severity: OrionFindingSeverity, evidence: String) {
@@ -89,11 +89,19 @@ internal object OrionSelfDiagnostics {
             }
         }
 
-        return OrionDiagnosticReport(
+        val report = OrionDiagnosticReport(
             generatedAtEpochMs = now, findings = findings.distinctBy { it.id }.take(40),
             registeredToolCount = tools.size, enabledSkillCount = skills.count { it.enabled },
             enabledVerifiedExtensionCount = verifiedEnabled, runtimeState = runtimeState,
             queuedBackgroundWork = pendingWork
         )
+        if (recordActivity) runCatching {
+            val errors = report.findings.count { it.severity == OrionFindingSeverity.ERROR || it.severity == OrionFindingSeverity.CRITICAL }
+            val warnings = report.findings.count { it.severity == OrionFindingSeverity.WARNING }
+            val status = if (errors > 0) "issues_found" else "completed"
+            val summary = "Local self-diagnostic completed: tools=${report.registeredToolCount}, enabled skills=${report.enabledSkillCount}, verified extensions=${report.enabledVerifiedExtensionCount}, structural errors=$errors, warnings=$warnings. Remote provider health, Android permission grants and physical-device reliability were not tested."
+            OrionConversationRepository.get(app).recordEvent(app, null, "self_diagnostic", status, summary.take(700))
+        }
+        return report
     }
 }
