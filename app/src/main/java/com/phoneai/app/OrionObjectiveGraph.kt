@@ -114,7 +114,12 @@ internal object OrionObjectiveGraph {
      */
     fun resolveDispatchId(graph: Graph, requestedId: String?): String? {
         val candidate = requestedId?.trim()?.lowercase().orEmpty()
+        // Exact model IDs always win. If the model invents an alias or omits the ID,
+        // bind only when the runtime state makes the target unambiguous:
+        // one currently-running objective (multi-tool step), otherwise one ready objective.
         return graph.nodes.firstOrNull { it.id == candidate }?.id
+            ?: graph.nodes.singleOrNull { it.status == Status.RUNNING }?.id
+            ?: graph.ready().singleOrNull()?.id
             ?: graph.nodes.singleOrNull()?.id
     }
 
