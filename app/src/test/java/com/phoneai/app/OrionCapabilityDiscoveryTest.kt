@@ -122,7 +122,7 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true
         )
         assertEquals(1, snapshot.availableCount)
-        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited)") })
+        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited,not-live-tested)") })
     }
 
     @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
