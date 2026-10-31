@@ -27,7 +27,7 @@ object AgentCheckpointStore {
 
     fun pending(c: Context): JSONObject? = synchronized(lock) {
         readCheckpoint(c)?.takeIf {
-            it.optString("status") in setOf("running", "paused", "recovery_required")
+            it.optString("status") in setOf("running", "waiting_for_children", "paused", "recovery_required")
         }
     }
 
@@ -43,11 +43,11 @@ object AgentCheckpointStore {
             val active = readCheckpoint(c)
             if (active?.optString("taskId") == taskId) {
                 active.optBoolean("stopRequested") || active.optBoolean("pauseRequested") ||
-                    active.optString("status") != "running"
+                    active.optString("status") !in setOf("running", "waiting_for_children")
             } else {
                 archivedPending(c).firstOrNull { it.second.optString("taskId") == taskId }
                     ?.second?.let { it.optBoolean("stopRequested") || it.optBoolean("pauseRequested") ||
-                        it.optString("status") != "running" } ?: true
+                        it.optString("status") !in setOf("running", "waiting_for_children") } ?: true
             }
         }
     }
@@ -61,7 +61,7 @@ object AgentCheckpointStore {
         File(c.filesDir, "orion_agent_checkpoints").also { it.mkdirs() }
 
     private fun isPending(o: JSONObject): Boolean =
-        o.optString("status") in setOf("running", "paused", "recovery_required")
+        o.optString("status") in setOf("running", "waiting_for_children", "paused", "recovery_required")
 
     /** Archive an independent unfinished task without copying it into chat history. */
     private fun archive(c: Context, checkpoint: JSONObject): Boolean {
@@ -290,6 +290,12 @@ object AgentCheckpointStore {
         val current = readCheckpoint(c)
         if (current?.optBoolean("stopRequested") == true || current?.optBoolean("pauseRequested") == true) return@synchronized false
         if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return@synchronized false
+        val taskId = current?.optString("taskId").orEmpty()
+        // A chat turn may finish while delegated work is still queued/running. Keep the
+        // objective alive until the final child reports a durable terminal receipt.
+        if (taskId.isNotBlank() && runCatching { OrionWorkerJobStore(c).hasPendingForParent(taskId) }.getOrDefault(true)) {
+            return@synchronized update(c) { it.put("status", "waiting_for_children") }
+        }
         val saved = update(c) {
             it.put("status", "completed")
             it.remove("inFlight")
