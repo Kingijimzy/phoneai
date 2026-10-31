@@ -49,4 +49,52 @@ class OrionAgentDelegationTest {
         assertEquals(1, manifest.maxModelCalls)
         assertFalse(manifest.objective.contains("super-secret"))
     }
+
+    @Test fun brokerDispatchesOnlyManifestAllowedReadOnlyTools() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-55", "Research Android background work"
+        )
+        var dispatched = 0
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { tool, args ->
+            dispatched++
+            assertEquals("live_web_search", tool)
+            assertEquals("WorkManager Android", args.optString("query"))
+            "source evidence"
+        }
+        assertEquals("source evidence", broker.execute("live_web_search", org.json.JSONObject().put("query", "WorkManager Android")))
+        assertEquals(1, dispatched)
+        assertEquals(1, broker.callsUsed())
+    }
+
+    @Test fun brokerRejectsUnlistedToolWithoutCallingParentDispatcher() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a topic"
+        )
+        var dispatched = false
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { _, _ -> dispatched = true; "should not run" }
+        assertTrue(broker.execute("telegram_send", org.json.JSONObject()).startsWith("error:"))
+        assertFalse(dispatched)
+    }
+
+    @Test fun brokerRejectsWriteToolEvenIfManifestIsTampered() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a topic"
+        ).copy(allowedTools = setOf("telegram_send"))
+        var dispatched = false
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { _, _ -> dispatched = true; "should not run" }
+        assertTrue(broker.execute("telegram_send", org.json.JSONObject()).contains("not read-only"))
+        assertFalse(dispatched)
+    }
+
+    @Test fun brokerEnforcesPerDelegationCapabilityBudget() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a topic"
+        )
+        var dispatched = 0
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { _, _ -> dispatched++; "ok" }
+        assertEquals("ok", broker.execute("live_web_search", org.json.JSONObject().put("query", "one")))
+        assertTrue(broker.execute("live_news", org.json.JSONObject().put("query", "two")).startsWith("error:"))
+        assertEquals(1, dispatched)
+    }
+
 }

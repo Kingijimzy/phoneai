@@ -21,7 +21,8 @@ internal object OrionAgentDelegation {
         val access: Access,
         val allowedTools: Set<String>,
         val memoryScope: String,
-        val maxModelCalls: Int = 1
+        val maxModelCalls: Int = 1,
+        val maxCapabilityCalls: Int = 1
     ) {
         fun promptBlock(): String = buildString {
             append("SPECIALIST DELEGATION ENVELOPE:")
@@ -34,6 +35,43 @@ internal object OrionAgentDelegation {
             append("\nModel-call budget: ").append(maxModelCalls)
             append("\nYou are a specialist worker, not the owner of Orion. Return analysis, sources, drafts or recommendations to the parent. Do not claim to execute phone actions, send messages, publish content, change accounts, run shell commands or place trades. The parent Agent must review your result and dispatch any approved action through its shared policy and task lifecycle.")
         }
+    }
+
+    /**
+     * Specialists never dispatch directly. The parent supplies its existing guarded executor;
+     * this broker narrows the manifest scope and enforces a per-run capability-call budget.
+     */
+    internal class CapabilityBroker(
+        private val manifest: Manifest,
+        private val dispatch: (String, JSONObject) -> String
+    ) {
+        private var calls = 0
+
+        @Synchronized
+        fun execute(tool: String, args: JSONObject): String {
+            if (tool !in manifest.allowedTools) {
+                return "error: delegated capability '$tool' is outside this worker's manifest; nothing was dispatched"
+            }
+            val registered = ToolRegistry.all.firstOrNull { it.name == tool }
+                ?: return "error: delegated capability '$tool' is not registered; nothing was dispatched"
+            if (registered.access != ToolAccess.READ) {
+                return "error: delegated capability '$tool' is not read-only; nothing was dispatched"
+            }
+            if (calls >= manifest.maxCapabilityCalls.coerceIn(0, 4)) {
+                return "error: specialist capability-call budget exhausted; nothing was dispatched"
+            }
+            if (args.toString().length > 1200) {
+                return "error: delegated capability arguments exceed the bounded input size; nothing was dispatched"
+            }
+            calls++
+            return try {
+                dispatch(tool, JSONObject(args.toString()))
+            } catch (e: Exception) {
+                "error: guarded parent dispatch failed (" + e.javaClass.simpleName + "); outcome requires inspection"
+            }
+        }
+
+        internal fun callsUsed(): Int = calls
     }
 
     private val researchTools = setOf("live_web_search", "live_news", "bybit_public_ticker")

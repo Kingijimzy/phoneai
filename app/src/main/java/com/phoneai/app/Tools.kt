@@ -31,7 +31,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** The extra abilities the agent can use besides touching the screen. All run on the worker thread. */
-class Tools(private val svc: PhoneAiService) {
+class Tools(
+    private val svc: PhoneAiService,
+    private val delegatedCapabilityDispatch: ((String, JSONObject) -> String)? = null
+) {
 
     private fun launch(i: Intent, settleMs: Long = 1200): String {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1014,7 +1017,9 @@ class Tools(private val svc: PhoneAiService) {
         val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
-            val answer = AgentRunner.runDelegated(svc, agent, manifest.objective, manifest)
+            val answer = AgentRunner.runDelegated(
+                svc, agent, manifest.objective, manifest, delegatedCapabilityDispatch
+            )
             val failed = answer.isBlank() || answer.startsWith("error:", true)
             val safeAnswer = if (answer.isBlank()) "error: specialist returned an empty response" else answer
             if (!OrionAgentDelegation.finish(svc, manifest, safeAnswer, failed = failed)) {
