@@ -75,14 +75,14 @@ internal data class OrionRoutineSuggestion(
 )
 
 internal object OrionRoutinePolicy {
-    fun eligible(memory: Memory, now: Long = System.currentTimeMillis()): Boolean =
+    fun eligible(context: Context, memory: Memory, now: Long = System.currentTimeMillis()): Boolean =
         memory.category == "routine" &&
             MemoryGovernancePolicy.canUseInPrompt(memory.reviewStatus, memory.sensitivity) &&
             MemoryGovernancePolicy.normalizeConfidence(memory.confidence) >= 0.75 &&
-            OrionMemoryLifecycle.isActive(memory.id, now)
+            OrionMemoryLifecycle.isActive(context, memory.id, now)
 
-    fun suggestions(memories: List<Memory>, now: Long = System.currentTimeMillis()): List<OrionRoutineSuggestion> =
-        memories.filter { eligible(it, now) }
+    fun suggestions(context: Context, memories: List<Memory>, now: Long = System.currentTimeMillis()): List<OrionRoutineSuggestion> =
+        memories.filter { eligible(context, it, now) }
             .sortedWith(compareByDescending<Memory> { it.confidence }.thenByDescending { it.updated })
             .take(8)
             .map { OrionRoutineSuggestion(it.id, it.text, it.confidence, now) }
