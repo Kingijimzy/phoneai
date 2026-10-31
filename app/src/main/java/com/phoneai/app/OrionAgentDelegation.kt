@@ -160,7 +160,8 @@ internal object OrionAgentDelegation {
         val safeObjective = AgentPrivacyFilter.safeCommand(objective)
             .replace(Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+"), "[redacted]")
             .replace(Regex("\\s+"), " ").trim().take(700)
-        record.optString("agentId") == agentId && record.optString("objective") == safeObjective &&\n            record.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" } == parentObjectiveId?.trim()?.takeIf { it.isNotBlank() }
+        record.optString("agentId") == agentId && record.optString("objective") == safeObjective &&
+            record.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" } == parentObjectiveId?.trim()?.takeIf { it.isNotBlank() }
     }
 
     fun isCompleted(context: Context, manifestId: String): Boolean = synchronized(this) {
