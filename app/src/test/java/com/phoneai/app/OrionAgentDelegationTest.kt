@@ -89,6 +89,21 @@ class OrionAgentDelegationTest {
         assertNull(OrionAgentDelegation.restore(context, ""))
     }
 
+    @Test fun restoreRejectsPersistedCapabilityScopeWidening() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-tamper", "Research a public Android topic"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        val prefs = context.getSharedPreferences("orion_agent_delegation_ledger", android.content.Context.MODE_PRIVATE)
+        val runs = org.json.JSONArray(prefs.getString("runs", "[]"))
+        runs.getJSONObject(0).put("allowedTools", org.json.JSONArray().put("telegram_send"))
+        prefs.edit().putString("runs", runs.toString()).commit()
+
+        assertNull(OrionAgentDelegation.restore(context, manifest.id))
+    }
+
     @Test fun customSpecialistDefaultsToAnalysisOnlyWithNoToolCapabilities() {
         val custom = AgentProfile("social_helper", "Social Helper", "Plans social content", "Create content plans and drafts.")
         val manifest = OrionAgentDelegation.create(custom, "parent-task-7", "Prepare a content calendar")
