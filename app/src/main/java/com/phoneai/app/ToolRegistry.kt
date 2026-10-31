@@ -263,7 +263,7 @@ internal object ToolRegistry {
         return promptSection(detailed, signatures, status)
     }
 
-    fun promptSection(): String = promptSection(null, "")
+    fun promptSection(): String = promptSection(all, emptyList(), "")
 
     private fun promptSection(tools: List<ToolDefinition>, omitted: List<ToolDefinition>, status: String): String = buildString {
         append("Tools:\n")
