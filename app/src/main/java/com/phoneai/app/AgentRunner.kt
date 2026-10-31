@@ -240,6 +240,7 @@ object AgentRunner {
         capabilityDispatch: ((String, JSONObject) -> String)? = null,
         cancelled: () -> Boolean = { false }
     ): String {
+        // Cancellation is cooperative: never start a child stage after parent pause/stop.
         if (cancelled()) return "error: parent task was paused or stopped before specialist execution."
         val needsCapability = manifest.access == OrionAgentDelegation.Access.READ_ONLY_RESEARCH ||
             (manifest.access == OrionAgentDelegation.Access.TRADING_ANALYSIS && symbolsIn(userText).isNotEmpty())
