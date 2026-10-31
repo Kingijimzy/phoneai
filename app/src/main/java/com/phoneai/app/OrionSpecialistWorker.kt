@@ -89,9 +89,10 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val nim = Nim(applicationContext, sharedBudget = CommandRequestBudget(maxRequests = 3))
         val answer = AtomicReference<String?>(null)
         val failure = AtomicReference<Exception?>(null)
-        val cancelled: () -> Boolean = {
-            isStopped || AgentCheckpointStore.cancellationRequested(applicationContext, claimed.parentTaskId)
+        val parentCancelled: () -> Boolean = {
+            AgentCheckpointStore.cancellationRequested(applicationContext, claimed.parentTaskId)
         }
+        val cancelled: () -> Boolean = { isStopped || parentCancelled() }
         val providerThread = Thread({
             try {
                 answer.set(AgentRunner.runDelegated(
@@ -110,10 +111,16 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 if (cancelled()) {
                     nim.cancel()
                     providerThread.join(5000)
-                    store.cancel(jobId, "parent_cancelled_or_worker_stopped")
+                    if (parentCancelled()) {
+                        store.cancel(jobId, "parent_cancelled_during_provider_request")
+                        OrionAgentDelegation.finish(applicationContext, manifest,
+                            "cancelled: parent stopped; late output discarded", cancelled = true)
+                        return Result.success()
+                    }
+                    store.needsReview(jobId, "workmanager_stopped_during_provider_request")
                     OrionAgentDelegation.finish(applicationContext, manifest,
-                        "cancelled: parent stopped or worker stopped; late output discarded", cancelled = true)
-                    return Result.success()
+                        "error: Android stopped the worker during a provider request; inspect before retrying", failed = true)
+                    return Result.failure()
                 }
             }
         } catch (_: InterruptedException) {
@@ -124,11 +131,17 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             return Result.failure()
         }
 
-        if (cancelled()) {
+        if (parentCancelled()) {
             nim.cancel()
             store.cancel(jobId, "parent_cancelled_before_result_commit")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
+        }
+        if (isStopped) {
+            store.needsReview(jobId, "workmanager_stopped_before_result_commit")
+            OrionAgentDelegation.finish(applicationContext, manifest,
+                "error: Android stopped the worker before a durable result was committed", failed = true)
+            return Result.failure()
         }
         if (failure.get() != null) {
             store.needsReview(jobId, "provider_outcome_uncertain:${failure.get()!!.javaClass.simpleName}")
@@ -143,7 +156,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 result.ifBlank { "error: specialist returned an empty result" }, failed = true)
             return Result.failure()
         }
-        if (cancelled()) {
+        if (parentCancelled()) {
             store.cancel(jobId, "parent_cancelled_after_provider_return")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: late result discarded", cancelled = true)
             return Result.success()
@@ -156,11 +169,12 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                 "error: result persistence failed; inspect before retrying", failed = true)
             return Result.failure()
         }
-        if (cancelled()) {
+        if (parentCancelled()) {
             store.cancel(jobId, "parent_cancelled_after_result_staging")
             OrionAgentDelegation.finish(applicationContext, manifest, "cancelled: staged result discarded after parent stop", cancelled = true)
             return Result.success()
         }
+        if (isStopped) return Result.retry()
         if (!OrionAgentDelegation.finish(applicationContext, manifest, result)) {
             store.needsReview(jobId, "delegation_receipt_commit_failed")
             return Result.failure()
