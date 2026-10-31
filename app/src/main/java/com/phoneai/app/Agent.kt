@@ -862,6 +862,10 @@ RESPONSE QUALITY AND FORMAT:
             return
         }
         if (stopped) return
+        if (HermesRepetitionGuard.isRunawayRepetition(answer)) {
+            ui.say("The model response fell into a repetition loop. I discarded the repeated answer instead of saving it as conversation history. Please retry or switch models.")
+            return
+        }
         if (answer.trim().trim('.', '!').equals("ACTION", true)) {
             // Persist tool-routed user turns too. Previously ACTION returned before chatHist was
             // updated, so follow-ups such as "go research it" lost their subject and were reinterpreted.
@@ -916,6 +920,10 @@ RESPONSE QUALITY AND FORMAT:
             ""
         }
         if (stopped) return
+        if (HermesRepetitionGuard.isRunawayRepetition(answer)) {
+            ui.say("The voice response repeated itself, so I discarded it. Please try again.")
+            return
+        }
         val safeAnswer = answer.takeIf { it.isNotBlank() && !it.uppercase().startsWith("ACTION") }
             ?: "I couldn't get a response just now. Please try saying that once more."
         liveHistory.put(msg("assistant", safeAnswer))
@@ -2111,6 +2119,11 @@ Rules:
                 moveTaskPhase(TaskLifecycle.Phase.CANCELLED, "User stopped while the model was responding; no planned action was dispatched")
                 OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("Stopped before the next action could start. I saved the task progress locally.")
+                return
+            }
+            if (HermesRepetitionGuard.isRunawayRepetition(raw)) {
+                OrionTasksCapabilityExecutor.pauseRun(svc)
+                ui.say("The model returned a repeated or corrupted task response. I stopped before parsing or dispatching any actions; the task checkpoint is preserved. Retry or switch models.")
                 return
             }
             val parsedStep = AgentJson.parse(raw)
