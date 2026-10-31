@@ -25,6 +25,13 @@ class MemoryAutoIndexerTest {
         assertEquals(null, MemoryAutoIndexer.extract("I prefer to store my password in this note"))
     }
 
+    @Test fun directRememberRequestIsExplicitOwnerConfirmation() {
+        val candidate = MemoryAutoIndexer.extract("Remember that my preferred coding language is Kotlin")
+        assertTrue(candidate != null)
+        assertTrue(candidate!!.ownerConfirmed)
+        assertEquals("fact", candidate.category)
+    }
+
     @Test fun candidateIsBoundedAndOwnerReviewable() {
         val candidate = MemoryAutoIndexer.extract("I prefer Orion to explain code step by step.")
         assertTrue(candidate != null)
