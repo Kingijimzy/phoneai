@@ -5,6 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CalculatorRequestParserTest {
+    @Test fun extractsTheRequestedDownloadsFolder() {
+        assertEquals("Orion_Test", CalculatorRequestParser.requestedFolder("Create a folder called Orion_Test in Downloads."))
+        assertEquals("Orion", CalculatorRequestParser.requestedFolder("Save the calculator with no folder specified."))
+    }
+
     @Test fun extractsTheRequestedArithmeticExpressions() {
         val expressions = CalculatorRequestParser.parse(
             "Test 15 + 25, 100 / 4 and 2 ** 5."
