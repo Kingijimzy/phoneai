@@ -1055,6 +1055,7 @@ Rules:
                     .append(catalogue.take(9000))
             }
             try { sb.append("\n\n").append(OrionCentralBrain.contextFor(svc, request.orEmpty())) } catch (_: Exception) { }
+            runCatching { TradingDeskContext.promptBlock(svc, request) }.getOrNull()?.let { sb.append("\n\n").append(it) }
             sb.append("\n\nLanguage policy:\n").append(Prefs.languagePolicy(svc))
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
