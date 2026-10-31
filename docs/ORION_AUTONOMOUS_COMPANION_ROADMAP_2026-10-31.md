@@ -226,3 +226,12 @@ Tasks:
 - Delegated coach runs now receive a separate read-only market/strategy context; they do not fetch private account balances/positions through the normal coach context.
 - Delegated specialist calls do not write new agent lessons or process coach action tags into local alerts/strategy proposals. Specialist output is returned to the parent for review.
 - Added Robolectric persistence tests proving child delegation receipts retain their parent task ID and record completed/failed status.
+
+
+## Delegation visibility and privacy hardening
+
+- Specialist tasks are now linked to the active parent checkpoint when one exists. Their start, completion/failure, scope and bounded summary are stored in a capped local delegation ledger.
+- The Task List response includes the five most recent specialist delegation receipts, so the parent brain can inspect what workers actually did.
+- Delegated objectives are sanitized before they are passed to the specialist model. Empty responses and failed provider responses are recorded as failures, not successful delegations.
+- Delegated specialists do not update agent lessons or process Trading Coach action tags. Delegated coaching receives public market context and saved strategy/journal context, not private account balances/positions or order controls.
+- Research manifest capability names now match the actual read-only context sources supplied by the research specialist.
