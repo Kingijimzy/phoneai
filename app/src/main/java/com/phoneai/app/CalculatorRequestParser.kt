@@ -22,7 +22,7 @@ internal object CalculatorRequestParser {
     }
 
     private val pattern = Regex(
-        """(?<![A-Za-z0-9_.])(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*(\\*\\*|[+\\-*/])\\s*(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?![A-Za-z0-9_.])"""
+        """(?<![A-Za-z0-9_.])(-?(?:\d+(?:\.\d*)?|\.\d+))\s*(\*\*|[+\-*/])\s*(-?(?:\d+(?:\.\d*)?|\.\d+))(?![A-Za-z0-9_.])"""
     )
 
     fun parse(request: String): List<Expression> = pattern.findAll(request)
