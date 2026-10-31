@@ -23,8 +23,16 @@ internal object ModelRouter {
     }
 
     /** The model to force, or null to keep the person's own choice. */
-    fun modelFor(tier: Tier, providerId: String, vision: Boolean, routingOn: Boolean): String? {
+    fun modelFor(
+        tier: Tier,
+        providerId: String,
+        vision: Boolean,
+        routingOn: Boolean,
+        availableModels: Set<String> = emptySet()
+    ): String? {
         if (!routingOn || vision || providerId != "nvidia") return null
-        return when (tier) { Tier.FAST -> FAST_MODEL; Tier.DEEP -> DEEP_MODEL; Tier.CHAT -> null }
+        val candidate = when (tier) { Tier.FAST -> FAST_MODEL; Tier.DEEP -> DEEP_MODEL; Tier.CHAT -> return null }
+        // Never route to a guessed/stale model ID. Use only a model returned by the provider's cached catalogue.
+        return candidate.takeIf { it in availableModels }
     }
 }
