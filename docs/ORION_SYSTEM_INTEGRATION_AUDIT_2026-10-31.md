@@ -106,7 +106,7 @@ The remaining design issue is the number of separate IDs/stores and the fact tha
 
 **Unavailable by design today:** hands-free live voice cannot execute tools. It explicitly tells users to use main chat for phone actions.
 
-**Potentially unconnected/placeholder packs:** `remote_computer`, `proactive` and `self_test` are declared in `AgentPolicy.packs`, but the audited `ToolRegistry`/tool-to-pack table does not provide a corresponding dedicated tool family for those pack IDs. Their actual end-user workflows need a separate wiring audit before they are described as working capabilities.
+**Cross-surface capabilities not exposed as registered chat tools:** `remote_computer`, `proactive` and `self_test` have real separate modules, but no dedicated `ToolRegistry` family in the audited central dispatcher. `CursorCloudAgentActivity` checks the `remote_computer` pack and runs its own flow; `ProactiveBriefing` checks the `proactive` pack and opt-in schedule; `SelfTest.run` performs a local/provider health check from its own UI flow. These are implemented UI/service surfaces, not central-chat-dispatch capabilities. They need explicit bridge contracts if Orion's brain is expected to discover and coordinate them.
 
 ## 8. Tests and end-to-end proof
 
