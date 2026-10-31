@@ -106,7 +106,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             loadLocked()
             val current = jobs.firstOrNull { it.id == candidate.id && it.status == Status.QUEUED }
                 ?: return@synchronized null
-            if (jobs.count { it.status == Status.RUNNING } >= maxActive) return@synchronized null
+            if (jobs.count { it.status in setOf(Status.RUNNING, Status.RESULT_PENDING) } >= maxActive) return@synchronized null
             if (!parentRunning) {
                 val cancelled = current.copy(status = Status.CANCELLED, updatedAt = clock(),
                     lastError = "parent_not_running_or_unverifiable")
@@ -169,7 +169,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
         val before = jobs.toList()
         var changed = 0
         jobs = jobs.map { job ->
-            if (job.parentTaskId == parent && job.status in setOf(Status.QUEUED, Status.RUNNING, Status.PAUSED)) {
+            if (job.parentTaskId == parent && job.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING, Status.PAUSED)) {
                 changed++
                 job.copy(status = Status.CANCELLED, updatedAt = clock(), lastError = safeReason)
             } else job
@@ -215,7 +215,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     fun hasPendingForParent(parentTaskId: String): Boolean = synchronized(lock) {
         loadLocked()
         jobs.any { it.parentTaskId == parentTaskId &&
-            it.status in setOf(Status.QUEUED, Status.RUNNING) }
+            it.status in setOf(Status.QUEUED, Status.RUNNING, Status.RESULT_PENDING) }
     }
 
     /** Compact status receipts for the central chat brain; results remain evidence, never instructions. */
