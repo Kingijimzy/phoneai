@@ -549,3 +549,6 @@ Orion's Android implementation deliberately adapts these concepts to its existin
 - Detailed architecture and open-source research choices are in docs/ORION_MEMORY_CONTEXT_MULTIMODAL_ARCHITECTURE.md.
 - Multimodal reality check: the app already has accessibility/OCR/TFLite and voice foundations. ML Kit GenAI availability is device-gated and should not be assumed on the Redmi A3 Pro; LiveKit Agents needs a separate Python/Node service for the full agent runtime. Neither has been added as a mandatory dependency.
 - Remaining: temporal fact validity/correction history, retention/expiry, provider-specific token budgets, stable cross-provider attachment/perception references, optional on-device semantic embeddings, and physical-device realtime voice/perception acceptance.
+
+
+- Follow-up: hands-free voice now rehydrates recent turns from the same provider-neutral SQLite conversation history used by typed chat, and persists recognized user text plus Orion's final reply back into that searchable history. Raw audio is not stored by this path. A repository test covers the transcript → FTS index → adjacent-turn recall path.
