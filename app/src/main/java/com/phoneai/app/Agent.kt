@@ -956,7 +956,7 @@ RESPONSE QUALITY AND FORMAT:
         val command = input.trim()
         if (command.isEmpty()) return
         runCatching {
-            MemoryAutoIndexer.observe(svc, command)?.let { proposal ->
+            MemoryAutoIndexer.observe(svc, command)?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }?.let { proposal ->
                 OrionConversationRepository.get(svc).recordEvent(
                     svc, null, "memory_proposal", "pending",
                     "Suggested memory from voice conversation for owner review: category=${proposal.category}"
