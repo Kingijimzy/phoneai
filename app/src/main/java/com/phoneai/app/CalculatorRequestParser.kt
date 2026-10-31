@@ -25,6 +25,10 @@ internal object CalculatorRequestParser {
         """(?<![A-Za-z0-9_.])(-?(?:\d+(?:\.\d*)?|\.\d+))\s*(\*\*|[+\-*/])\s*(-?(?:\d+(?:\.\d*)?|\.\d+))(?![A-Za-z0-9_.])"""
     )
 
+    fun requestedFolder(request: String): String =
+        Regex("""(?i)\\b(?:folder|directory)\\s+(?:called|named)\\s+([A-Za-z0-9_-]{1,60})\\b""")
+            .find(request)?.groupValues?.getOrNull(1)?.let { DownloadsFolderPolicy.normalize(it) } ?: "Orion"
+
     fun parse(request: String): List<Expression> = pattern.findAll(request)
         .mapNotNull { match ->
             val expression = Expression(match.groupValues[1], match.groupValues[2], match.groupValues[3])
