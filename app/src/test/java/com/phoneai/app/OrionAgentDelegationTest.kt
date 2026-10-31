@@ -236,6 +236,19 @@ class OrionAgentDelegationTest {
         assertNull(OrionAgentDelegation.restore(context, manifest.id))
     }
 
+    @Test fun idempotencyMatchRequiresExactSpecialistTaskAndObjectiveNode() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("coder")!!, "parent-idempotency", "Inspect the worker lifecycle", "node_build"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        assertTrue(OrionAgentDelegation.matches(context, manifest.id, "coder", "Inspect the worker lifecycle", "node_build"))
+        assertFalse(OrionAgentDelegation.matches(context, manifest.id, "writer", "Inspect the worker lifecycle", "node_build"))
+        assertFalse(OrionAgentDelegation.matches(context, manifest.id, "coder", "Inspect another task", "node_build"))
+        assertFalse(OrionAgentDelegation.matches(context, manifest.id, "coder", "Inspect the worker lifecycle", "node_other"))
+    }
+
     @Test fun specialistReceiptCannotBeFinishedTwiceOrResurrected() {
         val context = org.robolectric.RuntimeEnvironment.getApplication()
         OrionAgentDelegation.clearForTest(context)
