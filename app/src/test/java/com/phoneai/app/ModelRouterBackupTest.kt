@@ -11,12 +11,14 @@ class ModelRouterBackupTest {
     @Test fun imagesStayStandard() = assertEquals(ModelRouter.Tier.CHAT, ModelRouter.tierFor("hi", true))
 
     @Test fun onlyNvidiaTextIsRouted() {
-        assertEquals(ModelRouter.FAST_MODEL, ModelRouter.modelFor(ModelRouter.Tier.FAST, "nvidia", false, true))
-        assertEquals(ModelRouter.DEEP_MODEL, ModelRouter.modelFor(ModelRouter.Tier.DEEP, "nvidia", false, true))
-        assertNull(ModelRouter.modelFor(ModelRouter.Tier.CHAT, "nvidia", false, true))
-        assertNull(ModelRouter.modelFor(ModelRouter.Tier.FAST, "openai", false, true))
-        assertNull(ModelRouter.modelFor(ModelRouter.Tier.FAST, "nvidia", true, true))
-        assertNull(ModelRouter.modelFor(ModelRouter.Tier.DEEP, "nvidia", false, false))
+        val verified = setOf(ModelRouter.FAST_MODEL, ModelRouter.DEEP_MODEL)
+        assertEquals(ModelRouter.FAST_MODEL, ModelRouter.modelFor(ModelRouter.Tier.FAST, "nvidia", false, true, verified))
+        assertEquals(ModelRouter.DEEP_MODEL, ModelRouter.modelFor(ModelRouter.Tier.DEEP, "nvidia", false, true, verified))
+        assertNull(ModelRouter.modelFor(ModelRouter.Tier.FAST, "nvidia", false, true, emptySet()))
+        assertNull(ModelRouter.modelFor(ModelRouter.Tier.CHAT, "nvidia", false, true, verified))
+        assertNull(ModelRouter.modelFor(ModelRouter.Tier.FAST, "openai", false, true, verified))
+        assertNull(ModelRouter.modelFor(ModelRouter.Tier.FAST, "nvidia", true, true, verified))
+        assertNull(ModelRouter.modelFor(ModelRouter.Tier.DEEP, "nvidia", false, false, verified))
     }
 
     @Test fun backupRoundTripsAndDropsSecretsAndSafetyState() {
