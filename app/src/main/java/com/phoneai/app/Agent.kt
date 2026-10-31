@@ -2343,7 +2343,7 @@ Rules:
             "live_news" -> LiveNews.search(a.optString("query"))
             "live_web_search" -> LiveWebSearch.search(a.optString("query"))
             "bybit_public_ticker" -> tools.bybitPublicTicker(a.optString("symbol"))
-            "github_public" -> tools.githubPublic(a.optString("owner"), a.optString("repo"), a.optString("section", "repo"))
+            "github_public" -> tools.githubPublic(a.optString("owner"), a.optString("repo"), a.optString("section", "repo"), a.optString("run_id").takeIf { it.isNotBlank() })
             "integration_status" -> tools.integrationStatus()
             "telegram_status" -> tools.telegramStatus()
             "telegram_inbox" -> TelegramBridge.checkUpdates(svc)
