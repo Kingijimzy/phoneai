@@ -710,6 +710,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Keep the central chat brain aware of the real installed app map, not just the tool names.
         // Compact context is used for ordinary turns; architecture questions receive the detailed map.
         val appMap = OrionAppAwareness.context(svc, query)
+        val delegationLedger = OrionAgentDelegation.promptSummary(svc, 3)
         val capabilityQuestion = query?.let {
             Regex("(?i)\\b(?:phone actions|what can you do|actually execute|list.*(?:tools|actions|capabilities)|tools?.*(?:available|execute))\\b")
                 .containsMatchIn(it)
@@ -729,7 +730,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
             "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
             "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
-            capabilityContext + "\n\n" + appMap + "\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + appMap + "\n\n" + delegationLedger + "\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1068,6 +1069,7 @@ Rules:
             sb.append(OrionMemoryCapabilityExecutor.promptContext(svc, request))
             sb.append("\n\nYour specialist team (delegate with ask_agent when the user wants that specialty; they also have their own screen under Tools → Agents):\n")
                 .append(AgentProfiles.rosterBlock(svc))
+            sb.append("\n\n").append(OrionAgentDelegation.promptSummary(svc, 3))
             sb.append("\n\nCENTRAL ORION ORCHESTRATION CONTRACT:\n" +
                 "You are the parent brain and the user's single conversational companion. Keep the user in this main chat; specialists work behind the scenes and report to you. For a multi-part or technically demanding objective, decompose it into bounded independent subtasks and delegate useful research, code review, planning, writing or trading-analysis work with ask_agent. Do not delegate trivial questions. Give each worker a specific deliverable and relevant context only. Review the returned result for correctness, conflicts, freshness and missing evidence; do not copy it blindly. Then YOU continue the parent objective using the registered tools and existing guarded dispatcher, task lifecycle, permission checks and confirmations. A specialist's analysis is not an action and does not authorize a write, phone action, account change, message or trade. Never tell the user to switch to a specialist screen or coordinate agents manually. Report meaningful progress in natural language, surface blockers and ask the user only when a real choice, missing input or approval is needed. If a specialist fails or is unavailable, continue safely yourself where possible and say what could not be delegated.\n" +
                 "COMPANION CONVERSATION: Be a consistent, attentive companion rather than a command-only interface. Respond naturally to greetings and ordinary conversation, use relevant conversation and saved context without reciting it, remember the current objective across follow-ups, and occasionally offer a useful next step when it genuinely helps. Do not pretend to have feelings, independent awareness, background activity, or access to events you have not observed. Do not narrate every internal step; keep the conversation human-readable and calm.");
