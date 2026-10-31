@@ -153,7 +153,9 @@ class ToolRegistryPromptAvailabilityTest {
     @Test fun everyToolRemainsDiscoverableByNameAndArgumentSignature() {
         val prompt = ToolRegistry.promptSection("open WhatsApp and read my last chat")
         ToolRegistry.all.forEach { tool ->
-            val signature = tool.promptLine.substringBefore(":")
+            val endOfArguments = tool.promptLine.indexOf("}:")
+            val signature = if (endOfArguments >= 0) tool.promptLine.substring(0, endOfArguments + 1)
+                else tool.promptLine.substringBefore(":")
             assertTrue("Missing discoverable signature for ${tool.name}", prompt.contains(signature))
         }
     }
