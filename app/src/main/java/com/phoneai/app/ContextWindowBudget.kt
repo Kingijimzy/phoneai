@@ -30,8 +30,8 @@ internal object ContextWindowBudget {
             if (remaining <= 0) return@forEach
             val allowedChars = minOf(remaining, perSectionCap) * 4
             val clipped = if (section.length > allowedChars) section.take(allowedChars) else section
-            val cost = estimateTokens(clipped)
-            if (cost > 0) { selected[index] = clipped; remaining -= cost }
+            val cost = estimateTokens(clipped) + if (selected.isEmpty()) 0 else 1
+            if (cost > 0 && cost <= remaining) { selected[index] = clipped; remaining -= cost }
         }
         val text = usable.mapNotNull { selected[it.first] }.joinToString("\n\n")
         return Packed(text, estimateTokens(text), selected.size, usable.size - selected.size)
