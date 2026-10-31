@@ -158,9 +158,7 @@ class Tools(private val svc: PhoneAiService) {
     /** Search public GitHub repositories by name without requiring private account access. */
     fun githubSearchRepository(name: String): String {
         val query = name.trim().take(100)
-        if (query.isBlank() || !Regex("^[A-Za-z0-9_. -]{1,100}$").matches(query)) {
-            return "error: provide a simple public repository name"
-        }
+        GitHubSearchQueryPolicy.rejection(query)?.let { return it }
         return try {
             val encoded = java.net.URLEncoder.encode(query, "UTF-8")
             val conn = (URL("https://api.github.com/search/repositories?q=" + encoded + "&per_page=5&sort=updated").openConnection() as HttpURLConnection)
