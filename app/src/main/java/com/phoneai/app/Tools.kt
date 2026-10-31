@@ -706,7 +706,7 @@ class Tools(private val svc: PhoneAiService) {
 
     /** Read back the exact file created by saveFile; accepts only a MediaStore content URI from its receipt. */
     fun readSavedFile(saveReceipt: String): String {
-        val rawUri = Regex("""uri=(content://[^\\s]+)""").find(saveReceipt)?.groupValues?.getOrNull(1)
+        val rawUri = Regex("""uri=(content://\S+)""").find(saveReceipt)?.groupValues?.getOrNull(1)
             ?: return "error: save receipt did not contain a verifiable file URI"
         val uri = runCatching { Uri.parse(rawUri) }.getOrNull()
             ?: return "error: saved file URI was invalid"
