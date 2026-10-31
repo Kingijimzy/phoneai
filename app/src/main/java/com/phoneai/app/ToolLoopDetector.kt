@@ -126,7 +126,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             val msg = "[LOOP BLOCKED] CRITICAL: $toolName has repeated identical " +
                 "no-progress outcomes $noProgressStreak times. Session execution " +
                 "blocked by global circuit breaker."
-            AppLogger.warning("ToolLoopDetector",
+            Logger.getLogger("ToolLoopDetector").warning(
                 "CRITICAL global_circuit_breaker tool=$toolName streak=$noProgressStreak")
             return LoopCheckResult(Level.CRITICAL, msg)
         }
@@ -137,7 +137,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             if (noProgressStreak >= config.criticalThreshold) {
                 val msg = "[LOOP BLOCKED] CRITICAL: Called $toolName $noProgressStreak " +
                     "times with identical no-progress results. Session execution blocked."
-                AppLogger.warning("ToolLoopDetector",
+                Logger.getLogger("ToolLoopDetector").warning(
                     "CRITICAL known_poll_no_progress tool=$toolName streak=$noProgressStreak")
                 return LoopCheckResult(Level.CRITICAL, msg)
             }
@@ -159,7 +159,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
                 val msg = "[LOOP WARNING] You have called $toolName $totalCount times " +
                     "with identical arguments. If this is not making progress, stop " +
                     "retrying and report the task as failed."
-                AppLogger.debug("ToolLoopDetector",
+                Logger.getLogger("ToolLoopDetector").info(
                     "WARNING generic_repeat tool=$toolName count=$totalCount")
                 return LoopCheckResult(Level.WARNING, msg, "repeat:$toolName:$argsHash")
             }
