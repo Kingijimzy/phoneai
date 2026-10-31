@@ -39,7 +39,7 @@ class OrionAgentDelegationStoreTest {
 
     @Test fun parentPromptCanSeeBoundedWorkerReceiptsAcrossTurns() {
         val manifest = OrionAgentDelegation.create(
-            AgentProfiles.find("coder")!!, "parent-123", "Review the Kotlin routing change"
+            AgentProfiles.find("coder")!!, "parent-123", "Review the Kotlin routing change", parentObjectiveId = "review_routing"
         )
         assertTrue(OrionAgentDelegation.begin(context, manifest))
         assertTrue(OrionAgentDelegation.finish(context, manifest, "Found a routing edge case and proposed a fix"))
@@ -48,6 +48,9 @@ class OrionAgentDelegationStoreTest {
         assertTrue(summary.contains("coder [completed]"))
         assertTrue(summary.contains("Found a routing edge case"))
         assertTrue(summary.contains("parent-123"))
+        assertTrue(summary.contains("objective review_routing"))
+        val saved = OrionAgentDelegation.latest(context).last()
+        assertEquals("review_routing", saved.optString("parentObjectiveId"))
     }
 
     @Test fun failedSpecialistRunIsRecordedAsFailedNotCompleted() {
