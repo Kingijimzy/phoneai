@@ -243,3 +243,12 @@ Tasks:
 - `Agent.chatSystem` now injects `OrionAppAwareness.context(svc, query)`. Ordinary chat receives the compact runtime map; explicit architecture/capability questions receive the detailed map, including registered READ/WRITE tools, specialist profiles, skills, capability-pack settings, locally recorded service connection state, installed Android activities/services/receivers, local task/memory/knowledge counts and the execution gate.
 - The awareness map is descriptive, not an authorization grant. The central Agent still dispatches through the existing guarded path; registered, configured, permission-granted, running and verified remain distinct states.
 - Existing tests in `ConversationAutoRoutePolicyTest` cover terminal/runtime, code execution, public repository inspection, explicit website visits and ordinary-conversation non-routing. Exact-head CI for the new chat wiring is tracked by Actions run `41208677709`; physical Redmi verification remains pending.
+
+
+## Implementation notes — parent brain, specialist delegation and companion continuity
+
+- Explicit user requests to delegate/assign work to a named specialist now route from Talk into the guarded Agent execution loop. This includes task assignments to the coder, researcher, planner, writer, coach or a specialist/subagent. Ordinary mentions of agents do not trigger execution.
+- The central Agent prompt now defines Orion as the parent orchestrator: decompose complex objectives into bounded subtasks, use `ask_agent` when a specialist materially helps, review specialist evidence, then continue the parent task itself through the existing guarded dispatcher and lifecycle. Specialists remain scoped workers; they do not inherit parent write permissions, phone-action authority, account mutation or trade execution.
+- The main chat companion prompt now emphasizes conversational continuity, remembering the active objective, natural replies and useful initiative without claiming sentience, independent awareness or unobserved background activity.
+- Added routing tests for explicit coder/researcher/planner delegation and negative coverage for casual agent mentions. Exact-head CI is required before treating these changes as verified.
+- Remaining orchestration work: add a durable parent/child objective graph for multi-agent runs, show worker progress and returned evidence in the main chat timeline, allow cancellation/recovery of child work, and verify voice/chat handoff on a physical device.
