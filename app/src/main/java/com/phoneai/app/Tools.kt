@@ -621,16 +621,17 @@ class Tools(private val svc: PhoneAiService) {
     }
 
     /** Save user-requested text/code into the public Downloads/Orion folder and verify the row. */
+    /** Save user-requested text/code into Downloads/Orion and verify the actual bytes by reading them back. */
     fun saveFile(fileName: String, content: String): String {
-        val requestedName = fileName.trim().substringAfterLast('/').substringAfterLast('\\')
+        val requestedName = fileName.trim().substringAfterLast('/').substringAfterLast('\\\\')
         val safeName = requestedName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120)
         if (safeName.isBlank() || safeName == "." || safeName == "..") {
             return "error: save_file needs a valid filename such as calculator.py"
         }
         if (content.isEmpty()) return "error: refusing to save an empty file"
-        if (content.toByteArray(Charsets.UTF_8).size > 200 * 1024) {
-            return "error: file exceeds the 200 KB limit"
-        }
+        val expectedBytes = content.toByteArray(Charsets.UTF_8)
+        if (expectedBytes.size > 200 * 1024) return "error: file exceeds the 200 KB limit"
+
         val resolver = svc.contentResolver
         val values = android.content.ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, safeName)
@@ -646,39 +647,90 @@ class Tools(private val svc: PhoneAiService) {
             put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Orion")
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
+
         var uri: Uri? = null
+        var writeCompleted = false
+        var published = false
         return try {
-            uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: return "error: Android did not create the Downloads entry"
-            resolver.openOutputStream(uri!!, "w")?.use { output ->
-                output.write(content.toByteArray(Charsets.UTF_8))
+            uri = target
+            resolver.openOutputStream(target, "w")?.use { output ->
+                output.write(expectedBytes)
                 output.flush()
             } ?: throw IllegalStateException("Downloads output stream unavailable")
-            val published = android.content.ContentValues().apply {
+            writeCompleted = true
+
+            val publishValues = android.content.ContentValues().apply {
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }
-            if (resolver.update(uri!!, published, null, null) != 1) {
-                throw IllegalStateException("could not publish the Downloads entry")
+            if (resolver.update(target, publishValues, null, null) != 1) {
+                throw IllegalStateException("Android did not confirm publication of the Downloads entry")
             }
-            val projection = arrayOf(
-                MediaStore.MediaColumns.DISPLAY_NAME,
-                MediaStore.MediaColumns.SIZE,
-                MediaStore.MediaColumns.RELATIVE_PATH
-            )
-            val verified = resolver.query(uri!!, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    Triple(cursor.getString(0), cursor.getLong(1), cursor.getString(2))
-                } else null
-            } ?: throw IllegalStateException("saved file could not be found for verification")
-            val expectedBytes = content.toByteArray(Charsets.UTF_8).size.toLong()
-            if (verified.first != safeName || verified.second != expectedBytes ||
-                verified.third != android.os.Environment.DIRECTORY_DOWNLOADS + "/Orion/") {
-                throw IllegalStateException("saved file metadata did not match the requested content")
+            published = true
+
+            // Verify the file's real bytes, not provider metadata such as SIZE or RELATIVE_PATH.
+            // Some MediaStore providers return stale/incomplete metadata immediately after a write.
+            val actualBytes = resolver.openInputStream(target)?.use { input ->
+                val output = java.io.ByteArrayOutputStream(expectedBytes.size)
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > expectedBytes.size) {
+                        throw IllegalStateException("read-back file is larger than the requested content")
+                    }
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            } ?: throw IllegalStateException("saved file could not be reopened for content verification")
+
+            if (!expectedBytes.contentEquals(actualBytes)) {
+                throw IllegalStateException("read-back content did not match the requested bytes")
             }
-            "FILE SAVED AND VERIFIED: ${verified.first} | Downloads/Orion/${verified.first} | ${verified.second} bytes | uri=$uri"
+            "FILE SAVED AND CONTENT VERIFIED: $safeName | Downloads/Orion/$safeName | ${actualBytes.size} bytes | uri=$target"
         } catch (e: Exception) {
-            uri?.let { runCatching { resolver.delete(it, null, null) } }
-            "error: file was not saved or verified (${e.javaClass.simpleName}: ${e.message.orEmpty().take(120)})"
+            // Do not delete a successfully written file because metadata or a later verification
+            // step failed. Only remove an entry when the initial write itself did not complete.
+            if (!writeCompleted) uri?.let { runCatching { resolver.delete(it, null, null) } }
+            val state = when {
+                published -> "file was published, but read-back verification failed; it was left in Downloads/Orion"
+                writeCompleted -> "file bytes were written, but publication or read-back verification failed; the entry was left for inspection"
+                else -> "file write did not complete"
+            }
+            "error: $state (${e.javaClass.simpleName}: ${e.message.orEmpty().take(160)})" +
+                (uri?.let { " | uri=$it" } ?: "")
+        }
+    }
+
+    /** Read back the exact file created by saveFile; accepts only a MediaStore content URI from its receipt. */
+    fun readSavedFile(saveReceipt: String): String {
+        val rawUri = Regex("""uri=(content://[^\\s]+)""").find(saveReceipt)?.groupValues?.getOrNull(1)
+            ?: return "error: save receipt did not contain a verifiable file URI"
+        val uri = runCatching { Uri.parse(rawUri) }.getOrNull()
+            ?: return "error: saved file URI was invalid"
+        if (uri.scheme != "content" || uri.authority != "media") {
+            return "error: saved file URI is outside Android MediaStore"
+        }
+        return try {
+            val bytes = svc.contentResolver.openInputStream(uri)?.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var total = 0
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > 200 * 1024) return "error: saved file exceeds the 200 KB read limit"
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            } ?: return "error: saved file could not be reopened"
+            String(bytes, Charsets.UTF_8)
+        } catch (e: Exception) {
+            "error: saved file read-back failed (${e.javaClass.simpleName}: ${e.message.orEmpty().take(120)})"
         }
     }
 
