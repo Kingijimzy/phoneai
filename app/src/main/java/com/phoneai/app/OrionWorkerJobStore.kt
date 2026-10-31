@@ -112,15 +112,16 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
             lastError = AgentPrivacyFilter.safeCommand(reason).take(240))
     }
 
-    fun cancelParent(parentTaskId: String): Int = synchronized(lock) {
+    fun cancelParent(parentTaskId: String, reason: String = "parent_cancelled"): Int = synchronized(lock) {
         val parent = parentTaskId.trim()
         if (parent.isBlank()) return@synchronized 0
+        val safeReason = AgentPrivacyFilter.safeCommand(reason).replace(Regex("\\s+"), " ").take(120)
         val before = jobs.toList()
         var changed = 0
         jobs = jobs.map { job ->
             if (job.parentTaskId == parent && job.status in setOf(Status.QUEUED, Status.RUNNING, Status.PAUSED)) {
                 changed++
-                job.copy(status = Status.CANCELLED, updatedAt = clock(), lastError = "parent_cancelled")
+                job.copy(status = Status.CANCELLED, updatedAt = clock(), lastError = safeReason)
             } else job
         }.toMutableList()
         if (changed > 0 && !persistLocked()) { jobs = before.toMutableList(); return@synchronized 0 }
