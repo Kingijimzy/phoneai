@@ -440,3 +440,11 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Added regression coverage for terminal-receipt and orphaned-manifest rejection. Existing tamper coverage confirms persisted tool-scope widening is rejected.
 - These are source changes and committed tests, not a claim that Gradle/CI or physical-device tests have passed. The provider-backed WorkManager executor, shared request cancellation/budget enforcement, and durable originating-chat result delivery remain the next Stage 3 implementation gates.
 - Central-brain invariant: specialists may produce bounded evidence, but only the parent Orion conversation owns user-facing continuity, final interpretation, memory updates and any consequential action approval.
+
+
+### Specialist receipt integrity update (2026-10-31)
+
+- Receipt completion is now one-way: only a running receipt can be finished. Duplicate or late completion cannot overwrite a terminal outcome.
+- Manifest restoration rejects persisted capability-call budgets above the canonical specialist profile budget.
+- Regression tests cover widened capability budgets and duplicate completion, in addition to terminal receipts, orphaned manifests, and widened tool scopes.
+- Source and test changes are committed. Gradle/CI and physical-device verification have not yet been observed. Background specialist execution remains incomplete until the scheduled executor, guarded provider path, cancellation handling, and parent-chat result delivery are implemented and tested.
