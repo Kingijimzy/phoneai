@@ -793,7 +793,8 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         val initialModel = selectedModel(p, vision)
         val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, initialModel)
-        val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, tokens)
+        val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
+        val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
         val queue = mutableListOf(initialModel)
         val tried = HashSet<String>()
         val rateLimitRetried = HashSet<String>()
@@ -820,7 +821,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val payload: String
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, requestMessages, tokens, temperature)
+                payload = anthropicBody(model, requestMessages, boundedTokens, temperature)
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
@@ -830,14 +831,14 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         .put("content", message.opt("content") ?: ""))
                 }
                 payload = JSONObject().put("model", model).put("input", input)
-                    .put("max_output_tokens", tokens).put("temperature", temperature).toString()
+                    .put("max_output_tokens", boundedTokens).put("temperature", temperature).toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
                     .put("model", model)
                     .put("messages", requestMessages)
                     .put("temperature", temperature)
-                    .put("max_tokens", tokens)
+                    .put("max_tokens", boundedTokens)
                 if (onDelta != null && !vision) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
