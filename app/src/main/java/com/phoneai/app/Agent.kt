@@ -854,15 +854,30 @@ RESPONSE QUALITY AND FORMAT:
         val from = maxOf(0, chatHist.length() - 8)
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
+        val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
+        val streamWatch = HermesRepetitionGuard.RunawayStreamWatch()
         val answer = try {
-            talkNim.chat(messages, false, 420, 0.55, onDelta = { delta -> if (!stopped) ui.stream(delta) }).trim()
+            talkNim.chat(messages, false, 420, 0.55, onDelta = { delta ->
+                if (!stopped && !runawayStream.get()) {
+                    if (streamWatch.feed(delta)) {
+                        runawayStream.set(true)
+                        talkNim.cancel()
+                    } else {
+                        ui.stream(delta)
+                    }
+                }
+            }).trim()
         } catch (e: Exception) {
             if (stopped) return
+            if (runawayStream.get()) {
+                ui.say("The model response entered a repetition loop. I stopped the stream and discarded the repeated answer instead of saving it.")
+                return
+            }
             ui.say("I couldn't reach the AI just now. " + (e.message ?: "Please try again."))
             return
         }
         if (stopped) return
-        if (HermesRepetitionGuard.isRunawayRepetition(answer)) {
+        if (runawayStream.get() || HermesRepetitionGuard.isRunawayRepetition(answer)) {
             ui.say("The model response fell into a repetition loop. I discarded the repeated answer instead of saving it as conversation history. Please retry or switch models.")
             return
         }
