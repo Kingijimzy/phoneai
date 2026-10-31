@@ -1,0 +1,100 @@
+package com.phoneai.app
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class OrionAgentDelegationTest {
+    @Test fun researchSpecialistReceivesOnlyPublicReadCapabilities() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-task-42", "Research recent Android agent frameworks"
+        )
+        assertEquals(OrionAgentDelegation.Access.READ_ONLY_RESEARCH, manifest.access)
+        assertEquals("parent-task-42", manifest.parentTaskId)
+        assertTrue(manifest.allowedTools.containsAll(setOf("live_web_search", "live_news", "bybit_public_ticker")))
+        assertFalse(manifest.allowedTools.any { it in setOf("telegram_send", "sms", "shell", "python_exec", "paper_trade") })
+    }
+
+    @Test fun customSpecialistDefaultsToAnalysisOnlyWithNoToolCapabilities() {
+        val custom = AgentProfile("social_helper", "Social Helper", "Plans social content", "Create content plans and drafts.")
+        val manifest = OrionAgentDelegation.create(custom, "parent-task-7", "Prepare a content calendar")
+        assertEquals(OrionAgentDelegation.Access.ANALYSIS_ONLY, manifest.access)
+        assertTrue(manifest.allowedTools.isEmpty())
+    }
+
+    @Test fun tradingCoachCannotPlaceOrdersFromItsDelegatedScope() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("coach")!!, "parent-trading-task", "Review the BTC chart and identify possible setups"
+        )
+        assertEquals(OrionAgentDelegation.Access.TRADING_ANALYSIS, manifest.access)
+        assertEquals(setOf("bybit_public_ticker"), manifest.allowedTools)
+        assertFalse(manifest.allowedTools.contains("paper_trade"))
+        assertFalse(manifest.allowedTools.contains("trading_kill_switch"))
+    }
+
+    @Test fun delegatedPromptNamesParentObjectiveAndExplicitlyForbidsExternalActions() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-123", "Compare two research sources"
+        )
+        val prompt = manifest.promptBlock()
+        assertTrue(prompt.contains("parent-123"))
+        assertTrue(prompt.contains("Compare two research sources"))
+        assertTrue(prompt.contains("Do not claim to execute phone actions"))
+        assertTrue(prompt.contains("parent Agent must review"))
+    }
+
+    @Test fun delegationHasBoundedCallBudgetAndNoParentSecretInManifest() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research this API key=super-secret and find public docs"
+        )
+        assertEquals(1, manifest.maxModelCalls)
+        assertFalse(manifest.objective.contains("super-secret"))
+    }
+
+    @Test fun brokerDispatchesOnlyManifestAllowedReadOnlyTools() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-55", "Research Android background work"
+        )
+        var dispatched = 0
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { tool, args ->
+            dispatched++
+            assertEquals("live_web_search", tool)
+            assertEquals("WorkManager Android", args.optString("query"))
+            "source evidence"
+        }
+        assertEquals("source evidence", broker.execute("live_web_search", org.json.JSONObject().put("query", "WorkManager Android")))
+        assertEquals(1, dispatched)
+        assertEquals(1, broker.callsUsed())
+    }
+
+    @Test fun brokerRejectsUnlistedToolWithoutCallingParentDispatcher() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a topic"
+        )
+        var dispatched = false
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { _, _ -> dispatched = true; "should not run" }
+        assertTrue(broker.execute("telegram_send", org.json.JSONObject()).startsWith("error:"))
+        assertFalse(dispatched)
+    }
+
+    @Test fun brokerRejectsWriteToolEvenIfManifestIsTampered() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a topic"
+        ).copy(allowedTools = setOf("telegram_send"))
+        var dispatched = false
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { _, _ -> dispatched = true; "should not run" }
+        assertTrue(broker.execute("telegram_send", org.json.JSONObject()).contains("not read-only"))
+        assertFalse(dispatched)
+    }
+
+    @Test fun brokerEnforcesPerDelegationCapabilityBudget() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, null, "Research a topic"
+        )
+        var dispatched = 0
+        val broker = OrionAgentDelegation.CapabilityBroker(manifest) { _, _ -> dispatched++; "ok" }
+        assertEquals("ok", broker.execute("live_web_search", org.json.JSONObject().put("query", "one")))
+        assertTrue(broker.execute("live_news", org.json.JSONObject().put("query", "two")).startsWith("error:"))
+        assertEquals(1, dispatched)
+    }
+
+}

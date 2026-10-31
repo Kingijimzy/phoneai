@@ -31,7 +31,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** The extra abilities the agent can use besides touching the screen. All run on the worker thread. */
-class Tools(private val svc: PhoneAiService) {
+class Tools(
+    private val svc: PhoneAiService,
+    private val delegatedCapabilityDispatch: ((String, JSONObject) -> String)? = null
+) {
 
     private fun launch(i: Intent, settleMs: Long = 1200): String {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -1011,9 +1014,24 @@ class Tools(private val svc: PhoneAiService) {
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
+        val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task)
+        if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
-            "AGENT ${agent.name} ANSWER (relay faithfully; it is analysis, not an action taken):\n" + AgentRunner.run(svc, agent, emptyList(), task)
-        } catch (e: Exception) { "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")" }
+            val answer = AgentRunner.runDelegated(
+                svc, agent, manifest.objective, manifest, delegatedCapabilityDispatch
+            )
+            val failed = answer.isBlank() || answer.startsWith("error:", true)
+            val safeAnswer = if (answer.isBlank()) "error: specialist returned an empty response" else answer
+            if (!OrionAgentDelegation.finish(svc, manifest, safeAnswer, failed = failed)) {
+                "error: ${agent.name} returned, but its delegation receipt could not be saved. Result requires review before treating the delegation as complete."
+            } else {
+                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\n" + safeAnswer
+            }
+        } catch (e: Exception) {
+            val failure = "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")"
+            OrionAgentDelegation.finish(svc, manifest, failure, failed = true)
+            failure
+        }
     }
 
     fun pythonExec(code: String): String =

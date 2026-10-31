@@ -124,7 +124,14 @@ internal object OrionTasksCapabilityExecutor {
                     val parts = row.split("|", limit = 3)
                     "- ${parts.getOrNull(1).orEmpty()}: ${parts.getOrNull(2).orEmpty()} (task id ${parts.firstOrNull().orEmpty()})"
                 } + "\nSay 'continue' to resume the oldest preserved task. Uncertain in-flight actions still require inspection."
-            taskLines + recovery + archivedText
+            val delegated = OrionAgentDelegation.latest(service, 5)
+            val delegationText = if (delegated.isEmpty()) "" else
+                "\nRECENT SPECIALIST DELEGATIONS (read-only workers; parent task retains action authority):\n" +
+                    delegated.asReversed().joinToString("\n") { item ->
+                        "- ${item.optString("agentId")} [${item.optString("status")}]: ${item.optString("objective").take(100)}" +
+                            (item.optString("parentTaskId").takeIf { it.isNotBlank() }?.let { " (parent $it)" } ?: "")
+                    }
+            taskLines + recovery + archivedText + delegationText
         }
         "task_add" -> {
             if (stopped()) "error: task was stopped before saving the task."

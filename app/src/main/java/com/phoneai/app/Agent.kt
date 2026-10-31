@@ -84,6 +84,29 @@ internal object OrionCommandIntentPolicy {
     }
 }
 
+/**
+ * Voice is an interaction surface, not a reduced-capability assistant.
+ * Action-shaped utterances enter the same guarded command/task lifecycle as chat.
+ */
+internal object OrionVoiceExecutionPolicy {
+    private val contextualActionKinds = setOf(
+        OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP,
+        OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
+        OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
+        OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
+        OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
+        OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
+    )
+
+    fun shouldRouteToCommand(
+        command: String,
+        recentTurns: List<Pair<String, String>>,
+        activeObjective: String
+    ): Boolean =
+        OrionCommandIntentPolicy.requiresDirectActionRouting(command) ||
+            OrionContextualIntentInterpreter.resolve(command, recentTurns, activeObjective).kind in contextualActionKinds
+}
+
 /** What the agent uses to talk to the person. */
 interface AgentUi {
     fun say(text: String)
@@ -127,7 +150,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
     private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val commandNim = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
-    private val tools = Tools(svc)
+    private val tools = Tools(svc) { tool, args -> executeWithRecoveryGuard(tool, args) }
     private val ranSteps = JSONArray()
     private val local = Local(
         svc, tools, { t, args -> executeWithRecoveryGuard(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
@@ -908,6 +931,14 @@ RESPONSE QUALITY AND FORMAT:
         val command = input.trim()
         if (command.isEmpty()) return
         talkNim.beginCommand()
+        // Route actionable voice requests through the exact same planner, checkpoint,
+        // capability registry, owner policy, confirmation and evidence gates as chat.
+        if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
+                command, recentConversationTurns(), contextualActiveObjective()
+            )) {
+            runInternal(command, reuseCommandBudget = false)
+            return
+        }
         stopped = false
         researchCancelled.set(false)
         talkNim.resume()
@@ -1808,7 +1839,7 @@ Rules:
             val extractedPlace = WeatherService.requestedPlace(command)
             val place = extractedPlace.ifBlank { rememberedWeatherPlace }
             if (extractedPlace.isNotBlank()) WeatherService.rememberPlace(svc, extractedPlace)
-            val answer = research("weather", JSONObject().put("location", place))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("weather", JSONObject().put("location", place))))
             logShortcut("weather", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1817,7 +1848,7 @@ Rules:
         // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
         if (!resumeRequest && !browserActionTask && !structuredTask && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
-            val answer = research("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))))
             logShortcut("live_news", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1826,7 +1857,7 @@ Rules:
         // Scores are structured live data: answer from the scoreboard feed, not a list of links.
         if (!resumeRequest && !browserActionTask && !structuredTask && LiveSports.isScoreRequest(command)) {
             ui.phase("acting")
-            val scores = research("live_sports", JSONObject().put("query", command))
+            val scores = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_sports", JSONObject().put("query", command))))
             if (!scores.startsWith("error:", true)) {
                 logShortcut("live_sports", scores)
                 history.put(msg("assistant", JSONObject().put("say", scores).put("tool", "done").toString()))
@@ -1950,7 +1981,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
-            val answer = summarizeSearch(command, research("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))).let { raw -> if (raw.startsWith("Web search results for")) summarizeSearch(command, raw) else raw }
             logShortcut("web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1960,7 +1991,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
-            val raw = research("live_web_search", JSONObject().put("query", query))
+            val raw = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", query))))
             val answer = summarizeSearch(command, raw)
             logShortcut("live_web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -1981,7 +2012,7 @@ Rules:
                 else -> rawSymbol
             }
             val symbol = baseSymbol + "USDT"
-            val answer = research("bybit_public_ticker", JSONObject().put("symbol", symbol))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("bybit_public_ticker", JSONObject().put("symbol", symbol))))
             logShortcut("market_quote", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -2718,6 +2749,37 @@ Rules:
     /** Deterministic read shortcuts skip model planning, never the shared dispatch lifecycle. */
     private fun research(tool: String, args: JSONObject): String =
         executeWithRecoveryGuard(tool, args)
+
+    /**
+     * Runs a deterministic, read-only shortcut through the same durable checkpoint and evidence
+     * receipt used by model-planned tasks. Each read is still dispatched through the guarded
+     * adapter; this wrapper only owns task begin/step/record/complete transitions.
+     */
+    private fun researchShortcut(command: String, steps: List<OrionResearchShortcutLifecycle.Step>): String {
+        val result = OrionResearchShortcutLifecycle.run(
+            command = command,
+            steps = steps,
+            checkpoint = object : OrionResearchShortcutLifecycle.Checkpoint {
+                override fun begin(command: String) = OrionTasksCapabilityExecutor.beginRun(svc, command)
+                override fun beginStep(tool: String, args: JSONObject) =
+                    OrionTasksCapabilityExecutor.beginStep(svc, tool, args)
+                override fun recordStep(tool: String, args: JSONObject, result: String) =
+                    OrionTasksCapabilityExecutor.recordStep(svc, tool, args, result)
+                override fun pause() { OrionTasksCapabilityExecutor.pauseRun(svc) }
+                override fun requireRecovery(reason: String) {
+                    OrionTasksCapabilityExecutor.requireRecovery(svc, reason)
+                }
+                override fun complete() = OrionTasksCapabilityExecutor.completeRun(svc)
+            },
+            cancelled = { stopped || researchCancelled.get() },
+            execute = { tool, args -> research(tool, args) }
+        )
+        if (result.completed) {
+            try { svc.onAgentTaskFinished(command, true) } catch (_: Exception) { }
+            return result.output
+        }
+        return result.output
+    }
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {

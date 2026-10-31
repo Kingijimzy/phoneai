@@ -150,17 +150,47 @@ class ToolRegistryTest {
 }
 
 class ToolRegistryPromptAvailabilityTest {
-    @Test fun everyRequestReceivesFullContractsForAllRegisteredTools() {
-        val prompt = ToolRegistry.promptSection("open whatsapp and read my last chat")
+    @Test fun everyToolRemainsDiscoverableByNameAndArgumentSignature() {
+        val prompt = ToolRegistry.promptSection("open WhatsApp and read my last chat")
         ToolRegistry.all.forEach { tool ->
-            assertTrue("Missing full tool contract for ${tool.name}", prompt.contains("- " + tool.promptLine))
+            val endOfArguments = tool.promptLine.indexOf("}:")
+            val signature = if (endOfArguments >= 0) tool.promptLine.substring(0, endOfArguments + 1)
+                else tool.promptLine.substringBefore(":")
+            assertTrue("Missing discoverable signature for ${tool.name}", prompt.contains(signature))
         }
-        assertTrue(prompt.contains("- bybit_public_ticker {symbol}: read the public Bybit"))
-        assertTrue(prompt.contains("- read_screen {}"))
     }
 
-    @Test fun requestTextDoesNotHideCapabilitiesFromThePlanner() {
-        assertEquals(ToolRegistry.promptSection(), ToolRegistry.promptSection("what is the bitcoin price on bybit"))
-        assertEquals(ToolRegistry.promptSection(), ToolRegistry.promptSection(null))
+    @Test fun requestGetsFullContractsForRelevantToolsAndCompactSignaturesForTheRest() {
+        val prompt = ToolRegistry.promptSection("scan BTCUSDT and EURUSD trading setups and review the market")
+        val setup = ToolRegistry.find("setup_scan")!!
+        val browser = ToolRegistry.find("browser_navigate")!!
+        assertTrue("Trading request must include the complete setup-scan contract", prompt.contains("- " + setup.promptLine))
+        assertTrue("Unrelated browser capability must remain discoverable", prompt.contains(browser.promptLine.substringBefore(":")))
+        assertFalse("Unrelated browser contract should not inflate the prompt", prompt.contains("- " + browser.promptLine))
+    }
+
+    @Test fun requestFamiliesSelectTheirRelevantCapabilityContracts() {
+        val launchOnly = ToolRegistry.detailedToolNames("Open WhatsApp")
+        assertTrue("A direct app-launch request must include open_app's full contract", launchOnly.contains("open_app"))
+        val phone = ToolRegistry.detailedToolNames("open WhatsApp and tap the search box")
+        assertTrue(phone.containsAll(setOf("open_app", "read_screen", "click", "type")))
+        val research = ToolRegistry.detailedToolNames("research the latest OpenAI news and verify sources")
+        assertTrue(research.containsAll(setOf("live_news", "live_web_search", "research_web")))
+        val memory = ToolRegistry.detailedToolNames("remember this decision and recall my previous lesson")
+        assertTrue(memory.containsAll(setOf("remember", "record_decision", "recall", "discussion_search")))
+        val agents = ToolRegistry.detailedToolNames("create a research subagent and delegate the task")
+        assertTrue(agents.containsAll(setOf("create_agent", "ask_agent")))
+    }
+
+    @Test fun baselineAndFullRegistrySnapshotsRemainAvailableForDiagnostics() {
+        val prompt = ToolRegistry.promptSection()
+        assertTrue(prompt.startsWith("Tools:\n"))
+        ToolRegistry.all.forEach { tool -> assertTrue(prompt.contains("- " + tool.promptLine)) }
+        assertTrue(prompt.contains("Tool-use guidance:"))
+        assertTrue(prompt.contains("SCREEN TARGET RULE"))
+        assertTrue(prompt.contains("GOAL COMPLETION RULE"))
+        val compact = ToolRegistry.promptSection(null)
+        assertTrue(compact.contains("Also available, signatures only"))
+        assertTrue(compact.contains("task_list {}"))
     }
 }
