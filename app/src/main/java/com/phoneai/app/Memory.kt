@@ -125,6 +125,7 @@ object MemoryStore {
             dup.reviewStatus = reviewStatus
             dup.evidence = evidence.take(240)
             if (!save(c)) { restoreFields(dup, old); return@synchronized null }
+            runCatching { OrionKnowledgeGraph.indexMemory(c, dup) }
             return@synchronized copyOf(dup)
         }
         val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
@@ -143,6 +144,7 @@ object MemoryStore {
                 save(c)
                 return@synchronized null
             }
+            runCatching { OrionKnowledgeGraph.indexMemory(c, replaced) }
             return@synchronized copyOf(replaced)
         }
         val id = (list.maxOfOrNull { it.id } ?: 0) + 1
@@ -156,6 +158,7 @@ object MemoryStore {
             list.addAll(0, removed)
             return@synchronized null
         }
+        runCatching { OrionKnowledgeGraph.indexMemory(c, m) }
         copyOf(m)
     }
 
@@ -177,6 +180,7 @@ object MemoryStore {
         val old = memory.reviewStatus
         memory.reviewStatus = status
         if (!save(c)) { memory.reviewStatus = old; return@synchronized false }
+        if (status == "approved") runCatching { OrionKnowledgeGraph.indexMemory(c, memory) }
         true
     }
 
@@ -224,7 +228,10 @@ object MemoryStore {
                 memory.reviewStatus = oldStatus
                 memory.evidence = oldEvidence
                 false
-            } else true
+            } else {
+                runCatching { OrionKnowledgeGraph.indexMemory(c, memory) }
+                true
+            }
         }
     }
 
@@ -248,6 +255,7 @@ object MemoryStore {
             list.addAll(removed)
             return@synchronized false
         }
+        removed.forEach { runCatching { OrionKnowledgeGraph.forgetMemory(c, it.id) } }
         true
     }
 
@@ -296,7 +304,11 @@ object MemoryStore {
             MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
                 OrionMemoryLifecycle.isActive(c, it.id)
         }
-        val items = MemoryRanking.select(approved, query)
+        val ranked = MemoryRanking.select(approved, query)
+        val graphIds = if (query.isNullOrBlank()) emptySet() else
+            runCatching { OrionKnowledgeGraph.relatedMemoryIds(c, query) }.getOrDefault(emptySet())
+        val graphMatches = approved.filter { it.id in graphIds }
+        val items = (ranked + graphMatches).distinctBy { it.id }.take(15)
         if (items.isEmpty()) return "(no owner-approved, non-sensitive memories yet; proposals require review)"
         return items.joinToString("\n") {
             "[${it.id}] (${it.category}, source=${it.sourceRole}, confidence=${(it.confidence * 100).toInt()}%" +
