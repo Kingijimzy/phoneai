@@ -183,6 +183,26 @@ class AgentCheckpointStoreTest {
         assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
     }
 
+    @Test fun parentWaitsForDelegatedChildrenAndCompletesAfterLastChildReceipt() {
+        assertTrue(AgentCheckpointStore.begin(context, "Research a topic with a specialist"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val child = store.enqueue(parentId, "Summarise verified findings", OrionWorkerJobStore.Kind.ANALYSIS)
+        assertNotNull(child)
+
+        assertTrue("Chat-turn completion must not close an objective with pending children",
+            AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertFalse("Waiting parent remains valid for its exact child", AgentCheckpointStore.cancellationRequested(context, parentId))
+
+        assertTrue(store.claimNext { it == parentId } != null)
+        assertTrue(store.complete(child!!.id, "Findings saved"))
+        assertFalse(store.hasPendingForParent(parentId))
+        assertTrue("Final child receipt should allow parent completion", AgentCheckpointStore.complete(context))
+        assertEquals("completed", AgentCheckpointStore.pending(context)?.optString("status") ?: "completed")
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+    }
+
     @Test fun tasksExecutorOwnsDurableCheckpointRecoveryBoundary() {
         assertTrue(OrionTasksCapabilityExecutor.beginRun(context, "Inspect the app after restart"))
         assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "open_app", JSONObject().put("name", "Settings")))
