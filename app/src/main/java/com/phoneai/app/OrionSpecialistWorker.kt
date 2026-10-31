@@ -175,7 +175,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
 
     private fun deliverResult(job: OrionWorkerJobStore.Job): Result {
         val sessionId = job.conversationId ?: return Result.failure()
-        val summary = "Specialist result ready (${job.kind.name.lowercase()}): ${job.result.take(420)}"
+        val summary = "Specialist result ready (job ${job.id}, ${job.kind.name.lowercase()}): ${job.result.take(380)}"
         val event = OrionConversationRepository.get(applicationContext).recordEventForSession(
             applicationContext, sessionId, "specialist-${job.id}", "specialist_result", "completed", summary
         )
