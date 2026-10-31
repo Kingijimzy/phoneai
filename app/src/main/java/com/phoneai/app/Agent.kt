@@ -814,16 +814,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     fun runConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
-        // Index explicit preferences, habits and project facts as owner-reviewable proposals.
-        // This is deterministic and local; it does not retain arbitrary conversation text.
+    private fun indexMemoryObservation(text: String, sourceLabel: String) {
         runCatching {
-            MemoryAutoIndexer.observe(svc, command)?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }?.let { proposal ->
+            MemoryAutoIndexer.observe(svc, text)?.let { memory ->
+                val ownerConfirmed = memory.sourceRole == "owner" && memory.reviewStatus == "approved"
                 OrionConversationRepository.get(svc).recordEvent(
-                    svc, null, "memory_proposal", "pending",
-                    "Suggested memory for owner review: category=${proposal.category}, source=user_observation"
+                    svc, null,
+                    if (ownerConfirmed) "memory_saved" else "memory_proposal",
+                    if (ownerConfirmed) "completed" else "pending",
+                    if (ownerConfirmed) "Explicit remember request saved to approved memory from $sourceLabel: category=${memory.category}"
+                    else "Suggested memory from $sourceLabel for owner review: category=${memory.category}"
                 )
             }
         }
+    }
+
+        indexMemoryObservation(command, "typed chat")
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         // Orion Chat is the front door: explicit repository, terminal/runtime and website tasks
         // must enter the same guarded Agent path instead of being answered as plain conversation.
@@ -955,14 +961,7 @@ RESPONSE QUALITY AND FORMAT:
     fun runLiveConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
-        runCatching {
-            MemoryAutoIndexer.observe(svc, command)?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }?.let { proposal ->
-                OrionConversationRepository.get(svc).recordEvent(
-                    svc, null, "memory_proposal", "pending",
-                    "Suggested memory from voice conversation for owner review: category=${proposal.category}"
-                )
-            }
-        }
+        indexMemoryObservation(command, "standard voice")
         talkNim.beginCommand()
         // Route actionable voice requests through the exact same planner, checkpoint,
         // capability registry, owner policy, confirmation and evidence gates as chat.
