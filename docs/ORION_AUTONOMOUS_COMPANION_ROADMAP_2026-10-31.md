@@ -252,3 +252,6 @@ Tasks:
 - The main chat companion prompt now emphasizes conversational continuity, remembering the active objective, natural replies and useful initiative without claiming sentience, independent awareness or unobserved background activity.
 - Added routing tests for explicit coder/researcher/planner delegation and negative coverage for casual agent mentions. Exact-head CI is required before treating these changes as verified.
 - Remaining orchestration work: add a durable parent/child objective graph for multi-agent runs, show worker progress and returned evidence in the main chat timeline, allow cancellation/recovery of child work, and verify voice/chat handoff on a physical device.
+
+
+- The parent brain and Talk chat now receive a compact, bounded specialist-work ledger (latest three receipts): worker identity, status, assigned objective, saved result summary and parent task link. This lets Orion maintain continuity across turns and review previous delegated work without relying on the model to remember transient output. Ledger entries are explicitly marked as evidence, not instructions.
