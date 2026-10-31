@@ -98,15 +98,27 @@ Tasks:
 
 Tasks:
 - [ ] Define canonical memory layers: identity/preferences, facts, decisions, lessons, skills, active objectives, agent state and evidence.
-- [ ] Add provenance, confidence, timestamps, sensitivity labels, retention and correction/deletion semantics.
+- [x] Add provenance, confidence, timestamps, sensitivity labels, and correction/deletion semantics to local memory records.
+- [ ] Add retention/expiry rules and a complete user-visible provenance/audit history.
 - [ ] Make memory provider-neutral and accessible to every authorized agent through filtered views.
-- [ ] Learn from completed tasks, user corrections, successful workflows and verified failures; do not learn blindly from model guesses or untrusted tool output.
-- [ ] Add review-before-save for sensitive or uncertain memories.
+- [x] Learn from completed task receipts, user corrections, clean successful workflows and verified failures; do not learn blindly from model guesses or untrusted tool output.
+- [x] Keep uncertain/model-originated memories pending owner review; sensitive memories are excluded from model context even if approved.
 - [ ] Build a skill factory: discover gap → research sources → inspect license → draft → sandbox tests → permission review → version → owner-approved activation → rollback.
-- [ ] Keep privileged security/policy code outside generated-skill write access.
+- [x] Keep privileged security/policy code outside generated-skill write access; current skill registration is declarative and cannot execute arbitrary code.
 - [ ] Add periodic memory consolidation with bounded cost and a user-visible audit trail.
 
 **Exit gate:** a lesson learned in one provider/agent is applied correctly by another; a new skill passes tests and remains inactive until authorized; rollback is verified.
+
+#### Stage 4 implementation log — owner-reviewed memory provenance
+
+- Extended local memory records with source role, confidence, sensitivity, review status and bounded evidence metadata. Existing records migrate as legacy, lower-confidence, pending-review entries rather than being silently trusted.
+- Model/tool-originated memory writes and edits are pending review. Direct entries and edits made in the Memory screen are owner-confirmed.
+- Added approve/reject controls and visible provenance/review labels to the Memory screen.
+- Only owner-approved, non-sensitive memories are injected into the central Agent's trusted long-term-memory prompt block. Likely credentials, seed phrases, private keys, OTPs and similar content are labelled sensitive and excluded even after approval.
+- Preserved the new metadata in the undo journal so reversing a deletion does not silently erase its provenance or trust state.
+- Added deterministic policy tests for review gating, sensitive-memory exclusion and confidence bounds.
+
+**Remaining Stage 4 work:** migrate the other memory layers to one canonical schema; add retention/expiry and audit history; expose filtered memory views to all authorized specialists; complete license-aware skill review and sandbox testing; add bounded consolidation and cross-provider learning acceptance tests.
 
 ### Stage 5 — Proactive watcher and background work
 **Purpose:** Orion notices relevant events and makes useful progress without being prompted.
