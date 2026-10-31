@@ -20,6 +20,11 @@ class CalculatorRequestParserTest {
         assertEquals(32.0, expressions[2].expected()!!, 0.0)
     }
 
+    @Test fun parsesDecimalOperandsAndIgnoresSentencePunctuation() {
+        val expressions = CalculatorRequestParser.parse("Calculate 2.5 * 4.0 and 2 ** 5.")
+        assertEquals(listOf("2.5 * 4.0", "2 ** 5"), expressions.map { it.display })
+    }
+
     @Test fun generatedScriptChecksEachRequestedExpressionAndAllOperations() {
         val expressions = CalculatorRequestParser.parse("15 + 25; 100 / 4; 2 ** 5")
         val script = CalculatorRequestParser.script(expressions)
