@@ -42,6 +42,22 @@ class OrionAgentDelegationTest {
         assertTrue(prompt.contains("parent Agent must review"))
     }
 
+    @Test fun failedBrokerEvidenceStopsBeforeSpecialistModelCanInventAResult() {
+        assertTrue(AgentRunner.isDelegatedCapabilityFailure("error: live_web_search unavailable"))
+        assertTrue(AgentRunner.isDelegatedCapabilityFailure("  ERROR: parent dispatch failed"))
+        assertFalse(AgentRunner.isDelegatedCapabilityFailure("No recognised public market symbol was supplied"))
+        assertFalse(AgentRunner.isDelegatedCapabilityFailure("source evidence"))
+        assertFalse(AgentRunner.isDelegatedCapabilityFailure(null))
+    }
+
+    @Test fun delegationPromptAndReceiptIncludeCapabilityBudgetAndMemoryScope() {
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!, "parent-88", "Research Android scheduling"
+        ).copy(maxCapabilityCalls = 2)
+        assertTrue(manifest.promptBlock().contains("Capability-call budget: 2"))
+        assertTrue(manifest.promptBlock().contains(manifest.memoryScope))
+    }
+
     @Test fun delegationHasBoundedCallBudgetAndNoParentSecretInManifest() {
         val manifest = OrionAgentDelegation.create(
             AgentProfiles.find("research")!!, null, "Research this API key=super-secret and find public docs"

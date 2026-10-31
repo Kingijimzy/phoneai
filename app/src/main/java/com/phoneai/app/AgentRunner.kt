@@ -15,6 +15,9 @@ object AgentRunner {
     internal fun symbolsIn(text: String): List<String> =
         text.split(Regex("[^A-Za-z0-9]+")).mapNotNull { Bybit.symbolOf(it) }.distinct().take(2)
 
+    internal fun isDelegatedCapabilityFailure(evidence: String?): Boolean =
+        evidence?.trim()?.startsWith("error:", ignoreCase = true) == true
+
     private fun wantsOutlook(text: String): Boolean =
         Regex("(?i)\\b(predict|prediction|forecast|outlook|bias|direction|briefing|where is .* going|which way|expect)\\b").containsMatchIn(text)
 
@@ -203,8 +206,13 @@ object AgentRunner {
         manifest: OrionAgentDelegation.Manifest,
         capabilityDispatch: ((String, JSONObject) -> String)? = null
     ): String {
+        val needsCapability = manifest.access == OrionAgentDelegation.Access.READ_ONLY_RESEARCH ||
+            (manifest.access == OrionAgentDelegation.Access.TRADING_ANALYSIS && symbolsIn(userText).isNotEmpty())
+        if (needsCapability && capabilityDispatch == null) {
+            return "error: parent guarded dispatcher was not supplied; delegated live-data work was not run"
+        }
         val evidence = if (capabilityDispatch == null) {
-            "No delegated capability was dispatched: the parent guarded dispatcher was not supplied."
+            "This specialist has no external data capabilities."
         } else {
             val broker = OrionAgentDelegation.CapabilityBroker(manifest, capabilityDispatch)
             when (manifest.access) {
@@ -223,6 +231,7 @@ object AgentRunner {
                 OrionAgentDelegation.Access.TASK_PLANNING -> "This specialist has no external data capabilities."
             }
         }
+        if (isDelegatedCapabilityFailure(evidence)) return evidence
         return runFull(c, agent, emptyList(), userText, delegation = manifest, delegatedEvidence = evidence).text
     }
 
