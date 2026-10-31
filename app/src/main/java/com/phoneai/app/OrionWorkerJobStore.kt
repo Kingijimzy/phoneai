@@ -230,7 +230,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
                     .append(job.objective.take(180))
                 if (job.result.isNotBlank()) append(" — result: ").append(job.result.take(220))
                 if (job.lastError.isNotBlank()) append(" — note: ").append(job.lastError.take(120))
-                append(" (job ").append(job.id.take(12)).append("; parent ").append(job.parentTaskId.take(12)).append(")")
+                append(" (job ").append(job.id).append("; parent ").append(job.parentTaskId.take(12)).append(")")
             }
         }.take(1400)
     }
