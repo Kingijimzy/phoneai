@@ -17,7 +17,8 @@ object AgentPolicy {
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
         Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
+        Pack("trading_research", "Trading research", "Public data, playbook, matcher, alerts, journal and news; no order placement", true),
+        Pack("trading_execution", "Trading execution", "Permissioned Bybit orders via TradingExecution gateway; off by default; approval or Trusted session required", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
@@ -27,15 +28,9 @@ object AgentPolicy {
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
     fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
     fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
-    /**
-     * Packs that are safe to have on from the first launch: they are local, read-only, or already gated by
-     * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
-     * lives in orion_core) and wrongly tells the user the feature does not exist. Risky packs stay opt-in.
-     */
     internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research")
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
-    /** An explicit user choice always wins; only a never-set pack falls back to its default. */
     fun enabled(c: Context, id: String) = p(c).getBoolean("pack_$id", defaultOn(id))
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
@@ -57,11 +52,9 @@ object AgentPolicy {
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
         p(c).edit().putInt("budget_steps", steps.coerceIn(1, 100)).putInt("budget_calls", calls.coerceIn(1, 100)).putInt("budget_minutes", minutes.coerceIn(1, 30)).apply()
     }
-    /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
     fun packOffMessage(pack: String): String =
         "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
 
-    /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
@@ -79,7 +72,6 @@ object AgentPolicy {
         askedThisTask = askedThisTask
     ))
 
-    /** Existing callers keep their RuleResult shape; the decision itself comes from GatePolicy. */
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
         val r = gate(c, pack, toolId, dangerous, toolMode = ToolPermissions.mode(c, toolId), askedThisTask = true, approvedThisAction = approvedThisAction)
         val decision = when (r.verdict) {
@@ -91,16 +83,22 @@ object AgentPolicy {
         return RuleResult(decision, r.reason)
     }
 
-    /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
         "play", "look" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
-        "trade_history_summary" -> "trading_research"
+        "trade_history_summary",
+        "trading_watchlist_list", "trading_watchlist_set",
+        "trading_playbook_list", "trading_playbook_propose", "trading_playbook_set_enabled",
+        "trading_match_setups", "trading_journal_add", "trading_journal_list",
+        "trading_strategy_note",
+        "bybit_public_ticker", "bybit_public_kline" -> "trading_research"
+        "bybit_place_order", "bybit_cancel_order", "bybit_set_leverage", "bybit_close_position",
+        "forex_place_order", "forex_cancel_order" -> "trading_execution"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
-        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
+        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
         "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
         "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
@@ -128,7 +126,6 @@ object AgentPolicy {
         tools.filter { it.matches(Regex("[a-zA-Z0-9_.:-]{1,80}")) }.distinct().take(100).forEach { a.put(it) }
         p(c).edit().putString("allowlist_$pack", a.toString()).apply()
     }
-    /** Bounded audit trail. Callers must never pass raw secrets. */
     fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
         val safe = Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+").replace(result) { match -> match.groupValues[1] + "=[redacted]" }.take(240)
         synchronized(this) {

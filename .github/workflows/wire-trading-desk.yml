@@ -1,0 +1,59 @@
+name: wire-trading-desk
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/trading-desk-phase-a]
+    paths:
+      - '.github/workflows/wire-trading-desk.yml'
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/trading-desk-phase-a
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Manifest + MainActivity entry
+        run: |
+          set -e
+          git config user.name "Kingi jimzy"
+          git config user.email "108807524+Kingijimzy@users.noreply.github.com"
+          python3 <<'PY'
+          from pathlib import Path
+
+          man = Path('app/src/main/AndroidManifest.xml')
+          mt = man.read_text()
+          if 'TradingDeskActivity' not in mt:
+              needle = '        <activity android:name=".TradingActivity" android:exported="false" />'
+              insert = needle + '\n        <activity android:name=".TradingDeskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />'
+              if needle not in mt:
+                  raise SystemExit('manifest needle missing')
+              man.write_text(mt.replace(needle, insert, 1))
+              print('manifest ok')
+          else:
+              print('manifest already')
+
+          main = Path('app/src/main/java/com/phoneai/app/MainActivity.kt')
+          t = main.read_text()
+          old = 'onOpenTrading = { startActivity(Intent(this@MainActivity, TradingActivity::class.java)) }'
+          new = 'onOpenTrading = { startActivity(Intent(this@MainActivity, TradingDeskActivity::class.java)) }'
+          if old in t:
+              main.write_text(t.replace(old, new, 1))
+              print('main ok')
+          elif 'TradingDeskActivity' in t:
+              print('main already')
+          else:
+              # softer match
+              t2 = t.replace('TradingActivity::class.java))' , 'TradingDeskActivity::class.java))', 1) if 'onOpenTrading' in t else t
+              if t2 == t:
+                  raise SystemExit('main needle missing')
+              main.write_text(t2)
+              print('main soft ok')
+          PY
+          if git diff --quiet; then echo nochange; else
+            git add app/src/main/AndroidManifest.xml app/src/main/java/com/phoneai/app/MainActivity.kt
+            git commit -m "Wire TradingDeskActivity into manifest and home Trading entry"
+            git push origin feature/trading-desk-phase-a
+          fi

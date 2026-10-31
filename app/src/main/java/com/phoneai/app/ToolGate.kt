@@ -58,6 +58,8 @@ internal object ToolGate {
         "connected_services" -> "the Capability board (Connected services)"
         "workspace_shell" -> "Agent control > Packs > Workspace shell"
         "orion_core" -> "Agent control > Packs > Orion core"
+        "trading_research" -> "Agent control > Packs > Trading research"
+        "trading_execution" -> "Agent control > Packs > Trading execution (orders need your approval)"
         else -> "Agent control > Packs"
     }
 
