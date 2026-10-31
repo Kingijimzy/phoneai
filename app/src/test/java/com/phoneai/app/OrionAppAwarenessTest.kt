@@ -22,6 +22,9 @@ class OrionAppAwarenessTest {
         assertTrue(OrionAppAwareness.isArchitectureRequest("Explain your app architecture and capabilities"))
         assertTrue(OrionAppAwareness.isArchitectureRequest("Teach me the app"))
         assertTrue(OrionAppAwareness.isArchitectureRequest("List your tools"))
+        assertTrue(OrionAppAwareness.isArchitectureRequest("Teach me how to use Orion"))
+        assertTrue(OrionAppAwareness.isArchitectureRequest("Walk me through the app"))
+        assertTrue(OrionAppAwareness.isArchitectureRequest("What screens and modules are installed?"))
     }
 
     @Test fun ordinaryRequestsUseCompactAwareness() {
