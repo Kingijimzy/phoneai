@@ -100,7 +100,9 @@ The remaining design issue is the number of separate IDs/stores and the fact tha
 
 ## 7. Feature maturity
 
-**Implemented in source with concrete routes:** device/accessibility actions, browser automation, shell/files, constrained Python and extension sandbox, research/news/weather/sports/GitHub public reads, memory and knowledge operations, task records/checkpoints, MCP, Telegram/SMS/dial intents, utilities, trading research/paper operations, gaming notes/focus, skills and background runtime queue.
+**Implemented in source with concrete routes:** device/accessibility actions, browser automation, shell/files, constrained Python and extension sandbox, research/news/weather/sports, GitHub repository metadata/README/releases/issues/Actions runs, memory and knowledge operations, task records/checkpoints, MCP, Telegram/SMS/dial intents, utilities, trading research/paper operations, gaming notes/focus, skills and background runtime queue.
+
+**GitHub inspection gap:** the public `github_public` executor does not expose repository tree listing, source-file contents, workflow YAML files or commit diffs. The deterministic repository URL path reads metadata and README; the Actions path reads runs, not workflow definitions. Therefore the test request to inspect code and workflow files is not fully supported through the public GitHub executor today, even though repository/README/Actions-run reads exist. A connected account read may cover some private/authenticated paths, but it is a different integration and is not a substitute for a complete public read contract.
 
 **Partially integrated:** shared central context, memory/learning, objective graph + checkpoint continuity, specialist-agent coordination, background standing orders, capability discovery and recovery. The components exist, but cross-surface state transitions are not uniformly driven by one orchestrator.
 
@@ -128,11 +130,13 @@ The central brain also adds up to 16,000 characters of executive context, includ
 ## 10. Recommended engineering order
 
 1. Finish routing every deterministic shortcut through one managed task lifecycle, including checkpoint steps and objective evidence.
-2. Unify the task identity model: one stable task/session ID should link Task Centre record, checkpoint, objective graph and evidence ledger.
-3. Make live voice use the same intent router and guarded execution loop, with hands-free confirmation behavior for consequential actions.
-4. Give specialists a bounded way to request registered capabilities through the central dispatcher instead of independent model-only paths.
-5. Replace the all-137-full-contract prompt with a compact complete capability index plus dynamically selected full contracts, preserving discoverability and dispatch-time enforcement.
-6. Add real Android instrumentation/device smoke tests for the critical vertical workflows: research → save memory → reminder; file save → Python execution; screen perception → action → verification; pause → process death → resume; voice request → guarded action.
+2. Expand the public GitHub reader with bounded tree, file-content, workflow-definition and commit-diff reads so repository audits can inspect actual source, not only README and Actions run summaries.
+3. Replace the single active checkpoint with a multi-task checkpoint index; keep the new no-overwrite rule until that storage migration is proven.
+4. Unify the task identity model: one stable task/session ID should link Task Centre record, checkpoint, objective graph and evidence ledger.
+5. Make live voice use the same intent router and guarded execution loop, with hands-free confirmation behavior for consequential actions.
+6. Give specialists a bounded way to request registered capabilities through the central dispatcher instead of independent model-only paths.
+7. Replace the all-137-full-contract prompt with a compact complete capability index plus dynamically selected full contracts, preserving discoverability and dispatch-time enforcement.
+8. Add real Android instrumentation/device smoke tests for the critical vertical workflows: research → save memory → reminder; file save → Python execution; screen perception → action → verification; pause → process death → resume; voice request → guarded action.
 
 ## Current status
 
