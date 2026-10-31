@@ -186,6 +186,28 @@ object MemoryStore {
         true
     }
 
+    fun updateOwnerConfirmed(c: Context, id: Int, category: String?, text: String?): Boolean {
+        if (!update(c, id, category, text)) return false
+        return synchronized(lock) {
+            val memory = load(c).firstOrNull { it.id == id } ?: return@synchronized false
+            val oldRole = memory.sourceRole
+            val oldConfidence = memory.confidence
+            val oldStatus = memory.reviewStatus
+            val oldEvidence = memory.evidence
+            memory.sourceRole = "owner"
+            memory.confidence = 1.0
+            memory.reviewStatus = "approved"
+            memory.evidence = "edited directly by owner"
+            if (!save(c)) {
+                memory.sourceRole = oldRole
+                memory.confidence = oldConfidence
+                memory.reviewStatus = oldStatus
+                memory.evidence = oldEvidence
+                false
+            } else true
+        }
+    }
+
     fun setPinned(c: Context, id: Int, pinned: Boolean): Boolean = synchronized(lock) {
         val memory = load(c).firstOrNull { it.id == id } ?: return@synchronized false
         val previous = memory.pinned
@@ -221,12 +243,12 @@ object MemoryStore {
     }
 
     /** Restore a deleted memory with its original id; refuses to overwrite or duplicate data. */
-    fun restore(c: Context, id: Int, category: String, text: String, created: Long, updated: Long): Boolean = synchronized(lock) {
+    fun restore(c: Context, id: Int, category: String, text: String, created: Long, updated: Long, sourceRole: String = "restored", confidence: Double = 0.5, sensitivity: String = "general", reviewStatus: String = "pending", evidence: String = "restored from undo history"): Boolean = synchronized(lock) {
         val clean = text.trim().replace("\n", " ").take(300)
         if (id < 1 || clean.isEmpty()) return@synchronized false
         val list = load(c)
         if (list.any { it.id == id || it.text.equals(clean, true) }) return@synchronized false
-        val memory = Memory(id, cat(category), clean, created, updated, false, "restored", 0.5, "general", "pending", "restored from undo history")
+        val memory = Memory(id, cat(category), clean, created, updated, false, sourceRole, MemoryGovernancePolicy.normalizeConfidence(confidence), MemoryGovernancePolicy.sensitivity(clean, sensitivity), reviewStatus, evidence.take(240))
         list.add(memory)
         if (!save(c)) {
             list.remove(memory)
