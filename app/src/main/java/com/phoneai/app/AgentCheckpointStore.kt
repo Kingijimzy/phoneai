@@ -117,6 +117,7 @@ object AgentCheckpointStore {
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
         val existing = readCheckpoint(c)
         if (existing?.optString("status") == "running") return@synchronized false
+        val previousParentId = existing?.takeIf { isPending(it) }?.optString("taskId")
         if (existing != null && isPending(existing) && !archive(c, existing)) return@synchronized false
         val now = System.currentTimeMillis()
         val o = JSONObject()
@@ -126,7 +127,11 @@ object AgentCheckpointStore {
             .put("startedAt", now)
             .put("updatedAt", now)
             .put("steps", JSONArray())
-        save(c, o)
+        val saved = save(c, o)
+        if (saved && !previousParentId.isNullOrBlank()) {
+            runCatching { OrionWorkerJobStore(c).cancelParent(previousParentId, "parent_replaced_by_new_objective") }
+        }
+        saved
     }
 
     fun markRunning(c: Context): Boolean = synchronized(lock) {
