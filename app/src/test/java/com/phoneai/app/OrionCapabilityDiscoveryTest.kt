@@ -9,6 +9,12 @@ class OrionCapabilityDiscoveryTest {
     private fun tool(name: String, access: ToolAccess = ToolAccess.READ) =
         ToolDefinition(name, "$name {}", "test", access)
 
+    @Test fun everyRegisteredBuiltInToolHasExactlyOneCapabilityPackMapping() {
+        val missing = ToolRegistry.all.map { it.name }.filter { AgentPolicy.packForTool(it) == null }
+        assertTrue("Unmapped registered tools: $missing", missing.isEmpty())
+        assertEquals(ToolRegistry.all.size, ToolRegistry.all.map { it.name }.distinct().size)
+    }
+
     @Test fun disabledPackBlocksRegisteredTool() {
         val snapshot = OrionCapabilityDiscovery.discover(listOf(tool("weather")), emptySet(), termuxReady = true)
         assertEquals(0, snapshot.availableCount)
@@ -58,6 +64,38 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("unverified"))
     }
 
+    @Test fun grantedAndroidPermissionsMakeMatchingCapabilitiesAvailable() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(
+                tool("resolve_contact"),
+                tool("read_notifications"),
+                tool("media_status"),
+                tool("media_control", ToolAccess.WRITE),
+                tool("device_location")
+            ),
+            setOf("messaging", "phone_control"),
+            termuxReady = true,
+            permissionStates = mapOf(
+                "contacts" to OrionCapabilityDiscovery.PermissionState.GRANTED,
+                "notification_access" to OrionCapabilityDiscovery.PermissionState.GRANTED,
+                "location" to OrionCapabilityDiscovery.PermissionState.GRANTED
+            )
+        )
+        assertEquals(5, snapshot.availableCount)
+        assertTrue(snapshot.tools.all { it.available })
+    }
+
+    @Test fun missingLocationPermissionNamesTheExactPrerequisite() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("device_location")),
+            setOf("phone_control"),
+            termuxReady = true,
+            permissionStates = mapOf("location" to OrionCapabilityDiscovery.PermissionState.MISSING)
+        )
+        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().reason.contains("location"))
+    }
+
     @Test fun availableToolRequiresRegistryAndEnabledPack() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("weather")),
@@ -66,6 +104,52 @@ class OrionCapabilityDiscoveryTest {
         )
         assertEquals(1, snapshot.availableCount)
         assertTrue(snapshot.promptLines().any { it.contains("weather(read)") })
+    }
+
+    @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
+        val pack = AgentPolicy.packForTool("mcp_call") ?: "connectors"
+        val unconfigured = OrionCapabilityDiscovery.discover(
+            listOf(tool("mcp_call", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            integrationStates = mapOf("mcp_endpoint" to "not-configured", "mcp_pairing" to "not-paired")
+        )
+        assertFalse(unconfigured.tools.single().available)
+        assertTrue(unconfigured.tools.single().reason.contains("endpoint"))
+        val configuredButUnpaired = OrionCapabilityDiscovery.discover(
+            listOf(tool("mcp_call", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            integrationStates = mapOf("mcp_endpoint" to "configured", "mcp_pairing" to "not-paired")
+        )
+        assertFalse(configuredButUnpaired.tools.single().available)
+        assertTrue(configuredButUnpaired.tools.single().reason.contains("paired"))
+    }
+
+    @Test fun mcpCallCanBeEligibleOnlyWhenEndpointIsConfiguredAndPaired() {
+        val pack = AgentPolicy.packForTool("mcp_call") ?: "connectors"
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("mcp_call", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            integrationStates = mapOf("mcp_endpoint" to "configured", "mcp_pairing" to "paired")
+        )
+        assertTrue(snapshot.tools.single().available)
+    }
+
+    @Test fun enabledGrantedCapabilityTellsPlannerToUseItWithoutInventingExtraRestrictions() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("weather")),
+            setOf("trading_research"),
+            termuxReady = true
+        )
+        val prompt = snapshot.promptLines().joinToString("\n")
+        assertTrue(snapshot.tools.single().available)
+        assertTrue(prompt.contains("GRANTED CAPABILITY RULE"))
+        assertTrue(prompt.contains("use it fully"))
+        assertTrue(prompt.contains("Do not invent extra application-level restrictions"))
+        assertTrue(prompt.contains("actual Android OS/runtime permissions"))
+        assertTrue(prompt.contains("explicit confirmations required for consequential actions"))
     }
 
     @Test fun integrationStateIsReportedAsSuppliedAndNotInvented() {

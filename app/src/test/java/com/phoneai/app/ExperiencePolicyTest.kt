@@ -45,4 +45,17 @@ class ExperiencePolicyTest {
         assertFalse(ExperiencePolicy.hasCleanSuccessEvidence(listOf(true), 1))
     }
 
+    @Test fun learnedTaskGistRedactsUrlsEmailsPhoneNumbersAndCredentialValues() {
+        val gist = ExperiencePolicy.gist(
+            "open dashboard https://private.example/path?token=abc123 email kingi@example.com call +234 801 234 5678 api_key=sk_live_123456789"
+        )
+        assertTrue(gist.contains("dashboard"))
+        assertFalse(gist.contains("private"))
+        assertFalse(gist.contains("example"))
+        assertFalse(gist.contains("kingi"))
+        assertFalse(gist.contains("234"))
+        assertFalse(gist.contains("abc123"))
+        assertFalse(gist.contains("sk_live"))
+    }
+
 }

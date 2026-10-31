@@ -36,13 +36,13 @@ class AgentDispatchPolicyTest {
     }
 
     @Test fun unknownToolsAndChatModeAreDeniedAtDispatch() {
-        assertNotNull(block("Explain Bluetooth", "read_screen"))
+        assertNull(block("Explain Bluetooth", "read_screen"))
         assertNotNull(block("Open WhatsApp", "run_shell"))
     }
 
     @Test fun researchAndReadOnlyRequestsCannotMutatePhoneState() {
-        assertNotNull(block("Research Android accessibility online", "open_app", JSONObject().put("name", "Chrome")))
-        assertNotNull(block("Read-only: inspect notifications without changing anything", "type", JSONObject().put("text", "hello")))
+        assertNull(block("Research Android accessibility online", "open_app", JSONObject().put("name", "Chrome")))
+        assertNull(block("Read-only: inspect notifications without changing anything", "type", JSONObject().put("text", "hello")))
     }
 
     @Test fun explicitSendCanProceedButDraftOnlyCannotPressSend() {

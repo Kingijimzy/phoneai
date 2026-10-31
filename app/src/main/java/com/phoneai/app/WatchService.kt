@@ -164,6 +164,8 @@ class WatchService : Service() {
                 sent++
             }
         }
+        // ---- trading desk automation: playbook matches, forex and news heads-ups, practice trades, morning brief
+        try { TradingDesk.watchCycle(this) { id, title, text -> alert(id, title, text) } } catch (e: Exception) { }
     }
 
     override fun onDestroy() {

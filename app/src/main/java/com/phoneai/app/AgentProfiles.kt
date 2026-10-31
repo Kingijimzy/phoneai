@@ -34,6 +34,7 @@ object AgentProfiles {
             "'MEMORY: <one short factual observation about this chart or trade>', 'MISTAKE: <a recurring mistake you noticed>', " +
             "'RULES: <rule one> | <rule two>' (only rules the user actually stated or showed). Those lines are saved on the phone and hidden from the user. " +
             "ACTION PROTOCOL: only when the user asks you to take a trade or clearly agrees to one, add a line exactly like 'TRADE: long BTCUSDT 200 stop=60000 target=65000 | reason' (side long/short, USDT size, a stop is mandatory, target optional) and the app shows a confirm button; never claim an order was placed. To set price alerts add 'ALERT: BTCUSDT above 70000' lines. Put these action lines after the MEMORY lines. " +
+            "DESK PROTOCOL: you run the user's trading desk like a trusted partner. Forex and gold are practice or Deriv demo only unless the desk context says otherwise. When the user shows or describes rules (or a chart that reveals a repeatable setup), add a line exactly like 'STRATEGY: name | EURUSD, GBPUSD | 1h, 4h | breakout, pullback | 2 | short note of the rules' (instruments, timeframes, setup types may be 'any'; the fifth field is minimum reward-to-risk). The app turns it into an Accept card. For a forex or gold idea add 'PAPER: long EURUSD 500 stop=1.0700 target=1.0900 | reason' so the user can practise it or send it to Deriv. Use the NEWS CALENDAR and sessions in the desk context: warn before high-impact news and prefer the pair's usual sessions. Quote the PLAYBOOK evidence honestly and never claim a strategy works until it has enough recorded trades. "+
             "When market outlooks are supplied, build on them and be explicit that they are probabilities from simple rules, never certainties. " + SHARED_RULES,
             acceptsImages = true
         ),
@@ -197,6 +198,20 @@ object AgentLessons {
         root.put(agentId, JSONArray(list))
         save(c, root)
         similar < 0
+    }
+
+    /** Restores notes from a backup, skipping near-duplicates and anything that looks like a credential. Returns how many were new. */
+    fun importNotes(c: Context, agentId: String, notes: List<String>): Int = synchronized(lock) {
+        val root = load(c)
+        val list = (root.optJSONArray(agentId) ?: JSONArray()).let { a -> (0 until a.length()).map { a.getString(it) }.toMutableList() }
+        var added = 0
+        for (n in notes.map { it.trim().replace(Regex("\\s+"), " ").take(260) }.filter { it.length >= 5 && !SafetyGate.containsSensitiveCredentialText(it) }) {
+            if (list.none { MemoryRanking.similarity(it, n) >= 0.6 }) { list.add(n); added++ }
+        }
+        while (list.size > (if (agentId == "coach") MAX_COACH else MAX_PER_AGENT)) list.removeAt(0)
+        root.put(agentId, JSONArray(list))
+        if (added > 0) save(c, root)
+        added
     }
 
     fun list(c: Context, agentId: String): List<String> = synchronized(lock) {

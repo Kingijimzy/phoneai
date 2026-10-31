@@ -97,4 +97,70 @@ class RecoveryPolicyTest {
         lc = lc.fail()!!
         assertEquals("exhausted: the task stops and reports", Phase.RECORD, lc.phase)
     }
+
+    private fun isErr(r: String) = r.startsWith("error")
+
+    @Test fun retryReadRecoversFromATransientFailure() {
+        val results = ArrayDeque(listOf("ok: 3 results"))
+        val slept = mutableListOf<Long>()
+        val seen = mutableListOf<Int>()
+        val out = RecoveryPolicy.retryRead("error: network unavailable, try again", ::isErr, { false }, { false },
+            { slept += it }, { n, _ -> seen += n }) { results.removeFirst() }
+        assertEquals("ok: 3 results", out.result)
+        assertEquals(1, out.retries)
+        assertEquals(listOf(800L), slept)
+        assertEquals(listOf(1), seen)
+    }
+
+    @Test fun retryReadStopsAfterTheBoundWhenFailureRepeats() {
+        var calls = 0
+        val out = RecoveryPolicy.retryRead("error: 503 unavailable", ::isErr, { false }, { false }, { }, { _, _ -> }) {
+            calls++; "error: 503 unavailable"
+        }
+        assertEquals(RecoveryPolicy.MAX_READ_RETRIES, calls)
+        assertEquals(RecoveryPolicy.MAX_READ_RETRIES, out.retries)
+        assertTrue(isErr(out.result))
+    }
+
+    @Test fun retryReadNeverRepeatsPermissionOrNonTransientFailures() {
+        var calls = 0
+        val perm = RecoveryPolicy.retryRead("error: permission not granted", ::isErr, { false }, { false }, { }, { _, _ -> }) { calls++; "ok" }
+        val other = RecoveryPolicy.retryRead("error: weird thing", ::isErr, { false }, { false }, { }, { _, _ -> }) { calls++; "ok" }
+        assertEquals(0, calls)
+        assertEquals(0, perm.retries); assertEquals(0, other.retries)
+    }
+
+    @Test fun retryReadDoesNothingOnSuccess() {
+        var calls = 0
+        val out = RecoveryPolicy.retryRead("ok", ::isErr, { false }, { false }, { }, { _, _ -> }) { calls++; "ok" }
+        assertEquals(0, calls); assertEquals(0, out.retries); assertEquals("ok", out.result)
+    }
+
+    @Test fun cancellationStopsRetriesImmediately() {
+        var calls = 0
+        val before = RecoveryPolicy.retryRead("error: timed out", ::isErr, { true }, { false }, { }, { _, _ -> }) { calls++; "ok" }
+        assertEquals(0, calls); assertEquals(0, before.retries)
+        // Cancelled during the backoff: no new dispatch starts.
+        var cancelled = false
+        val during = RecoveryPolicy.retryRead("error: timed out", ::isErr, { cancelled }, { false }, { cancelled = true }, { _, _ -> }) { calls++; "ok" }
+        assertEquals(0, calls)
+        assertTrue(isErr(during.result))
+    }
+
+    @Test fun budgetExhaustionStopsRetries() {
+        var calls = 0
+        val out = RecoveryPolicy.retryRead("error: timed out", ::isErr, { false }, { true }, { }, { _, _ -> }) { calls++; "ok" }
+        assertEquals(0, calls); assertEquals(0, out.retries)
+    }
+
+    @Test fun writesAndConsequentialActionsAreNeverRetriedAutomatically() {
+        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.WRITE, Failure.AMBIGUOUS, 0))
+        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.CONSEQUENTIAL, Failure.TRANSIENT, 0))
+        assertEquals(Decision.PAUSE_ASK, RecoveryPolicy.decide(Risk.CONSEQUENTIAL, Failure.TARGET_MISSING, 0))
+    }
+
+    @Test fun failedTestThenRepairThenRerunIsAllowedByReplan() {
+        assertEquals(Risk.DEV_COMMAND, RecoveryPolicy.riskOf("shell", ToolAccess.WRITE, consequential = false))
+        assertEquals(Decision.REPLAN, RecoveryPolicy.decide(Risk.DEV_COMMAND, RecoveryPolicy.classify("exit code 1: 2 tests failed"), 0))
+    }
 }

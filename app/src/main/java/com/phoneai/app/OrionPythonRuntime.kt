@@ -20,4 +20,14 @@ internal object OrionPythonRuntime {
             "error: bundled Python is unavailable (" + (e.message ?: e.javaClass.simpleName).take(180) + ")."
         }
     }
+
+    /** Runs a generated extension in the whitelist sandbox; returns orion_exec.run_extension's JSON text. */
+    @Synchronized
+    fun runExtension(context: Context, source: String, inputJson: String): String = try {
+        if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
+        Python.getInstance().getModule("orion_exec").callAttr("run_extension", source, inputJson).toString()
+    } catch (e: Exception) {
+        org.json.JSONObject().put("ok", false)
+            .put("error", "bundled Python is unavailable (" + (e.message ?: e.javaClass.simpleName).take(180) + ")").toString()
+    }
 }

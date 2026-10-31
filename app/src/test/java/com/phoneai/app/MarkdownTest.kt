@@ -24,6 +24,18 @@ class MarkdownTest {
         assertEquals("one\n\ntwo", Markdown.normalizeLines("one\n\ntwo"))
     }
 
+    @Test fun markdownTablesBecomeReadableLabelValueRows() {
+        val input = "| Pair | Bias | Status |\n| --- | --- | --- |\n| EURUSD | Bearish | Wait |\n| GBPUSD | Bullish | Confirmed |"
+        assertEquals(
+            "**Pair:** EURUSD · **Bias:** Bearish · **Status:** Wait\n**Pair:** GBPUSD · **Bias:** Bullish · **Status:** Confirmed",
+            normalizeOrionMarkdownTables(input)
+        )
+    }
+
+    @Test fun markdownTableConversionDoesNotRewriteCodeFences() {
+        val input = "```text\n| a | b |\n| --- | --- |\n```"
+        assertEquals(input, normalizeOrionMarkdownTables(input))
+    }
     @Test fun emptyInputNormalizesSafely() {
         assertEquals("", Markdown.normalizeLines(""))
     }

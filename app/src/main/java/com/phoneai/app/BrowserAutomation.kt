@@ -250,6 +250,53 @@ object BrowserAutomation {
     }
 
     /**
+     * Wait for an actual page transition after loadUrl(). Navigation start is not page completion:
+     * slow pages often need longer than the agent's ordinary screen-stability window.
+     * Returns the final bounded snapshot when the requested URL is reached or the URL changes
+     * and the page is ready; otherwise returns the last observed state for honest diagnosis.
+     */
+    fun awaitNavigation(targetUrl: String, previousUrl: String = "", timeoutMs: Long = 8000L): String {
+        val target = try { android.net.Uri.parse(targetUrl) } catch (_: Exception) { null }
+        val prior = previousUrl.trim()
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(500L, 15000L)
+        var last = ""
+        while (System.currentTimeMillis() < deadline) {
+            if (Thread.currentThread().isInterrupted) return "error: navigation wait was interrupted"
+            val state = evaluate("""
+                (function(){
+                  return JSON.stringify({
+                    url: location.href,
+                    title: document.title || '',
+                    ready: document.readyState || '',
+                    text: (document.body && document.body.innerText || '').replace(/\\s+/g,' ').trim().slice(0,500)
+                  });
+                })()
+            """.trimIndent(), 1200L)
+            if (!state.startsWith("error:", ignoreCase = true)) {
+                last = state
+                val obj = try { org.json.JSONObject(state) } catch (_: Exception) { null }
+                val currentUrl = obj?.optString("url").orEmpty()
+                val ready = obj?.optString("ready").orEmpty()
+                val current = try { android.net.Uri.parse(currentUrl) } catch (_: Exception) { null }
+                val targetReached = target != null && current != null &&
+                    current.host.equals(target.host, ignoreCase = true) &&
+                    current.path.orEmpty() == target.path.orEmpty() &&
+                    (target.encodedQuery.isNullOrBlank() || current.encodedQuery == target.encodedQuery)
+                val changed = prior.isNotBlank() && currentUrl.isNotBlank() && currentUrl != prior
+                val hasPage = !obj?.optString("title").isNullOrBlank() || !obj?.optString("text").isNullOrBlank()
+                if (ready == "complete" && hasPage && (targetReached || changed)) {
+                    return snapshot().ifBlank { state }
+                }
+            }
+            try { Thread.sleep(250L) } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return "error: navigation wait was interrupted"
+            }
+        }
+        return last.ifBlank { "error: browser page did not become readable before the navigation timeout" }
+    }
+
+    /**
      * Explicitly hands control back to the person for login, CAPTCHA, MFA, or other
      * site-controlled steps. Orion never attempts to solve or bypass these challenges.
      */

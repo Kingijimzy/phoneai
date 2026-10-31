@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Settings
@@ -85,7 +86,9 @@ fun OrionComposeShell(
     onOpenUtilities: () -> Unit,
     onOpenTrading: () -> Unit = {},
     onOpenMemory: () -> Unit = {},
-    onOpenAgents: () -> Unit = {}
+    onOpenAgents: () -> Unit = {},
+    onOpenSoulEngine: () -> Unit = {},
+    onOpenExtensions: () -> Unit = {}
 ) {
     var selected by remember { mutableStateOf("Home") }
     val scheme = darkColorScheme(
@@ -112,7 +115,7 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
-                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents)
+                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents, onOpenSoulEngine, onOpenExtensions)
                         else -> SettingsPage(onOpenSettings)
                     }
                 }
@@ -280,7 +283,9 @@ private fun ToolsPage(
     onOpenSettings: (String?) -> Unit,
     onOpenTrading: () -> Unit,
     onOpenMemory: () -> Unit,
-    onOpenAgents: () -> Unit
+    onOpenAgents: () -> Unit,
+    onOpenSoulEngine: () -> Unit,
+    onOpenExtensions: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
@@ -290,6 +295,8 @@ private fun ToolsPage(
         ActionRow("Orion Browser", "Web navigation and assisted research", Icons.Rounded.Public, onOpenBrowser)
         ActionRow("Task centre", "Saved tasks and routines", Icons.Rounded.TaskAlt, onOpenTasks)
         ActionRow("Agents", "Trading Coach, Research, Code, Planner, Writer", Icons.Rounded.SmartToy, onOpenAgents)
+        ActionRow("Soul Engine Command Center", "System readiness, connected workspaces and self-test", Icons.Rounded.Hub, onOpenSoulEngine)
+        ActionRow("Self-extension lab", "Create, sandbox-test, approve and manage generated skills", Icons.Rounded.AutoAwesome, onOpenExtensions)
         ActionRow("Trading desk", "Bybit market scanner, journal and watchlist", Icons.Rounded.TaskAlt, onOpenTrading)
         ActionRow("Memory", "What Orion remembers; pin, edit or delete", Icons.Rounded.Memory, onOpenMemory)
         ActionRow("Teach mode", "Record a workflow for Orion to repeat", Icons.Rounded.SmartToy, onOpenUtilities)
@@ -307,7 +314,7 @@ private fun ToolsPage(
             ToolRegistry.all.forEach { definition ->
                 val readOnly = definition.access == ToolAccess.READ
                 val badgeColor = if (readOnly) Silver else Color(0xFFE7BD7B)
-                val badgeBackground = if (readOnly) Color(0xFF172D28) else Color(0xFF302820)
+                val badgeBackground = if (readOnly) Color(0xFF242424) else Color(0xFF302820)
                 Row(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))

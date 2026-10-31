@@ -59,15 +59,20 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         item
     }
 
-    fun complete(item: WorkItem) = synchronized(lock) {
-        if (inflight?.id == item.id) inflight = null
+    /** A stale/duplicate acknowledgement must never complete a different in-flight task. */
+    fun complete(item: WorkItem): Boolean = synchronized(lock) {
+        if (inflight?.id != item.id) return@synchronized false
+        inflight = null
         state = if (state == State.BUSY) State.ACTIVE else state
         eventLocked("work_completed:" + item.type.name.lowercase())
         persistLocked()
+        true
     }
 
+    /** Only the exact claimed item may be retried; stale failures cannot enqueue phantom work. */
     fun fail(item: WorkItem): Boolean = synchronized(lock) {
-        if (inflight?.id == item.id) inflight = null
+        if (inflight?.id != item.id) return@synchronized false
+        inflight = null
         val attempts = item.attempts + 1
         if (!OrionRuntimePolicy.shouldRetry(attempts)) {
             // One exhausted item must not strand unrelated queued work.
