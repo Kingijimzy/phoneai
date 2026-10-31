@@ -293,7 +293,7 @@ Tasks:
 
 - Added exact-parent-checkpoint cancellation inspection. A worker treats its parent as cancelled when that checkpoint is paused, stopped, terminal, or no longer the active checkpoint; archived paused/recovery work is still recognized by task ID.
 - Specialist execution checks cancellation before starting, before brokered capability use, after brokered reads, and after the model request returns.
-- The parent tool records a terminal `cancelled` delegation receipt and discards any late specialist answer rather than relaying it as completed work.
+- The parent tool records a terminal `cancelled` delegation receipt and discards any late specialist answer rather than relaying it as completed work. The central chat timeline emits a distinct `[SPECIALIST:CANCELLED]` event rather than misclassifying it as RETURNED or FAILED.
 - Added tests for active parent pause/stop visibility, archived parent cancellation, cancelled delegation receipts and blocking capability dispatch when cancellation is already present.
 - Limitation: the current provider request is synchronous and cannot yet be forcibly interrupted mid-HTTP call. The late response is discarded when it returns; bounded provider timeouts/interruptible transport and genuinely asynchronous child workers remain follow-up work.
 - A child does not inherit parent write permissions. Parent authorization, confirmation and evidence gates remain authoritative.
