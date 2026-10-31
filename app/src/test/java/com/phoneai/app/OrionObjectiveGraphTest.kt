@@ -99,7 +99,45 @@ class OrionObjectiveGraphTest {
             )
         )
         assertEquals("research", OrionObjectiveGraph.resolveDispatchId(graph, "research"))
-        assertNull(OrionObjectiveGraph.resolveDispatchId(graph, "research_step"))
-        assertNull(OrionObjectiveGraph.resolveDispatchId(graph, ""))
+        assertEquals("research", OrionObjectiveGraph.resolveDispatchId(graph, "research_step"))
+        assertEquals("research", OrionObjectiveGraph.resolveDispatchId(graph, ""))
     }
+    @Test fun invalidPlannerAliasResolvesToTheOnlyReadyObjectiveInASequentialGraph() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Research, save report, create task, save memory, verify",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("research", "Research current AI developments"),
+                OrionObjectiveGraph.Objective("save_report", "Save the report", listOf("research")),
+                OrionObjectiveGraph.Objective("create_task", "Create a reminder", listOf("save_report")),
+                OrionObjectiveGraph.Objective("save_memory", "Save project memory", listOf("create_task")),
+                OrionObjectiveGraph.Objective("verify_all", "Verify all outcomes", listOf("save_memory"))
+            )
+        )
+        assertEquals("research", OrionObjectiveGraph.resolveDispatchId(graph, "and"))
+        val next = OrionObjectiveGraph.updateStatus(graph, "research", OrionObjectiveGraph.Status.COMPLETE, "receipt")
+        assertEquals("save_report", OrionObjectiveGraph.resolveDispatchId(next, "report_step"))
+    }
+
+    @Test fun missingPlannerIdStaysOnTheOnlyRunningObjective() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Save and verify",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("save_report", "Save report", status = OrionObjectiveGraph.Status.RUNNING),
+                OrionObjectiveGraph.Objective("verify_all", "Verify report", listOf("save_report"))
+            )
+        )
+        assertEquals("save_report", OrionObjectiveGraph.resolveDispatchId(graph, "wrong_id"))
+    }
+
+    @Test fun ambiguousParallelReadyObjectivesDoNotGuess() {
+        val graph = OrionObjectiveGraph.Graph(
+            objective = "Independent actions",
+            nodes = listOf(
+                OrionObjectiveGraph.Objective("research", "Research"),
+                OrionObjectiveGraph.Objective("memory", "Save memory")
+            )
+        )
+        assertNull(OrionObjectiveGraph.resolveDispatchId(graph, "wrong_id"))
+    }
+
 }

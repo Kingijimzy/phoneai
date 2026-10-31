@@ -48,6 +48,8 @@ internal object AgentChatStore {
 class AgentChatActivity : Activity() {
     companion object {
         const val EXTRA_AGENT = "agent_id"
+        /** Trading workspace entry: open the specialist coach chat as the desk front door. */
+        fun workspaceIntent(c: Context): Intent = Intent(c, AgentChatActivity::class.java).putExtra(EXTRA_AGENT, "coach")
         private const val REQUEST_IMAGE = 7422
     }
 
@@ -62,6 +64,19 @@ class AgentChatActivity : Activity() {
     private var pendingImage: String? = null
     @Volatile private var busy = false
     @Volatile private var screenDestroyed = false
+    private var deskStatus: TextView? = null
+
+    override fun onResume() {
+        super.onResume()
+        val status = deskStatus ?: return
+        Thread {
+            val line = runCatching { TradingDesk.statusLine(this) }
+                .getOrDefault("Trading desk status unavailable")
+            runOnUiThread {
+                if (!screenDestroyed) status.text = line
+            }
+        }.start()
+    }
 
     override fun onDestroy() {
         screenDestroyed = true
@@ -106,6 +121,17 @@ class AgentChatActivity : Activity() {
         titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(header, -1, -2)
+        if (agent.id == "coach") {
+            deskStatus = TextView(this).apply {
+                text = "Trading desk: loading status…"
+                textSize = 11f
+                setTextColor(Theme.MUTED)
+                setPadding(dp(18), 0, dp(18), dp(8))
+                contentDescription = "Trading desk status; tap to open desk"
+                setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
+            }
+            root.addView(deskStatus, -1, -2)
+        }
 
         run {
             val chips = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }

@@ -158,9 +158,7 @@ class Tools(private val svc: PhoneAiService) {
     /** Search public GitHub repositories by name without requiring private account access. */
     fun githubSearchRepository(name: String): String {
         val query = name.trim().take(100)
-        if (query.isBlank() || !Regex("^[A-Za-z0-9_. -]{1,100}$").matches(query)) {
-            return "error: provide a simple public repository name"
-        }
+        GitHubSearchQueryPolicy.rejection(query)?.let { return it }
         return try {
             val encoded = java.net.URLEncoder.encode(query, "UTF-8")
             val conn = (URL("https://api.github.com/search/repositories?q=" + encoded + "&per_page=5&sort=updated").openConnection() as HttpURLConnection)
@@ -621,12 +619,14 @@ class Tools(private val svc: PhoneAiService) {
     }
 
     /** Save user-requested text/code into Downloads/Orion and verify the actual bytes by reading them back. */
-    fun saveFile(fileName: String, content: String): String {
+    fun saveFile(fileName: String, content: String, folder: String = "Orion"): String {
         val requestedName = fileName.trim().substringAfterLast('/').substringAfterLast('\\')
         val safeName = requestedName.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120)
         if (safeName.isBlank() || safeName == "." || safeName == "..") {
             return "error: save_file needs a valid filename such as calculator.py"
         }
+        val safeFolder = DownloadsFolderPolicy.normalize(folder)
+            ?: return "error: save_file folder must be one safe folder name inside Downloads (letters, numbers, _ or - only)"
         if (content.isEmpty()) return "error: refusing to save an empty file"
         val expectedBytes = content.toByteArray(Charsets.UTF_8)
         if (expectedBytes.size > 200 * 1024) return "error: file exceeds the 200 KB limit"
@@ -643,7 +643,7 @@ class Tools(private val svc: PhoneAiService) {
                 safeName.endsWith(".js", true) -> "text/javascript"
                 else -> "text/plain"
             })
-            put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Orion")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/" + safeFolder)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
 
@@ -689,13 +689,13 @@ class Tools(private val svc: PhoneAiService) {
             if (!SavedFileContentVerifier.matches(expectedBytes, actualBytes)) {
                 throw IllegalStateException("read-back content did not match the requested bytes")
             }
-            "FILE SAVED AND CONTENT VERIFIED: $safeName | Downloads/Orion/$safeName | ${actualBytes.size} bytes | uri=$target"
+            "FILE SAVED AND CONTENT VERIFIED: $safeName | Downloads/$safeFolder/$safeName | ${actualBytes.size} bytes | uri=$target"
         } catch (e: Exception) {
             // Do not delete a successfully written file because metadata or a later verification
             // step failed. Only remove an entry when the initial write itself did not complete.
             if (!writeCompleted) uri?.let { runCatching { resolver.delete(it, null, null) } }
             val state = when {
-                published -> "file was published, but read-back verification failed; it was left in Downloads/Orion"
+                published -> "file was published, but read-back verification failed; it was left in Downloads/$safeFolder"
                 writeCompleted -> "file bytes were written, but publication or read-back verification failed; the entry was left for inspection"
                 else -> "file write did not complete"
             }
