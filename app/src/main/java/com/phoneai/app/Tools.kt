@@ -1009,7 +1009,7 @@ class Tools(private val svc: PhoneAiService) {
 
     fun askAgent(agentName: String, task: String): String {
         val agent = AgentProfiles.resolveFor(svc, agentName)
-            ?: return "error: unknown agent \\"$agentName\\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
+            ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
         val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
