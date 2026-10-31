@@ -101,7 +101,7 @@ object MemoryStore {
         c: Context, category: String?, text: String, sourceRole: String, confidence: Double,
         reviewStatus: String, sensitivity: String, evidence: String
     ): Memory? = synchronized(lock) {
-        val t = text.trim().replace("\\n", " ").take(300)
+        val t = text.trim().replace("\n", " ").take(300)
         if (t.isEmpty()) return@synchronized null
         val list = load(c)
         val now = System.currentTimeMillis()
@@ -251,7 +251,7 @@ object MemoryStore {
     fun promptBlock(c: Context, query: String? = null): String {
         val items = MemoryRanking.select(all(c), query)
         if (items.isEmpty()) return "(nothing saved yet)"
-        return items.filter { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus) }.joinToString("\\n") {
+        return items.filter { MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus) }.joinToString("\n") {
             (if (it.pinned) "[${it.id}] (${it.category}, pinned) " else "[${it.id}] (${it.category}) ") + it.text
         }.ifBlank { "(no owner-approved memories yet; proposals require review)" }
     }
