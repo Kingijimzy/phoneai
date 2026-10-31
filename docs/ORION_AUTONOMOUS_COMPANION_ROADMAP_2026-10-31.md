@@ -414,9 +414,9 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - [x] PR #148 confirmed merged into `upgrade/nanomuse-chat-foundation`.
 - [x] Companion UI, activity feed, setup-health checks, memory backup/restore and navigation ported into the roadmap integration branch.
 - [x] Exact-head PR #152 CI passed: Kotlin unit tests, debug APK build, APK package/signature validation and artifact staging.
-- [ ] Port the companion's visual/voice state into the canonical `MainChatActivity` without creating a second transcript or objective store.
+- [x] Port the companion's visual state into the canonical `MainChatActivity` without creating a second transcript or objective store (PR #153; exact-head Android CI passed).
 - [ ] Verify microphone permission, Talk stop/resume, wake-word model availability, interruption recovery and background restrictions on the Redmi A3 Pro.
 - [ ] Verify backup export/import on-device with existing coach notes and a journal containing duplicate records.
 - [ ] Complete end-to-end trading account matrix and confirm every live-data view shows stale/unavailable states honestly.
 
-**Honest status:** Claude's companion/desk additions are now integrated and CI-verified on the roadmap line. The companion visuals currently live in the coach specialist surface while desk coaching itself uses the central Orion chat. The final visual consolidation into the central chat and physical Redmi acceptance are still open.
+**Honest status:** Claude's companion/desk additions are integrated and CI-verified on the roadmap line. PR #153 now embeds the companion in the actual central Compose chat header, maps the central runtime state to its animation, and persists the selected drawn appearance. The coach specialist surface retains its expanded dot-matrix/hologram views. Live Voice remains the existing dedicated flow; this change does not add an always-on microphone. Physical Redmi acceptance, Talk/Command continuity checks, microphone interruption recovery and backup export/import verification remain open.
