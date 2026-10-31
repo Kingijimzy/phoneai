@@ -779,6 +779,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =
         try { OrionConversationRepository.get(this).eventsForActive(this) } catch (_: Exception) { emptyList() }
 
+    /** Recent durable events are read-only evidence supplied to the parent Agent on each turn. */
+    internal fun brainActivityBriefForBrain(): String = try {
+        val recent = OrionConversationRepository.get(this).eventsForActive(this).takeLast(4)
+        if (recent.isEmpty()) "no recorded chat activity events"
+        else recent.joinToString(" | ") { event ->
+            event.type + "/" + event.status + ": " + event.summary.take(150)
+        }.take(720)
+    } catch (_: Exception) { "chat activity ledger unavailable; do not infer background progress" }
+
     private fun rewindTranscriptToPrompt(prompt: String): Boolean {
         val rewound = TranscriptEditPolicy.rewind(transcript.toList(), prompt) ?: return false
         transcript.clear()
