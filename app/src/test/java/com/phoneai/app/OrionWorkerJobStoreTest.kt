@@ -172,8 +172,10 @@ class OrionWorkerJobStoreTest {
     @Test fun stagedProviderResultSurvivesRestartAndDoesNotReleaseActiveSlot() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Produce a bounded analysis")!!
+        val sibling = store.enqueue("parent-1", "Wait behind the active specialist")!!
         assertNotNull(store.claim(job.id) { true })
         assertTrue(store.stageResult(job.id, "Verified specialist result"))
+        assertNull(store.claim(sibling.id) { true })
         OrionWorkerJobStore.simulateProcessRestartForTest(context)
         val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
         assertEquals(OrionWorkerJobStore.Status.RESULT_PENDING, restored.status)
