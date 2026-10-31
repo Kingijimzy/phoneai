@@ -679,8 +679,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         if (command.isEmpty()) return
         val intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualActiveObjective())
         val directActionRoute = OrionCommandIntentPolicy.requiresDirectActionRouting(command)
+        val contextualActionRoute = intentResolution.kind in setOf(
+            OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE,
+            OrionContextualIntentInterpreter.Kind.COMPLETE_REMAINING,
+            OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS,
+            OrionContextualIntentInterpreter.Kind.TEST_OBJECTIVE,
+            OrionContextualIntentInterpreter.Kind.AMBIGUOUS_REFERENCE
+        )
         if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP ||
-            directActionRoute) {
+            directActionRoute || contextualActionRoute) {
             if (intentResolution.kind == OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
                 taskProofs.clear()
                 OrionObjectiveGraph.clear(svc)
