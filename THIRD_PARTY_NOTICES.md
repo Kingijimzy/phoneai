@@ -1,4 +1,19 @@
-# Third-party model and tooling notices
+# Third-party software and license notices
+
+## nanoMuse agent tool-loop detector
+
+- Project: [nanoMuse](https://github.com/Kingijimzy/nanoMuse)
+- Upstream file: `android/src/android/app/src/main/java/com/openminis/app/agent/ToolLoopDetector.kt`
+- Integrated file: `app/src/main/java/com/phoneai/app/ToolLoopDetector.kt`
+- Upstream license: GNU General Public License, version 3 (GPL-3.0).
+- Changes made for PhoneAI on 2026-10-31: changed the Kotlin package to `com.phoneai.app`, replaced nanoMuse's AppLogger dependency with Android's `android.util.Log`, and added this provenance header. The detection logic and threshold behavior are derived from the upstream implementation.
+- Upstream repository: https://github.com/Kingijimzy/nanoMuse
+
+PhoneAI is licensed as a whole under GPL-3.0-or-later. The complete GPL-3.0 license text is in the repository root `LICENSE`. Preserve this notice and the source-file header in redistributed source and binaries.
+
+## Existing third-party components
+
+See the sections below for existing model/tool notices. These notices do not replace the license terms of their respective upstream projects.
 
 ## Android UI Detection YOLOv8 weights
 
