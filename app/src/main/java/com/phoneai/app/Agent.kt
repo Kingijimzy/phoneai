@@ -1434,10 +1434,11 @@ Rules:
         }
         val contextualObjective = contextualObjectiveForRequest(command)
         var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualObjective)
+        val correctedObjective = intentResolution.resolvedObjective
         if (Regex("(?i)^\\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\\s+(?:the\\s+)?integration\\b").containsMatchIn(command) &&
             intentResolution.kind == OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS &&
-            !intentResolution.resolvedObjective.isNullOrBlank()) {
-            currentTask = intentResolution.resolvedObjective
+            !correctedObjective.isNullOrBlank()) {
+            currentTask = correctedObjective
         }
         var recalled = emptyList<OrionConversationRepository.SearchHit>()
         if (intentResolution.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE) {
