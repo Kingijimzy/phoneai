@@ -431,3 +431,12 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - Existing dependencies are reused: WorkManager KTX 2.9.1, OkHttp 4.12.0, AtomicFile-backed worker ledger, SharedPreferences delegation receipts and the existing provider runner. No additional dependency was added.
 
 **Evidence status:** source and tests are committed on the roadmap branch. Exact-head CI has not yet been observed for these commits, so the new tests are not claimed as passing. The independent provider-backed WorkManager worker, shared cancellable provider request budget, durable originating-chat result event and process-death end-to-end test are still outstanding. Stage 3 remains IN PROGRESS.
+
+
+### Central-brain delegation hardening follow-up (2026-10-31)
+
+- Tightened manifest restoration so only a receipt explicitly marked `running` can be reconstructed for execution; completed, failed and cancelled receipts remain historical evidence and cannot become execution grants.
+- Background-restorable manifests now require a non-empty parent checkpoint ID. Orphaned work is rejected before a future worker can reach provider execution; the worker must still validate that exact checkpoint is current and running immediately before the request.
+- Added regression coverage for terminal-receipt and orphaned-manifest rejection. Existing tamper coverage confirms persisted tool-scope widening is rejected.
+- These are source changes and committed tests, not a claim that Gradle/CI or physical-device tests have passed. The provider-backed WorkManager executor, shared request cancellation/budget enforcement, and durable originating-chat result delivery remain the next Stage 3 implementation gates.
+- Central-brain invariant: specialists may produce bounded evidence, but only the parent Orion conversation owns user-facing continuity, final interpretation, memory updates and any consequential action approval.
