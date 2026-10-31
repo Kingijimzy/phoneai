@@ -420,3 +420,14 @@ Claude's `trading-desk-11` work was squash-merged by PR #148 into `upgrade/nanom
 - [ ] Complete end-to-end trading account matrix and confirm every live-data view shows stale/unavailable states honestly.
 
 **Honest status:** Claude's companion/desk additions are integrated and CI-verified on the roadmap line. PR #153 now embeds the companion in the actual central Compose chat header, maps the central runtime state to its animation, and persists the selected drawn appearance. The coach specialist surface retains its expanded dot-matrix/hologram views. Live Voice remains the existing dedicated flow; this change does not add an always-on microphone. Physical Redmi acceptance, Talk/Command continuity checks, microphone interruption recovery and backup export/import verification remain open.
+
+
+## Stage 3 execution foundation update (2026-10-31)
+
+- Added `OrionAgentDelegation.restore(context, manifestId)` so a future WorkManager process can reconstruct the persisted specialist assignment from its durable manifest ID rather than relying on an Activity or in-memory Agent.
+- Restoration fails closed for missing/malformed IDs, unknown specialist profiles, unknown access levels, invalid tool names, malformed parent/objective identifiers, blank scopes and out-of-range budgets.
+- Restored access and memory scope are checked against the canonical specialist profile policy; persisted tool grants must be a subset of the profile's canonical read-only tools. A corrupted preference record cannot widen a research specialist into messaging or other write capabilities.
+- Added Robolectric tests for round-trip manifest restoration, unknown/malformed IDs and tampered capability grants.
+- Existing dependencies are reused: WorkManager KTX 2.9.1, OkHttp 4.12.0, AtomicFile-backed worker ledger, SharedPreferences delegation receipts and the existing provider runner. No additional dependency was added.
+
+**Evidence status:** source and tests are committed on the roadmap branch. Exact-head CI has not yet been observed for these commits, so the new tests are not claimed as passing. The independent provider-backed WorkManager worker, shared cancellable provider request budget, durable originating-chat result event and process-death end-to-end test are still outstanding. Stage 3 remains IN PROGRESS.
