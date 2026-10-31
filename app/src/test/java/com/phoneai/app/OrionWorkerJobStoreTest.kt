@@ -169,6 +169,32 @@ class OrionWorkerJobStoreTest {
         assertTrue(store.all().isEmpty())
     }
 
+    @Test fun stagedProviderResultSurvivesRestartAndDoesNotReleaseActiveSlot() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Produce a bounded analysis")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.stageResult(job.id, "Verified specialist result"))
+        OrionWorkerJobStore.simulateProcessRestartForTest(context)
+        val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(OrionWorkerJobStore.Status.RESULT_PENDING, restored.status)
+        assertEquals("Verified specialist result", restored.result)
+        assertNull(OrionWorkerJobStore(context).claimNext { true })
+        assertTrue(OrionWorkerJobStore(context).complete(job.id, restored.result, closeParent = false))
+        assertEquals(OrionWorkerJobStore.Status.COMPLETED,
+            OrionWorkerJobStore(context).all().single { it.id == job.id }.status)
+    }
+
+    @Test fun stagedResultCanBeMovedToReviewWithoutBeingReplayed() {
+        val store = OrionWorkerJobStore(context)
+        val job = store.enqueue("parent-1", "Analyze safely")!!
+        assertNotNull(store.claim(job.id) { true })
+        assertTrue(store.stageResult(job.id, "Potentially completed response"))
+        assertTrue(store.needsReview(job.id, "manifest commit uncertain"))
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            store.all().single { it.id == job.id }.status)
+        assertFalse(store.complete(job.id, "replay must not happen"))
+    }
+
     @Test fun exactClaimNeverClaimsAnotherQueuedJob() {
         val store = OrionWorkerJobStore(context)
         val first = store.enqueue("parent-1", "First")!!
