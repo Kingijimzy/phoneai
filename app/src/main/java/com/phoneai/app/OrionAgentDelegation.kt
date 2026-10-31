@@ -166,7 +166,7 @@ internal object OrionAgentDelegation {
         val record = (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
             .lastOrNull { it.optString("id") == id } ?: return@synchronized null
         val agentId = record.optString("agentId").take(64)
-        if (AgentProfiles.find(agentId) == null) return@synchronized null
+        val profile = AgentProfiles.find(agentId) ?: return@synchronized null
         val access = runCatching { Access.valueOf(record.optString("access")) }.getOrNull()
             ?: return@synchronized null
         val objective = AgentPrivacyFilter.safeCommand(record.optString("objective"))
@@ -184,8 +184,11 @@ internal object OrionAgentDelegation {
             toolsArray.optString(index).takeIf { it.matches(Regex("^[a-z][a-z0-9_]{0,63}$")) }
         }.toSet()
         if (tools.size != toolsArray.length()) return@synchronized null
+        val canonical = create(profile, parentTaskId, objective, parentObjectiveId)
+        // Persisted preferences are not authorization: reject widened access or tool grants.
+        if (access != canonical.access || !canonical.allowedTools.containsAll(tools)) return@synchronized null
         val memoryScope = AgentPrivacyFilter.safeCommand(record.optString("memoryScope")).take(180)
-        if (memoryScope.isBlank()) return@synchronized null
+        if (memoryScope.isBlank() || memoryScope != canonical.memoryScope) return@synchronized null
         val modelCalls = record.optInt("maxModelCalls", 1)
         val capabilityCalls = record.optInt("maxCapabilityCalls", 0)
         if (modelCalls !in 1..3 || capabilityCalls !in 0..4) return@synchronized null
