@@ -9,7 +9,7 @@ import android.content.Context
  */
 internal object OrionAppAwareness {
     internal fun domainForTool(name: String): String = when {
-        name.startsWith("browser_") || name in setOf("open_url", "chrome_search", "open_deep_link") -> "Web and navigation"
+        name.startsWith("browser_") || name in setOf("open_url", "chrome_search", "open_deep_link", "live_web_search", "live_news", "fetch_url") -> "Web and navigation"
         name.startsWith("read_screen") || name in setOf("look", "click", "click_text", "tap", "swipe", "swipe_path", "scroll", "type", "key", "play", "validate_action", "verify_action", "verify_send", "wait_for") -> "Screen perception and interaction"
         name.contains("notification") || name.startsWith("media_") || name in setOf("play_media", "record_screen") -> "Notifications and media"
         name.contains("contact") || name in setOf("call", "sms", "send_email", "telegram_send") -> "Communication and contacts"
@@ -42,7 +42,7 @@ internal object OrionAppAwareness {
         sb.append("\nREGISTERED TOOL DOMAINS (actual ToolRegistry entries; READ is not a write grant):\n").append(toolArchitecture(ToolRegistry.all))
         sb.append("\nSPECIALIST AGENTS (actual profiles):\n").append(AgentProfiles.rosterBlock(c))
         val skills = runCatching { OrionSkillsCapabilityExecutor.list(c) }.getOrDefault(emptyList())
-        sb.append("\nSKILLS: ").append(if (skills.isEmpty()) "none registered" else skills.joinToString("; ") { it.id + " v" + it.version + " [" + if (it.enabled) "enabled" else "disabled" + "]" })
+        sb.append("\nSKILLS: ").append(if (skills.isEmpty()) "none registered" else skills.joinToString("; ") { it.id + " v" + it.version + " [" + (if (it.enabled) "enabled" else "disabled") + "]" })
         sb.append("\nCAPABILITY PACKS: ").append(AgentPolicy.packs.joinToString("; ") { it.id + "=" + if (AgentPolicy.enabled(c, it.id)) "enabled" else "disabled" })
         sb.append("\nCONNECTED SERVICES (local status only): ")
         sb.append(ServiceCatalog.all.joinToString("; ") { service ->
