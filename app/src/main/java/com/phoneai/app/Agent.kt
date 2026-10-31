@@ -721,7 +721,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // a fresh local diagnostic report without making a provider/network health claim.
         val selfDiagnosticRequest = OrionSelfDiagnostics.isExplicitRequest(query)
         val selfDiagnosticContext = if (selfDiagnosticRequest) {
-            runCatching { OrionSelfDiagnostics.inspect(svc).promptBlock() }
+            runCatching { OrionSelfDiagnostics.inspect(svc, recordActivity = true).promptBlock() }
                 .getOrDefault("Local self-diagnostics could not be completed. Do not claim the system is healthy.")
         } else ""
         return "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
