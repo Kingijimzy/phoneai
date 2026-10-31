@@ -1839,7 +1839,7 @@ Rules:
             val extractedPlace = WeatherService.requestedPlace(command)
             val place = extractedPlace.ifBlank { rememberedWeatherPlace }
             if (extractedPlace.isNotBlank()) WeatherService.rememberPlace(svc, extractedPlace)
-            val answer = research("weather", JSONObject().put("location", place))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("weather", JSONObject().put("location", place))))
             logShortcut("weather", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1848,7 +1848,7 @@ Rules:
         // Recent-news lookup uses GDELT directly; don't spend a model request to discover headlines.
         if (!resumeRequest && !browserActionTask && !structuredTask && LiveNews.isNewsRequest(command)) {
             ui.phase("acting")
-            val answer = research("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_news", JSONObject().put("query", LiveNews.queryFrom(command)))))
             logShortcut("live_news", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1857,7 +1857,7 @@ Rules:
         // Scores are structured live data: answer from the scoreboard feed, not a list of links.
         if (!resumeRequest && !browserActionTask && !structuredTask && LiveSports.isScoreRequest(command)) {
             ui.phase("acting")
-            val scores = research("live_sports", JSONObject().put("query", command))
+            val scores = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_sports", JSONObject().put("query", command))))
             if (!scores.startsWith("error:", true)) {
                 logShortcut("live_sports", scores)
                 history.put(msg("assistant", JSONObject().put("say", scores).put("tool", "done").toString()))
@@ -1981,7 +1981,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction &&
             !Regex("(?i)\\b(chrome|google chrome)\\b").containsMatchIn(command) && LiveWebSearch.isSearchRequest(command)) {
             ui.phase("acting")
-            val answer = summarizeSearch(command, research("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", LiveWebSearch.queryFrom(command))))).let { raw -> if (raw.startsWith("Web search results for")) summarizeSearch(command, raw) else raw }
             logShortcut("web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
@@ -1991,7 +1991,7 @@ Rules:
         if (!resumeRequest && !browserActionTask && !structuredTask && !explicitAppAction && LiveWebSearch.isLiveInfoRequest(command)) {
             ui.phase("acting")
             val query = LiveWebSearch.liveQueryFrom(command)
-            val raw = research("live_web_search", JSONObject().put("query", query))
+            val raw = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("live_web_search", JSONObject().put("query", query))))
             val answer = summarizeSearch(command, raw)
             logShortcut("live_web_search", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -2012,7 +2012,7 @@ Rules:
                 else -> rawSymbol
             }
             val symbol = baseSymbol + "USDT"
-            val answer = research("bybit_public_ticker", JSONObject().put("symbol", symbol))
+            val answer = researchShortcut(command, listOf(OrionResearchShortcutLifecycle.Step("bybit_public_ticker", JSONObject().put("symbol", symbol))))
             logShortcut("market_quote", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)
