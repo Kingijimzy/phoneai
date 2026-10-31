@@ -243,6 +243,26 @@ internal object TradingDesk {
             if (sent >= 2 || m.score < 55) break
             if (Journal.add(c, m.setup)) { notify(4300 + sent, "Orion: setup for your playbook", SetupMatcher.text(m)); sent++ }
         }
+        // open positions, newly closed trades, habits, crowded funding
+        try { monitorPositions(c, notify) } catch (_: Exception) { }
+        try {
+            if (Bybit.hasKeys(c) && now - sp(c).getLong("last_sync", 0L) > 30 * 60_000L) {
+                val fresh = syncBybit(c)
+                fresh.take(3).forEachIndexed { i, t -> notify(4600 + i, "Trade closed: ${t.symbol.removeSuffix("USDT")}", "${t.side} ${"%+.2f".format(Locale.US, t.pnl ?: 0.0)} USD. Logged in your journal.") }
+                if (fresh.isNotEmpty() && sp(c).getString("habit_day", "") != dayKey(now)) {
+                    val rep = habits(c)
+                    rep.findings.firstOrNull()?.let { sp(c).edit().putString("habit_day", dayKey(now)).apply(); notify(4610, "Habit check", it.text) }
+                }
+            }
+        } catch (_: Exception) { }
+        try {
+            follow.filter { FxData.pairOf(it) == null }.take(3).forEach { sym ->
+                val r = derivatives(c, sym) ?: return@forEach
+                val k = "fund_$sym"
+                if (r.extremeFunding && now - sp(c).getLong(k, 0L) > 12 * 3_600_000L) { sp(c).edit().putLong(k, now).apply(); notify(4620, "Crowded funding on ${sym.removeSuffix("USDT")}", r.text) }
+            }
+        } catch (_: Exception) { }
+        try { ChainDesk.watchCycle(c, notify) } catch (_: Exception) { }
         // one morning brief a day
         val day = dayKey(now)
         if (hour >= 6 && sp(c).getString("brief_day", "") != day) {
@@ -287,10 +307,12 @@ internal object TradingDesk {
         val rs = if (live != null) StrategyBacktest.run(sym, live.setup.tf, (if (live.setup.tf == "4h") h4 else h1).dropLast(1), strat).rs else emptyList()
         val summary = TradingStats.summarize(rs)
         val fx = FxData.pairOf(sym) != null
-        val tilt = if (fx) CurrencyConditions.pairTilt(events(now), now, sym) else HeadlineSentiment.score(NewsDesk.cryptoHeadlines(sym)).tilt
+        val deriv = if (fx) null else derivatives(c, sym)
+        val tilt = if (fx) CurrencyConditions.pairTilt(events(now), now, sym)
+            else HeadlineSentiment.score(NewsDesk.cryptoHeadlines(sym)).tilt * (if (deriv != null) 0.6 else 1.0) + (deriv?.tilt ?: 0.0) * 0.4
         val f = MarketForecast.forecast(MarketForecast.Input(sym, outlook.bias, outlook.confidence,
             when (live?.setup?.side) { "long" -> 1; "short" -> -1; else -> 0 }, if (rs.isEmpty()) null else summary.expectancyR, rs.size, tilt))
-        return f.text(sym) + "\n" + outlook.text + (if (sim != null) "\n" + sim.text else "")
+        return f.text(sym) + "\n" + outlook.text + (if (deriv != null) "\n" + deriv.text else "") + (if (sim != null) "\n" + sim.text else "")
     }
 
     /** What the economic calendar and news say about a symbol (or the playbook's pairs when none is named). */
@@ -311,6 +333,143 @@ internal object TradingDesk {
 
     fun watchSymbols(c: Context): List<String> =
         (Prefs.watchlist(c).split(",").map { it.trim() }.filter { it.isNotEmpty() } + defaultFx.filter { false }).distinct()
+
+    // ---- open positions, broker sync, habits, derivatives (Bybit)
+    class Live(val positions: List<PositionMonitor.Pos>, val equity: Double)
+
+    fun livePositions(c: Context): Live? {
+        if (!Bybit.hasKeys(c)) return null
+        val l = Bybit.positionList(c)
+        val ps = (0 until l.length()).mapNotNull { BybitParse.position(l.getJSONObject(it)) }
+        return Live(ps, try { Bybit.equity(c) } catch (_: Exception) { 0.0 })
+    }
+
+    private fun newsSoonFor(ev: List<MarketCalendar.Event>, now: Long): (String) -> String? = { sym ->
+        MarketCalendar.upcoming(ev, now, 1, MarketCalendar.Impact.HIGH, MarketCalendar.currenciesFor(sym)).firstOrNull { it.atMillis - now <= 30 * 60_000L }?.let {
+            "${it.currency} ${it.title.take(30)} in ${(it.atMillis - now) / 60_000L}m"
+        }
+    }
+
+    fun positionsText(c: Context): String {
+        val live = livePositions(c) ?: return "Bybit keys are not saved, so I cannot see open positions."
+        val now = System.currentTimeMillis()
+        val alerts = PositionMonitor.assess(live.positions, live.equity, Prefs.maxRiskPct(c).toDouble(), newsSoonFor(events(now), now))
+        return PositionMonitor.summary(live.positions, live.equity) + (if (alerts.isEmpty()) "" else "\n" + alerts.joinToString("\n") { "- ${it.title}: ${it.text}" })
+    }
+
+    /** Watcher pass: alert on position risks, each at most once every 3 hours. */
+    fun monitorPositions(c: Context, notify: (Int, String, String) -> Unit) {
+        val live = livePositions(c) ?: return
+        val now = System.currentTimeMillis()
+        val alerts = PositionMonitor.assess(live.positions, live.equity, Prefs.maxRiskPct(c).toDouble(), newsSoonFor(events(now), now))
+        val seen = try { JSONObject(sp(c).getString("pos_alerts", "{}")) } catch (_: Exception) { JSONObject() }
+        var sent = 0
+        for (a in alerts) {
+            if (sent >= 3) break
+            if (now - seen.optLong(a.key, 0L) < 3 * 3_600_000L) continue
+            seen.put(a.key, now); notify(4500 + sent, a.title, a.text); sent++
+        }
+        val keep = JSONObject(); seen.keys().forEach { k -> if (now - seen.optLong(k) < 12 * 3_600_000L) keep.put(k, seen.optLong(k)) }
+        sp(c).edit().putString("pos_alerts", keep.toString()).apply()
+    }
+
+    /** Pulls closed Bybit trades into the journal. Returns the trades that were new. */
+    fun syncBybit(c: Context): List<ImportedTrade> {
+        if (!Bybit.hasKeys(c)) return emptyList()
+        val rows = Bybit.closedPnl(c, 100)
+        val now = System.currentTimeMillis()
+        val all = (0 until rows.length()).mapNotNull { BybitParse.imported(rows.getJSONObject(it), now) }
+        val known = TradeHistoryStore.all(c).map { it.fingerprint }.toHashSet()
+        val fresh = all.filter { it.fingerprint !in known }
+        TradeHistoryStore.addRecords(c, fresh)
+        sp(c).edit().putLong("last_sync", now).apply()
+        return fresh
+    }
+
+    private fun fillsFromHistory(c: Context): List<HabitDetector.Fill> =
+        TradeHistoryStore.all(c).mapNotNull { t ->
+            val at = HabitDetector.parseTime(t.closedAt) ?: return@mapNotNull null
+            val pnl = t.pnl ?: return@mapNotNull null
+            HabitDetector.Fill(t.symbol, t.side == "long", (t.quantity ?: 0.0) * (t.entryPrice ?: 0.0), pnl, at)
+        }
+
+    fun habits(c: Context): HabitDetector.Report {
+        try { syncBybit(c) } catch (_: Exception) { }
+        val offset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 3_600_000
+        return HabitDetector.analyse(fillsFromHistory(c), offset)
+    }
+
+    fun derivatives(c: Context, symbol: String): DerivativesRead.Read? {
+        val sym = Bybit.symbolOf(symbol) ?: return null
+        return try { Bybit.derivativesInput(c, sym)?.let { DerivativesRead.read(it) } } catch (_: Exception) { null }
+    }
+
+    // ---- live PnL strip and companion mood
+    internal class Snap(val strip: String, val state: CompanionMood.State)
+
+    private fun localMidnight(now: Long): Long {
+        val tz = java.util.TimeZone.getDefault()
+        return now - ((now + tz.getOffset(now)) % 86_400_000L + 86_400_000L) % 86_400_000L
+    }
+
+    /** Numbers behind the strip: Bybit when keys are saved, otherwise the practice account. Network work, call off the main thread. */
+    internal fun pnlSnapshot(c: Context): Snap {
+        val now = System.currentTimeMillis()
+        val news = MarketCalendar.upcoming(events(now), now, 1, MarketCalendar.Impact.HIGH).firstOrNull()
+            ?.let { ((it.atMillis - now) / 60_000L).toInt() }
+        val kill = killSwitch(c)
+        var open = 0.0; var realized = 0.0; var equity = 0.0; var count = 0; var noStop = 0; var streak = 0; var has = false; var practice = false
+        try {
+            val live = livePositions(c)
+            if (live != null) {
+                has = true; open = live.positions.sumOf { it.unrealisedPnl }; count = live.positions.size
+                equity = live.equity; noStop = live.positions.count { it.stop == null }
+                val rows = cachedClosed(c, now)
+                val mid = localMidnight(now)
+                val pnls = (0 until rows.length()).mapNotNull { BybitParse.fill(rows.getJSONObject(it)) }
+                realized = pnls.filter { it.closedAt >= mid }.sumOf { it.pnl }
+                streak = pnls.takeWhile { it.pnl < 0 }.size
+            } else {
+                practice = true
+                val s = paper(c)
+                has = s.open.isNotEmpty() || s.closed.isNotEmpty()
+                count = s.open.size; equity = s.balance
+                open = s.open.sumOf { p ->
+                    val px = lastPrice(c, p.symbol) ?: p.entry
+                    (if (p.long) 1 else -1) * (px - p.entry) / p.entry * p.usd
+                }
+                val mid = localMidnight(now)
+                realized = s.closed.filter { it.closedAt >= mid }.sumOf { it.pnlUsd }
+                streak = s.closed.asReversed().takeWhile { it.pnlUsd < 0 }.size
+            }
+        } catch (_: Exception) { }
+        val mood = CompanionMood.from(CompanionMood.Input(open, realized, equity, streak, news, kill, practice, noStop, has))
+        return Snap(if (has) PnlStrip.text(open, realized, equity, count, practice) else "No live numbers yet", mood)
+    }
+
+    @Volatile private var closedCache: Pair<Long, JSONArray>? = null
+    private fun cachedClosed(c: Context, now: Long): JSONArray {
+        closedCache?.let { if (now - it.first < 60_000L) return it.second }
+        return Bybit.closedPnl(c, 100).also { closedCache = now to it }
+    }
+
+    /** One line for the top of the trading workspace: mode, kill switch, session, next high-impact news, playbook size. */
+    fun statusLine(c: Context): String {
+        val now = System.currentTimeMillis()
+        val hour = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).hour
+        val mode = when {
+            Prefs.tradingReadOnly(c) -> "Read-only"
+            Prefs.bybitTestnet(c) -> "Practice"
+            else -> "REAL money"
+        }
+        val next = MarketCalendar.upcoming(events(now), now, 48, MarketCalendar.Impact.HIGH).firstOrNull()?.let {
+            val m = (it.atMillis - now) / 60_000L
+            "next ${it.currency} ${it.title.take(24)} in " + (if (m < 60) "${m}m" else "${m / 60}h")
+        } ?: "no high-impact news in 48h"
+        val n = strategies(c).size
+        return "$mode · " + MarketSessions.describe(hour).substringBefore('.') + " · " + next + " · playbook $n" +
+            (if (killSwitch(c)) " · KILL SWITCH ON" else "") + "  (tap for Desk)"
+    }
 
     // ---- tool entry point
     fun run(c: Context, tool: String, a: JSONObject): String = try {
@@ -394,6 +553,26 @@ internal object TradingDesk {
             "strategy_backtest" -> backtest(c, a.optString("strategy").ifBlank { null }, a.optString("symbol", followSymbols(c).firstOrNull() ?: "BTCUSDT"), a.optString("timeframe", "1h")).text
             "market_forecast" -> forecast(c, a.optString("symbol", followSymbols(c).firstOrNull() ?: "BTCUSDT"))
             "market_conditions" -> conditions(c, a.optString("symbol").ifBlank { null })
+            "positions_monitor" -> positionsText(c)
+            "bybit_sync" -> if (!Bybit.hasKeys(c)) "Bybit keys are not saved." else syncBybit(c).let { "Synced. ${it.size} new closed trade${if (it.size == 1) "" else "s"} added to your journal. ${TradeHistoryStore.summaryText(c)}" }
+            "habit_report" -> habits(c).text()
+            "crypto_derivatives" -> derivatives(c, a.optString("symbol", "BTCUSDT"))?.text ?: "No funding or open-interest data for that symbol."
+            "memecoin_check" -> ChainDesk.checkMeme(a.optString("query"))
+            "memecoin_watch" -> when (a.optString("action", "list")) {
+                "add" -> ChainDesk.addMeme(c, a.optString("query"))
+                "remove" -> ChainDesk.removeMeme(c, a.optString("query"))
+                else -> ChainDesk.memes(c).let { l -> if (l.isEmpty()) "Memecoin watchlist is empty." else l.joinToString(", ") { it.symbol + " (" + it.chain + ")" } }
+            }
+            "wallet_check" -> ChainDesk.snapshot(a.optString("address").trim()).let { sn ->
+                if (WalletAddress.looksLikeSecret(a.optString("address"))) "That looks like a private key or seed phrase. Never share those. I only need a public address."
+                else if (sn == null) "Could not read that wallet right now (or it is not a valid public address)." else WalletDiff.text("Wallet", sn, null)
+            }
+            "wallet_watch" -> when (a.optString("action", "list")) {
+                "add" -> ChainDesk.addWallet(c, a.optString("address"), a.optString("label"))
+                "remove" -> ChainDesk.removeWallet(c, a.optString("address").ifBlank { a.optString("label") })
+                else -> ChainDesk.wallets(c).let { l -> if (l.isEmpty()) "No wallets watched." else l.joinToString("; ") { it.label + " " + it.address.take(6) + "..." + it.address.takeLast(4) } }
+            }
+            "chain_overview" -> ChainDesk.overview(c)
             "trading_kill_switch" -> { setKill(c, a.optBoolean("on", true)); "Kill switch is now ${if (killSwitch(c)) "ON: no new orders will pass the risk gate" else "OFF"}." }
             else -> "Unknown trading tool $tool."
         }
