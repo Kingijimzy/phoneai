@@ -76,6 +76,7 @@ internal object ChatGroups {
             Chip("Voice", action = "voice"),
             Chip("Talk", action = "talk"),
             Chip("Mic", action = "mic"),
+            Chip("Wake", action = "wake"),
             Chip("Learned", action = "learned"),
             Chip("Clear", action = "clear")
         ))

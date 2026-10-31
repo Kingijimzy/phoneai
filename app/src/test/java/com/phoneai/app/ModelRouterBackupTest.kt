@@ -33,6 +33,12 @@ class ModelRouterBackupTest {
         assertEquals(1, r.journal.length())
     }
 
+    @Test fun memoryNotesRoundTrip() {
+        val r = DeskBackup.parse(DeskBackup.build(emptyMap(), JSONArray(), 1L, listOf("[rule] never risk more than 1%", "my entry is on a retest")))
+        assertEquals(listOf("[rule] never risk more than 1%", "my entry is on a retest"), r.memory)
+        assertTrue(DeskBackup.parse("""{"app":"orion-desk","v":1}""").memory.isEmpty())
+    }
+
     @Test fun tamperedBackupCannotRestoreSafetyKeys() {
         val text = """{"app":"orion-desk","v":1,"prefs":{"trading_desk":{"kill":{"t":"b","v":false},"deriv_token":{"t":"s","v":"x"},"paper":{"t":"s","v":"{}"}}},"journal":[]}"""
         val m = DeskBackup.parse(text).prefs["trading_desk"]!!
