@@ -39,6 +39,11 @@ internal object OrionContextualIntentInterpreter {
     private val correction = Regex(
         """(?i)^\s*(?:no[, ]+)?(?:fix|change|correct|repair|update|adjust|redo|improve)\s+(?:that|it|this|the previous task|the last change|the implementation)\b|^\s*(?:that's|that is)\s+(?:wrong|not right)"""
     )
+    // Broad "fix everything" wording is a correction to the active objective when one exists,
+    // not a brand-new chat question that should be answered without continuing the work.
+    private val broadCorrection = Regex(
+        """(?i)^\s*(?:please\s+)?(?:fix|repair|improve|correct|update|integrate)\s+(?:everything|all of it|the whole thing|the entire thing|the whole platform|the entire platform)\b"""
+    )
     private val testRequest = Regex(
         """(?i)^\s*(?:please\s+)?(?:test|verify|validate|audit|check)\s+(?:everything|it all|all of it|the rest|the remaining work|the outstanding work|all remaining work)\b[.! ]*$"""
     )
@@ -68,7 +73,7 @@ internal object OrionContextualIntentInterpreter {
 
     private fun isFollowUpOnly(value: String): Boolean =
         continuation.matches(value) || followUpOnly.matches(value) ||
-            standaloneContextual.matches(value) || testRequest.matches(value) ||
+            standaloneContextual.matches(value) || broadCorrection.containsMatchIn(value) || testRequest.matches(value) ||
             historicalReference.containsMatchIn(value) ||
             (value.length < 48 && (completeRemaining.containsMatchIn(value) || correction.containsMatchIn(value)))
 
@@ -86,7 +91,7 @@ internal object OrionContextualIntentInterpreter {
         val namedTargetMatchesActive = namedTokens.isNotEmpty() && namedTokens.any { it in objectiveTokens }
         val isContinue = continuation.matches(raw) || (namedTargetMatchesActive && objective.isNotBlank())
         val isComplete = completeRemaining.containsMatchIn(raw)
-        val isCorrection = correction.containsMatchIn(raw)
+        val isCorrection = correction.containsMatchIn(raw) || broadCorrection.containsMatchIn(raw)
         val isTest = testRequest.containsMatchIn(raw)
         val isReferenceOnly = followUpOnly.matches(raw) || standaloneContextual.matches(raw)
         val isHistorical = explicitHistoricalLookup.containsMatchIn(raw)
