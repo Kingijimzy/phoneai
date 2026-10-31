@@ -10,7 +10,7 @@
 
 package com.phoneai.app
 
-import android.util.Log
+import java.util.logging.Logger
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -113,7 +113,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         if (unknownStreak >= config.unknownToolThreshold) {
             val msg = "[LOOP BLOCKED] CRITICAL: attempted unavailable tool '$toolName' " +
                 "$unknownStreak times. Stop retrying that missing tool and answer without it."
-            Log.w("ToolLoopDetector",
+            Logger.getLogger("ToolLoopDetector").warning(
                 "CRITICAL unknown_tool_repeat tool=$toolName streak=$unknownStreak")
             return LoopCheckResult(Level.CRITICAL, msg)
         }
@@ -145,7 +145,7 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
                 val msg = "[LOOP WARNING] You have called $toolName $noProgressStreak " +
                     "times with no progress. Stop polling and either (1) increase wait " +
                     "time, or (2) report the task as failed."
-                Log.d("ToolLoopDetector",
+                Logger.getLogger("ToolLoopDetector").info(
                     "WARNING known_poll_no_progress tool=$toolName streak=$noProgressStreak")
                 return LoopCheckResult(Level.WARNING, msg, "poll:$toolName:$argsHash")
             }
