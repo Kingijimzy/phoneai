@@ -36,6 +36,22 @@ object AgentCheckpointStore {
         readCheckpoint(c)?.optString("taskId")?.takeIf { it.isNotBlank() }
     }
 
+    /** A specialist must stop accepting work when its exact parent checkpoint is paused/stopped. */
+    fun cancellationRequested(c: Context, taskId: String?): Boolean {
+        if (taskId.isNullOrBlank()) return false
+        return synchronized(lock) {
+            val active = readCheckpoint(c)
+            if (active?.optString("taskId") == taskId) {
+                active.optBoolean("stopRequested") || active.optBoolean("pauseRequested") ||
+                    active.optString("status") != "running"
+            } else {
+                archivedPending(c).firstOrNull { it.second.optString("taskId") == taskId }
+                    ?.second?.let { it.optBoolean("stopRequested") || it.optBoolean("pauseRequested") ||
+                        it.optString("status") != "running" } ?: true
+            }
+        }
+    }
+
     private fun safeCommand(command: String): String = AgentPrivacyFilter.safeCommand(
         command
             .replace(Regex("(?i)\\bpasswd\\s*[:=]\\s*[^\\s,;]+")) { "passwd=[redacted]" }
