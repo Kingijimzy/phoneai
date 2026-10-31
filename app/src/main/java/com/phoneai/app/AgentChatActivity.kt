@@ -96,6 +96,7 @@ class AgentChatActivity : Activity() {
             chip("Positions") { quick("Check my open positions: stops, risk, news ahead, and what I should do about each.") }
             chip("Habits") { quick("Review my trading habits from my synced trades: overtrading, revenge trades, bad hours, size after losses. Be direct and give me one rule.") }
             chip("Funding") { quick("What do funding rates and open interest say about my watchlist right now, and is the crowd leaning one way?") }
+            chip("Memecoins & wallets") { quick("Check my memecoin watchlist and watched wallets and tell me what needs attention, including any rug or dump warning signs.") }
             chip("Simulate") { quick("Simulate my playbook on recent history for the pairs in it and tell me honestly whether the numbers show an edge.") }
             chip("Forecast") { quick("Give me a forecast for the main pair in my playbook using my strategy, its simulated record, the news calendar and headlines.") }
             chip("Desk") { startActivity(Intent(this, TradingActivity::class.java)) }

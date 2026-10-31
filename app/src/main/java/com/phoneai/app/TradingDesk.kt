@@ -262,6 +262,7 @@ internal object TradingDesk {
                 if (r.extremeFunding && now - sp(c).getLong(k, 0L) > 12 * 3_600_000L) { sp(c).edit().putLong(k, now).apply(); notify(4620, "Crowded funding on ${sym.removeSuffix("USDT")}", r.text) }
             }
         } catch (_: Exception) { }
+        try { ChainDesk.watchCycle(c, notify) } catch (_: Exception) { }
         // one morning brief a day
         val day = dayKey(now)
         if (hour >= 6 && sp(c).getString("brief_day", "") != day) {
@@ -507,6 +508,22 @@ internal object TradingDesk {
             "bybit_sync" -> if (!Bybit.hasKeys(c)) "Bybit keys are not saved." else syncBybit(c).let { "Synced. ${it.size} new closed trade${if (it.size == 1) "" else "s"} added to your journal. ${TradeHistoryStore.summaryText(c)}" }
             "habit_report" -> habits(c).text()
             "crypto_derivatives" -> derivatives(c, a.optString("symbol", "BTCUSDT"))?.text ?: "No funding or open-interest data for that symbol."
+            "memecoin_check" -> ChainDesk.checkMeme(a.optString("query"))
+            "memecoin_watch" -> when (a.optString("action", "list")) {
+                "add" -> ChainDesk.addMeme(c, a.optString("query"))
+                "remove" -> ChainDesk.removeMeme(c, a.optString("query"))
+                else -> ChainDesk.memes(c).let { l -> if (l.isEmpty()) "Memecoin watchlist is empty." else l.joinToString(", ") { it.symbol + " (" + it.chain + ")" } }
+            }
+            "wallet_check" -> ChainDesk.snapshot(a.optString("address").trim()).let { sn ->
+                if (WalletAddress.looksLikeSecret(a.optString("address"))) "That looks like a private key or seed phrase. Never share those. I only need a public address."
+                else if (sn == null) "Could not read that wallet right now (or it is not a valid public address)." else WalletDiff.text("Wallet", sn, null)
+            }
+            "wallet_watch" -> when (a.optString("action", "list")) {
+                "add" -> ChainDesk.addWallet(c, a.optString("address"), a.optString("label"))
+                "remove" -> ChainDesk.removeWallet(c, a.optString("address").ifBlank { a.optString("label") })
+                else -> ChainDesk.wallets(c).let { l -> if (l.isEmpty()) "No wallets watched." else l.joinToString("; ") { it.label + " " + it.address.take(6) + "..." + it.address.takeLast(4) } }
+            }
+            "chain_overview" -> ChainDesk.overview(c)
             "trading_kill_switch" -> { setKill(c, a.optBoolean("on", true)); "Kill switch is now ${if (killSwitch(c)) "ON: no new orders will pass the risk gate" else "OFF"}." }
             else -> "Unknown trading tool $tool."
         }
