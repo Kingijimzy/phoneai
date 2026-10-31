@@ -222,7 +222,7 @@ class Tools(private val svc: PhoneAiService) {
                 val cleanPath = path.trim().trim('/')
                 val segments = cleanPath.split('/').filter { it.isNotBlank() }
                 if (segments.isEmpty() || segments.size > 12 ||
-                    segments.any { it == "." || it == ".." || it.contains('\\\\') ||
+                    segments.any { it == "." || it == ".." || it.contains('\\') ||
                         it.any { ch -> ch.code < 32 } || it.length > 160 }) {
                     return "error: provide a safe repository-relative file path"
                 }
