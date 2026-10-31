@@ -167,6 +167,30 @@ object Bybit {
         return out
     }
 
+    /** Closed trades (profit and loss records), newest first. Needs a key with read access. */
+    fun closedPnl(c: Context, limit: Int = 100): JSONArray =
+        call(c, tradeBase(c), "GET", "/v5/position/closed-pnl", "category=linear&limit=${limit.coerceIn(1, 200)}", null, true)
+            .getJSONObject("result").getJSONArray("list")
+
+    /** Funding rate, open interest (now and about 24h ago), 24h price change and the long share of accounts. Public data, no key. */
+    internal fun derivativesInput(c: Context, symbol: String): DerivativesRead.Input? {
+        val t = call(c, MAIN, "GET", "/v5/market/tickers", "category=linear&symbol=$symbol", null, false)
+            .getJSONObject("result").getJSONArray("list").let { if (it.length() == 0) return null else it.getJSONObject(0) }
+        val funding = t.optString("fundingRate", "").toDoubleOrNull() ?: return null
+        val oiNow = t.optString("openInterest", "").toDoubleOrNull() ?: 0.0
+        val chg = (t.optString("price24hPcnt", "0").toDoubleOrNull() ?: 0.0) * 100.0
+        val oiOld = try {
+            val l = call(c, MAIN, "GET", "/v5/market/open-interest", "category=linear&symbol=$symbol&intervalTime=1h&limit=25", null, false)
+                .getJSONObject("result").getJSONArray("list")
+            if (l.length() >= 25) l.getJSONObject(24).optString("openInterest", "").toDoubleOrNull() else null
+        } catch (_: Exception) { null }
+        val longShare = try {
+            call(c, MAIN, "GET", "/v5/market/account-ratio", "category=linear&symbol=$symbol&period=1h&limit=1", null, false)
+                .getJSONObject("result").getJSONArray("list").let { if (it.length() == 0) null else it.getJSONObject(0).optString("buyRatio", "").toDoubleOrNull() }
+        } catch (_: Exception) { null }
+        return DerivativesRead.Input(symbol, funding, oiNow, oiOld, chg, longShare)
+    }
+
     fun positions(c: Context): String {
         val l = positionList(c)
         if (l.length() == 0) return "You have no open positions. Mode: " + modeText(c) + "."
