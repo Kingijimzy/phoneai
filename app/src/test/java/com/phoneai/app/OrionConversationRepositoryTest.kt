@@ -34,6 +34,33 @@ class OrionConversationRepositoryTest {
         resetRepositorySingleton()
     }
 
+    @Test fun specialistEventIsIdempotentAndTargetsItsOriginalArchivedSession() {
+        val first = listOf("me" to "original specialist request", "ai" to "I will delegate this")
+        repository.saveActive(context, first)
+        val originId = repository.activeSessionId(context)!!
+        repository.archiveAndClear(context, first)
+
+        val second = listOf("me" to "a different active chat", "ai" to "separate conversation")
+        repository.saveActive(context, second)
+        val activeId = repository.activeSessionId(context)!!
+        assertFalse(originId == activeId)
+
+        val firstWrite = repository.recordEventForSession(
+            context, originId, "specialist-job-stable-id", "specialist_result", "completed", "Research evidence ready"
+        )
+        val duplicateWrite = repository.recordEventForSession(
+            context, originId, "specialist-job-stable-id", "specialist_result", "completed", "Research evidence ready"
+        )
+        assertNotNull(firstWrite)
+        assertEquals(firstWrite?.id, duplicateWrite?.id)
+        assertEquals(activeId, repository.activeSessionId(context))
+
+        assertNotNull(repository.restoreArchivedById(context, originId))
+        val events = repository.eventsForActive(context).filter { it.id == "specialist-job-stable-id" }
+        assertEquals(1, events.size)
+        assertEquals("Research evidence ready", events.single().summary)
+    }
+
     @Test fun switchingSessionsRestoresTheExactArchivedSessionById() {
         val first = listOf("me" to "first question", "ai" to "first answer")
         repository.saveActive(context, first)
