@@ -55,6 +55,15 @@ class OrionWorkerJobStoreTest {
         assertFalse(summary.contains("completed"))
     }
 
+    @Test fun ordinaryReloadInSameProcessDoesNotTreatLiveJobAsInterrupted() {
+        val first = OrionWorkerJobStore(context)
+        val job = first.enqueue("parent-1", "Continue a live analysis")!!
+        assertNotNull(first.claimNext { true })
+        val observed = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        assertEquals(OrionWorkerJobStore.Status.RUNNING, observed.status)
+        assertTrue(first.complete(job.id, "Completed normally"))
+    }
+
     @Test fun jobsPersistAndDuplicateIdempotencyKeyReturnsOriginal() {
         val store = OrionWorkerJobStore(context)
         val first = store.enqueue("parent-1", "Research Android background workers", idempotencyKey = "research-1")!!
