@@ -930,6 +930,7 @@ RESPONSE QUALITY AND FORMAT:
     fun runLiveConversation(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
+        talkNim.beginCommand()
         // Route actionable voice requests through the exact same planner, checkpoint,
         // capability registry, owner policy, confirmation and evidence gates as chat.
         if (OrionVoiceExecutionPolicy.shouldRouteToCommand(
@@ -938,7 +939,6 @@ RESPONSE QUALITY AND FORMAT:
             runInternal(command, reuseCommandBudget = false)
             return
         }
-        talkNim.beginCommand()
         stopped = false
         researchCancelled.set(false)
         talkNim.resume()
