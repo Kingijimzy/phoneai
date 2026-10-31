@@ -26,7 +26,7 @@ internal object HabitDetector {
     fun parseTime(raw: String): Long? {
         val t = raw.trim()
         if (t.isEmpty()) return null
-        t.toLongOrNull()?.let { return if (t > 100_000_000_000L) it else it * 1000L }
+        t.toLongOrNull()?.let { v -> return if (v > 100_000_000_000L) v else v * 1000L }
         try { return java.time.OffsetDateTime.parse(t).toInstant().toEpochMilli() } catch (_: Exception) { }
         return try { java.time.LocalDateTime.parse(t.replace(' ', 'T').take(19)).toInstant(java.time.ZoneOffset.UTC).toEpochMilli() } catch (_: Exception) { null }
     }
