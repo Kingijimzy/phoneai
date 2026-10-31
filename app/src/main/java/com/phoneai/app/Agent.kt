@@ -1358,48 +1358,75 @@ Rules:
         ).containsMatchIn(command) || Regex(
             "(?i)\\b(search in|search on|inside|within)\\s+(youtube|whatsapp|telegram|instagram|tiktok|facebook|spotify)\\b"
         ).containsMatchIn(command)
-        // Exact public GitHub Actions run URLs are a deterministic read-only route.
-        // Do not send a known owner/repository/run URL through account identity or generic browser intent.
-        val githubRunMatch = Regex(
-            "(?i)https?://(?:www\\.)?github\\.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})/actions/runs/([0-9]{1,20})"
-        ).find(command)
-        if (!resumeRequest && !browserActionTask && githubRunMatch != null) {
-            val owner = githubRunMatch.groupValues[1]
-            val repository = githubRunMatch.groupValues[2]
-            val runId = githubRunMatch.groupValues[3]
-            if (!authorizeDirectTool("github_public", "trading_research")) {
-                ui.say("I couldn't read that public GitHub Actions run because the public research capability is disabled or this tool was explicitly denied.")
-                return
-            }
+        // URL-first GitHub routing: exact supplied URLs outrank every natural-language repository-name heuristic.
+        val githubTargets = if (!resumeRequest && !browserActionTask) GitHubRequestPolicy.resolveAll(command) else emptyList()
+        if (githubTargets.isNotEmpty()) {
             ui.phase("acting")
-            val result = tools.githubPublic(owner, repository, "run", runId)
-            logShortcut("github_public_run", result)
-            history.put(msg("assistant", JSONObject().put("say", result).put("tool", "done").toString()))
-            ui.say(result)
+            val output = mutableListOf<String>()
+            for (target in githubTargets) {
+                val owner = target.owner
+                val repository = target.repository
+                if (owner.isBlank()) {
+                    val search = tools.githubSearchRepository(repository)
+                    val exact = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
+                        .findAll(search).firstOrNull { it.groupValues[2].equals(repository, ignoreCase = true) }
+                    if (exact == null) {
+                        output += if (search.startsWith("error:", true)) search else
+                            "I couldn't verify an exact public repository named '$repository'.\n$search"
+                        continue
+                    }
+                    val resolvedOwner = exact.groupValues[1]
+                    val resolvedRepo = exact.groupValues[2]
+                    val metadata = executeWithRecoveryGuard("github_public", JSONObject()
+                        .put("owner", resolvedOwner).put("repo", resolvedRepo).put("section", "repo"))
+                    val readme = executeWithRecoveryGuard("github_public", JSONObject()
+                        .put("owner", resolvedOwner).put("repo", resolvedRepo).put("section", "readme"))
+                    output += if (metadata.startsWith("error:", true) || readme.startsWith("error:", true)) {
+                        "Public repository https://github.com/$resolvedOwner/$resolvedRepo\n$metadata\n$readme"
+                    } else summarizeRepository(command, metadata, readme)
+                    continue
+                }
+                when (target.section) {
+                    GitHubRequestPolicy.Section.REPOSITORY -> {
+                        val metadata = executeWithRecoveryGuard("github_public", JSONObject()
+                            .put("owner", owner).put("repo", repository).put("section", "repo"))
+                        val readme = executeWithRecoveryGuard("github_public", JSONObject()
+                            .put("owner", owner).put("repo", repository).put("section", "readme"))
+                        output += if (metadata.startsWith("error:", true) || readme.startsWith("error:", true)) {
+                            "Repository https://github.com/$owner/$repository\n$metadata\n$readme"
+                        } else summarizeRepository(command, metadata, readme)
+                    }
+                    GitHubRequestPolicy.Section.RUNS -> {
+                        output += executeWithRecoveryGuard("github_public", JSONObject()
+                            .put("owner", owner).put("repo", repository).put("section", "runs"))
+                    }
+                    GitHubRequestPolicy.Section.RUN -> {
+                        output += executeWithRecoveryGuard("github_public", JSONObject()
+                            .put("owner", owner).put("repo", repository).put("section", "run")
+                            .put("run_id", target.runId.orEmpty()))
+                    }
+                }
+            }
+            val answer = output.filter { it.isNotBlank() }.joinToString("\n\n")
+                .ifBlank { "I couldn't retrieve GitHub information for the supplied URL." }
+            logShortcut("github_public_url_audit", answer)
+            history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
+            ui.say(answer)
             return
         }
-        // Named public GitHub repositories are discovered and read without requiring account-scope access.
+        // Explicit repository names are supported, but generic words such as "code" and "source"
+        // are not valid inferred repository names. Exact GitHub URLs above always take precedence.
         val namedRepo = Regex("(?i)\\b(?:my\\s+)?(?:github\\s+)?(?:repo|repository|project)\\s+(?:(?:called|named|is)\\s+)?([A-Za-z0-9_.-]{2,100})\\b").find(command)
-        val trailingNamedRepo = Regex("(?i)\\b([A-Za-z0-9_.-]{2,100})\\s+(?:github\\s+)?(?:repo|repository|project)\\b").find(command)
-        val requestedRepoName = namedRepo?.groupValues?.getOrNull(1)
-            ?: trailingNamedRepo?.groupValues?.getOrNull(1)
+        val requestedRepoName = namedRepo?.groupValues?.getOrNull(1)?.takeUnless {
+            it.lowercase() in setOf("code", "source", "files", "entire", "everything", "all", "account", "check", "inspect", "review", "workflow", "actions", "build", "logs")
+        }
         if (!resumeRequest && !browserActionTask && requestedRepoName != null) {
-            val requestedName = requestedRepoName
-            if (!authorizeDirectTool("github_public", "trading_research")) {
-                val answer = "I couldn't search public GitHub because the GitHub public-read capability is disabled or this tool was explicitly denied. Enable the public GitHub capability and retry; public repository reads do not need a separate approval prompt."
-                logShortcut("github_repository_search", answer)
-                history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
-                ui.say(answer)
-                return
-            }
-            ui.phase("acting")
-            val searchResult = tools.githubSearchRepository(requestedName)
-            val candidates = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
-                .findAll(searchResult).toList()
-            val exact = candidates.firstOrNull { it.groupValues[2].equals(requestedName, ignoreCase = true) }
-            if (searchResult.startsWith("error:") || exact == null) {
-                val answer = if (searchResult.startsWith("error:")) searchResult else
-                    "I searched public GitHub for '$requestedName' but could not verify an exact repository-name match. Please share its GitHub URL or owner/repository name.\n\n" + searchResult.take(1800)
+            val searchResult = tools.githubSearchRepository(requestedRepoName)
+            val exact = Regex("(?m)^MATCH: ([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})$")
+                .findAll(searchResult).firstOrNull { it.groupValues[2].equals(requestedRepoName, ignoreCase = true) }
+            if (exact == null) {
+                val answer = if (searchResult.startsWith("error:", true)) searchResult else
+                    "I searched public GitHub for '$requestedRepoName' but could not verify an exact repository-name match. Please provide the repository URL or exact owner/repository.\n\n" + searchResult.take(1800)
                 logShortcut("github_repository_search", answer)
                 history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
                 ui.say(answer)
@@ -1407,10 +1434,12 @@ Rules:
             }
             val owner = exact.groupValues[1]
             val repository = exact.groupValues[2]
-            val metadata = tools.githubPublic(owner, repository, "repo")
-            val readme = tools.githubPublic(owner, repository, "readme")
-            val answer = if (metadata.startsWith("error:") || readme.startsWith("error:")) {
-                "I found the public repository https://github.com/$owner/$repository, but couldn't retrieve all of its details.\n$metadata\n$readme"
+            val metadata = executeWithRecoveryGuard("github_public", JSONObject()
+                .put("owner", owner).put("repo", repository).put("section", "repo"))
+            val readme = executeWithRecoveryGuard("github_public", JSONObject()
+                .put("owner", owner).put("repo", repository).put("section", "readme"))
+            val answer = if (metadata.startsWith("error:", true) || readme.startsWith("error:", true)) {
+                "I found https://github.com/$owner/$repository, but couldn't retrieve all details.\n$metadata\n$readme"
             } else summarizeRepository(command, metadata, readme)
             logShortcut("github_public_repository", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
