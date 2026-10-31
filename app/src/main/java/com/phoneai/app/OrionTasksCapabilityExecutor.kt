@@ -63,6 +63,8 @@ internal object OrionTasksCapabilityExecutor {
     ): String = when (tool) {
         "ask_agent" -> if (stopped()) "error: task was stopped before specialist delegation."
             else tools.askAgent(args.optString("agent"), args.optString("task"), args.optString("objective_id"))
+        "queue_agent" -> if (stopped()) "error: task was stopped before background specialist scheduling."
+            else tools.queueAgent(args.optString("agent"), args.optString("task"), args.optString("objective_id"), args.optString("idempotency_key"))
         "create_agent" -> if (stopped()) "error: task was stopped before specialist creation."
             else tools.createAgent(args.optString("id"), args.optString("name"), args.optString("tagline"), args.optString("persona"))
         "morning_brief" -> if (stopped()) "error: task was stopped before building the brief."
