@@ -17,7 +17,7 @@ import kotlin.math.sin
  * breathing, blinking, a talking mouth while speaking, and a hop when the mood changes. Tap to switch look.
  * Animation stops when the system animation scale is off.
  */
-class CompanionView(context: Context) : View(context) {
+internal class CompanionView(context: Context) : View(context) {
     companion object { val CHARACTERS = listOf("Orb", "Fox", "Robot") }
 
     var character = 0

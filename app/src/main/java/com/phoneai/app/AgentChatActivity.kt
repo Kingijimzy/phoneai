@@ -65,7 +65,7 @@ class AgentChatActivity : Activity() {
     private var deskStatus: TextView? = null
     private var pnlText: TextView? = null
     private var moodText: TextView? = null
-    private var companion: CompanionView? = null
+    private var mascot: CompanionView? = null
     private var voice: Voice? = null
     private var lastMood: CompanionMood.Mood? = null
     private var lastSpokeAt = 0L
@@ -87,7 +87,7 @@ class AgentChatActivity : Activity() {
                 if (isDestroyed) return@runOnUiThread
                 deskStatus?.text = t
                 if (snap != null) {
-                    strip.text = snap.strip; moodText?.text = snap.state.line; companion?.setMood(snap.state.mood)
+                    strip.text = snap.strip; moodText?.text = snap.state.line; mascot?.setMood(snap.state.mood)
                     val now = System.currentTimeMillis()
                     if (Prefs.companionVoice(this) && CompanionMood.shouldSpeak(lastMood, snap.state.mood, lastSpokeAt, now)) {
                         lastSpokeAt = now; voiceOut().speak(snap.state.line)
@@ -138,7 +138,7 @@ class AgentChatActivity : Activity() {
         if (agent.id == "coach") {
             val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), 0, dp(14), dp(6)) }
             val face = CompanionView(this).apply { character = Prefs.companionChar(this@AgentChatActivity); onCharacterChanged = { Prefs.setCompanionChar(this@AgentChatActivity, it) } }
-            companion = face
+            mascot = face
             top.addView(face, LinearLayout.LayoutParams(dp(72), dp(72)))
             val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
             pnlText = TextView(this).apply { textSize = 14f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD; text = "Live PnL: loading…" }
