@@ -191,7 +191,7 @@ internal object OrionAgentDelegation {
         if (memoryScope.isBlank() || memoryScope != canonical.memoryScope) return@synchronized null
         val modelCalls = record.optInt("maxModelCalls", 1)
         val capabilityCalls = record.optInt("maxCapabilityCalls", 0)
-        if (modelCalls !in 1..3 || capabilityCalls !in 0..4) return@synchronized null
+        if (modelCalls !in 1..canonical.maxModelCalls || capabilityCalls !in 0..4) return@synchronized null
         Manifest(
             id = id,
             parentTaskId = parentTaskId,
