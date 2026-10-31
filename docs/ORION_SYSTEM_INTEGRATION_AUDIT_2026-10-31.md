@@ -90,6 +90,7 @@ These layers overlap. That is safe but makes it difficult to understand why a to
 - For multi-step planning, the model proposes `objective_graph` nodes and later supplies `objective_id` for each tool step.
 - `OrionObjectiveGraph` validates IDs/dependencies, persists by active chat session, enforces prerequisite status, and accepts completion only from an exact successful evidence receipt in the same session.
 - `AgentCheckpointStore.begin` creates a separate UUID task ID; each step is checkpointed before execution and recorded afterward.
+- The checkpoint start boundary now refuses to overwrite a `running`, `paused` or `recovery_required` task. The Agent explains that the previous task must be resumed or explicitly stopped. Regression tests verify that normal progress and uncertain in-flight actions survive an attempted new task.
 - The evidence ledger associates dispatches with the checkpoint UUID (hashed for storage).
 - User-visible Task Centre tasks have separate integer IDs in `TaskStore`.
 
@@ -135,4 +136,4 @@ The central brain also adds up to 16,000 characters of executive context, includ
 
 ## Current status
 
-The objective-ID recovery, compound-action routing, direct research routing and shared guarded-research dispatch changes are committed to the PR #132 integration branch, with regression tests. The new exact-head CI run must pass before these changes are considered build-verified. No merge to `main` and no physical-device success is claimed by this audit.
+The objective-ID recovery, compound-action routing, direct research routing, shared guarded-research dispatch, and unfinished-checkpoint preservation changes are committed to the PR #132 integration branch, with regression tests. The new exact-head CI run must pass before these changes are considered build-verified. No merge to `main` and no physical-device success is claimed by this audit.
