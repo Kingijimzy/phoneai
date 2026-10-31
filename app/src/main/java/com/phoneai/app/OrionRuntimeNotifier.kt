@@ -113,6 +113,31 @@ internal object OrionRuntimeNotifier {
         }
     }
 
+    /** Notify that evidence is ready in the originating chat; never claim the parent task is complete. */
+    fun postSpecialistResult(context: Context, jobId: String) {
+        val config = OrionAutonomySettings.read(context)
+        val granted = Build.VERSION.SDK_INT < 33 ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!OrionNotificationPolicy.shouldNotifyTaskOutcome(
+                config.notifyOnCompletion, appForeground(), Build.VERSION.SDK_INT, granted
+            )) return
+        runCatching {
+            val id = NOTIFICATION_BASE + (jobId.hashCode() and 0x3fff)
+            val body = "A specialist result is saved in its original Orion conversation. Open chat to review the evidence; the parent task is not marked complete."
+            manager(context).notify(
+                id,
+                builder(context)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("Orion has a specialist result")
+                    .setContentText(body)
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(body))
+                    .setContentIntent(openIntent(context, id))
+                    .setAutoCancel(true)
+                    .build()
+            )
+        }
+    }
+
     /** Generic approval alert only; never include the action text or private arguments. */
     fun postApprovalRequired(context: Context) {
         val config = OrionAutonomySettings.read(context)
