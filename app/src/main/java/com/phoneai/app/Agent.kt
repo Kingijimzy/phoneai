@@ -1716,7 +1716,7 @@ Rules:
         // URL-first GitHub routing: exact supplied URLs take precedence over prose/name heuristics.
         // All reads use the unified Research executor so capability policy, cancellation, preflight,
         // adapter ownership and durable evidence stay connected to the same task.
-        val githubTargets = if (!resumeRequest && !browserActionTask && !structuredTask) GitHubRequestPolicy.resolveAll(command) else emptyList()
+        val githubTargets = if (!resumeRequest && !browserActionTask && GitHubRequestPolicy.shouldRouteDirectly(command)) GitHubRequestPolicy.resolveAll(command) else emptyList()
         if (githubTargets.isNotEmpty()) {
             ui.phase("acting")
             val reports = githubTargets.map { target ->
