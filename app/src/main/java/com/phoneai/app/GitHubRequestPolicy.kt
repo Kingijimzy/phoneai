@@ -25,6 +25,22 @@ internal object GitHubRequestPolicy {
         "workflow", "workflows", "actions", "build", "builds", "logs", "history"
     )
 
+    /**
+     * A repository inspection is a direct read task unless the same request also asks Orion
+     * to perform work in another executor family. This prevents a planner from turning words
+     * such as "and" or "identify" into a repository search query, while preserving compound plans.
+     */
+    fun shouldRouteDirectly(command: String): Boolean {
+        if (resolveAll(command).isEmpty()) return false
+        val secondaryAction = listOf(
+            Regex("(?i)\\b(?:remember|save|store|record|update|forget)\\b.{0,70}\\b(?:memory|lesson|fact|note|preference)\\b"),
+            Regex("(?i)\\b(?:remind|reminder|schedule|alarm|timer)\\b"),
+            Regex("(?i)\\b(?:write|create|generate|build|save|download)\\b.{0,80}\\b(?:code|script|file|document|report|pdf|apk)\\b"),
+            Regex("(?i)\\b(?:send|message|text|email|telegram|sms|call|publish|post|install|uninstall|open|launch|tap|click)\\b")
+        )
+        return secondaryAction.none { it.containsMatchIn(command) }
+    }
+
     fun resolveAll(command: String): List<Target> {
         val fromUrls = githubUrl.findAll(command).mapNotNull { match ->
             parseUrl(match.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}'))
