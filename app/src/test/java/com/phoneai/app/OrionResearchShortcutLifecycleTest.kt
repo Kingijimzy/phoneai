@@ -85,6 +85,57 @@ class OrionResearchShortcutLifecycleTest {
         assertFalse(checkpoint.events.any { it == "beginStep:live_web_search" })
     }
 
+    @Test fun dynamicStepsUseOnlyPreviouslyRecordedResults() {
+        val checkpoint = FakeCheckpoint()
+        val dispatched = mutableListOf<String>()
+        val result = OrionResearchShortcutLifecycle.runDynamic(
+            "inspect a public repository",
+            checkpoint,
+            { false },
+            { tool, args ->
+                dispatched += tool + ":" + args.optString("branch")
+                when (dispatched.size) {
+                    1 -> "Default branch: develop"
+                    2 -> "error: README is not available"
+                    else -> "FILE: Agent.kt"
+                }
+            }
+        ) { outputs ->
+            when (outputs.size) {
+                0 -> OrionResearchShortcutLifecycle.Step("github_public", JSONObject().put("section", "repo"))
+                1 -> OrionResearchShortcutLifecycle.Step("github_public", JSONObject().put("section", "readme"), continueOnError = true)
+                2 -> {
+                    val branch = Regex("Default branch:\\s*([^\\s]+)").find(outputs[0])?.groupValues?.get(1)
+                    OrionResearchShortcutLifecycle.Step("github_public", JSONObject().put("section", "tree").put("branch", branch))
+                }
+                else -> null
+            }
+        }
+        assertTrue(result.completed)
+        assertEquals(3, result.completedSteps)
+        assertEquals(listOf("github_public:", "github_public:", "github_public:develop"), dispatched)
+        assertTrue(checkpoint.events.contains("complete"))
+        assertEquals(3, result.stepOutputs.size)
+    }
+
+    @Test fun dynamicResearchStopsAfterNonToleratedReadFailure() {
+        val checkpoint = FakeCheckpoint()
+        val result = OrionResearchShortcutLifecycle.runDynamic(
+            "inspect a public repository",
+            checkpoint,
+            { false },
+            { _, _ -> "error: GitHub API unavailable" }
+        ) { outputs ->
+            if (outputs.isEmpty()) OrionResearchShortcutLifecycle.Step("github_public", JSONObject())
+            else OrionResearchShortcutLifecycle.Step("github_public", JSONObject())
+        }
+        assertFalse(result.completed)
+        assertEquals(1, result.completedSteps)
+        assertEquals(1, result.stepOutputs.size)
+        assertEquals("pause", checkpoint.events.last())
+        assertFalse(checkpoint.events.contains("complete"))
+    }
+
     @Test fun failedCompletionMarkerIsReportedAsUnconfirmed() {
         val checkpoint = FakeCheckpoint().apply { allowComplete = false }
         val result = OrionResearchShortcutLifecycle.run(
