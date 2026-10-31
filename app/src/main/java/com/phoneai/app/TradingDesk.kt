@@ -418,7 +418,7 @@ internal object TradingDesk {
     }
 
     // ---- live PnL strip and companion mood
-    internal class Snap(val strip: String, val state: CompanionMood.State)
+    internal class Snap(val strip: String, val state: CompanionMood.State, val realized: Double, val equity: Double, val positions: Int, val newsMinutes: Int?)
 
     private fun localMidnight(now: Long): Long {
         val tz = java.util.TimeZone.getDefault()
@@ -457,7 +457,7 @@ internal object TradingDesk {
             }
         } catch (_: Exception) { }
         val mood = CompanionMood.from(CompanionMood.Input(open, realized, equity, streak, news, kill, practice, noStop, has))
-        return Snap(if (has) PnlStrip.text(open, realized, equity, count, practice) else "No live numbers yet", mood)
+        return Snap(if (has) PnlStrip.text(open, realized, equity, count, practice) else "No live numbers yet", mood, realized, equity, count, news)
     }
 
     @Volatile private var closedCache: Pair<Long, JSONArray>? = null
