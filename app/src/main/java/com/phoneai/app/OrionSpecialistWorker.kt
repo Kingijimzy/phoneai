@@ -88,7 +88,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         }
         val nim = Nim(applicationContext, sharedBudget = CommandRequestBudget(maxRequests = 3))
         val answer = AtomicReference<String?>(null)
-        val failure = AtomicReference<Throwable?>(null)
+        val failure = AtomicReference<Exception?>(null)
         val cancelled: () -> Boolean = {
             isStopped || AgentCheckpointStore.cancellationRequested(applicationContext, claimed.parentTaskId)
         }
@@ -98,7 +98,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
                     applicationContext, agent, manifest.objective, manifest,
                     capabilityDispatch = null, cancelled = cancelled, nim = nim
                 ))
-            } catch (t: Throwable) {
+            } catch (t: Exception) {
                 failure.set(t)
             }
         }, "orion-specialist-${jobId.take(8)}").apply { isDaemon = true }
