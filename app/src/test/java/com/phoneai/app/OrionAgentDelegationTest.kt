@@ -10,7 +10,7 @@ class OrionAgentDelegationTest {
         )
         assertEquals(OrionAgentDelegation.Access.READ_ONLY_RESEARCH, manifest.access)
         assertEquals("parent-task-42", manifest.parentTaskId)
-        assertTrue(manifest.allowedTools.containsAll(setOf("live_web_search", "live_news", "fetch_url")))
+        assertTrue(manifest.allowedTools.containsAll(setOf("live_web_search", "live_news", "bybit_public_ticker")))
         assertFalse(manifest.allowedTools.any { it in setOf("telegram_send", "sms", "shell", "python_exec", "paper_trade") })
     }
 
