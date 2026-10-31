@@ -1014,22 +1014,30 @@ class Tools(
         val agent = AgentProfiles.resolveFor(svc, agentName)
             ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
-        val manifest = OrionAgentDelegation.create(agent, AgentCheckpointStore.evidenceTaskId(svc), task, parentObjectiveId)
+        val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
+        val parentCancelled = { AgentCheckpointStore.cancellationRequested(svc, parentTaskId) }
+        if (parentCancelled()) return "error: parent task was paused or stopped; no specialist was started."
+        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
             val answer = AgentRunner.runDelegated(
-                svc, agent, manifest.objective, manifest, delegatedCapabilityDispatch
+                svc, agent, manifest.objective, manifest, delegatedCapabilityDispatch, parentCancelled
             )
-            val failed = answer.isBlank() || answer.startsWith("error:", true)
+            val cancelled = parentCancelled()
+            val failed = !cancelled && (answer.isBlank() || answer.startsWith("error:", true))
             val safeAnswer = if (answer.isBlank()) "error: specialist returned an empty response" else answer
-            if (!OrionAgentDelegation.finish(svc, manifest, safeAnswer, failed = failed)) {
+            if (!OrionAgentDelegation.finish(svc, manifest, safeAnswer, failed = failed, cancelled = cancelled)) {
                 "error: ${agent.name} returned, but its delegation receipt could not be saved. Result requires review before treating the delegation as complete."
+            } else if (cancelled) {
+                "Specialist ${agent.name} was marked CANCELLED because its parent task was paused or stopped. Any late model result was discarded."
             } else {
-                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\n" + safeAnswer
+                "AGENT ${agent.name} ANSWER (delegation ${manifest.id}; scope ${manifest.access}; relay faithfully; analysis only, no external action taken):\\n" + safeAnswer
             }
         } catch (e: Exception) {
-            val failure = "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")"
-            OrionAgentDelegation.finish(svc, manifest, failure, failed = true)
+            val cancelled = parentCancelled()
+            val failure = if (cancelled) "error: specialist cancelled because its parent task was paused or stopped."
+                else "error: ${agent.name} could not answer (" + (e.message ?: e.javaClass.simpleName).take(160) + ")"
+            OrionAgentDelegation.finish(svc, manifest, failure, failed = !cancelled, cancelled = cancelled)
             failure
         }
     }
