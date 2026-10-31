@@ -21,20 +21,36 @@ internal object OrionTasksCapabilityExecutor {
     // Durable execution checkpoint ownership stays here; Agent supplies the control-flow decisions.
     fun evidenceTaskId(service: Context): String? = AgentCheckpointStore.evidenceTaskId(service)
     fun pendingCheckpoint(service: Context): JSONObject? = AgentCheckpointStore.pending(service)
+    fun hasArchivedPending(service: Context): Boolean = AgentCheckpointStore.hasArchivedPending(service)
+    fun activateOldestArchived(service: Context): Boolean = AgentCheckpointStore.activateOldestArchived(service)
+    fun archivedPendingSummaries(service: Context): List<String> = AgentCheckpointStore.archivedPendingSummaries(service)
     fun needsRecoveryConfirmation(service: Context): Boolean = AgentCheckpointStore.needsRecoveryConfirmation(service)
     fun acknowledgeRecovery(service: Context, confirmation: String): Boolean =
         AgentCheckpointStore.acknowledgeRecovery(service, confirmation)
     fun resumeInstruction(service: Context): String? = AgentCheckpointStore.resumeInstruction(service)
     fun markRunning(service: Context): Boolean = AgentCheckpointStore.markRunning(service)
     fun beginRun(service: Context, command: String): Boolean = AgentCheckpointStore.begin(service, command)
-    fun pauseRun(service: Context): Boolean = AgentCheckpointStore.pause(service)
+    fun pauseRun(service: Context, notifyFailure: Boolean = false): Boolean {
+        val paused = AgentCheckpointStore.pause(service)
+        // A user stop, step-budget pause, or handoff is not a task failure.
+        // Only callers that classified an actual failed action opt into failure notification.
+        if (paused && notifyFailure) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = false) }
+        return paused
+    }
     fun beginStep(service: Context, tool: String, args: JSONObject): Boolean =
         AgentCheckpointStore.beginStep(service, tool, args)
     fun recordStep(service: Context, tool: String, args: JSONObject, result: String): Boolean =
         AgentCheckpointStore.record(service, tool, args, result)
-    fun requireRecovery(service: Context, reason: String): Boolean =
-        AgentCheckpointStore.recoveryRequired(service, reason)
-    fun completeRun(service: Context): Boolean = AgentCheckpointStore.complete(service)
+    fun requireRecovery(service: Context, reason: String): Boolean {
+        val required = AgentCheckpointStore.recoveryRequired(service, reason)
+        if (required) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = false) }
+        return required
+    }
+    fun completeRun(service: Context): Boolean {
+        val completed = AgentCheckpointStore.complete(service)
+        if (completed) runCatching { OrionRuntimeNotifier.postTaskOutcome(service, success = true) }
+        return completed
+    }
 
     fun execute(
         tool: String,
@@ -102,7 +118,13 @@ internal object OrionTasksCapabilityExecutor {
                     (inFlightTool?.let { "; uncertain_in_flight_tool=$it" } ?: "") +
                     ". Continue only through the normal resume/recovery flow; verify uncertain outcomes and never blindly replay an in-flight action."
             }.orEmpty()
-            taskLines + recovery
+            val archived = AgentCheckpointStore.archivedPendingSummaries(service)
+            val archivedText = if (archived.isEmpty()) "" else
+                "\nPRESERVED UNFINISHED TASKS (oldest first):\n" + archived.joinToString("\n") { row ->
+                    val parts = row.split("|", limit = 3)
+                    "- ${parts.getOrNull(1).orEmpty()}: ${parts.getOrNull(2).orEmpty()} (task id ${parts.firstOrNull().orEmpty()})"
+                } + "\nSay 'continue' to resume the oldest preserved task. Uncertain in-flight actions still require inspection."
+            taskLines + recovery + archivedText
         }
         "task_add" -> {
             if (stopped()) "error: task was stopped before saving the task."

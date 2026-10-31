@@ -16,10 +16,26 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
+            "mcp_call", "remember", "recall", "discussion_search", "decision_history", "record_decision", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
+
+    @Test fun tradingDeskToolsHaveOneConcreteOwnerAndSafeAccessClasses() {
+        val readTools = listOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list")
+        readTools.forEach {
+            assertEquals("$it must be read-only", ToolAccess.READ, ToolRegistry.access(it))
+            assertEquals("trading_research", AgentPolicy.packForTool(it))
+            assertEquals(OrionCapabilityAdapters.Backend.TRADING_DESK, OrionCapabilityAdapters.route(it)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TRADING_DESK, it))
+        }
+        listOf("strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch").forEach {
+            assertEquals("$it must require write policy", ToolAccess.WRITE, ToolRegistry.access(it))
+            assertEquals("trading_research", AgentPolicy.packForTool(it))
+            assertEquals(OrionCapabilityAdapters.Backend.TRADING_DESK, OrionCapabilityAdapters.route(it)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TRADING_DESK, it))
+        }
+    }
 
     @Test fun everyRegisteredToolMapsToAnExistingCapabilityPack() {
         val knownPacks = AgentPolicy.packs.map { it.id }.toSet()
@@ -88,7 +104,17 @@ class ToolRegistryTest {
     }
 
     @Test fun toolAccessMetadataIsAvailableToTheScopeGuard() {
+        assertEquals(ToolAccess.READ, ToolRegistry.access("discussion_search"))
+        assertEquals("orion_core", AgentPolicy.packForTool("discussion_search"))
+        assertTrue(OrionMemoryCapabilityExecutor.supports("discussion_search"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("decision_history"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("record_decision"))
+        assertEquals("orion_core", AgentPolicy.packForTool("decision_history"))
+        assertEquals("orion_core", AgentPolicy.packForTool("record_decision"))
+        assertTrue(OrionMemoryCapabilityExecutor.supports("decision_history"))
+        assertTrue(OrionMemoryCapabilityExecutor.supports("record_decision"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("read_screen"))
+        assertEquals("phone_control", AgentPolicy.packForTool("look"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))

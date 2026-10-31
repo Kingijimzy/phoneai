@@ -367,6 +367,27 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** Convenient in-app legal notice required for GPL-covered interactive UI. */
+    private fun showOpenSourceLicenses() {
+        val notice = "PHONEAI — GPL-3.0-or-later\n\n" +
+            "PhoneAI is free software: you may copy, modify, and convey it under the GNU General Public License, version 3 or (at your option) any later version. The complete license text is available from the VIEW FULL GPL LICENSE action below.\n\n" +
+            "NO WARRANTY: to the extent permitted by law, this program is provided without warranty, including implied warranties of merchantability or fitness for a particular purpose. See GPLv3 sections 15 and 16.\n\n" +
+            "NANOMUSE COMPONENT: ToolLoopDetector is adapted from nanoMuse, Copyright (C) nanoMuse contributors, and is licensed under GPLv3. The PhoneAI adaptation changes its package and logging adapter.\n\n" +
+            "HERMES AGENT COMPONENTS: The model-output repetition guard and head/tail tool-output truncation are Kotlin adaptations of MIT-licensed Hermes Agent code, Copyright (c) 2025 Nous Research. The MIT license is included in licenses/HERMES-MIT-LICENSE.txt and the source adaptations are identified in THIRD_PARTY_NOTICES.md.\n\n" +
+            "CORRESPONDING SOURCE: the PhoneAI source repository and third-party notices are publicly available at github.com/Kingijimzy/phoneai. Preserve the nanoMuse attribution and license notices when redistributing. Other bundled components may carry separate licenses listed in THIRD_PARTY_NOTICES.md."
+        AlertDialog.Builder(this)
+            .setTitle("Open-source licenses")
+            .setMessage(notice)
+            .setPositiveButton("VIEW FULL GPL LICENSE") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/blob/orion/gpl-nanomuse-integration-20261031-v2/LICENSE")))
+            }
+            .setNeutralButton("THIRD-PARTY NOTICES") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/blob/orion/gpl-nanomuse-integration-20261031-v2/THIRD_PARTY_NOTICES.md")))
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
@@ -434,6 +455,9 @@ class SettingsActivity : Activity() {
         }, 8)
         add(col, button("Soul Engine · live system dashboard", true) {
             startActivity(Intent(this, SoulEngineActivity::class.java))
+        }, 8)
+        add(col, button("Open-source licenses & legal notices", false) {
+            showOpenSourceLicenses()
         }, 8)
         
         // ---- 1. setup

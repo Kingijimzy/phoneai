@@ -23,10 +23,11 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "workspace_write", "workspace_read")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -68,6 +69,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
         OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.execute(tool, args, tools, stopped)
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)
+        OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.execute(tool, args, service, stopped)
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
@@ -79,6 +81,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.FILES -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
+            "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
             "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
             else -> null

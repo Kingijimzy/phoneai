@@ -19,6 +19,21 @@ object ChatHistoryStore {
     private fun repo(context: Context) = OrionConversationRepository.get(context)
 
     @Synchronized
+    fun activeSessionId(context: Context): String? = repo(context).activeSessionId(context)
+
+    @Synchronized
+    fun search(context: Context, query: String, limit: Int = 8): List<OrionConversationRepository.SearchHit> = repo(context).searchHistory(context, query, limit)
+
+    @Synchronized
+    fun recent(context: Context, limit: Int = 8): List<OrionConversationRepository.SearchHit> = repo(context).recentHistory(context, limit)
+
+    @Synchronized
+    fun recordObjectiveEvidence(context: Context, objectiveId: String, tool: String, outcome: String, summary: String, turnId: String? = null): OrionConversationRepository.ObjectiveEvidence? = repo(context).recordObjectiveEvidence(context, objectiveId, tool, outcome, summary, turnId)
+
+    @Synchronized
+    fun objectiveEvidence(context: Context, objectiveId: String): List<OrionConversationRepository.ObjectiveEvidence> = repo(context).objectiveEvidence(context, objectiveId)
+
+    @Synchronized
     fun load(context: Context): List<Pair<String, String>> = repo(context).loadActive(context)
 
     @Synchronized

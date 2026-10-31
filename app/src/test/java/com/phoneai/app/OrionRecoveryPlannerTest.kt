@@ -30,8 +30,8 @@ class OrionRecoveryPlannerTest {
 
     @Test fun transientFailureAvoidsRapidRetry() {
         val guidance = OrionRecoveryPlanner.forFailure("browser_navigate", "error: request timeout")
-        assertEquals(OrionRecoveryPlanner.Strategy.ASK_USER_TO_RESOLVE, guidance.strategy)
-        assertTrue(guidance.reason.contains("rapid retries"))
+        assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
+        assertTrue(guidance.reason.contains("different registered source/provider"))
     }
 
     @Test fun staleTargetUsesFreshEvidenceAndDifferentArguments() {
@@ -67,6 +67,16 @@ class OrionRecoveryPlannerTest {
             limit = 2
         )
         assertEquals(listOf("read_screen", "verify_action"), selected)
+    }
+
+    @Test fun researchProviderFailureChoosesDifferentRegisteredResearchSources() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "live_web_search",
+            result = "error: provider request timed out",
+            registeredAndPermitted = setOf("live_web_search", "research_web", "fetch_url", "read_screen"),
+            alreadyAttempted = setOf("read_screen")
+        )
+        assertEquals(listOf("research_web", "fetch_url"), selected)
     }
 
 }

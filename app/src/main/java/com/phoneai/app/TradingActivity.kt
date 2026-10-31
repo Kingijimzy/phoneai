@@ -23,6 +23,10 @@ import android.widget.Toast
 /** Trading control room: keys, practice/real mode, limits and the background market watch. Orion's monochrome card style. */
 class TradingActivity : Activity() {
     private lateinit var host: LinearLayout
+    private var firstRender = true
+    private var simStrategy = ""
+    private var simSymbol = ""
+    private var simTf = "1h"
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -70,10 +74,26 @@ class TradingActivity : Activity() {
         host.removeAllViews()
         val test = Prefs.bybitTestnet(this)
         host.addView(label("TRADING", 11f, Theme.MUTED, true))
-        host.addView(label("Control room", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
-        host.addView(pill("Trading Coach · upload a chart, find setups, review mistakes", true) {
-            startActivity(Intent(this, AgentChatActivity::class.java).putExtra(AgentChatActivity.EXTRA_AGENT, "coach"))
-        })
+        host.addView(label("Desk", 30f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(14)) })
+        host.addView(row(
+            pill("Back to chat", true) { openWithFade(AgentChatActivity.workspaceIntent(this)) },
+            pill("Orion brain", false) { openWithFade(Intent(this, SoulEngineActivity::class.java)) }
+        ))
+        host.addView(label("Settings, playbook, simulation and safety for your trading chat. The chat is the front door: talk to it, upload a chart, accept what it proposes.", 12f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        host.addView(gap(12))
+        host.addView(playbookCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(deskCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(positionsCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(chainCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(backupCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(simulateCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+        host.addView(conditionsCard(), LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
         val acc = card()
@@ -135,6 +155,9 @@ class TradingActivity : Activity() {
         host.addView(history, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(12))
 
+        host.addView(derivCard(), LinearLayout.LayoutParams(-1, -2))
+        host.addView(gap(12))
+
         val lim = card()
         lim.addView(label("Safety limits", 12f, Theme.MUTED))
         lim.addView(label("Max order " + Prefs.maxOrderUsd(this).toInt() + " USD, max risk " + Prefs.maxRiskPct(this) + "% of balance", 15f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(6)) })
@@ -148,6 +171,282 @@ class TradingActivity : Activity() {
         host.addView(help, LinearLayout.LayoutParams(-1, -2))
         host.addView(gap(16))
         host.addView(label("Use a Read + Trade key. Never enable Withdraw.", 11f, Theme.MUTED))
+        if (firstRender) {
+            firstRender = false
+            for (i in 0 until host.childCount) if (host.getChildAt(i) is LinearLayout) Motion.enter(host.getChildAt(i), i / 2)
+        }
+    }
+
+    /** Open positions with risk flags, trade sync with habit review, and crypto funding and open interest. */
+    private fun positionsCard(): LinearLayout {
+        val c = card()
+        c.addView(label("POSITIONS, HABITS & DERIVATIVES", 12f, Theme.MUTED, true))
+        val out = label("When Market watch is enabled and desk automation is on, background checks can alert on missing or near stops, large losses, upcoming news, crowded funding, closed trades and habits. Refresh or sync to inspect current data; the watcher never places orders.", 12f, Theme.MUTED).apply { setPadding(0, dp(6), 0, dp(10)) }
+        c.addView(out)
+        fun run(wait: String, job: () -> String) {
+            out.setTextColor(Theme.TEXT); out.text = wait
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r; Motion.enter(out) }
+            }.start()
+        }
+        val sym = TradingDesk.followSymbols(this).firstOrNull { FxData.pairOf(it) == null } ?: "BTCUSDT"
+        c.addView(row(
+            pill("Positions", true) { run("Reading your positions…") { TradingDesk.positionsText(this) } },
+            pill("Sync & habits", false) { run("Syncing your Bybit trades and reviewing habits…") { TradingDesk.habits(this).text() } },
+            pill("Funding " + sym.removeSuffix("USDT"), false) { run("Reading funding and open interest…") { TradingDesk.derivatives(this, sym)?.text ?: "No derivatives data right now." } }
+        ))
+        return c
+    }
+
+    private fun askText(title: String, hint: String, secondHint: String? = null, done: (String, String) -> Unit) {
+        val a = EditText(this).apply { this.hint = hint; setSingleLine(true) }
+        val b = secondHint?.let { h -> EditText(this).apply { this.hint = h; setSingleLine(true) } }
+        val w = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0); addView(a); b?.let { addView(it) } }
+        AlertDialog.Builder(this).setTitle(title).setView(w)
+            .setPositiveButton("Add") { _, _ -> done(a.text.toString(), b?.text?.toString().orEmpty()) }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    /** Public wallets and memecoins, read-only. No keys, no signing, no transactions. */
+    private fun chainCard(): LinearLayout {
+        val c = card()
+        c.addView(label("MEMECOINS & WALLETS (read-only)", 12f, Theme.MUTED, true))
+        val watching = ChainDesk.memes(this).joinToString(", ") { it.symbol }.ifBlank { "no memecoins" } + " · " +
+            ChainDesk.wallets(this).let { if (it.isEmpty()) "no wallets" else it.joinToString(", ") { w -> w.label } }
+        c.addView(label("Watching: $watching", 13f, Theme.TEXT, true).apply { setPadding(0, dp(6), 0, dp(4)) })
+        c.addView(label("Public addresses and market data only. Never paste a private key or seed phrase anywhere; Orion refuses them.", 11f, Theme.MUTED))
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(8), 0, 0); visibility = View.GONE }
+        fun run(wait: String, job: () -> String) {
+            out.visibility = View.VISIBLE; out.text = wait
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r; Motion.enter(out) }
+            }.start()
+        }
+        c.addView(row(
+            pill("Add memecoin", false) { askText("Watch a memecoin", "Name, symbol or contract address") { q, _ -> run("Searching…") { ChainDesk.addMeme(this, q).also { runOnUiThread { render() } } } } },
+            pill("Add wallet", false) { askText("Watch a wallet", "Public address (Solana or 0x…)", "Label (optional)") { a, l -> run("Checking…") { ChainDesk.addWallet(this, a, l).also { runOnUiThread { render() } } } } },
+            pill("Check now", true) { run("Reading the chain…") { ChainDesk.overview(this) } }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+        c.addView(out)
+        return c
+    }
+
+    /** Smart model routing switch and a versioned JSON backup of the desk. No keys or safety state are saved or restored. */
+    private fun backupCard(): LinearLayout {
+        val c = card()
+        c.addView(label("MODEL & BACKUP", 12f, Theme.MUTED, true))
+        c.addView(label("Smart model routing: " + (if (Prefs.modelRouting(this)) "on" else "off"), 13f, Theme.TEXT, true).apply { setPadding(0, dp(6), 0, dp(4)) })
+        c.addView(label("On NVIDIA, short simple questions use a light model, weekly reviews use the largest one, everything else your chosen model. Other providers are unchanged.", 11f, Theme.MUTED))
+        c.addView(label("Backup saves your playbook, practice account, watchlists and trade journal as one JSON file. It never contains API keys or tokens, and restoring never touches the kill switch or loss limits.", 11f, Theme.MUTED).apply { setPadding(0, dp(6), 0, 0) })
+        c.addView(row(
+            pill(if (Prefs.modelRouting(this)) "Routing: on" else "Routing: off", Prefs.modelRouting(this)) { Prefs.setModelRouting(this, !Prefs.modelRouting(this)); render() },
+            pill("Export backup", false) {
+                val i = Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"; putExtra(Intent.EXTRA_TITLE, "orion-desk-backup.json") }
+                startActivityForResult(i, REQUEST_BACKUP_EXPORT)
+            },
+            pill("Restore", false) {
+                val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); type = "*/*" }
+                startActivityForResult(i, REQUEST_BACKUP_RESTORE)
+            }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+        return c
+    }
+
+    private fun exportBackup(uri: Uri) {
+        Thread {
+            val msg = try {
+                val prefs = DeskBackup.FILES.associateWith { getSharedPreferences(it, MODE_PRIVATE).all as Map<String, Any?> }
+                val text = DeskBackup.build(prefs, TradeHistoryStore.exportJson(this), System.currentTimeMillis())
+                (contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Could not open the file.")).use { it.write(text.toByteArray()) }
+                "Backup saved."
+            } catch (e: Exception) { "Backup failed: " + (e.message ?: e.javaClass.simpleName) }
+            runOnUiThread { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+        }.start()
+    }
+
+    private fun restoreBackup(uri: Uri) {
+        val parsed = try {
+            val bytes = (contentResolver.openInputStream(uri) ?: throw IOException("Could not open the file.")).use { it.readBytes() }
+            DeskBackup.parse(String(bytes))
+        } catch (e: Exception) { Toast.makeText(this, e.message ?: "Could not read that file.", Toast.LENGTH_LONG).show(); return }
+        AlertDialog.Builder(this).setTitle("Restore this backup?")
+            .setMessage("Contains ${DeskBackup.summary(parsed)}. Matching desk settings are replaced; journal trades are merged. Keys and safety limits are not touched.")
+            .setPositiveButton("Restore") { _, _ ->
+                for ((file, map) in parsed.prefs) {
+                    val e = getSharedPreferences(file, MODE_PRIVATE).edit()
+                    for ((k, v) in map) when (v) {
+                        is String -> e.putString(k, v)
+                        is Boolean -> e.putBoolean(k, v)
+                        is Int -> e.putInt(k, v)
+                        is Long -> e.putLong(k, v)
+                        is Float -> e.putFloat(k, v)
+                    }
+                    e.apply()
+                }
+                val added = TradeHistoryStore.importJson(this, parsed.journal)
+                Toast.makeText(this, "Restored. $added new journal trades.", Toast.LENGTH_LONG).show()
+                render()
+            }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun openWithFade(i: Intent) {
+        startActivity(i)
+        @Suppress("DEPRECATION") overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    /** Pick a strategy, symbol and timeframe, then simulate it on history or ask for a forecast. */
+    private fun simulateCard(): LinearLayout {
+        val c = card()
+        c.addView(label("SIMULATE & FORECAST", 12f, Theme.MUTED, true))
+        val list = TradingDesk.strategies(this)
+        if (list.isEmpty()) {
+            c.addView(label("Accept a strategy in your playbook first, then simulate it on real history and see how it would have done.", 13f, Theme.TEXT).apply { setPadding(0, dp(6), 0, 0) })
+            return c
+        }
+        if (list.none { it.name == simStrategy }) simStrategy = list.first().name
+        val st = list.first { it.name == simStrategy }
+        val symbols = st.instruments.ifEmpty { TradingDesk.followSymbols(this) }.ifEmpty { listOf("BTCUSDT") }
+        if (simSymbol !in symbols) simSymbol = symbols.first()
+        c.addView(label("Strategy", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)) })
+        c.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false
+            addView(row(*list.map { x -> pill(x.name, x.name == simStrategy) { simStrategy = x.name; render() } }.toTypedArray())) })
+        c.addView(label("Symbol", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)) })
+        c.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false
+            addView(row(*symbols.map { x -> pill(x.removeSuffix("USDT"), x == simSymbol) { simSymbol = x; render() } }.toTypedArray())) })
+        c.addView(label("Timeframe", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)) })
+        c.addView(row(*listOf("15m", "1h", "4h", "1d").map { x -> pill(x, x == simTf) { simTf = x; render() } }.toTypedArray()))
+        val curve = EquityCurveView(this).apply { visibility = View.GONE }
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(10), 0, 0); visibility = View.GONE }
+        fun run(job: () -> Pair<String, List<Double>>) {
+            out.visibility = View.VISIBLE; out.text = "Working on it…"; curve.visibility = View.GONE
+            Thread {
+                val r = try { job() } catch (e: Exception) { "Failed: " + (e.message ?: e.javaClass.simpleName) to emptyList<Double>() }
+                runOnUiThread { out.text = r.first; curve.show(r.second); Motion.enter(out) }
+            }.start()
+        }
+        c.addView(row(
+            pill("Simulate", true) { run { TradingDesk.backtest(this, simStrategy, simSymbol, simTf).let { it.text to it.curve } } },
+            pill("Forecast", false) { run { TradingDesk.forecast(this, simSymbol) to emptyList() } }
+        ).apply { setPadding(0, dp(12), 0, 0) })
+        c.addView(curve, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        c.addView(out)
+        c.addView(label("Simulations use past candles with trading costs; they show how the rules behaved, not what will happen.", 11f, Theme.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+        return c
+    }
+
+    /** Economic calendar conditions per currency and headline tone, for forex and crypto. */
+    private fun conditionsCard(): LinearLayout {
+        val c = card()
+        c.addView(label("MARKET CONDITIONS", 12f, Theme.MUTED, true))
+        val out = label("Tap Refresh to read the Forex Factory calendar and the latest headlines for your playbook pairs.", 12f, Theme.TEXT).apply { setPadding(0, dp(8), 0, dp(8)) }
+        c.addView(out)
+        c.addView(row(pill("Refresh", true) {
+            out.text = "Reading the calendar and headlines…"
+            Thread {
+                val t = try { TradingDesk.conditions(this, null) } catch (e: Exception) { "Could not read conditions: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = t; Motion.enter(out) }
+            }.start()
+        }))
+        return c
+    }
+
+    private fun playbookCard(): LinearLayout {
+        val c = card()
+        c.addView(label("PLAYBOOK", 12f, Theme.MUTED, true))
+        val pend = TradingDesk.pending(this)
+        pend.forEach { st ->
+            c.addView(label("Proposed: " + st.name, 15f, Theme.CYAN, true).apply { setPadding(0, dp(10), 0, 0) })
+            c.addView(label(describe(st), 12f, Theme.MUTED))
+            c.addView(row(
+                pill("Accept", true) { TradingDesk.accept(this, st); render() },
+                pill("Dismiss", false) { TradingDesk.dismissPending(this, st.name); render() }
+            ).apply { setPadding(0, dp(6), 0, 0) })
+        }
+        val list = TradingDesk.strategies(this)
+        if (list.isEmpty() && pend.isEmpty()) c.addView(label("Empty. Open the workspace and upload a chart or describe how you trade; I will propose rules for you to accept.", 13f, Theme.TEXT).apply { setPadding(0, dp(6), 0, 0) })
+        list.forEach { st ->
+            c.addView(label(st.name, 16f, Theme.TEXT, true).apply { setPadding(0, dp(12), 0, 0) })
+            c.addView(label(describe(st), 12f, Theme.MUTED))
+            c.addView(label("Results: " + TradingDesk.evidenceFor(this, st.name), 12f, Theme.TEXT))
+            c.addView(row(pill("Remove", false) { TradingDesk.deleteStrategy(this, st.name); render() }).apply { setPadding(0, dp(6), 0, 0) })
+        }
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(10), 0, 0); visibility = View.GONE }
+        c.addView(row(pill("Match now", list.isNotEmpty()) {
+            out.visibility = View.VISIBLE; out.text = "Scanning your playbook pairs…"
+            Thread {
+                val r = try { TradingDesk.scan(this, TradingDesk.followSymbols(this)) } catch (e: Exception) { "Scan failed: " + (e.message ?: e.javaClass.simpleName) }
+                runOnUiThread { out.text = r }
+            }.start()
+        }).apply { setPadding(0, dp(12), 0, 0) })
+        c.addView(out)
+        return c
+    }
+
+    private fun describe(st: StrategySpec) =
+        st.instruments.ifEmpty { listOf("any instrument") }.joinToString(", ") + " · " + st.timeframes.ifEmpty { listOf("any timeframe") }.joinToString(", ") +
+            " · " + st.setupTypes.ifEmpty { listOf("any setup") }.joinToString(", ") + " · min R:R " + st.minRewardToRisk + (if (st.notes.isNotBlank()) "\n" + st.notes else "")
+
+    private fun deskCard(): LinearLayout {
+        val c = card()
+        c.addView(label("AUTOMATION & SAFETY", 12f, Theme.MUTED, true))
+        c.addView(Switch(this).apply {
+            text = "Desk automation (playbook matches, news heads-ups, morning brief)"; setTextColor(Theme.TEXT)
+            isChecked = Prefs.deskAuto(this@TradingActivity)
+            setOnCheckedChangeListener { _, on -> Prefs.setDeskAuto(this@TradingActivity, on) }
+        })
+        c.addView(label("Runs inside Market watch below. Alerts only; it never places an order by itself.", 11f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(8)) })
+        c.addView(Switch(this).apply {
+            text = "Kill switch: block every new order"; setTextColor(Theme.TEXT)
+            isChecked = TradingDesk.killSwitch(this@TradingActivity)
+            setOnCheckedChangeListener { _, on -> TradingDesk.setKill(this@TradingActivity, on) }
+        })
+        val info = label("Loading news and sessions…", 12f, Theme.MUTED).apply { setPadding(0, dp(10), 0, 0) }
+        c.addView(info)
+        Thread {
+            val t = try {
+                val now = System.currentTimeMillis()
+                val hour = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).hour
+                MarketSessions.describe(hour) + "\n" + MarketCalendar.text(MarketCalendar.upcoming(TradingDesk.events(now), now, 24, MarketCalendar.Impact.HIGH).take(4), now)
+            } catch (_: Exception) { "News calendar unavailable right now." }
+            runOnUiThread { info.text = t }
+        }.start()
+        return c
+    }
+
+    private fun derivCard(): LinearLayout {
+        val c = card()
+        c.addView(label("DERIV (forex and gold)", 12f, Theme.MUTED, true))
+        c.addView(label(if (DerivDesk.hasToken(this)) "Token saved" else "Not connected", 16f, Theme.TEXT, true).apply { setPadding(0, dp(4), 0, dp(4)) })
+        c.addView(label("Start with a DEMO account token (needs trade scope, never withdraw). Every trade is a defined-risk multiplier with a stop loss and target, passes the risk gate and asks you first. Not yet verified on a live account.", 11f, Theme.MUTED))
+        val out = label("", 12f, Theme.TEXT).apply { setPadding(0, dp(8), 0, 0); visibility = View.GONE }
+        c.addView(row(
+            pill("Set token", false) { derivDialog() },
+            pill("Check", DerivDesk.hasToken(this)) {
+                out.visibility = View.VISIBLE; out.text = "Connecting…"
+                Thread { val r = DerivDesk.status(this); runOnUiThread { out.text = r } }.start()
+            }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+        c.addView(out)
+        c.addView(Switch(this).apply {
+            text = "Allow a REAL Deriv account"; setTextColor(Theme.TEXT)
+            isChecked = Prefs.derivRealAllowed(this@TradingActivity)
+            setOnCheckedChangeListener { _, on -> Prefs.setDerivRealAllowed(this@TradingActivity, on) }
+        })
+        return c
+    }
+
+    private fun derivDialog() {
+        val t = EditText(this).apply { hint = "Deriv API token"; setSingleLine(true); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val a = EditText(this).apply { hint = "App ID (optional)"; setSingleLine(true); setText(Prefs.derivAppId(this@TradingActivity)) }
+        val w = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0); addView(t); addView(a) }
+        AlertDialog.Builder(this).setTitle("Deriv API token").setMessage("Create a token at app.deriv.com with Read and Trade scopes on a demo account.").setView(w)
+            .setPositiveButton("Save") { _, _ ->
+                if (t.text.isNotBlank() && !Prefs.setDerivToken(this, t.text.toString().trim())) {
+                    Toast.makeText(this, "Secure storage unavailable; token not saved.", Toast.LENGTH_LONG).show()
+                } else { Prefs.setDerivAppId(this, a.text.toString()); render() }
+            }.setNegativeButton("Cancel", null).show()
     }
 
     private fun startTradeImport() {
@@ -167,6 +466,8 @@ class TradingActivity : Activity() {
     @Deprecated("Uses the platform document picker for broad Android compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == RESULT_OK && requestCode == REQUEST_BACKUP_EXPORT) { data?.data?.let { exportBackup(it) }; return }
+        if (resultCode == RESULT_OK && requestCode == REQUEST_BACKUP_RESTORE) { data?.data?.let { restoreBackup(it) }; return }
         if (requestCode != REQUEST_TRADE_IMPORT || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         try {
@@ -235,6 +536,8 @@ class TradingActivity : Activity() {
 
     companion object {
         private const val REQUEST_TRADE_IMPORT = 9501
+        private const val REQUEST_BACKUP_EXPORT = 9502
+        private const val REQUEST_BACKUP_RESTORE = 9503
     }
 
     private fun toggleMode() {

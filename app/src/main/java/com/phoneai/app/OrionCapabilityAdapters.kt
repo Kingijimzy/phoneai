@@ -12,7 +12,7 @@ import org.json.JSONObject
  */
 internal object OrionCapabilityAdapters {
     enum class Backend {
-        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, TRADING_READONLY, GAMING, CORE
+        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, TRADING_READONLY, TRADING_DESK, GAMING, CORE
     }
 
     data class Route(val backend: Backend, val tool: String)
@@ -23,7 +23,7 @@ internal object OrionCapabilityAdapters {
             "python_exec", "extension_list", "extension_create", "extension_test",
             "extension_enable", "extension_run", "extension_disable"
         ),
-        Backend.FILES to setOf("find_files", "open_file", "workspace_write", "workspace_read"),
+        Backend.FILES to setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read"),
         Backend.BROWSER to setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -33,7 +33,7 @@ internal object OrionCapabilityAdapters {
         Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call"),
         Backend.DEVICE to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
-            "media_status", "media_control", "resolve_contact",
+            "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
             "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
             "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe",
             "swipe_path", "scroll", "type", "key", "look", "play", "record_screen"
@@ -42,15 +42,16 @@ internal object OrionCapabilityAdapters {
         Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",
             "github_account_read", "gmail_list_messages", "vault_list", "vault_request", "vault_get", "capability_note"),
         Backend.COMMUNICATION to setOf("telegram_status", "telegram_inbox", "telegram_send", "dial", "sms", "notification_action"),
-        Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "knowledge_search",
+        Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search",
             "graph_link", "graph_query", "self_review", "undo_last", "undo_status"),
         Backend.TASKS to setOf("ask_agent", "create_agent", "task_list", "task_add", "task_update",
             "task_delete", "ask_user", "morning_brief", "standing_order"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
-            "weather", "github_public", "bybit_public_ticker"),
+            "weather", "github_public", "github_search_repositories", "bybit_public_ticker", "live_sports"),
         Backend.UTILITIES to setOf("settings", "alarm", "timer", "volume", "flashlight", "copy",
             "battery", "time", "wait", "device_info", "device_location"),
         Backend.TRADING_READONLY to setOf("trade_history_summary"),
+        Backend.TRADING_DESK to setOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch", "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives", "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview"),
         Backend.GAMING to setOf("gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset")
     )
 

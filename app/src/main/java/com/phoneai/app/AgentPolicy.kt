@@ -17,7 +17,7 @@ object AgentPolicy {
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
         Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
+        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real orders remain separately gated and confirmed", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
@@ -80,7 +80,8 @@ object AgentPolicy {
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        autonomous = ToolPermissions.level(c) == "autonomous",
+        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
+        autonomous = ToolPermissions.level(c) == "autonomous" && !ToolPermissions.hasOverride(c, toolId),
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
@@ -104,24 +105,28 @@ object AgentPolicy {
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
         "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
-        "play", "look" -> "gaming_hobby"
+        "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
-        "trade_history_summary" -> "trading_research"
+        "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
+        "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
+        "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview",
+        "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save",
+        "strategy_record_result", "paper_trade", "trading_kill_switch" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
-        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
+        "weather", "live_news", "live_web_search", "live_sports", "web_search", "github_public", "github_search_repositories", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
-        "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
-        "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
+        "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control", "play_media", "chrome_search",
+        "find_files", "open_file", "save_file", "list_apps", "list_app_deeplinks", "read_screen", "look", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
         "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
         "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "record_screen" -> "phone_control"
-        "remember", "update_memory", "forget", "recall", "knowledge_search", "ask_agent", "undo_last", "undo_status",
+        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "undo_last", "undo_status",
         "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
         else -> null
     }

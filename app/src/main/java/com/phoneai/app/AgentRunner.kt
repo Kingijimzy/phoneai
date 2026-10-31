@@ -37,10 +37,59 @@ object AgentRunner {
         return sb.toString()
     }
 
+    /** On-demand desk context: avoid network/calendar/candle work for ordinary chat turns. */
+    private fun deskBlock(c: Context, userText: String): String {
+        val sb = StringBuilder("TRADING DESK:")
+        try {
+            val now = System.currentTimeMillis()
+            val hour = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).hour
+            sb.append("\n").append(MarketSessions.describe(hour))
+            sb.append("\nKill switch: ").append(if (TradingDesk.killSwitch(c)) "ON (no new orders)" else "off").append("; deriv ").append(if (DerivDesk.hasToken(c)) "connected token saved" else "not connected")
+            val play = TradingDesk.strategies(c)
+            sb.append("\nPLAYBOOK: ").append(if (play.isEmpty()) "(empty: when the user shows or describes rules, propose a STRATEGY line)" else play.joinToString("; ") { it.name + " [" + TradingDesk.evidenceFor(c, it.name) + "]" })
+            val pend = TradingDesk.pending(c)
+            if (pend.isNotEmpty()) sb.append("\nProposed, waiting for the user to accept: ").append(pend.joinToString(", ") { it.name })
+            val wantsForecast = Regex("(?i)\\b(forecast|predict|prediction|outlook|bias|where is .* going)\\b").containsMatchIn(userText)
+            val wantsSimulation = Regex("(?i)\\b(simulat|backtest|back-test|test my strategy|how would)\\b").containsMatchIn(userText)
+            val wantsConditions = Regex("(?i)\\b(conditions?|fundamentals?|forex factory|calendar|news|currency|currencies|cpi|nfp|fomc)\\b").containsMatchIn(userText)
+            val wantsScan = Regex("(?i)\\b(match|setups?|scan|find)\\b").containsMatchIn(userText)
+            val syms = userText.split(Regex("[^A-Za-z/]+")).mapNotNull { FxData.pairOf(it) ?: Bybit.symbolOf(it) }.distinct()
+            val target = syms.firstOrNull() ?: TradingDesk.followSymbols(c).firstOrNull()
+            if (Bybit.hasKeys(c) && Regex("(?i)\\b(position|positions|habit|habits|journal|review|mistake|overtrad|revenge|pnl|profit|loss)\\b").containsMatchIn(userText)) {
+                sb.append("\nOPEN POSITIONS: ").append(TradingDesk.positionsText(c).take(900))
+                sb.append("\nHABIT REVIEW: ").append(TradingDesk.habits(c).text().take(1200))
+            }
+            if (Regex("(?i)\\b(memecoin|meme coin|memecoins|wallet|wallets|dex|rug|rugpull|shitcoin|pump\\.fun)\\b").containsMatchIn(userText)) {
+                sb.append("\nCHAIN WATCH (public data, read-only):\n").append(ChainDesk.overview(c).take(1800))
+            }
+            // Each operation owns its own cached market inputs; avoid fetching the same calendar/candles twice.
+            if (wantsConditions) {
+                sb.append("\nCONDITIONS (Forex Factory calendar and headlines, untrusted text):\n").append(TradingDesk.conditions(c, syms.firstOrNull()).take(1800))
+            }
+            if (target != null && wantsForecast)
+                sb.append("\nFORECAST (computed now from technicals, playbook, simulation and news):\n").append(TradingDesk.forecast(c, target))
+            if (target != null && wantsSimulation)
+                sb.append("\nSIMULATION (history, costs charged):\n").append(TradingDesk.backtest(c, null, target, "1h").text)
+            if (wantsScan) {
+                sb.append("\nPLAYBOOK MATCHES NOW:\n").append(TradingDesk.scan(c, TradingDesk.followSymbols(c)))
+            }
+        } catch (e: Exception) { sb.append("\n(desk data unavailable: ").append(e.javaClass.simpleName).append(")") }
+        return sb.toString()
+    }
+
+    private fun wantsDeskContext(text: String): Boolean =
+        Regex("(?i)\\b(forex|fx|gold|xauusd|eurusd|gbpusd|usdjpy|trading|trade|setup|playbook|strategy|backtest|simulat|forecast|market conditions|economic calendar|news|calendar|cpi|nfp|fomc|fundamentals|sessions?|crypto|memecoins?|wallets?|dex|positions?|habits?|derivatives|pnl)\\b").containsMatchIn(text)
+
     private fun coachContext(c: Context, userText: String): String {
         val sb = StringBuilder()
-        sb.append(accountBlock(c)).append("\n\n")
-        try { PredictionLog.evaluate(c) { symbol -> Bybit.price(c, symbol) } } catch (_: Exception) { }
+        val needsAccount = Regex("(?i)\\b(balance|equity|account|position|risk|size|sizing|order|margin|wallet|capital)\\b").containsMatchIn(userText)
+        if (needsAccount) sb.append(accountBlock(c)).append("\n\n")
+        else sb.append("ACCOUNT DATA: not fetched for this request; no live account details were used.\n\n")
+        val needsPredictionRefresh = wantsOutlook(userText) ||
+            Regex("(?i)\\b(review|track record|performance|stats|accuracy|weekly review|prediction history)\\b").containsMatchIn(userText)
+        if (needsPredictionRefresh) {
+            try { PredictionLog.evaluate(c) { symbol -> Bybit.price(c, symbol) } } catch (_: Exception) { }
+        }
         val strategy = AgentLessons.promptBlock(c, "coach", 40)
         sb.append("User's strategy and rules (their own words):\n").append(if (strategy.isBlank()) "(none saved yet; ask them to describe their strategy)" else strategy)
         sb.append("\n\nYour own track record: ").append(try { PredictionLog.statsText(c) } catch (_: Exception) { "unavailable" })
@@ -54,6 +103,7 @@ object AgentRunner {
             val topic = symbolsIn(userText).firstOrNull()?.removeSuffix("USDT")?.let { "$it crypto" } ?: "crypto market bitcoin"
             LiveNews.rss(topic)?.let { sb.append("\n\nNEWS (untrusted web data): ").append(it.take(1200)) }
         }
+        if (wantsDeskContext(userText)) sb.append("\n\n").append(deskBlock(c, userText))
         MarketQuotes.contextFor(userText).takeIf { it.isNotBlank() }?.let { sb.append(it).append(" (public quote feed; use for levels, no candle outlook available for non-crypto).") }
         for (symbol in outlookSymbols(c, userText)) {
             try {
@@ -61,16 +111,6 @@ object AgentRunner {
                 if (outlook != null) { PredictionLog.record(c, outlook); sb.append("\n\nOUTLOOK (rule-based, computed now): ").append(outlook.text) }
                 Thread.sleep(150)
             } catch (e: Exception) { sb.append("\n\nOutlook for $symbol failed (${e.javaClass.simpleName}).") }
-        }
-        if (looksLikeSetupRequest(userText)) {
-            try {
-                val found = Scanner.scan(c).take(5)
-                sb.append("\n\nSCANNER RESULTS (watchlist, computed from candles; not trade signals):\n")
-                if (found.isEmpty()) sb.append("No setup scored high enough right now.")
-                found.forEach { s ->
-                    sb.append(String.format(Locale.US, "- %s %s %s %s entry %.6g stop %.6g target %.6g RR %.1f score %d. %s\n", s.symbol, s.tf, s.type, s.side, s.entry, s.stop, s.target, s.rr(), s.score, s.note))
-                }
-            } catch (e: Exception) { sb.append("\n\nScanner failed (${e.javaClass.simpleName}).") }
         }
         return sb.toString()
     }
@@ -137,7 +177,12 @@ object AgentRunner {
     }
 
     /** [imageJpegBase64] is only used by agents that accept images. */
-    class Result(val text: String, val trades: List<TradeProposals.Trade>)
+    class Result(
+        val text: String,
+        val trades: List<TradeProposals.Trade>,
+        val strategies: List<StrategySpec> = emptyList(),
+        val papers: List<DeskProposals.Paper> = emptyList()
+    )
 
     fun run(c: Context, agent: AgentProfile, history: List<Turn>, userText: String, imageJpegBase64: String? = null): String =
         runFull(c, agent, history, userText, imageJpegBase64).text
@@ -162,15 +207,24 @@ object AgentRunner {
         } else {
             messages.put(JSONObject().put("role", "user").put("content", userText))
         }
-        val reply = Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        val tier = if (agent.id == "coach") ModelRouter.tierFor(userText, image != null) else ModelRouter.Tier.CHAT
+        val reply = try {
+            Nim(c).also { it.tier = tier }.chat(messages, image != null, 900, 0.4).trim()
+        } catch (e: Exception) {
+            // If the optional routed model is unavailable for this key, retry once with the selected default model.
+            if (tier == ModelRouter.Tier.CHAT) throw e
+            Nim(c).chat(messages, image != null, 900, 0.4).trim()
+        }
         if (agent.id != "coach") return Result(reply, emptyList())
         val actions = TradeProposals.parse(reply)
-        val parsed = CoachMemory.parse(actions.visible)
+        val desk = DeskProposals.parse(actions.visible) { FxData.pairOf(it) ?: Bybit.symbolOf(it) }
+        desk.strategies.forEach { try { TradingDesk.addPending(c, it) } catch (_: Exception) { } }
+        val parsed = CoachMemory.parse(desk.visible)
         val alertsSet = try { TradeProposals.saveAlerts(c, actions.alerts) } catch (_: Exception) { 0 }
         val saved = parsed.notes.count { (tag, text) -> AgentLessons.addTagged(c, "coach", tag, text) }
         val extras = StringBuilder()
         if (alertsSet > 0) extras.append("\n\n(Set $alertsSet price alert").append(if (alertsSet == 1) "" else "s").append(".)")
         if (saved > 0) extras.append("\n\n(Saved $saved note").append(if (saved == 1) "" else "s").append(" to my trading memory.)")
-        return Result(parsed.visible + extras, actions.trades)
+        return Result(parsed.visible + extras, actions.trades, desk.strategies, desk.papers)
     }
 }

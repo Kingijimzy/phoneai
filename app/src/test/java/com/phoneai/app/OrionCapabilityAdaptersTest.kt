@@ -19,7 +19,11 @@ class OrionCapabilityAdaptersTest {
             "python_exec" to OrionCapabilityAdapters.Backend.PYTHON,
             "extension_run" to OrionCapabilityAdapters.Backend.PYTHON,
             "workspace_write" to OrionCapabilityAdapters.Backend.FILES,
+            "save_file" to OrionCapabilityAdapters.Backend.FILES,
             "browser_navigate" to OrionCapabilityAdapters.Backend.BROWSER,
+            "play_media" to OrionCapabilityAdapters.Backend.DEVICE,
+            "chrome_search" to OrionCapabilityAdapters.Backend.DEVICE,
+            "github_search_repositories" to OrionCapabilityAdapters.Backend.RESEARCH,
             "mcp_call" to OrionCapabilityAdapters.Backend.MCP,
             "click" to OrionCapabilityAdapters.Backend.DEVICE,
             "skills_list" to OrionCapabilityAdapters.Backend.SKILLS
@@ -66,6 +70,7 @@ class OrionCapabilityAdaptersTest {
             "remember" to OrionCapabilityAdapters.Backend.MEMORY,
             "task_add" to OrionCapabilityAdapters.Backend.TASKS,
             "web_search" to OrionCapabilityAdapters.Backend.RESEARCH,
+            "live_sports" to OrionCapabilityAdapters.Backend.RESEARCH,
             "telegram_send" to OrionCapabilityAdapters.Backend.COMMUNICATION,
             "sms" to OrionCapabilityAdapters.Backend.COMMUNICATION,
             "notification_action" to OrionCapabilityAdapters.Backend.COMMUNICATION,
@@ -211,6 +216,12 @@ class OrionCapabilityAdaptersTest {
         }
     }
     
+    @Test fun saveFileIsRegisteredToTheFilesRuntimeOwner() {
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("save_file"))
+        assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route("save_file")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, "save_file"))
+    }
+
     @Test fun everyRegisteredRouteHasAConcreteRuntimeImplementation() {
         val routes = OrionCapabilityAdapters.routes()
         assertEquals(ToolRegistry.all.size, routes.size)
@@ -220,6 +231,12 @@ class OrionCapabilityAdaptersTest {
                 unsupported.joinToString { "${it.backend}:${it.tool}" },
             unsupported.isEmpty()
         )
+    }
+    
+    @Test fun directPythonExecutionRequiresItsOwnActionSpecificConfirmation() {
+        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
     }
 
 }

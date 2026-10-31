@@ -168,9 +168,135 @@ class OrionConversationRepositoryTest {
         assertEquals(listOf(firstEvent.id), repository.eventsForActive(context).map { it.id })
     }
 
+    @Test fun fullTextSearchReturnsStableSessionAndTurnReferencesAcrossSaves() {
+        val transcript = listOf("me" to "The keyboard crashes after switching apps", "ai" to "I will inspect the keyboard crash and recovery path")
+        repository.saveActive(context, transcript)
+        val first = repository.searchHistory(context, "keyboard crashes", 5).first()
+        repository.saveActive(context, transcript)
+        val second = repository.searchHistory(context, "keyboard crashes", 5).first()
+        assertEquals(first.sessionId, second.sessionId)
+        assertEquals(first.turnId, second.turnId)
+        assertEquals("me", second.role)
+        assertTrue(second.snippet.contains("keyboard", ignoreCase = true))
+    }
+
+    @Test fun fullTextSearchFindsArchivedConversationWithAdjacentTurnContext() {
+        val transcript = listOf("me" to "Fix the Telegram delivery timeout", "ai" to "The Telegram bot timed out while sending a reply")
+        repository.saveActive(context, transcript)
+        val beforeArchive = repository.searchHistory(context, "Telegram delivery", 5).first()
+        repository.archiveAndClear(context, transcript)
+        val hit = repository.searchHistory(context, "Telegram delivery", 5).first()
+        assertEquals(beforeArchive.sessionId, hit.sessionId)
+        assertEquals(beforeArchive.turnId, hit.turnId)
+        assertTrue(hit.sessionId.isNotBlank())
+        assertTrue(hit.turnId.isNotBlank())
+        assertTrue(hit.title.contains("Fix the Telegram"))
+        assertTrue(hit.after.contains("timed out"))
+    }
+
+    @Test fun historicalSearchPrioritizesSpecificEngineeringTermsOverPromptFiller() {
+        val transcript = listOf(
+            "me" to "We discussed separating backend executors from dispatchLegacyTool; the remaining work was to extract browser, device, MCP, integrations, and skills families.",
+            "ai" to "Next, finish the direct-call audit and prove owner settings against actual execution."
+        )
+        repository.saveActive(context, transcript)
+        val query = "Search our previous conversations for the Orion task where we discussed separating backend executors from dispatchLegacyTool. Tell me what was incomplete and what we agreed to do next. Use actual conversation history, not guesses."
+        val hits = repository.searchHistory(context, query, 8)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.any { it.snippet.contains("backend executors") || it.snippet.contains("dispatchLegacyTool") })
+    }
+
+
+    @Test fun discussionSearchRanksDenseTechnicalMatchesAboveRecentKeywordMentions() {
+        val specific = listOf(
+            "me" to "We investigated the Android 16 keyboard crash recovery root cause and agreed to preserve the checkpoint before resuming.",
+            "ai" to "The decision was to inspect the in-flight action before retrying."
+        )
+        repository.saveActive(context, specific)
+        repository.archiveAndClear(context, specific)
+
+        val vagueRecent = listOf(
+            "me" to "The keyboard crashed after opening Settings.",
+            "ai" to "I will look at the crash."
+        )
+        repository.saveActive(context, vagueRecent)
+
+        val hits = repository.searchHistory(context, "Android 16 keyboard crash recovery root cause", 8)
+        assertTrue(hits.isNotEmpty())
+        assertTrue(hits.first().title.contains("Android 16 keyboard crash recovery"))
+        assertTrue(hits.first().snippet.contains("recovery root cause"))
+        assertTrue(hits.first().after.contains("inspect the in-flight action"))
+    }
+
+    @Test fun objectiveCompletionRequiresLatestSuccessfulExecutorReceipt() {
+        repository.saveActive(context, listOf("me" to "Complete the release objective", "ai" to "I am validating the release"))
+        val graph = OrionObjectiveGraph.Graph("Release objective", listOf(OrionObjectiveGraph.Objective("release", "Release the build")))
+        assertTrue(OrionObjectiveGraph.save(context, graph))
+        val first = OrionObjectiveGraph.recordExecution(context, "release", "build", "Build output confirms success")
+        assertNotNull(first)
+        val latest = OrionObjectiveGraph.recordExecution(context, "release", "verify_apk", "APK package and signature checks passed")
+        assertNotNull(latest)
+        assertFalse(OrionObjectiveGraph.completeFromEvidence(context, "release", first!!))
+        assertTrue(OrionObjectiveGraph.completeFromEvidence(context, "release", latest!!))
+        assertEquals(OrionObjectiveGraph.Status.COMPLETE, OrionObjectiveGraph.load(context)?.nodes?.single()?.status)
+    }
+
+    @Test fun objectiveGraphsRemainScopedToTheirConversationSession() {
+        val firstTurns = listOf("me" to "First session task", "ai" to "First session response")
+        repository.saveActive(context, firstTurns)
+        val firstGraph = OrionObjectiveGraph.Graph("First session task", listOf(OrionObjectiveGraph.Objective("first", "First objective")))
+        assertTrue(OrionObjectiveGraph.save(context, firstGraph))
+        repository.archiveAndClear(context, firstTurns)
+
+        val secondTurns = listOf("me" to "Second session task", "ai" to "Second session response")
+        repository.saveActive(context, secondTurns)
+        val secondGraph = OrionObjectiveGraph.Graph("Second session task", listOf(OrionObjectiveGraph.Objective("second", "Second objective")))
+        assertTrue(OrionObjectiveGraph.save(context, secondGraph))
+        assertEquals("Second session task", OrionObjectiveGraph.load(context)?.objective)
+
+        val firstArchive = repository.archived(context).single { it.title == "First session task" }
+        assertEquals(firstTurns, repository.restoreArchivedById(context, firstArchive.id))
+        assertEquals("First session task", OrionObjectiveGraph.load(context)?.objective)
+    }
+
+    @Test fun recentHistoryReturnsTurnReferencesFromTheMostRecentlyUpdatedSession() {
+        val older = listOf("me" to "Older unrelated project", "ai" to "Older answer")
+        repository.saveActive(context, older)
+        repository.archiveAndClear(context, older)
+        val latest = listOf("me" to "Repair the Android keyboard crash", "ai" to "The previous crash came from settings resume")
+        repository.saveActive(context, latest)
+        val turns = repository.recentHistory(context, 8)
+        assertEquals(2, turns.size)
+        assertTrue(turns.all { it.title.contains("Repair the Android keyboard crash") })
+        assertTrue(turns.any { it.role == "me" && it.snippet.contains("keyboard crash") })
+        assertTrue(turns.all { it.sessionId == turns.first().sessionId })
+    }
+
+    @Test fun objectiveEvidenceIsBoundToActiveSessionAndLatestUserTurn() {
+        repository.saveActive(context, listOf("me" to "Finish the conversation index", "ai" to "I will add indexed recall"))
+        val evidence = repository.recordObjectiveEvidence(context, "history-index", "web_search", "success", "Search returned source-backed documentation")
+        assertNotNull(evidence)
+        assertEquals("history-index", evidence!!.objectiveId)
+        assertNotNull(evidence.turnId)
+        assertEquals(evidence.sessionId, repository.searchHistory(context, "conversation index", 1).single().sessionId)
+        assertEquals(evidence.id, repository.objectiveEvidence(context, "history-index").single().id)
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
         field.set(null, null)
     }
+    @Test fun decisionEvidenceMustMatchStoredSpeakerAndExactTranscriptText() {
+        val userText = "I explicitly accept keeping a separate decision ledger with source evidence."
+        val assistantText = "I propose a searchable decision history table."
+        repository.saveActive(context, listOf("me" to userText, "ai" to assistantText))
+
+        val userEvidence = repository.findTranscriptEvidence(context, "user", userText)
+        assertNotNull(userEvidence)
+        assertNull(repository.findTranscriptEvidence(context, "assistant", userText))
+        assertNotNull(repository.findTranscriptEvidence(context, "assistant", assistantText))
+        assertNull(repository.findTranscriptEvidence(context, "user", "I accept a decision that was never said here."))
+    }
+
 }

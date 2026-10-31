@@ -10,7 +10,9 @@ import android.content.Context
  * live capability picture and task-continuity contract.
  */
 internal object OrionCentralBrain {
-    private const val MAX_CONTEXT_CHARS = 12_000
+    // Keep enough room for the original task, transcript evidence, decisions and recovery
+    // instructions; the lower-priority general Soul Engine snapshot is bounded separately.
+    private const val MAX_CONTEXT_CHARS = 16_000
 
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
@@ -20,7 +22,7 @@ internal object OrionCentralBrain {
         runCatching { OrionSoulEngine.contextFor(app, request) }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
+            ?.let { sections += it.take(5_200) }
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
@@ -31,6 +33,7 @@ internal object OrionCentralBrain {
         }.getOrDefault(emptyList())
         val skills = runCatching { SkillRegistry.list(app) }.getOrDefault(emptyList())
         val enabledSkills = skills.filter { it.enabled }
+        val savedTasks = runCatching { TaskStore.all(app).take(12) }.getOrDefault(emptyList())
         val taskCount = runCatching { TaskStore.all(app).size }.getOrNull()
         val extensionRows = runCatching { SelfExtendingExtensionStore(app).all() }.getOrDefault(emptyList())
         val verifiedExtensions = extensionRows.count {
@@ -43,6 +46,13 @@ internal object OrionCentralBrain {
             appendLine("This is the single coordination layer for Talk, Command, tools, MCP, browser, Android actions, shell/workspace, memory, tasks, schedules, skills, subagents, voice, and verified extensions. These are not separate assistants: use the same current goal and shared app registries.")
             appendLine("Live inventory: registered_tools=${registered.size}; enabled_packs=${enabledPacks.joinToString().ifBlank { "none" }}; enabled_skills=${enabledSkills.joinToString { it.id }.ifBlank { "none" }}; saved_tasks=${taskCount?.toString() ?: "unavailable"}; saved_extensions=${extensionRows.size}; verified_enabled_extensions=$verifiedExtensions.")
             appendLine("Registered tool names (not a promise of availability): ${registered.take(100).joinToString().ifBlank { "none" }}.")
+            if (savedTasks.isNotEmpty()) {
+                appendLine("PERSISTED TASK CENTRE RECORDS (authoritative task titles/status/details; these are not execution receipts):")
+                savedTasks.forEach { task ->
+                    appendLine("- #${task.id} [${task.status}/${task.priority}] ${task.title}: ${task.details.take(500)}; last_result=${task.resultSummary.take(220)}")
+                }
+                appendLine("When the user names one of these tasks, retrieve and continue that exact record; do not say it is missing merely because the separate execution checkpoint is empty. Distinguish a saved task definition from a running execution checkpoint.")
+            }
             if (enabledSkills.isNotEmpty()) {
                 appendLine("Enabled skill contracts: " + enabledSkills.take(20).joinToString(" | ") {
                     "${it.id}: tools=${it.allowedTools.sorted().joinToString(",")}; purpose=${it.description.take(180)}"
@@ -75,11 +85,75 @@ internal object OrionCentralBrain {
         }.getOrNull()
         checkpointSummary?.let { sections += it }
 
+        // Resolve short follow-ups against the persisted objective before Talk or Command plans.
+        // This joins the original request, transcript evidence, objective graph, checkpoint,
+        // decisions and learned failure corrections into one provider-neutral continuity frame.
+        val pendingTask = runCatching { AgentCheckpointStore.pending(app) }.getOrNull()
+        val savedGraph = runCatching { OrionObjectiveGraph.load(app) }.getOrNull()
+        val savedSoulGoal = runCatching { SoulEngineState.snapshot(app).goal }.getOrDefault("")
+        val activeObjective = pendingTask?.optString("command")?.takeIf { it.isNotBlank() }
+            ?: savedGraph?.objective?.takeIf { it.isNotBlank() }.orEmpty()
+        val recentTurns = runCatching { ChatHistoryStore.recent(app, 8) }.getOrDefault(emptyList())
+            .asReversed().map { hit ->
+                (if (hit.role == "ai" || hit.role == "assistant") "assistant" else "user") to hit.snippet
+            }
+        val continuity = runCatching {
+            val current = OrionContextualIntentInterpreter.resolve(request, recentTurns, activeObjective)
+            if (current.needsClarification && savedSoulGoal.isNotBlank())
+                OrionContextualIntentInterpreter.resolve(request, recentTurns, savedSoulGoal)
+            else current
+        }.getOrNull()
+        val isFollowUp = continuity != null && !continuity.needsClarification &&
+            continuity.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
+            continuity.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
+        val continuityObjective = continuity?.resolvedObjective?.takeIf { isFollowUp }
+            ?: activeObjective.takeIf { isFollowUp }.orEmpty()
+        val contextQuery = continuityObjective.takeIf { isFollowUp && it.isNotBlank() } ?: request
+        if (isFollowUp && continuityObjective.isNotBlank()) {
+            val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
+            if (!resume.isNullOrBlank()) {
+                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(3600)
+            }
+            savedGraph?.let { graph ->
+                sections += OrionObjectiveGraph.prompt(graph) +
+                    "\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+            }
+            val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 3) }.getOrDefault(emptyList())
+            if (discussion.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE (durable transcript evidence)")
+                    discussion.forEach { hit ->
+                        appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp} title=${hit.title}] ${hit.snippet.take(420)}")
+                        if (hit.before.isNotBlank()) appendLine("preceding turn: ${hit.before.take(180)}")
+                        if (hit.after.isNotBlank()) appendLine("following turn: ${hit.after.take(180)}")
+                    }
+                    appendLine("User turns establish requests. Assistant turns provide context only and are never proof that an action succeeded.")
+                }
+            }
+            val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(continuityObjective, 4) }.getOrDefault(emptyList())
+            if (decisions.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("DECISIONS AND UNRESOLVED QUESTIONS FOR THIS OBJECTIVE")
+                    decisions.forEach { d ->
+                        appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(300)}; rejected=${d.rejectedAlternative.take(180)}; rejection_reason=${d.rejectionReason.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
+                    }
+                    appendLine("Accepted decisions are user-backed constraints; proposals are not accepted. Superseded decisions are historical only. Unresolved questions remain open. Re-check the current request before applying any old decision.")
+                }
+            }
+        }
+
+        // Retrieve task-specific failure lessons before a similar tool/action is planned.
+        val learnedExperience = runCatching { ExperienceStore.promptBlock(app, contextQuery, 5) }.getOrDefault("")
+        if (learnedExperience.isNotBlank()) {
+            sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\n" + learnedExperience +
+                "\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
+        }
+
         // Capability gap planning is derived from the same live registries as execution.
         // It prefers reuse and only instructs research/drafting when local evidence is weak.
         runCatching {
             CapabilityGapPlanner.assess(
-                request = request,
+                request = contextQuery,
                 registeredTools = ToolRegistry.all,
                 enabledSkills = enabledSkills,
                 extensions = extensionRows
@@ -88,7 +162,7 @@ internal object OrionCentralBrain {
 
         // Persistent learning is provider-neutral and loaded into the same executive context
         // for Talk and Command. Lessons and completed routes are hints, never execution authority.
-        runCatching { SoulEngineState.relatedContext(app, request, limit = 4) }
+        runCatching { SoulEngineState.relatedContext(app, contextQuery, limit = 4) }
             .getOrDefault(emptyList())
             .takeIf { it.isNotEmpty() }
             ?.let { lessons ->
@@ -99,7 +173,7 @@ internal object OrionCentralBrain {
                 }
             }
 
-        runCatching { RouteMemoryStore.promptBlock(app, request) }
+        runCatching { RouteMemoryStore.promptBlock(app, contextQuery) }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let { routes ->
