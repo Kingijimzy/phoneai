@@ -51,11 +51,26 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             store.needsReview(jobId, "delegation_manifest_not_restorable_for_recovery")
             return Result.failure()
         }
-        val expectedKind = if (manifest.access == OrionAgentDelegation.Access.TASK_PLANNING)
-            OrionWorkerJobStore.Kind.TASK_PLANNING else OrionWorkerJobStore.Kind.ANALYSIS
+        val expectedKind = when (manifest.access) {
+            OrionAgentDelegation.Access.ANALYSIS_ONLY -> OrionWorkerJobStore.Kind.ANALYSIS
+            OrionAgentDelegation.Access.TASK_PLANNING -> OrionWorkerJobStore.Kind.TASK_PLANNING
+            OrionAgentDelegation.Access.READ_ONLY_RESEARCH -> OrionWorkerJobStore.Kind.READ_ONLY_RESEARCH
+            OrionAgentDelegation.Access.TRADING_ANALYSIS -> OrionWorkerJobStore.Kind.TRADING_ANALYSIS
+        }
+        val expectedAccess = when (manifest.agentId) {
+            "research" -> OrionAgentDelegation.Access.READ_ONLY_RESEARCH
+            "coach" -> OrionAgentDelegation.Access.TRADING_ANALYSIS
+            "planner" -> OrionAgentDelegation.Access.TASK_PLANNING
+            else -> OrionAgentDelegation.Access.ANALYSIS_ONLY
+        }
+        val permittedTools = when (manifest.access) {
+            OrionAgentDelegation.Access.READ_ONLY_RESEARCH -> setOf("live_web_search", "live_news", "bybit_public_ticker")
+            OrionAgentDelegation.Access.TRADING_ANALYSIS -> setOf("bybit_public_ticker")
+            OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING -> emptySet()
+        }
         if (manifest.parentTaskId != existing.parentTaskId ||
-            manifest.access !in setOf(OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING) ||
-            manifest.allowedTools.isNotEmpty() || manifest.agentId !in setOf("coder", "writer", "planner") ||
+            manifest.access != expectedAccess || manifest.agentId !in setOf("coder", "writer", "planner", "research", "coach") ||
+            !permittedTools.containsAll(manifest.allowedTools) ||
             existing.kind != expectedKind || existing.conversationId.isNullOrBlank() ||
             !parentIsLive(existing.parentTaskId)) {
             store.cancel(jobId, "parent_or_background_scope_not_valid")
@@ -95,9 +110,23 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val cancelled: () -> Boolean = { isStopped || parentCancelled() }
         val providerThread = Thread({
             try {
+                val capabilityDispatch: (String, JSONObject) -> String = { tool, args ->
+                    if (cancelled()) "error: parent or worker cancellation requested before public data lookup."
+                    else when (tool) {
+                        "live_web_search" -> LiveWebSearch.search(args.optString("query").take(160))
+                        "live_news" -> LiveNews.search(args.optString("query").take(120))
+                        "bybit_public_ticker" -> {
+                            val symbol = Bybit.symbolOf(args.optString("symbol"))
+                                ?: return@Thread "error: invalid public market symbol."
+                            val price = Bybit.price(applicationContext, symbol)
+                            "PUBLIC BYBIT LINEAR TICKER (mainnet, unauthenticated): $symbol last price=$price. No account or position data was accessed."
+                        }
+                        else -> "error: background worker does not implement public capability '$tool'."
+                    }
+                }
                 answer.set(AgentRunner.runDelegated(
                     applicationContext, agent, manifest.objective, manifest,
-                    capabilityDispatch = null, cancelled = cancelled, nim = nim
+                    capabilityDispatch = capabilityDispatch, cancelled = cancelled, nim = nim
                 ))
             } catch (t: Exception) {
                 failure.set(t)
