@@ -163,7 +163,8 @@ class AgentCheckpointStoreTest {
         val parentId = AgentCheckpointStore.evidenceTaskId(context)
         assertNotNull(parentId)
         assertFalse(AgentCheckpointStore.cancellationRequested(context, parentId))
-        assertFalse(AgentCheckpointStore.cancellationRequested(context, "different-task"))
+        assertTrue("A worker with an unknown parent must fail closed instead of outliving an unverified parent",
+            AgentCheckpointStore.cancellationRequested(context, "different-task"))
         assertTrue(AgentCheckpointStore.pause(context))
         assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
 
