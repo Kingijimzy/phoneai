@@ -12,7 +12,7 @@ import java.util.Locale
  */
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
-        "ask_agent", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
+        "ask_agent", "queue_agent", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
         "morning_brief", "standing_order"
     )
 
