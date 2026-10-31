@@ -36,7 +36,7 @@ internal object OrionAgentDelegation {
         }
     }
 
-    private val researchTools = setOf("live_web_search", "live_news", "fetch_url", "bybit_public_ticker")
+    private val researchTools = setOf("live_web_search", "live_news", "bybit_public_ticker")
     private val coachTools = setOf("bybit_public_ticker")
     private const val PREFS = "orion_agent_delegation_ledger"
     private const val KEY = "runs"
@@ -71,7 +71,7 @@ internal object OrionAgentDelegation {
                 "planner" -> "active task summaries; read-only"
                 else -> "agent-specific lessons and relevant saved facts; read-only"
             },
-            maxModelCalls = 1
+            maxModelCalls = if (agent.id == "coach") 2 else 1
         )
     }
 
