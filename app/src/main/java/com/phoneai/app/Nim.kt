@@ -101,7 +101,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     @Volatile internal var tier: ModelRouter.Tier? = null
 
     private fun selectedModel(p: Provider, vision: Boolean): String {
-        tier?.let { t -> ModelRouter.modelFor(t, p.id, vision, Prefs.modelRouting(ctx))?.let { return it } }
+        tier?.let { t -> ModelRouter.modelFor(t, p.id, vision, Prefs.modelRouting(ctx), Prefs.cachedModels(ctx, p.id).toSet())?.let { return it } }
         if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
             Prefs.commandModelId(ctx)?.let { return it }
         }
