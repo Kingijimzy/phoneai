@@ -179,8 +179,10 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         val event = OrionConversationRepository.get(applicationContext).recordEventForSession(
             applicationContext, sessionId, "specialist-${job.id}", "specialist_result", "completed", summary
         )
-        return if (event != null) Result.success()
-        else if (runAttemptCount < 4) Result.retry() else Result.failure()
+        return if (event != null) {
+            OrionRuntimeNotifier.postSpecialistResult(applicationContext, job.id)
+            Result.success()
+        } else if (runAttemptCount < 4) Result.retry() else Result.failure()
     }
 
     companion object { const val KEY_JOB_ID = "orion_specialist_job_id" }
