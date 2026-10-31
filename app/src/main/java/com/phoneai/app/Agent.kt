@@ -2285,9 +2285,13 @@ Rules:
                     }
                     var br = executeWithRecoveryGuard(bt, batchArgs)
                     if (bt == "ask_agent") {
-                        val failed = br.trimStart().startsWith("error", true)
-                        ui.note("[SPECIALIST:" + (if (failed) "FAILED" else "RETURNED") + "]\n" +
-                            (if (failed) "Specialist did not complete successfully. " else "Specialist returned; Orion will review the result. ") + br.take(420))
+                        val cancelled = br.contains("cancelled", true) || br.contains("paused or stopped", true)
+                        val failed = !cancelled && br.trimStart().startsWith("error", true)
+                        val status = when { cancelled -> "CANCELLED"; failed -> "FAILED"; else -> "RETURNED" }
+                        val summary = when { cancelled -> "Specialist stopped with its parent; late results were discarded. "
+                            failed -> "Specialist did not complete successfully. "
+                            else -> "Specialist returned; Orion will review the result. " }
+                        ui.note("[SPECIALIST:" + status + "]\n" + summary + br.take(420))
                     }
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
@@ -2407,9 +2411,13 @@ Rules:
             }
             var result = executeWithRecoveryGuard(tool, args)
             if (tool == "ask_agent") {
-                val failed = result.trimStart().startsWith("error", true)
-                ui.note("[SPECIALIST:" + (if (failed) "FAILED" else "RETURNED") + "]\n" +
-                    (if (failed) "Specialist did not complete successfully. " else "Specialist returned; Orion will review the result. ") + result.take(420))
+                val cancelled = result.contains("cancelled", true) || result.contains("paused or stopped", true)
+                val failed = !cancelled && result.trimStart().startsWith("error", true)
+                val status = when { cancelled -> "CANCELLED"; failed -> "FAILED"; else -> "RETURNED" }
+                val summary = when { cancelled -> "Specialist stopped with its parent; late results were discarded. "
+                    failed -> "Specialist did not complete successfully. "
+                    else -> "Specialist returned; Orion will review the result. " }
+                ui.note("[SPECIALIST:" + status + "]\n" + summary + result.take(420))
             }
             var readRetries = 0
             if (isRetryableRead(tool, args)) {
