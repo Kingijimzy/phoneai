@@ -2259,7 +2259,16 @@ Rules:
                     val batchGraph = OrionObjectiveGraph.load(svc)
                     activeObjectiveId = one.optString("objective_id").ifBlank { step.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" } }
                     if (activeObjectiveId.isNotBlank()) batchArgs.put("objective_id", activeObjectiveId)
+                    if (bt == "ask_agent") {
+                        ui.note("[SPECIALIST:ASSIGNED]\nOrion assigned " + batchArgs.optString("agent", "specialist") + ": " +
+                            batchArgs.optString("task").take(180) + if (activeObjectiveId.isNotBlank()) "\nParent objective: $activeObjectiveId" else "")
+                    }
                     var br = executeWithRecoveryGuard(bt, batchArgs)
+                    if (bt == "ask_agent") {
+                        val failed = br.trimStart().startsWith("error", true)
+                        ui.note("[SPECIALIST:" + (if (failed) "FAILED" else "RETURNED") + "]\n" +
+                            (if (failed) "Specialist did not complete successfully. " else "Specialist returned; Orion will review the result. ") + br.take(420))
+                    }
                     ui.note(activityNote(bt, batchArgs, br))
                     record(bt, one.optJSONObject("args") ?: JSONObject(), br)
                     if (!OrionTasksCapabilityExecutor.recordStep(svc, bt, batchArgs, br)) {
@@ -2370,7 +2379,18 @@ Rules:
             val currentGraph = OrionObjectiveGraph.load(svc)
             activeObjectiveId = step.optString("objective_id").ifBlank { if (currentGraph?.nodes?.size == 1) currentGraph.nodes.first().id else "" }
             if (activeObjectiveId.isNotBlank()) args.put("objective_id", activeObjectiveId)
+            if (tool == "ask_agent") {
+                val worker = args.optString("agent").ifBlank { "specialist" }
+                val objective = args.optString("task").take(180)
+                ui.note("[SPECIALIST:ASSIGNED]\nOrion assigned $worker: $objective" +
+                    if (activeObjectiveId.isNotBlank()) "\nParent objective: $activeObjectiveId" else "")
+            }
             var result = executeWithRecoveryGuard(tool, args)
+            if (tool == "ask_agent") {
+                val failed = result.trimStart().startsWith("error", true)
+                ui.note("[SPECIALIST:" + (if (failed) "FAILED" else "RETURNED") + "]\n" +
+                    (if (failed) "Specialist did not complete successfully. " else "Specialist returned; Orion will review the result. ") + result.take(420))
+            }
             var readRetries = 0
             if (isRetryableRead(tool, args)) {
                 // A read has no side effect, so a transient or timed-out failure is retried with bounded backoff.
