@@ -74,7 +74,7 @@ class AgentChatActivity : Activity() {
     private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); ticker.postDelayed(this, 20_000L) } } }
 
     private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
-        v.onSpeaking = { on -> companion?.speaking = on }
+        v.onSpeaking = { on -> mascot?.speaking = on }
         voice = v
     }
 
