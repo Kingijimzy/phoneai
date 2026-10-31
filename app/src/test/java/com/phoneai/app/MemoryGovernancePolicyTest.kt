@@ -112,4 +112,12 @@ class OrionSelfHealingPolicyTest {
         assertFalse(finding.copy(evidenceRefs = emptyList()).isActionable())
         assertFalse(finding.copy(detectedAtEpochMs = 0L).isActionable())
     }
+
+    @Test fun onlyExplicitHealthRequestsRunSelfDiagnosticsInTalk() {
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest("Orion, self diagnose"))
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest("run a system audit"))
+        assertTrue(OrionSelfDiagnostics.isExplicitRequest("self-heal what is broken"))
+        assertFalse(OrionSelfDiagnostics.isExplicitRequest("hey Orion, what is up?"))
+        assertFalse(OrionSelfDiagnostics.isExplicitRequest("explain how forex liquidity works"))
+    }
 }
