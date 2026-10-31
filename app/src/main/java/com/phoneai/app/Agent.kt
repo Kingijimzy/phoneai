@@ -260,7 +260,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         val loopCheck = toolLoopDetector.check(tool, loopParams(args))
-        if (loopCheck.level == ToolLoopDetector.Level.CRITICAL) {
+        if (loopCheck.level == Level.CRITICAL) {
             val blocked = loopCheck.message ?: "error: repeated tool calls were blocked by the session circuit breaker."
             taskProofs.record(tool, blocked)
             recordDispatchBlocked(tool, args, "tool_loop_circuit_breaker")
@@ -590,7 +590,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             tool, loopParams(args), verifiedResult,
             errorMessage = if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) verifiedResult else null
         )
-        if (loopRecord.level == ToolLoopDetector.Level.WARNING && !loopRecord.message.isNullOrBlank()) {
+        if (loopRecord.level == Level.WARNING && !loopRecord.message.isNullOrBlank()) {
             verifiedResult += "\n" + loopRecord.message
         }
         AgentPolicy.log(svc, tool, "result", !verifiedResult.trimStart().startsWith("error", ignoreCase = true),
