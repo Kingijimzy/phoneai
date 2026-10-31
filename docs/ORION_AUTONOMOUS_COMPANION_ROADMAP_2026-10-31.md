@@ -184,7 +184,7 @@ Tasks:
 | Stage | Status | Evidence / blocker |
 |---|---|---|
 | Stage 0 — integration baseline | IN PROGRESS | PR #132 draft; upstream stack is not yet on main; exact-head CI/review must be checked |
-| Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness, market-quote, GitHub account, repository-name search, Actions run/list and public repository inspection now persist task/step/result receipts; parent-child cancellation/recovery and background continuity remain |
+| Stage 1 — central lifecycle | IN PROGRESS — voice and deterministic research receipts added | actionable live voice uses the shared executor; weather, news, sports, web-search, freshness, market-quote, GitHub account, repository-name search and Actions run/list shortcuts persist receipts; full repository source inspection remains direct guarded research; parent-child cancellation/recovery and background continuity remain |
 | Stage 2 — capability intelligence | IN PROGRESS — request-scoped contracts added | relevant capability families receive full contracts while all other tools remain discoverable by compact signatures; exact-head CI and latency/token comparison are pending |
 | Stage 3 — specialist delegation | IN PROGRESS — scoped manifests and receipts added | each ask_agent call now receives a parent-linked, least-privilege manifest and a durable delegation receipt; specialist tools are still analysis/read-only and lifecycle controls/independent delegated execution remain |
 | Stage 4 — memory/self-evolution | PARTIAL | memory and extension lab exist; canonical cross-agent memory/learning needs integration proof |
@@ -288,3 +288,12 @@ Tasks:
 
 - The service now writes durable `runtime/started`, `runtime/completed` and retry/failure events for meaningful queued work (standing-order checks, safe presence events, task outcomes and conversation restoration). The active chat can restore these events after reattachment.
 - Each central Agent turn receives the latest bounded durable activity receipts alongside the live runtime snapshot. These are evidence summaries, not instructions or proof of work beyond the recorded status.
+
+## Implementation notes — parent cancellation reaches specialist workers
+
+- Added exact-parent-checkpoint cancellation inspection. A worker treats its parent as cancelled when that checkpoint is paused, stopped, terminal, or no longer the active checkpoint; archived paused/recovery work is still recognized by task ID.
+- Specialist execution checks cancellation before starting, before brokered capability use, after brokered reads, and after the model request returns.
+- The parent tool records a terminal `cancelled` delegation receipt and discards any late specialist answer rather than relaying it as completed work.
+- Added tests for active parent pause/stop visibility, archived parent cancellation, cancelled delegation receipts and blocking capability dispatch when cancellation is already present.
+- Limitation: the current provider request is synchronous and cannot yet be forcibly interrupted mid-HTTP call. The late response is discarded when it returns; bounded provider timeouts/interruptible transport and genuinely asynchronous child workers remain follow-up work.
+- A child does not inherit parent write permissions. Parent authorization, confirmation and evidence gates remain authoritative.
