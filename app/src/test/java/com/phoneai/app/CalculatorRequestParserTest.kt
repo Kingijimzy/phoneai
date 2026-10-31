@@ -30,6 +30,6 @@ class CalculatorRequestParserTest {
 
     @Test fun ignoresUnsafeOrUnboundedExpressionInputs() {
         val expressions = CalculatorRequestParser.parse("15 + 25; 2 ** 999999; import os; 1 / 0")
-        assertEquals(listOf("15 + 25", "1 / 0"), expressions.map { it.display })
+        assertEquals(listOf("15 + 25"), expressions.map { it.display })
     }
 }
