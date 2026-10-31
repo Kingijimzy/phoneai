@@ -10,7 +10,9 @@ internal object TaskScopePolicy {
     private val readOnlyIntent = Regex(
         "(?i)^\\s*(?:(?:please|can you|could you)\\s+)*(read[- ]only|inspect|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
-    // Explicit URLs plus an inspection verb are actionable research, even when the user phrases the request naturally.\n    private val explicitUrl = Regex("(?i)https?://[^\\s<>\\\"]+")\n    private val urlInspectionIntent = Regex("(?i)\\\\b(check|inspect|open|visit|read|review|summari[sz]e|analy[sz]e|audit|scan|fetch|look at|look into|what is in|tell me about|explain)\\\\b")\n    private val researchIntent = Regex(
+    // Explicit URLs plus an inspection verb are actionable research, even when phrased naturally.
+    private val explicitUrl = Regex("(?i)https?://[^\\s<>\\\"]+")
+    private val urlInspectionIntent = Regex("(?i)\\b(check|inspect|open|visit|read|review|summari[sz]e|analy[sz]e|audit|scan|fetch|look at|look into|what is in|tell me about|explain)\\b")
         "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|go do|go|do|use)\\s+)*(research|browse(?: the web| online| the internet)?|search(?: the web| online| the internet| the internet for| for| up)?|web_search|look up(?: online)?|find online|check online|check the web|check the internet|google|fetch (?:the )?(?:page|url|website)|open (?:this )?(?:url|website)|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today)\\b"
     )
     // Account/integration work is an actionable task, not ordinary conversation. This only
