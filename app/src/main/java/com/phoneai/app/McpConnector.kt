@@ -341,15 +341,18 @@ object McpConnector {
         val id = sessionId ?: return
         runCatching {
             val conn = URL(endpoint(c)).openConnection() as HttpURLConnection
-            conn.requestMethod = "DELETE"
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            conn.instanceFollowRedirects = false
-            conn.setRequestProperty("Mcp-Session-Id", id)
-            negotiatedProtocolVersion?.let { conn.setRequestProperty("MCP-Protocol-Version", it) }
-            readToken(c)?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
-            conn.responseCode
-            conn.disconnect()
+            try {
+                conn.requestMethod = "DELETE"
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("Mcp-Session-Id", id)
+                negotiatedProtocolVersion?.let { conn.setRequestProperty("MCP-Protocol-Version", it) }
+                readToken(c)?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
+                conn.responseCode
+            } finally {
+                conn.disconnect()
+            }
         }
         sessionId = null
         negotiatedProtocolVersion = null
