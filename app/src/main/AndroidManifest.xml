@@ -123,6 +123,11 @@
         </service>
 
         <service android:name=".OrionSocketForegroundService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <!-- WorkManager's foreground dispatcher runs long-lived delegated specialist requests. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
         <service android:name=".TelegramListenerService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".WatchService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".RecordService" android:exported="false" android:foregroundServiceType="mediaProjection" />
