@@ -115,6 +115,8 @@ internal class OrionWorkerLeaseStore(context: Context, private val clock: () -> 
         json.optString("workerId") == lease.workerId &&
             json.optString("leaseId") == lease.leaseId &&
             json.optLong("fencingToken") == lease.fencingToken &&
+            json.optLong("expiresAt") == lease.expiresAt &&
+            json.optLong("heartbeatAt") == lease.heartbeatAt &&
             json.optString("idempotencyKey") == lease.idempotencyKey
 
     private fun Lease.toJson() = JSONObject()
