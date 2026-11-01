@@ -84,9 +84,13 @@ class SelfExtendingExtensionsTest {
         assertNotNull(store.enabled(extension.id))
 
         val file = context.filesDir.resolve("orion_generated_extensions.json")
-        val tampered = file.readText().replace(extension.source, "def run(value):\\n    return 'tampered'")
-        assertNotEquals(file.readText(), tampered)
-        file.writeText(tampered)
+        // Mutate the persisted JSON field rather than searching for raw source text:
+        // AtomicFile stores JSON-escaped newlines, so the source string is not present
+        // verbatim in the serialized file.
+        val registry = JSONObject(file.readText())
+        val entries = registry.getJSONArray("extensions")
+        entries.getJSONObject(0).put("source", "def run(value):\\n    return 'tampered'")
+        file.writeText(registry.toString())
 
         assertNull(store.enabled(extension.id))
     }
