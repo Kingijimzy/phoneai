@@ -209,7 +209,11 @@ internal object OrionPythonWebSocketTransport {
         return session
     }
 
-    private fun stopServiceIfIdle() {\n        if (sessions.isEmpty()) appContext?.let { OrionSocketForegroundService.stop(it) }\n    }\n\n    private fun dispose(session: Session) {
+    private fun stopServiceIfIdle() {
+        if (sessions.isEmpty()) appContext?.let { OrionSocketForegroundService.stop(it) }
+    }
+
+    private fun dispose(session: Session) {
         session.client?.let { client ->
             runCatching { client.dispatcher.executorService.shutdown() }
             runCatching { client.connectionPool.evictAll() }
