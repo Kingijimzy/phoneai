@@ -41,6 +41,8 @@ class OrionContextGovernanceTest {
         assertEquals(listOf("calendar.read", "calendar.create"),
             OrionMcpPolicy.safeToolSubset(grant, listOf("calendar.read", "calendar.create", "contacts.export", "bad tool")))
         assertFalse(OrionMcpPolicy.requiresOwnerConfirmation("calendar.read", true))
+        assertFalse(OrionMcpPolicy.requiresOwnerConfirmation("calendar-read", true))
+        assertFalse(OrionMcpPolicy.requiresOwnerConfirmation("calendar_read", true))
         assertTrue(OrionMcpPolicy.requiresOwnerConfirmation("calendar.create", false))
         assertTrue(OrionMcpPolicy.requiresOwnerConfirmation("wallet.transfer", true))
     }
