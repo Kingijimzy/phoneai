@@ -1,4 +1,4 @@
-"""Constrained in-process Python runner for Orion. No imports, attributes, file, or network APIs."""
+"""Bounded in-process Python runner with a small safe stdlib and explicit phone capabilities."""
 import ast
 import contextlib
 import io
