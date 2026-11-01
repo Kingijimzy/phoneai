@@ -30,10 +30,11 @@ internal class OrionPythonPhoneApi(
         val manager = context.getSystemService(BatteryManager::class.java)
         val level = manager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
         val status = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val batteryStatus = status?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val charging = batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING ||
+            batteryStatus == BatteryManager.BATTERY_STATUS_FULL
         return JSONObject().put("level_percent", level.takeIf { it in 0..100 })
-            .put("charging", status?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) in setOf(
-                BatteryManager.BATTERY_STATUS_CHARGING, BatteryManager.BATTERY_STATUS_FULL
-            )).put("power_save", runCatching {
+            .put("charging", charging).put("power_save", runCatching {
                 context.getSystemService(android.os.PowerManager::class.java)?.isPowerSaveMode
             }.getOrNull()).toString()
     }
