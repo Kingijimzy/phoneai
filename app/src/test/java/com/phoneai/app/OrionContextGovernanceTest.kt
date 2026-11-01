@@ -37,7 +37,7 @@ class OrionContextGovernanceTest {
     }
 
     @Test fun mcpGrantOnlyExposesExplicitToolsAndMutationsNeedApproval() {
-        val grant = OrionMcpServerGrant("calendar", true, setOf("calendar.read", "calendar.create"), 10L)
+        val grant = OrionMcpServerGrant("calendar", true, setOf("calendar.read", "calendar.create"), System.currentTimeMillis() + 60_000L)
         assertEquals(listOf("calendar.read", "calendar.create"),
             OrionMcpPolicy.safeToolSubset(grant, listOf("calendar.read", "calendar.create", "contacts.export", "bad tool")))
         assertFalse(OrionMcpPolicy.requiresOwnerConfirmation("calendar.read", true))
