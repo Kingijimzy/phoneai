@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class OrionExecutionCoordinatorTest {
     private fun context(): Context = RuntimeEnvironment.getApplication<Context>().also { c ->
-        c.filesDir.listFiles()?.filter { it.name.startsWith("orion_distributed") || it.name.startsWith("orion_worker_lease") || it.name == "orion_agent_checkpoint.json" || it.name == "orion_agent_checkpoint.json.bak" }?.forEach { it.delete() }
+        c.filesDir.listFiles()?.filter { it.name.startsWith("orion_distributed") || it.name.startsWith("orion_worker_lease") || it.name == "orion_agent_checkpoint.json" || it.name == "orion_agent_checkpoint.json.bak" || it.name == "orion_task_checkpoints" }?.forEach { it.deleteRecursively() }
         AgentCheckpointStore.clear(c)
     }
     private fun worker(result: OrionWorkerResult = OrionWorkerResult.Success("evidence:ok")) =
@@ -62,21 +62,21 @@ class OrionExecutionCoordinatorTest {
         val c = context(); val store = OrionDistributedTaskStore(c); val leases = OrionWorkerLeaseStore(c)
         val task = OrionTaskEnvelope.create("checkpoint task")
         assertTrue(store.enqueue(task))
-        assertTrue(AgentCheckpointStore.beginForTask(c, task.taskId, task.objective))
-        assertTrue(AgentCheckpointStore.beginStep(c, "send_message", org.json.JSONObject().put("text", "private")))
+        assertTrue(OrionTaskCheckpointStore(c).begin(task.taskId, task.objective))
+        assertTrue(OrionTaskCheckpointStore(c).beginAction(task.taskId, "send_message", "a".repeat(64)))
         val result = OrionExecutionCoordinator(store, leases, c).dispatch(task.taskId, worker())
         assertTrue(result is OrionCoordinatedResult.NeedsOwner)
         assertEquals("failed", store.get(task.taskId)?.status)
-        assertTrue(AgentCheckpointStore.needsRecoveryConfirmation(c))
+        assertTrue(OrionTaskCheckpointStore(c).needsOwner(task.taskId))
     }
 
     @Test fun delegatedCheckpointIsIsolatedFromOtherTasks() {
         val c = context()
         val first = OrionTaskEnvelope.create("first task")
         val second = OrionTaskEnvelope.create("second task")
-        assertTrue(AgentCheckpointStore.beginForTask(c, first.taskId, first.objective))
-        assertNotNull(AgentCheckpointStore.pendingForTask(c, first.taskId))
-        assertNull(AgentCheckpointStore.pendingForTask(c, second.taskId))
+        assertTrue(OrionTaskCheckpointStore(c).begin(first.taskId, first.objective))
+        assertNotNull(OrionTaskCheckpointStore(c).pending(first.taskId))
+        assertNull(OrionTaskCheckpointStore(c).pending(second.taskId))
     }
 
     @Test fun remoteTransportRejectsInsecureEndpointBeforeSendingCredentials() {
