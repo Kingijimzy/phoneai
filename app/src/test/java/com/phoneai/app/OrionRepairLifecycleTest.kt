@@ -60,7 +60,8 @@ class OrionRepairLifecycleTest {
         apply: () -> String? = { "receipt-123" },
         verify: () -> Boolean = { true },
         rollback: () -> Boolean = { true },
-        verifyRollback: () -> Boolean = { true }
+        verifyRollback: () -> Boolean = { true },
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ) = OrionRepairLifecycle.execute(
         context, sessionId, "task-repair-test", finding(), proposal,
         OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), proposal),
@@ -74,6 +75,54 @@ class OrionRepairLifecycleTest {
         assertEquals(1, applied)
         assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
             .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
+    }
+
+    @Test fun sandboxDataMutationRunsAutonomouslyAfterIsolatedTest() {
+        val sandboxProposal = proposal(OrionRepairRisk.DATA_AFFECTING, approval = false)
+        var applied = 0
+        val result = execute(
+            proposal = sandboxProposal,
+            apply = { applied++; "sandbox-receipt" },
+            executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX
+        )
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
+        assertEquals(1, applied)
+    }
+
+    @Test fun securitySensitiveSandboxRepairStillRequiresOwnerApproval() {
+        val securityProposal = proposal(OrionRepairRisk.SECURITY_SENSITIVE, approval = false)
+        var applied = false
+        val result = execute(
+            proposal = securityProposal,
+            apply = { applied = true; "receipt" },
+            executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX
+        )
+        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
+        assertFalse(applied)
+    }
+
+    @Test fun suspiciousSandboxProposalRequiresOwnerApproval() {
+        val suspiciousProposal = proposal().copy(suspicious = true)
+        var applied = false
+        val result = execute(
+            proposal = suspiciousProposal,
+            apply = { applied = true; "receipt" },
+            executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX
+        )
+        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
+        assertFalse(applied)
+    }
+
+    @Test fun externalBoundaryNeverAutoAppliesWithoutOwnerApproval() {
+        val externalProposal = proposal(OrionRepairRisk.REVERSIBLE, approval = false)
+        var applied = false
+        val result = execute(
+            proposal = externalProposal,
+            apply = { applied = true; "receipt" },
+            executionBoundary = OrionRepairExecutionBoundary.EXTERNAL
+        )
+        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
+        assertFalse(applied)
     }
 
     @Test fun consequentialRepairWaitsForOwnerAndNeverCallsApplyEarly() {
