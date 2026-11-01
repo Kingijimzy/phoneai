@@ -66,7 +66,7 @@
 - MCP resources, prompts, server-initiated notifications, persistent multi-turn streaming subscriptions and full conformance-suite coverage remain future work. The extra duplicate transport class was removed; McpConnector remains the single source of truth.
 
 ### Provider-aware context update
-- Model capability flags are transport-specific: ordinary HTTP chat profiles expose only known image-capable model families; audio input/output and video are advertised only for the dedicated Gemini Live transport.
+- Model capability flags are transport-specific: ordinary HTTP chat profiles expose only known image-capable model families; audio input/output are advertised only for the dedicated Gemini Live transport. Video input remains disabled because Orion has not implemented camera/video capture or frame transmission.
 - Unknown model IDs use conservative limits; output ceilings are applied before request construction.
 - Multimodal messages are estimated by content part, so base64 image strings no longer cause the whole newest turn to be discarded as if they were ordinary text. The newest user turn is retained in a bounded form where possible.
 - These are conservative static profiles and character/image-cost estimates, not live provider metadata or exact tokenizer measurements. Gemini Live uses its own transport setup and limits. A future catalogue refresh should store verified context/output limits and modality support by exact model ID and transport.
@@ -74,3 +74,5 @@
 ### Validation
 - Exact-head CI must pass after this continuation. No physical-device validation is implied.
 - HyperOS background restrictions, notification permission behaviour, screen/voice collectors and long-running sensor behaviour still require explicit on-device testing.
+
+- Gemini Live now uses the same provider-aware context budget for its system instruction and receives the active conversation's evidence index plus any consented short-lived motion summary. Its generation output remains capped at 1,024 tokens; video remains unsupported by the PhoneAI route.
