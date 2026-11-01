@@ -305,10 +305,28 @@ object McpConnector {
         conn.disconnect()
         if (code !in 200..299 && code != 202) throw IllegalStateException("HTTP " + code)
         if (raw.isBlank()) return null
-        val json = if (raw.trimStart().startsWith("{")) raw.trim() else
-            raw.lineSequence().filter { it.startsWith("data:") }.map { it.removePrefix("data:").trim() }
-                .firstOrNull { it.startsWith("{") } ?: throw IllegalStateException("unsupported stream response")
-        return JSONObject(json)
+        val expectedId = payload.optLong("id", -1L)
+        val response = if (raw.trimStart().startsWith("{")) JSONObject(raw.trim())
+            else parseSseResponse(raw, expectedId)
+        if (expectedId > 0L && response.optLong("id", -1L) != expectedId) {
+            throw IllegalStateException("MCP JSON-RPC response id did not match the request.")
+        }
+        return response
+    }
+
+    /** Streamable HTTP may return multiple SSE events; select the matching JSON-RPC response. */
+    private fun parseSseResponse(raw: String, expectedId: Long): JSONObject {
+        val events = raw.split(Regex("\\r?\\n\\r?\\n"))
+        for (event in events) {
+            val data = event.lineSequence()
+                .filter { it.startsWith("data:") }
+                .map { it.removePrefix("data:").trim() }
+                .joinToString("\\n")
+            if (data.isBlank() || data == "[DONE]") continue
+            val candidate = runCatching { JSONObject(data) }.getOrNull() ?: continue
+            if (expectedId <= 0L || candidate.optLong("id", Long.MIN_VALUE) == expectedId) return candidate
+        }
+        throw IllegalStateException("MCP event stream ended without a matching JSON-RPC response.")
     }
 
     private fun readToken(c: Context): String? {
