@@ -82,6 +82,11 @@ class SensorContextActivity : Activity() {
             }
             row.addView(text); row.addView(toggle)
             root.addView(row)
+            root.addView(TextView(this).apply {
+                text = scopeDescription(scope)
+                textSize = 11f; setTextColor(0xff8995a3.toInt())
+                setPadding(0, 0, 0, dp(5))
+            })
             if (scope == OrionSensorScope.MOTION) {
                 motionStatus = TextView(this).apply {
                     text = "Motion observations appear here only while this screen is open."
@@ -119,6 +124,18 @@ class SensorContextActivity : Activity() {
         refreshStatus()
     }
 
+
+    private fun scopeDescription(scope: OrionSensorScope): String = when (scope) {
+        OrionSensorScope.MOTION -> "Foreground collector: coarse accelerometer/gyroscope hints while this screen is open."
+        OrionSensorScope.DEVICE_STATE -> "Consent flag only; automatic device-state collection is not connected yet."
+        OrionSensorScope.LOCATION -> "Consent flag only; no passive tracking. Explicit location requests still require Android permission."
+        OrionSensorScope.SCREEN_CONTEXT -> "Manual screen reads only; no continuous screenshot or screen recording."
+        OrionSensorScope.MICROPHONE -> "Voice sessions only after you explicitly start them; no background listening."
+        OrionSensorScope.NOTIFICATIONS -> "Consent flag only; Android notification-listener access and safety filters remain separate."
+        OrionSensorScope.APP_USAGE -> "Consent flag only; usage-access collector is not connected yet."
+        OrionSensorScope.ROUTINE_REMINDERS -> "Allows only one-time reminders you explicitly schedule for approved routines."
+    }
+
     private fun rebuild() {
         // Recreate the consent view so every switch reflects the revoked state.
         recreate()
@@ -126,7 +143,7 @@ class SensorContextActivity : Activity() {
 
     private fun refreshStatus() {
         val active = OrionSensorConsent.activeScopes(this).map { it.name.lowercase().replace('_', ' ') }
-        status.text = if (active.isEmpty()) "No active Orion context grants." else "Active grants: " + active.joinToString(", ")
+        status.text = if (active.isEmpty()) "No active Orion context grants." else "Granted scopes (not all have active collectors): " + active.joinToString(", ")
     }
 
     private fun startMotionSampler() {
