@@ -138,7 +138,7 @@ internal object OrionEvidenceLedger {
         failed: Boolean = false
     ): Boolean {
         val safeStage = stage.take(32)
-        if (safeStage !in setOf("PROPOSED", "SANDBOX_PASSED", "SANDBOX_FAILED",
+        if (safeStage !in setOf("PROPOSED", "SANDBOX_PASSED", "SANDBOX_FAILED", "AWAITING_OWNER",
                 "OWNER_APPROVED", "OWNER_REJECTED", "APPLIED", "VERIFIED",
                 "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")) return false
         if (!planDigest.matches(Regex("^[a-fA-F0-9]{64}$"))) return false
