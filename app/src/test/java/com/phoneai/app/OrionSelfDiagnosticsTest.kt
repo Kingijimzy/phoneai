@@ -18,6 +18,7 @@ class OrionSelfDiagnosticsTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        context.getSharedPreferences("orion_sensor_consent_v1", Context.MODE_PRIVATE).edit().clear().commit()
         val file = File(context.filesDir, "orion_worker_jobs.json")
         file.delete()
         File(file.path + ".bak").delete()
@@ -44,4 +45,21 @@ class OrionSelfDiagnosticsTest {
             it.component == "specialist_queue" && it.title == "Specialist result needs review"
         })
     }
+    @Test fun diagnosticsDistinguishesOrionConsentFromMissingAndroidSystemGrants() {
+        listOf(
+            OrionSensorScope.LOCATION,
+            OrionSensorScope.CONTACTS,
+            OrionSensorScope.MICROPHONE,
+            OrionSensorScope.SCREEN_CONTEXT,
+            OrionSensorScope.NOTIFICATIONS
+        ).forEach { OrionSensorConsent.grant(context, it, 60_000L, foregroundOnly = true) }
+
+        val report = OrionSelfDiagnostics.inspect(context)
+        val components = report.findings.map { it.component }.toSet()
+        assertTrue(components.contains("android_permissions"))
+        assertTrue(components.contains("android_accessibility"))
+        assertTrue(components.contains("android_notifications"))
+        assertTrue(report.promptBlock().contains("Android permission"))
+    }
+
 }
