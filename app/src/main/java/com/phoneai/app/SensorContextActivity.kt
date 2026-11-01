@@ -38,6 +38,10 @@ class SensorContextActivity : Activity() {
             text = "Each switch is a separate Orion consent grant, not an Android permission. Android may still ask for its own permission or special access. Grants default to foreground-only. Nothing is collected by this screen unless you enable the relevant scope."
             textSize = 13f; setTextColor(0xffaab2bd.toInt()); setPadding(0, dp(10), 0, dp(16))
         })
+        root.addView(TextView(this).apply {
+            text = "When enabled, relevant context can be included in Orion requests to your selected AI provider. Motion summaries expire after 15 minutes; device, location and app-usage snapshots are not stored; safe notification summaries stay in memory only. Revoke a grant to stop its context from being used."
+            textSize = 12f; setTextColor(0xffc0c8d2.toInt()); setPadding(0, 0, 0, dp(12))
+        })
         status = TextView(this).apply { textSize = 12f; setTextColor(0xff9da8b5.toInt()) }
         root.addView(status)
         val scopes = listOf(
