@@ -2,9 +2,15 @@ package com.phoneai.app
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.provider.Settings
+import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
+import java.util.Calendar
 import android.text.InputType
 import android.view.Gravity
 import android.widget.EditText
@@ -110,12 +116,74 @@ class MemoryActivity : Activity() {
             actions.addView(button("Delete") { confirmDelete(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             card.addView(actions)
             val governanceActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+            if (memory.category == "routine" && memory.reviewStatus == "approved") {
+                governanceActions.addView(button("Reminder") { chooseRoutineReminder(memory.id) })
+                governanceActions.addView(button("Cancel reminder") {
+                    AlertDialog.Builder(this).setTitle("Cancel routine reminder?")
+                        .setMessage("Orion will cancel the scheduled reminder for this routine.")
+                        .setNegativeButton("Keep", null)
+                        .setPositiveButton("Cancel reminder") { _, _ ->
+                            OrionRoutineReminderWorker.cancel(this, memory.id)
+                            Toast.makeText(this, "Routine reminder cancelled", Toast.LENGTH_SHORT).show()
+                        }.show()
+                }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+            }
             governanceActions.addView(button("Version history") { showVersionHistory(memory.id) })
             governanceActions.addView(button("Expiry") { chooseExpiry(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             card.addView(governanceActions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
             page.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
             card.alpha = 0f; card.translationY = dp(6).toFloat(); card.animate().alpha(1f).translationY(0f).setDuration(220).start()
         }
+    }
+
+
+    private fun chooseRoutineReminder(memoryId: Int) {
+        if (!OrionSensorConsent.read(this, OrionSensorScope.ROUTINE_REMINDERS).active()) {
+            AlertDialog.Builder(this).setTitle("Routine reminders are disabled")
+                .setMessage("Enable the separate Routine reminders grant first. Orion will not schedule anything until you choose a time.")
+                .setNegativeButton("Not now", null)
+                .setPositiveButton("Open permissions") { _, _ ->
+                    startActivity(Intent(this, SensorContextActivity::class.java))
+                }.show()
+            return
+        }
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            AlertDialog.Builder(this).setTitle("Notifications are disabled")
+                .setMessage("Android notifications are disabled for Orion. Enable them before scheduling a reminder.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Open settings") { _, _ ->
+                    runCatching {
+                        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    }
+                }.show()
+            return
+        }
+        val now = Calendar.getInstance()
+        val selected = Calendar.getInstance()
+        DatePickerDialog(this, { _, year, month, day ->
+            selected.set(Calendar.YEAR, year)
+            selected.set(Calendar.MONTH, month)
+            selected.set(Calendar.DAY_OF_MONTH, day)
+            TimePickerDialog(this, { _, hour, minute ->
+                selected.set(Calendar.HOUR_OF_DAY, hour)
+                selected.set(Calendar.MINUTE, minute)
+                selected.set(Calendar.SECOND, 0)
+                selected.set(Calendar.MILLISECOND, 0)
+                if (selected.timeInMillis <= System.currentTimeMillis()) {
+                    Toast.makeText(this, "Choose a future time for the reminder.", Toast.LENGTH_SHORT).show()
+                    return@TimePickerDialog
+                }
+                AlertDialog.Builder(this).setTitle("Repeat this reminder?")
+                    .setItems(arrayOf("Once", "Every day", "Every week")) { _, repeat ->
+                        val days = when (repeat) { 1 -> 1; 2 -> 7; else -> 0 }
+                        val ok = OrionRoutineReminderWorker.schedule(this, memoryId, selected.timeInMillis, days)
+                        Toast.makeText(this, if (ok) "Routine reminder scheduled" else "Could not schedule reminder; check the routine and permission grant.", Toast.LENGTH_SHORT).show()
+                    }.show()
+            }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show()
+        }, now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH)).apply {
+            datePicker.minDate = System.currentTimeMillis()
+        }.show()
     }
 
     private fun showVersionHistory(id: Int) {
