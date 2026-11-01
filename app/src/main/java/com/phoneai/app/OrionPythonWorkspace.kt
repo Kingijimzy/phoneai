@@ -38,8 +38,16 @@ internal class OrionPythonWorkspace(context: Context) {
         val temp = File(parent, ".orion-${file.name}.part")
         return try {
             FileOutputStream(temp).use { it.write(bytes); it.fd.sync() }
-            if (file.exists() && !file.delete()) error("could not replace target")
-            if (!temp.renameTo(file)) error("could not atomically commit workspace file")
+            try {
+                java.nio.file.Files.move(
+                    temp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                )
+            } catch (_: Exception) {
+                if (file.exists() && !file.delete()) error("could not replace target")
+                if (!temp.renameTo(file)) error("could not commit workspace file")
+            }
             "saved ${path.take(180)} (${bytes.size} bytes)"
         } catch (e: Exception) {
             temp.delete()
