@@ -146,6 +146,17 @@ internal object OrionProviderContextPolicy {
         (capabilities.contextTokens - requestedOutput.coerceIn(256, capabilities.maxOutputTokens) - 1_024)
             .coerceAtLeast(1_024)
 
+    fun newestUserImageCount(messages: JSONArray): Int {
+        val newestUser = (messages.length() - 1 downTo 0)
+            .asSequence().mapNotNull { messages.optJSONObject(it) }
+            .firstOrNull { it.optString("role") == "user" } ?: return 0
+        val content = newestUser.opt("content") as? JSONArray ?: return 0
+        return (0 until content.length()).count { index ->
+            val type = content.optJSONObject(index)?.optString("type")
+            type == "image_url" || type == "input_image"
+        }
+    }
+
     private fun messageCost(item: JSONObject): Int {
         val content = item.opt("content")
         val tokens = when (content) {
