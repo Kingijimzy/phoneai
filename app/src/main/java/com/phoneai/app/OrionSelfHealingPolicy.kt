@@ -77,11 +77,16 @@ object OrionSelfHealingPolicy {
         testsPassed: Boolean,
         ownerApproved: Boolean,
         applied: Boolean,
-        verificationPassed: Boolean
+        verificationPassed: Boolean,
+        ownerApprovalRequired: Boolean = true
     ): OrionRepairStatus? = when (current) {
         OrionRepairStatus.PROPOSED -> if (testsPassed) OrionRepairStatus.TEST_PASSED else OrionRepairStatus.TEST_FAILED
         OrionRepairStatus.TESTING -> if (testsPassed) OrionRepairStatus.TEST_PASSED else OrionRepairStatus.TEST_FAILED
-        OrionRepairStatus.TEST_PASSED -> if (ownerApproved) OrionRepairStatus.AWAITING_OWNER else OrionRepairStatus.AWAITING_OWNER
+        OrionRepairStatus.TEST_PASSED -> when {
+            ownerApprovalRequired && !ownerApproved -> OrionRepairStatus.AWAITING_OWNER
+            applied && (!ownerApprovalRequired || ownerApproved) -> OrionRepairStatus.APPLIED
+            else -> null
+        }
         OrionRepairStatus.AWAITING_OWNER -> if (ownerApproved && applied) OrionRepairStatus.APPLIED else null
         OrionRepairStatus.APPLIED -> if (verificationPassed) OrionRepairStatus.VERIFIED else OrionRepairStatus.ROLLED_BACK
         OrionRepairStatus.TEST_FAILED -> null
