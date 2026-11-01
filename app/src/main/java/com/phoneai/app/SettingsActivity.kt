@@ -559,6 +559,19 @@ class SettingsActivity : Activity() {
                 "6. Open Recent apps and lock Orion if your launcher offers a lock option.\n\n" +
                 "Xiaomi changes these labels by OS version and region. Orion cannot enable the vendor's Autostart switch itself; confirm each setting manually.")
         }, 8)
+        add(updateCard, button("Open Android battery optimization settings", false) {
+            runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                .onFailure { Toast.makeText(this, "Battery optimization settings are unavailable on this Android build.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(updateCard, button("Open Orion app details · HyperOS permissions", false) {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }.onFailure { Toast.makeText(this, "App details settings could not be opened.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(updateCard, text(
+            "HyperOS note: Orion cannot silently enable Xiaomi Autostart or exempt itself from battery management. Enable Autostart and No restrictions manually where your MIUI/HyperOS version exposes them. WorkManager jobs are durable/deferred, not guaranteed sub-second; a live voice/WebSocket session must remain in an owner-started foreground session and may end if Android force-stops the app.",
+            12f, Theme.MUTED
+        ), 8)
         add(updateCard, button("OPPO / realme background & overlay guide", false) {
             showInfoDialog("OPPO / realme permissions",
                 "For ColorOS / realme UI (labels vary by version):\n\n" +
