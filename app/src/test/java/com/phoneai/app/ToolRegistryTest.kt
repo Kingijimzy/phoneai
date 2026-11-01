@@ -21,6 +21,19 @@ class ToolRegistryTest {
     }
 
 
+    @Test fun mcpResourceAndPromptReadsAreRegisteredAndReachTheSharedExecutor() {
+        val readTools = listOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
+        readTools.forEach { name ->
+            assertEquals("$name must be read-only", ToolAccess.READ, ToolRegistry.access(name))
+            assertEquals("orion_core", AgentPolicy.packForTool(name))
+            assertEquals(OrionCapabilityAdapters.Backend.MCP, OrionCapabilityAdapters.route(name)?.backend)
+            assertTrue("MCP executor must implement $name", OrionMcpCapabilityExecutor.supports(name))
+            assertTrue("Runtime owner must implement $name", OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.MCP, name))
+        }
+        assertTrue(ToolRegistry.detailedToolNames("inspect MCP resources and prompt templates")
+            .containsAll(readTools))
+    }
+
     @Test fun tradingDeskToolsHaveOneConcreteOwnerAndSafeAccessClasses() {
         val readTools = listOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list")
         readTools.forEach {
