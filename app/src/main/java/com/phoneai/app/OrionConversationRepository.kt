@@ -162,6 +162,29 @@ class OrionConversationRepository private constructor(context: Context) :
         }
     }
 
+    /**
+     * Atomically claim a one-shot lifecycle transition. Unlike recordEventForSession, this
+     * returns false when another caller/process already claimed the same event ID.
+     */
+    @Synchronized
+    fun claimEventForSession(
+        context: Context, sessionId: String, eventId: String,
+        type: String, status: String, summary: String
+    ): Boolean {
+        val sid = sessionId.trim().take(128)
+        val id = eventId.trim().take(128)
+        if (sid.isBlank() || id.isBlank()) return false
+        migrateLegacy(context)
+        val db = writableDatabase
+        if (!sessionExists(db, sid)) return false
+        val values = ContentValues().apply {
+            put("id", id); put("session_id", sid); putNull("message_id")
+            put("event_type", type.take(48)); put("status", status.take(32))
+            put("summary", sanitizeEventSummary(summary)); put("created_at", System.currentTimeMillis())
+        }
+        return db.insertWithOnConflict("chat_events", null, values, SQLiteDatabase.CONFLICT_IGNORE) >= 0
+    }
+
     /** Check an idempotent lifecycle receipt in its original session after process restart. */
     @Synchronized
     fun hasEventForSession(context: Context, sessionId: String, eventId: String): Boolean {
