@@ -51,6 +51,16 @@ internal object OrionRepairLifecycle {
                 "Repair proposal failed identity, evidence, digest or rollback validation.")
         }
 
+        // A plan may be applied only once. An interrupted/uncertain apply is reconciled
+        // manually; a previous owner approval is never silently reused after process restart.
+        val priorPlanEvents = OrionEvidenceLedger.events(app, taskId).filter { it.argsFingerprint == digest }
+        val terminalOrUncertain = setOf("repair_applied", "repair_apply_uncertain", "repair_verified",
+            "repair_rollback_required", "repair_rolled_back", "repair_rollback_failed")
+        if (priorPlanEvents.any { it.tool in terminalOrUncertain }) {
+            return Receipt(Result.POLICY_BLOCKED, digest,
+                "This exact repair plan already reached an apply or uncertain state; it cannot be replayed.")
+        }
+
         if (!emit(app, sessionId, taskId, "PROPOSED", digest,
                 "Repair proposal recorded; risk=${proposal.risk}; approval_required=${proposal.requiredOwnerApproval}.")) {
             return Receipt(Result.PERSISTENCE_FAILED, digest, "Proposal receipt failed; repair was not tested or applied.")
