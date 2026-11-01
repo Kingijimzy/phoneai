@@ -585,3 +585,5 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Connected the existing safe notification listener to the NOTIFICATIONS grant: safe in-memory summaries now enter the central brain only with both Android listener access and explicit Orion consent; revocation clears summaries and blocks actions.
 
 - Added on-demand, consent-gated battery/charging/network/thermal snapshots, approximate last-known location (10-minute freshness, ~1 km rounding), and recent app foreground-duration summaries (Usage Access required, sensitive apps excluded, not persisted). These snapshots are supplied to the central brain only while their Orion grants are active.
+
+- Memory Activity now surfaces prior versions and owner-editable expiry windows; expired entries are retained locally but filtered out of prompt context. Permanent deletion removes the memory's version history and graph metadata.
