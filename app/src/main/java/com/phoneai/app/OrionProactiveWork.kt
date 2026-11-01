@@ -44,7 +44,9 @@ internal object OrionProactivePolicy {
     const val FLEX_MINUTES = 5L
     const val MAX_RETRIES = 3
 
-    fun shouldRun(coreEnabled: Boolean): Boolean = coreEnabled
+    /** Both the central brain and the separately opt-in proactive pack must be enabled. */
+    fun shouldRun(coreEnabled: Boolean, proactiveEnabled: Boolean): Boolean =
+        coreEnabled && proactiveEnabled
 }
 
 internal object OrionProactiveWork {
