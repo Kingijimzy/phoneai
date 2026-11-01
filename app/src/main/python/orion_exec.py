@@ -52,6 +52,11 @@ def _validate(tree):
     for node in nodes:
         if not isinstance(node, _ALLOWED_NODES):
             raise Rejected("unsupported Python syntax: " + type(node).__name__)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+            if not isinstance(node.right, ast.Constant) or not isinstance(node.right.value, int) or isinstance(node.right.value, bool):
+                raise Rejected("exponents must be small integer constants")
+            if node.right.value < 0 or node.right.value > 16:
+                raise Rejected("integer exponents must be between 0 and 16")
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in _SAFE:
                 raise Rejected("only approved built-in functions may be called")
@@ -94,6 +99,16 @@ def _mul(a, b):
             raise Rejected("a number grew too large")
     return a * b
 
+def _pow(a, b):
+    if not isinstance(a, int) or isinstance(a, bool) or not isinstance(b, int) or isinstance(b, bool):
+        raise Rejected("exponentiation is limited to bounded integers")
+    if b < 0 or b > 16:
+        raise Rejected("integer exponents must be between 0 and 16")
+    estimated_bits = max(1, abs(a).bit_length()) * b
+    if estimated_bits > MAX_INT_BITS:
+        raise Rejected("an exponentiation result would exceed the integer size limit")
+    return pow(a, b)
+
 class _Guard(ast.NodeTransformer):
     """Routes + and * through size-checked helpers so a short loop cannot grow data without bound."""
     @staticmethod
@@ -106,6 +121,8 @@ class _Guard(ast.NodeTransformer):
             return ast.copy_location(self._call("_add", node.left, node.right), node)
         if isinstance(node.op, ast.Mult):
             return ast.copy_location(self._call("_mul", node.left, node.right), node)
+        if isinstance(node.op, ast.Pow):
+            return ast.copy_location(self._call("_pow", node.left, node.right), node)
         return node
 
     def visit_AugAssign(self, node):
@@ -123,7 +140,7 @@ def _prepare(source):
     return compile(tree, "<orion-approved-python>", "exec")
 
 def _scope(extra=None):
-    scope = {"__builtins__": _SAFE, "_add": _add, "_mul": _mul}
+    scope = {"__builtins__": _SAFE, "_add": _add, "_mul": _mul, "_pow": _pow}
     if extra:
         scope.update(extra)
     return scope
