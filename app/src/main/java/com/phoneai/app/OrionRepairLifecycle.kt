@@ -42,14 +42,36 @@ internal object OrionRepairLifecycle {
     fun stageEventId(taskId: String, planDigest: String, stage: String): String =
         "repair-" + sha256("$taskId|${planDigest.lowercase()}|${stage.uppercase()}").take(48)
 
+    private fun hasStageReceipt(
+        context: Context, sessionId: String, taskId: String, planDigest: String, stage: String
+    ): Boolean {
+        val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
+            it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
+                it.argsFingerprint == planDigest
+        }
+        val chatHas = runCatching {
+            OrionConversationRepository.get(context).hasEventForSession(
+                context, sessionId, stageEventId(taskId, planDigest, stage)
+            )
+        }.getOrDefault(false)
+        return ledgerHas || chatHas
+    }
+
+    /** Idempotently mirrors a lifecycle stage into both durable stores. */
     private fun emit(context: Context, sessionId: String, taskId: String, stage: String,
         planDigest: String, summary: String, verified: Boolean = false, failed: Boolean = false): Boolean {
-        val ledgerSaved = OrionEvidenceLedger.recordRepairStage(
+        val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
+            it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
+                it.argsFingerprint == planDigest
+        }
+        val eventId = stageEventId(taskId, planDigest, stage)
+        val repository = OrionConversationRepository.get(context)
+        val chatHas = runCatching { repository.hasEventForSession(context, sessionId, eventId) }.getOrDefault(false)
+        val ledgerSaved = ledgerHas || OrionEvidenceLedger.recordRepairStage(
             context, taskId, stage, planDigest, summary, verified, failed
         )
-        val eventId = stageEventId(taskId, planDigest, stage)
-        val chatSaved = runCatching {
-            OrionConversationRepository.get(context).recordEventForSession(
+        val chatSaved = chatHas || runCatching {
+            repository.recordEventForSession(
                 context, sessionId, eventId, "repair_lifecycle", stage.lowercase(), summary
             ) != null
         }.getOrDefault(false)
@@ -103,11 +125,22 @@ internal object OrionRepairLifecycle {
             return Receipt(Result.PERSISTENCE_FAILED, digest, "Proposal receipt failed; repair was not tested or applied.")
         }
 
-        val sandboxPassed = runCatching { sandboxTest() }.getOrDefault(false)
-        if (!emit(app, sessionId, taskId, if (sandboxPassed) "SANDBOX_PASSED" else "SANDBOX_FAILED",
-                digest, if (sandboxPassed) "Isolated repair test passed." else "Isolated repair test failed or was uncertain.",
-                failed = !sandboxPassed)) {
-            return Receipt(Result.PERSISTENCE_FAILED, digest, "Sandbox receipt failed; application is blocked.")
+        // Resume a previously tested plan after process death or an owner-approval pause.
+        // A durable SANDBOX_PASSED receipt is sufficient to skip the isolated test; a failed
+        // test is terminal for this digest and is never silently rerun as though it had passed.
+        val sandboxPassed = when {
+            hasStageReceipt(app, sessionId, taskId, digest, "SANDBOX_FAILED") -> false
+            hasStageReceipt(app, sessionId, taskId, digest, "SANDBOX_PASSED") -> true
+            else -> {
+                val passed = runCatching { sandboxTest() }.getOrDefault(false)
+                val stage = if (passed) "SANDBOX_PASSED" else "SANDBOX_FAILED"
+                val saved = emit(app, sessionId, taskId, stage, digest,
+                    if (passed) "Isolated repair test passed." else "Isolated repair test failed or was uncertain.",
+                    failed = !passed)
+                if (!saved) return Receipt(Result.PERSISTENCE_FAILED, digest,
+                    "Sandbox receipt failed; application is blocked and the test result must be reconciled.")
+                passed
+            }
         }
         if (!sandboxPassed) return Receipt(Result.SANDBOX_FAILED, digest, "Sandbox validation failed; repair was not applied.")
 
