@@ -231,16 +231,16 @@ internal class OrionExecutionCoordinator(
             return OrionCoordinatedResult.Deferred(taskId, "lease_unavailable")
         }
 
-        val currentCheckpoint = AgentCheckpointStore.pendingForTask(context, task.taskId)
+        val currentCheckpoint = OrionTaskCheckpointStore(context).pending(task.taskId)
         val replay = if (currentCheckpoint != null) {
-            if (AgentCheckpointStore.needsRecoveryConfirmationForTask(context, task.taskId)) {
-                AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
+            if (OrionTaskCheckpointStore(context).needsOwner(task.taskId)) {
+                OrionTaskCheckpointStore(context).requireRecovery(task.taskId,
                     "Delegated task $taskId has an unresolved in-flight action. Inspect its real-world outcome before replay.")
                 leases.release(lease)
                 tasks.fail(taskId, retryable = false)
                 return OrionCoordinatedResult.NeedsOwner(taskId, "checkpoint_in_flight_requires_owner_reconciliation")
             }
-            AgentCheckpointStore.resumeInstructionForTask(context, task.taskId)
+            OrionTaskCheckpointStore(context).resumeInstruction(task.taskId)
         } else null
 
         val activeLease = java.util.concurrent.atomic.AtomicReference(lease)
