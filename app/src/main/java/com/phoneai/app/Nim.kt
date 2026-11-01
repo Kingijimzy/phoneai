@@ -818,6 +818,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             // Recompute budgets for every fallback model; context limits can differ within a provider.
             val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
             val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
+            val originalImageCount = OrionProviderContextPolicy.newestUserImageCount(messages)
+            val retainedImageCount = OrionProviderContextPolicy.newestUserImageCount(requestMessages)
+            if (vision && retainedImageCount < originalImageCount) {
+                throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 400)
+            }
             attempts++
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
