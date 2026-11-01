@@ -77,6 +77,29 @@ else:
         self.assertIn("policy rejected", orion_exec.run("print(phone.__class__)", phone_api=FakePhone()))
         self.assertIn("policy rejected", orion_exec.run("print(phone.delete_everything())", phone_api=FakePhone()))
 
+    def test_safe_standard_library_imports(self):
+        code = """import json
+import math
+import re
+from datetime import datetime
+from urllib.parse import urlparse
+print(json.dumps({"sqrt": math.sqrt(81), "match": bool(re.search("ha", "homeassistant")), "host": urlparse("http://192.168.1.2:8123/api").hostname, "year": datetime.now().year}))
+"""
+        out = orion_exec.run(code)
+        self.assertNotIn("error:", out)
+        self.assertIn('"sqrt": 9.0', out)
+        self.assertIn('"match": true', out)
+        self.assertIn('"host": "192.168.1.2"', out)
+
+    def test_safe_asyncio_subset_is_bounded(self):
+        self.assertIn("completed", orion_exec.run("import asyncio\nasyncio.run(asyncio.sleep(0.01))"))
+        self.assertIn("limited to one second", orion_exec.run("import asyncio\nasyncio.run(asyncio.sleep(2))"))
+
+    def test_imports_do_not_open_files_or_network(self):
+        self.assertIn("policy rejected", orion_exec.run("import urllib.request"))
+        self.assertIn("policy rejected", orion_exec.run("import asyncio.subprocess"))
+        self.assertIn("policy rejected", orion_exec.run("from json import *"))
+
 
 if __name__ == "__main__":
     unittest.main()
