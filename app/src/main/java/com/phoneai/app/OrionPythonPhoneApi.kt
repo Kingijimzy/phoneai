@@ -227,7 +227,7 @@ internal class OrionPythonPhoneApi(
     }
 
     /** Persistent WebSocket sessions survive separate Python tool invocations within this app process. */
-    fun ws_connect(url: String): String = OrionPythonWebSocketTransport.connect(context, url)
+    fun ws_connect(url: String): String = OrionPythonWebSocketTransport.connect(context, url)\n\n    fun ws_connect_with_headers(url: String, headersJson: String): String =\n        OrionPythonWebSocketTransport.connect(context, url, headersJson)
 
     fun ws_send(sessionId: String, text: String): String {
         if (readOnly) return error("WebSocket sends are disabled by the read-only autonomy profile")
