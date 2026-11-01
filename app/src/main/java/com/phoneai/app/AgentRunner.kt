@@ -172,7 +172,7 @@ object AgentRunner {
         else buildString {
             append("Delegated active task summaries (read-only; titles only):")
             active.forEach { task ->
-                append("\\n- #").append(task.id).append(" [").append(task.status).append("/")
+                append("\n- #").append(task.id).append(" [").append(task.status).append("/")
                     .append(task.priority).append("] ")
                     .append(AgentPrivacyFilter.safeCommand(task.title).take(120))
             }
