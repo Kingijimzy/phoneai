@@ -99,20 +99,30 @@ internal data class OrionModelCapabilities(
 )
 
 internal object OrionProviderContextPolicy {
-    fun capabilities(providerId: String, modelId: String): OrionModelCapabilities {
+    fun capabilities(providerId: String, modelId: String, transport: String = "chat"): OrionModelCapabilities {
         val p = providerId.lowercase()
         val m = modelId.lowercase()
-        val vision = m.contains("vision") || m.contains("-vl") || m.contains("llava") ||
-            m.contains("pixtral") || m.contains("llama-4") || m.contains("gemini") ||
-            m.contains("claude") || m.contains("gpt-4o") || m.contains("4.1")
-        val audioIn = m.contains("audio") || m.contains("gemini") || m.contains("gpt-4o")
-        val audioOut = m.contains("audio") || m.contains("gemini-live") || m.contains("gpt-4o")
-        val video = m.contains("gemini") || m.contains("video")
+        val isGeminiLive = transport == "gemini_live" && p == "gemini" && m.contains("live")
+        // These flags describe the selected request route, not broad model-family marketing.
+        // Chat-completions routes support images only for known multimodal families. Audio/video
+        // are exposed only on the dedicated Gemini Live transport.
+        val vision = transport == "chat" && (
+            (p == "gemini" && m.startsWith("gemini-")) ||
+            m.startsWith("claude-") ||
+            m.contains("gpt-4o") || m.contains("gpt-4.1") ||
+            m.contains("llama-4") || m.contains("gemma-3") ||
+            m.contains("pixtral") || m.contains("llava") || m.contains("-vl") ||
+            m.contains("vila") || m.contains("paligemma") ||
+            m.contains("nemotron-3.5-super-vl") || m.contains("qwen2.5-vl") ||
+            m.contains("qwen-vl")
+        )
         val context = when {
-            m.contains("gemini-2.5") || m.contains("gemini-3") -> 1_000_000
-            m.contains("claude-3") || m.contains("claude-sonnet-4") || m.contains("claude-opus-4") -> 200_000
+            m.contains("gemini-2.5") || m.contains("gemini-3") ||
+                m.contains("gemini-flash-latest") || m.contains("gemini-flash-lite-latest") -> 1_000_000
+            m.startsWith("claude-") -> 200_000
             m.contains("gpt-4.1") -> 1_047_576
             m.contains("gpt-4o") -> 128_000
+            m.contains("llama-4") -> 128_000
             m.contains("nemotron-3.5") -> 128_000
             m.contains("deepseek-v3") -> 64_000
             m.contains("llama-3.3") -> 128_000
@@ -120,149 +130,130 @@ internal object OrionProviderContextPolicy {
             else -> 16_384
         }
         val output = when {
-            m.contains("gemini-2.5") || m.contains("gemini-3") -> 8_192
-            m.contains("claude") -> 8_192
+            m.contains("gemini") || m.startsWith("claude-") -> 8_192
             m.contains("gpt-4.1") || m.contains("gpt-4o") -> 4_096
             else -> 2_048
         }
-        return OrionModelCapabilities(context, output, vision, audioIn, audioOut, video)
+        return OrionModelCapabilities(
+            context, output, vision,
+            audioInput = isGeminiLive,
+            audioOutput = isGeminiLive,
+            videoInput = isGeminiLive
+        )
     }
 
     fun inputBudget(capabilities: OrionModelCapabilities, requestedOutput: Int): Int =
         (capabilities.contextTokens - requestedOutput.coerceIn(256, capabilities.maxOutputTokens) - 1_024)
             .coerceAtLeast(1_024)
 
-    /** Keep system instructions and the newest user turn; discard oldest history first. */
+    private fun messageCost(item: JSONObject): Int {
+        val content = item.opt("content")
+        val tokens = when (content) {
+            is String -> ContextWindowBudget.estimateTokens(content)
+            is JSONArray -> {
+                var total = 0
+                for (i in 0 until content.length()) {
+                    val part = content.optJSONObject(i)
+                    if (part == null) {
+                        total += ContextWindowBudget.estimateTokens(content.opt(i).toString())
+                    } else when (part.optString("type")) {
+                        "text" -> total += ContextWindowBudget.estimateTokens(part.optString("text"))
+                        "image_url", "input_image" -> total += 1_024
+                        else -> total += ContextWindowBudget.estimateTokens(part.toString())
+                    }
+                }
+                total
+            }
+            else -> ContextWindowBudget.estimateTokens(content?.toString().orEmpty())
+        }
+        return tokens + 12
+    }
+
+    private fun clipped(item: JSONObject, maxTokens: Int): JSONObject {
+        val copy = JSONObject(item.toString())
+        val content = copy.opt("content")
+        val maxChars = maxTokens.coerceAtLeast(1) * 4
+        when (content) {
+            is String -> copy.put("content", content.take(maxChars))
+            is JSONArray -> {
+                val out = JSONArray()
+                var remaining = maxTokens
+                for (i in 0 until content.length()) {
+                    val part = content.optJSONObject(i)
+                    if (part == null) continue
+                    when (part.optString("type")) {
+                        "text" -> {
+                            if (remaining <= 0) continue
+                            val text = part.optString("text")
+                            val keep = minOf(text.length, remaining * 4)
+                            out.put(JSONObject(part.toString()).put("text", text.take(keep)))
+                            remaining -= ContextWindowBudget.estimateTokens(text.take(keep))
+                        }
+                        "image_url", "input_image" -> {
+                            if (remaining >= 1_024) {
+                                out.put(JSONObject(part.toString()))
+                                remaining -= 1_024
+                            }
+                        }
+                        else -> if (remaining > 0) {
+                            out.put(JSONObject(part.toString()))
+                            remaining -= ContextWindowBudget.estimateTokens(part.toString())
+                        }
+                    }
+                }
+                copy.put("content", out)
+            }
+        }
+        return copy
+    }
+
+    /** Keep the complete instruction prefix where possible and always preserve the newest user turn. */
     fun fitMessages(
         messages: JSONArray,
         capabilities: OrionModelCapabilities,
         requestedOutput: Int
     ): JSONArray {
         val budget = inputBudget(capabilities, requestedOutput)
-        val selected = mutableListOf<JSONObject>()
-        var used = 0
         val system = mutableListOf<JSONObject>()
         val conversation = mutableListOf<JSONObject>()
         for (i in 0 until messages.length()) {
             val item = messages.optJSONObject(i)?.let { JSONObject(it.toString()) } ?: continue
-            val role = item.optString("role")
-            if (role == "system" || role == "developer") system.add(item) else conversation.add(item)
+            if (item.optString("role") in setOf("system", "developer")) system.add(item)
+            else conversation.add(item)
         }
-        fun cost(item: JSONObject): Int = ContextWindowBudget.estimateTokens(item.toString()) + 4
+
+        val selected = mutableListOf<JSONObject>()
+        var used = 0
+        var systemRemaining = (budget * 45 / 100).coerceAtLeast(512)
         system.forEach { item ->
-            val c = cost(item)
-            if (used + c <= budget / 2) { selected.add(item); used += c }
+            if (systemRemaining <= 0) return@forEach
+            val cost = messageCost(item)
+            val keep = if (cost <= systemRemaining) item else clipped(item, systemRemaining - 12)
+            val keptCost = messageCost(keep)
+            if (keptCost <= systemRemaining && keptCost > 0) {
+                selected.add(keep)
+                used += keptCost
+                systemRemaining -= keptCost
+            }
         }
-        val newestFirst = conversation.asReversed()
-        val retained = mutableListOf<JSONObject>()
-        for (item in newestFirst) {
-            val c = cost(item)
-            if (used + c > budget) break
-            retained.add(item); used += c
+
+        var remaining = (budget - used).coerceAtLeast(1)
+        val newestUser = conversation.indexOfLast { it.optString("role") == "user" }
+        val retained = mutableListOf<Pair<Int, JSONObject>>()
+        for (index in conversation.indices.reversed()) {
+            val item = conversation[index]
+            val cost = messageCost(item)
+            if (cost <= remaining) {
+                retained.add(index to item)
+                remaining -= cost
+            } else if (index == newestUser && remaining > 24) {
+                val keep = clipped(item, remaining - 12)
+                retained.add(index to keep)
+                remaining -= messageCost(keep).coerceAtMost(remaining)
+            }
+            if (remaining <= 24) break
         }
-        selected.addAll(retained.asReversed())
-        // Never send an empty request because one oversized newest message exceeded the budget.
-        if (selected.isEmpty() && messages.length() > 0) {
-            val newest = messages.optJSONObject(messages.length() - 1)
-            if (newest != null) selected.add(JSONObject(newest.toString()))
-        }
+        selected.addAll(retained.sortedBy { it.first }.map { it.second })
         return JSONArray().also { out -> selected.forEach { out.put(it) } }
-    }
-}
-
-/** MCP tool exposure is capability-scoped; remote servers never receive blanket phone access. */
-internal data class OrionMcpServerGrant(
-    val serverId: String,
-    val enabled: Boolean,
-    val allowedTools: Set<String>,
-    val grantedAt: Long,
-    val expiresAt: Long = 0L
-) {
-    fun permits(toolName: String, now: Long = System.currentTimeMillis()): Boolean =
-        enabled && (expiresAt == 0L || expiresAt > now) && toolName in allowedTools
-}
-
-internal object OrionMcpPolicy {
-    fun validateServerId(value: String): Boolean =
-        value.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))
-
-    fun validateToolName(value: String): Boolean =
-        value.matches(Regex("[A-Za-z0-9][A-Za-z0-9._/-]{0,127}"))
-
-    fun safeToolSubset(grant: OrionMcpServerGrant, discoveredTools: List<String>): List<String> =
-        discoveredTools.filter { validateToolName(it) && grant.permits(it) }.distinct().take(100)
-
-    /** Mutating MCP tools always pass through the same explicit action confirmation policy. */
-    fun requiresOwnerConfirmation(toolName: String, annotationsReadOnly: Boolean): Boolean =
-        !annotationsReadOnly || Regex("(?i)(delete|write|send|publish|transfer|trade|purchase|execute|shell)").containsMatchIn(toolName)
-}
-
-
-/** Version history and expiry metadata are separate from the active memory row for migration safety. */
-internal object OrionMemoryLifecycle {
-    private const val PREFS = "orion_memory_lifecycle_v1"
-    private const val HISTORY = "orion_memory_versions_v1"
-
-    fun setExpiry(context: Context, memoryId: Int, expiresAt: Long): Boolean {
-        if (memoryId <= 0 || expiresAt < 0L) return false
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putLong("expiry_$memoryId", expiresAt).apply()
-        return true
-    }
-
-    fun expiryFor(context: Context, memoryId: Int): Long =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("expiry_$memoryId", 0L)
-
-    fun isActive(context: Context, memoryId: Int, now: Long = System.currentTimeMillis()): Boolean {
-        val expiry = expiryFor(context, memoryId)
-        return expiry == 0L || expiry > now
-    }
-
-    fun archiveBeforeChange(context: Context, memory: Memory, reason: String): Boolean {
-        val prefs = context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
-        val history = runCatching { JSONArray(prefs.getString("entries", "[]") ?: "[]") }.getOrDefault(JSONArray())
-        if (history.length() >= 500) history.remove(0)
-        history.put(JSONObject()
-            .put("memoryId", memory.id)
-            .put("category", memory.category)
-            .put("text", memory.text)
-            .put("capturedAt", System.currentTimeMillis())
-            .put("createdAt", memory.created)
-            .put("updatedAt", memory.updated)
-            .put("sourceRole", memory.sourceRole)
-            .put("confidence", MemoryGovernancePolicy.normalizeConfidence(memory.confidence))
-            .put("sensitivity", memory.sensitivity)
-            .put("reviewStatus", memory.reviewStatus)
-            .put("reason", reason.take(120)))
-        return prefs.edit().putString("entries", history.toString()).commit()
-    }
-
-    fun history(context: Context, memoryId: Int, includeSensitive: Boolean = false): List<JSONObject> {
-        val history = runCatching {
-            JSONArray(context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE).getString("entries", "[]") ?: "[]")
-        }.getOrDefault(JSONArray())
-        return (0 until history.length()).mapNotNull { history.optJSONObject(it) }
-            .filter { it.optInt("memoryId") == memoryId }
-            .filter { includeSensitive || it.optString("sensitivity") != "sensitive" }
-            .map { JSONObject(it.toString()) }
-    }
-
-    fun clearExpiry(context: Context, memoryId: Int) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("expiry_$memoryId").apply()
-    }
-
-    fun forgetHistory(context: Context, memoryId: Int) {
-        val prefs = context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
-        val history = runCatching { JSONArray(prefs.getString("entries", "[]") ?: "[]") }.getOrDefault(JSONArray())
-        val kept = JSONArray()
-        for (i in 0 until history.length()) {
-            val item = history.optJSONObject(i) ?: continue
-            if (item.optInt("memoryId") != memoryId) kept.put(item)
-        }
-        prefs.edit().putString("entries", kept.toString()).apply()
-    }
-
-    fun clearHistory(context: Context) {
-        context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE).edit().remove("entries").apply()
     }
 }
