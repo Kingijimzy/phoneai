@@ -40,7 +40,7 @@ internal object OrionRepairLifecycle {
         context: Context, sessionId: String, taskId: String,
         finding: OrionDiagnosticFinding, proposal: OrionRepairProposal, planDigest: String,
         ownerApprovalDigest: String?, sandboxTest: () -> Boolean, apply: () -> String?,
-        verify: () -> Boolean, rollback: () -> Boolean
+        verify: () -> Boolean, rollback: () -> Boolean, verifyRollback: () -> Boolean
     ): Receipt {
         val app = context.applicationContext
         val digest = planDigest.lowercase()
@@ -122,14 +122,16 @@ internal object OrionRepairLifecycle {
             return Receipt(Result.PERSISTENCE_FAILED, digest,
                 "Verification failed and rollback intent could not be persisted; manual intervention required.")
         }
-        val rolledBack = runCatching { rollback() }.getOrDefault(false)
-        val rollbackSaved = emit(app, sessionId, taskId, if (rolledBack) "ROLLED_BACK" else "ROLLBACK_FAILED",
-            digest, if (rolledBack) "Rollback callback completed; verify restored state separately."
-            else "Rollback failed or was uncertain; manual intervention required.", failed = !rolledBack)
+        val rollbackInvoked = runCatching { rollback() }.getOrDefault(false)
+        // Callback completion is not proof of restoration; require a separate read-only check.
+        val restored = rollbackInvoked && runCatching { verifyRollback() }.getOrDefault(false)
+        val rollbackSaved = emit(app, sessionId, taskId, if (restored) "ROLLED_BACK" else "ROLLBACK_FAILED",
+            digest, if (restored) "Rollback completed and original state independently verified."
+            else "Rollback failed or was uncertain; manual intervention required.", verified = restored, failed = !restored)
         return when {
             !rollbackSaved -> Receipt(Result.PERSISTENCE_FAILED, digest, "Rollback outcome could not be persisted.")
-            rolledBack -> Receipt(Result.ROLLED_BACK, digest,
-                "Verification failed; rollback callback completed. Independently confirm restored state.")
+            restored -> Receipt(Result.ROLLED_BACK, digest,
+                "Verification failed; rollback completed and restored state was independently verified.")
             else -> Receipt(Result.ROLLBACK_FAILED, digest, "Rollback failed or was uncertain; manual intervention required.")
         }
     }
