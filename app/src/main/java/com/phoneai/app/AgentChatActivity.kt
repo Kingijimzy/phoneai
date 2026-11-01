@@ -617,7 +617,7 @@ class AgentChatActivity : Activity() {
     }
 
     private fun pickImage() {
-        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         try { startActivityForResult(pick, REQUEST_IMAGE) } catch (_: Exception) { Toast.makeText(this, "No image picker is available.", Toast.LENGTH_LONG).show() }
     }
 
@@ -625,6 +625,8 @@ class AgentChatActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_IMAGE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        val readGrant = (data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0
+        if (readGrant) runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         Thread {
             val encoded = try { encodeImage(uri) } catch (e: Exception) { null }
             postUiIfAlive {
