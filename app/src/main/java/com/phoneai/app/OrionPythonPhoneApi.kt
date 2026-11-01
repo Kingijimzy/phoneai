@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.BatteryManager
-import android.os.Build
 import android.os.SystemClock
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
@@ -20,7 +19,10 @@ import java.util.concurrent.TimeUnit
  * Narrow Python-to-Android bridge. Every method is explicit, read/write-scoped and rechecks
  * consent at call time. The Python AST admits only phone.<registered_method>() calls.
  */
-internal class OrionPythonPhoneApi(private val context: Context) {
+internal class OrionPythonPhoneApi(
+    private val context: Context,
+    private val confirm: (String) -> Boolean = { false }
+) {
     private val workspace = OrionPythonWorkspace(context)
 
     fun battery(): String {
@@ -43,8 +45,7 @@ internal class OrionPythonPhoneApi(private val context: Context) {
         if (!fine && !coarse) return error("Android location permission is not granted")
         return try {
             val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            val providers = manager.getProviders(true)
-            val location = providers.mapNotNull { provider ->
+            val location = manager.getProviders(true).mapNotNull { provider ->
                 runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
             }.maxByOrNull { it.time } ?: return error("no last-known location is available; no background location request was started")
             JSONObject().put("latitude", (location.latitude * 1000.0).toInt() / 1000.0)
@@ -95,28 +96,42 @@ internal class OrionPythonPhoneApi(private val context: Context) {
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
-        val root = service.rootInActiveWindow ?: return error("there is no active accessibility window")
-        val pkg = root.packageName?.toString().orEmpty()
-        if (SafetyGate.isSensitiveApp(pkg, pkg)) return error("screen reading is blocked on a sensitive app")
-        val rows = JSONArray()
-        val queue = ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>()
-        queue.add(root)
-        var visited = 0
-        while (queue.isNotEmpty() && visited < 80) {
-            val node = queue.removeFirst()
-            visited++
-            val text = (node.text?.toString() ?: node.contentDescription?.toString()).orEmpty().trim()
-            if (node.isVisibleToUser && text.isNotBlank()) {
-                val rect = android.graphics.Rect()
-                node.getBoundsInScreen(rect)
-                rows.put(JSONObject().put("text", text.take(140))
-                    .put("clickable", node.isClickable)
-                    .put("bounds", JSONArray().put(rect.left).put(rect.top).put(rect.right).put(rect.bottom)))
-            }
-            for (i in 0 until minOf(node.childCount, 20)) node.getChild(i)?.let { queue.add(it) }
-        }
-        return JSONObject().put("package", pkg.take(100)).put("elements", rows)
-            .put("truncated", queue.isNotEmpty()).toString()
+        // Reuse the production screen reader: it filters sensitive surfaces and performs bounded
+        // accessibility/OCR extraction instead of exposing raw AccessibilityNodeInfo objects.
+        return service.readScreen()
+    }
+
+    fun ui_tap_text(text: String): String {
+        val target = text.trim().take(120)
+        if (target.isBlank()) return error("visible text target is required")
+        val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
+        if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
+            return error("screen context grant is not enabled")
+        if (!confirm("Python requests an accessibility tap on the visible text: \"$target\". Continue?"))
+            return error("owner declined or did not approve the UI action")
+        return Tools(service).clickText(target)
+    }
+
+    fun ui_tap(x: Double, y: Double): String {
+        if (!x.isFinite() || !y.isFinite() || x < 0 || y < 0 || x > 20_000 || y > 20_000)
+            return error("tap coordinates are invalid")
+        val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
+        if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
+            return error("screen context grant is not enabled")
+        if (!confirm("Python requests an accessibility tap at screen coordinates ${x.toInt()}, ${y.toInt()}. Continue?"))
+            return error("owner declined or did not approve the UI action")
+        return service.tap(x.toFloat(), y.toFloat())
+    }
+
+    fun ui_swipe(x1: Double, y1: Double, x2: Double, y2: Double): String {
+        val values = listOf(x1, y1, x2, y2)
+        if (values.any { !it.isFinite() || it < 0 || it > 20_000 }) return error("swipe coordinates are invalid")
+        val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
+        if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
+            return error("screen context grant is not enabled")
+        if (!confirm("Python requests an accessibility swipe from (${x1.toInt()}, ${y1.toInt()}) to (${x2.toInt()}, ${y2.toInt()}). Continue?"))
+            return error("owner declined or did not approve the UI action")
+        return service.swipe(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), 350L)
     }
 
     fun fs_list(): String = workspace.list()
@@ -146,18 +161,33 @@ internal class OrionPythonPhoneApi(private val context: Context) {
         finally { output.delete() }
     }
 
-    /** GET only. Hosts must be explicitly owner-granted and the NETWORK scope must remain active. */
-    fun http_get(url: String): String {
+    /** GET is autonomous for explicitly owner-granted hosts; POST requires per-call approval unless the host has a write grant. */
+    fun http_get(url: String): String = request(url, "GET", "", requireApproval = false)
+
+    fun http_post(url: String, body: String): String {
+        if (body.length > 32_000) return error("HTTP body is limited to 32 KB")
+        return request(url, "POST", body, requireApproval = true)
+    }
+
+    private fun request(url: String, method: String, body: String, requireApproval: Boolean): String {
         val endpoint = OrionPythonNetworkPolicy.validate(context, url)
             ?: return error("network request blocked: grant NETWORK and explicitly allow this host first")
+        if (requireApproval && !endpoint.allowWrites &&
+            !confirm("Python requests an HTTP POST to owner-approved host ${endpoint.host}. Send this external request?"))
+            return error("owner approval is required for HTTP POST to this host")
         var connection: HttpURLConnection? = null
         return try {
             connection = URL(endpoint.uri.toString()).openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
+            connection.requestMethod = method
             connection.connectTimeout = 5_000
             connection.readTimeout = 8_000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json, text/plain, */*")
+            if (method == "POST") {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val bytes = stream?.use { input ->
