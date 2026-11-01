@@ -40,7 +40,7 @@ class OrionMcpProtocolTest {
             OrionMcpProtocol.getPrompt("../arbitrary")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            OrionMcpProtocol.listPrompts("bad\\ncursor")
+            OrionMcpProtocol.listPrompts("bad\ncursor")
         }
 
         val resourceResult = JSONObject().put("contents", org.json.JSONArray().put(
