@@ -58,7 +58,7 @@ internal class OrionSocketForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle("Orion live connection")
             .setContentText("An owner-approved real-time network session is active.")
             .setCategory(Notification.CATEGORY_SERVICE)
