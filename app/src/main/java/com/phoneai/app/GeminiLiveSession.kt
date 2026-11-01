@@ -196,7 +196,7 @@ internal class GeminiLiveSession(
             val activeSession = ChatHistoryStore.activeSessionId(appContext).orEmpty()
             val evidence = OrionMultimodalEvidenceStore.promptBlock(appContext, activeSession)
             if (evidence.isNotBlank()) {
-                append("\\n\\n")
+                append("\n\n")
                 append(evidence.take(1_800))
             }
             val motion = OrionSensorContextStore.summary(appContext)
