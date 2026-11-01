@@ -233,7 +233,7 @@ internal class OrionExecutionCoordinator(
 
         val currentCheckpoint = AgentCheckpointStore.pendingForTask(context, task.taskId)
         val replay = if (currentCheckpoint != null) {
-            if (AgentCheckpointStore.needsRecoveryConfirmation(context)) {
+            if (AgentCheckpointStore.needsRecoveryConfirmationForTask(context, task.taskId)) {
                 AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
                     "Delegated task $taskId has an unresolved in-flight action. Inspect its real-world outcome before replay.")
                 leases.release(lease)
@@ -285,7 +285,7 @@ internal class OrionExecutionCoordinator(
                 }
             }
         } catch (_: Exception) {
-            AgentCheckpointStore.recoveryRequired(context,
+            AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
                 "Delegated task $taskId threw while executing. The action outcome is unknown; inspect before replay.")
             OrionCoordinatedResult.Deferred(taskId, "worker_exception_outcome_unknown")
         } finally {
