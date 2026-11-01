@@ -50,7 +50,7 @@
 - Grants are revocable, expire after 30 days by default, and are foreground-only.
 - Motion is the first active sensor collector: accelerometer/gyroscope samples are reduced to coarse movement hints while the dashboard is foregrounded. Raw vectors are not persisted.
 - The last coarse hint is retained for at most 15 minutes and supplied to the central brain only while the MOTION grant remains active. Revoking motion clears the cached hint.
-- The dashboard labels unimplemented collectors honestly. Device state, passive location, passive screen capture, passive microphone, app usage and notification monitoring are not enabled by these grant switches. Manual screen reads and explicit voice sessions remain governed by their own Android/service permissions and the optional evidence-index grant.
+- The dashboard labels collection modes honestly. Device state is an on-demand battery/network/thermal snapshot; location uses only a recent last-known approximate fix when Android location permission is granted; app usage calculates foreground durations from recent UsageEvents only when Android Usage Access is granted; safe notification summaries are in-memory and require Android Notification access. None of these starts an always-on location, screen or microphone tracker. Manual screen reads and explicit voice sessions remain governed by their own Android/service permissions and the optional evidence-index grant.
 - Routine reminder scope is separate; revoking it cancels scheduled Orion routine reminder work.
 
 ### Multimodal continuity
@@ -78,3 +78,5 @@
 - Gemini Live now uses the same provider-aware context budget for its system instruction and receives the active conversation's evidence index plus any consented short-lived motion summary. Its generation output remains capped at 1,024 tokens; video remains unsupported by the PhoneAI route.
 
 - The existing safe notification listener is now gated by the separate NOTIFICATIONS grant as well as Android Notification access. Its already-filtered, in-memory summaries can enter the central brain only while that grant is active; revocation clears the in-memory list and blocks notification actions. Sensitive financial/authentication notifications remain excluded.
+
+- The DEVICE_STATE, LOCATION and APP_USAGE grants now feed bounded on-demand snapshots into the central brain. Location is rounded to approximately 1 km and discarded if older than ten minutes. App usage is calculated from the last 30 minutes of foreground/background events, excludes sensitive apps and is not persisted.
