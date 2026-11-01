@@ -61,6 +61,22 @@ else:
         out = orion_exec.run("print('x' * 4000)")
         self.assertLessEqual(len(out), 5000)
 
+    def test_registered_phone_capabilities_are_available_only_to_direct_runner(self):
+        class FakePhone:
+            def battery(self):
+                return '{"level":77}'
+
+        self.assertIn("77", orion_exec.run("print(phone.battery())", phone_api=FakePhone()))
+        self.assertIn("policy rejected", orion_exec.run_extension("RESULT = phone.battery()", "{}"))
+
+    def test_phone_attribute_escape_and_unregistered_methods_are_rejected(self):
+        class FakePhone:
+            def battery(self):
+                return "ok"
+
+        self.assertIn("policy rejected", orion_exec.run("print(phone.__class__)", phone_api=FakePhone()))
+        self.assertIn("policy rejected", orion_exec.run("print(phone.delete_everything())", phone_api=FakePhone()))
+
 
 if __name__ == "__main__":
     unittest.main()
