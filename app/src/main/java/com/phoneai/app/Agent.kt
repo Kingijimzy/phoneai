@@ -1018,6 +1018,20 @@ RESPONSE QUALITY AND FORMAT:
                 transcript += "ai" to safeAnswer
                 ChatHistoryStore.save(svc, transcript)
             }
+            if (OrionSensorConsent.read(svc, OrionSensorScope.MICROPHONE).active()) {
+                val session = ChatHistoryStore.activeSessionId(svc)
+                listOf(command to "user", safeAnswer to "assistant").forEach { (text, role) ->
+                    OrionMultimodalEvidenceStore.record(
+                        svc, session,
+                        modality = OrionMultimodalEvidenceStore.Modality.AUDIO_TRANSCRIPT,
+                        source = "standard_voice_final_transcript",
+                        digest = java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(text.toByteArray(Charsets.UTF_8))
+                            .joinToString("") { "%02x".format(it) },
+                        summary = "$role voice transcript is available in the shared conversation history; raw audio was not stored."
+                    )
+                }
+            }
         }
         ui.say(safeAnswer)
     }
