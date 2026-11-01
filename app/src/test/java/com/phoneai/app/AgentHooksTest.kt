@@ -129,6 +129,30 @@ class AgentHooksTest {
         assertFalse(decision.allowed)
     }
 
+    @Test fun durableMemoryRetrievalIsNotActionCompletionEvidence() {
+        val event = OrionEvidenceLedger.Event(
+            "memory-1", "task", "memory", "retrieve_before_act",
+            OrionEvidenceLedger.Outcome.CONTEXT_RETRIEVED, 1L, 2L, "objective-hash",
+            "Objective-scoped memory context retrieved; source=persistent_memory_context; chars=420."
+        )
+        assertFalse(
+            "Memory retrieval must not satisfy even a harmless action completion gate",
+            AgentHooks.completionDecision("Open Settings", emptyList(), listOf(event)).allowed
+        )
+        assertFalse(
+            "Memory retrieval must never satisfy a consequential completion gate",
+            AgentHooks.completionDecision("Send a message", emptyList(), listOf(event)).allowed
+        )
+        val verified = OrionEvidenceLedger.Event(
+            "action-1", "task", "device", "open_app",
+            OrionEvidenceLedger.Outcome.VERIFIED, 2L, 3L, "action-hash", "app visibly opened"
+        )
+        assertTrue(
+            "A separate verified action event remains valid alongside retrieval metadata",
+            AgentHooks.completionDecision("Open Settings", emptyList(), listOf(event, verified)).allowed
+        )
+    }
+
     @Test fun durableFailureAndRecoveryEventsNeverCountAsSuccess() {
         val events = listOf(
             OrionEvidenceLedger.Event("3", "task", "mcp", "mcp_call",
