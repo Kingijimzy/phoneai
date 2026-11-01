@@ -117,8 +117,16 @@ internal object OrionPythonWebSocketTransport {
         }
     }
 
-    fun send(context: Context, id: String, data: String, binaryBase64: Boolean = false): String {
+    fun send(
+        context: Context,
+        id: String,
+        data: String,
+        binaryBase64: Boolean = false,
+        confirm: (String) -> Boolean = { false }
+    ): String {
         val session = authorized(context, id) ?: return error("WebSocket session is missing, closed, or its network grant was revoked")
+        if (!session.allowWrites && !confirm("Send data over the owner-approved WebSocket host ${session.host}?"))
+            return error("owner approval is required to send WebSocket data to this host")
         if (data.toByteArray(Charsets.UTF_8).size > MAX_FRAME_BYTES * 2) return error("outgoing frame exceeds the 64 KiB limit")
         val socket = session.socket ?: return error("WebSocket is not connected")
         val sent = if (binaryBase64) {
