@@ -105,6 +105,29 @@ parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps(
         self.assertEqual(out, "4\n")
         self.assertIn("quantified groups", orion_exec.run('import re\nprint(re.search("(a+)+$", "a" * 100))'))
 
+    def test_accessibility_status_and_websocket_methods_are_registered_phone_calls(self):
+        class FakePhone:
+            def accessibility_status(self):
+                return '{"service_connected": true}'
+            def ws_connect(self, url):
+                return '{"session_id": "test-session"}'
+            def ws_send(self, session_id, text):
+                return '{"sent": true}'
+            def ws_receive(self, session_id, timeout_ms):
+                return '{"type": "text", "data": "ok"}'
+            def ws_close(self, session_id):
+                return '{"closed": true}'
+        code = """print(phone.accessibility_status())
+print(phone.ws_connect("wss://example.test/live"))
+print(phone.ws_send("test-session", "hello"))
+print(phone.ws_receive("test-session", 100))
+print(phone.ws_close("test-session"))
+"""
+        output = orion_exec.run(code, phone_api=FakePhone())
+        self.assertNotIn("error:", output)
+        self.assertIn('"service_connected": true', output)
+        self.assertIn('"type": "text"', output)
+
 
 if __name__ == "__main__":
     unittest.main()
