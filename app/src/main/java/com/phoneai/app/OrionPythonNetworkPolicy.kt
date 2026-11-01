@@ -71,6 +71,9 @@ internal object OrionPythonNetworkPolicy {
     private fun isLocalHost(host: String): Boolean {
         if (host == "localhost" || host.endsWith(".localhost")) return true
         val parts = host.split('.')
-        return parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 } && parts[0].toIntOrNull() == 127
+        return parts.size == 4 && parts.all { label ->
+            val octet = label.toIntOrNull()
+            octet != null && octet in 0..255
+        } && parts[0].toIntOrNull() == 127
     }
 }
