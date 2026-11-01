@@ -83,7 +83,7 @@ internal data class OrionTaskEnvelope(
         private const val MAX_SCHEMA_VERSION = 32
         private const val MAX_CLOCK_SKEW_MS = 5 * 60 * 1000L
         private val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-        private val LABEL = Regex("^[A-Za-z0-9][A-Za-z0-9._:/ -]{0,99}$")
+        private val LABEL = Regex("^[A-Za-z0-9][A-Za-z0-9._:/ _-]{0,99}$")
         private val HEX = Regex("^[a-fA-F0-9]+$")
 
         private fun isSafeId(value: String) = ID.matches(value)
