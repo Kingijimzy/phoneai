@@ -63,8 +63,14 @@ internal object OrionPythonNetworkPolicy {
         val host = value.trim().lowercase().trimEnd('.')
         if (host.length !in 1..253 || host.contains('/') || host.contains('@') ||
             !host.matches(Regex("^[a-z0-9.-]+$")) || host.startsWith('.') || host.endsWith('.')) return null
+        if (host.split('.').any { label ->
+                label.isEmpty() || label.length > 63 || label.startsWith('-') || label.endsWith('-')
+            }) return null
         return host
     }
-    private fun isLocalHost(host: String): Boolean =
-        host == "localhost" || host.endsWith(".localhost") || host.startsWith("127.") || host == "::1"
+    private fun isLocalHost(host: String): Boolean {
+        if (host == "localhost" || host.endsWith(".localhost")) return true
+        val parts = host.split('.')
+        return parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 } && parts[0].toIntOrNull() == 127
+    }
 }
