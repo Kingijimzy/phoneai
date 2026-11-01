@@ -17,10 +17,52 @@ internal object OrionMcpProtocol {
 
     fun initializedNotification(): JSONObject = notification("notifications/initialized", JSONObject())
 
-    fun listTools(cursor: String? = null): JSONObject {
+    fun listTools(cursor: String? = null): JSONObject = paginatedRequest("tools/list", cursor)
+
+    /** MCP resource discovery/read are read-only protocol operations. */
+    fun listResources(cursor: String? = null): JSONObject = paginatedRequest("resources/list", cursor)
+
+    fun readResource(uri: String): JSONObject {
+        require(validResourceUri(uri)) { "Invalid MCP resource URI." }
+        return request("resources/read", JSONObject().put("uri", uri))
+    }
+
+    /** Prompt discovery is read-only; prompt arguments are data, never executable instructions. */
+    fun listPrompts(cursor: String? = null): JSONObject = paginatedRequest("prompts/list", cursor)
+
+    fun getPrompt(name: String, arguments: JSONObject = JSONObject()): JSONObject {
+        require(validatePromptName(name)) { "Invalid MCP prompt name." }
+        require(arguments.toString().length <= 8_000) { "MCP prompt arguments exceed 8 KB." }
+        return request("prompts/get", JSONObject().put("name", name).put("arguments", arguments))
+    }
+
+    fun resourceContents(result: JSONObject): JSONArray =
+        result.optJSONArray("contents") ?: JSONArray()
+
+    fun prompts(result: JSONObject): JSONArray =
+        result.optJSONArray("prompts") ?: JSONArray()
+
+    fun tools(result: JSONObject): JSONArray = result.optJSONArray("tools") ?: JSONArray()
+
+    private fun paginatedRequest(method: String, cursor: String?): JSONObject {
         val params = JSONObject()
-        if (!cursor.isNullOrBlank()) params.put("cursor", cursor)
-        return request("tools/list", params)
+        if (!cursor.isNullOrBlank()) {
+            require(cursor.length <= 2_000 && cursor.none { it.isISOControl() }) { "Invalid MCP pagination cursor." }
+            params.put("cursor", cursor)
+        }
+        return request(method, params)
+    }
+
+    private fun validatePromptName(name: String): Boolean =
+        name.length in 1..128 && name.matches(Regex("^[A-Za-z0-9][A-Za-z0-9_.:/-]*$"))
+
+    private fun validResourceUri(uri: String): Boolean {
+        if (uri.length !in 1..2_000 || uri.any { it.isISOControl() }) return false
+        return runCatching {
+            val parsed = java.net.URI(uri)
+            parsed.scheme?.matches(Regex("^[A-Za-z][A-Za-z0-9+.-]{0,31}$")) == true &&
+                parsed.rawUserInfo == null && parsed.rawFragment == null
+        }.getOrDefault(false)
     }
 
     fun callTool(name: String, arguments: JSONObject): JSONObject {
@@ -43,5 +85,4 @@ internal object OrionMcpProtocol {
         return response.optJSONObject("result") ?: JSONObject()
     }
 
-    fun tools(result: JSONObject): JSONArray = result.optJSONArray("tools") ?: JSONArray()
 }
