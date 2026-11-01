@@ -206,6 +206,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
         scheduleSoulWatchTick()
+        OrionProactiveWork.ensureScheduled(this)
         showBubble()
         startWake()
     }
