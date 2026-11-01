@@ -44,13 +44,28 @@ _ALLOWED_NODES = (
     ast.ListComp, ast.comprehension,
 )
 
-def _validate(tree):
+_PHONE_METHODS = {
+    "battery", "location", "notifications", "contacts", "accessibility_screen",
+    "fs_list", "fs_read", "fs_write", "shell", "http_get",
+}
+
+def _validate(tree, allow_phone=False):
     nodes = list(ast.walk(tree))
     if len(nodes) > MAX_NODES:
         raise Rejected("script is too complex")
     loops = 0
+    allowed_phone_attributes = {
+        id(node.func) for node in nodes
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
     for node in nodes:
-        if not isinstance(node, _ALLOWED_NODES):
+        if isinstance(node, ast.Attribute):
+            valid = (allow_phone and id(node) in allowed_phone_attributes and
+                     isinstance(node.value, ast.Name) and node.value.id == "phone" and
+                     node.attr in _PHONE_METHODS)
+            if not valid:
+                raise Rejected("only registered phone.<capability>() calls are allowed")
+        elif not isinstance(node, _ALLOWED_NODES):
             raise Rejected("unsupported Python syntax: " + type(node).__name__)
         if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
             if abs(node.value).bit_length() > MAX_INT_BITS:
@@ -66,8 +81,12 @@ def _validate(tree):
             if node.value.value < 0 or node.value.value > 16:
                 raise Rejected("integer exponents must be between 0 and 16")
         if isinstance(node, ast.Call):
-            if not isinstance(node.func, ast.Name) or node.func.id not in _SAFE:
-                raise Rejected("only approved built-in functions may be called")
+            safe_builtin = isinstance(node.func, ast.Name) and node.func.id in _SAFE
+            safe_phone = (allow_phone and isinstance(node.func, ast.Attribute) and
+                          isinstance(node.func.value, ast.Name) and node.func.value.id == "phone" and
+                          node.func.attr in _PHONE_METHODS)
+            if not (safe_builtin or safe_phone):
+                raise Rejected("only approved built-ins and registered phone capabilities may be called")
             if node.keywords:
                 raise Rejected("keyword arguments are not supported")
         if isinstance(node, ast.Name) and node.id.startswith("_"):
@@ -146,9 +165,9 @@ class _Guard(ast.NodeTransformer):
             return ast.copy_location(ast.Assign(targets=[node.target], value=self._call(name, load, node.value)), node)
         return node
 
-def _prepare(source):
+def _prepare(source, allow_phone=False):
     tree = ast.parse(source, mode="exec")
-    _validate(tree)
+    _validate(tree, allow_phone=allow_phone)
     tree = ast.fix_missing_locations(_Guard().visit(tree))
     return compile(tree, "<orion-approved-python>", "exec")
 
@@ -158,7 +177,7 @@ def _scope(extra=None):
         scope.update(extra)
     return scope
 
-def run(source, max_source=MAX_SOURCE):
+def run(source, max_source=MAX_SOURCE, phone_api=None):
     if not isinstance(source, str):
         return "error: Python code must be text"
     if not isinstance(max_source, int) or max_source < MAX_SOURCE or max_source > 16000:
@@ -168,9 +187,9 @@ def run(source, max_source=MAX_SOURCE):
     if not source.strip():
         return "error: Python code is required"
     try:
-        code = _prepare(source)
+        code = _prepare(source, allow_phone=phone_api is not None)
         output = io.StringIO()
-        scope = _scope()
+        scope = _scope({"phone": phone_api} if phone_api is not None else None)
         with contextlib.redirect_stdout(output):
             exec(code, scope, scope)
         result = output.getvalue()
