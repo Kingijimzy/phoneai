@@ -1123,7 +1123,7 @@ class Tools(
     }
 
     fun pythonExec(code: String): String =
-        OrionPythonRuntime.execute(svc, code, explicitlyApproved = true)
+        OrionPythonRuntime.execute(svc, code)
 
     fun shell(command: String, where: String): String =
         if (command.isBlank()) "error: command is required"
