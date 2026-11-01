@@ -66,4 +66,23 @@ class OrionDelegatedMemoryIntegrationTest {
         assertTrue(prompt.contains("The project uses Kotlin."))
         assertFalse(prompt.contains("Use short checklists."))
     }
+    @Test fun plannerDelegationReceivesSanitizedTaskTitlesButNotFreeFormDetails() {
+        val marker = "delegated-planner-${System.nanoTime()}"
+        val task = TaskStore.add(
+            context,
+            "Review $marker",
+            "private_detail_marker api_key=should-not-leak",
+            "normal"
+        )
+        assertNotNull(task)
+
+        val planner = requireNotNull(AgentProfiles.find("planner"))
+        val manifest = OrionAgentDelegation.create(planner, "parent-task", "Plan the next work")
+        val prompt = AgentRunner.systemPrompt(context, planner, "next work", manifest)
+
+        assertTrue(prompt.contains("Review $marker"))
+        assertFalse(prompt.contains("private_detail_marker"))
+        assertFalse(prompt.contains("should-not-leak"))
+    }
+
 }
