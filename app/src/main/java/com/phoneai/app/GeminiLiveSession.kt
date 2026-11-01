@@ -193,6 +193,17 @@ internal class GeminiLiveSession(
                     append("\n")
                 }
             }
+            val activeSession = ChatHistoryStore.activeSessionId(appContext).orEmpty()
+            val evidence = OrionMultimodalEvidenceStore.promptBlock(appContext, activeSession)
+            if (evidence.isNotBlank()) {
+                append("\\n\\n")
+                append(evidence.take(1_800))
+            }
+            val motion = OrionSensorContextStore.summary(appContext)
+            if (motion.isNotBlank()) {
+                append("\\n\\n")
+                append(motion.take(240))
+            }
             val languagePolicy = Prefs.languagePolicy(appContext)
             if (languagePolicy.isNotBlank()) {
                 append("Respect the user's saved language policy: ")
@@ -200,6 +211,14 @@ internal class GeminiLiveSession(
                 append(". ")
             }
         }
+        val liveCapabilities = OrionProviderContextPolicy.capabilities("gemini", GeminiLivePolicy.MODEL, "gemini_live")
+        require(liveCapabilities.audioInput && liveCapabilities.audioOutput) {
+            "The configured Gemini Live model is not verified for bidirectional audio."
+        }
+        val boundedInstructions = ContextWindowBudget.pack(
+            listOf(instructions),
+            OrionProviderContextPolicy.inputBudget(liveCapabilities, 1_024).coerceAtMost(40_000)
+        ).text
         val generationConfig = JSONObject()
             .put("responseModalities", JSONArray().put("AUDIO"))
             .put("maxOutputTokens", 1024)
@@ -216,7 +235,7 @@ internal class GeminiLiveSession(
         return JSONObject()
             .put("model", GeminiLivePolicy.MODEL)
             .put("generationConfig", generationConfig)
-            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instructions))))
+            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", boundedInstructions))))
             .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection", activityDetectionConfig()))
             .put("inputAudioTranscription", JSONObject())
             .put("outputAudioTranscription", JSONObject())
