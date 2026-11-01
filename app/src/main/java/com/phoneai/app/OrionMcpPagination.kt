@@ -43,7 +43,7 @@ internal object OrionMcpPagination {
                     truncated = true
                     break
                 }
-                rows.optJSONObject(index)?.let(items::put)
+                rows.optJSONObject(index)?.let { items.put(it) }
             }
             val next = validCursor(page.optString("nextCursor").takeIf { page.has("nextCursor") && !page.isNull("nextCursor") })
             if (next == null) break
