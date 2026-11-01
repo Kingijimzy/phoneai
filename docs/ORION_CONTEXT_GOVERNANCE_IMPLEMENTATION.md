@@ -82,3 +82,5 @@
 - The DEVICE_STATE, LOCATION and APP_USAGE grants now feed bounded on-demand snapshots into the central brain. Location is rounded to approximately 1 km and discarded if older than ten minutes. App usage is calculated from the last 30 minutes of foreground/background events, excludes sensitive apps and is not persisted.
 
 - Memory UI now exposes archived version history (previous text, timestamp, provenance, confidence, review status and supersede/edit reason) and expiry choices (never, 7/30/90 days, one year). Expired memories remain in local storage but are excluded from prompt context until expiry is cleared or changed.
+
+- Approved, sufficiently confident routine memories now appear in a bounded central-brain suggestion block. The Memory UI lets the owner schedule once, daily or weekly reminders by choosing the date/time and recurrence. Scheduling requires the separate ROUTINE_REMINDERS grant and Android notifications enabled; reminders are cancelled on revocation, memory deletion, or when the routine is no longer eligible.
