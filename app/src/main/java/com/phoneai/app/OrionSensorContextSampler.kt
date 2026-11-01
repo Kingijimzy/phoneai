@@ -61,7 +61,9 @@ internal class OrionSensorContextSampler(
             accelerationMagnitude in 8.0..11.5 && rotationMagnitude < 0.25 -> "relatively still"
             else -> "movement uncertain"
         }
-        onObservation("Motion context: $movement (coarse on-device estimate; not a location or activity diagnosis).")
+        val summary = "Motion context: $movement (coarse on-device estimate; not a location or activity diagnosis)."
+        OrionSensorContextStore.recordMotion(appContext, summary, now)
+        onObservation(summary)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
