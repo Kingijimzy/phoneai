@@ -256,10 +256,10 @@ class OrionNotificationListener : NotificationListenerService() {
             if (items.isEmpty()) {
                 return "No safe notifications are available. Banking/payment and authentication/security notifications are deliberately excluded; access is memory-only."
             }
-            return "Recent safe notifications (memory-only; sensitive financial/security notifications filtered):\\n" +
-                items.joinToString("\\n\\n") {
+            return "Recent safe notifications (memory-only; sensitive financial/security notifications filtered):\n" +
+                items.joinToString("\n\n") {
                     val time = try { timeFormat.format(Date(it.whenMillis)) } catch (_: Exception) { "--:--" }
-                    "$time · ${it.app}\\nNotification key (for reply/dismiss): ${it.key}\\n${it.title}\\n${it.text}".trim()
+                    "$time · ${it.app}\nNotification key (for reply/dismiss): ${it.key}\n${it.title}\n${it.text}".trim()
                 }.take(5000)
         }
     }
