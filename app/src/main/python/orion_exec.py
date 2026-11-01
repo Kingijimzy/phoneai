@@ -61,19 +61,22 @@ _MODULE_PATHS = {
     "json.loads", "json.dumps",
     "datetime.datetime", "datetime.date", "datetime.time", "datetime.timedelta", "datetime.timezone",
     "datetime.datetime.now", "datetime.datetime.utcnow", "datetime.datetime.fromtimestamp",
+    "datetime.now", "datetime.utcnow", "datetime.fromtimestamp", "datetime.strptime", "datetime.isoformat",
     "datetime.datetime.strptime", "datetime.datetime.isoformat",
     "datetime.date.today", "datetime.date.fromisoformat", "datetime.date.isoformat",
+    "date.today", "date.fromisoformat", "date.isoformat", "time.isoformat", "timedelta.total_seconds",
     "math.pi", "math.e", "math.tau", "math.inf", "math.nan",
     "math.sqrt", "math.floor", "math.ceil", "math.sin", "math.cos", "math.tan",
     "math.log", "math.log10", "math.exp", "math.pow", "math.fabs", "math.isfinite",
     "math.isclose", "math.gcd", "math.lcm", "math.factorial",
     "re.match", "re.search", "re.fullmatch", "re.findall", "re.sub", "re.split", "re.escape",
-    "urllib.parse.urlparse", "urllib.parse.urlsplit", "urllib.parse.urljoin",
+    "urllib.parse", "urllib.parse.urlparse", "urllib.parse.urlsplit", "urllib.parse.urljoin",
     "urllib.parse.quote", "urllib.parse.unquote", "urllib.parse.urlencode",
     "urllib.parse.parse_qs", "urllib.parse.parse_qsl",
     "asyncio.run", "asyncio.sleep",
 }
 _ALLOWED_IMPORTS = {"json", "datetime", "math", "re", "asyncio", "urllib.parse"}
+_SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds"}
 
 def _path(node):
     if isinstance(node, ast.Name):
@@ -154,7 +157,8 @@ def _validate(tree, allow_phone=False):
             phone_valid = (allow_phone and id(node) in allowed_phone_attributes and
                            isinstance(node.value, ast.Name) and node.value.id == "phone" and
                            node.attr in _PHONE_METHODS)
-            if not phone_valid and _path(node) not in _MODULE_PATHS:
+            safe_result_property = (isinstance(node.value, ast.Name) and node.value.id != "phone" and node.attr in _SAFE_OBJECT_ATTRS)
+            if not phone_valid and _path(node) not in _MODULE_PATHS and not safe_result_property:
                 raise Rejected("attribute access is limited to registered phone capabilities and safe module members")
         elif not isinstance(node, _ALLOWED_NODES):
             raise Rejected("unsupported Python syntax: " + type(node).__name__)
