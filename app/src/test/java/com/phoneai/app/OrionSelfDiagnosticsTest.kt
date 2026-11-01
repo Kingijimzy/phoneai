@@ -52,7 +52,7 @@ class OrionSelfDiagnosticsTest {
             OrionSensorScope.MICROPHONE,
             OrionSensorScope.SCREEN_CONTEXT,
             OrionSensorScope.NOTIFICATIONS
-        ).forEach { OrionSensorConsent.grant(context, it, 60_000L, foregroundOnly = true) }
+        ).forEach { OrionSensorConsent.grant(context, it, 60_000L, foregroundOnly = false) }
 
         val report = OrionSelfDiagnostics.inspect(context)
         val components = report.findings.map { it.component }.toSet()
