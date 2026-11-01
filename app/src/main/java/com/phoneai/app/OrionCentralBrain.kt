@@ -44,6 +44,10 @@ internal object OrionCentralBrain {
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let { sections += it }
+        runCatching { OrionAppUsageContextProvider.summary(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
 
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         runCatching { OrionSoulEngine.contextFor(app, request) }
