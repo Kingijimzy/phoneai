@@ -111,6 +111,8 @@ parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps(
                 return '{"service_connected": true}'
             def ws_connect(self, url):
                 return '{"session_id": "test-session"}'
+            def ws_connect_with_headers(self, url, headers):
+                return '{"session_id": "auth-session"}'
             def ws_send(self, session_id, text):
                 return '{"sent": true}'
             def ws_receive(self, session_id, timeout_ms):
@@ -119,6 +121,7 @@ parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps(
                 return '{"closed": true}'
         code = """print(phone.accessibility_status())
 print(phone.ws_connect("wss://example.test/live"))
+print(phone.ws_connect_with_headers("wss://example.test/live", "{}"))
 print(phone.ws_send("test-session", "hello"))
 print(phone.ws_receive("test-session", 100))
 print(phone.ws_close("test-session"))
