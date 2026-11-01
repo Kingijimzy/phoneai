@@ -12,6 +12,27 @@ import android.content.Context
 internal object OrionCentralBrain {
     private const val MAX_CONTEXT_CHARS = 12_000
 
+    /** Queue and dispatch through the same registered specialist runtime used by delegated tasks. */
+    fun enqueueAndDispatch(
+        context: Context,
+        objective: String,
+        kind: OrionTaskEnvelope.Kind,
+        requestedCapabilities: List<String>
+    ): OrionCoordinatedResult {
+        val app = context.applicationContext
+        val task = OrionTaskEnvelope.create(
+            objective = objective,
+            kind = kind,
+            capabilities = requestedCapabilities
+        )
+        val store = OrionDistributedTaskStore(app)
+        if (!store.enqueue(task)) return OrionCoordinatedResult.Failed(task.taskId, "task_enqueue_rejected")
+        return OrionSpecialistRuntime.dispatch(app, task.taskId)
+    }
+
+    fun dispatchDelegatedTask(context: Context, taskId: String): OrionCoordinatedResult =
+        OrionSpecialistRuntime.dispatch(context.applicationContext, taskId)
+
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
