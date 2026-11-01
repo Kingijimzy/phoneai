@@ -245,6 +245,21 @@ class OrionNotificationListener : NotificationListenerService() {
             try { service.activeNotifications?.forEach { service.capture(it) } } catch (_: Exception) { }
         }
 
+        /** Bounded safe notification context for the central brain; no notification keys are exposed. */
+        fun contextSummary(): String {
+            val service = instance ?: return ""
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) return ""
+            val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis }.take(5) }
+            if (items.isEmpty()) return ""
+            return buildString {
+                appendLine("OWNER-GRANTED SAFE NOTIFICATION CONTEXT (in-memory only; sensitive apps/content filtered)")
+                items.forEach { item ->
+                    appendLine("- ${item.app}: ${item.title} — ${item.text}".take(260))
+                }
+                appendLine("These are recent notifications, not proof of user intent or task completion.")
+            }.take(1_300)
+        }
+
         fun readSafeNotifications(): String {
             val service = instance
                 ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry."
