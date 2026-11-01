@@ -76,3 +76,5 @@
 - HyperOS background restrictions, notification permission behaviour, screen/voice collectors and long-running sensor behaviour still require explicit on-device testing.
 
 - Gemini Live now uses the same provider-aware context budget for its system instruction and receives the active conversation's evidence index plus any consented short-lived motion summary. Its generation output remains capped at 1,024 tokens; video remains unsupported by the PhoneAI route.
+
+- The existing safe notification listener is now gated by the separate NOTIFICATIONS grant as well as Android Notification access. Its already-filtered, in-memory summaries can enter the central brain only while that grant is active; revocation clears the in-memory list and blocks notification actions. Sensitive financial/authentication notifications remain excluded.
