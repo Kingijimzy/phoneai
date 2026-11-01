@@ -200,7 +200,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
     }
     @Volatile private var activeSkillId: String? = null
-    @Volatile private var activeInteractionTraceId: String = ""
+    private val interactionTraceId = ThreadLocal<String>()
     private var activeSkillStartedAt: Long = 0L
     private var activeSkillCalls: Int = 0
     private val researchCancelled = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -1704,26 +1704,26 @@ Rules:
      * creating a disconnected execution history.
      */
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
-        val ownsTrace = activeInteractionTraceId.isBlank()
+        val ownsTrace = interactionTraceId.get().isNullOrBlank()
         if (ownsTrace) {
-            activeInteractionTraceId = java.util.UUID.randomUUID().toString().replace("-", "")
-            svc.recordChatEvent("interaction", "started", "request accepted", traceId = activeInteractionTraceId)
+            interactionTraceId.set(java.util.UUID.randomUUID().toString().replace("-", ""))
+            svc.recordChatEvent("interaction", "started", "request accepted", traceId = interactionTraceId.get())
         }
         try {
             runInternalBody(inputCommand, reuseCommandBudget)
             if (ownsTrace) svc.recordChatEvent(
                 "interaction", "completed", "interaction processing finished",
-                traceId = activeInteractionTraceId
+                traceId = interactionTraceId
             )
         } catch (failure: Throwable) {
             if (ownsTrace) svc.recordChatEvent(
                 "interaction", "error",
                 "interaction failed: " + failure.javaClass.simpleName,
-                traceId = activeInteractionTraceId
+                traceId = interactionTraceId
             )
             throw failure
         } finally {
-            if (ownsTrace) activeInteractionTraceId = ""
+            if (ownsTrace) interactionTraceId.remove()
         }
     }
 
@@ -2991,7 +2991,7 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
         // W3C-compatible 16-byte trace ID; shared by the start and terminal tool receipts.
-        val traceId = activeInteractionTraceId.ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
+        val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
         svc.recordChatEvent("tool", "started", "Tool: $tool", traceId = traceId)
         val result = runCatching { OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val preflight = preflightTool(route.tool, args)
