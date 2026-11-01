@@ -1,6 +1,8 @@
 package com.phoneai.app
 
 import android.Manifest
+import android.app.AppOpsManager
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -87,5 +89,39 @@ internal object OrionLocationContextProvider {
             fix.latitude,
             fix.longitude
         )
+    }
+}
+
+
+/** On-demand, coarse app-usage summary. It never reads app content or records a usage timeline. */
+internal object OrionAppUsageContextProvider {
+    fun hasSystemAccess(context: Context): Boolean {
+        val ops = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
+        return runCatching {
+            ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName) ==
+                AppOpsManager.MODE_ALLOWED
+        }.getOrDefault(false)
+    }
+
+    fun summary(context: Context, now: Long = System.currentTimeMillis()): String {
+        if (!OrionSensorConsent.read(context, OrionSensorScope.APP_USAGE, now).active() || !hasSystemAccess(context)) return ""
+        val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return ""
+        val stats = runCatching { manager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 30L * 60L * 1000L, now) }
+            .getOrNull().orEmpty()
+        val rows = stats.asSequence()
+            .filter { it.lastTimeUsed in (now - 30L * 60L * 1000L)..now && it.totalTimeInForeground > 0L }
+            .filterNot { SafetyGate.isSensitiveApp(it.packageName, it.packageName) }
+            .sortedByDescending { it.totalTimeInForeground }
+            .take(5)
+            .map { usage ->
+                val label = runCatching {
+                    context.packageManager.getApplicationLabel(
+                        context.packageManager.getApplicationInfo(usage.packageName, 0)
+                    ).toString()
+                }.getOrDefault(usage.packageName)
+                "${label.take(40)}: ${(usage.totalTimeInForeground / 60_000L).coerceAtLeast(1L)} min"
+            }.toList()
+        if (rows.isEmpty()) return ""
+        return "OWNER-GRANTED APP USAGE CONTEXT (last 30 minutes; on-demand; sensitive apps excluded; not stored): " + rows.joinToString("; ")
     }
 }
