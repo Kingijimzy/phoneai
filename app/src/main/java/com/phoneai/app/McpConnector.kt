@@ -63,6 +63,7 @@ object McpConnector {
         return if (saved) "This MCP endpoint is now locally approved on this device. This confirms local user intent only; it does not authenticate the remote server or provide WebRTC." else "Could not save local pairing approval."
     }
     fun unpair(c: Context) {
+        closeSession(c)
         c.getSharedPreferences(PREFS, 0).edit().remove("paired_endpoint_sha256").commit()
         pendingPairPin = null
         pendingPairExpiry = 0L
@@ -106,6 +107,7 @@ object McpConnector {
         return try {
             val prefs = c.getSharedPreferences(PREFS, 0)
             val previousEndpoint = prefs.getString(URL_KEY, "") ?: ""
+            if (clean != previousEndpoint) closeSession(c)
             val edit = prefs.edit().putString(URL_KEY, clean)
             if (clean != previousEndpoint) edit.remove("paired_endpoint_sha256")
             if (rawToken.isBlank()) {
@@ -123,7 +125,10 @@ object McpConnector {
         } catch (_: Exception) { "Could not securely save MCP settings." }
     }
 
-    fun clear(c: Context) { c.getSharedPreferences(PREFS, 0).edit().clear().commit() }
+    fun clear(c: Context) {
+        closeSession(c)
+        c.getSharedPreferences(PREFS, 0).edit().clear().commit()
+    }
 
     fun status(c: Context): String {
         val value = endpoint(c)
@@ -142,6 +147,7 @@ object McpConnector {
 
     fun listTools(c: Context): String {
         if (!configured(c)) return "error: no MCP server configured."
+        closeSession(c)
         sessionId = null
         negotiatedProtocolVersion = null
         return try {
@@ -221,6 +227,7 @@ object McpConnector {
         if (requiredScope !in scopes(c)) {
             return "error: MCP permission denied. Tool '$name' requires the '$requiredScope' scope, which is disabled. Review MCP permissions in Orion Settings."
         }
+        closeSession(c)
         sessionId = null
         negotiatedProtocolVersion = null
         return try {
@@ -327,6 +334,25 @@ object McpConnector {
             if (expectedId <= 0L || candidate.optLong("id", Long.MIN_VALUE) == expectedId) return candidate
         }
         throw IllegalStateException("MCP event stream ended without a matching JSON-RPC response.")
+    }
+
+    /** Close a stateful MCP session when supported; failure is non-fatal for stateless servers. */
+    private fun closeSession(c: Context) {
+        val id = sessionId ?: return
+        runCatching {
+            val conn = URL(endpoint(c)).openConnection() as HttpURLConnection
+            conn.requestMethod = "DELETE"
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Mcp-Session-Id", id)
+            negotiatedProtocolVersion?.let { conn.setRequestProperty("MCP-Protocol-Version", it) }
+            readToken(c)?.takeIf { it.isNotBlank() }?.let { conn.setRequestProperty("Authorization", "Bearer " + it) }
+            conn.responseCode
+            conn.disconnect()
+        }
+        sessionId = null
+        negotiatedProtocolVersion = null
     }
 
     private fun readToken(c: Context): String? {
