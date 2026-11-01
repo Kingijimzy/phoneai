@@ -33,6 +33,16 @@ internal object OrionCentralBrain {
     fun dispatchDelegatedTask(context: Context, taskId: String): OrionCoordinatedResult =
         OrionSpecialistRuntime.dispatch(context.applicationContext, taskId)
 
+    /** Remote LangGraph execution is opt-in and requires an HTTPS endpoint plus live token provider. */
+    fun dispatchRemoteTask(
+        context: Context,
+        taskId: String,
+        httpsEndpoint: String,
+        bearerToken: () -> String?
+    ): OrionCoordinatedResult = OrionSpecialistRuntime.dispatchRemote(
+        context.applicationContext, taskId, httpsEndpoint, bearerToken
+    )
+
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
