@@ -26,7 +26,9 @@ class OrionCapabilityAdaptersTest {
             "github_search_repositories" to OrionCapabilityAdapters.Backend.RESEARCH,
             "mcp_call" to OrionCapabilityAdapters.Backend.MCP,
             "click" to OrionCapabilityAdapters.Backend.DEVICE,
-            "skills_list" to OrionCapabilityAdapters.Backend.SKILLS,\n            "self_diagnose" to OrionCapabilityAdapters.Backend.DIAGNOSTICS,\n            "repair_apply" to OrionCapabilityAdapters.Backend.DIAGNOSTICS
+            "skills_list" to OrionCapabilityAdapters.Backend.SKILLS,
+            "self_diagnose" to OrionCapabilityAdapters.Backend.DIAGNOSTICS,
+            "repair_apply" to OrionCapabilityAdapters.Backend.DIAGNOSTICS
         )
         expected.forEach { (tool, backend) ->
             assertEquals(tool, backend, OrionCapabilityAdapters.route(tool)?.backend)
@@ -222,7 +224,14 @@ class OrionCapabilityAdaptersTest {
         assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, "save_file"))
     }
 
-    @Test fun diagnosticsAndRepairRoutesHaveConcreteRuntimeImplementation() {\n        assertTrue(OrionDiagnosticsCapabilityExecutor.supports("self_diagnose"))\n        assertTrue(OrionDiagnosticsCapabilityExecutor.supports("repair_apply"))\n        assertEquals(ToolAccess.READ, ToolRegistry.access("repair_apply"))\n        assertEquals("orion_core", AgentPolicy.packForTool("repair_apply"))\n    }\n\n    @Test fun everyRegisteredRouteHasAConcreteRuntimeImplementation() {
+    @Test fun diagnosticsAndRepairRoutesHaveConcreteRuntimeImplementation() {
+        assertTrue(OrionDiagnosticsCapabilityExecutor.supports("self_diagnose"))
+        assertTrue(OrionDiagnosticsCapabilityExecutor.supports("repair_apply"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("repair_apply"))
+        assertEquals("orion_core", AgentPolicy.packForTool("repair_apply"))
+    }
+
+    @Test fun everyRegisteredRouteHasAConcreteRuntimeImplementation() {
         val routes = OrionCapabilityAdapters.routes()
         assertEquals(ToolRegistry.all.size, routes.size)
         val unsupported = routes.filterNot { OrionRuntimeCapabilityExecutor.supports(it.backend, it.tool) }
