@@ -35,6 +35,47 @@ The phone remains the trusted device endpoint. Expensive research, parallel agen
 - The Trading Desk is present in the integration stack. Keep read-only market analysis, strategy research, backtesting and paper trading available through the shared brain. Real exchange orders must remain separately risk-checked and explicitly confirmed.
 - Physical Redmi verification remains a separate release gate. CI cannot prove HyperOS background scheduling, voice capture/playback, accessibility, keyboard switching, notifications or thermal stability.
 
+
+### Stage 4 continuation — LangGraph, AgentBigBrain, proactive work, traces and cron reflection (2026-11-01)
+
+**Integration rule:** these are named responsibilities inside the existing Orion architecture, not competing assistants or duplicate stores.
+
+#### AgentBigBrain — central executive
+- The existing `OrionCentralBrain` is the canonical AgentBigBrain implementation boundary. It assembles the active conversation, opt-in sensor context, device context, routines, Soul Engine state, capability registry, enabled skills, tasks and verified extensions.
+- `OrionTaskOrchestrator` supplies request-time goal understanding, capability readiness and a dispatch-block decision. `Agent` remains the guarded execution owner; `OrionAgentDelegation` supplies scoped specialist envelopes and parent-mediated read-only capability access.
+- Do not create a second brain, tool registry, memory store, task database or executor under a new AgentBigBrain class name. Evolve these existing owners behind stable interfaces.
+- Remaining integration work: make the graph/task state the single durable source for all chat, voice, specialist, MCP and background entry points; remove remaining direct/parallel lifecycle paths; verify continuity across provider switch, process death, pause/resume and cancellation.
+
+#### LangGraph — explicit graph semantics, not an Android dependency
+- LangGraph is the target orchestration model for the remote/hosted Python worker: typed state, named nodes, conditional edges, checkpoint persistence, interrupt/resume and bounded subgraph delegation.
+- The Android app remains the trusted capability endpoint and must not bundle a heavyweight graph runtime onto the Redmi. It submits a bounded task envelope and receives graph state/checkpoint/evidence updates through the existing worker contract.
+- Graph state must carry stable task/objective/session IDs, current node, approved capability scope, checkpoint cursor, cancellation state, retry budget, provider-neutral memory references and verification receipts.
+- Required graph: intake → retrieve context → plan → capability/consent gate → execute/delegate → verify → persist trace/learning → report. Failure edges go through bounded recovery and re-verification; uncertain writes reconcile before retry.
+- No LangGraph package/runtime is claimed as integrated in this Android source tree yet. Add it only to the appropriate Python/remote runtime after its deployment, version pinning, checkpoint store, auth boundary and contract tests are present. The existing Kotlin lifecycle remains authoritative until the remote graph proves parity.
+
+#### Proactive work and cron reflection
+- Existing `OrionDecisionScheduler`, `OrionRuntime`, WorkManager recovery and opt-in `ProactiveBriefing` are the local event/schedule foundations. They are not an unrestricted always-on agent and the current morning briefing is a local task recap, not AI reflection.
+- Add a separate, opt-in daily/weekly reflection schedule using WorkManager on-device and a remote cron only where a remote worker is configured. A run must check owner opt-in, current device/runtime state, quiet hours, budget, last successful reflection and duplicate window before work.
+- Reflection reads only consented, retained traces and verified task outcomes. It may propose memory updates, obsolete-lesson retirement, routine reminders, skill drafts or follow-up tasks; it must not silently change permissions, execute consequential actions, publish, trade or install generated code.
+- Every reflection has a durable run ID, scheduled time, started/finished state, source time range, checkpoint, bounded model-call budget, result summary and next eligible time. Missed schedules are coalesced, not replayed as a burst. Failed runs use bounded retry/backoff.
+- Android/HyperOS may defer or stop scheduled work. The UI must show the actual last run, next eligible run and scheduler state; never promise exact delivery or continuous background execution.
+
+#### Local interaction trace ledger
+- Conversation turns are already stored locally in `OrionConversationRepository.messages` (SQLite); lifecycle receipts are stored in its `chat_events` table. Message bodies remain device-local.
+- Added a completion receipt after every routed tool call, including adapter/preflight/backend errors, in addition to the existing `tool/started` event. The receipt stores tool name, success/error outcome and a bounded failure category only. It deliberately does not store tool arguments, raw screen contents, credentials or raw tool output.
+- Existing event sanitization redacts credential-like values. The trace is associated with the active chat session and remains available through the existing event history.
+- Remaining work: add explicit correlation IDs linking each user/assistant turn, tool call, task checkpoint, specialist run and reflection run; add retention/export/delete controls and tests for archived-session linkage, duplicate events, storage failure and redaction across all provider/tool paths.
+
+#### Completion gates
+- [ ] Remote LangGraph graph executes a contract-tested task end-to-end with durable checkpoint/resume and cancellation; no duplicate Android executor.
+- [ ] AgentBigBrain owns the same objective and trace IDs across chat, voice, specialist, MCP and scheduled entry points.
+- [ ] Proactive schedules are opt-in, visible, deduplicated, budgeted and honest about OS delivery.
+- [ ] Cron reflection consumes verified local/remote traces, produces reviewable proposals and never self-authorizes actions.
+- [ ] Every conversation turn and every tool outcome is locally traceable; correlation, retention, privacy and deletion tests pass.
+- [ ] Exact-head CI passes and the Redmi physical acceptance suite verifies process death, HyperOS scheduling, notification controls and offline recovery.
+
+**Current evidence:** local transcript persistence and lifecycle event storage existed before this continuation. The all-routed-tool outcome receipt was added in commit `8fc7302`. LangGraph deployment, full trace correlation/retention controls and cron reflection are still open implementation gates; they are not represented as completed.
+
 ## Roadmap and completion gates
 
 ### Stage 0 — Establish a trustworthy integration baseline
