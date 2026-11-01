@@ -204,6 +204,17 @@ internal class GeminiLiveSession(
                 append("\n\n")
                 append(motion.take(240))
             }
+            val grantedContext = listOf(
+                OrionNotificationListener.contextSummary(),
+                OrionDeviceContextProvider.summary(appContext),
+                OrionLocationContextProvider.summary(appContext),
+                OrionAppUsageContextProvider.summary(appContext),
+                OrionRoutinePolicy.promptBlock(appContext, MemoryStore.all(appContext))
+            ).filter { it.isNotBlank() }
+            grantedContext.forEach { section ->
+                append("\n\n")
+                append(section.take(1_300))
+            }
             val languagePolicy = Prefs.languagePolicy(appContext)
             if (languagePolicy.isNotBlank()) {
                 append("Respect the user's saved language policy: ")
