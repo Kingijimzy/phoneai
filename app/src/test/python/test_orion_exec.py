@@ -41,6 +41,18 @@ else:
         self.assertIn("policy rejected", orion_exec.run("for x in [1, 2]: print(x)"))
         self.assertIn("1000 iterations", orion_exec.run("for x in range(1001): print(x)"))
 
+    def test_exponentiation_is_bounded(self):
+        self.assertEqual(orion_exec.run("print(2 ** 16)"), "65536\n")
+        self.assertIn("small integer constants", orion_exec.run("power = 2 ** exponent"))
+        self.assertIn("between 0 and 16", orion_exec.run("print(2 ** 17)"))
+        self.assertIn("size limit", orion_exec.run("print(((2 ** 16) ** 16) ** 16)"))
+
+    def test_augmented_exponentiation_and_integer_growth_are_bounded(self):
+        self.assertIn("between 0 and 16", orion_exec.run("value = 2\nvalue **= 17"))
+        self.assertIn("size limit", orion_exec.run("value = 2\nvalue **= 16\nvalue **= 16\nvalue **= 16"))
+        huge_literal = "value = " + str(1 << 4096)
+        self.assertIn("constant exceeds the size limit", orion_exec.run(huge_literal))
+
     def test_rejects_oversized_and_empty_code(self):
         self.assertIn("required", orion_exec.run(" "))
         self.assertIn("8000 characters", orion_exec.run(" " * 8001))

@@ -233,8 +233,8 @@ class OrionCapabilityAdaptersTest {
         )
     }
     
-    @Test fun directPythonExecutionRequiresItsOwnActionSpecificConfirmation() {
-        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+    @Test fun directPythonExecutionRunsWithoutInteractiveApprovalInsideRestrictedSandbox() {
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
     }

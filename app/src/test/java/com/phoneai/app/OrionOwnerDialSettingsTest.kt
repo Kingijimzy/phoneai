@@ -35,9 +35,9 @@ class OrionOwnerDialSettingsTest {
     @Test fun pythonProfileChangesOnlyTheCodeSizeBudget() {
         OrionOwnerDialSettings.write(context, OrionOwnerDials(pythonProfile = OrionPythonProfile.GUARDED))
         assertEquals(8_000, PythonExecutionPolicy.maxCodeChars(context))
-        assertTrue(PythonExecutionPolicy.rejection("x".repeat(8_001), true) != null)
+        assertTrue(PythonExecutionPolicy.rejection("x".repeat(8_001)) != null)
         OrionOwnerDialSettings.write(context, OrionOwnerDials(pythonProfile = OrionPythonProfile.DEVELOPER))
         assertEquals(16_000, PythonExecutionPolicy.maxCodeChars(context))
-        assertTrue(PythonExecutionPolicy.rejection("x".repeat(16_001), true, PythonExecutionPolicy.maxCodeChars(context)) != null)
+        assertTrue(PythonExecutionPolicy.rejection("x".repeat(16_001), PythonExecutionPolicy.maxCodeChars(context)) != null)
     }
 }

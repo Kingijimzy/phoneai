@@ -33,10 +33,6 @@ internal class OrionPythonCapabilityExecutor(
             "python_exec" -> {
                 val code = args.optString("code")
                 if (stopped()) "error: task was stopped before Python execution."
-                else if (requiresExplicitApproval(tool) &&
-                    !confirm("Run this code in Orion's restricted Python interpreter? The interpreter cannot import modules or access Android, files, network, shell or device controls.")) {
-                    "error: user cancelled Python execution"
-                } else if (stopped()) "error: task was stopped after approval; Python was not run."
                 else tools.pythonExec(code)
             }
             "extension_list" -> listExtensions()
@@ -145,7 +141,8 @@ internal class OrionPythonCapabilityExecutor(
     }
 
     companion object {
-        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
+        /** The direct Python sandbox is capability-free; execution itself needs no confirmation. */
+        fun requiresExplicitApproval(tool: String): Boolean = false
 
         private val supportedTools = setOf(
             "python_exec", "extension_list", "extension_create", "extension_test",

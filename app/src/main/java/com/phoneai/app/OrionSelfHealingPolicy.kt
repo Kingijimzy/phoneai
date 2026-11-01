@@ -9,6 +9,8 @@ package com.phoneai.app
 enum class OrionFindingSeverity { INFO, WARNING, ERROR, CRITICAL }
 enum class OrionFindingStatus { OPEN, INVESTIGATING, RESOLVED, ACCEPTED_RISK, DISMISSED }
 enum class OrionRepairRisk { REVERSIBLE, DATA_AFFECTING, SECURITY_SENSITIVE, EXTERNAL_SIDE_EFFECT }
+/** Execution boundary is selected by trusted app code, never by model-provided arguments. */
+enum class OrionRepairExecutionBoundary { ISOLATED_SANDBOX, DEVICE_LOCAL, EXTERNAL }
 enum class OrionRepairStatus { PROPOSED, TESTING, TEST_FAILED, TEST_PASSED, AWAITING_OWNER, APPLIED, VERIFIED, ROLLED_BACK, REJECTED }
 enum class OrionExtensionStatus { DRAFT, RESEARCHED, LICENSE_REVIEWED, TESTED, AWAITING_OWNER, ACTIVE, REJECTED, ROLLED_BACK }
 
@@ -36,7 +38,9 @@ data class OrionRepairProposal(
     val requiredOwnerApproval: Boolean,
     val status: OrionRepairStatus = OrionRepairStatus.PROPOSED,
     val testRunId: String? = null,
-    val testPassed: Boolean = false
+    val testPassed: Boolean = false,
+    /** Suspicion is a hard approval trigger even when the operation is otherwise low risk. */
+    val suspicious: Boolean = false
 )
 
 data class OrionExtensionDraft(
@@ -65,12 +69,35 @@ object OrionSelfHealingPolicy {
         idempotent && hasRollback && attemptCount == 0 &&
         findingSeverity != OrionFindingSeverity.CRITICAL
 
-    /** Code/config changes are never silently applied by a model-generated proposal. */
-    fun mayAutoApply(proposal: OrionRepairProposal): Boolean =
-        proposal.risk == OrionRepairRisk.REVERSIBLE &&
-            proposal.isIdempotent && proposal.hasRollback &&
-            proposal.status == OrionRepairStatus.TEST_PASSED &&
-            proposal.testPassed && !proposal.requiredOwnerApproval
+    /**
+     * Sandbox autonomy is broader than device autonomy: ordinary data mutations are acceptable
+     * inside a verified disposable boundary, but security-sensitive and external effects never are.
+     * The boundary is supplied by an app-owned adapter, not inferred from model text.
+     */
+    fun requiresOwnerApproval(
+        proposal: OrionRepairProposal,
+        boundary: OrionRepairExecutionBoundary
+    ): Boolean = proposal.requiredOwnerApproval || proposal.suspicious ||
+        proposal.risk == OrionRepairRisk.SECURITY_SENSITIVE ||
+        proposal.risk == OrionRepairRisk.EXTERNAL_SIDE_EFFECT ||
+        boundary == OrionRepairExecutionBoundary.EXTERNAL ||
+        (boundary == OrionRepairExecutionBoundary.DEVICE_LOCAL &&
+            (proposal.risk != OrionRepairRisk.REVERSIBLE || !proposal.isIdempotent || !proposal.hasRollback))
+
+    fun mayAutoApply(
+        proposal: OrionRepairProposal,
+        boundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
+    ): Boolean {
+        if (requiresOwnerApproval(proposal, boundary) || !proposal.isIdempotent ||
+            !proposal.hasRollback || proposal.status != OrionRepairStatus.TEST_PASSED ||
+            !proposal.testPassed) return false
+        return when (boundary) {
+            OrionRepairExecutionBoundary.ISOLATED_SANDBOX ->
+                proposal.risk == OrionRepairRisk.REVERSIBLE || proposal.risk == OrionRepairRisk.DATA_AFFECTING
+            OrionRepairExecutionBoundary.DEVICE_LOCAL -> proposal.risk == OrionRepairRisk.REVERSIBLE
+            OrionRepairExecutionBoundary.EXTERNAL -> false
+        }
+    }
 
     fun nextRepairStatus(
         current: OrionRepairStatus,
