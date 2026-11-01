@@ -40,7 +40,7 @@ class SoulStageVerificationTest {
     }
 
     @Test fun memorySuggestionRequiresReviewBeforeItBecomesLesson() {
-        val unique = UUID.randomUUID().toString()
+        val unique = "stage-seven-" + UUID.randomUUID().toString().map { ch -> if (ch.isDigit()) ('a' + ch.digitToInt()) else ch }.joinToString("")
         val summary = "I prefer concise summaries for stage seven $unique"
         assertTrue(SoulEngineState.proposeMemoryNudge(
             context,
@@ -62,7 +62,7 @@ class SoulStageVerificationTest {
     }
 
     @Test fun dismissingMemorySuggestionDoesNotCreateLesson() {
-        val unique = UUID.randomUUID().toString()
+        val unique = "stage-seven-" + UUID.randomUUID().toString().map { ch -> if (ch.isDigit()) ('a' + ch.digitToInt()) else ch }.joinToString("")
         val summary = "I prefer a compact verification report $unique"
         assertTrue(SoulEngineState.proposeMemoryNudge(
             context,
