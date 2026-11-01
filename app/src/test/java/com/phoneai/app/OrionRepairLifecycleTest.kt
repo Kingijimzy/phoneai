@@ -79,6 +79,17 @@ class OrionRepairLifecycleTest {
             .any { it.tool == "repair_awaiting_owner" })
     }
 
+    @Test fun approvalForAnotherDigestCannotAuthorizeThisPlan() {
+        var applied = false
+        val result = execute(
+            proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
+            ownerApprovalDigest = "b".repeat(64),
+            apply = { applied = true; "receipt" }
+        )
+        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
+        assertFalse(applied)
+    }
+
     @Test fun failedSandboxPreventsApplication() {
         var applied = false
         val result = execute(sandbox = { false }, apply = { applied = true; "receipt" })
@@ -121,7 +132,7 @@ class OrionRepairLifecycleTest {
     @Test fun invalidPlanDigestIsRejectedBeforeAnyCallback() {
         var callbacks = 0
         val result = OrionRepairLifecycle.execute(
-            context, sessionId, "task-repair-test", finding(), proposal(), "bad", false,
+            context, sessionId, "task-repair-test", finding(), proposal(), "bad", null,
             { callbacks++; true }, { callbacks++; "receipt" }, { callbacks++; true }, { callbacks++; true }
         )
         assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, result.result)
