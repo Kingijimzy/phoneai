@@ -1115,7 +1115,6 @@ RESPONSE QUALITY AND FORMAT:
     }
 
     companion object {
-        const val MAX_STEPS = 16
         private const val MAX_VISION_STEPS_PER_MINUTE = 5
         private val visionStepTimes = java.util.concurrent.ConcurrentLinkedDeque<Long>()
 
@@ -2292,7 +2291,7 @@ Rules:
         moveTaskPhase(TaskLifecycle.Phase.CHECK_CAPABILITIES, "Checking registered tools, enabled packs and permissions")
         managedTask = managedTask.advance() ?: managedTask // CHECK_CAPABILITIES -> AUTHORIZE
         moveTaskPhase(TaskLifecycle.Phase.AUTHORIZE, "Required approvals remain enforced at each real tool dispatch")
-        val requestBudget = AgentHooks.RequestBudget(minOf(MAX_STEPS, AgentPolicy.maxSteps(svc), OrionAutonomySettings.read(svc).maxToolSteps))
+        val requestBudget = AgentHooks.RequestBudget(minOf(AgentPolicy.maxSteps(svc), OrionAutonomySettings.read(svc).maxToolSteps))
         val taskStartedAt = System.currentTimeMillis()
         var toolCalls = 0
         fun budgetStopReason(): String? = when {
