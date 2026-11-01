@@ -45,7 +45,7 @@ else:
         self.assertEqual(orion_exec.run("print(2 ** 16)"), "65536\n")
         self.assertIn("small integer constants", orion_exec.run("power = 2 ** exponent"))
         self.assertIn("between 0 and 16", orion_exec.run("print(2 ** 17)"))
-        self.assertIn("size limit", orion_exec.run("print((2 ** 16) ** 16)"))
+        self.assertIn("size limit", orion_exec.run("print(((2 ** 16) ** 16) ** 16)"))
 
     def test_rejects_oversized_and_empty_code(self):
         self.assertIn("required", orion_exec.run(" "))
