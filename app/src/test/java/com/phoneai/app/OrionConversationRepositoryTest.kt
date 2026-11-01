@@ -152,6 +152,31 @@ class OrionConversationRepositoryTest {
         assertEquals(activeExpected, repository.loadActive(context))
     }
 
+    @Test fun toolLifecycleEventsShareValidatedTraceIdAcrossStartAndOutcome() {
+        val traceId = "0123456789abcdef0123456789abcdef"
+        val started = repository.recordEvent(
+            context, messageId = null, type = "tool", status = "started",
+            summary = "tool=browser_search", traceId = traceId
+        )
+        val completed = repository.recordEvent(
+            context, messageId = null, type = "tool_result", status = "success",
+            summary = "tool=browser_search; outcome=completed", traceId = traceId
+        )
+        assertEquals(traceId, started?.traceId)
+        assertEquals(traceId, completed?.traceId)
+        val stored = repository.eventsForActive(context).filter { it.traceId == traceId }
+        assertEquals(2, stored.size)
+        assertEquals(setOf("tool", "tool_result"), stored.map { it.type }.toSet())
+    }
+
+    @Test fun malformedTraceIdsAreNotPersisted() {
+        val event = repository.recordEvent(
+            context, null, "tool", "started", "tool=browser_search", "not-a-w3c-trace-id"
+        )
+        assertNotNull(event)
+        assertNull(event?.traceId)
+    }
+
     @Test fun persistedLifecycleEventRedactsCredentialLikeValues() {
         val event = repository.recordEvent(
             context,
