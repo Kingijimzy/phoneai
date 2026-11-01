@@ -174,14 +174,14 @@ class MemoryActivity : Activity() {
                 selected.set(Calendar.MILLISECOND, 0)
                 if (selected.timeInMillis <= System.currentTimeMillis()) {
                     Toast.makeText(this, "Choose a future time for the reminder.", Toast.LENGTH_SHORT).show()
-                    return@TimePickerDialog
+                } else {
+                    AlertDialog.Builder(this).setTitle("Repeat this reminder?")
+                        .setItems(arrayOf("Once", "Every day", "Every week")) { _, repeat ->
+                            val days = when (repeat) { 1 -> 1; 2 -> 7; else -> 0 }
+                            val ok = OrionRoutineReminderWorker.schedule(this, memoryId, selected.timeInMillis, days)
+                            Toast.makeText(this, if (ok) "Routine reminder scheduled" else "Could not schedule reminder; check the routine and permission grant.", Toast.LENGTH_SHORT).show()
+                        }.show()
                 }
-                AlertDialog.Builder(this).setTitle("Repeat this reminder?")
-                    .setItems(arrayOf("Once", "Every day", "Every week")) { _, repeat ->
-                        val days = when (repeat) { 1 -> 1; 2 -> 7; else -> 0 }
-                        val ok = OrionRoutineReminderWorker.schedule(this, memoryId, selected.timeInMillis, days)
-                        Toast.makeText(this, if (ok) "Routine reminder scheduled" else "Could not schedule reminder; check the routine and permission grant.", Toast.LENGTH_SHORT).show()
-                    }.show()
             }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show()
         }, now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH)).apply {
             datePicker.minDate = System.currentTimeMillis()
