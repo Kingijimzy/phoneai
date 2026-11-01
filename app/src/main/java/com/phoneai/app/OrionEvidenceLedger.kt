@@ -123,6 +123,44 @@ internal object OrionEvidenceLedger {
             .put("argsFingerprint", digest(args.toString()))
             .put("summary", "Dispatch denied before execution: " + category.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48))
         )
+    /**
+     * Persist a repair lifecycle receipt in the existing evidence ledger. The plan digest is
+     * retained as a fingerprint only; proposal text, source code and approval credentials never
+     * enter the ledger.
+     */
+    fun recordRepairStage(
+        context: Context,
+        taskId: String,
+        stage: String,
+        planDigest: String,
+        summary: String,
+        verified: Boolean = false,
+        failed: Boolean = false
+    ): Boolean {
+        val safeStage = stage.take(32)
+        if (safeStage !in setOf("PROPOSED", "SANDBOX_PASSED", "SANDBOX_FAILED",
+                "OWNER_APPROVED", "OWNER_REJECTED", "APPLIED", "VERIFIED",
+                "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")) return false
+        if (!planDigest.matches(Regex("^[a-fA-F0-9]{64}$"))) return false
+        val now = System.currentTimeMillis()
+        val result = summary.replace(Regex("[\\r\\n\\t]+"), " ").take(MAX_TEXT)
+        return append(context, JSONObject()
+            .put("id", digest("$now|repair|$safeStage|$taskId|$planDigest").take(24))
+            .put("taskId", safeTaskId(taskId))
+            .put("backend", "repair_lifecycle")
+            .put("tool", "repair_$safeStage".lowercase())
+            .put("outcome", when {
+                failed -> Outcome.FAILED.name
+                verified -> Outcome.VERIFIED.name
+                else -> Outcome.EXECUTED_UNVERIFIED.name
+            })
+            .put("startedAt", now)
+            .put("finishedAt", now)
+            .put("argsFingerprint", planDigest.lowercase())
+            .put("summary", result)
+        )
+    }
+
     /** Recovery is a first-class event; it never authorizes or replays an action. */
     fun recordRecovery(context: Context, taskId: String, tool: String, strategy: String, reason: String): Boolean =
         append(context, JSONObject()
