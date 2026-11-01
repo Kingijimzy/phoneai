@@ -25,7 +25,7 @@ class ToolRegistryTest {
         val readTools = listOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         readTools.forEach { name ->
             assertEquals("$name must be read-only", ToolAccess.READ, ToolRegistry.access(name))
-            assertEquals("orion_core", AgentPolicy.packForTool(name))
+            assertEquals("phone_control", AgentPolicy.packForTool(name))
             assertEquals(OrionCapabilityAdapters.Backend.MCP, OrionCapabilityAdapters.route(name)?.backend)
             assertTrue("MCP executor must implement $name", OrionMcpCapabilityExecutor.supports(name))
             assertTrue("Runtime owner must implement $name", OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.MCP, name))
