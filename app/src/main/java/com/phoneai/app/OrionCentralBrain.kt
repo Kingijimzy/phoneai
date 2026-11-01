@@ -18,6 +18,14 @@ internal object OrionCentralBrain {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
 
+        val activeConversation = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrDefault("")
+        if (activeConversation.isNotBlank()) {
+            runCatching { OrionMultimodalEvidenceStore.promptBlock(app, activeConversation) }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { sections += it }
+        }
+
         // Sensor context is opt-in, coarse, foreground-sampled and short-lived. It is included
         // only while the matching grant remains active; raw sensor vectors never enter prompts.
         runCatching { OrionSensorContextStore.summary(app) }
