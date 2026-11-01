@@ -106,6 +106,7 @@ internal object OrionPythonWebSocketTransport {
                     session.closed = true
                     session.offer(JSONObject().put("type", "closed").put("code", code).put("reason", reason.take(160)))
                     dispose(session)
+                    stopServiceIfIdle()
                     ready.countDown()
                 }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -113,6 +114,7 @@ internal object OrionPythonWebSocketTransport {
                     session.closed = true
                     session.offer(JSONObject().put("type", "error").put("error", t.javaClass.simpleName))
                     dispose(session)
+                    stopServiceIfIdle()
                     ready.countDown()
                 }
             })
