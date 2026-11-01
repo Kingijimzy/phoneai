@@ -33,10 +33,11 @@ internal class OrionPythonPhoneApi(
         val batteryStatus = status?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val charging = batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING ||
             batteryStatus == BatteryManager.BATTERY_STATUS_FULL
-        return JSONObject().put("level_percent", level.takeIf { it in 0..100 })
-            .put("charging", charging).put("power_save", runCatching {
-                context.getSystemService(android.os.PowerManager::class.java)?.isPowerSaveMode
-            }.getOrNull()).toString()
+        val powerSave = runCatching {
+            context.getSystemService(android.os.PowerManager::class.java)?.isPowerSaveMode
+        }.getOrNull()
+        return JSONObject().put("level_percent", level.takeIf { it in 0..100 } ?: JSONObject.NULL)
+            .put("charging", charging).put("power_save", powerSave ?: JSONObject.NULL).toString()
     }
 
     fun location(): String {
