@@ -68,6 +68,10 @@ class OrionMcpProtocolTest {
 
     @Test fun mcpReconnectPolicyNeverRetriesAmbiguousToolCalls() {
         assertTrue(McpReconnectPolicy.shouldRetry("tools/list", java.io.IOException("timeout")))
+        assertTrue(McpReconnectPolicy.shouldRetry("resources/list", java.io.IOException("timeout")))
+        assertTrue(McpReconnectPolicy.shouldRetry("resources/read", java.io.IOException("timeout")))
+        assertTrue(McpReconnectPolicy.shouldRetry("prompts/list", java.io.IOException("timeout")))
+        assertTrue(McpReconnectPolicy.shouldRetry("prompts/get", java.io.IOException("timeout")))
         assertFalse(McpReconnectPolicy.shouldRetry("tools/call", java.io.IOException("timeout")))
         assertFalse(McpReconnectPolicy.shouldRetry("tools/list", IllegalArgumentException("bad request")))
     }
