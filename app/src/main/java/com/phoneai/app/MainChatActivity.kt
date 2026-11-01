@@ -1959,7 +1959,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         if (imageUris.isNotEmpty()) {
             val question = value.ifBlank { "Describe these images and explain anything important I should notice. Compare them when useful." }
             addMessage("me", question)
-            imageUris.forEach { addImageBubble(it) }
+            imageUris.forEach { uri ->
+                addImageBubble(uri)
+                runCatching {
+                    OrionMultimodalEvidenceStore.record(
+                        applicationContext,
+                        ChatHistoryStore.activeSessionId(applicationContext),
+                        modality = OrionMultimodalEvidenceStore.Modality.IMAGE,
+                        source = "main_chat_attachment",
+                        reference = uri.toString(),
+                        summary = "Image attached to this conversation; re-open the original content URI before future visual analysis."
+                    )
+                }
+            }
             selectedImageUris.clear()
             composeSelectedImages.value = emptyList()
             refreshImagePreview(null)
