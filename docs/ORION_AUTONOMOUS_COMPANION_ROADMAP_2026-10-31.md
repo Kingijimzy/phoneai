@@ -555,3 +555,27 @@ Orion's Android implementation deliberately adapts these concepts to its existin
 
 
 - Follow-up: optional Gemini Live now receives approved profile memories and recent non-sensitive typed/voice turns as data-only context. Its final user/model transcript segments are persisted into the same SQLite full-text index, and explicit user preferences/routines can create reviewable proposals. Raw microphone audio remains unpersisted. This remains an audio-first Live mode; camera/video streaming has not been implemented.
+
+
+---
+
+## Stage 4 continuation — 2026-11-01
+
+The Stage 4 implementation has been extended beyond memory/context foundations:
+
+- Added the Settings-linked Sensor & Context Permissions dashboard with separate revocable grants and expiry.
+- Added a foreground-only accelerometer/gyroscope collector. It persists only a coarse motion hint for 15 minutes and injects it into the central brain only while the matching grant remains active.
+- Added a conversation-linked multimodal evidence index for image attachments, manually requested non-sensitive screen observations and explicit voice-session final transcripts. It stores references/digests/metadata, not raw media. Chat deletion removes the corresponding evidence index rows.
+- Added transport-aware provider capability profiles. HTTP chat profiles distinguish image-capable models from dedicated Gemini Live audio/video capability; unknown models use conservative budgets. Context packing accounts for multimodal content parts and preserves the newest user turn where possible.
+- Tightened MCP SSE response selection to require the matching JSON-RPC request ID. The existing connector remains the single MCP transport and its registered capability executor remains the execution route.
+
+### Still open — do not mark Stage 4 complete yet
+
+1. Dynamic exact-model capability refresh from provider metadata where available; exact tokenizer/context accounting remains provider-specific.
+2. Wire the remaining sensor scopes to dedicated Android permission-backed collectors, with visible status, retention and pause/revoke behaviour. Current dashboard clearly labels consent-only scopes.
+3. Expose memory version history, confidence and expiry editing in the Memory UI, not just the underlying store.
+4. Add a secure evidence-reference resolver that can reopen a still-permitted image attachment for a later model turn; video frame capture/streaming is not implemented.
+5. Expand MCP to resources/prompts and run protocol conformance tests.
+6. Verify permission flows, battery behaviour, notification delivery, memory pressure and sensor sampling on the physical Redmi A3 Pro.
+
+Latest code validation must be based on the exact PR head workflow result; CI is not a substitute for device validation.
