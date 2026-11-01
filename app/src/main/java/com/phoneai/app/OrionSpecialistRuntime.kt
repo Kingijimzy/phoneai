@@ -37,6 +37,7 @@ internal object OrionSpecialistRuntime {
                     "cancelled", "cancel_requested" -> OrionWorkerResult.NeedsOwner(result.detail ?: "remote_task_cancelled")
                     else -> OrionWorkerResult.Failure("remote_pending_resume_from_receipt", true)
                 }
+                else -> OrionWorkerResult.Failure("remote_result_type_unknown", false)
             }
         }
         return OrionExecutionCoordinator(tasks, OrionWorkerLeaseStore(app), app).dispatch(taskId, worker)
