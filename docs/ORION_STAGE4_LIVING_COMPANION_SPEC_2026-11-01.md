@@ -64,8 +64,8 @@ Use the existing deterministic repair policy as the authority:
 
 Failure after application must transition to `ROLLED_BACK`, not success.
 
-- Automatic repair is limited to explicitly allowlisted, reversible, idempotent, low-risk operations with a tested rollback path.
-- Security-sensitive, data-affecting, destructive, external-side-effect and permission/policy changes require owner approval.
+- Automatic repair is limited to app-owned, explicitly allowlisted operations with a tested rollback path. Inside a verified isolated sandbox, ordinary reversible and data-affecting experiments may run autonomously when idempotent; the sandbox must not expose real device/account state, secrets, permissions, or external side effects.
+- Security-sensitive, suspicious, destructive, external-side-effect, permission/policy, and real-device consequential changes require owner approval. A sandbox label supplied by model output is never proof of isolation; only the trusted app-owned runner may select the execution boundary.
 - Never auto-change Android permissions, safety gates, trading rules, secrets, provider credentials or capability grants.
 - Never blindly retry an uncertain write.
 - Record before/after hashes or state snapshots where appropriate, test receipt, approver and rollback receipt.
