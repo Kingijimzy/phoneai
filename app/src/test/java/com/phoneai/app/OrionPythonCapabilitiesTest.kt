@@ -69,4 +69,17 @@ class OrionPythonCapabilitiesTest {
         assertTrue(endpoint!!.allowWrites)
         assertNull(OrionPythonNetworkPolicy.validate(context, "http://example.com/api/"))
     }
+    @Test fun readOnlyPhoneCapabilitiesDoNotTriggerPerCallApprovalAndStillCheckGrants() {
+        var prompts = 0
+        val api = OrionPythonPhoneApi(context) { prompts++; true }
+        assertTrue(api.battery().contains("level_percent"))
+        assertTrue(api.location().contains("error"))
+        assertTrue(api.notifications().contains("error"))
+        assertTrue(api.contacts("King").contains("error"))
+        assertTrue(api.accessibility_screen().contains("error"))
+        assertTrue(api.fs_write("session/log.txt", "trace").startsWith("saved"))
+        assertEquals("trace", api.fs_read("session/log.txt"))
+        assertEquals(0, prompts)
+    }
+
 }
