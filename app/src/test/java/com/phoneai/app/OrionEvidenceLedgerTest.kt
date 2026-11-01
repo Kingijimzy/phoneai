@@ -61,6 +61,33 @@ class OrionEvidenceLedgerTest {
         assertFalse(event.summary.contains("private message"))
     }
 
+    @Test fun memoryRetrievalEvidenceIsDurableButNeverCountsAsActionVerification() {
+        val task = "ledger-memory-${System.nanoTime()}"
+        val objective = "Send the approved project update to the team"
+        assertTrue(OrionEvidenceLedger.recordMemoryRetrieval(
+            context, task, objective, "persistent_memory_context", 420
+        ))
+        val event = OrionEvidenceLedger.events(context, task).single()
+        assertEquals(OrionEvidenceLedger.Outcome.CONTEXT_RETRIEVED, event.outcome)
+        assertEquals("retrieve_before_act", event.tool)
+        assertFalse(OrionEvidenceLedger.hasVerifiedEvidence(context, task))
+        val persisted = File(context.filesDir, "orion_evidence_ledger.json").readText()
+        assertFalse(persisted.contains(objective))
+        assertTrue(event.summary.contains("chars=420"))
+    }
+
+    @Test fun memoryRetrievalEvidenceRejectsInvalidMetadata() {
+        assertFalse(OrionEvidenceLedger.recordMemoryRetrieval(
+            context, "invalid-memory-${System.nanoTime()}", "", "persistent_memory_context", 10
+        ))
+        assertFalse(OrionEvidenceLedger.recordMemoryRetrieval(
+            context, "invalid-source-${System.nanoTime()}", "objective", "arbitrary_source", 10
+        ))
+        assertFalse(OrionEvidenceLedger.recordMemoryRetrieval(
+            context, "invalid-size-${System.nanoTime()}", "objective", "persistent_memory_context", -1
+        ))
+    }
+
     @Test fun explicitVerifierPassIsDurableButUnverifiedPassIsNot() {
         val task = "ledger-explicit-pass-${System.nanoTime()}"
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "device", "verify_send", JSONObject(), 1L,
