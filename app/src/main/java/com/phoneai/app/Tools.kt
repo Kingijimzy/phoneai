@@ -416,6 +416,14 @@ class Tools(
 
     fun mcpCall(name: String, args: JSONObject): String = McpConnector.callTool(svc, name, args)
 
+    fun mcpListResources(cursor: String): String = McpConnector.listResources(svc, cursor.ifBlank { null })
+
+    fun mcpReadResource(uri: String): String = McpConnector.readResource(svc, uri)
+
+    fun mcpListPrompts(cursor: String): String = McpConnector.listPrompts(svc, cursor.ifBlank { null })
+
+    fun mcpGetPrompt(name: String, arguments: JSONObject): String = McpConnector.getPrompt(svc, name, arguments)
+
     // ---- deterministic local routes (Stage 5)
 
     fun lookupApp(name: String): String {
