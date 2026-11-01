@@ -201,7 +201,7 @@ internal class GeminiLiveSession(
             }
             val motion = OrionSensorContextStore.summary(appContext)
             if (motion.isNotBlank()) {
-                append("\\n\\n")
+                append("\n\n")
                 append(motion.take(240))
             }
             val languagePolicy = Prefs.languagePolicy(appContext)
