@@ -13,8 +13,13 @@ import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
+import okhttp3.Dns
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.Proxy
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -243,35 +248,44 @@ internal class OrionPythonPhoneApi(
         if (requireApproval && !endpoint.allowWrites &&
             !confirm("Python requests an HTTP POST to owner-approved host ${endpoint.host}. Send this external request?"))
             return error("owner approval is required for HTTP POST to this host")
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = URL(endpoint.uri.toString()).openConnection() as HttpURLConnection
-            connection.requestMethod = method
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 8_000
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json, text/plain, */*")
-            if (method == "POST") {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val bytes = stream?.use { input ->
-                val out = java.io.ByteArrayOutputStream()
-                val buffer = ByteArray(4096)
-                var total = 0
-                while (total < 64 * 1024) {
-                    val n = input.read(buffer, 0, minOf(buffer.size, 64 * 1024 - total))
-                    if (n < 0) break
-                    out.write(buffer, 0, n); total += n
+        val client = OkHttpClient.Builder()
+            .proxy(Proxy.NO_PROXY)
+            .dns(Dns { hostname ->
+                if (!hostname.equals(endpoint.host, ignoreCase = true)) {
+                    throw UnknownHostException("redirect or secondary network host is blocked")
                 }
-                out.toByteArray()
-            } ?: ByteArray(0)
-            JSONObject().put("status", code).put("body", bytes.toString(Charsets.UTF_8)).toString()
-        } catch (e: Exception) { error("HTTP request failed: ${e.javaClass.simpleName}") }
-        finally { connection?.disconnect() }
+                endpoint.addresses
+            })
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(8, TimeUnit.SECONDS)
+            .writeTimeout(5, TimeUnit.SECONDS)
+            .callTimeout(10, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+        return try {
+            val request = Request.Builder().url(endpoint.uri.toString())
+                .header("Accept", "application/json, text/plain, */*")
+                .apply {
+                    if (method == "POST") {
+                        post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    } else get()
+                }.build()
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body
+                val bytes = responseBody?.byteStream()?.use { it.readNBytes(64 * 1024) } ?: ByteArray(0)
+                val truncated = (responseBody?.contentLength() ?: -1L) > bytes.size ||
+                    bytes.size == 64 * 1024
+                JSONObject().put("status", response.code)
+                    .put("body", bytes.toString(Charsets.UTF_8))
+                    .put("truncated", truncated).toString()
+            }
+        } catch (e: Exception) {
+            error("HTTP request failed: ${e.javaClass.simpleName}")
+        } finally {
+            runCatching { client.dispatcher.executorService.shutdown() }
+            runCatching { client.connectionPool.evictAll() }
+        }
     }
 
     private fun error(message: String): String = JSONObject().put("error", message.take(300)).toString()
