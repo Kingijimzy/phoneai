@@ -3,7 +3,7 @@ package com.phoneai.app
 /** Argument-vector policy for non-root Android utility commands. No shell parser or shell process. */
 internal object OrionPythonShellPolicy {
     data class Command(val executable: String, val args: List<String>, val workingDirectory: String)
-    private val commands = setOf("ls", "cat", "head", "tail", "grep", "wc", "date", "uname", "getprop", "df", "pwd")
+    private val commands = setOf("ls", "cat", "head", "tail", "grep", "wc", "date", "uname", "df", "pwd")
     private val token = Regex("^[A-Za-z0-9_./:=,+@%-]{1,180}$")
     fun parse(json: String, workspacePath: String): Command? {
         if (json.length > 1200 || json.contains('\u0000')) return null
