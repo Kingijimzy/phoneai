@@ -84,3 +84,5 @@
 - Memory UI now exposes archived version history (previous text, timestamp, provenance, confidence, review status and supersede/edit reason) and expiry choices (never, 7/30/90 days, one year). Expired memories remain in local storage but are excluded from prompt context until expiry is cleared or changed.
 
 - Approved, sufficiently confident routine memories now appear in a bounded central-brain suggestion block. The Memory UI lets the owner schedule once, daily or weekly reminders by choosing the date/time and recurrence. Scheduling requires the separate ROUTINE_REMINDERS grant and Android notifications enabled; reminders are cancelled on revocation, memory deletion, or when the routine is no longer eligible.
+
+- When an owner approves a new preference/routine note that closely matches an older approved note in the same category, Orion archives the previous version, marks the old entry superseded, removes it from graph recall, and activates the new approved entry. Pinned memories are not automatically superseded.
