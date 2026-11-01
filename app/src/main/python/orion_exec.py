@@ -68,7 +68,7 @@ _MODULE_PATHS = {
     "math.pi", "math.e", "math.tau", "math.inf", "math.nan",
     "math.sqrt", "math.floor", "math.ceil", "math.sin", "math.cos", "math.tan",
     "math.log", "math.log10", "math.exp", "math.pow", "math.fabs", "math.isfinite",
-    "math.isclose", "math.gcd", "math.lcm", "math.factorial",
+    "math.isclose", "math.gcd", "math.lcm",
     "re.match", "re.search", "re.fullmatch", "re.findall", "re.sub", "re.split", "re.escape",
     "urllib.parse", "urllib.parse.urlparse", "urllib.parse.urlsplit", "urllib.parse.urljoin",
     "urllib.parse.quote", "urllib.parse.unquote", "urllib.parse.urlencode",
@@ -76,7 +76,8 @@ _MODULE_PATHS = {
     "asyncio.run", "asyncio.sleep",
 }
 _ALLOWED_IMPORTS = {"json", "datetime", "math", "re", "asyncio", "urllib.parse"}
-_SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds"}
+_SAFE_OBJECT_METHODS = {"get", "keys", "values", "items", "lower", "upper", "strip", "split", "startswith", "endswith", "isoformat", "strftime", "timestamp", "weekday", "total_seconds", "group", "groups", "start", "end"}
+_SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds", "get", "keys", "values", "items", "lower", "upper", "strip", "split", "startswith", "endswith"}
 
 def _path(node):
     if isinstance(node, ast.Name):
@@ -95,9 +96,48 @@ async def _bounded_async_sleep(seconds=0):
 def _bounded_async_run(coro):
     return _asyncio.run(_asyncio.wait_for(coro, timeout=2.0))
 
+
+def _bounded_json_loads(value):
+    if not isinstance(value, str) or len(value) > 16000:
+        raise Rejected("json.loads accepts at most 16000 characters of text")
+    return json.loads(value)
+
+def _bounded_json_dumps(value):
+    result = json.dumps(value)
+    if len(result) > 20000:
+        raise Rejected("json.dumps output is limited to 20000 characters")
+    return result
+
+def _safe_pattern(pattern, value):
+    if not isinstance(pattern, str) or len(pattern) > 160:
+        raise Rejected("regular-expression patterns are limited to 160 characters")
+    if not isinstance(value, str) or len(value) > 2048:
+        raise Rejected("regular-expression input is limited to 2048 characters")
+    if _re.search(r"\\)[+*{]", pattern):
+        raise Rejected("quantified groups are blocked to reduce regular-expression backtracking")
+    return pattern
+
+def _bounded_re_match(pattern, value):
+    return _re.match(_safe_pattern(pattern, value), value)
+
+def _bounded_re_search(pattern, value):
+    return _re.search(_safe_pattern(pattern, value), value)
+
+def _bounded_re_fullmatch(pattern, value):
+    return _re.fullmatch(_safe_pattern(pattern, value), value)
+
+def _bounded_re_findall(pattern, value):
+    return _re.findall(_safe_pattern(pattern, value), value)
+
+def _bounded_re_sub(pattern, replacement, value):
+    return _re.sub(_safe_pattern(pattern, value), str(replacement)[:120], value, count=1000)
+
+def _bounded_re_split(pattern, value):
+    return _re.split(_safe_pattern(pattern, value), value, maxsplit=1000)
+
 def _safe_module(name):
     modules = {
-        "json": _types.SimpleNamespace(loads=json.loads, dumps=json.dumps),
+        "json": _types.SimpleNamespace(loads=_bounded_json_loads, dumps=_bounded_json_dumps),
         "datetime": _types.SimpleNamespace(
             datetime=_datetime.datetime, date=_datetime.date, time=_datetime.time,
             timedelta=_datetime.timedelta, timezone=_datetime.timezone,
@@ -106,13 +146,13 @@ def _safe_module(name):
             key: getattr(_math, key) for key in (
                 "pi", "e", "tau", "inf", "nan", "sqrt", "floor", "ceil", "sin", "cos",
                 "tan", "log", "log10", "exp", "pow", "fabs", "isfinite", "isclose",
-                "gcd", "lcm", "factorial"
+                "gcd", "lcm"
             )
         }),
         "re": _types.SimpleNamespace(**{
-            key: getattr(_re, key) for key in (
-                "match", "search", "fullmatch", "findall", "sub", "split", "escape"
-            )
+            "match": _bounded_re_match, "search": _bounded_re_search,
+            "fullmatch": _bounded_re_fullmatch, "findall": _bounded_re_findall,
+            "sub": _bounded_re_sub, "split": _bounded_re_split, "escape": _re.escape,
         }),
         "asyncio": _types.SimpleNamespace(run=_bounded_async_run, sleep=_bounded_async_sleep),
     }
@@ -181,7 +221,9 @@ def _validate(tree, allow_phone=False):
                           isinstance(node.func.value, ast.Name) and node.func.value.id == "phone" and
                           node.func.attr in _PHONE_METHODS)
             safe_module = isinstance(node.func, ast.Attribute) and _path(node.func) in _MODULE_PATHS
-            if not (safe_builtin or safe_phone or safe_module):
+            safe_object_method = (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and
+                                  node.func.value.id != "phone" and node.func.attr in _SAFE_OBJECT_METHODS)
+            if not (safe_builtin or safe_phone or safe_module or safe_object_method):
                 raise Rejected("only approved built-ins and registered phone capabilities may be called")
             if node.keywords:
                 raise Rejected("keyword arguments are not supported")
