@@ -246,21 +246,20 @@ class OrionNotificationListener : NotificationListenerService() {
         }
 
         fun readSafeNotifications(): String {
-            if (!OrionSensorConsent.read(instance ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry.", OrionSensorScope.NOTIFICATIONS).active()) {
+            val service = instance
+                ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry."
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
                 synchronized(lock) { recent.clear() }
                 return "Orion notification context is disabled. Enable the Notification context grant in Settings → Sensor & context permissions."
-            }
-            if (instance == null) {
-                return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry. Orion excludes banking, payment, password, card, CVV, OTP, and security-code notifications."
             }
             val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis } }
             if (items.isEmpty()) {
                 return "No safe notifications are available. Banking/payment and authentication/security notifications are deliberately excluded; access is memory-only."
             }
-            return "Recent safe notifications (memory-only; sensitive financial/security notifications filtered):\n" +
-                items.joinToString("\n\n") {
+            return "Recent safe notifications (memory-only; sensitive financial/security notifications filtered):\\n" +
+                items.joinToString("\\n\\n") {
                     val time = try { timeFormat.format(Date(it.whenMillis)) } catch (_: Exception) { "--:--" }
-                    "$time · ${it.app}\nNotification key (for reply/dismiss): ${it.key}\n${it.title}\n${it.text}".trim()
+                    "$time · ${it.app}\\nNotification key (for reply/dismiss): ${it.key}\\n${it.title}\\n${it.text}".trim()
                 }.take(5000)
         }
     }
