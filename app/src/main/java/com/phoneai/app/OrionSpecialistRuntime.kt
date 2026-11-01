@@ -6,6 +6,42 @@ import android.content.Context
 internal object OrionSpecialistRuntime {
     fun workers(context: Context): List<OrionTaskWorker> = OrionBuiltInSpecialists(context.applicationContext).workers()
 
+    /**
+     * Explicit remote route for deployments that provide an HTTPS LangGraph endpoint and
+     * an in-memory token provider. Receipt storage is always enabled; credentials never
+     * enter task envelopes, logs, or the receipt ledger.
+     */
+    fun dispatchRemote(
+        context: Context,
+        taskId: String,
+        endpoint: String,
+        bearerToken: () -> String?
+    ): OrionCoordinatedResult {
+        val app = context.applicationContext
+        val tasks = OrionDistributedTaskStore(app)
+        val remote = OrionLangGraphRemoteWorker(
+            OrionLangGraphTransport(endpoint, bearerToken),
+            bearerToken,
+            OrionRemoteTaskReceiptStore(app)
+        )
+        val worker = object : OrionTaskWorker {
+            override val workerId = "orion-langgraph-remote"
+            override val supportedKinds = OrionTaskEnvelope.Kind.values().toSet()
+            override val supportedCapabilities = setOf("research", "coding", "diagnostics", "trading_analysis", "verification")
+            override fun execute(task: OrionTaskEnvelope): OrionWorkerResult = when (
+                val result = remote.execute(task) { tasks.isCancellationRequested(task.taskId) }
+            ) {
+                is OrionLangGraphRemoteWorker.RemoteResult -> when (result.status) {
+                    "completed" -> OrionWorkerResult.Success(result.evidenceRef ?: throw IllegalStateException("remote_evidence_missing"))
+                    "failed" -> OrionWorkerResult.Failure(result.detail ?: "remote_task_failed", false)
+                    "cancelled", "cancel_requested" -> OrionWorkerResult.NeedsOwner(result.detail ?: "remote_task_cancelled")
+                    else -> OrionWorkerResult.Failure("remote_pending_resume_from_receipt", true)
+                }
+            }
+        }
+        return OrionExecutionCoordinator(tasks, OrionWorkerLeaseStore(app), app).dispatch(taskId, worker)
+    }
+
     fun dispatch(context: Context, taskId: String): OrionCoordinatedResult {
         val app = context.applicationContext
         val tasks = OrionDistributedTaskStore(app)
