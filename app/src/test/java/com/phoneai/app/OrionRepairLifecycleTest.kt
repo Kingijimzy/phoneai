@@ -73,6 +73,7 @@ class OrionRepairLifecycleTest {
         val result = execute(apply = { applied++; "receipt-123" })
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
         assertEquals(1, applied)
+        assertEquals(0, approvalPrompts)
         assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
             .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
     }
@@ -311,6 +312,51 @@ class OrionRepairLifecycleTest {
         assertEquals(0, callbacks)
     }
 
+    @Test fun centralBrainRequestsOwnerOnlyAfterSandboxForDangerousRepairAndResumesWithoutRetesting() {
+        val plan = proposal(OrionRepairRisk.SECURITY_SENSITIVE, approval = true)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        var sandboxCalls = 0
+        var approvalCalls = 0
+        var applyCalls = 0
+        val receipt = OrionCentralBrain.executeRepairProposal(
+            context, sessionId, "task-repair-test", finding(), plan, digest,
+            { prompt ->
+                approvalCalls++
+                assertTrue(prompt.contains("SECURITY_SENSITIVE"))
+                assertTrue(prompt.contains("safely tested"))
+                assertEquals(1, sandboxCalls)
+                true
+            },
+            { sandboxCalls++; true },
+            { applyCalls++; "approved-repair-receipt" },
+            { true }, { true }, { true }
+        )
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, receipt.result)
+        assertEquals(1, sandboxCalls)
+        assertEquals(1, approvalCalls)
+        assertEquals(1, applyCalls)
+    }
+
+    @Test fun centralBrainPersistsOwnerRejectionAndNeverApplies() {
+        val plan = proposal(OrionRepairRisk.EXTERNAL_SIDE_EFFECT, approval = true)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        var applyCalls = 0
+        val rejected = OrionCentralBrain.executeRepairProposal(
+            context, sessionId, "task-repair-test", finding(), plan, digest,
+            { false }, { true }, { applyCalls++; "must-not-run" }, { true }, { true }, { true },
+            OrionRepairExecutionBoundary.EXTERNAL
+        )
+        assertEquals(OrionRepairLifecycle.Result.OWNER_REJECTED, rejected.result)
+        assertEquals(0, applyCalls)
+        val replay = OrionRepairLifecycle.execute(
+            context, sessionId, "task-repair-test", finding(), plan, digest, digest,
+            { true }, { applyCalls++; "replay" }, { true }, { true }, { true },
+            OrionRepairExecutionBoundary.EXTERNAL
+        )
+        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, replay.result)
+        assertEquals(0, applyCalls)
+    }
+
     @Test fun centralBrainRepairContextIncludesPersistedStagesWithoutApprovalDigest() {
         val digest = "d".repeat(64)
         assertTrue(OrionEvidenceLedger.recordRepairStage(
@@ -328,8 +374,10 @@ class OrionRepairLifecycleTest {
         val plan = proposal()
         val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
         var applied = 0
+        var approvalPrompts = 0
         val receipt = OrionCentralBrain.executeRepairProposal(
-            context, sessionId, "task-repair-test", finding(), plan, digest, null,
+            context, sessionId, "task-repair-test", finding(), plan, digest,
+            { approvalPrompts++; true },
             { true }, { applied++; "central-brain-receipt" }, { true }, { true }, { true }
         )
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, receipt.result)
