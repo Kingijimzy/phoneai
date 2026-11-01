@@ -7,17 +7,17 @@ import java.net.InetAddress
 /** Host-scoped outbound HTTP policy. A host must be explicitly registered by the owner. */
 internal object OrionPythonNetworkPolicy {
     private const val PREFS = "orion_python_network_hosts_v1"
-    data class Endpoint(val uri: URI, val host: String, val local: Boolean)
-    fun grantHost(context: Context, hostInput: String, allowPlainHttp: Boolean = false): Boolean {
+    data class Endpoint(val uri: URI, val host: String, val local: Boolean, val allowWrites: Boolean)
+    fun grantHost(context: Context, hostInput: String, allowPlainHttp: Boolean = false, allowWrites: Boolean = false): Boolean {
         val host = normalizeHost(hostInput) ?: return false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putBoolean(host, true).putBoolean("$host:plain_http", allowPlainHttp).apply()
+            .putBoolean(host, true).putBoolean("$host:plain_http", allowPlainHttp).putBoolean("$host:writes", allowWrites).apply()
         return true
     }
     fun revokeHost(context: Context, hostInput: String) {
         val host = normalizeHost(hostInput) ?: return
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .remove(host).remove("$host:plain_http").apply()
+            .remove(host).remove("$host:plain_http").remove("$host:writes").apply()
     }
     fun validate(context: Context, url: String): Endpoint? {
         if (!OrionSensorConsent.read(context, OrionSensorScope.NETWORK).active()) return null
@@ -35,7 +35,7 @@ internal object OrionPythonNetworkPolicy {
             if (addresses.isEmpty() || addresses.any { it.isAnyLocalAddress || it.isLoopbackAddress ||
                     it.isLinkLocalAddress || it.isSiteLocalAddress || it.isMulticastAddress }) return null
         }
-        return Endpoint(uri, host, local)
+        return Endpoint(uri, host, local, p.getBoolean("$host:writes", false))
     }
     private fun normalizeHost(value: String): String? {
         val host = value.trim().lowercase().trimEnd('.')
