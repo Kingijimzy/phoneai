@@ -47,7 +47,7 @@ _ALLOWED_NODES = (
 _PHONE_METHODS = {
     "battery", "location", "notifications", "contacts", "accessibility_screen",
     "fs_list", "fs_read", "fs_write", "shell", "http_get", "http_post",
-    "ui_tap_text", "ui_tap", "ui_swipe",
+    "ui_tap_text", "ui_tap", "ui_swipe", "websocket",
 }
 
 def _validate(tree, allow_phone=False):
