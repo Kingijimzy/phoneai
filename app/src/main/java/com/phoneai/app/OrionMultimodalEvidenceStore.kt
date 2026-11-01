@@ -25,10 +25,10 @@ internal object OrionMultimodalEvidenceStore {
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
     fun record(
-        context: Context, sessionId: String, taskRef: String = sessionId,
+        context: Context, sessionId: String?, taskRef: String = sessionId.orEmpty(),
         modality: Modality, source: String, reference: String = "", digest: String = "", summary: String
     ): String? {
-        val session = sessionId.trim().take(160)
+        val session = sessionId?.trim()?.take(160).orEmpty()
         if (session.isBlank()) return null
         val safeSource = source.filter { it.isLetterOrDigit() || it in "._-" }.take(48)
         val safeSummary = summary.replace(Regex("[\\r\\n]+"), " ").take(220)
