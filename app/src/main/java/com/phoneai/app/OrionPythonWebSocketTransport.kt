@@ -96,12 +96,14 @@ internal object OrionPythonWebSocketTransport {
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                     session.closed = true
                     session.offer(JSONObject().put("type", "closed").put("code", code).put("reason", reason.take(160)))
+                    dispose(session)
                     ready.countDown()
                 }
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     session.failure = t.javaClass.simpleName
                     session.closed = true
                     session.offer(JSONObject().put("type", "error").put("error", t.javaClass.simpleName))
+                    dispose(session)
                     ready.countDown()
                 }
             })
@@ -159,8 +161,8 @@ internal object OrionPythonWebSocketTransport {
     fun close(id: String): String {
         val session = sessions.remove(id) ?: return error("WebSocket session not found")
         session.closed = true
-        session.socket?.close(1000, "Orion session closed")
-        dispose(session)
+        val socket = session.socket
+        if (socket != null) socket.close(1000, "Orion session closed") else dispose(session)
         return JSONObject().put("closed", true).put("session_id", id).toString()
     }
 
