@@ -3,6 +3,8 @@ package com.phoneai.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.ComponentName
+import android.provider.Settings
 import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.SystemClock
@@ -96,6 +98,21 @@ internal class OrionPythonPhoneApi(
             out.toString()
         } catch (e: SecurityException) { error("Android denied Contacts access") }
         catch (e: Exception) { error("contacts query failed: ${e.javaClass.simpleName}") }
+    }
+
+    /** Reports the Android-owned accessibility binding; Python cannot start or impersonate this service. */
+    fun accessibility_status(): String {
+        val component = ComponentName(context, PhoneAiService::class.java).flattenToString()
+        val enabled = Settings.Secure.getString(
+            context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty().split(':').any { it.equals(component, ignoreCase = true) }
+        val service = PhoneAiService.instance
+        val packageName = runCatching { service?.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+        return JSONObject().put("enabled_in_android_settings", enabled)
+            .put("service_connected", service != null)
+            .put("active_package", packageName ?: JSONObject.NULL)
+            .put("settings_action", Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            .toString()
     }
 
     fun accessibility_screen(): String {
