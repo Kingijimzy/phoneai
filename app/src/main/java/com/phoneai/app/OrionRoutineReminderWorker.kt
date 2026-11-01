@@ -14,10 +14,17 @@ import java.util.concurrent.TimeUnit
 /** A reminder runs only after the owner explicitly grants the routine-reminder scope and schedules it. */
 internal class OrionRoutineReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
-        if (!OrionSensorConsent.read(applicationContext, OrionSensorScope.ROUTINE_REMINDERS).active()) return Result.success()
         val memoryId = inputData.getInt(KEY_MEMORY_ID, -1)
-        val memory = MemoryStore.all(applicationContext).firstOrNull { it.id == memoryId } ?: return Result.success()
-        if (!OrionRoutinePolicy.eligible(applicationContext, memory)) return Result.success()
+        if (memoryId <= 0) return Result.success()
+        if (!OrionSensorConsent.read(applicationContext, OrionSensorScope.ROUTINE_REMINDERS).active()) {
+            cancel(applicationContext, memoryId)
+            return Result.success()
+        }
+        val memory = MemoryStore.all(applicationContext).firstOrNull { it.id == memoryId }
+        if (memory == null || !OrionRoutinePolicy.eligible(applicationContext, memory)) {
+            cancel(applicationContext, memoryId)
+            return Result.success()
+        }
         OrionRuntimeNotifier.postRoutineReminder(applicationContext, memory.text)
         return Result.success()
     }
