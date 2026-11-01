@@ -259,7 +259,9 @@ class OrionRepairLifecycleTest {
 
     @Test fun applyStartClaimIsAtomicAndSingleUse() {
         val plan = proposal()
-        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(
+            sessionId, "task-repair-test", finding(), plan, OrionRepairExecutionBoundary.EXTERNAL
+        )
         val eventId = OrionRepairLifecycle.stageEventId("task-repair-test", digest, "APPLY_STARTED")
         val repository = OrionConversationRepository.get(context)
         assertTrue(repository.claimEventForSession(
