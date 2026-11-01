@@ -11,7 +11,8 @@ internal object ContextWindowBudget {
             "orion central brain" in s || "shared executive contract" in s -> 105
             "relevant persistent memory" in s || "long-term memory" in s || "things you have learned about how this user" in s -> 100
             "multimodal evidence index" in s -> 82
-            "owner-granted sensor context" in s || "owner-granted safe notification context" in s -> 72
+            "owner-granted sensor context" in s || "owner-granted safe notification context" in s ||
+                "owner-granted device state" in s || "owner-granted location context" in s -> 72
             "previous discussions for this objective" in s || "relevant past conversations" in s || "decisions and unresolved questions" in s -> 95
             "orion local self-diagnostic" in s || "self-diagnostic" in s -> 90
             "relevant execution lessons" in s || "lessons from your own past runs" in s -> 85
