@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionWorkspacePatchStoreTest {
-    private fun context(): Context = RuntimeEnvironment.getApplication<Context>().also { c ->
+    private fun context(): Context = RuntimeEnvironment.getApplication().also { c ->
         java.io.File(c.filesDir, "orion_patch_proposals").deleteRecursively()
     }
 
