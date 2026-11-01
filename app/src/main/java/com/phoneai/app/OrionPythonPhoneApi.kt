@@ -96,8 +96,9 @@ internal class OrionPythonPhoneApi(
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
-        // Reuse the production screen reader: it filters sensitive surfaces and performs bounded
-        // accessibility/OCR extraction instead of exposing raw AccessibilityNodeInfo objects.
+        // Reuse the production screen reader and suppress its potentially sensitive surfaces entirely
+        // at the Python boundary rather than returning partially filtered node text.
+        if (!screenSafe(service)) return error("screen reading is blocked on a potentially sensitive surface")
         return service.readScreen()
     }
 
@@ -107,6 +108,7 @@ internal class OrionPythonPhoneApi(
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
+        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         if (!confirm("Python requests an accessibility tap on the visible text: \"$target\". Continue?"))
             return error("owner declined or did not approve the UI action")
         return Tools(service).clickText(target)
@@ -118,6 +120,9 @@ internal class OrionPythonPhoneApi(
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
+        val metrics = context.resources.displayMetrics
+        if (x > metrics.widthPixels || y > metrics.heightPixels) return error("tap coordinates are outside the current display")
+        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         if (!confirm("Python requests an accessibility tap at screen coordinates ${x.toInt()}, ${y.toInt()}. Continue?"))
             return error("owner declined or did not approve the UI action")
         return service.tap(x.toFloat(), y.toFloat())
@@ -129,9 +134,23 @@ internal class OrionPythonPhoneApi(
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
+        val metrics = context.resources.displayMetrics
+        if (values.filterIndexed { index, _ -> index % 2 == 0 }.any { it > metrics.widthPixels } ||
+            values.filterIndexed { index, _ -> index % 2 == 1 }.any { it > metrics.heightPixels })
+            return error("swipe coordinates are outside the current display")
+        if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
         if (!confirm("Python requests an accessibility swipe from (${x1.toInt()}, ${y1.toInt()}) to (${x2.toInt()}, ${y2.toInt()}). Continue?"))
             return error("owner declined or did not approve the UI action")
         return service.swipe(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), 350L)
+    }
+
+    private fun screenSafe(service: PhoneAiService): Boolean {
+        val root = service.rootInActiveWindow ?: return false
+        val packageName = root.packageName?.toString().orEmpty()
+        if (SafetyGate.isSensitiveApp(packageName, packageName)) return false
+        val snapshot = service.readScreen()
+        return !snapshot.startsWith("error:") &&
+            !snapshot.contains("(OCR withheld on a potentially sensitive screen)")
     }
 
     fun fs_list(): String = workspace.list()
