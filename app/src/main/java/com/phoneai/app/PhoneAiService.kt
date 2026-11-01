@@ -2430,7 +2430,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (nodes.size + ocrElements.size + visualElements.size < 3) {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
-        return sb.toString().take(2800)
+        val rendered = sb.toString().take(2800)
+        if (!sensitiveScreen) {
+            runCatching {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(rendered.toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it) }
+                OrionMultimodalEvidenceStore.record(
+                    this,
+                    ChatHistoryStore.activeSessionId(this),
+                    modality = OrionMultimodalEvidenceStore.Modality.SCREEN,
+                    source = "accessibility_ocr_screen",
+                    digest = digest,
+                    summary = "Non-sensitive screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
+                )
+            }
+        }
+        return rendered
     }
 
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {
