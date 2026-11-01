@@ -2963,7 +2963,7 @@ Rules:
         // W3C-compatible 16-byte trace ID; shared by the start and terminal tool receipts.
         val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
         svc.recordChatEvent("tool", "started", "Tool: $tool", traceId = traceId)
-        val result = OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
+        val result = runCatching { OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val preflight = preflightTool(route.tool, args)
             val backendResult = if (preflight != null) preflight else runCatching {
                 OrionRuntimeCapabilityExecutor.execute(
@@ -2990,6 +2990,8 @@ Rules:
             } else backendResult
             taskProofs.record(route.tool, finalResult)
             finalResult
+        } }.getOrElse { failure ->
+            "error: capability adapter dispatch threw ${failure.javaClass.simpleName}; outcome requires inspection."
         }
         // Conversation turns already live in the local SQLite messages table. This lifecycle
         // receipt adds the outcome for every routed tool, including adapter/preflight errors,
