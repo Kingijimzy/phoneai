@@ -166,6 +166,24 @@ class OrionRepairLifecycleTest {
         assertEquals(1, calls)
     }
 
+    @Test fun persistedApplyStartedMarkerBlocksReplayAfterInterruptedDispatch() {
+        val plan = proposal()
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        assertTrue(OrionEvidenceLedger.recordRepairStage(
+            context, "task-repair-test", "APPLY_STARTED", digest,
+            "Simulated process interruption during adapter dispatch."
+        ))
+        assertTrue(OrionConversationRepository.get(context).recordEventForSession(
+            context, sessionId,
+            OrionRepairLifecycle.stageEventId("task-repair-test", digest, "APPLY_STARTED"),
+            "repair_lifecycle", "apply_started", "Simulated interrupted dispatch."
+        ) != null)
+        var applyCalls = 0
+        val result = execute(apply = { applyCalls++; "should-not-run" })
+        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, result.result)
+        assertEquals(0, applyCalls)
+    }
+
     @Test fun suppliedDigestMustMatchTheExactFindingAndProposal() {
         var applied = false
         val original = proposal()
