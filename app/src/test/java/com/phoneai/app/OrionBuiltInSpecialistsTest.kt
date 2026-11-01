@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionBuiltInSpecialistsTest {
-    private fun context(): Context = RuntimeEnvironment.getApplication<Context>().also { c ->
+    private fun context(): Context = RuntimeEnvironment.getApplication().also { c ->
         c.filesDir.listFiles()?.filter { it.name.startsWith("orion_evidence_") }?.forEach { it.delete() }
     }
 
