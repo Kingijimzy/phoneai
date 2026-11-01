@@ -45,7 +45,12 @@ internal object OrionMcpPagination {
                 }
                 rows.optJSONObject(index)?.let { items.put(it) }
             }
-            val next = validCursor(page.optString("nextCursor").takeIf { page.has("nextCursor") && !page.isNull("nextCursor") })
+            val rawNextCursor = page.opt("nextCursor")
+            val next = when (rawNextCursor) {
+                null, JSONObject.NULL -> null
+                is String -> validCursor(rawNextCursor)
+                else -> throw IllegalArgumentException("MCP server returned a non-string pagination cursor.")
+            }
             if (next == null) break
             if (next in visited) throw IllegalStateException("MCP pagination cursor cycle detected.")
             if (items.length() >= maxItems || pages >= maxPages) {
