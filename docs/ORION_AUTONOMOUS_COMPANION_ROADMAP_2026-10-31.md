@@ -587,3 +587,5 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Added on-demand, consent-gated battery/charging/network/thermal snapshots, approximate last-known location (10-minute freshness, ~1 km rounding), and recent app foreground-duration summaries (Usage Access required, sensitive apps excluded, not persisted). These snapshots are supplied to the central brain only while their Orion grants are active.
 
 - Memory Activity now surfaces prior versions and owner-editable expiry windows; expired entries are retained locally but filtered out of prompt context. Permanent deletion removes the memory's version history and graph metadata.
+
+- Connected approved routine memories to the central brain as non-nagging suggestions and added owner-selected once/daily/weekly reminder scheduling from Memory Activity. Recurrence requires the separate reminder grant and Android notifications; revocation or loss of routine eligibility cancels future work.
