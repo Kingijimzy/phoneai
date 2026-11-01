@@ -33,7 +33,7 @@ internal class OrionPythonCapabilityExecutor(
             "python_exec" -> {
                 val code = args.optString("code")
                 if (stopped()) "error: task was stopped before Python execution."
-                else tools.pythonExec(code)
+                else tools.pythonExec(code, confirm)
             }
             "extension_list" -> listExtensions()
             "extension_create" -> createDraft(args)
