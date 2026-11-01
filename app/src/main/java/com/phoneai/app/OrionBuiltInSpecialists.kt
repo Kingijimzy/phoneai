@@ -55,7 +55,7 @@ internal class OrionBuiltInSpecialists(private val context: Context) {
         val rows = org.json.JSONArray()
         setups.take(30).forEach { s ->
             rows.put(JSONObject().put("symbol", s.symbol).put("type", s.type)
-                .put("timeframe", s.timeframe).put("score", s.score))
+                .put("timeframe", s.tf).put("score", s.score).put("side", s.side).put("entry", s.entry).put("stop", s.stop).put("target", s.target).put("note", s.note).put("rr", s.rr()))
         }
         return success("trading_analysis", task, JSONObject().put("watchlist", Prefs.watchlist(context))
             .put("setups", rows).put("note", "Read-only scan. No orders or account mutations were submitted."))
