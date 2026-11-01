@@ -821,7 +821,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val originalImageCount = OrionProviderContextPolicy.newestUserImageCount(messages)
             val retainedImageCount = OrionProviderContextPolicy.newestUserImageCount(requestMessages)
             if (vision && retainedImageCount < originalImageCount) {
-                throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 400)
+                throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 413)
             }
             attempts++
             pace(p)
