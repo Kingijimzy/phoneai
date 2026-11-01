@@ -52,10 +52,18 @@ def _validate(tree):
     for node in nodes:
         if not isinstance(node, _ALLOWED_NODES):
             raise Rejected("unsupported Python syntax: " + type(node).__name__)
+        if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
+            if abs(node.value).bit_length() > MAX_INT_BITS:
+                raise Rejected("an integer constant exceeds the size limit")
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
             if not isinstance(node.right, ast.Constant) or not isinstance(node.right.value, int) or isinstance(node.right.value, bool):
                 raise Rejected("exponents must be small integer constants")
             if node.right.value < 0 or node.right.value > 16:
+                raise Rejected("integer exponents must be between 0 and 16")
+        if isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Pow):
+            if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, int) or isinstance(node.value.value, bool):
+                raise Rejected("augmented exponents must be small integer constants")
+            if node.value.value < 0 or node.value.value > 16:
                 raise Rejected("integer exponents must be between 0 and 16")
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name) or node.func.id not in _SAFE:
@@ -87,6 +95,9 @@ def _check_seq(n):
 def _add(a, b):
     if _is_seq(a) and _is_seq(b):
         _check_seq(len(a) + len(b))
+    elif isinstance(a, int) and not isinstance(a, bool) and isinstance(b, int) and not isinstance(b, bool):
+        if max(abs(a).bit_length(), abs(b).bit_length()) + 1 > MAX_INT_BITS:
+            raise Rejected("a number grew too large")
     return a + b
 
 def _mul(a, b):
@@ -127,9 +138,11 @@ class _Guard(ast.NodeTransformer):
 
     def visit_AugAssign(self, node):
         self.generic_visit(node)
-        if isinstance(node.op, (ast.Add, ast.Mult)):
-            name = "_add" if isinstance(node.op, ast.Add) else "_mul"
-            load = ast.Name(id=node.target.id, ctx=ast.Load()) if isinstance(node.target, ast.Name) else node.target
+        if isinstance(node.op, (ast.Add, ast.Mult, ast.Pow)):
+            if not isinstance(node.target, ast.Name):
+                raise Rejected("bounded augmented operations require a simple variable target")
+            name = "_add" if isinstance(node.op, ast.Add) else "_mul" if isinstance(node.op, ast.Mult) else "_pow"
+            load = ast.Name(id=node.target.id, ctx=ast.Load())
             return ast.copy_location(ast.Assign(targets=[node.target], value=self._call(name, load, node.value)), node)
         return node
 
