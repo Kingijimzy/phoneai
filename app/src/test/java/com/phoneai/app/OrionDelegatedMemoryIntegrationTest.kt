@@ -67,7 +67,7 @@ class OrionDelegatedMemoryIntegrationTest {
         assertFalse(prompt.contains("Use short checklists."))
     }
     @Test fun plannerDelegationReceivesSanitizedTaskTitlesButNotFreeFormDetails() {
-        val marker = "delegated-planner-${System.nanoTime()}"
+        val marker = "delegated-planner-private-marker"
         val task = TaskStore.add(
             context,
             "Review $marker",
