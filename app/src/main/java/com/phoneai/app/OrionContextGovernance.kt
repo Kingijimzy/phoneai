@@ -111,7 +111,7 @@ internal object OrionProviderContextPolicy {
             m.startsWith("claude-") ||
             m.contains("gpt-4o") || m.contains("gpt-4.1") ||
             m.contains("llama-4") || m.contains("gemma-3") ||
-            m.contains("pixtral") || m.contains("llava") || m.contains("-vl") ||
+            m.contains("vision") || m.contains("pixtral") || m.contains("llava") || m.contains("-vl") ||
             m.contains("vila") || m.contains("paligemma") ||
             m.contains("nemotron-3.5-super-vl") || m.contains("qwen2.5-vl") ||
             m.contains("qwen-vl")
