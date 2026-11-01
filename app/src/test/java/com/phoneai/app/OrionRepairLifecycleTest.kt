@@ -55,7 +55,8 @@ class OrionRepairLifecycleTest {
         verifyRollback: () -> Boolean = { true }
     ) = OrionRepairLifecycle.execute(
         context, sessionId, "task-repair-test", finding(), proposal,
-        "a".repeat(64), ownerApprovalDigest, sandbox, apply, verify, rollback, verifyRollback
+        OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), proposal),
+        ownerApprovalDigest, sandbox, apply, verify, rollback, verifyRollback
     )
 
     @Test fun safeReversibleRepairRequiresSandboxAndVerifiedApplyReceipt() {
@@ -102,7 +103,10 @@ class OrionRepairLifecycleTest {
         var rolledBack = false
         val result = execute(
             proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
-            ownerApprovalDigest = "a".repeat(64),
+            ownerApprovalDigest = OrionRepairLifecycle.expectedPlanDigest(
+                sessionId, "task-repair-test", finding(),
+                proposal(OrionRepairRisk.DATA_AFFECTING, true)
+            ),
             verify = { false },
             rollback = { rolledBack = true; true }
         )
@@ -145,6 +149,19 @@ class OrionRepairLifecycleTest {
         val second = execute(apply = { calls++; "receipt-twice" })
         assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, second.result)
         assertEquals(1, calls)
+    }
+
+    @Test fun suppliedDigestMustMatchTheExactFindingAndProposal() {
+        var applied = false
+        val original = proposal()
+        val changed = original.copy(summary = "Different repair plan")
+        val staleDigest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), original)
+        val result = OrionRepairLifecycle.execute(
+            context, sessionId, "task-repair-test", finding(), changed, staleDigest, null,
+            { true }, { applied = true; "receipt" }, { true }, { true }, { true }
+        )
+        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, result.result)
+        assertFalse(applied)
     }
 
     @Test fun invalidPlanDigestIsRejectedBeforeAnyCallback() {
