@@ -130,11 +130,23 @@ internal object OrionRepairLifecycle {
                 "Repair does not meet the reversible, idempotent, rollback-backed auto-apply policy.")
         }
 
-        // Persist a no-replay marker before entering any side-effecting adapter. If the
-        // process dies mid-call, recovery must inspect actual state rather than dispatch again.
-        if (!emit(app, sessionId, taskId, "APPLY_STARTED", digest,
-                "Application dispatch is beginning; a crash or missing receipt requires manual reconciliation.")) {
-            return Receipt(Result.PERSISTENCE_FAILED, digest, "Apply-start receipt failed; adapter was not invoked.")
+        // Atomically claim the one-shot transition before entering any side-effecting adapter.
+        // A competing worker or process can never pass this unique event-ID insertion twice.
+        val applyStartedId = stageEventId(taskId, digest, "APPLY_STARTED")
+        val claimed = runCatching {
+            OrionConversationRepository.get(app).claimEventForSession(
+                app, sessionId, applyStartedId, "repair_lifecycle", "apply_started",
+                "Application dispatch claimed; a crash or missing receipt requires manual reconciliation."
+            )
+        }.getOrDefault(false)
+        if (!claimed) return Receipt(Result.POLICY_BLOCKED, digest,
+            "Another execution already claimed this repair plan; reconcile its state before retrying.")
+        // Mirror the claim into the evidence ledger before invoking the adapter.
+        if (!OrionEvidenceLedger.recordRepairStage(
+                app, taskId, "APPLY_STARTED", digest,
+                "Application dispatch claimed; a crash or missing receipt requires manual reconciliation."
+            )) {
+            return Receipt(Result.PERSISTENCE_FAILED, digest, "Apply-start evidence failed; adapter was not invoked.")
         }
         val appliedReceipt = try { apply()?.trim()?.take(160) } catch (_: Exception) { null }
         if (appliedReceipt.isNullOrBlank()) {
