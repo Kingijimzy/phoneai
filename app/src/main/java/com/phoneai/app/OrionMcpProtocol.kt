@@ -36,8 +36,13 @@ internal object OrionMcpProtocol {
         return request("prompts/get", JSONObject().put("name", name).put("arguments", arguments))
     }
 
+    fun resources(result: JSONObject): JSONArray = result.optJSONArray("resources") ?: JSONArray()
+
     fun resourceContents(result: JSONObject): JSONArray =
         result.optJSONArray("contents") ?: JSONArray()
+
+    fun isReadOnlyMethod(method: String): Boolean =
+        method in setOf("resources/list", "resources/read", "prompts/list", "prompts/get")
 
     fun prompts(result: JSONObject): JSONArray =
         result.optJSONArray("prompts") ?: JSONArray()
