@@ -141,6 +141,9 @@ internal class OrionPythonCapabilityExecutor(
     }
 
     companion object {
+        /** The direct Python sandbox is capability-free; execution itself needs no confirmation. */
+        fun requiresExplicitApproval(tool: String): Boolean = false
+
         private val supportedTools = setOf(
             "python_exec", "extension_list", "extension_create", "extension_test",
             "extension_enable", "extension_run", "extension_disable"
