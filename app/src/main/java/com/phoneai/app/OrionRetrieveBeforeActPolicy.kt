@@ -12,6 +12,26 @@ internal data class OrionMemoryRetrievalReceipt(
 )
 
 internal object OrionRetrieveBeforeActPolicy {
+    sealed class DispatchGate<out T> {
+        data class Allowed<T>(val value: T) : DispatchGate<T>()
+        data class Blocked(val reason: String) : DispatchGate<Nothing>()
+    }
+
+    /**
+     * The final dispatch seam. A stale/missing receipt returns Blocked without evaluating
+     * the executor lambda; callers still own cancellation, permissions and approval checks.
+     */
+    fun <T> dispatchIfValid(
+        request: String,
+        receipt: OrionMemoryRetrievalReceipt?,
+        now: Long = System.currentTimeMillis(),
+        dispatch: () -> T
+    ): DispatchGate<T> {
+        val reason = blockReason(request, receipt, now)
+        return if (reason != null) DispatchGate.Blocked(reason)
+        else DispatchGate.Allowed(dispatch())
+    }
+
     private val readOnlyMemoryTools = setOf(
         "recall", "discussion_search", "decision_history", "knowledge_search", "graph_query"
     )
