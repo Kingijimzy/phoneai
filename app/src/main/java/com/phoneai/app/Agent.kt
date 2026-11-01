@@ -417,6 +417,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             if (mcpReadScopeGranted) ToolAccess.READ else (ToolRegistry.access(tool) ?: ToolAccess.WRITE),
             consequential
         )
+        var memoryRetrievalReceipt: OrionMemoryRetrievalReceipt? = null
+        var memoryRetrievalObjective = ""
         if (retrievalRequired) {
             val objective = currentTask.ifBlank { activeIntentContext }.ifBlank { activeRequestScope }
             val retrievedContext = runCatching {
@@ -428,8 +430,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 taskProofs.record(tool, blocked)
                 return blocked
             }
-            val receipt = OrionRetrieveBeforeActPolicy.receipt(objective, retrievedContext)
-            OrionRetrieveBeforeActPolicy.blockReason(objective, receipt)?.let { reason ->
+            memoryRetrievalObjective = objective
+            memoryRetrievalReceipt = OrionRetrieveBeforeActPolicy.receipt(objective, retrievedContext)
+            OrionRetrieveBeforeActPolicy.blockReason(objective, memoryRetrievalReceipt)?.let { reason ->
                 val blocked = "error: retrieve-before-act blocked '$tool': $reason. No action was dispatched."
                 recordDispatchBlocked(tool, args, "retrieve_before_act_invalid")
                 taskProofs.record(tool, blocked)
@@ -526,6 +529,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 } else svc.readScreen()
             } catch (_: Exception) {
                 lastScreenSnapshot = if (tool == "browser_navigate") "ORION_BROWSER_CLOSED_BEFORE_NAVIGATION" else ""
+            }
+        }
+        // Revalidate the trusted retrieval receipt after any approval dialog and immediately
+        // before dispatch; a long approval wait must not reuse stale memory context.
+        if (retrievalRequired) {
+            OrionRetrieveBeforeActPolicy.blockReason(memoryRetrievalObjective, memoryRetrievalReceipt)?.let { reason ->
+                val blocked = "error: retrieve-before-act blocked '$tool' immediately before dispatch: $reason. No action was dispatched."
+                recordDispatchBlocked(tool, args, "retrieve_before_act_stale_before_dispatch")
+                taskProofs.record(tool, blocked)
+                return blocked
             }
         }
         // Stop may be tapped while the approval dialog is open. Recheck immediately
