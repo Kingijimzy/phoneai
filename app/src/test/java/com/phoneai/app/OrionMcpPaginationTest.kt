@@ -31,7 +31,7 @@ class OrionMcpPaginationTest {
         assertTrue(pageLimited.truncated)
 
         val itemLimited = OrionMcpPagination.collect("tools", maxPages = 3, maxItems = 2) {
-            JSONObject().put("tools", JSONArray().put(JSONObject()).put(JSONObject()).put(JSONObject()).put("nextCursor", "more"))
+            JSONObject().put("tools", JSONArray().put(JSONObject()).put(JSONObject()).put(JSONObject())).put("nextCursor", "more")
         }
         assertEquals(2, itemLimited.items.length())
         assertTrue(itemLimited.truncated)
