@@ -792,12 +792,6 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             else -> maxTokens
         }
         val initialModel = selectedModel(p, vision)
-        val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, initialModel)
-        if (vision && !modelCapabilities.vision) {
-            throw AiException("Selected model '$initialModel' is not verified for image input. Choose a vision-capable model.", 400)
-        }
-        val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
-        val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
         val queue = mutableListOf(initialModel)
         val tried = HashSet<String>()
         val rateLimitRetried = HashSet<String>()
@@ -816,6 +810,14 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
+            val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, model)
+            if (vision && !modelCapabilities.vision) {
+                lastNote = "Model $model is not verified for image input; skipping this model."
+                continue
+            }
+            // Recompute budgets for every fallback model; context limits can differ within a provider.
+            val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
+            val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
             attempts++
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
