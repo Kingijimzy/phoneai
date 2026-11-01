@@ -227,4 +227,31 @@ class OrionRepairLifecycleTest {
         assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, result.result)
         assertEquals(0, callbacks)
     }
+
+    @Test fun centralBrainRepairContextIncludesPersistedStagesWithoutApprovalDigest() {
+        val digest = "d".repeat(64)
+        assertTrue(OrionEvidenceLedger.recordRepairStage(
+            context, "task-repair-test", "AWAITING_OWNER", digest,
+            "Sandbox passed; explicit owner approval is required before application."
+        ))
+        val block = OrionRepairLifecycle.promptBlock(context)
+        assertTrue(block.contains("PERSISTED REPAIR / OWNER-APPROVAL LIFECYCLE"))
+        assertTrue(block.contains("AWAITING_OWNER"))
+        assertFalse(block.contains(digest))
+        assertFalse(block.contains("task-repair-test"))
+    }
+
+    @Test fun centralBrainEntryPointUsesTheGuardedRepairLifecycle() {
+        val plan = proposal()
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        var applied = 0
+        val receipt = OrionCentralBrain.executeRepairProposal(
+            context, sessionId, "task-repair-test", finding(), plan, digest, null,
+            { true }, { applied++; "central-brain-receipt" }, { true }, { true }, { true }
+        )
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, receipt.result)
+        assertEquals(1, applied)
+        assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
+            .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
+    }
 }
