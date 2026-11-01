@@ -32,6 +32,7 @@ internal object OrionCentralBrain {
         val skills = runCatching { SkillRegistry.list(app) }.getOrDefault(emptyList())
         val enabledSkills = skills.filter { it.enabled }
         val taskCount = runCatching { TaskStore.all(app).size }.getOrNull()
+        val distributedTaskSummary = runCatching { OrionDistributedTaskStore(app).summary() }.getOrDefault("delegated_task_ledger=unavailable")
         val extensionRows = runCatching { SelfExtendingExtensionStore(app).all() }.getOrDefault(emptyList())
         val verifiedExtensions = extensionRows.count {
             it.enabled && it.verified &&
@@ -41,7 +42,7 @@ internal object OrionCentralBrain {
         sections += buildString {
             appendLine("ORION CENTRAL BRAIN — SHARED EXECUTIVE CONTRACT")
             appendLine("This is the single coordination layer for Talk, Command, tools, MCP, browser, Android actions, shell/workspace, memory, tasks, schedules, skills, subagents, voice, and verified extensions. These are not separate assistants: use the same current goal and shared app registries.")
-            appendLine("Live inventory: registered_tools=${registered.size}; enabled_packs=${enabledPacks.joinToString().ifBlank { "none" }}; enabled_skills=${enabledSkills.joinToString { it.id }.ifBlank { "none" }}; saved_tasks=${taskCount?.toString() ?: "unavailable"}; saved_extensions=${extensionRows.size}; verified_enabled_extensions=$verifiedExtensions.")
+            appendLine("Live inventory: registered_tools=${registered.size}; enabled_packs=${enabledPacks.joinToString().ifBlank { "none" }}; enabled_skills=${enabledSkills.joinToString { it.id }.ifBlank { "none" }}; saved_tasks=${taskCount?.toString() ?: "unavailable"}; $distributedTaskSummary; saved_extensions=${extensionRows.size}; verified_enabled_extensions=$verifiedExtensions.")
             appendLine("Registered tool names (not a promise of availability): ${registered.take(100).joinToString().ifBlank { "none" }}.")
             if (enabledSkills.isNotEmpty()) {
                 appendLine("Enabled skill contracts: " + enabledSkills.take(20).joinToString(" | ") {
