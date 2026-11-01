@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
  */
 internal class OrionPythonPhoneApi(
     private val context: Context,
-    private val confirm: (String) -> Boolean = { false }
+    private val confirm: (String) -> Boolean = { false },
+    private val readOnly: Boolean = false
 ) {
     private val workspace = OrionPythonWorkspace(context)
 
@@ -103,6 +104,7 @@ internal class OrionPythonPhoneApi(
     }
 
     fun ui_tap_text(text: String): String {
+        if (readOnly) return error("UI actions are disabled by the read-only autonomy profile")
         val target = text.trim().take(120)
         if (target.isBlank()) return error("visible text target is required")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
@@ -115,6 +117,7 @@ internal class OrionPythonPhoneApi(
     }
 
     fun ui_tap(x: Double, y: Double): String {
+        if (readOnly) return error("UI actions are disabled by the read-only autonomy profile")
         if (!x.isFinite() || !y.isFinite() || x < 0 || y < 0 || x > 20_000 || y > 20_000)
             return error("tap coordinates are invalid")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
@@ -129,6 +132,7 @@ internal class OrionPythonPhoneApi(
     }
 
     fun ui_swipe(x1: Double, y1: Double, x2: Double, y2: Double): String {
+        if (readOnly) return error("UI actions are disabled by the read-only autonomy profile")
         val values = listOf(x1, y1, x2, y2)
         if (values.any { !it.isFinite() || it < 0 || it > 20_000 }) return error("swipe coordinates are invalid")
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
@@ -158,7 +162,8 @@ internal class OrionPythonPhoneApi(
 
     fun fs_list(): String = workspace.list()
     fun fs_read(path: String): String = workspace.read(path)
-    fun fs_write(path: String, content: String): String = workspace.write(path, content)
+    fun fs_write(path: String, content: String): String =
+        if (readOnly) error("workspace writes are disabled by the read-only autonomy profile") else workspace.write(path, content)
 
     /** JSON argv only. No /bin/sh, shell expansion, pipes, redirects, privilege escalation or root. */
     fun shell(argvJson: String): String {
@@ -187,6 +192,7 @@ internal class OrionPythonPhoneApi(
     fun http_get(url: String): String = request(url, "GET", "", requireApproval = false)
 
     fun http_post(url: String, body: String): String {
+        if (readOnly) return error("HTTP POST is disabled by the read-only autonomy profile")
         if (body.length > 32_000) return error("HTTP body is limited to 32 KB")
         return request(url, "POST", body, requireApproval = true)
     }
