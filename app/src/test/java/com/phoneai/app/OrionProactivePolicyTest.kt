@@ -6,8 +6,10 @@ import org.junit.Test
 
 class OrionProactivePolicyTest {
     @Test fun proactiveHeartbeatRequiresExplicitCoreEnablement() {
-        assertTrue(OrionProactivePolicy.shouldRun(coreEnabled = true))
-        assertFalse(OrionProactivePolicy.shouldRun(coreEnabled = false))
+        assertTrue(OrionProactivePolicy.shouldRun(coreEnabled = true, proactiveEnabled = true))
+        assertFalse(OrionProactivePolicy.shouldRun(coreEnabled = false, proactiveEnabled = true))
+        assertFalse(OrionProactivePolicy.shouldRun(coreEnabled = true, proactiveEnabled = false))
+        assertFalse(OrionProactivePolicy.shouldRun(coreEnabled = false, proactiveEnabled = false))
     }
 
     @Test fun heartbeatUsesBatteryAwareMinimumIntervalAndBoundedRetries() {
