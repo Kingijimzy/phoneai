@@ -21,10 +21,9 @@ internal class OrionProactiveWorker(
     params: WorkerParameters
 ) : Worker(appContext, params) {
     override fun doWork(): Result {
-        if (!OrionProactivePolicy.shouldRun(
-                coreEnabled = runCatching { AgentPolicy.enabled(applicationContext, "orion_core") }.getOrDefault(false)
-            )
-        ) return Result.success()
+        val coreEnabled = runCatching { AgentPolicy.enabled(applicationContext, "orion_core") }.getOrDefault(false)
+        val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
+        if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
         return runCatching {
             SoulEngineWatcher.run(applicationContext)
