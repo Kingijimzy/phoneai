@@ -22,6 +22,14 @@ internal class OrionPythonWorkspace(context: Context) {
         return if (root.isDirectory && root.canRead() && root.canWrite()) RootStatus.READY else RootStatus.UNSAFE
     }
 
+    @Synchronized fun canEnsureRoot(): Boolean {
+        if (rootStatus() != RootStatus.MISSING) return false
+        var parent = root.parentFile
+        while (parent != null && !parent.exists()) parent = parent.parentFile
+        return parent != null && parent.isDirectory && parent.canWrite() &&
+            insideFilesDir(parent) && !hasSymlink(parent)
+    }
+
     /** App-owned repair primitive: creates only the fixed workspace root, never follows links. */
     @Synchronized fun ensureRootForRepair(): String? {
         when (rootStatus()) {
