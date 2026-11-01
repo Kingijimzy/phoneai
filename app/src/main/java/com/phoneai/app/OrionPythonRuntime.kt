@@ -11,7 +11,7 @@ internal object OrionPythonRuntime {
         PythonExecutionPolicy.rejection(code, PythonExecutionPolicy.maxCodeChars(context))?.let { return "error: $it" }
         return try {
             if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
-            val phone = OrionPythonPhoneApi(context.applicationContext, confirm)
+            val phone = OrionPythonPhoneApi(context.applicationContext, confirm, readOnly = ToolPermissions.level(context) == "read_only")
             Python.getInstance().getModule("orion_exec")
                 .callAttr("run", code, PythonExecutionPolicy.maxCodeChars(context), phone)
                 .toString().take(5_200)
