@@ -139,7 +139,7 @@ internal object OrionEvidenceLedger {
     ): Boolean {
         val safeStage = stage.take(32)
         if (safeStage !in setOf("PROPOSED", "SANDBOX_PASSED", "SANDBOX_FAILED", "AWAITING_OWNER",
-                "OWNER_APPROVED", "OWNER_REJECTED", "APPLIED", "VERIFIED",
+                "OWNER_APPROVED", "OWNER_REJECTED", "APPLY_UNCERTAIN", "APPLIED", "VERIFIED",
                 "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")) return false
         if (!planDigest.matches(Regex("^[a-fA-F0-9]{64}$"))) return false
         val now = System.currentTimeMillis()
