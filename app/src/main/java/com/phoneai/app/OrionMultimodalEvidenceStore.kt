@@ -1,6 +1,7 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.net.Uri
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.content.ContentValues
@@ -86,6 +87,42 @@ internal object OrionMultimodalEvidenceStore {
             }
             out
         }
+    }
+
+    /**
+     * Resolve an image only for an explicit owner request, from the exact conversation/evidence
+     * row, and only while Android still reports a persisted read grant. This method never launches
+     * a viewer or forwards media; callers must keep the returned URI inside that user-requested
+     * operation. Temporary picker access is deliberately insufficient after process restart.
+     */
+    fun resolveImageForExplicitRequest(
+        context: Context,
+        sessionId: String,
+        evidenceId: String,
+        userInitiated: Boolean
+    ): Uri? {
+        if (!userInitiated || sessionId.isBlank() || evidenceId.isBlank()) return null
+        val reference = runCatching {
+            withDb(context, false) { db ->
+                db.rawQuery(
+                    "SELECT reference FROM evidence WHERE id=? AND session_id=? AND modality=? LIMIT 1",
+                    arrayOf(evidenceId.take(64), sessionId.take(160), Modality.IMAGE.name)
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            }
+        }.getOrNull() ?: return null
+        val uri = runCatching { Uri.parse(reference) }.getOrNull() ?: return null
+        if (uri.scheme != "content" || reference.length > 1000) return null
+        val resolver = context.applicationContext.contentResolver
+        val persistedRead = runCatching {
+            resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+        }.getOrDefault(false)
+        if (!persistedRead) return null
+        val imageMime = runCatching { resolver.getType(uri)?.startsWith("image/") == true }
+            .getOrDefault(false)
+        if (!imageMime) return null
+        val readable = runCatching { resolver.openFileDescriptor(uri, "r")?.use { true } ?: false }
+            .getOrDefault(false)
+        return uri.takeIf { readable }
     }
 
     /** Metadata only: no raw URI, media bytes, OCR text or transcript content enters the prompt. */
