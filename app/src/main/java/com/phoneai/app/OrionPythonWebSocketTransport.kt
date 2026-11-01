@@ -210,7 +210,7 @@ internal object OrionPythonWebSocketTransport {
     }
 
     private fun stopServiceIfIdle() {
-        if (sessions.isEmpty()) appContext?.let { OrionSocketForegroundService.stop(it) }
+        if (sessions.values.none { !it.closed }) appContext?.let { OrionSocketForegroundService.stop(it) }
     }
 
     private fun dispose(session: Session) {
