@@ -438,6 +438,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 taskProofs.record(tool, blocked)
                 return blocked
             }
+            // Retrieval evidence is durable and privacy-minimal. If it cannot be written,
+            // fail closed rather than dispatching an action with an unverifiable memory preflight.
+            val retrievalRecorded = runCatching {
+                OrionEvidenceLedger.recordMemoryRetrieval(
+                    svc, evidenceTaskId(), objective, "persistent_memory_context", retrievedContext.length
+                )
+            }.getOrDefault(false)
+            if (!retrievalRecorded) {
+                val blocked = "error: retrieve-before-act blocked '$tool': retrieval evidence could not be durably recorded. No action was dispatched."
+                recordDispatchBlocked(tool, args, "retrieve_before_act_evidence_failed")
+                taskProofs.record(tool, blocked)
+                return blocked
+            }
         }
         // A paired MCP endpoint plus an explicitly enabled read scope is already a standing
         // user grant for read-only remote tools. Do not ask again for every read call.
