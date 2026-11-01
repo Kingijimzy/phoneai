@@ -39,4 +39,27 @@ class OrionRetrieveBeforeActPolicyTest {
         assertNull(OrionRetrieveBeforeActPolicy.receipt("   ", "context"))
         assertTrue(OrionRetrieveBeforeActPolicy.blockReason(" ", null).orEmpty().contains("objective"))
     }
+
+    @Test fun finalDispatchGateNeverEntersExecutorWithoutValidReceipt() {
+        var executions = 0
+        val blocked = OrionRetrieveBeforeActPolicy.dispatchIfValid<String>(
+            "send approved update", null, now = 10_000L
+        ) { executions++; "executed" }
+        assertTrue(blocked is OrionRetrieveBeforeActPolicy.DispatchGate.Blocked)
+        assertEquals(0, executions)
+
+        val receipt = OrionRetrieveBeforeActPolicy.receipt("send approved update", "", now = 10_000L)
+        val stale = OrionRetrieveBeforeActPolicy.dispatchIfValid<String>(
+            "send approved update", receipt, now = 70_001L
+        ) { executions++; "executed" }
+        assertTrue(stale is OrionRetrieveBeforeActPolicy.DispatchGate.Blocked)
+        assertEquals(0, executions)
+
+        val allowed = OrionRetrieveBeforeActPolicy.dispatchIfValid<String>(
+            "send approved update", receipt, now = 10_001L
+        ) { executions++; "executed" }
+        assertEquals(OrionRetrieveBeforeActPolicy.DispatchGate.Allowed("executed"), allowed)
+        assertEquals(1, executions)
+    }
+
 }
