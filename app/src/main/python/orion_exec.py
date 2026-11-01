@@ -3,6 +3,12 @@ import ast
 import contextlib
 import io
 import json
+import asyncio as _asyncio
+import datetime as _datetime
+import math as _math
+import re as _re
+import types as _types
+import urllib.parse as _urllib_parse
 
 MAX_SOURCE = 8000
 MAX_NODES = 500
@@ -41,14 +47,98 @@ _ALLOWED_NODES = (
     ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
     ast.UAdd, ast.USub, ast.Not, ast.And, ast.Or,
     ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn,
-    ast.ListComp, ast.comprehension,
+    ast.ListComp, ast.comprehension, ast.Import, ast.ImportFrom, ast.alias,
 )
 
 _PHONE_METHODS = {
     "battery", "location", "notifications", "contacts", "accessibility_screen",
     "fs_list", "fs_read", "fs_write", "shell", "http_get", "http_post",
-    "ui_tap_text", "ui_tap", "ui_swipe",
+    "ui_tap_text", "ui_tap", "ui_swipe", "ws_connect", "ws_send", "ws_send_binary", "ws_receive", "ws_close",
 }
+
+
+_MODULE_PATHS = {
+    "json.loads", "json.dumps",
+    "datetime.datetime", "datetime.date", "datetime.time", "datetime.timedelta", "datetime.timezone",
+    "datetime.datetime.now", "datetime.datetime.utcnow", "datetime.datetime.fromtimestamp",
+    "datetime.datetime.strptime", "datetime.datetime.isoformat",
+    "datetime.date.today", "datetime.date.fromisoformat", "datetime.date.isoformat",
+    "math.pi", "math.e", "math.tau", "math.inf", "math.nan",
+    "math.sqrt", "math.floor", "math.ceil", "math.sin", "math.cos", "math.tan",
+    "math.log", "math.log10", "math.exp", "math.pow", "math.fabs", "math.isfinite",
+    "math.isclose", "math.gcd", "math.lcm", "math.factorial",
+    "re.match", "re.search", "re.fullmatch", "re.findall", "re.sub", "re.split", "re.escape",
+    "urllib.parse.urlparse", "urllib.parse.urlsplit", "urllib.parse.urljoin",
+    "urllib.parse.quote", "urllib.parse.unquote", "urllib.parse.urlencode",
+    "urllib.parse.parse_qs", "urllib.parse.parse_qsl",
+    "asyncio.run", "asyncio.sleep",
+}
+_ALLOWED_IMPORTS = {"json", "datetime", "math", "re", "asyncio", "urllib.parse"}
+
+def _path(node):
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _path(node.value)
+        return (parent + "." + node.attr) if parent else None
+    return None
+
+async def _bounded_async_sleep(seconds=0):
+    value = float(seconds)
+    if not 0 <= value <= 1:
+        raise Rejected("asyncio.sleep is limited to one second")
+    await _asyncio.sleep(value)
+
+def _bounded_async_run(coro):
+    return _asyncio.run(_asyncio.wait_for(coro, timeout=2.0))
+
+def _safe_module(name):
+    modules = {
+        "json": _types.SimpleNamespace(loads=json.loads, dumps=json.dumps),
+        "datetime": _types.SimpleNamespace(
+            datetime=_datetime.datetime, date=_datetime.date, time=_datetime.time,
+            timedelta=_datetime.timedelta, timezone=_datetime.timezone,
+        ),
+        "math": _types.SimpleNamespace(**{
+            key: getattr(_math, key) for key in (
+                "pi", "e", "tau", "inf", "nan", "sqrt", "floor", "ceil", "sin", "cos",
+                "tan", "log", "log10", "exp", "pow", "fabs", "isfinite", "isclose",
+                "gcd", "lcm", "factorial"
+            )
+        }),
+        "re": _types.SimpleNamespace(**{
+            key: getattr(_re, key) for key in (
+                "match", "search", "fullmatch", "findall", "sub", "split", "escape"
+            )
+        }),
+        "asyncio": _types.SimpleNamespace(run=_bounded_async_run, sleep=_bounded_async_sleep),
+    }
+    parse = _types.SimpleNamespace(**{
+        key: getattr(_urllib_parse, key) for key in (
+            "urlparse", "urlsplit", "urljoin", "quote", "unquote", "urlencode",
+            "parse_qs", "parse_qsl"
+        )
+    })
+    modules["urllib"] = _types.SimpleNamespace(parse=parse)
+    modules["urllib.parse"] = parse
+    return modules.get(name)
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if level != 0 or name not in _ALLOWED_IMPORTS:
+        raise Rejected("import is not on the safe standard-library allowlist")
+    module = _safe_module(name)
+    if module is None:
+        raise Rejected("safe module is unavailable")
+    if fromlist:
+        for item in fromlist:
+            if item == "*":
+                raise Rejected("star imports are not supported")
+            if not hasattr(module, item):
+                raise Rejected("requested module member is not allowlisted: " + str(item))
+        return module
+    if name == "urllib.parse":
+        return _safe_module("urllib")
+    return module
 
 def _validate(tree, allow_phone=False):
     nodes = list(ast.walk(tree))
@@ -61,11 +151,11 @@ def _validate(tree, allow_phone=False):
     }
     for node in nodes:
         if isinstance(node, ast.Attribute):
-            valid = (allow_phone and id(node) in allowed_phone_attributes and
-                     isinstance(node.value, ast.Name) and node.value.id == "phone" and
-                     node.attr in _PHONE_METHODS)
-            if not valid:
-                raise Rejected("only registered phone.<capability>() calls are allowed")
+            phone_valid = (allow_phone and id(node) in allowed_phone_attributes and
+                           isinstance(node.value, ast.Name) and node.value.id == "phone" and
+                           node.attr in _PHONE_METHODS)
+            if not phone_valid and _path(node) not in _MODULE_PATHS:
+                raise Rejected("attribute access is limited to registered phone capabilities and safe module members")
         elif not isinstance(node, _ALLOWED_NODES):
             raise Rejected("unsupported Python syntax: " + type(node).__name__)
         if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
@@ -86,7 +176,8 @@ def _validate(tree, allow_phone=False):
             safe_phone = (allow_phone and isinstance(node.func, ast.Attribute) and
                           isinstance(node.func.value, ast.Name) and node.func.value.id == "phone" and
                           node.func.attr in _PHONE_METHODS)
-            if not (safe_builtin or safe_phone):
+            safe_module = isinstance(node.func, ast.Attribute) and _path(node.func) in _MODULE_PATHS
+            if not (safe_builtin or safe_phone or safe_module):
                 raise Rejected("only approved built-ins and registered phone capabilities may be called")
             if node.keywords:
                 raise Rejected("keyword arguments are not supported")
@@ -173,7 +264,7 @@ def _prepare(source, allow_phone=False):
     return compile(tree, "<orion-approved-python>", "exec")
 
 def _scope(extra=None):
-    scope = {"__builtins__": _SAFE, "_add": _add, "_mul": _mul, "_pow": _pow}
+    scope = {"__builtins__": dict(_SAFE, __import__=_safe_import), "_add": _add, "_mul": _mul, "_pow": _pow}
     if extra:
         scope.update(extra)
     return scope
