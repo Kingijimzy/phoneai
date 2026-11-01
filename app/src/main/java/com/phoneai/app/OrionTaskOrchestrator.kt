@@ -46,7 +46,10 @@ internal object OrionTaskOrchestrator {
         val capability = context.capabilities.tools.firstOrNull { it.name == toolName }
             ?: return "'$toolName' is not registered for this request."
         if (!capability.available) return "'$toolName' is ${capability.state.name.lowercase()}: ${capability.reason}"
-        if (context.goal.needsClarification || !context.goal.shouldAct) return "the current goal is not ready for tool execution."
+        // Goal classification is advisory, not an authorization primitive. The prompt still
+        // asks for clarification when required; an explicit registered tool call must be judged
+        // by live capability, pack, OS-permission and AgentPolicy gates rather than a classifier
+        // false-negative. This prevents a guessed goal label from silently suppressing a granted tool.
         return null
     }
     fun build(
