@@ -13,6 +13,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.Date
 
 /** Local-first memory browser. Entries remain in app-private storage on this device. */
 class MemoryActivity : Activity() {
@@ -78,6 +80,13 @@ class MemoryActivity : Activity() {
                 if (memory.sensitivity == "sensitive") "  ·  SENSITIVE (excluded from AI context)" else "",
                 10f, if (memory.reviewStatus == "pending" || memory.sensitivity == "sensitive") 0xFFFFC27A.toInt() else 0xFF888888.toInt())
                 .apply { setPadding(0, 0, 0, dp(9)) })
+            val expiry = OrionMemoryLifecycle.expiryFor(this, memory.id)
+            if (expiry > 0L) {
+                card.addView(text(
+                    "EXPIRES: " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(expiry)),
+                    10f, 0xFFB9C7D5.toInt()
+                ).apply { setPadding(0, 0, 0, dp(8)) })
+            }
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
             if (memory.reviewStatus == "pending") {
                 actions.addView(button("Approve") {
@@ -99,10 +108,67 @@ class MemoryActivity : Activity() {
             })
             actions.addView(button("Edit") { editMemory(memory) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             actions.addView(button("Delete") { confirmDelete(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
-            card.addView(actions); page.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            card.addView(actions)
+            val governanceActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+            governanceActions.addView(button("Version history") { showVersionHistory(memory.id) })
+            governanceActions.addView(button("Expiry") { chooseExpiry(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+            card.addView(governanceActions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+            page.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
             card.alpha = 0f; card.translationY = dp(6).toFloat(); card.animate().alpha(1f).translationY(0f).setDuration(220).start()
         }
     }
+
+    private fun showVersionHistory(id: Int) {
+        val versions = OrionMemoryLifecycle.history(this, id)
+        if (versions.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("Version history")
+                .setMessage("No previous versions have been archived for this memory yet. Orion archives the previous version when its content is changed or superseded.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val details = versions.asReversed().mapIndexed { index, version ->
+            val time = version.optLong("capturedAt", 0L)
+            val confidence = (version.optDouble("confidence", 0.0).coerceIn(0.0, 1.0) * 100).toInt()
+            buildString {
+                append("VERSION ${versions.size - index} · ")
+                append(if (time > 0L) formatter.format(Date(time)) else "unknown date")
+                append("\\nCategory: ${version.optString("category")}")
+                append(" · Confidence: $confidence%")
+                append(" · Status: ${version.optString("reviewStatus")}")
+                append("\\nSource: ${version.optString("sourceRole")} · Reason: ${version.optString("reason")}")
+                append("\\n")
+                append(version.optString("text").take(300))
+            }
+        }
+        AlertDialog.Builder(this).setTitle("Previous versions · ${versions.size}")
+            .setMessage(details.joinToString("\\n\\n"))
+            .setPositiveButton("Close", null).show()
+    }
+
+    private fun chooseExpiry(id: Int) {
+        val current = OrionMemoryLifecycle.expiryFor(this, id)
+        val currentLabel = if (current == 0L) "No expiry" else
+            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(current))
+        val options = arrayOf("Never expire", "7 days", "30 days", "90 days", "1 year")
+        AlertDialog.Builder(this)
+            .setTitle("Memory expiry")
+            .setMessage("Current expiry: $currentLabel\\nChoose when Orion should stop using this memory in context.")
+            .setItems(options) { _, which ->
+                val now = System.currentTimeMillis()
+                val expiry = when (which) {
+                    0 -> 0L
+                    1 -> now + 7L * 24 * 60 * 60 * 1000
+                    2 -> now + 30L * 24 * 60 * 60 * 1000
+                    3 -> now + 90L * 24 * 60 * 60 * 1000
+                    else -> now + 365L * 24 * 60 * 60 * 1000
+                }
+                val ok = OrionMemoryLifecycle.setExpiry(this, id, expiry)
+                Toast.makeText(this, if (ok) "Memory expiry updated" else "Could not update expiry", Toast.LENGTH_SHORT).show()
+                render()
+            }.show()
+    }
+
     private fun editMemory(existing: Memory?) {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(4)); setBackgroundColor(0xFF111111.toInt()) }
         body.addView(text(if (existing == null) "Save a memory" else "Edit memory", 20f, 0xFFF0F0F0.toInt(), true))
