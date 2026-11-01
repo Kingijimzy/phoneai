@@ -66,6 +66,34 @@ The phone remains the trusted device endpoint. Expensive research, parallel agen
 - Existing event sanitization redacts credential-like values. The trace is associated with the active chat session and remains available through the existing event history.
 - Remaining work: add explicit correlation IDs linking each user/assistant turn, tool call, task checkpoint, specialist run and reflection run; add retention/export/delete controls and tests for archived-session linkage, duplicate events, storage failure and redaction across all provider/tool paths.
 
+
+#### Open-source engineering decisions (research-backed, 2026-11-01)
+
+These choices are based on upstream documentation and licenses, with deployment boundaries chosen for the Android/Redmi constraints:
+
+1. **LangGraph (MIT) for the remote orchestration graph.** Use the Python `langgraph` package for typed state, conditional routing, resumable checkpoints and human interrupts. Keep Android `Agent` as the only device capability executor. LangGraph nodes may propose a capability request, but the request returns to Android and must pass its existing ToolRegistry, permission, retrieve-before-act, approval and evidence gates. Do not let a remote graph call Android or trading APIs directly.
+2. **LangGraph checkpointer choice.** `langgraph-checkpoint-sqlite` is appropriate for local development and single-worker/lightweight testing; upstream explicitly warns that SQLite checkpointing is not recommended for production workloads. Production remote workers should use `langgraph-checkpoint-postgres` with a managed Postgres database and migrations. Do not confuse the Android conversation SQLite database with the remote graph checkpoint store.
+3. **OpenTelemetry + W3C Trace Context for correlation.** Use OpenTelemetry API/SDK in the remote Python worker when deployed; preserve one W3C-compatible 16-byte trace ID across chat turn → graph run → node → specialist → tool request → Android execution receipt. Keep the local SQLite event ledger as the durable owner-visible history; OpenTelemetry is instrumentation/export, not a replacement for user data storage. Export must be opt-in and redact prompts, tool arguments, screen text, secrets and memory passages.
+4. **WorkManager for on-device scheduling.** Use unique work, constraints, coalescing and bounded retries. Android periodic work has a 15-minute minimum and may be deferred by Doze/battery optimizations; it is not a precise cron daemon. Exact daily reflection time is best-effort on-device. If exact scheduling is required, use a remote scheduler and treat its run as a request that still rechecks consent, budgets and owner policy on the device.
+5. **Do not add a second agent framework.** Pydantic AI/Pydantic Graph and Temporal/DBOS are credible alternatives for typed graphs or durable execution. They should remain evaluated alternatives, not additional runtimes beside LangGraph. One graph orchestrator and one durable execution owner per run prevents duplicate retries, tool execution and checkpoint histories.
+
+Upstream references:
+- LangGraph overview and MIT package metadata: https://github.com/langchain-ai/langgraph and https://github.com/langchain-ai/langgraph/blob/main/libs/langgraph/pyproject.toml
+- LangGraph checkpoint backends and production guidance: https://github.com/langchain-ai/langgraph/blob/main/libs/checkpoint-sqlite/README.md and https://reference.langchain.com/python/langgraph.checkpoint.postgres
+- LangGraph interrupts / human approval: https://docs.langchain.com/oss/python/langgraph/interrupts
+- OpenTelemetry Python traces: https://opentelemetry.io/docs/languages/python/
+- W3C Trace Context: https://www.w3.org/TR/trace-context/
+- Android PeriodicWorkRequest constraints: https://developer.android.com/reference/androidx/work/PeriodicWorkRequest
+- Pydantic durable execution alternatives: https://pydantic.dev/docs/ai/capabilities/durable_execution/overview/
+
+#### Stage 4 continuation — W3C-compatible local trace correlation (2026-11-01)
+
+- Upgraded the existing `OrionConversationRepository` event schema to v4 with nullable `trace_id`; v1/v2/v3 migration paths preserve old event rows and safely add the column only where needed.
+- Every routed tool execution now generates a 32-hex-character (16-byte) trace ID and writes it to both `tool/started` and `tool_result` receipts. This correlates success and failure events without persisting tool arguments or output.
+- Added `eventsForTrace` to retrieve a correlated lifecycle and tests for round-trip correlation, invalid ID rejection and event grouping.
+- The ID follows the W3C trace-id representation, but full W3C `traceparent` propagation across Android ↔ remote worker is still pending. This local trace ID is not yet an OpenTelemetry span.
+- Exact-head CI is required after this schema migration. No remote LangGraph worker or cron deployment is claimed by this change.
+
 #### Completion gates
 - [ ] Remote LangGraph graph executes a contract-tested task end-to-end with durable checkpoint/resume and cancellation; no duplicate Android executor.
 - [ ] AgentBigBrain owns the same objective and trace IDs across chat, voice, specialist, MCP and scheduled entry points.
