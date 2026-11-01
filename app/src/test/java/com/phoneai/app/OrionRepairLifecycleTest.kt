@@ -21,9 +21,9 @@ class OrionRepairLifecycleTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
-        // SQLiteOpenHelper is a process singleton; close its connection before deleting the
-        // backing file so each Robolectric test starts from a genuinely fresh database.
-        OrionConversationRepository.get(context).close()
+        // Reset the helper itself: Robolectric may give each test a different Application
+        // context while the process singleton survives, so close-only can retain a stale Context.
+        OrionConversationRepository.resetForTests()
         // Clear migration/session preferences as well as SQLite: otherwise a prior test's
         // ACTIVE_ID and MIGRATED flag can leak a stale session identity into this fixture.
         context.getSharedPreferences("orion_chat_history", Context.MODE_PRIVATE).edit().clear().commit()
@@ -34,7 +34,7 @@ class OrionRepairLifecycleTest {
     }
 
     @After fun tearDown() {
-        OrionConversationRepository.get(context).close()
+        OrionConversationRepository.resetForTests()
         context.getSharedPreferences("orion_chat_history", Context.MODE_PRIVATE).edit().clear().commit()
         File(context.filesDir, "orion_evidence_ledger.json").delete()
         context.deleteDatabase("orion_conversations.db")
