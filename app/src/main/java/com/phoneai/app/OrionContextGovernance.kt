@@ -280,3 +280,104 @@ internal object OrionProviderContextPolicy {
         return JSONArray().also { out -> selected.forEach { out.put(it) } }
     }
 }
+
+
+/** Version snapshots and expiry metadata are stored locally, separately from the active memory row. */
+internal object OrionMemoryLifecycle {
+    private const val PREFS = "orion_memory_lifecycle_v1"
+    private const val HISTORY = "orion_memory_versions_v1"
+
+    fun setExpiry(context: Context, memoryId: Int, expiresAt: Long): Boolean {
+        if (memoryId <= 0 || expiresAt < 0L) return false
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong("expiry_$memoryId", expiresAt).apply()
+        return true
+    }
+
+    fun expiryFor(context: Context, memoryId: Int): Long =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("expiry_$memoryId", 0L)
+
+    fun isActive(context: Context, memoryId: Int, now: Long = System.currentTimeMillis()): Boolean {
+        val expiry = expiryFor(context, memoryId)
+        return expiry == 0L || expiry > now
+    }
+
+    fun archiveBeforeChange(context: Context, memory: Memory, reason: String): Boolean {
+        val prefs = context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
+        val history = runCatching {
+            JSONArray(prefs.getString("entries", "[]") ?: "[]")
+        }.getOrDefault(JSONArray())
+        if (history.length() >= 500) history.remove(0)
+        history.put(JSONObject()
+            .put("memoryId", memory.id)
+            .put("category", memory.category)
+            .put("text", memory.text)
+            .put("capturedAt", System.currentTimeMillis())
+            .put("createdAt", memory.created)
+            .put("updatedAt", memory.updated)
+            .put("sourceRole", memory.sourceRole)
+            .put("confidence", MemoryGovernancePolicy.normalizeConfidence(memory.confidence))
+            .put("sensitivity", memory.sensitivity)
+            .put("reviewStatus", memory.reviewStatus)
+            .put("reason", reason.replace(Regex("[\\r\\n]+"), " ").take(120)))
+        return prefs.edit().putString("entries", history.toString()).commit()
+    }
+
+    fun history(context: Context, memoryId: Int, includeSensitive: Boolean = false): List<JSONObject> {
+        val history = runCatching {
+            JSONArray(context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE).getString("entries", "[]") ?: "[]")
+        }.getOrDefault(JSONArray())
+        return (0 until history.length()).mapNotNull { history.optJSONObject(it) }
+            .filter { it.optInt("memoryId") == memoryId }
+            .filter { includeSensitive || it.optString("sensitivity") != "sensitive" }
+            .map { JSONObject(it.toString()) }
+    }
+
+    fun clearExpiry(context: Context, memoryId: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("expiry_$memoryId").apply()
+    }
+
+    fun forgetHistory(context: Context, memoryId: Int) {
+        val prefs = context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE)
+        val history = runCatching { JSONArray(prefs.getString("entries", "[]") ?: "[]") }.getOrDefault(JSONArray())
+        val kept = JSONArray()
+        for (i in 0 until history.length()) {
+            val item = history.optJSONObject(i) ?: continue
+            if (item.optInt("memoryId") != memoryId) kept.put(item)
+        }
+        prefs.edit().putString("entries", kept.toString()).apply()
+    }
+
+    fun clearHistory(context: Context) {
+        context.getSharedPreferences(HISTORY, Context.MODE_PRIVATE).edit().remove("entries").apply()
+    }
+}
+
+internal data class OrionMcpServerGrant(
+    val serverId: String,
+    val enabled: Boolean,
+    val allowedTools: Set<String>,
+    val expiresAt: Long = 0L
+) {
+    fun active(now: Long = System.currentTimeMillis()): Boolean =
+        enabled && serverId.isNotBlank() && (expiresAt == 0L || expiresAt > now)
+}
+
+/** Narrow MCP tool-name and grant policy used by protocol parsing and the shared executor. */
+internal object OrionMcpPolicy {
+    private val safeName = Regex("^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+
+    fun validateToolName(name: String): Boolean = name.length in 1..128 && safeName.matches(name)
+
+    fun safeToolSubset(
+        grant: OrionMcpServerGrant,
+        discovered: List<String>,
+        now: Long = System.currentTimeMillis()
+    ): List<String> {
+        if (!grant.active(now)) return emptyList()
+        return discovered.filter { validateToolName(it) && it in grant.allowedTools }.distinct()
+    }
+
+    fun requiresOwnerConfirmation(toolName: String, locallyPaired: Boolean): Boolean =
+        !locallyPaired || !validateToolName(toolName) || McpConnector.scopeForTool(toolName) != "read"
+}
