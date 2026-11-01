@@ -1,6 +1,15 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.work.ForegroundInfo
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -94,6 +103,17 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             }
             return deliverResult(store.all().first { it.id == jobId })
         }
+        // Promote long-running provider work to an owner-visible foreground worker.
+        // This improves survival under Android background limits but cannot override Xiaomi
+        // Autostart, force-stop, OEM process cleanup, or Android foreground-service policy.
+        try {
+            setForegroundAsync(foregroundInfo(jobId)).get(8, TimeUnit.SECONDS)
+        } catch (_: Exception) {
+            // The provider has not been called and the durable job remains QUEUED.
+            // Let WorkManager retry rather than running a long request without foreground status.
+            return Result.retry()
+        }
+
         val agent = AgentProfiles.find(manifest.agentId) ?: run {
             store.cancel(jobId, "canonical_specialist_profile_missing")
             return Result.failure()
@@ -236,6 +256,33 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
             OrionRuntimeNotifier.postSpecialistResult(applicationContext, job.id)
             Result.success()
         } else if (runAttemptCount < 4) Result.retry() else Result.failure()
+    }
+
+    private fun foregroundInfo(jobId: String): ForegroundInfo {
+        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "orion_specialist_work"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(channelId, "Orion background specialists", NotificationManager.IMPORTANCE_LOW)
+            )
+        }
+        val openApp = PendingIntent.getActivity(
+            applicationContext, 7315,
+            Intent(applicationContext, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("Orion is working")
+            .setContentText("A delegated analysis task is running. Job ${jobId.take(8)}")
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setContentIntent(openApp)
+            .build()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(7315, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else ForegroundInfo(7315, notification)
     }
 
     companion object { const val KEY_JOB_ID = "orion_specialist_job_id" }

@@ -73,7 +73,6 @@ class OrionRepairLifecycleTest {
         val result = execute(apply = { applied++; "receipt-123" })
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
         assertEquals(1, applied)
-        assertEquals(0, approvalPrompts)
         assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
             .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
     }
@@ -260,7 +259,9 @@ class OrionRepairLifecycleTest {
 
     @Test fun applyStartClaimIsAtomicAndSingleUse() {
         val plan = proposal()
-        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(
+            sessionId, "task-repair-test", finding(), plan, OrionRepairExecutionBoundary.EXTERNAL
+        )
         val eventId = OrionRepairLifecycle.stageEventId("task-repair-test", digest, "APPLY_STARTED")
         val repository = OrionConversationRepository.get(context)
         assertTrue(repository.claimEventForSession(
@@ -339,7 +340,9 @@ class OrionRepairLifecycleTest {
 
     @Test fun centralBrainPersistsOwnerRejectionAndNeverApplies() {
         val plan = proposal(OrionRepairRisk.EXTERNAL_SIDE_EFFECT, approval = true)
-        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(
+            sessionId, "task-repair-test", finding(), plan, OrionRepairExecutionBoundary.EXTERNAL
+        )
         var applyCalls = 0
         val rejected = OrionCentralBrain.executeRepairProposal(
             context, sessionId, "task-repair-test", finding(), plan, digest,

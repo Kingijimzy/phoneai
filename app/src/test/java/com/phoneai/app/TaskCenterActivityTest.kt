@@ -33,6 +33,24 @@ class TaskCenterActivityTest {
         return found
     }
 
+    private fun buttonForTask(root: View, title: String, buttonText: String): Button? {
+        if (root is ViewGroup) {
+            for (i in 0 until root.childCount) {
+                buttonForTask(root.getChildAt(i), title, buttonText)?.let { return it }
+            }
+            val texts = mutableListOf<String>()
+            fun collect(node: View) {
+                if (node is android.widget.TextView) texts += node.text.toString()
+                if (node is ViewGroup) for (i in 0 until node.childCount) collect(node.getChildAt(i))
+            }
+            collect(root)
+            if (texts.any { it.contains(title) }) {
+                return buttons(root).firstOrNull { it.text.toString().trim() == buttonText }
+            }
+        }
+        return null
+    }
+
     @Test fun taskBoardPauseAndResumeControlsDoNotInventExecution() {
         val task = TaskStore.add(context, "UI control test ${UUID.randomUUID()}")!!
         assertTrue(TaskStore.update(context, task.id, status = "running"))
@@ -66,7 +84,7 @@ class TaskCenterActivityTest {
         assertTrue(TaskStore.update(context, task.id, status = "failed", resultSummary = "Old failed run"))
         val activity = Robolectric.buildActivity(TaskCenterActivity::class.java).setup().get()
 
-        val complete = buttons(activity.window.decorView).firstOrNull { it.text.toString().trim() == "Complete" }
+        val complete = buttonForTask(activity.window.decorView, task.title, "Complete")
         assertNotNull("An unfinished task must expose a manual Complete control", complete)
         complete!!.performClick()
         val saved = TaskStore.all(context).first { it.id == task.id }
