@@ -14,7 +14,7 @@ import java.security.MessageDigest
  * acceptance as proof of goal completion.
  */
 internal object OrionEvidenceLedger {
-    enum class Outcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, DENIED, RECOVERY }
+    enum class Outcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, DENIED, RECOVERY, CONTEXT_RETRIEVED }
 
     private const val MAX_EVENTS = 240
     private const val MAX_TEXT = 320
@@ -83,6 +83,32 @@ internal object OrionEvidenceLedger {
         .put("argsFingerprint", digest(args.toString()))
         .put("summary", safeSummary(tool, result))
     )
+
+    /**
+     * Records only metadata proving that objective-scoped memory retrieval completed.
+     * The objective itself and retrieved text are never persisted; only a one-way digest is kept.
+     */
+    fun recordMemoryRetrieval(
+        context: Context,
+        taskId: String,
+        objective: String,
+        source: String,
+        retrievedChars: Int
+    ): Boolean {
+        if (objective.isBlank() || source != "persistent_memory_context" || retrievedChars < 0) return false
+        val now = System.currentTimeMillis()
+        return append(context, JSONObject()
+            .put("id", digest("$now|memory_retrieval|$taskId|$objective").take(24))
+            .put("taskId", safeTaskId(taskId))
+            .put("backend", "memory")
+            .put("tool", "retrieve_before_act")
+            .put("outcome", Outcome.CONTEXT_RETRIEVED.name)
+            .put("startedAt", now)
+            .put("finishedAt", now)
+            .put("argsFingerprint", digest(objective))
+            .put("summary", "Objective-scoped memory context retrieved; source=$source; chars=$retrievedChars.")
+        )
+    }
 
     /** Records policy/capability denials that happen before the backend is entered. */
     fun recordBlocked(context: Context, taskId: String, tool: String, category: String, args: JSONObject = JSONObject()): Boolean =
