@@ -121,7 +121,10 @@ class OrionRepairLifecycleTest {
         var restoredCheckInvoked = false
         val result = execute(
             proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
-            ownerApprovalDigest = "a".repeat(64),
+            ownerApprovalDigest = OrionRepairLifecycle.expectedPlanDigest(
+                sessionId, "task-repair-test", finding(),
+                proposal(OrionRepairRisk.DATA_AFFECTING, true)
+            ),
             verify = { false },
             rollback = { rollbackInvoked = true; true },
             verifyRollback = { restoredCheckInvoked = true; false }
@@ -146,6 +149,18 @@ class OrionRepairLifecycleTest {
         var calls = 0
         val first = execute(apply = { calls++; "receipt-once" })
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, first.result)
+        val second = execute(apply = { calls++; "receipt-twice" })
+        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, second.result)
+        assertEquals(1, calls)
+    }
+
+    @Test fun appliedPlanCannotBeReplayedAfterEvidenceLedgerRotation() {
+        var calls = 0
+        val first = execute(apply = { calls++; "receipt-once" })
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, first.result)
+        repeat(260) { index ->
+            OrionEvidenceLedger.recordRecovery(context, "noise-$index", "test", "bounded", "rotation")
+        }
         val second = execute(apply = { calls++; "receipt-twice" })
         assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, second.result)
         assertEquals(1, calls)
