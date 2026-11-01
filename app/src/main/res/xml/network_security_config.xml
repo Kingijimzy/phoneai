@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <!-- Dynamic owner-approved RFC1918 hosts cannot be enumerated in Android's static domain list.
+         Python's network bridge enforces exact-host grants, private-address checks, and HTTPS for
+         public hosts before opening HTTP/WebSocket connections. Other app networking should use TLS. -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>
