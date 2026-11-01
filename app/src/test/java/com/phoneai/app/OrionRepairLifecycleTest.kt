@@ -64,8 +64,8 @@ class OrionRepairLifecycleTest {
         executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ) = OrionRepairLifecycle.execute(
         context, sessionId, "task-repair-test", finding(), proposal,
-        OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), proposal),
-        ownerApprovalDigest, sandbox, apply, verify, rollback, verifyRollback
+        OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), proposal, executionBoundary),
+        ownerApprovalDigest, sandbox, apply, verify, rollback, verifyRollback, executionBoundary
     )
 
     @Test fun safeReversibleRepairRequiresSandboxAndVerifiedApplyReceipt() {
