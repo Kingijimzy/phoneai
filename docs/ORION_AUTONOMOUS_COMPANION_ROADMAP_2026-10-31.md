@@ -727,3 +727,18 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Corrected the regression test to parse the persisted JSON registry, mutate the stored source field while preserving the original approved source hash, serialize it, and assert `enabled()` rejects the tampered extension. Production integrity checks and the security assertion remain unchanged.
 - Follow-up CI must run against the exact updated PR head before this correction is considered validated. Build #3422 is not a passing build. Physical Redmi verification remains outstanding.
 - Stage 5 remains the next major implementation: shared typed Kotlin/Python task envelope → authenticated remote worker → LangGraph/Postgres checkpoint → pause/resume/cancel → Android-owned approval interrupt → secure capability bridge → W3C traceparent/OpenTelemetry. Do not create a second executor, memory store or policy authority.
+
+### Stage 4 continuation — bounded MCP pagination (2026-11-01)
+
+- Completed automatic cursor traversal for MCP `resources/list` and `prompts/list` through the existing paired, read-only MCP transport. The central ToolRegistry and capability adapter remain the only route into these operations.
+- Added `OrionMcpPagination` with strict allowlisted collection names, opaque cursor size/control-character validation, repeated-cursor/cycle rejection, a maximum of 5 pages and 100 accumulated items, and explicit partial-catalogue reporting when a safe bound is reached.
+- Each page still passes through the existing endpoint pairing, read-scope, initialize/initialized handshake, JSON-RPC request-ID validation, response-size bound and untrusted-data handling. `tools/call` remains non-retryable.
+- Added pure unit tests for cursor propagation, multi-page aggregation, page/item limits, truncation reporting, cursor cycles and malformed server cursors.
+- Commits: `d6988339`, `5e35d601`, `48d82f48`, `f435bc7c`, `60ae047f`.
+- Validation: exact-head Build #3428 was queued for `60ae047f`; it must finish green before this change is considered validated. This closes the pagination gap only; real-server MCP conformance and physical-device validation remain separate gates.
+
+### Stage 4 closeout status — do not overstate completion
+
+- Software work continues against the Living Companion exit gate. Remaining proof includes repair proposal → sandbox test → owner approval → apply/verify/rollback integration; permission/retention tests across every ambient source; explicit user-initiated evidence reopening with persisted URI-grant verification; cross-provider/process-restart continuity; and cross-agent scope enforcement.
+- Exact-head CI and physical Redmi A3 Pro/HyperOS acceptance are mandatory independent gates. CI cannot prove Android permission screens, background limits, battery impact, notification delivery, thermal/memory behaviour, or voice reliability on the actual device.
+- Stage 4 must remain IN PROGRESS until each remaining software acceptance test has a concrete test/receipt and the physical-device matrix is recorded. No main-branch change or Stage 5 worker deployment is implied by this continuation.
