@@ -128,8 +128,8 @@ class SensorContextActivity : Activity() {
 
     private fun scopeDescription(scope: OrionSensorScope): String = when (scope) {
         OrionSensorScope.MOTION -> "Foreground collector: coarse accelerometer/gyroscope hints while this screen is open."
-        OrionSensorScope.DEVICE_STATE -> "Consent flag only; automatic device-state collection is not connected yet."
-        OrionSensorScope.LOCATION -> "Consent flag only; no passive tracking. Explicit location requests still require Android permission."
+        OrionSensorScope.DEVICE_STATE -> "On-demand battery, charging, power-saver, network type and thermal snapshot; not stored."
+        OrionSensorScope.LOCATION -> "On-demand last-known approximate location, only with Android location permission; no background tracking."
         OrionSensorScope.SCREEN_CONTEXT -> "Manual screen reads only; no continuous screenshot or screen recording."
         OrionSensorScope.MICROPHONE -> "Voice sessions only after you explicitly start them; no background listening."
         OrionSensorScope.NOTIFICATIONS -> "Safe summaries are kept in memory only when this grant and Android Notification access are both enabled."
