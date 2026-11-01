@@ -52,6 +52,10 @@ class OrionNotificationListener : NotificationListenerService() {
 
     private fun capture(sbn: StatusBarNotification) {
         try {
+            if (!OrionSensorConsent.read(this, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return
+            }
             val pkg = sbn.packageName.orEmpty()
             val app = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
@@ -231,7 +235,21 @@ class OrionNotificationListener : NotificationListenerService() {
             }
         }
 
+        /** Re-evaluate app-level consent without changing Android's separate notification-listener grant. */
+        fun refreshConsent() {
+            val service = instance ?: return
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return
+            }
+            try { service.activeNotifications?.forEach { service.capture(it) } } catch (_: Exception) { }
+        }
+
         fun readSafeNotifications(): String {
+            if (!OrionSensorConsent.read(instance ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry.", OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return "Orion notification context is disabled. Enable the Notification context grant in Settings → Sensor & context permissions."
+            }
             if (instance == null) {
                 return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry. Orion excludes banking, payment, password, card, CVV, OTP, and security-code notifications."
             }
