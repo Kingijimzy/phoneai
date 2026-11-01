@@ -25,8 +25,8 @@ class OrionMcpProtocolTest {
         assertThrows(IllegalStateException::class.java) { OrionMcpProtocol.parseResponse(failed) }
     }
     @Test fun streamableHttpParserSelectsOnlyMatchingSseResponseId() {
-        val raw = "event: message\\ndata: {\\"jsonrpc\\":\\"2.0\\",\\"id\\":1,\\"result\\":{\\"ignored\\":true}}\\n\\n" +
-            "event: message\\ndata: {\\"jsonrpc\\":\\"2.0\\",\\"id\\":2,\\"result\\":{\\"accepted\\":true}}\\n\\n"
+        val raw = "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ignored\":true}}\n\n" +
+            "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"accepted\":true}}\n\n"
         val parsed = McpConnector.parseSseResponse(raw, 2L)
         assertEquals(2L, parsed.optLong("id"))
         assertTrue(parsed.optJSONObject("result")?.optBoolean("accepted") == true)
