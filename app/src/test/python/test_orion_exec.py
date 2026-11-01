@@ -83,7 +83,7 @@ import math
 import re
 from datetime import datetime
 import urllib.parse
-parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps({"sqrt": math.sqrt(81), "match": bool(re.search("ha", "homeassistant")), "host": parsed.hostname, "year": datetime.now().year}))
+parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps({"sqrt": math.sqrt(81), "match": bool(re.search("home", "homeassistant")), "host": parsed.hostname, "year": datetime.now().year}))
 """
         out = orion_exec.run(code)
         self.assertNotIn("error:", out)
