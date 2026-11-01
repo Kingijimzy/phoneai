@@ -79,10 +79,16 @@ internal object OrionRepairLifecycle {
 
         // A plan may be applied only once. An interrupted/uncertain apply is reconciled
         // manually; a previous owner approval is never silently reused after process restart.
+        val terminalOrUncertain = setOf("APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
+            "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")
+        val durableTerminalReceipt = terminalOrUncertain.any { stage ->
+            val eventId = "repair-" + sha256("$taskId|$digest|${stage}").take(48)
+            runCatching {
+                OrionConversationRepository.get(app).hasEventForSession(app, sessionId, eventId)
+            }.getOrDefault(false)
+        }
         val priorPlanEvents = OrionEvidenceLedger.events(app, taskId).filter { it.argsFingerprint == digest }
-        val terminalOrUncertain = setOf("repair_applied", "repair_apply_uncertain", "repair_verified",
-            "repair_rollback_required", "repair_rolled_back", "repair_rollback_failed")
-        if (priorPlanEvents.any { it.tool in terminalOrUncertain }) {
+        if (durableTerminalReceipt || priorPlanEvents.any { it.tool in terminalOrUncertain.map { stage -> "repair_" + stage.lowercase() } }) {
             return Receipt(Result.POLICY_BLOCKED, digest,
                 "This exact repair plan already reached an apply or uncertain state; it cannot be replayed.")
         }
