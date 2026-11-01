@@ -52,32 +52,59 @@ object ChatHistoryStore {
         repo(context).renameArchivedById(context, sessionId, title)
 
     @Synchronized
-    fun deleteArchivedById(context: Context, sessionId: String): Boolean = repo(context).deleteArchivedById(context, sessionId)
+    fun deleteArchivedById(context: Context, sessionId: String): Boolean {
+        val deleted = repo(context).deleteArchivedById(context, sessionId)
+        if (deleted) OrionMultimodalEvidenceStore.deleteSession(context, sessionId)
+        return deleted
+    }
 
     @Synchronized
     fun restoreArchivedById(context: Context, sessionId: String): List<Pair<String, String>>? =
         repo(context).restoreArchivedById(context, sessionId)
 
     @Synchronized
-    fun deleteArchived(context: Context, timestamp: Long, title: String): Boolean =
-        repo(context).deleteArchived(context, timestamp, title)
+    fun deleteArchived(context: Context, timestamp: Long, title: String): Boolean {
+        val session = archived(context).firstOrNull { it.timestamp == timestamp && it.title == title }?.sessionId
+        val deleted = repo(context).deleteArchived(context, timestamp, title)
+        if (deleted && session != null) OrionMultimodalEvidenceStore.deleteSession(context, session)
+        return deleted
+    }
 
     @Synchronized
-    fun deleteArchived(context: Context, timestamp: Long): Boolean =
-        repo(context).deleteArchived(context, timestamp)
+    fun deleteArchived(context: Context, timestamp: Long): Boolean {
+        val session = archived(context).firstOrNull { it.timestamp == timestamp }?.sessionId
+        val deleted = repo(context).deleteArchived(context, timestamp)
+        if (deleted && session != null) OrionMultimodalEvidenceStore.deleteSession(context, session)
+        return deleted
+    }
 
     @Synchronized
-    fun clearArchived(context: Context): Boolean = repo(context).clearArchived(context)
+    fun clearArchived(context: Context): Boolean {
+        val sessions = archived(context).map { it.sessionId }
+        val deleted = repo(context).clearArchived(context)
+        if (deleted) sessions.forEach { OrionMultimodalEvidenceStore.deleteSession(context, it) }
+        return deleted
+    }
 
     @Synchronized
     fun restoreActive(context: Context, transcript: List<Pair<String, String>>) =
         repo(context).restoreActive(context, transcript)
 
     @Synchronized
-    fun clearAll(context: Context): Boolean = repo(context).clearAll(context)
+    fun clearAll(context: Context): Boolean {
+        val active = activeSessionId(context)
+        val sessions = archived(context).map { it.sessionId } + listOfNotNull(active)
+        val deleted = repo(context).clearAll(context)
+        if (deleted) sessions.distinct().forEach { OrionMultimodalEvidenceStore.deleteSession(context, it) }
+        return deleted
+    }
 
     @Synchronized
-    fun clear(context: Context) = repo(context).clear(context)
+    fun clear(context: Context) {
+        val active = activeSessionId(context)
+        repo(context).clear(context)
+        active?.let { OrionMultimodalEvidenceStore.deleteSession(context, it) }
+    }
 
     /** Kept for regression tests that exercise legacy JSON migration/filtering. */
     internal fun removeArchivedEntry(raw: String, timestamp: Long): String? = try {
