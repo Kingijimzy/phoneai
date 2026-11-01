@@ -627,3 +627,11 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - This is a prompt-level consistency guard, not a replacement for executable permission/approval gates. ToolGate, AgentPolicy, safety checks and dispatch authorization remain authoritative.
 - Still open: verify every alternate provider/worker prompt path, add device-level continuity tests, and connect mood only to optional presentation surfaces without allowing it to influence action policy.
 
+### Stage 4 continuation — supersede obsolete recovery lessons after verified success (2026-11-01)
+
+- Audited the existing learning loop end-to-end: failed tool outcomes are stored as privacy-minimal categories; user corrections/praise are associated with the preceding task; only a clean trace with every step independently verified can reinforce a reusable routine; task-level completion is persisted before recovered-failure lessons are resolved; relevant lessons are injected into the central memory context.
+- Found a narrow stale-learning defect: a later clean success retired old `failure` entries for the proven tool sequence but left matching `resolved_failure` entries active. That could make Orion continue presenting an obsolete recovery warning after the same task/tool sequence had subsequently succeeded cleanly.
+- Updated `ExperiencePolicy.merge` so a new `worked` record retires both unresolved and resolved failure lessons only when the task similarity is sufficient and the failed tool belongs to the newly verified sequence. User corrections and unrelated task lessons are preserved.
+- Added tests for resolved-failure supersession, preservation of unrelated task lessons, and limiting retirement to tools in the proven sequence.
+- This changes learning guidance only. It does not create executable routines, skip verification, or change tool permissions. The clean-success evidence gate remains mandatory.
+
