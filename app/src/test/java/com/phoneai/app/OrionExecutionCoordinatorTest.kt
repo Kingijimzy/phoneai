@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionExecutionCoordinatorTest {
-    private fun context(): Context = RuntimeEnvironment.getApplication<Context>().also { c ->
+    private fun context(): Context = RuntimeEnvironment.getApplication().also { c ->
         c.filesDir.listFiles()?.filter { it.name.startsWith("orion_distributed") || it.name.startsWith("orion_worker_lease") || it.name == "orion_agent_checkpoint.json" || it.name == "orion_agent_checkpoint.json.bak" || it.name == "orion_task_checkpoints" }?.forEach { it.deleteRecursively() }
         AgentCheckpointStore.clear(c)
     }
