@@ -119,6 +119,7 @@ internal object OrionPythonWebSocketTransport {
             if (!ready.await(6, TimeUnit.SECONDS) || !session.opened) {
                 session.socket?.cancel()
                 sessions.remove(id)
+                stopServiceIfIdle()
                 return error("WebSocket connection did not open: ${session.failure.ifBlank { "timeout or handshake rejected" }}")
             }
             return JSONObject().put("session_id", id).put("host", endpoint.host)
@@ -126,6 +127,7 @@ internal object OrionPythonWebSocketTransport {
         } catch (e: Exception) {
             session.socket?.cancel()
             sessions.remove(id)
+            stopServiceIfIdle()
             return error("WebSocket connection failed: ${e.javaClass.simpleName}")
         }
     }
@@ -162,6 +164,7 @@ internal object OrionPythonWebSocketTransport {
         if (event == null && session.closed) {
             sessions.remove(id)
             dispose(session)
+            stopServiceIfIdle()
             return JSONObject().put("type", "closed").put("session_id", id).toString()
         }
         return event ?: JSONObject().put("type", "timeout").put("session_id", id).toString()
@@ -172,6 +175,7 @@ internal object OrionPythonWebSocketTransport {
         session.closed = true
         val socket = session.socket
         if (socket != null) socket.close(1000, "Orion session closed") else dispose(session)
+        stopServiceIfIdle()
         return JSONObject().put("closed", true).put("session_id", id).toString()
     }
 
@@ -205,7 +209,7 @@ internal object OrionPythonWebSocketTransport {
         return session
     }
 
-    private fun dispose(session: Session) {
+    private fun stopServiceIfIdle() {\n        if (sessions.isEmpty()) appContext?.let { OrionSocketForegroundService.stop(it) }\n    }\n\n    private fun dispose(session: Session) {
         session.client?.let { client ->
             runCatching { client.dispatcher.executorService.shutdown() }
             runCatching { client.connectionPool.evictAll() }
