@@ -173,8 +173,11 @@ object AgentRunner {
 
     private fun delegatedFactMemory(c: Context, userText: String, allowedCategories: Set<String>): String {
         if (allowedCategories.isEmpty()) return "(no memory categories are permitted for this delegation)"
-        val safe = MemoryStore.all(c).filter {
-            it.category in allowedCategories && !SafetyGate.containsSensitiveCredentialText(it.text)
+        val safe = MemoryStore.all(c).filter { memory ->
+            memory.category in allowedCategories &&
+                MemoryGovernancePolicy.canUseInPrompt(memory.reviewStatus, memory.sensitivity) &&
+                OrionMemoryLifecycle.isActive(c, memory.id) &&
+                !SafetyGate.containsSensitiveCredentialText(memory.text)
         }
         val selected = MemoryRanking.selectCategories(safe, allowedCategories, userText, limit = 6, relevantLimit = 4)
         if (selected.isEmpty()) return "(no shareable fact memories match this request)"
