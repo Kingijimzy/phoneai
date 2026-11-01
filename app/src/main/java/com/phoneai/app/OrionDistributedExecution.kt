@@ -190,3 +190,184 @@ internal class OrionSpecialistWorker(
         return handler.run(task)
     }
 }
+
+
+internal sealed class OrionCoordinatedResult {
+    data class Completed(val taskId: String, val evidenceRef: String, val fence: Long) : OrionCoordinatedResult()
+    data class Deferred(val taskId: String, val reason: String) : OrionCoordinatedResult()
+    data class NeedsOwner(val taskId: String, val reason: String) : OrionCoordinatedResult()
+    data class Failed(val taskId: String, val reason: String) : OrionCoordinatedResult()
+}
+
+/** Optional contract for workers that can safely resume from the existing agent checkpoint. */
+internal interface OrionCheckpointAwareWorker : OrionTaskWorker {
+    fun execute(task: OrionTaskEnvelope, replayInstruction: String?): OrionWorkerResult
+}
+
+/**
+ * The single local queue-to-worker coordinator. A lease is renewed while the worker runs.
+ * Result persistence is an idempotent two-ledger commit: lease completion is written first,
+ * then task completion. If the process dies between writes, reconcile() finishes the task
+ * from the durable lease completion rather than executing it a second time.
+ */
+internal class OrionExecutionCoordinator(
+    private val tasks: OrionDistributedTaskStore,
+    private val leases: OrionWorkerLeaseStore,
+    private val context: Context,
+    private val leaseMs: Long = 45_000L,
+    private val heartbeatMs: Long = 12_000L
+) {
+    fun dispatch(taskId: String, worker: OrionTaskWorker): OrionCoordinatedResult {
+        val record = tasks.get(taskId) ?: return OrionCoordinatedResult.Failed(taskId, "task_not_found")
+        val task = record.envelope
+        if (record.status !in setOf("queued", "retry_wait")) return OrionCoordinatedResult.Deferred(taskId, "task_not_queued")
+        if (task.validate().isNotEmpty()) return OrionCoordinatedResult.Failed(taskId, "invalid_envelope")
+        if (task.kind !in worker.supportedKinds || !worker.supportedCapabilities.containsAll(task.requestedCapabilities))
+            return OrionCoordinatedResult.Failed(taskId, "worker_capability_mismatch")
+        if (!tasks.claim(taskId)) return OrionCoordinatedResult.Deferred(taskId, "claim_race")
+        val lease = leases.acquire(task, worker.workerId, leaseMs)
+        if (lease == null) {
+            tasks.fail(taskId, retryable = true)
+            return OrionCoordinatedResult.Deferred(taskId, "lease_unavailable")
+        }
+
+        val currentCheckpoint = AgentCheckpointStore.pending(context)
+        val checkpointCommand = currentCheckpoint?.optString("command").orEmpty()
+        val replay = if (checkpointCommand == task.objective) {
+            if (AgentCheckpointStore.needsRecoveryConfirmation(context)) {
+                AgentCheckpointStore.recoveryRequired(context,
+                    "Delegated task $taskId has an unresolved in-flight action. Inspect its real-world outcome before replay.")
+                leases.release(lease)
+                tasks.fail(taskId, retryable = false)
+                return OrionCoordinatedResult.NeedsOwner(taskId, "checkpoint_in_flight_requires_owner_reconciliation")
+            }
+            AgentCheckpointStore.resumeInstruction(context)
+        } else null
+
+        val activeLease = java.util.concurrent.atomic.AtomicReference(lease)
+        val heartbeatFailure = java.util.concurrent.atomic.AtomicReference(false)
+        val scheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor()
+        val heartbeat = scheduler.scheduleAtFixedRate({
+            val updated = activeLease.get()?.let { leases.heartbeat(it, leaseMs) }
+            if (updated == null) heartbeatFailure.set(true) else activeLease.set(updated)
+        }, heartbeatMs, heartbeatMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+        try {
+            if (tasks.isCancellationRequested(taskId)) {
+                leases.release(activeLease.get())
+                tasks.markRecovered(taskId)
+                return OrionCoordinatedResult.Deferred(taskId, "cancelled_before_execution")
+            }
+            val result = if (worker is OrionCheckpointAwareWorker) worker.execute(task, replay) else worker.execute(task)
+            if (heartbeatFailure.get()) return OrionCoordinatedResult.Deferred(taskId, "lease_heartbeat_lost_outcome_requires_reconciliation")
+            if (tasks.isCancellationRequested(taskId)) {
+                AgentCheckpointStore.recoveryRequired(context,
+                    "Delegated task $taskId was cancelled while executing. Verify whether the worker completed an external action.")
+                return OrionCoordinatedResult.NeedsOwner(taskId, "cancelled_during_execution_outcome_unknown")
+            }
+            return when (result) {
+                is OrionWorkerResult.Success -> {
+                    val current = activeLease.get() ?: return OrionCoordinatedResult.Failed(taskId, "lease_missing")
+                    // Commit order is intentional; reconcile() closes a crash window between these durable writes.
+                    if (!leases.complete(current, result.evidenceRef))
+                        OrionCoordinatedResult.Deferred(taskId, "fenced_completion_rejected")
+                    else if (!tasks.complete(taskId, result.evidenceRef))
+                        OrionCoordinatedResult.Deferred(taskId, "lease_committed_task_completion_pending_reconcile")
+                    else OrionCoordinatedResult.Completed(taskId, result.evidenceRef, current.fencingToken)
+                }
+                is OrionWorkerResult.NeedsOwner -> {
+                    leases.release(activeLease.get()); tasks.fail(taskId, retryable = false)
+                    OrionCoordinatedResult.NeedsOwner(taskId, result.reason.take(300))
+                }
+                is OrionWorkerResult.Failure -> {
+                    // Preserve lease after ambiguous/side-effecting failures until it expires.
+                    tasks.fail(taskId, result.retryable)
+                    OrionCoordinatedResult.Failed(taskId, result.code)
+                }
+            }
+        } catch (_: Exception) {
+            AgentCheckpointStore.recoveryRequired(context,
+                "Delegated task $taskId threw while executing. The action outcome is unknown; inspect before replay.")
+            OrionCoordinatedResult.Deferred(taskId, "worker_exception_outcome_unknown")
+        } finally {
+            heartbeat.cancel(true)
+            scheduler.shutdownNow()
+        }
+    }
+
+    /** Repairs the crash window after lease completion but before task-ledger completion. */
+    fun reconcile(): Int {
+        var repaired = 0
+        tasks.all().filter { it.status == "running" || it.status == "retry_wait" }.forEach { record ->
+            val result = leases.completedResult(record.envelope.taskId, record.envelope.idempotencyKey)
+            if (result != null && tasks.complete(record.envelope.taskId, result)) repaired++
+        }
+        return repaired
+    }
+}
+
+/** Remote LangGraph lifecycle with same-origin HTTPS polling/cancellation and bounded reconnects. */
+internal class OrionLangGraphRemoteWorker(
+    private val transport: OrionLangGraphTransport,
+    private val bearerToken: () -> String?,
+    private val maxPolls: Int = 20,
+    private val pollDelayMs: Long = 1_500L
+) {
+    data class RemoteResult(val status: String, val evidenceRef: String?, val detail: String?)
+    fun execute(task: OrionTaskEnvelope, cancelled: () -> Boolean = { false }): RemoteResult {
+        val accepted = transport.submit(task)
+        val statusUrl = accepted.optString("status_url")
+        val cancelUrl = accepted.optString("cancel_url")
+        require(statusUrl.isNotBlank()) { "langgraph_status_url_missing" }
+        validateSameOrigin(statusUrl)
+        if (cancelUrl.isNotBlank()) validateSameOrigin(cancelUrl)
+        repeat(maxPolls.coerceIn(1, 100)) {
+            if (cancelled()) {
+                if (cancelUrl.isNotBlank()) request(cancelUrl, "POST", JSONObject().put("task_id", task.taskId))
+                return RemoteResult("cancel_requested", null, "owner_cancellation_forwarded")
+            }
+            val state = try { request(statusUrl, "GET", null) } catch (e: Exception) {
+                // Reconnect with a bounded retry; never resubmit a task on a polling failure.
+                Thread.sleep(pollDelayMs.coerceIn(100L, 10_000L))
+                return@repeat
+            }
+            when (state.optString("status").lowercase()) {
+                "completed", "success" -> {
+                    val ref = state.optString("evidence_ref").takeIf { it.isNotBlank() }
+                        ?: throw IllegalStateException("langgraph_result_missing_evidence_ref")
+                    return RemoteResult("completed", ref, null)
+                }
+                "failed", "error" -> return RemoteResult("failed", null, state.optString("error").take(300))
+                "cancelled", "canceled" -> return RemoteResult("cancelled", null, null)
+            }
+            Thread.sleep(pollDelayMs.coerceIn(100L, 10_000L))
+        }
+        return RemoteResult("pending", null, "poll_budget_exhausted; resume polling without resubmission")
+    }
+
+    private fun validateSameOrigin(raw: String) {
+        val base = URL(transport.endpointForValidation())
+        val target = URL(raw)
+        require(target.protocol.equals("https", true) && target.host.equals(base.host, true) &&
+            target.port == base.port) { "langgraph_url_origin_mismatch" }
+    }
+    private fun request(raw: String, method: String, body: JSONObject?): JSONObject {
+        val url = URL(raw); validateSameOrigin(raw)
+        val token = bearerToken()?.takeIf { it.isNotBlank() } ?: throw IllegalStateException("langgraph_authentication_missing")
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = method
+            conn.connectTimeout = 8_000; conn.readTimeout = 15_000
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            if (body != null) {
+                conn.doOutput = true; conn.setRequestProperty("Content-Type", "application/json")
+                conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.use { it.readText() }?.take(32_000).orEmpty()
+            if (code !in 200..299) throw IllegalStateException("langgraph_http_$code")
+            return JSONObject(text)
+        } finally { conn.disconnect() }
+    }
+}
