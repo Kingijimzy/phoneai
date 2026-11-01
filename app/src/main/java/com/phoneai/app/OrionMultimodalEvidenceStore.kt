@@ -24,8 +24,18 @@ internal object OrionMultimodalEvidenceStore {
     private fun hash(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+    private fun currentTaskRef(context: Context, sessionId: String?): String {
+        val graph = runCatching { OrionObjectiveGraph.load(context) }.getOrNull()
+        if (graph != null && graph.objective.isNotBlank()) {
+            val activeNode = graph.nodes.firstOrNull { it.status == OrionObjectiveGraph.Status.RUNNING }?.id
+            return if (activeNode.isNullOrBlank()) graph.objective.take(140)
+                else (graph.objective + "#" + activeNode).take(160)
+        }
+        return sessionId.orEmpty()
+    }
+
     fun record(
-        context: Context, sessionId: String?, taskRef: String = sessionId.orEmpty(),
+        context: Context, sessionId: String?, taskRef: String = currentTaskRef(context, sessionId),
         modality: Modality, source: String, reference: String = "", digest: String = "", summary: String
     ): String? {
         val session = sessionId?.trim()?.take(160).orEmpty()
