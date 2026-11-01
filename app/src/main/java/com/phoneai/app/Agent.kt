@@ -2961,7 +2961,7 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
         svc.recordChatEvent("tool", "started", "Tool: $tool")
-        return OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
+        val result = OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val preflight = preflightTool(route.tool, args)
             val backendResult = if (preflight != null) preflight else runCatching {
                 OrionRuntimeCapabilityExecutor.execute(
@@ -2989,6 +2989,18 @@ Rules:
             taskProofs.record(route.tool, finalResult)
             finalResult
         }
+        // Conversation turns already live in the local SQLite messages table. This lifecycle
+        // receipt adds the outcome for every routed tool, including adapter/preflight errors,
+        // without persisting arguments, screen contents, credentials or raw tool output.
+        val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
+        svc.recordChatEvent(
+            "tool_result",
+            if (failed) "error" else "success",
+            "tool=$tool; outcome=${if (failed) "failed" else "completed"}" +
+                if (failureCategory.isNotBlank()) "; category=$failureCategory" else ""
+        )
+        return result
     }
 
     /** Shared preflight runs before every backend, including extracted executors. */
