@@ -72,4 +72,17 @@ class OrionMultimodalEvidenceStoreTest {
         assertEquals("session-a", row.sessionId)
         assertFalse(row.toString().contains("content://"))
     }
+    @Test fun evidenceMetadataSurvivesDatabaseReopenAndSessionDeletionIsScoped() {
+        val first = recordImage("session-a")
+        val second = recordImage("session-b")
+
+        // forSession opens and closes its SQLite helper on each read, exercising durable reopen.
+        assertEquals(first, OrionMultimodalEvidenceStore.forSession(context, "session-a").single().id)
+        assertEquals(second, OrionMultimodalEvidenceStore.forSession(context, "session-b").single().id)
+
+        assertEquals(1, OrionMultimodalEvidenceStore.deleteSession(context, "session-a"))
+        assertTrue(OrionMultimodalEvidenceStore.forSession(context, "session-a").isEmpty())
+        assertEquals(second, OrionMultimodalEvidenceStore.forSession(context, "session-b").single().id)
+    }
+
 }
