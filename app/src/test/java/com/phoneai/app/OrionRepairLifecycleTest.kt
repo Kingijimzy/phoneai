@@ -109,6 +109,15 @@ class OrionRepairLifecycleTest {
             .any { it.tool == "repair_apply_uncertain" })
     }
 
+    @Test fun previouslyAppliedPlanCannotBeReplayedAfterProcessLikeReentry() {
+        var calls = 0
+        val first = execute(apply = { calls++; "receipt-once" })
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, first.result)
+        val second = execute(apply = { calls++; "receipt-twice" })
+        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, second.result)
+        assertEquals(1, calls)
+    }
+
     @Test fun invalidPlanDigestIsRejectedBeforeAnyCallback() {
         var callbacks = 0
         val result = OrionRepairLifecycle.execute(
