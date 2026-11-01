@@ -45,6 +45,7 @@ internal object OrionMultimodalEvidenceStore {
     ): String? {
         val session = sessionId?.trim()?.take(160).orEmpty()
         if (session.isBlank()) return null
+        val safeTaskRef = taskRef.replace(Regex("[\\r\\n]+"), " ").take(160)
         val safeSource = source.filter { it.isLetterOrDigit() || it in "._-" }.take(48)
         val safeSummary = summary.replace(Regex("[\\r\\n]+"), " ").take(220)
         if (safeSource.isBlank() || safeSummary.isBlank()) return null
@@ -55,9 +56,9 @@ internal object OrionMultimodalEvidenceStore {
         val evidenceDigest = digest.takeIf { it.matches(Regex("[a-fA-F0-9]{32,128}")) }
             ?: hash("$modality|$safeSource|$safeReference|$safeSummary")
         val created = System.currentTimeMillis()
-        val id = hash("$session|$taskRef|$modality|$evidenceDigest|$created").take(32)
+        val id = hash("$session|$safeTaskRef|$modality|$evidenceDigest|$created").take(32)
         val values = ContentValues().apply {
-            put("id", id); put("session_id", session); put("task_ref", taskRef.take(160))
+            put("id", id); put("session_id", session); put("task_ref", safeTaskRef)
             put("modality", modality.name); put("source", safeSource); put("reference", safeReference)
             put("digest", evidenceDigest); put("summary", safeSummary); put("created_at", created)
         }
