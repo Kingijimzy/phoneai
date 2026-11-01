@@ -24,7 +24,8 @@ internal object OrionRepairLifecycle {
      */
     fun expectedPlanDigest(
         sessionId: String, taskId: String,
-        finding: OrionDiagnosticFinding, proposal: OrionRepairProposal
+        finding: OrionDiagnosticFinding, proposal: OrionRepairProposal,
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): String {
         fun field(value: String): String = "${value.length}:$value"
         val canonical = listOf(
@@ -33,7 +34,7 @@ internal object OrionRepairLifecycle {
             finding.evidenceRefs.sorted().joinToString("") { field(it) },
             proposal.id, proposal.findingId, proposal.summary, proposal.risk.name,
             proposal.isIdempotent.toString(), proposal.hasRollback.toString(),
-            proposal.requiredOwnerApproval.toString()
+            proposal.requiredOwnerApproval.toString(), proposal.suspicious.toString(), executionBoundary.name
         ).joinToString("") { field(it) }
         return sha256(canonical)
     }
@@ -63,14 +64,15 @@ internal object OrionRepairLifecycle {
         context: Context, sessionId: String, taskId: String,
         finding: OrionDiagnosticFinding, proposal: OrionRepairProposal, planDigest: String,
         ownerApprovalDigest: String?, sandboxTest: () -> Boolean, apply: () -> String?,
-        verify: () -> Boolean, rollback: () -> Boolean, verifyRollback: () -> Boolean
+        verify: () -> Boolean, rollback: () -> Boolean, verifyRollback: () -> Boolean,
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): Receipt {
         val app = context.applicationContext
         val digest = planDigest.lowercase()
         val expectedDigest = if (sessionId.isNotBlank() && taskId.isNotBlank() &&
             finding.isActionable() && finding.id == proposal.findingId && proposal.id.isNotBlank() &&
             proposal.summary.isNotBlank() && proposal.hasRollback) {
-            expectedPlanDigest(sessionId, taskId, finding, proposal)
+            expectedPlanDigest(sessionId, taskId, finding, proposal, executionBoundary)
         } else ""
         val ownerApproved = ownerApprovalDigest?.equals(expectedDigest, ignoreCase = true) == true
         if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$")) ||
@@ -97,7 +99,7 @@ internal object OrionRepairLifecycle {
         }
 
         if (!emit(app, sessionId, taskId, "PROPOSED", digest,
-                "Repair proposal recorded; risk=${proposal.risk}; approval_required=${proposal.requiredOwnerApproval}.")) {
+                "Repair proposal recorded; risk=${proposal.risk}; boundary=${executionBoundary.name}; approval_required=${proposal.requiredOwnerApproval || proposal.suspicious}.")) {
             return Receipt(Result.PERSISTENCE_FAILED, digest, "Proposal receipt failed; repair was not tested or applied.")
         }
 
@@ -109,10 +111,13 @@ internal object OrionRepairLifecycle {
         }
         if (!sandboxPassed) return Receipt(Result.SANDBOX_FAILED, digest, "Sandbox validation failed; repair was not applied.")
 
-        val approvalRequired = proposal.requiredOwnerApproval ||
-            proposal.risk != OrionRepairRisk.REVERSIBLE || !proposal.isIdempotent
+        // Only the trusted adapter can declare the execution boundary. Sandbox data mutations
+        // are autonomous when isolated, idempotent and rollback-backed; dangerous/suspicious
+        // work and every external effect still require owner approval.
+        val approvalRequired = OrionSelfHealingPolicy.requiresOwnerApproval(proposal, executionBoundary)
         val safeAutoApply = OrionSelfHealingPolicy.mayAutoApply(
-            proposal.copy(status = OrionRepairStatus.TEST_PASSED, testPassed = true)
+            proposal.copy(status = OrionRepairStatus.TEST_PASSED, testPassed = true),
+            executionBoundary
         )
         if (approvalRequired && !ownerApproved) {
             val saved = emit(app, sessionId, taskId, "AWAITING_OWNER", digest,
@@ -127,7 +132,7 @@ internal object OrionRepairLifecycle {
             }
         } else if (!safeAutoApply) {
             return Receipt(Result.POLICY_BLOCKED, digest,
-                "Repair does not meet the reversible, idempotent, rollback-backed auto-apply policy.")
+                "Repair does not meet the risk-aware, boundary-specific, idempotent and rollback-backed auto-apply policy.")
         }
 
         // Atomically claim the one-shot transition before entering any side-effecting adapter.
