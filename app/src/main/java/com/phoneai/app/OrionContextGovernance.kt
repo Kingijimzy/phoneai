@@ -138,7 +138,7 @@ internal object OrionProviderContextPolicy {
             context, output, vision,
             audioInput = isGeminiLive,
             audioOutput = isGeminiLive,
-            videoInput = isGeminiLive
+            videoInput = false
         )
     }
 
