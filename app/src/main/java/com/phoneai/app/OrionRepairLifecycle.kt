@@ -18,6 +18,26 @@ internal object OrionRepairLifecycle {
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+    /**
+     * Stable, context-bound digest of the complete repair intent. execute recomputes it so a
+     * stale digest cannot authorize changed finding/proposal content or a different task/session.
+     */
+    fun expectedPlanDigest(
+        sessionId: String, taskId: String,
+        finding: OrionDiagnosticFinding, proposal: OrionRepairProposal
+    ): String {
+        fun field(value: String): String = "${value.length}:$value"
+        val canonical = listOf(
+            sessionId, taskId, finding.id, finding.component, finding.title, finding.detail,
+            finding.severity.name, finding.detectedAtEpochMs.toString(),
+            finding.evidenceRefs.sorted().joinToString("") { field(it) },
+            proposal.id, proposal.findingId, proposal.summary, proposal.risk.name,
+            proposal.isIdempotent.toString(), proposal.hasRollback.toString(),
+            proposal.requiredOwnerApproval.toString()
+        ).joinToString("") { field(it) }
+        return sha256(canonical)
+    }
+
     private fun emit(context: Context, sessionId: String, taskId: String, stage: String,
         planDigest: String, summary: String, verified: Boolean = false, failed: Boolean = false): Boolean {
         val ledgerSaved = OrionEvidenceLedger.recordRepairStage(
@@ -44,9 +64,14 @@ internal object OrionRepairLifecycle {
     ): Receipt {
         val app = context.applicationContext
         val digest = planDigest.lowercase()
-        val ownerApproved = ownerApprovalDigest?.equals(digest, ignoreCase = true) == true
+        val expectedDigest = if (sessionId.isNotBlank() && taskId.isNotBlank() &&
+            finding.isActionable() && finding.id == proposal.findingId && proposal.id.isNotBlank() &&
+            proposal.summary.isNotBlank() && proposal.hasRollback) {
+            expectedPlanDigest(sessionId, taskId, finding, proposal)
+        } else ""
+        val ownerApproved = ownerApprovalDigest?.equals(expectedDigest, ignoreCase = true) == true
         if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$")) ||
-            !finding.isActionable() || finding.id != proposal.findingId || proposal.id.isBlank() ||
+            digest != expectedDigest || !finding.isActionable() || finding.id != proposal.findingId || proposal.id.isBlank() ||
             proposal.summary.isBlank() || !proposal.hasRollback) {
             return Receipt(Result.POLICY_BLOCKED, digest,
                 "Repair proposal failed identity, evidence, digest or rollback validation.")
