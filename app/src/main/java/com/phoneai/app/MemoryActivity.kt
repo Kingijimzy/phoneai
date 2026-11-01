@@ -133,16 +133,16 @@ class MemoryActivity : Activity() {
             buildString {
                 append("VERSION ${versions.size - index} · ")
                 append(if (time > 0L) formatter.format(Date(time)) else "unknown date")
-                append("\\nCategory: ${version.optString("category")}")
+                append("\nCategory: ${version.optString("category")}")
                 append(" · Confidence: $confidence%")
                 append(" · Status: ${version.optString("reviewStatus")}")
-                append("\\nSource: ${version.optString("sourceRole")} · Reason: ${version.optString("reason")}")
-                append("\\n")
+                append("\nSource: ${version.optString("sourceRole")} · Reason: ${version.optString("reason")}")
+                append("\n")
                 append(version.optString("text").take(300))
             }
         }
         AlertDialog.Builder(this).setTitle("Previous versions · ${versions.size}")
-            .setMessage(details.joinToString("\\n\\n"))
+            .setMessage(details.joinToString("\n\n"))
             .setPositiveButton("Close", null).show()
     }
 
@@ -153,7 +153,7 @@ class MemoryActivity : Activity() {
         val options = arrayOf("Never expire", "7 days", "30 days", "90 days", "1 year")
         AlertDialog.Builder(this)
             .setTitle("Memory expiry")
-            .setMessage("Current expiry: $currentLabel\\nChoose when Orion should stop using this memory in context.")
+            .setMessage("Current expiry: $currentLabel\nChoose when Orion should stop using this memory in context.")
             .setItems(options) { _, which ->
                 val now = System.currentTimeMillis()
                 val expiry = when (which) {
