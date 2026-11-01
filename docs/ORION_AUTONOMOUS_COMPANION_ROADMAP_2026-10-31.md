@@ -89,8 +89,8 @@ Upstream references:
 #### Stage 4 continuation — W3C-compatible local trace correlation (2026-11-01)
 
 - Upgraded the existing `OrionConversationRepository` event schema to v4 with nullable `trace_id`; v1/v2/v3 migration paths preserve old event rows and safely add the column only where needed.
-- Every routed tool execution now generates a 32-hex-character (16-byte) trace ID and writes it to both `tool/started` and `tool_result` receipts. This correlates success and failure events without persisting tool arguments or output.
-- Added `eventsForTrace` to retrieve a correlated lifecycle and tests for round-trip correlation, invalid ID rejection and event grouping.
+- Every top-level Agent interaction now creates one 32-hex-character (16-byte) trace ID. Nested voice/research/skill command routing inherits that ID, and every routed tool writes it to both `tool/started` and `tool_result` receipts. A trace can therefore be queried as interaction start → multiple tool calls/results → interaction completion/error without persisting tool arguments or output.
+- Added `eventsForTrace` to retrieve a correlated lifecycle and tests for round-trip correlation, invalid ID rejection and event grouping. Tool calls outside a top-level interaction receive a standalone trace ID.
 - The ID follows the W3C trace-id representation, but full W3C `traceparent` propagation across Android ↔ remote worker is still pending. This local trace ID is not yet an OpenTelemetry span.
 - Exact-head CI is required after this schema migration. No remote LangGraph worker or cron deployment is claimed by this change.
 
