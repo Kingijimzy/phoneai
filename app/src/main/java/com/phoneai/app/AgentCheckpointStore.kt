@@ -87,6 +87,12 @@ object AgentCheckpointStore {
         save(c, checkpoint)
     }
 
+    fun needsRecoveryConfirmationForTask(c: Context, taskId: String): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optString("taskId") != taskId) return@synchronized false
+        CheckpointTransitionPolicy.needsUserConfirmation(checkpoint.optJSONObject("inFlight") != null)
+    }
+
     fun needsRecoveryConfirmation(c: Context): Boolean = synchronized(lock) {
         try {
             val checkpoint = AtomicFile(file(c)).openRead().bufferedReader().use { JSONObject(it.readText()) }
