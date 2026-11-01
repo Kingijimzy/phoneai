@@ -90,13 +90,13 @@ class SensorContextActivity : Activity() {
             row.addView(text); row.addView(toggle)
             root.addView(row)
             root.addView(TextView(this).apply {
-                text = scopeDescription(scope)
+                this.text = scopeDescription(scope)
                 textSize = 11f; setTextColor(0xff8995a3.toInt())
                 setPadding(0, 0, 0, dp(5))
             })
             if (scope == OrionSensorScope.MOTION) {
                 motionStatus = TextView(this).apply {
-                    text = "Motion observations appear here only while this screen is open."
+                    this.text = "Motion observations appear here only while this screen is open."
                     textSize = 12f; setTextColor(0xff8995a3.toInt())
                 }
                 root.addView(motionStatus)
