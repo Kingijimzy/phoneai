@@ -62,12 +62,21 @@ class OrionExecutionCoordinatorTest {
         val c = context(); val store = OrionDistributedTaskStore(c); val leases = OrionWorkerLeaseStore(c)
         val task = OrionTaskEnvelope.create("checkpoint task")
         assertTrue(store.enqueue(task))
-        assertTrue(AgentCheckpointStore.begin(c, task.objective))
+        assertTrue(AgentCheckpointStore.beginForTask(c, task.taskId, task.objective))
         assertTrue(AgentCheckpointStore.beginStep(c, "send_message", org.json.JSONObject().put("text", "private")))
         val result = OrionExecutionCoordinator(store, leases, c).dispatch(task.taskId, worker())
         assertTrue(result is OrionCoordinatedResult.NeedsOwner)
         assertEquals("failed", store.get(task.taskId)?.status)
         assertTrue(AgentCheckpointStore.needsRecoveryConfirmation(c))
+    }
+
+    @Test fun delegatedCheckpointIsIsolatedFromOtherTasks() {
+        val c = context()
+        val first = OrionTaskEnvelope.create("first task")
+        val second = OrionTaskEnvelope.create("second task")
+        assertTrue(AgentCheckpointStore.beginForTask(c, first.taskId, first.objective))
+        assertNotNull(AgentCheckpointStore.pendingForTask(c, first.taskId))
+        assertNull(AgentCheckpointStore.pendingForTask(c, second.taskId))
     }
 
     @Test fun remoteTransportRejectsInsecureEndpointBeforeSendingCredentials() {
