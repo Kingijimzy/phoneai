@@ -591,3 +591,11 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Connected approved routine memories to the central brain as non-nagging suggestions and added owner-selected once/daily/weekly reminder scheduling from Memory Activity. Recurrence requires the separate reminder grant and Android notifications; revocation or loss of routine eligibility cancels future work.
 
 - Gemini Live's bounded system instruction now receives the same active conversation evidence and currently granted sensor/device/location/usage/notification/routine summaries as the central brain; its PhoneAI route remains audio-only.
+
+
+### Stage 4 continuation — MCP resource and prompt protocol contracts (2026-11-01)
+
+- Added JSON-RPC request builders for `resources/list`, `resources/read`, `prompts/list`, and `prompts/get` to the existing `OrionMcpProtocol` contract layer. Pagination cursors are bounded and reject control characters; resource URIs reject user-info and fragments; prompt names and argument sizes are validated.
+- Added bounded result extractors for resource contents and prompt catalogues. Returned content remains untrusted data and must not be treated as instructions or authority.
+- Added unit tests for method/parameter shape, pagination, URI rejection, prompt-name rejection and result extraction.
+- **Not yet complete:** these are protocol contracts only. `McpConnector` still needs transport wiring, endpoint-grant/scope policy for resource and prompt reads, cache/expiry rules, response-size limits, cancellation, and server-fixture/protocol conformance tests. No MCP resource or prompt execution is advertised as available until those are implemented and verified.
