@@ -162,6 +162,19 @@ class OrionConversationRepository private constructor(context: Context) :
         }
     }
 
+    /** Check an idempotent lifecycle receipt in its original session after process restart. */
+    @Synchronized
+    fun hasEventForSession(context: Context, sessionId: String, eventId: String): Boolean {
+        val sid = sessionId.trim().take(128)
+        val id = eventId.trim().take(128)
+        if (sid.isBlank() || id.isBlank()) return false
+        migrateLegacy(context)
+        return readableDatabase.rawQuery(
+            "SELECT 1 FROM chat_events WHERE id=? AND session_id=? LIMIT 1",
+            arrayOf(id, sid)
+        ).use { it.moveToFirst() }
+    }
+
     /** Verify provenance against an actual stored transcript turn before recording a decision. */
     @Synchronized
     fun findTranscriptEvidence(context: Context, sourceRole: String, excerpt: String, turnId: String? = null): Pair<String, String>? {
