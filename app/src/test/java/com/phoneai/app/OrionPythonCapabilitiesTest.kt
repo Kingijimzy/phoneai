@@ -84,7 +84,7 @@ class OrionPythonCapabilitiesTest {
 
     @Test fun readOnlyAutonomyProfileDisablesPythonMutations() {
         ToolPermissions.applyLevel(context, "read_only")
-        val api = OrionPythonPhoneApi(context)
+        val api = OrionPythonPhoneApi(context, readOnly = true)
         assertTrue(api.fs_list().isNotBlank())
         assertTrue(api.fs_write("blocked.txt", "no").contains("disabled"))
         assertFalse(File(context.filesDir, "orion-python/workspace/blocked.txt").exists())
