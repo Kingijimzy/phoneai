@@ -830,7 +830,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     /** One small AI call for plain questions and chat. Returns null when the request needs the phone-control agent. */
-    private fun chatReply(command: String): String? {
+    private fun chatReply(command: String): String? = withInteractionTrace { chatReplyBody(command) }
+
+    private fun chatReplyBody(command: String) {
         val key = MacroStore.norm(command)
         val hit = chatCache[key]
         if (hit != null && System.currentTimeMillis() - hit.first < 600000L) return hit.second
@@ -888,7 +890,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
     }
 
-    fun runConversation(input: String) {
+    fun runConversation(input: String) = withInteractionTrace { runConversationBody(input) }
+
+    private fun runConversationBody(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
         indexMemoryObservation(command, "typed chat")
@@ -1020,7 +1024,9 @@ RESPONSE QUALITY AND FORMAT:
      * ordinary words like "open" or "start" into text, so this path never enters the
      * phone-action planner or exposes tools to the model.
      */
-    fun runLiveConversation(input: String) {
+    fun runLiveConversation(input: String) = withInteractionTrace { runLiveConversationBody(input) }
+
+    private fun runLiveConversationBody(input: String) {
         val command = input.trim()
         if (command.isEmpty()) return
         indexMemoryObservation(command, "standard voice")
@@ -1703,18 +1709,20 @@ Rules:
      * routing (voice/research/skill continuation) inherits the parent's trace instead of
      * creating a disconnected execution history.
      */
-    private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
+    /** Root interaction trace shared by chat, voice, nested command routing and tool calls. */
+    private fun <T> withInteractionTrace(block: () -> T): T {
         val ownsTrace = interactionTraceId.get().isNullOrBlank()
         if (ownsTrace) {
             interactionTraceId.set(java.util.UUID.randomUUID().toString().replace("-", ""))
             svc.recordChatEvent("interaction", "started", "request accepted", traceId = interactionTraceId.get())
         }
         try {
-            runInternalBody(inputCommand, reuseCommandBudget)
+            val result = block()
             if (ownsTrace) svc.recordChatEvent(
                 "interaction", "completed", "interaction processing finished",
                 traceId = interactionTraceId.get()
             )
+            return result
         } catch (failure: Throwable) {
             if (ownsTrace) svc.recordChatEvent(
                 "interaction", "error",
@@ -1726,6 +1734,9 @@ Rules:
             if (ownsTrace) interactionTraceId.remove()
         }
     }
+
+    private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) =
+        withInteractionTrace { runInternalBody(inputCommand, reuseCommandBudget) }
 
     private fun runInternalBody(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
