@@ -77,6 +77,7 @@ class SensorContextActivity : Activity() {
                             }
                         }
                     }
+                    if (scope == OrionSensorScope.NOTIFICATIONS) OrionNotificationListener.refreshConsent()
                     refreshStatus()
                 }
             }
@@ -131,7 +132,7 @@ class SensorContextActivity : Activity() {
         OrionSensorScope.LOCATION -> "Consent flag only; no passive tracking. Explicit location requests still require Android permission."
         OrionSensorScope.SCREEN_CONTEXT -> "Manual screen reads only; no continuous screenshot or screen recording."
         OrionSensorScope.MICROPHONE -> "Voice sessions only after you explicitly start them; no background listening."
-        OrionSensorScope.NOTIFICATIONS -> "Consent flag only; Android notification-listener access and safety filters remain separate."
+        OrionSensorScope.NOTIFICATIONS -> "Safe summaries are kept in memory only when this grant and Android Notification access are both enabled."
         OrionSensorScope.APP_USAGE -> "Consent flag only; usage-access collector is not connected yet."
         OrionSensorScope.ROUTINE_REMINDERS -> "Allows only one-time reminders you explicitly schedule for approved routines."
     }
