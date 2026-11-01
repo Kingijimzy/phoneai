@@ -276,10 +276,10 @@ internal class OrionExecutionCoordinator(
                     // Commit order is intentional; reconcile() closes a crash window between these durable writes.
                     if (!leases.complete(current, result.evidenceRef))
                         OrionCoordinatedResult.Deferred(taskId, "fenced_completion_rejected")
+                    else if (!taskCheckpoints.complete(taskId))
+                        OrionCoordinatedResult.Deferred(taskId, "lease_committed_checkpoint_completion_pending")
                     else if (!tasks.complete(taskId, result.evidenceRef))
                         OrionCoordinatedResult.Deferred(taskId, "lease_committed_task_completion_pending_reconcile")
-                    else if (!taskCheckpoints.complete(taskId))
-                        OrionCoordinatedResult.Deferred(taskId, "task_checkpoint_completion_pending")
                     else OrionCoordinatedResult.Completed(taskId, result.evidenceRef, current.fencingToken)
                 }
                 is OrionWorkerResult.NeedsOwner -> {
