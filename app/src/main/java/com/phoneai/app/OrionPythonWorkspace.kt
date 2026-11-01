@@ -114,10 +114,13 @@ internal class OrionPythonWorkspace(context: Context) {
     private fun hasSymlink(file: File): Boolean {
         val base = filesDir.canonicalFile.toPath()
         var cursor: File? = file.absoluteFile
-        while (cursor != null && cursor.toPath().normalize().startsWith(base)) {
-            if (java.nio.file.Files.isSymbolicLink(cursor.toPath())) return true
-            if (runCatching { cursor.canonicalFile.toPath() == base }.getOrDefault(false)) break
-            cursor = cursor.parentFile
+        while (cursor != null) {
+            val current = cursor ?: break
+            if (!current.toPath().normalize().startsWith(base)) break
+            if (java.nio.file.Files.isSymbolicLink(current.toPath())) return true
+            val canonical = runCatching { current.canonicalFile.toPath() }.getOrNull()
+            if (canonical == base) break
+            cursor = current.parentFile
         }
         return false
     }
