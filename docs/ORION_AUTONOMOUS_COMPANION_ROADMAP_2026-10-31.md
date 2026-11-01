@@ -616,3 +616,14 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Added ledger tests for durable retrieval events, privacy minimization, invalid metadata and the rule that retrieval alone is not verified execution. `AgentHooks` explicitly ignores `CONTEXT_RETRIEVED` when reconstructing action completion evidence.
 - Added `OrionRetrieveBeforeActPolicy.dispatchIfValid` as the final executor seam. `Agent` now passes the real execution lambda through it after approval and cancellation checks; a missing or stale receipt returns a blocked result without evaluating the executor. A regression test asserts the executor invocation count remains zero for missing/stale receipts and increments only for a fresh matching receipt.
 - **Remaining:** broaden dispatch integration coverage across each concrete executor family and test on a physical Android device. The gate proves eligible context retrieval completed for the active objective, not that retrieved facts are true or that the action is safe—existing authorization, confirmation, and verification policies remain mandatory.
+
+### Stage 4 continuation — personality and behaviour authority boundary (2026-11-01)
+
+- Extended the existing `CharacterProfile.systemInstruction` rather than creating a second personality manager.
+- Every selectable profile now receives the same non-negotiable behaviour invariants after its voice guidance. Character selection and transient mood are presentation-only; they cannot grant permissions, authorize tools, bypass confirmation, weaken privacy, change trading restrictions, or override safety policy.
+- The invariant explicitly rejects interpreting a mood hint as evidence of the user's emotional state and forbids claims of human emotions or private observations.
+- The same policy is appended in the central chat and live-voice character instruction paths because both already use `CharacterProfile.systemInstruction`; provider changes retain it through the shared prompt construction.
+- Added `CharacterProfileTest` coverage for all registered profiles, unknown-profile fallback, and the invariant remaining identical when the voice profile changes.
+- This is a prompt-level consistency guard, not a replacement for executable permission/approval gates. ToolGate, AgentPolicy, safety checks and dispatch authorization remain authoritative.
+- Still open: verify every alternate provider/worker prompt path, add device-level continuity tests, and connect mood only to optional presentation surfaces without allowing it to influence action policy.
+
