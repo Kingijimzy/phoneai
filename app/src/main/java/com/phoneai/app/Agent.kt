@@ -1713,13 +1713,13 @@ Rules:
             runInternalBody(inputCommand, reuseCommandBudget)
             if (ownsTrace) svc.recordChatEvent(
                 "interaction", "completed", "interaction processing finished",
-                traceId = interactionTraceId
+                traceId = interactionTraceId.get()
             )
         } catch (failure: Throwable) {
             if (ownsTrace) svc.recordChatEvent(
                 "interaction", "error",
                 "interaction failed: " + failure.javaClass.simpleName,
-                traceId = interactionTraceId
+                traceId = interactionTraceId.get()
             )
             throw failure
         } finally {
