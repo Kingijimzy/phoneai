@@ -49,7 +49,7 @@ internal object OrionPythonWebSocketTransport {
 
     private val sessions = ConcurrentHashMap<String, Session>()
 
-    fun connect(context: Context, url: String): String {
+    fun connect(context: Context, url: String, headersJson: String = "{}"): String {\n        val headers = parseHeaders(headersJson) ?: return error("WebSocket headers are invalid or contain unsupported names")
         val endpoint = OrionPythonNetworkPolicy.validateWebSocket(context, url)
             ?: return error("WebSocket blocked: grant NETWORK and explicitly allow this exact host; ws:// also needs local HTTP permission")
         if (sessions.size >= MAX_SESSIONS) return error("at most $MAX_SESSIONS WebSocket sessions may be open")
@@ -71,7 +71,7 @@ internal object OrionPythonWebSocketTransport {
             .pingInterval(20, TimeUnit.SECONDS)
             .build()
         session.client = client
-        val request = Request.Builder().url(endpoint.uri.toString()).header("User-Agent", "Orion-PhoneAI/1").build()
+        val requestBuilder = Request.Builder().url(endpoint.uri.toString()).header("User-Agent", "Orion-PhoneAI/1")\n        headers.forEach { (name, value) -> requestBuilder.header(name, value) }\n        val request = requestBuilder.build()
         try {
             session.socket = client.newWebSocket(request, object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -164,6 +164,25 @@ internal object OrionPythonWebSocketTransport {
         val socket = session.socket
         if (socket != null) socket.close(1000, "Orion session closed") else dispose(session)
         return JSONObject().put("closed", true).put("session_id", id).toString()
+    }
+
+    private fun parseHeaders(source: String): Map<String, String>? {
+        if (source.length > 4096) return null
+        val allowed = setOf("authorization", "x-goog-api-key", "x-api-key", "sec-websocket-protocol")
+        return try {
+            val json = JSONObject(source.ifBlank { "{}" })
+            if (json.length() > 8) return null
+            val result = linkedMapOf<String, String>()
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = json.optString(key, "")
+                if (key.lowercase() !in allowed || value.isBlank() || value.length > 2048 ||
+                    value.contains('\\r') || value.contains('\\n')) return null
+                result[key] = value
+            }
+            result
+        } catch (_: Exception) { null }
     }
 
     private fun authorized(context: Context, id: String): Session? {
