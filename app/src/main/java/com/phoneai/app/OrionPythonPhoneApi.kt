@@ -20,6 +20,7 @@ import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.Proxy
+import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
@@ -264,11 +265,13 @@ internal class OrionPythonPhoneApi(
             return error("owner approval is required for HTTP POST to this host")
         val client = OkHttpClient.Builder()
             .proxy(Proxy.NO_PROXY)
-            .dns(Dns { hostname ->
-                if (!hostname.equals(endpoint.host, ignoreCase = true)) {
-                    throw UnknownHostException("redirect or secondary network host is blocked")
+            .dns(object : Dns {
+                override fun lookup(hostname: String): List<InetAddress> {
+                    if (!hostname.equals(endpoint.host, ignoreCase = true)) {
+                        throw UnknownHostException("redirect or secondary network host is blocked")
+                    }
+                    return endpoint.addresses
                 }
-                endpoint.addresses
             })
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(8, TimeUnit.SECONDS)
