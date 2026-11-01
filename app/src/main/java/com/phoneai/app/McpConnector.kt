@@ -321,7 +321,7 @@ object McpConnector {
             val data = event.lineSequence()
                 .filter { it.startsWith("data:") }
                 .map { it.removePrefix("data:").trim() }
-                .joinToString("\\n")
+                .joinToString("\n")
             if (data.isBlank() || data == "[DONE]") continue
             val candidate = runCatching { JSONObject(data) }.getOrNull() ?: continue
             if (expectedId <= 0L || candidate.optLong("id", Long.MIN_VALUE) == expectedId) return candidate
