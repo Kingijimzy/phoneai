@@ -84,7 +84,7 @@ object McpConnector {
         } else "Could not save MCP scopes."
     }
     fun scopeForTool(name: String): String {
-        val n = name.lowercase().replace('-', '_')
+        val n = name.lowercase().replace('-', '_').replace('.', '_')
         return when {
             Regex("(^|_)(send|message|email|telegram|post|publish|reply|notify|share|call|sms)(_|$)").containsMatchIn(n) -> "communication"
             Regex("(^|_)(delete|remove|update|create|write|edit|save|submit|purchase|pay|transfer|trade|order|execute|run|deploy)(_|$)").containsMatchIn(n) -> "write"
