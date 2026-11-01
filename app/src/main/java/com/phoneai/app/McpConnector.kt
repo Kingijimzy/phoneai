@@ -468,7 +468,7 @@ object McpConnector {
 
 internal object McpReconnectPolicy {
     fun shouldRetry(method: String, error: Exception): Boolean {
-        if (method !in setOf("initialize", "notifications/initialized", "tools/list")) return false
+        if (method !in setOf("initialize", "notifications/initialized", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get")) return false
         if (error is java.io.IOException) return true
         val message = error.message.orEmpty().lowercase()
         val status = Regex("http\\s+(\\d{3})").find(message)?.groupValues?.getOrNull(1)?.toIntOrNull()
