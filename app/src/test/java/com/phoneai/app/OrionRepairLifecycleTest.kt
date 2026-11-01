@@ -24,7 +24,7 @@ class OrionRepairLifecycleTest {
         File(context.filesDir, "orion_evidence_ledger.json").delete()
         context.deleteDatabase("orion_conversations.db")
         OrionConversationRepository.get(context).recordEvent(context, null, "test_seed", "ok", "test session")
-        sessionId = requireNotNull(OrionConversationRepository.activeSessionId(context))
+        sessionId = requireNotNull(OrionConversationRepository.get(context).activeSessionId(context))
     }
 
     @After fun tearDown() {
