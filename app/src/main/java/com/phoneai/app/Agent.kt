@@ -396,9 +396,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
-        val mcpScope = if (tool == "mcp_call") McpConnector.scopeForTool(args.optString("name")) else ""
-        val mcpReadScopeGranted = tool == "mcp_call" &&
-            mcpScope == "read" &&
+        val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
+        val mcpScope = when {
+            tool == "mcp_call" -> McpConnector.scopeForTool(args.optString("name"))
+            mcpReadOperation -> "read"
+            else -> ""
+        }
+        val mcpReadScopeGranted = (mcpReadOperation || (tool == "mcp_call" && mcpScope == "read")) &&
             McpConnector.configured(svc) &&
             McpConnector.isPaired(svc) &&
             "read" in McpConnector.scopes(svc) &&
