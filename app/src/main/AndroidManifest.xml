@@ -122,7 +122,7 @@
                 android:resource="@xml/orion_ime_method" />
         </service>
 
-        <service android:name=".TelegramListenerService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <service android:name=".OrionSocketForegroundService" android:exported="false" android:foregroundServiceType="dataSync" />\n        <service android:name=".TelegramListenerService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".WatchService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".RecordService" android:exported="false" android:foregroundServiceType="mediaProjection" />
 
