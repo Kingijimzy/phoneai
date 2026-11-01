@@ -30,7 +30,8 @@ internal object OrionCapabilityAdapters {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         ),
-        Backend.DIAGNOSTICS to setOf("self_diagnose", "repair_apply"),\n        Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"),
+        Backend.DIAGNOSTICS to setOf("self_diagnose", "repair_apply"),
+        Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"),
         Backend.DEVICE to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
             "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
