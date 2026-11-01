@@ -315,7 +315,7 @@ object McpConnector {
     }
 
     /** Streamable HTTP may return multiple SSE events; select the matching JSON-RPC response. */
-    private fun parseSseResponse(raw: String, expectedId: Long): JSONObject {
+    internal fun parseSseResponse(raw: String, expectedId: Long): JSONObject {
         val events = raw.split(Regex("\\r?\\n\\r?\\n"))
         for (event in events) {
             val data = event.lineSequence()
