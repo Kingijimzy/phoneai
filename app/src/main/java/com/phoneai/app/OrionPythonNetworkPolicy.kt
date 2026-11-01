@@ -39,11 +39,26 @@ internal object OrionPythonNetworkPolicy {
         if (scheme == "http" && (!local || !p.getBoolean("$host:plain_http", false))) return null
         if (!local) {
             val addresses = runCatching { InetAddress.getAllByName(host).toList() }.getOrNull() ?: return null
-            if (addresses.isEmpty() || addresses.any { it.isAnyLocalAddress || it.isLoopbackAddress ||
-                    it.isLinkLocalAddress || it.isSiteLocalAddress || it.isMulticastAddress }) return null
+            if (addresses.isEmpty() || addresses.any { isUnsafeAddress(it) }) return null
         }
         return Endpoint(uri, host, local, p.getBoolean("$host:writes", false))
     }
+    private fun isUnsafeAddress(address: InetAddress): Boolean {
+        if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress ||
+            address.isSiteLocalAddress || address.isMulticastAddress) return true
+        val bytes = address.address.map { it.toInt() and 0xff }
+        if (bytes.size == 4) {
+            val a = bytes[0]; val b = bytes[1]; val c = bytes[2]
+            return a == 0 || a == 10 || a == 127 || (a == 169 && b == 254) ||
+                (a == 172 && b in 16..31) || (a == 192 && b == 168) ||
+                (a == 100 && b in 64..127) || (a == 192 && b == 0 && c == 0) ||
+                (a == 192 && b == 0 && c == 2) || (a == 198 && b in 18..19) ||
+                (a == 198 && b == 51 && c == 100) || (a == 203 && b == 0 && c == 113) ||
+                a >= 224
+        }
+        return bytes.size == 16 && (bytes[0] and 0xfe) == 0xfc
+    }
+
     private fun normalizeHost(value: String): String? {
         val host = value.trim().lowercase().trimEnd('.')
         if (host.length !in 1..253 || host.contains('/') || host.contains('@') ||
