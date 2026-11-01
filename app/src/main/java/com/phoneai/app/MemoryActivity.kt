@@ -115,10 +115,10 @@ class MemoryActivity : Activity() {
             actions.addView(button("Edit") { editMemory(memory) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             actions.addView(button("Delete") { confirmDelete(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             card.addView(actions)
-            val governanceActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
             if (memory.category == "routine" && memory.reviewStatus == "approved") {
-                governanceActions.addView(button("Reminder") { chooseRoutineReminder(memory.id) })
-                governanceActions.addView(button("Cancel reminder") {
+                val reminderActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
+                reminderActions.addView(button("Reminder") { chooseRoutineReminder(memory.id) })
+                reminderActions.addView(button("Cancel reminder") {
                     AlertDialog.Builder(this).setTitle("Cancel routine reminder?")
                         .setMessage("Orion will cancel the scheduled reminder for this routine.")
                         .setNegativeButton("Keep", null)
@@ -127,7 +127,9 @@ class MemoryActivity : Activity() {
                             Toast.makeText(this, "Routine reminder cancelled", Toast.LENGTH_SHORT).show()
                         }.show()
                 }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+                card.addView(reminderActions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
             }
+            val governanceActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END }
             governanceActions.addView(button("Version history") { showVersionHistory(memory.id) })
             governanceActions.addView(button("Expiry") { chooseExpiry(memory.id) }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
             card.addView(governanceActions, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
