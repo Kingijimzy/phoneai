@@ -14,6 +14,7 @@ internal object ContextWindowBudget {
             "owner-granted sensor context" in s || "owner-granted safe notification context" in s ||
                 "owner-granted device state" in s || "owner-granted location context" in s ||
                 "owner-granted app usage context" in s -> 72
+            "owner-approved routine suggestions" in s -> 74
             "previous discussions for this objective" in s || "relevant past conversations" in s || "decisions and unresolved questions" in s -> 95
             "orion local self-diagnostic" in s || "self-diagnostic" in s -> 90
             "relevant execution lessons" in s || "lessons from your own past runs" in s -> 85
