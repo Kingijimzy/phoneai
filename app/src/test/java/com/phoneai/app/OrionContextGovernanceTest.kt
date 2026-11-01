@@ -59,8 +59,10 @@ class OrionContextGovernanceTest {
             .put(JSONObject().put("role", "system").put("content", "system contract"))
             .put(JSONObject().put("role", "user").put("content", content))
         val caps = OrionModelCapabilities(16_384, 2_048, true, false, false, false)
+        assertEquals(1, OrionProviderContextPolicy.newestUserImageCount(messages))
         val packed = OrionProviderContextPolicy.fitMessages(messages, caps, 512)
         val newest = packed.optJSONObject(packed.length() - 1)
+        assertEquals(1, OrionProviderContextPolicy.newestUserImageCount(packed))
         assertEquals("user", newest?.optString("role"))
         assertTrue(newest?.optJSONArray("content")?.length() == 2)
     }
