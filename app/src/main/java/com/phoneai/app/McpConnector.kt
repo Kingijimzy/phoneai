@@ -263,7 +263,7 @@ object McpConnector {
      */
     internal fun readOnlyRequest(c: Context, payload: JSONObject): JSONObject? {
         val method = payload.optString("method")
-        if (method !in setOf("resources/list", "resources/read", "prompts/list", "prompts/get")) return null
+        if (!OrionMcpProtocol.isReadOnlyMethod(method)) return null
         if (!configured(c)) throw IllegalStateException("No MCP server configured.")
         if (!isPaired(c)) throw SecurityException("MCP endpoint is not locally approved.")
         if ("read" !in scopes(c)) throw SecurityException("MCP read scope is disabled.")
@@ -292,7 +292,7 @@ object McpConnector {
     fun listResources(c: Context, cursor: String? = null): String = runCatching {
         val result = readOnlyRequest(c, OrionMcpProtocol.listResources(cursor))
             ?: return@runCatching "error: MCP resource discovery did not return a result."
-        val rows = result.optJSONArray("resources") ?: org.json.JSONArray()
+        val rows = OrionMcpProtocol.resources(result)
         val rendered = (0 until minOf(rows.length(), 30)).mapNotNull { i ->
             val item = rows.optJSONObject(i) ?: return@mapNotNull null
             val uri = item.optString("uri").take(2_000)
