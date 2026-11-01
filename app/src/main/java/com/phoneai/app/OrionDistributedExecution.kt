@@ -23,7 +23,7 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         if (task.parentTaskId != null) {
             val parent = rows.optJSONObject(task.parentTaskId) ?: return@synchronized false
             if (parent.optString("status") in TERMINAL) return@synchronized false
-            if (parent.optString("rootTaskId") != task.rootTaskId) return@synchronized false
+            if (parent.optJSONObject("envelope")?.optString("rootTaskId") != task.rootTaskId) return@synchronized false
         } else if (task.rootTaskId != task.taskId) return@synchronized false
         rows.put(task.taskId, JSONObject().put("envelope", task.toJson()).put("status", "queued")
             .put("resultRef", JSONObject.NULL).put("updatedAt", clock()))
