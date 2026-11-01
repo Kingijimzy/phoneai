@@ -27,17 +27,20 @@ internal class OrionPythonPhoneApi(
     private val workspace = OrionPythonWorkspace(context)
 
     fun battery(): String {
-        val manager = context.getSystemService(BatteryManager::class.java)
-        val level = manager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-        val status = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-        val batteryStatus = status?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-        val charging = batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING ||
-            batteryStatus == BatteryManager.BATTERY_STATUS_FULL
+        val intent = context.registerReceiver(
+            null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+        )
+        val rawLevel = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+        val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == BatteryManager.BATTERY_STATUS_FULL
+        val level = if (rawLevel >= 0 && scale > 0) rawLevel * 100 / scale else JSONObject.NULL
         val powerSave = runCatching {
-            context.getSystemService(android.os.PowerManager::class.java)?.isPowerSaveMode
-        }.getOrNull()
-        return JSONObject().put("level_percent", level.takeIf { it in 0..100 } ?: JSONObject.NULL)
-            .put("charging", charging).put("power_save", powerSave ?: JSONObject.NULL).toString()
+            (context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode ?: false
+        }.getOrDefault(false)
+        return JSONObject().put("level_percent", level)
+            .put("charging", charging).put("power_save", powerSave).toString()
     }
 
     fun location(): String {
