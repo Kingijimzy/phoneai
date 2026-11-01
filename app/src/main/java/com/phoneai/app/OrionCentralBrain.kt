@@ -18,7 +18,7 @@ internal object OrionCentralBrain {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
 
-        val activeConversation = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrDefault("")
+        val activeConversation = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull().orEmpty()
         if (activeConversation.isNotBlank()) {
             runCatching { OrionMultimodalEvidenceStore.promptBlock(app, activeConversation) }
                 .getOrNull()
