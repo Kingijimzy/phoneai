@@ -69,6 +69,8 @@ internal object OrionPythonWebSocketTransport {
         val ready = CountDownLatch(1)
         val client = OkHttpClient.Builder()
             .proxy(Proxy.NO_PROXY)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .dns(object : Dns {
                 override fun lookup(hostname: String): List<InetAddress> {
                     if (!hostname.equals(endpoint.host, ignoreCase = true)) {
