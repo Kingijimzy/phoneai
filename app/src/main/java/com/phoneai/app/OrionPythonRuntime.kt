@@ -7,11 +7,11 @@ import com.chaquo.python.android.AndroidPlatform
 /** Bundled Python runtime. Direct scripts receive only the registered, policy-checked phone facade. */
 internal object OrionPythonRuntime {
     @Synchronized
-    fun execute(context: Context, code: String): String {
+    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }): String {
         PythonExecutionPolicy.rejection(code, PythonExecutionPolicy.maxCodeChars(context))?.let { return "error: $it" }
         return try {
             if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
-            val phone = OrionPythonPhoneApi(context.applicationContext)
+            val phone = OrionPythonPhoneApi(context.applicationContext, confirm)
             Python.getInstance().getModule("orion_exec")
                 .callAttr("run", code, PythonExecutionPolicy.maxCodeChars(context), phone)
                 .toString().take(5_200)
