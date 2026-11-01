@@ -77,7 +77,7 @@ internal object OrionSelfDiagnostics {
             ?.take(300).orEmpty().ifBlank { "SERVICE_DISCONNECTED_OR_UNAVAILABLE" }
         // Inspect the real durable specialist queue; registration counts alone do not show
         // whether background work is waiting, paused or needs owner reconciliation.
-        val workerJobs = runCatching { OrionWorkerJobStore(app).all() }.getOrDefault(emptyList())
+        val workerJobs = runCatching { OrionWorkerJobStore(app).all() }.getOrNull()
         val pendingStatuses = setOf(
             OrionWorkerJobStore.Status.QUEUED,
             OrionWorkerJobStore.Status.RUNNING,
@@ -85,8 +85,13 @@ internal object OrionSelfDiagnostics {
             OrionWorkerJobStore.Status.PAUSED,
             OrionWorkerJobStore.Status.NEEDS_REVIEW
         )
-        val pendingWork: Int? = workerJobs.count { it.status in pendingStatuses }
-        workerJobs.filter { it.status == OrionWorkerJobStore.Status.NEEDS_REVIEW }.take(8).forEach { job ->
+        val pendingWork: Int? = workerJobs?.count { it.status in pendingStatuses }
+        if (workerJobs == null) {
+            add("specialist_queue", "Specialist queue state unavailable",
+                "The durable specialist queue could not be read; pending work count is unknown, not zero.",
+                OrionFindingSeverity.WARNING, "OrionWorkerJobStore:read_failed")
+        }
+        workerJobs.orEmpty().filter { it.status == OrionWorkerJobStore.Status.NEEDS_REVIEW }.take(8).forEach { job ->
             add("specialist_queue", "Specialist result needs review",
                 "A delegated ${job.kind.name.lowercase()} job needs parent-brain reconciliation; its result is not an instruction or proof of completion.",
                 OrionFindingSeverity.WARNING, "WorkerJob:${job.id.take(12)}")
