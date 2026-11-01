@@ -73,6 +73,21 @@ internal object OrionSelfDiagnostics {
             add("extension_registry", "Enabled extension failed integrity check", "Extension '${it.id}' is enabled but is not verified against its current source hash.", OrionFindingSeverity.CRITICAL, "Extension:${it.id}")
         }
 
+        val pythonWorkspace = runCatching { OrionPythonWorkspace(app).rootStatus() }.getOrNull()
+        when (pythonWorkspace) {
+            OrionPythonWorkspace.RootStatus.MISSING -> add(
+                "python_workspace", "Python workspace root is missing",
+                "The fixed app-private workspace directory has not been created; bounded Python file capabilities may need repair.",
+                OrionFindingSeverity.WARNING, "OrionPythonWorkspace:root_missing"
+            )
+            OrionPythonWorkspace.RootStatus.UNSAFE -> add(
+                "python_workspace", "Python workspace path is unsafe",
+                "A workspace ancestor is a symlink or the root is not a readable/writable directory; automatic repair is blocked.",
+                OrionFindingSeverity.CRITICAL, "OrionPythonWorkspace:root_unsafe"
+            )
+            OrionPythonWorkspace.RootStatus.READY, null -> Unit
+        }
+
         val runtimeState = runCatching { PhoneAiService.instance?.runtimeBriefForBrain() }.getOrNull()
             ?.take(300).orEmpty().ifBlank { "SERVICE_DISCONNECTED_OR_UNAVAILABLE" }
         // Inspect the real durable specialist queue; registration counts alone do not show
