@@ -276,9 +276,10 @@ internal object OrionCentralBrain {
         apply: () -> String?,
         verify: () -> Boolean,
         rollback: () -> Boolean,
-        verifyRollback: () -> Boolean
+        verifyRollback: () -> Boolean,
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): OrionRepairLifecycle.Receipt = OrionRepairLifecycle.execute(
         context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
-        ownerApprovalDigest, sandboxTest, apply, verify, rollback, verifyRollback
+        ownerApprovalDigest, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
     )
 }
