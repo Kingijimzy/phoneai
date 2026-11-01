@@ -10,8 +10,13 @@ class OrionContextGovernanceTest {
         val gemini = OrionProviderContextPolicy.capabilities("gemini", "gemini-2.5-flash")
         assertTrue(gemini.contextTokens > 100_000)
         assertTrue(gemini.vision)
-        assertTrue(gemini.audioInput)
-        assertTrue(gemini.videoInput)
+        assertFalse(gemini.audioInput)
+        assertFalse(gemini.audioOutput)
+        assertFalse(gemini.videoInput)
+        val live = OrionProviderContextPolicy.capabilities("gemini", "gemini-live", "gemini_live")
+        assertTrue(live.audioInput)
+        assertTrue(live.audioOutput)
+        assertTrue(live.videoInput)
         val local = OrionProviderContextPolicy.capabilities("local", "unknown-local-model")
         assertFalse(local.vision)
         assertTrue(OrionProviderContextPolicy.inputBudget(local, 2_000) < local.contextTokens)
@@ -46,4 +51,24 @@ class OrionContextGovernanceTest {
         assertFalse(grant.active(201L))
         assertFalse(grant.copy(enabled = false).active(150L))
     }
+    @Test fun multimodalPackingKeepsNewestImageAttachmentAndPrompt() {
+        val content = JSONArray()
+            .put(JSONObject().put("type", "text").put("text", "What is in this picture?"))
+            .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64,AAAA")))
+        val messages = JSONArray()
+            .put(JSONObject().put("role", "system").put("content", "system contract"))
+            .put(JSONObject().put("role", "user").put("content", content))
+        val caps = OrionModelCapabilities(16_384, 2_048, true, false, false, false)
+        val packed = OrionProviderContextPolicy.fitMessages(messages, caps, 512)
+        val newest = packed.optJSONObject(packed.length() - 1)
+        assertEquals("user", newest?.optString("role"))
+        assertTrue(newest?.optJSONArray("content")?.length() == 2)
+    }
+
+    @Test fun sensorContextExpiresAfterFifteenMinutes() {
+        assertTrue(OrionSensorContextStore.isFresh(1_000L, 1_000L + 60_000L))
+        assertFalse(OrionSensorContextStore.isFresh(1_000L, 1_000L + 16L * 60L * 1000L))
+        assertFalse(OrionSensorContextStore.isFresh(2_000L, 1_000L))
+    }
+
 }
