@@ -231,16 +231,22 @@ internal class OrionExecutionCoordinator(
             return OrionCoordinatedResult.Deferred(taskId, "lease_unavailable")
         }
 
-        val currentCheckpoint = OrionTaskCheckpointStore(context).pending(task.taskId)
+        val taskCheckpoints = OrionTaskCheckpointStore(context)
+        if (taskCheckpoints.pending(task.taskId) == null && !taskCheckpoints.begin(task.taskId, task.objective)) {
+            leases.release(lease)
+            tasks.fail(taskId, retryable = true)
+            return OrionCoordinatedResult.Deferred(taskId, "task_checkpoint_initialization_failed")
+        }
+        val currentCheckpoint = taskCheckpoints.pending(task.taskId)
         val replay = if (currentCheckpoint != null) {
-            if (OrionTaskCheckpointStore(context).needsOwner(task.taskId)) {
-                OrionTaskCheckpointStore(context).requireRecovery(task.taskId,
+            if (taskCheckpoints.needsOwner(task.taskId)) {
+                taskCheckpoints.requireRecovery(task.taskId,
                     "Delegated task $taskId has an unresolved in-flight action. Inspect its real-world outcome before replay.")
                 leases.release(lease)
                 tasks.fail(taskId, retryable = false)
                 return OrionCoordinatedResult.NeedsOwner(taskId, "checkpoint_in_flight_requires_owner_reconciliation")
             }
-            OrionTaskCheckpointStore(context).resumeInstruction(task.taskId)
+            taskCheckpoints.resumeInstruction(task.taskId)
         } else null
 
         val activeLease = java.util.concurrent.atomic.AtomicReference(lease)
@@ -272,6 +278,8 @@ internal class OrionExecutionCoordinator(
                         OrionCoordinatedResult.Deferred(taskId, "fenced_completion_rejected")
                     else if (!tasks.complete(taskId, result.evidenceRef))
                         OrionCoordinatedResult.Deferred(taskId, "lease_committed_task_completion_pending_reconcile")
+                    else if (!taskCheckpoints.complete(taskId))
+                        OrionCoordinatedResult.Deferred(taskId, "task_checkpoint_completion_pending")
                     else OrionCoordinatedResult.Completed(taskId, result.evidenceRef, current.fencingToken)
                 }
                 is OrionWorkerResult.NeedsOwner -> {
