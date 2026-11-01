@@ -47,14 +47,14 @@ class OrionRepairLifecycleTest {
 
     private fun execute(
         proposal: OrionRepairProposal = proposal(),
-        ownerApproved: Boolean = false,
+        ownerApprovalDigest: String? = null,
         sandbox: () -> Boolean = { true },
         apply: () -> String? = { "receipt-123" },
         verify: () -> Boolean = { true },
         rollback: () -> Boolean = { true }
     ) = OrionRepairLifecycle.execute(
         context, sessionId, "task-repair-test", finding(), proposal,
-        "a".repeat(64), ownerApproved, sandbox, apply, verify, rollback
+        "a".repeat(64), ownerApprovalDigest, sandbox, apply, verify, rollback
     )
 
     @Test fun safeReversibleRepairRequiresSandboxAndVerifiedApplyReceipt() {
@@ -70,7 +70,7 @@ class OrionRepairLifecycleTest {
         var applied = 0
         val result = execute(
             proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
-            ownerApproved = false,
+            ownerApprovalDigest = null,
             apply = { applied++; "receipt" }
         )
         assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
@@ -90,7 +90,7 @@ class OrionRepairLifecycleTest {
         var rolledBack = false
         val result = execute(
             proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
-            ownerApproved = true,
+            ownerApprovalDigest = "a".repeat(64),
             verify = { false },
             rollback = { rolledBack = true; true }
         )
