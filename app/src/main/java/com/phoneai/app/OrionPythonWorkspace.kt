@@ -7,13 +7,13 @@ import java.io.FileOutputStream
 
 /** App-private persistent Python workspace. Paths cannot escape this directory or follow symlinks. */
 internal class OrionPythonWorkspace(context: Context) {
-    private val root = File(context.applicationContext.filesDir, "orion-python/workspace")
+    private val filesDir = context.applicationContext.filesDir\n    private val root = File(filesDir, "orion-python/workspace")
     companion object {
         const val MAX_FILE_BYTES = 2 * 1024 * 1024
         const val MAX_TOTAL_BYTES = 20L * 1024 * 1024
         private val NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,179}$")
     }
-    @Synchronized fun list(): String {
+    enum class RootStatus { MISSING, READY, UNSAFE }\n\n    @Synchronized fun rootStatus(): RootStatus {\n        if (hasSymlink(root) || !insideFilesDir(root)) return RootStatus.UNSAFE\n        if (!root.exists()) return RootStatus.MISSING\n        return if (root.isDirectory && root.canRead() && root.canWrite()) RootStatus.READY else RootStatus.UNSAFE\n    }\n\n    /** App-owned repair primitive: creates only the fixed workspace root, never follows links. */\n    @Synchronized fun ensureRootForRepair(): String? {\n        when (rootStatus()) {\n            RootStatus.READY -> return "already_ready"\n            RootStatus.UNSAFE -> return null\n            RootStatus.MISSING -> Unit\n        }\n        val parent = root.parentFile ?: return null\n        if (!parent.exists() && !parent.mkdirs()) return null\n        if (hasSymlink(parent) || !insideFilesDir(parent) || !parent.isDirectory) return null\n        if (!root.mkdir() || rootStatus() != RootStatus.READY) {\n            if (root.isDirectory && root.listFiles().isNullOrEmpty()) root.delete()\n            return null\n        }\n        return "created"\n    }\n\n    @Synchronized fun removeRootIfEmpty(): Boolean {\n        if (!root.exists()) return true\n        if (rootStatus() != RootStatus.READY) return false\n        return root.listFiles()?.isEmpty() == true && root.delete()\n    }\n\n    @Synchronized fun rootExists(): Boolean = root.exists()\n\n    @Synchronized fun list(): String {
         ensureRoot()
         return root.walkTopDown().filter { it != root && it.isFile && !it.isHidden }
             .take(500).map { root.toPath().relativize(it.toPath()).toString() }
@@ -54,7 +54,7 @@ internal class OrionPythonWorkspace(context: Context) {
             "error: workspace write failed (${e.javaClass.simpleName})"
         }
     }
-    private fun ensureRoot() { if (!root.exists()) check(root.mkdirs()) { "workspace unavailable" } }
+    private fun ensureRoot() {\n        check(rootStatus() != RootStatus.UNSAFE) { "workspace path is unsafe" }\n        if (!root.exists()) check(root.mkdirs()) { "workspace unavailable" }\n        check(rootStatus() == RootStatus.READY) { "workspace unavailable" }\n    }
     private fun resolve(path: String, mustExist: Boolean): File? {
         if (!NAME.matches(path) || path.startsWith("/") || path.split('/').any { it.isBlank() || it == "." || it == ".." }) return null
         ensureRoot()
@@ -65,7 +65,7 @@ internal class OrionPythonWorkspace(context: Context) {
         if (!mustExist && target.exists() && java.nio.file.Files.isSymbolicLink(target.toPath())) return null
         return target
     }
-    private fun insideRoot(file: File): Boolean {
+    private fun insideFilesDir(file: File): Boolean {\n        val base = filesDir.canonicalFile.toPath()\n        return runCatching { file.canonicalFile.toPath().startsWith(base) }.getOrDefault(false)\n    }\n    private fun insideRoot(file: File): Boolean {
         val base = root.canonicalFile.toPath()
         return runCatching { file.canonicalFile.toPath().startsWith(base) }.getOrDefault(false)
     }
