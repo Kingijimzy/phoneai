@@ -832,7 +832,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** One small AI call for plain questions and chat. Returns null when the request needs the phone-control agent. */
     private fun chatReply(command: String): String? = withInteractionTrace { chatReplyBody(command) }
 
-    private fun chatReplyBody(command: String) {
+    private fun chatReplyBody(command: String): String? {
         val key = MacroStore.norm(command)
         val hit = chatCache[key]
         if (hit != null && System.currentTimeMillis() - hit.first < 600000L) return hit.second
