@@ -3,7 +3,9 @@ package com.phoneai.app
 import android.content.Context
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
@@ -23,20 +25,31 @@ internal class OrionRoutineReminderWorker(context: Context, params: WorkerParame
     companion object {
         const val KEY_MEMORY_ID = "routine_memory_id"
 
-        /** whenMillis must be chosen by the owner; Orion never guesses a reminder time from prose. */
-        fun schedule(context: Context, memoryId: Int, whenMillis: Long): Boolean {
+        /** whenMillis and repeatDays are chosen by the owner; 0=once, 1=daily, 7=weekly. */
+        fun schedule(context: Context, memoryId: Int, whenMillis: Long, repeatDays: Int = 0): Boolean {
             val grant = OrionSensorConsent.read(context, OrionSensorScope.ROUTINE_REMINDERS)
             if (!grant.active() || whenMillis <= System.currentTimeMillis()) return false
+            if (repeatDays !in setOf(0, 1, 7)) return false
             val memory = MemoryStore.all(context).firstOrNull { it.id == memoryId } ?: return false
             if (!OrionRoutinePolicy.eligible(context, memory)) return false
             val delay = (whenMillis - System.currentTimeMillis()).coerceAtLeast(1L)
-            val request = OneTimeWorkRequestBuilder<OrionRoutineReminderWorker>()
-                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-                .setInputData(Data.Builder().putInt(KEY_MEMORY_ID, memoryId).build())
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                "orion-routine-reminder-$memoryId", ExistingWorkPolicy.REPLACE, request
-            )
+            val name = "orion-routine-reminder-$memoryId"
+            val manager = WorkManager.getInstance(context)
+            manager.cancelUniqueWork(name)
+            val data = Data.Builder().putInt(KEY_MEMORY_ID, memoryId).build()
+            if (repeatDays == 0) {
+                val request = OneTimeWorkRequestBuilder<OrionRoutineReminderWorker>()
+                    .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                    .setInputData(data)
+                    .build()
+                manager.enqueueUniqueWork(name, ExistingWorkPolicy.REPLACE, request)
+            } else {
+                val request = PeriodicWorkRequestBuilder<OrionRoutineReminderWorker>(repeatDays.toLong(), TimeUnit.DAYS)
+                    .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                    .setInputData(data)
+                    .build()
+                manager.enqueueUniquePeriodicWork(name, ExistingPeriodicWorkPolicy.REPLACE, request)
+            }
             return true
         }
 
