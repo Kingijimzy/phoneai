@@ -6,7 +6,7 @@ import android.provider.DocumentsContract
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
-import java.util.Base64
+import android.util.Base64
 
 /** Stages bounded, single-file workspace replacements; applying always requires explicit owner approval. */
 internal object OrionWorkspacePatchStore {
@@ -30,8 +30,8 @@ internal object OrionWorkspacePatchStore {
         val id = digest((treeUri.toString() + "|" + fileName + "|" + sourceHash + "|" + replacementHash).toByteArray())
         val row = JSONObject().put("id", id).put("treeUri", treeUri.toString()).put("fileName", fileName)
             .put("sourceSha256", sourceHash).put("replacementSha256", replacementHash)
-            .put("sourceBase64", Base64.getEncoder().encodeToString(source))
-            .put("replacementBase64", Base64.getEncoder().encodeToString(replacement))
+            .put("sourceBase64", Base64.encodeToString(source, Base64.NO_WRAP))
+            .put("replacementBase64", Base64.encodeToString(replacement, Base64.NO_WRAP))
             .put("status", "pending_owner_approval").put("createdAt", System.currentTimeMillis())
         val file = proposalFile(context, id)
         val tmp = File(file.parentFile, "$id.tmp")
@@ -50,8 +50,8 @@ internal object OrionWorkspacePatchStore {
         val uri = runCatching { Uri.parse(row.getString("treeUri")) }.getOrNull() ?: return false
         val name = row.optString("fileName")
         if (!name.matches(Regex("^[A-Za-z0-9_.-]{1,120}$"))) return false
-        val source = runCatching { Base64.getDecoder().decode(row.getString("sourceBase64")) }.getOrNull() ?: return false
-        val replacement = runCatching { Base64.getDecoder().decode(row.getString("replacementBase64")) }.getOrNull() ?: return false
+        val source = runCatching { Base64.decode(row.getString("sourceBase64"), Base64.NO_WRAP) }.getOrNull() ?: return false
+        val replacement = runCatching { Base64.decode(row.getString("replacementBase64"), Base64.NO_WRAP) }.getOrNull() ?: return false
         if (digest(source) != expectedSourceHash || digest(replacement) != row.optString("replacementSha256")) return false
         return try {
             val treeId = DocumentsContract.getTreeDocumentId(uri)
