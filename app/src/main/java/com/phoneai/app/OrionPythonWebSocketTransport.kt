@@ -30,9 +30,10 @@ internal object OrionPythonWebSocketTransport {
         val id: String,
         val url: String,
         val host: String,
-        val allowWrites: Boolean,
+        @Volatile var allowWrites: Boolean,
         val events: ArrayBlockingQueue<String> = ArrayBlockingQueue(MAX_QUEUED_EVENTS),
         @Volatile var socket: WebSocket? = null,
+        @Volatile var client: OkHttpClient? = null,
         @Volatile var opened: Boolean = false,
         @Volatile var closed: Boolean = false,
         @Volatile var failure: String = ""
@@ -69,6 +70,7 @@ internal object OrionPythonWebSocketTransport {
             .writeTimeout(5, TimeUnit.SECONDS)
             .pingInterval(20, TimeUnit.SECONDS)
             .build()
+        session.client = client
         val request = Request.Builder().url(endpoint.uri.toString()).header("User-Agent", "Orion-PhoneAI/1").build()
         try {
             session.socket = client.newWebSocket(request, object : WebSocketListener() {
@@ -128,6 +130,7 @@ internal object OrionPythonWebSocketTransport {
         if (!session.allowWrites && !confirm("Send data over the owner-approved WebSocket host ${session.host}?"))
             return error("owner approval is required to send WebSocket data to this host")
         if (data.toByteArray(Charsets.UTF_8).size > MAX_FRAME_BYTES * 2) return error("outgoing frame exceeds the 64 KiB limit")
+        if (session.closed) return error("WebSocket session is closed")
         val socket = session.socket ?: return error("WebSocket is not connected")
         val sent = if (binaryBase64) {
             val bytes = runCatching { Base64.decode(data, Base64.DEFAULT) }.getOrNull()
@@ -145,6 +148,11 @@ internal object OrionPythonWebSocketTransport {
     fun receive(context: Context, id: String, timeoutMs: Long): String {
         val session = authorized(context, id) ?: return error("WebSocket session is missing, closed, or its network grant was revoked")
         val event = session.events.poll(timeoutMs.coerceIn(0L, 30_000L), TimeUnit.MILLISECONDS)
+        if (event == null && session.closed) {
+            sessions.remove(id)
+            dispose(session)
+            return JSONObject().put("type", "closed").put("session_id", id).toString()
+        }
         return event ?: JSONObject().put("type", "timeout").put("session_id", id).toString()
     }
 
@@ -152,16 +160,27 @@ internal object OrionPythonWebSocketTransport {
         val session = sessions.remove(id) ?: return error("WebSocket session not found")
         session.closed = true
         session.socket?.close(1000, "Orion session closed")
+        dispose(session)
         return JSONObject().put("closed", true).put("session_id", id).toString()
     }
 
     private fun authorized(context: Context, id: String): Session? {
         val session = sessions[id] ?: return null
-        if (session.closed || OrionPythonNetworkPolicy.validateWebSocket(context, session.url) == null) {
+        val endpoint = OrionPythonNetworkPolicy.validateWebSocket(context, session.url)
+        if (endpoint == null) {
             close(id)
             return null
         }
+        session.allowWrites = endpoint.allowWrites
         return session
+    }
+
+    private fun dispose(session: Session) {
+        session.client?.let { client ->
+            runCatching { client.dispatcher.executorService.shutdown() }
+            runCatching { client.connectionPool.evictAll() }
+        }
+        session.client = null
     }
 
     private fun error(message: String) = JSONObject().put("error", message.take(240)).toString()
