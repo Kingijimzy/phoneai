@@ -13,7 +13,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class OrionWorkerDispatcherTest {
     private lateinit var context: Context
-    private var now = 1_800_000_000_000L
+    private var now = System.currentTimeMillis()
     private lateinit var dispatcher: OrionWorkerDispatcher
 
     @Before fun setUp() {
