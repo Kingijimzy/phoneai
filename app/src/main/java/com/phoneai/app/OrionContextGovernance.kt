@@ -49,7 +49,7 @@ internal object OrionSensorConsent {
             .putBoolean("${scope.name}_enabled", false).apply()
     }
 
-    fun read(context: Context, scope: OrionSensorScope): OrionSensorGrant {
+    fun read(context: Context, scope: OrionSensorScope, now: Long = System.currentTimeMillis()): OrionSensorGrant {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val grant = OrionSensorGrant(
             scope, p.getBoolean("${scope.name}_enabled", false),
@@ -57,8 +57,8 @@ internal object OrionSensorConsent {
             p.getLong("${scope.name}_expires_at", 0L),
             p.getBoolean("${scope.name}_foreground_only", true)
         )
-        if (grant.enabled && !grant.active()) revoke(context, scope)
-        return grant.copy(enabled = grant.active())
+        if (grant.enabled && !grant.active(now)) revoke(context, scope)
+        return grant.copy(enabled = grant.active(now))
     }
 
     fun activeScopes(context: Context): Set<OrionSensorScope> =
