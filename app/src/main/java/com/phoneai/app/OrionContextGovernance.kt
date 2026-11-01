@@ -86,6 +86,18 @@ internal object OrionRoutinePolicy {
             .sortedWith(compareByDescending<Memory> { it.confidence }.thenByDescending { it.updated })
             .take(8)
             .map { OrionRoutineSuggestion(it.id, it.text, it.confidence, now) }
+
+    fun promptBlock(context: Context, memories: List<Memory>): String {
+        val items = suggestions(context, memories).take(5)
+        if (items.isEmpty()) return ""
+        return buildString {
+            appendLine("OWNER-APPROVED ROUTINE SUGGESTIONS (use only when relevant; do not nag or assume a schedule)")
+            items.forEach { item ->
+                appendLine("- routine_id=${item.memoryId}; confidence=${(item.confidence * 100).toInt()}%; ${item.title}")
+            }
+            appendLine("You may suggest a useful reminder when context makes it timely. Never schedule or repeat a reminder without an explicit owner-selected time, recurrence and active ROUTINE_REMINDERS grant.")
+        }
+    }
 }
 
 /** Conservative model limits. Unknown models get a small safe budget rather than an invented large one. */
