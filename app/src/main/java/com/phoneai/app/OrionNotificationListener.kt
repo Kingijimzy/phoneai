@@ -203,6 +203,7 @@ class OrionNotificationListener : NotificationListenerService() {
             if (normalized !in setOf("reply", "dismiss")) return "error: action must be reply or dismiss"
             val service = instance ?: return "error: enable Orion Notification access first"
             if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
                 return "error: Orion notification context is disabled; enable its grant in Sensor & context permissions."
             }
             val allowed = synchronized(lock) { recent.containsKey(key) }
@@ -251,7 +252,10 @@ class OrionNotificationListener : NotificationListenerService() {
         /** Bounded safe notification context for the central brain; no notification keys are exposed. */
         fun contextSummary(): String {
             val service = instance ?: return ""
-            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) return ""
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return ""
+            }
             val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis }.take(5) }
             if (items.isEmpty()) return ""
             return buildString {
