@@ -190,7 +190,7 @@ class SensorContextActivity : Activity() {
     private fun addPythonHost() {
         val host = android.widget.EditText(this).apply {
             hint = "api.example.com or localhost"
-            singleLine = true
+            setSingleLine(true)
         }
         val allowHttp = android.widget.CheckBox(this).apply { text = "Allow plain HTTP (local endpoints only)" }
         val allowWrites = android.widget.CheckBox(this).apply { text = "Allow HTTP POST without asking each time" }
