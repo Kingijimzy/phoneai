@@ -364,17 +364,19 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                 transcript += turn
                 ChatHistoryStore.save(this, transcript)
             }
-            OrionMultimodalEvidenceStore.record(
-                this,
-                ChatHistoryStore.activeSessionId(this),
-                modality = OrionMultimodalEvidenceStore.Modality.AUDIO_TRANSCRIPT,
-                source = "gemini_live_final_transcript",
-                digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(clean.toByteArray(Charsets.UTF_8))
-                    .joinToString("") { "%02x".format(it) },
-                summary = if (fromModel) "Assistant speech transcript is available in the shared conversation history; raw audio was not stored."
-                    else "User speech transcript is available in the shared conversation history; raw audio was not stored."
-            )
+            if (OrionSensorConsent.read(this, OrionSensorScope.MICROPHONE).active()) {
+                OrionMultimodalEvidenceStore.record(
+                    this,
+                    ChatHistoryStore.activeSessionId(this),
+                    modality = OrionMultimodalEvidenceStore.Modality.AUDIO_TRANSCRIPT,
+                    source = "gemini_live_final_transcript",
+                    digest = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(clean.toByteArray(Charsets.UTF_8))
+                        .joinToString("") { "%02x".format(it) },
+                    summary = if (fromModel) "Assistant speech transcript is available in the shared conversation history; raw audio was not stored."
+                        else "User speech transcript is available in the shared conversation history; raw audio was not stored."
+                )
+            }
         }
     }
 
