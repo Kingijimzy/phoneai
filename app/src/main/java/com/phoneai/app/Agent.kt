@@ -200,6 +200,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
     }
     @Volatile private var activeSkillId: String? = null
+    @Volatile private var activeInteractionTraceId: String = ""
     private var activeSkillStartedAt: Long = 0L
     private var activeSkillCalls: Int = 0
     private val researchCancelled = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -1697,7 +1698,36 @@ Rules:
         return true
     }
 
+    /**
+     * One W3C trace spans the user interaction and every nested tool call. Nested command
+     * routing (voice/research/skill continuation) inherits the parent's trace instead of
+     * creating a disconnected execution history.
+     */
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
+        val ownsTrace = activeInteractionTraceId.isBlank()
+        if (ownsTrace) {
+            activeInteractionTraceId = java.util.UUID.randomUUID().toString().replace("-", "")
+            svc.recordChatEvent("interaction", "started", "request accepted", traceId = activeInteractionTraceId)
+        }
+        try {
+            runInternalBody(inputCommand, reuseCommandBudget)
+            if (ownsTrace) svc.recordChatEvent(
+                "interaction", "completed", "interaction processing finished",
+                traceId = activeInteractionTraceId
+            )
+        } catch (failure: Throwable) {
+            if (ownsTrace) svc.recordChatEvent(
+                "interaction", "error",
+                "interaction failed: " + failure.javaClass.simpleName,
+                traceId = activeInteractionTraceId
+            )
+            throw failure
+        } finally {
+            if (ownsTrace) activeInteractionTraceId = ""
+        }
+    }
+
+    private fun runInternalBody(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
         val explicitResumeRequest = Regex("(?i)^(?:continue|resume|keep going)(?:\\s|$)").containsMatchIn(command)
@@ -2961,7 +2991,7 @@ Rules:
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
         // W3C-compatible 16-byte trace ID; shared by the start and terminal tool receipts.
-        val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
+        val traceId = activeInteractionTraceId.ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
         svc.recordChatEvent("tool", "started", "Tool: $tool", traceId = traceId)
         val result = runCatching { OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val preflight = preflightTool(route.tool, args)
