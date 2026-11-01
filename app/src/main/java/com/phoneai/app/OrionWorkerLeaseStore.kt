@@ -90,7 +90,7 @@ internal class OrionWorkerLeaseStore(context: Context, private val clock: () -> 
         write(root)
     }
 
-    fun isCompleted(taskId: String, idempotencyKey: String): Boolean = synchronized(lock) {
+    /** Durable completion reference used to reconcile the task ledger after process death. */\n    fun completedResult(taskId: String, idempotencyKey: String): String? = synchronized(lock) {\n        val item = read().optJSONObject("completions")?.optJSONObject(taskId) ?: return@synchronized null\n        item.optString("resultRef").takeIf { item.optString("idempotencyKey") == idempotencyKey && it.isNotBlank() }\n    }\n\n    fun isCompleted(taskId: String, idempotencyKey: String): Boolean = synchronized(lock) {
         val item = read().optJSONObject("completions")?.optJSONObject(taskId) ?: return@synchronized false
         item.optString("idempotencyKey") == idempotencyKey
     }
