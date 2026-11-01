@@ -71,7 +71,7 @@ class OrionPythonCapabilitiesTest {
     }
     @Test fun readOnlyPhoneCapabilitiesDoNotTriggerPerCallApprovalAndStillCheckGrants() {
         var prompts = 0
-        val api = OrionPythonPhoneApi(context) { prompts++; true }
+        val api = OrionPythonPhoneApi(context, confirm = { prompts++; true })
         assertTrue(api.battery().contains("level_percent"))
         assertTrue(api.location().contains("error"))
         assertTrue(api.notifications().contains("error"))
