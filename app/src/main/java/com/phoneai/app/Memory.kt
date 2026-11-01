@@ -176,10 +176,44 @@ object MemoryStore {
 
     fun setReviewStatus(c: Context, id: Int, status: String): Boolean = synchronized(lock) {
         if (status !in setOf("approved", "rejected")) return@synchronized false
-        val memory = load(c).firstOrNull { it.id == id } ?: return@synchronized false
-        val old = memory.reviewStatus
+        val list = load(c)
+        val memory = list.firstOrNull { it.id == id } ?: return@synchronized false
+        val oldStatus = memory.reviewStatus
+        val superseded = if (status == "approved") {
+            MemoryRanking.findSuperseded(
+                list.filter { it.id != id && it.reviewStatus == "approved" },
+                memory.category,
+                memory.text
+            )
+        } else null
+        val oldSuperseded = superseded?.let { copyOf(it) }
+        val oldSupersededUpdated = superseded?.updated
+        val oldSupersededEvidence = superseded?.evidence
         memory.reviewStatus = status
-        if (!save(c)) { memory.reviewStatus = old; return@synchronized false }
+        if (superseded != null) {
+            superseded.reviewStatus = "superseded"
+            superseded.updated = System.currentTimeMillis()
+            superseded.evidence = "superseded by approved memory #$id"
+        }
+        if (!save(c)) {
+            memory.reviewStatus = oldStatus
+            if (superseded != null && oldSuperseded != null) {
+                superseded.reviewStatus = oldSuperseded.reviewStatus
+                superseded.updated = oldSupersededUpdated ?: oldSuperseded.updated
+                superseded.evidence = oldSupersededEvidence.orEmpty()
+            }
+            return@synchronized false
+        }
+        if (superseded != null && oldSuperseded != null &&
+            !OrionMemoryLifecycle.archiveBeforeChange(c, oldSuperseded, "superseded by owner-approved memory #$id")) {
+            memory.reviewStatus = oldStatus
+            superseded.reviewStatus = oldSuperseded.reviewStatus
+            superseded.updated = oldSuperseded.updated
+            superseded.evidence = oldSuperseded.evidence
+            save(c)
+            return@synchronized false
+        }
+        if (superseded != null) runCatching { OrionKnowledgeGraph.forgetMemory(c, superseded.id) }
         if (status == "approved") runCatching { OrionKnowledgeGraph.indexMemory(c, memory) }
         true
     }
