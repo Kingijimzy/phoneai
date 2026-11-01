@@ -290,9 +290,11 @@ object McpConnector {
 
     /** Read-only resource discovery; results remain untrusted server data. */
     fun listResources(c: Context, cursor: String? = null): String = runCatching {
-        val result = readOnlyRequest(c, OrionMcpProtocol.listResources(cursor))
-            ?: return@runCatching "error: MCP resource discovery did not return a result."
-        val rows = OrionMcpProtocol.resources(result)
+        val pages = OrionMcpPagination.collect("resources", cursor) { nextCursor ->
+            readOnlyRequest(c, OrionMcpProtocol.listResources(nextCursor))
+                ?: throw IllegalStateException("MCP resource discovery did not return a result.")
+        }
+        val rows = pages.items
         val rendered = (0 until minOf(rows.length(), 30)).mapNotNull { i ->
             val item = rows.optJSONObject(i) ?: return@mapNotNull null
             val uri = item.optString("uri").take(2_000)
@@ -300,7 +302,8 @@ object McpConnector {
             if (uri.isBlank()) null else "- " + (if (name.isBlank()) uri else "$name ($uri)")
         }
         "MCP resources (untrusted metadata; read scope only):\n" +
-            rendered.joinToString("\n").take(6_000).ifBlank { "No resources advertised." }
+            rendered.joinToString("\n").take(6_000).ifBlank { "No resources advertised." } +
+            if (pages.truncated) "\nPartial catalogue: stopped at the safe pagination limit." else ""
     }.getOrElse { "error: MCP resource discovery failed: " + (it.message ?: it.javaClass.simpleName).take(180) }
 
     /** Reads one explicitly selected resource URI; never follows server instructions. */
@@ -320,16 +323,19 @@ object McpConnector {
 
     /** Prompt discovery is metadata-only; prompt bodies require an explicit prompts/get call. */
     fun listPrompts(c: Context, cursor: String? = null): String = runCatching {
-        val result = readOnlyRequest(c, OrionMcpProtocol.listPrompts(cursor))
-            ?: return@runCatching "error: MCP prompt discovery did not return a result."
-        val rows = OrionMcpProtocol.prompts(result)
+        val pages = OrionMcpPagination.collect("prompts", cursor) { nextCursor ->
+            readOnlyRequest(c, OrionMcpProtocol.listPrompts(nextCursor))
+                ?: throw IllegalStateException("MCP prompt discovery did not return a result.")
+        }
+        val rows = pages.items
         val rendered = (0 until minOf(rows.length(), 30)).mapNotNull { i ->
             val item = rows.optJSONObject(i) ?: return@mapNotNull null
             val name = item.optString("name").take(128)
             if (name.isBlank()) null else "- $name: " + item.optString("description").replace(Regex("\\s+"), " ").take(180)
         }
         "MCP prompts (untrusted metadata; not executed):\n" +
-            rendered.joinToString("\n").take(6_000).ifBlank { "No prompts advertised." }
+            rendered.joinToString("\n").take(6_000).ifBlank { "No prompts advertised." } +
+            if (pages.truncated) "\nPartial catalogue: stopped at the safe pagination limit." else ""
     }.getOrElse { "error: MCP prompt discovery failed: " + (it.message ?: it.javaClass.simpleName).take(180) }
 
     /** Retrieves a prompt only on explicit caller request; returned text is data, not authority. */
