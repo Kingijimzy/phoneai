@@ -3,6 +3,8 @@ package com.phoneai.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import android.hardware.SensorManager
 import android.os.Bundle
 import android.view.View
@@ -97,6 +99,18 @@ class SensorContextActivity : Activity() {
             }
         }
         root.addView(TextView(this).apply {
+            text = "APP USAGE REQUIRES ANDROID SPECIAL ACCESS"
+            textSize = 12f; setTextColor(0xffc4ccd5.toInt()); setPadding(0, dp(14), 0, dp(6))
+        })
+        root.addView(TextView(this).apply {
+            text = "OPEN ANDROID USAGE ACCESS SETTINGS"
+            textSize = 13f; setTextColor(0xffd5e3f2.toInt()); setPadding(0, dp(8), 0, dp(12))
+            setOnClickListener {
+                runCatching { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+                    .onFailure { Toast.makeText(this@SensorContextActivity, "Android Usage Access settings are unavailable.", Toast.LENGTH_SHORT).show() }
+            }
+        })
+        root.addView(TextView(this).apply {
             text = "A grant expires after 30 days. Revoke any scope here at any time. Location, notification access, usage access and screen capture still require their separate Android system approvals and are not activated by these switches."
             textSize = 12f; setTextColor(0xff8995a3.toInt()); setPadding(0, dp(16), 0, dp(10))
         })
@@ -133,7 +147,7 @@ class SensorContextActivity : Activity() {
         OrionSensorScope.SCREEN_CONTEXT -> "Manual screen reads only; no continuous screenshot or screen recording."
         OrionSensorScope.MICROPHONE -> "Voice sessions only after you explicitly start them; no background listening."
         OrionSensorScope.NOTIFICATIONS -> "Safe summaries are kept in memory only when this grant and Android Notification access are both enabled."
-        OrionSensorScope.APP_USAGE -> "Consent flag only; usage-access collector is not connected yet."
+        OrionSensorScope.APP_USAGE -> "On-demand recent app-use summary, only with Android Usage Access; sensitive apps are excluded."
         OrionSensorScope.ROUTINE_REMINDERS -> "Allows only one-time reminders you explicitly schedule for approved routines."
     }
 
