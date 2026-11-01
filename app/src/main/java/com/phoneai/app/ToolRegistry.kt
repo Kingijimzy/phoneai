@@ -204,6 +204,10 @@ internal object ToolRegistry {
     )
 
     private val requestFamilies: List<Pair<Regex, Set<String>>> = listOf(
+        Regex("(?i)\\b(mcp|remote\\s+server|resource|prompt\\s+template)\\b") to setOf(
+            "mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources",
+            "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"
+        ),
         Regex("(?i)\\b(phone|screen|tap|click|swipe|scroll|type|keyboard|open|launch|start|switch|go to|install|uninstall|notification|device|settings|flashlight|volume|alarm|timer)\\b") to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "notification_action",
             "media_status", "media_control", "play_media", "chrome_search", "list_apps", "read_screen",
