@@ -207,7 +207,13 @@ internal class OrionPythonPhoneApi(
     /** JSON argv only. No /bin/sh, shell expansion, pipes, redirects, privilege escalation or root. */
     fun shell(argvJson: String): String {
         val root = File(context.filesDir, "orion-python/workspace")
-        if (!root.exists() && !root.mkdirs()) return error("Python workspace is unavailable")
+        when (workspace.rootStatus()) {
+            OrionPythonWorkspace.RootStatus.READY -> Unit
+            OrionPythonWorkspace.RootStatus.MISSING -> {
+                if (workspace.ensureRootForRepair() == null) return error("Python workspace could not be safely initialized")
+            }
+            OrionPythonWorkspace.RootStatus.UNSAFE -> return error("Python workspace path is suspicious or unsafe; refusing to execute even read-only commands")
+        }
         val command = OrionPythonShellPolicy.parse(argvJson, root.absolutePath)
             ?: return error("command rejected: use a registered read-only command and workspace-relative paths")
         if (command.executable == "pwd") return root.absolutePath
