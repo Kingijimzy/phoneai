@@ -416,7 +416,7 @@ class Tools(
 
     fun mcpCall(name: String, args: JSONObject): String = McpConnector.callTool(svc, name, args)
 
-    fun mcpListResources(cursor: String): String = McpConnector.listResources(svc, cursor.ifBlank { null })
+    fun mcpListResources(cursor: String): String = McpConnector.listResources(svc, cursor.takeIf { it.isNotBlank() })
 
     fun mcpReadResource(uri: String): String = McpConnector.readResource(svc, uri)
 
