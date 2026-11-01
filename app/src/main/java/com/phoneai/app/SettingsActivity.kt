@@ -477,6 +477,9 @@ class SettingsActivity : Activity() {
         add(s1, button("Open Accessibility settings", true) {
             AccessibilityDisclosure.requestSettings(this)
         }, 8)
+        add(s1, button("Sensor & context permissions", false) {
+            startActivity(Intent(this, SensorContextActivity::class.java))
+        }, 8)
         add(s1, button("Enable Orion Private Keyboard", false) {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
         }, 8)
