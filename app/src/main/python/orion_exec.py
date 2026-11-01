@@ -53,7 +53,7 @@ _ALLOWED_NODES = (
 _PHONE_METHODS = {
     "battery", "location", "notifications", "contacts", "accessibility_status", "accessibility_open_settings", "accessibility_screen",
     "fs_list", "fs_read", "fs_write", "shell", "http_get", "http_post",
-    "ui_tap_text", "ui_tap", "ui_swipe", "ws_connect", "ws_send", "ws_send_binary", "ws_receive", "ws_close",
+    "ui_tap_text", "ui_tap", "ui_swipe", "ws_connect", "ws_connect_with_headers", "ws_send", "ws_send_binary", "ws_receive", "ws_close",
 }
 
 
