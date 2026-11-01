@@ -67,6 +67,7 @@ Failure after application must transition to `ROLLED_BACK`, not success.
 - Automatic repair is limited to app-owned, explicitly allowlisted operations with a tested rollback path. Inside a verified isolated sandbox, ordinary reversible and data-affecting experiments may run autonomously when idempotent; the sandbox must not expose real device/account state, secrets, permissions, or external side effects.
 - Security-sensitive, suspicious, destructive, external-side-effect, permission/policy, and real-device consequential changes require owner approval. A sandbox label supplied by model output is never proof of isolation; only the trusted app-owned runner may select the execution boundary.
 - Never auto-change Android permissions, safety gates, trading rules, secrets, provider credentials or capability grants.
+- The direct `python_exec` capability uses the bounded, capability-free AST interpreter: supported data transformations run without an interactive approval; imports, attribute access, file/network/OS access, unsupported syntax and oversized computation are rejected. Generated-extension activation remains a separate capability change and follows its own owner-approval setting.
 - Never blindly retry an uncertain write.
 - Record before/after hashes or state snapshots where appropriate, test receipt, approver and rollback receipt.
 
