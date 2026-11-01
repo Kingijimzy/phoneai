@@ -96,6 +96,7 @@ class TaskReminderBootReceiver : BroadcastReceiver() {
             TaskReminder.restoreAll(context)
             ProactiveBriefing.schedule(context)
             GamingFocus.schedule(context)
+            OrionProactiveWork.ensureScheduled(context)
         }
     }
 }
