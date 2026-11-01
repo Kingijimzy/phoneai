@@ -113,7 +113,7 @@ def _safe_pattern(pattern, value):
         raise Rejected("regular-expression patterns are limited to 160 characters")
     if not isinstance(value, str) or len(value) > 2048:
         raise Rejected("regular-expression input is limited to 2048 characters")
-    if _re.search(r"\\)[+*{]", pattern):
+    if _re.search(r"\)[+*{]", pattern):
         raise Rejected("quantified groups are blocked to reduce regular-expression backtracking")
     return pattern
 
