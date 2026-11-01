@@ -569,7 +569,7 @@ class SettingsActivity : Activity() {
             }.onFailure { Toast.makeText(this, "App details settings could not be opened.", Toast.LENGTH_LONG).show() }
         }, 8)
         add(updateCard, text(
-            "HyperOS note: Orion cannot silently enable Xiaomi Autostart or exempt itself from battery management. Enable Autostart and No restrictions manually where your MIUI/HyperOS version exposes them. WorkManager jobs are durable/deferred, not guaranteed sub-second; a live voice/WebSocket session must remain in an owner-started foreground session and may end if Android force-stops the app.",
+            "HyperOS note: Orion cannot silently enable Xiaomi Autostart or exempt itself from battery management. Enable Autostart and No restrictions manually where your MIUI/HyperOS version exposes them. WorkManager jobs are durable/deferred, not guaranteed sub-second. An open Python WebSocket starts a visible data-sync foreground notification and stops it when all sessions close; Android/HyperOS can still stop it after force-stop, vendor cleanup or foreground-service time limits. Python WebSocket transport does not secretly activate the microphone; audio capture still requires the existing owner-started voice flow and microphone permission.",
             12f, Theme.MUTED
         ), 8)
         add(updateCard, button("OPPO / realme background & overlay guide", false) {
