@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class OrionRemoteTaskReceiptStoreTest {
     @Test fun acceptedReceiptAndTerminalResultSurviveStoreRecreation() {
-        val context = RuntimeEnvironment.getApplication<Context>()
+        val context = RuntimeEnvironment.getApplication()
         context.getFileStreamPath("orion_remote_receipts.json").delete()
         context.getFileStreamPath("orion_remote_receipts.json.bak").delete()
         val task = OrionTaskEnvelope.create("remote research", OrionTaskEnvelope.Kind.RESEARCH)
@@ -27,7 +27,7 @@ class OrionRemoteTaskReceiptStoreTest {
     }
 
     @Test fun receiptRejectsDifferentIdempotencyKeyForSameTaskId() {
-        val context = RuntimeEnvironment.getApplication<Context>()
+        val context = RuntimeEnvironment.getApplication()
         context.getFileStreamPath("orion_remote_receipts.json").delete()
         val task = OrionTaskEnvelope.create("remote")
         val store = OrionRemoteTaskReceiptStore(context)
