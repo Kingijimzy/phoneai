@@ -11,6 +11,7 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import org.json.JSONObject
 import java.net.Proxy
+import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
@@ -66,11 +67,13 @@ internal object OrionPythonWebSocketTransport {
         val ready = CountDownLatch(1)
         val client = OkHttpClient.Builder()
             .proxy(Proxy.NO_PROXY)
-            .dns(Dns { hostname ->
-                if (!hostname.equals(endpoint.host, ignoreCase = true)) {
-                    throw UnknownHostException("WebSocket redirect or secondary host is blocked")
+            .dns(object : Dns {
+                override fun lookup(hostname: String): List<InetAddress> {
+                    if (!hostname.equals(endpoint.host, ignoreCase = true)) {
+                        throw UnknownHostException("WebSocket redirect or secondary host is blocked")
+                    }
+                    return endpoint.addresses
                 }
-                endpoint.addresses
             })
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
