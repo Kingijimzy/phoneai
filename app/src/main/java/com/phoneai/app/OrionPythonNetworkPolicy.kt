@@ -14,6 +14,13 @@ internal object OrionPythonNetworkPolicy {
             .putBoolean(host, true).putBoolean("$host:plain_http", allowPlainHttp).putBoolean("$host:writes", allowWrites).apply()
         return true
     }
+    fun grantedHosts(context: Context): List<String> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.all.keys.filter { key ->
+            !key.endsWith(":plain_http") && !key.endsWith(":writes") && prefs.getBoolean(key, false)
+        }.sorted()
+    }
+
     fun revokeHost(context: Context, hostInput: String) {
         val host = normalizeHost(hostInput) ?: return
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
