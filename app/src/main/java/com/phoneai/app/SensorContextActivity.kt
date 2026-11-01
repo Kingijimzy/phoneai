@@ -67,7 +67,10 @@ class SensorContextActivity : Activity() {
                         if (scope == OrionSensorScope.MOTION) startMotionSampler()
                     } else {
                         OrionSensorConsent.revoke(this@SensorContextActivity, scope)
-                        if (scope == OrionSensorScope.MOTION) stopMotionSampler()
+                        if (scope == OrionSensorScope.MOTION) {
+                            stopMotionSampler()
+                            OrionSensorContextStore.clear(this@SensorContextActivity)
+                        }
                         if (scope == OrionSensorScope.ROUTINE_REMINDERS) {
                             MemoryStore.all(this@SensorContextActivity).forEach {
                                 OrionRoutineReminderWorker.cancel(this@SensorContextActivity, it.id)
@@ -105,6 +108,7 @@ class SensorContextActivity : Activity() {
                             OrionRoutineReminderWorker.cancel(this@SensorContextActivity, it.id)
                         }
                         stopMotionSampler()
+                        OrionSensorContextStore.clear(this@SensorContextActivity)
                         rebuild()
                     }.show()
             }
