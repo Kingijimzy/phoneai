@@ -10,7 +10,7 @@ import java.security.MessageDigest
  * postcondition, and rollback restores captured prior state. Uncertain receipts are never replayed.
  */
 internal object OrionRepairLifecycle {
-    enum class Result { VERIFIED, AWAITING_OWNER, SANDBOX_FAILED, POLICY_BLOCKED, APPLY_FAILED,
+    enum class Result { VERIFIED, AWAITING_OWNER, OWNER_REJECTED, SANDBOX_FAILED, POLICY_BLOCKED, APPLY_FAILED,
         APPLY_OUTCOME_UNCERTAIN, ROLLED_BACK, ROLLBACK_FAILED, PERSISTENCE_FAILED }
 
     data class Receipt(val result: Result, val planDigest: String, val detail: String)
@@ -106,7 +106,7 @@ internal object OrionRepairLifecycle {
 
         // A plan may be applied only once. An interrupted/uncertain apply is reconciled
         // manually; a previous owner approval is never silently reused after process restart.
-        val terminalOrUncertain = setOf("APPLY_STARTED", "APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
+        val terminalOrUncertain = setOf("OWNER_REJECTED", "APPLY_STARTED", "APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
             "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")
         val durableTerminalReceipt = terminalOrUncertain.any { stage ->
             val eventId = "repair-" + sha256("$taskId|$digest|${stage}").take(48)
@@ -224,6 +224,21 @@ internal object OrionRepairLifecycle {
                 "Verification failed; rollback completed and restored state was independently verified.")
             else -> Receipt(Result.ROLLBACK_FAILED, digest, "Rollback failed or was uncertain; manual intervention required.")
         }
+    }
+
+
+    /** Persist an explicit rejection for this exact immutable plan; it cannot later be replayed. */
+    fun recordOwnerRejection(
+        context: Context, sessionId: String, taskId: String, planDigest: String
+    ): Receipt {
+        val digest = planDigest.lowercase()
+        if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$"))) {
+            return Receipt(Result.POLICY_BLOCKED, digest, "Owner rejection did not match a valid repair identity.")
+        }
+        val saved = emit(context.applicationContext, sessionId, taskId, "OWNER_REJECTED", digest,
+            "Owner declined this exact repair plan; application was not dispatched.", failed = true)
+        return Receipt(if (saved) Result.OWNER_REJECTED else Result.PERSISTENCE_FAILED, digest,
+            if (saved) "Owner rejected this repair; no application occurred." else "Owner decision could not be persisted; no application occurred.")
     }
 
     /**
