@@ -33,17 +33,18 @@ internal object OrionRepairLifecycle {
     }
 
     /**
-     * ownerApproved must come from explicit confirmation bound to this exact plan digest.
+     * ownerApprovalDigest must be returned by explicit owner confirmation of this exact plan digest.
      * Callbacks are fixed application code, never model-generated code or arbitrary shell commands.
      */
     fun execute(
         context: Context, sessionId: String, taskId: String,
         finding: OrionDiagnosticFinding, proposal: OrionRepairProposal, planDigest: String,
-        ownerApproved: Boolean, sandboxTest: () -> Boolean, apply: () -> String?,
+        ownerApprovalDigest: String?, sandboxTest: () -> Boolean, apply: () -> String?,
         verify: () -> Boolean, rollback: () -> Boolean
     ): Receipt {
         val app = context.applicationContext
         val digest = planDigest.lowercase()
+        val ownerApproved = ownerApprovalDigest?.equals(digest, ignoreCase = true) == true
         if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$")) ||
             !finding.isActionable() || finding.id != proposal.findingId || proposal.id.isBlank() ||
             proposal.summary.isBlank() || !proposal.hasRollback) {
