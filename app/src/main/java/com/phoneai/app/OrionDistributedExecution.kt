@@ -231,17 +231,16 @@ internal class OrionExecutionCoordinator(
             return OrionCoordinatedResult.Deferred(taskId, "lease_unavailable")
         }
 
-        val currentCheckpoint = AgentCheckpointStore.pending(context)
-        val checkpointCommand = currentCheckpoint?.optString("command").orEmpty()
-        val replay = if (checkpointCommand == task.objective) {
+        val currentCheckpoint = AgentCheckpointStore.pendingForTask(context, task.taskId)
+        val replay = if (currentCheckpoint != null) {
             if (AgentCheckpointStore.needsRecoveryConfirmation(context)) {
-                AgentCheckpointStore.recoveryRequired(context,
+                AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
                     "Delegated task $taskId has an unresolved in-flight action. Inspect its real-world outcome before replay.")
                 leases.release(lease)
                 tasks.fail(taskId, retryable = false)
                 return OrionCoordinatedResult.NeedsOwner(taskId, "checkpoint_in_flight_requires_owner_reconciliation")
             }
-            AgentCheckpointStore.resumeInstruction(context)
+            AgentCheckpointStore.resumeInstructionForTask(context, task.taskId)
         } else null
 
         val activeLease = java.util.concurrent.atomic.AtomicReference(lease)
@@ -261,7 +260,7 @@ internal class OrionExecutionCoordinator(
             val result = if (worker is OrionCheckpointAwareWorker) worker.execute(task, replay) else worker.execute(task)
             if (heartbeatFailure.get()) return OrionCoordinatedResult.Deferred(taskId, "lease_heartbeat_lost_outcome_requires_reconciliation")
             if (tasks.isCancellationRequested(taskId)) {
-                AgentCheckpointStore.recoveryRequired(context,
+                AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
                     "Delegated task $taskId was cancelled while executing. Verify whether the worker completed an external action.")
                 return OrionCoordinatedResult.NeedsOwner(taskId, "cancelled_during_execution_outcome_unknown")
             }
