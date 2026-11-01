@@ -82,6 +82,17 @@ class OrionPythonCapabilitiesTest {
         assertEquals(0, prompts)
     }
 
+    @Test fun shellWrapperRefusesAnUnsafeWorkspaceSymlink() {
+        val parent = File(context.filesDir, "orion-python")
+        assertTrue(parent.mkdirs() || parent.isDirectory)
+        val target = File(context.filesDir, "outside-workspace").apply { mkdirs() }
+        val root = File(parent, "workspace")
+        java.nio.file.Files.createSymbolicLink(root.toPath(), target.toPath())
+        val api = OrionPythonPhoneApi(context)
+        assertTrue(api.shell("""["ls"]""").contains("unsafe"))
+        assertEquals(OrionPythonWorkspace.RootStatus.UNSAFE, OrionPythonWorkspace(context).rootStatus())
+    }
+
     @Test fun readOnlyAutonomyProfileDisablesPythonMutations() {
         ToolPermissions.applyLevel(context, "read_only")
         val api = OrionPythonPhoneApi(context, readOnly = true)
