@@ -309,20 +309,25 @@ internal class OrionExecutionCoordinator(
 internal class OrionLangGraphRemoteWorker(
     private val transport: OrionLangGraphTransport,
     private val bearerToken: () -> String?,
+    private val receipts: OrionRemoteTaskReceiptStore? = null,
     private val maxPolls: Int = 20,
     private val pollDelayMs: Long = 1_500L
 ) {
     data class RemoteResult(val status: String, val evidenceRef: String?, val detail: String?)
     fun execute(task: OrionTaskEnvelope, cancelled: () -> Boolean = { false }): RemoteResult {
-        val accepted = transport.submit(task)
-        val statusUrl = accepted.optString("status_url")
-        val cancelUrl = accepted.optString("cancel_url")
+        val saved = receipts?.get(task)
+        if (saved?.terminalStatus != null) return RemoteResult(saved.terminalStatus, saved.evidenceRef, "replayed_from_durable_remote_receipt")
+        val accepted = if (saved == null) transport.submit(task) else null
+        val statusUrl = saved?.statusUrl ?: accepted?.optString("status_url").orEmpty()
+        val cancelUrl = saved?.cancelUrl ?: accepted?.optString("cancel_url")?.takeIf { it.isNotBlank() }
         require(statusUrl.isNotBlank()) { "langgraph_status_url_missing" }
         validateSameOrigin(statusUrl)
-        if (cancelUrl.isNotBlank()) validateSameOrigin(cancelUrl)
+        if (!cancelUrl.isNullOrBlank()) validateSameOrigin(cancelUrl)
+        if (saved == null && receipts?.saveAccepted(task, statusUrl, cancelUrl) == false) throw IllegalStateException("langgraph_receipt_persist_failed")
         repeat(maxPolls.coerceIn(1, 100)) {
             if (cancelled()) {
-                if (cancelUrl.isNotBlank()) request(cancelUrl, "POST", JSONObject().put("task_id", task.taskId))
+                if (!cancelUrl.isNullOrBlank()) request(cancelUrl, "POST", JSONObject().put("task_id", task.taskId))
+                receipts?.saveTerminal(task, "cancel_requested", null)
                 return RemoteResult("cancel_requested", null, "owner_cancellation_forwarded")
             }
             val state = try { request(statusUrl, "GET", null) } catch (e: Exception) {
@@ -334,10 +339,11 @@ internal class OrionLangGraphRemoteWorker(
                 "completed", "success" -> {
                     val ref = state.optString("evidence_ref").takeIf { it.isNotBlank() }
                         ?: throw IllegalStateException("langgraph_result_missing_evidence_ref")
+                    receipts?.saveTerminal(task, "completed", ref)
                     return RemoteResult("completed", ref, null)
                 }
-                "failed", "error" -> return RemoteResult("failed", null, state.optString("error").take(300))
-                "cancelled", "canceled" -> return RemoteResult("cancelled", null, null)
+                "failed", "error" -> { receipts?.saveTerminal(task, "failed", null); return RemoteResult("failed", null, state.optString("error").take(300)) }
+                "cancelled", "canceled" -> { receipts?.saveTerminal(task, "cancelled", null); return RemoteResult("cancelled", null, null) }
             }
             Thread.sleep(pollDelayMs.coerceIn(100L, 10_000L))
         }
