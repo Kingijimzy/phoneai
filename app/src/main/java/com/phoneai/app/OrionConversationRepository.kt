@@ -60,7 +60,7 @@ class OrionConversationRepository private constructor(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createEventsTable(db)
         if (oldVersion < 3) { createObjectiveEvidenceTable(db); createSearchIndex(db, true) }
-        if (oldVersion < 4) db.execSQL("ALTER TABLE chat_events ADD COLUMN trace_id TEXT")
+        if (oldVersion in 2..3) db.execSQL("ALTER TABLE chat_events ADD COLUMN trace_id TEXT")
     }
 
     private fun createEventsTable(db: SQLiteDatabase) {
