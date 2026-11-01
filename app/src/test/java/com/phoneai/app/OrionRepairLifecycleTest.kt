@@ -77,6 +77,40 @@ class OrionRepairLifecycleTest {
             .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
     }
 
+    @Test fun ownerApprovalResumeReusesSandboxReceiptAfterProcessLikeReentry() {
+        val plan = proposal(OrionRepairRisk.DATA_AFFECTING, approval = true)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(
+            sessionId, "task-repair-test", finding(), plan
+        )
+        var sandboxCalls = 0
+        var applyCalls = 0
+        val waiting = execute(
+            proposal = plan,
+            sandbox = { sandboxCalls++; true },
+            apply = { applyCalls++; "should-wait" }
+        )
+        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, waiting.result)
+        assertEquals(1, sandboxCalls)
+        assertEquals(0, applyCalls)
+
+        val resumed = execute(
+            proposal = plan,
+            ownerApprovalDigest = digest,
+            sandbox = { sandboxCalls++; true },
+            apply = { applyCalls++; "approved-receipt" }
+        )
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, resumed.result)
+        assertEquals(1, sandboxCalls)
+        assertEquals(1, applyCalls)
+        val stages = OrionEvidenceLedger.events(context, "task-repair-test")
+            .filter { it.argsFingerprint == digest && it.backend == "repair_lifecycle" }
+            .map { it.tool }
+        assertEquals(1, stages.count { it == "repair_proposed" })
+        assertEquals(1, stages.count { it == "repair_sandbox_passed" })
+        assertEquals(1, stages.count { it == "repair_owner_approved" })
+        assertEquals(1, stages.count { it == "repair_verified" })
+    }
+
     @Test fun sandboxDataMutationRunsAutonomouslyAfterIsolatedTest() {
         val sandboxProposal = proposal(OrionRepairRisk.DATA_AFFECTING, approval = false)
         var applied = 0
