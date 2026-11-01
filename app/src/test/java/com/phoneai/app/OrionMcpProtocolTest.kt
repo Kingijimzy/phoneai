@@ -19,6 +19,11 @@ class OrionMcpProtocolTest {
     @Test fun resourcesAndPromptsUseBoundedReadOnlyMcpContracts() {
         val resources = OrionMcpProtocol.listResources("next-page")
         assertEquals("resources/list", resources.optString("method"))
+        assertTrue(OrionMcpProtocol.isReadOnlyMethod("resources/list"))
+        assertTrue(OrionMcpProtocol.isReadOnlyMethod("resources/read"))
+        assertTrue(OrionMcpProtocol.isReadOnlyMethod("prompts/list"))
+        assertTrue(OrionMcpProtocol.isReadOnlyMethod("prompts/get"))
+        assertFalse(OrionMcpProtocol.isReadOnlyMethod("tools/call"))
         assertEquals("next-page", resources.optJSONObject("params")?.optString("cursor"))
 
         val read = OrionMcpProtocol.readResource("orion://memory/approved")
@@ -47,6 +52,7 @@ class OrionMcpProtocolTest {
             JSONObject().put("uri", "orion://memory/approved").put("text", "untrusted memory data")
         ))
         assertEquals(1, OrionMcpProtocol.resourceContents(resourceResult).length())
+        assertEquals(1, OrionMcpProtocol.resources(JSONObject().put("resources", org.json.JSONArray().put(JSONObject().put("uri", "orion://memory/approved")))).length())
         assertEquals(0, OrionMcpProtocol.prompts(JSONObject()).length())
     }
 
