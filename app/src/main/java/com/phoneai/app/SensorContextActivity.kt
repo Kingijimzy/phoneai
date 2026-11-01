@@ -165,7 +165,7 @@ class SensorContextActivity : Activity() {
         OrionSensorScope.APP_USAGE -> "On-demand recent app-use summary, only with Android Usage Access; sensitive apps are excluded."
         OrionSensorScope.ROUTINE_REMINDERS -> "Allows only one-time reminders you explicitly schedule for approved routines."
         OrionSensorScope.CONTACTS -> "Allows bounded local contact searches after both this grant and Android Contacts permission are enabled."
-        OrionSensorScope.NETWORK -> "Allows Python HTTP requests only to hosts you explicitly add below. GET is read-only; POST asks each time unless you grant host write access."
+        OrionSensorScope.NETWORK -> "Allows HTTPS/HTTP and persistent WSS/WS connections only to exact hosts you explicitly add below. RFC1918 private LAN hosts (10/8, 172.16/12, 192.168/16) are allowed after exact-host approval; HTTP and ws:// require the local plain-HTTP switch. POST and WebSocket sends ask each time unless you grant writes for that host."
     }
 
     private fun managePythonHosts() {
