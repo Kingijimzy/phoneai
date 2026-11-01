@@ -100,6 +100,11 @@ parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps(
         self.assertIn("policy rejected", orion_exec.run("import asyncio.subprocess"))
         self.assertIn("policy rejected", orion_exec.run("from json import *"))
 
+    def test_safe_json_dict_helpers_and_regex_limits(self):
+        out = orion_exec.run('import json\ndata = json.loads("{\\"count\\": 4}")\nprint(data.get("count"))')
+        self.assertEqual(out, "4\n")
+        self.assertIn("quantified groups", orion_exec.run('import re\nprint(re.search("(a+)+$", "a" * 100))'))
+
 
 if __name__ == "__main__":
     unittest.main()
