@@ -266,7 +266,7 @@ internal class OrionExecutionCoordinator(
             val result = if (worker is OrionCheckpointAwareWorker) worker.execute(task, replay) else worker.execute(task)
             if (heartbeatFailure.get()) return OrionCoordinatedResult.Deferred(taskId, "lease_heartbeat_lost_outcome_requires_reconciliation")
             if (tasks.isCancellationRequested(taskId)) {
-                AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
+                taskCheckpoints.requireRecovery(task.taskId,
                     "Delegated task $taskId was cancelled while executing. Verify whether the worker completed an external action.")
                 return OrionCoordinatedResult.NeedsOwner(taskId, "cancelled_during_execution_outcome_unknown")
             }
