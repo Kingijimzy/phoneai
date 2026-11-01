@@ -47,13 +47,19 @@ internal object OrionPythonWebSocketTransport {
         }
     }
 
-    private val sessions = ConcurrentHashMap<String, Session>()\n    @Volatile private var appContext: Context? = null
+    private val sessions = ConcurrentHashMap<String, Session>()
+    @Volatile private var appContext: Context? = null
 
     fun connect(context: Context, url: String, headersJson: String = "{}"): String {
         val headers = parseHeaders(headersJson) ?: return error("WebSocket headers are invalid or contain unsupported names")
-        sessions.values.filter { it.closed && it.events.isEmpty() }.forEach { stale ->\n            if (sessions.remove(stale.id, stale)) dispose(stale)\n        }\n        appContext = context.applicationContext\n        val endpoint = OrionPythonNetworkPolicy.validateWebSocket(context, url)
+        sessions.values.filter { it.closed && it.events.isEmpty() }.forEach { stale ->
+            if (sessions.remove(stale.id, stale)) dispose(stale)
+        }
+        appContext = context.applicationContext
+        val endpoint = OrionPythonNetworkPolicy.validateWebSocket(context, url)
             ?: return error("WebSocket blocked: grant NETWORK and explicitly allow this exact host; ws:// also needs local HTTP permission")
-        if (sessions.size >= MAX_SESSIONS) return error("at most $MAX_SESSIONS WebSocket sessions may be open")\n        if (!OrionSocketForegroundService.start(context)) return error("Android did not allow Orion to start its visible live-connection foreground service; keep Orion open and retry")
+        if (sessions.size >= MAX_SESSIONS) return error("at most $MAX_SESSIONS WebSocket sessions may be open")
+        if (!OrionSocketForegroundService.start(context)) return error("Android did not allow Orion to start its visible live-connection foreground service; keep Orion open and retry")
         val id = UUID.randomUUID().toString()
         val session = Session(id, endpoint.uri.toString(), endpoint.host, endpoint.allowWrites)
         sessions[id] = session
