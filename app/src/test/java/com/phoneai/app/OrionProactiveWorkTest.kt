@@ -26,8 +26,9 @@ class OrionProactiveWorkTest {
         OrionProactiveWork.ensureScheduled(context)
         OrionProactiveWork.ensureScheduled(context)
 
+        // Use the ListenableFuture API supported by the project's WorkManager version.
         val work = WorkManager.getInstance(context)
-            .getWorkInfosForUniqueWorkSync("orion_stage6_proactive_heartbeat")
+            .getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
         assertEquals("Repeated service/boot registration must keep one heartbeat", 1, work.size)
         assertEquals(WorkInfo.State.ENQUEUED, work.single().state)
         assertTrue(work.single().tags.contains("orion_stage6_proactive_heartbeat"))
