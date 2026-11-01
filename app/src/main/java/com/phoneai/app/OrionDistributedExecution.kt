@@ -141,7 +141,7 @@ internal class OrionLangGraphTransport(
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 30_000
 ) {
-    fun submit(task: OrionTaskEnvelope): JSONObject {
+    internal fun endpointForValidation(): String = endpoint\n\n    fun submit(task: OrionTaskEnvelope): JSONObject {
         require(task.validate().isEmpty()) { "invalid_task_envelope" }
         val uri = URL(endpoint)
         require(uri.protocol.equals("https", true) && uri.host.isNotBlank()) { "langgraph_requires_https" }
