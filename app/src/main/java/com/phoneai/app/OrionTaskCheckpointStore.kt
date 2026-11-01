@@ -68,7 +68,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
         steps.put(JSONObject().put("action", action.take(100)).put("outcome", outcome.take(500))
             .put("at", System.currentTimeMillis()))
         while (steps.length() > 32) steps.remove(0)
-        state.put("steps", steps).remove("inFlight").put("updatedAt", System.currentTimeMillis())
+        state.put("steps", steps)\n        state.remove("inFlight")\n        state.put("updatedAt", System.currentTimeMillis())
         return write(taskId, state)
     }
 
@@ -85,7 +85,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
         if (ownerConfirmation.isBlank()) return false
         val state = read(taskId) ?: return false
         if (state.optJSONObject("inFlight") == null && state.optString("status") != "recovery_required") return false
-        state.remove("inFlight").put("status", "paused")
+        state.remove("inFlight")\n        state.put("status", "paused")
             .put("ownerConfirmedAt", System.currentTimeMillis())
             .put("ownerConfirmation", ownerConfirmation.take(240))
             .put("updatedAt", System.currentTimeMillis())
