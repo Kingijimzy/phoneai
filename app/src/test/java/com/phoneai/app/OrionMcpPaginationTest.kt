@@ -49,5 +49,10 @@ class OrionMcpPaginationTest {
                 JSONObject().put("prompts", JSONArray()).put("nextCursor", "bad\nvalue")
             }
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            OrionMcpPagination.collect("resources") {
+                JSONObject().put("resources", JSONArray()).put("nextCursor", 42)
+            }
+        }
     }
 }
