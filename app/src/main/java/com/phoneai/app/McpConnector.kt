@@ -120,7 +120,7 @@ object McpConnector {
                 edit.putString(TOKEN_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                     .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             }
-            if (edit.commit()) "MCP endpoint saved. Tool discovery is read-only in this initial integration."
+            if (edit.commit()) "MCP endpoint saved. Tool discovery, resource reads and prompt retrieval use the paired read-only scope."
             else "Could not save MCP settings."
         } catch (_: Exception) { "Could not securely save MCP settings." }
     }
