@@ -14,9 +14,9 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 3) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 4) {
 
-    data class ChatEvent(val id: String, val sessionId: String, val messageId: String?, val type: String, val status: String, val summary: String, val createdAt: Long)
+    data class ChatEvent(val id: String, val sessionId: String, val messageId: String?, val type: String, val status: String, val summary: String, val createdAt: Long, val traceId: String? = null)
 
     data class Session(
         val id: String,
@@ -60,6 +60,7 @@ class OrionConversationRepository private constructor(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createEventsTable(db)
         if (oldVersion < 3) { createObjectiveEvidenceTable(db); createSearchIndex(db, true) }
+        if (oldVersion < 4) db.execSQL("ALTER TABLE chat_events ADD COLUMN trace_id TEXT")
     }
 
     private fun createEventsTable(db: SQLiteDatabase) {
@@ -71,6 +72,7 @@ class OrionConversationRepository private constructor(context: Context) :
             status TEXT NOT NULL,
             summary TEXT NOT NULL,
             created_at INTEGER NOT NULL,
+            trace_id TEXT,
             FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )""")
         db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
@@ -102,7 +104,7 @@ class OrionConversationRepository private constructor(context: Context) :
 
     /** Store bounded, secret-free lifecycle evidence for tools and approvals in the active session. */
     @Synchronized
-    fun recordEvent(context: Context, messageId: String?, type: String, status: String, summary: String): ChatEvent? {
+    fun recordEvent(context: Context, messageId: String?, type: String, status: String, summary: String, traceId: String? = null): ChatEvent? {
         migrateLegacy(context)
         val db = writableDatabase
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -116,10 +118,10 @@ class OrionConversationRepository private constructor(context: Context) :
             prefs.edit().putString(ACTIVE_ID, sessionId).commit()
         }
         val event = ChatEvent(UUID.randomUUID().toString(), sessionId!!, messageId?.take(128),
-            type.take(48), status.take(32), sanitizeEventSummary(summary), System.currentTimeMillis())
+            type.take(48), status.take(32), sanitizeEventSummary(summary), System.currentTimeMillis(), traceId?.takeIf { it.matches(Regex("^[a-fA-F0-9]{32}$")) }?.lowercase())
         val values = ContentValues().apply {
             put("id", event.id); put("session_id", event.sessionId); put("message_id", event.messageId)
-            put("event_type", event.type); put("status", event.status); put("summary", event.summary); put("created_at", event.createdAt)
+            put("event_type", event.type); put("status", event.status); put("summary", event.summary); put("created_at", event.createdAt); put("trace_id", event.traceId)
         }
         if (db.insert("chat_events", null, values) < 0) return null
         return event
@@ -152,11 +154,11 @@ class OrionConversationRepository private constructor(context: Context) :
         if (inserted >= 0) return event
         // A retry after a crash returns the already-persisted event, never a duplicate.
         return db.rawQuery(
-            "SELECT id,session_id,message_id,event_type,status,summary,created_at FROM chat_events WHERE id=? AND session_id=?",
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id FROM chat_events WHERE id=? AND session_id=?",
             arrayOf(id, sid)
         ).use { c ->
             if (c.moveToFirst()) ChatEvent(c.getString(0), c.getString(1), c.getString(2),
-                c.getString(3), c.getString(4), c.getString(5), c.getLong(6)) else null
+                c.getString(3), c.getString(4), c.getString(5), c.getLong(6), c.getString(7)) else null
         }
     }
 
@@ -269,8 +271,8 @@ class OrionConversationRepository private constructor(context: Context) :
             if (it.moveToFirst()) it.getString(0) else return emptyList()
         }
         val result = ArrayList<ChatEvent>()
-        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at FROM chat_events WHERE session_id=? ORDER BY created_at ASC", arrayOf(id)).use { c ->
-            while (c.moveToNext()) result.add(ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getLong(6)))
+        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id FROM chat_events WHERE session_id=? ORDER BY created_at ASC", arrayOf(id)).use { c ->
+            while (c.moveToNext()) result.add(ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getLong(6), c.getString(7)))
         }
         return result
     }
