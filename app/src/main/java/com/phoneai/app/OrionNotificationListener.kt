@@ -202,6 +202,9 @@ class OrionNotificationListener : NotificationListenerService() {
             if (key.isBlank()) return "error: notification key is required"
             if (normalized !in setOf("reply", "dismiss")) return "error: action must be reply or dismiss"
             val service = instance ?: return "error: enable Orion Notification access first"
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                return "error: Orion notification context is disabled; enable its grant in Sensor & context permissions."
+            }
             val allowed = synchronized(lock) { recent.containsKey(key) }
             if (!allowed) return "error: notification is unavailable or was filtered for safety"
             val sbn = try { service.activeNotifications?.firstOrNull { it.key == key } }
