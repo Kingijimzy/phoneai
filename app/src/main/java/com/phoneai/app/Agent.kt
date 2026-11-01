@@ -410,6 +410,32 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
+        // Retrieve current durable context immediately before any write/consequential dispatch.
+        // The receipt is created inside this Agent instance, never accepted from model arguments.
+        val retrievalRequired = OrionRetrieveBeforeActPolicy.requiresRetrieval(
+            tool,
+            if (mcpReadScopeGranted) ToolAccess.READ else (ToolRegistry.access(tool) ?: ToolAccess.WRITE),
+            consequential
+        )
+        if (retrievalRequired) {
+            val objective = currentTask.ifBlank { activeIntentContext }.ifBlank { activeRequestScope }
+            val retrievedContext = runCatching {
+                OrionMemoryCapabilityExecutor.promptContext(svc, objective)
+            }.getOrElse { failure ->
+                val blocked = "error: retrieve-before-act blocked '$tool': persistent memory retrieval failed (" +
+                    (failure.message ?: failure.javaClass.simpleName).take(160) + "). No action was dispatched."
+                recordDispatchBlocked(tool, args, "retrieve_before_act_failed")
+                taskProofs.record(tool, blocked)
+                return blocked
+            }
+            val receipt = OrionRetrieveBeforeActPolicy.receipt(objective, retrievedContext)
+            OrionRetrieveBeforeActPolicy.blockReason(objective, receipt)?.let { reason ->
+                val blocked = "error: retrieve-before-act blocked '$tool': $reason. No action was dispatched."
+                recordDispatchBlocked(tool, args, "retrieve_before_act_invalid")
+                taskProofs.record(tool, blocked)
+                return blocked
+            }
+        }
         // A paired MCP endpoint plus an explicitly enabled read scope is already a standing
         // user grant for read-only remote tools. Do not ask again for every read call.
         val effectiveToolMode = if (mcpReadScopeGranted) ToolMode.ALLOW else ToolPermissions.mode(svc, tool)
