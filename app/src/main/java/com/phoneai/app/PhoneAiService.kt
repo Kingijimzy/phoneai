@@ -2431,7 +2431,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
         val rendered = sb.toString().take(2800)
-        if (!sensitiveScreen) {
+        if (!sensitiveScreen && OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
             runCatching {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(rendered.toByteArray(Charsets.UTF_8))
