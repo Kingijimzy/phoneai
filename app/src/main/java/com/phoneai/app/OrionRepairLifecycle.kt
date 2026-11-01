@@ -38,12 +38,15 @@ internal object OrionRepairLifecycle {
         return sha256(canonical)
     }
 
+    fun stageEventId(taskId: String, planDigest: String, stage: String): String =
+        "repair-" + sha256("$taskId|${planDigest.lowercase()}|${stage.uppercase()}").take(48)
+
     private fun emit(context: Context, sessionId: String, taskId: String, stage: String,
         planDigest: String, summary: String, verified: Boolean = false, failed: Boolean = false): Boolean {
         val ledgerSaved = OrionEvidenceLedger.recordRepairStage(
             context, taskId, stage, planDigest, summary, verified, failed
         )
-        val eventId = "repair-" + sha256("$taskId|$planDigest|$stage").take(48)
+        val eventId = stageEventId(taskId, planDigest, stage)
         val chatSaved = runCatching {
             OrionConversationRepository.get(context).recordEventForSession(
                 context, sessionId, eventId, "repair_lifecycle", stage.lowercase(), summary
@@ -79,7 +82,7 @@ internal object OrionRepairLifecycle {
 
         // A plan may be applied only once. An interrupted/uncertain apply is reconciled
         // manually; a previous owner approval is never silently reused after process restart.
-        val terminalOrUncertain = setOf("APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
+        val terminalOrUncertain = setOf("APPLY_STARTED", "APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
             "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")
         val durableTerminalReceipt = terminalOrUncertain.any { stage ->
             val eventId = "repair-" + sha256("$taskId|$digest|${stage}").take(48)
@@ -127,6 +130,12 @@ internal object OrionRepairLifecycle {
                 "Repair does not meet the reversible, idempotent, rollback-backed auto-apply policy.")
         }
 
+        // Persist a no-replay marker before entering any side-effecting adapter. If the
+        // process dies mid-call, recovery must inspect actual state rather than dispatch again.
+        if (!emit(app, sessionId, taskId, "APPLY_STARTED", digest,
+                "Application dispatch is beginning; a crash or missing receipt requires manual reconciliation.")) {
+            return Receipt(Result.PERSISTENCE_FAILED, digest, "Apply-start receipt failed; adapter was not invoked.")
+        }
         val appliedReceipt = try { apply()?.trim()?.take(160) } catch (_: Exception) { null }
         if (appliedReceipt.isNullOrBlank()) {
             emit(app, sessionId, taskId, "APPLY_UNCERTAIN", digest,
