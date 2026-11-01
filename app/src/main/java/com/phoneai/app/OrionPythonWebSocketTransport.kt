@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 internal object OrionPythonWebSocketTransport {
     private const val MAX_SESSIONS = 3
     private const val MAX_FRAME_BYTES = 64 * 1024
-    private const val MAX_QUEUED_EVENTS = 64
+    private const val MAX_QUEUED_EVENTS = 16
     private data class Session(
         val id: String,
         val url: String,
@@ -40,7 +40,9 @@ internal object OrionPythonWebSocketTransport {
         @Volatile var failure: String = ""
     ) {
         fun offer(event: JSONObject) {
-            val value = event.toString().take(MAX_FRAME_BYTES + 512)
+            // JSON escaping/base64 can expand a valid 64 KiB frame. Never truncate serialized
+            // JSON (which would make it unparsable); the bounded queue limits memory instead.
+            val value = event.toString()
             if (!events.offer(value)) {
                 events.poll()
                 events.offer(value)
