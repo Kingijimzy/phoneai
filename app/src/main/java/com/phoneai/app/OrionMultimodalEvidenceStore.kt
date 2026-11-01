@@ -94,7 +94,7 @@ internal object OrionMultimodalEvidenceStore {
         return buildString {
             appendLine("MULTIMODAL EVIDENCE INDEX FOR THIS CONVERSATION (references only; media payloads are not in this context)")
             rows.asReversed().forEach { item ->
-                appendLine("- evidence=${item.id}; modality=${item.modality}; source=${item.source}; time=${item.createdAt}; ${item.summary}")
+                appendLine("- evidence=${item.id}; task=${item.taskRef.take(80)}; modality=${item.modality}; source=${item.source}; time=${item.createdAt}; ${item.summary}")
             }
             appendLine("A listed reference proves only that an observation/attachment was recorded. Re-open the original permissioned media source before describing image or video contents. Raw audio is not retained.")
         }
