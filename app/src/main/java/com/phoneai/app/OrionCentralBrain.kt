@@ -18,6 +18,13 @@ internal object OrionCentralBrain {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
 
+        // Sensor context is opt-in, coarse, foreground-sampled and short-lived. It is included
+        // only while the matching grant remains active; raw sensor vectors never enter prompts.
+        runCatching { OrionSensorContextStore.summary(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         runCatching { OrionSoulEngine.contextFor(app, request) }
             .getOrNull()
