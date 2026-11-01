@@ -105,6 +105,16 @@ internal class OrionPythonPhoneApi(
         catch (e: Exception) { error("contacts query failed: ${e.javaClass.simpleName}") }
     }
 
+    /** Opens the real Android accessibility settings page after owner confirmation. */
+    fun accessibility_open_settings(): String {
+        if (!confirm("Open Android Accessibility settings so you can enable Orion's system-bound service?"))
+            return error("owner declined opening Android Accessibility settings")
+        return try {
+            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            JSONObject().put("opened", true).put("action", Settings.ACTION_ACCESSIBILITY_SETTINGS).toString()
+        } catch (e: Exception) { error("could not open Android Accessibility settings: ${e.javaClass.simpleName}") }
+    }
+
     /** Reports the Android-owned accessibility binding; Python cannot start or impersonate this service. */
     fun accessibility_status(): String {
         val component = ComponentName(context, PhoneAiService::class.java).flattenToString()
