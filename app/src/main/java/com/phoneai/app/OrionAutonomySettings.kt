@@ -18,7 +18,7 @@ internal data class OrionAutonomyConfig(
 
 internal object OrionAutonomyPolicy {
     const val MIN_STEPS = 1
-    const val MAX_STEPS = 40
+    const val MAX_STEPS = 100
     const val MIN_REQUESTS = 1
     const val MAX_REQUESTS = 30
     const val MIN_RETRIES = 0
