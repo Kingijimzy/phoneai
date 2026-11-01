@@ -106,22 +106,46 @@ internal object OrionAppUsageContextProvider {
     fun summary(context: Context, now: Long = System.currentTimeMillis()): String {
         if (!OrionSensorConsent.read(context, OrionSensorScope.APP_USAGE, now).active() || !hasSystemAccess(context)) return ""
         val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return ""
-        val stats = runCatching { manager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 30L * 60L * 1000L, now) }
-            .getOrNull().orEmpty()
-        val rows = stats.asSequence()
-            .filter { it.lastTimeUsed in (now - 30L * 60L * 1000L)..now && it.totalTimeInForeground > 0L }
-            .filterNot { SafetyGate.isSensitiveApp(it.packageName, it.packageName) }
-            .sortedByDescending { it.totalTimeInForeground }
+        val start = now - 30L * 60L * 1000L
+        val events = runCatching { manager.queryEvents(start, now) }.getOrNull() ?: return ""
+        val foregroundSince = linkedMapOf<String, Long>()
+        val durations = linkedMapOf<String, Long>()
+        val event = android.app.usage.UsageEvents.Event()
+        while (runCatching { events.hasNextEvent() }.getOrDefault(false)) {
+            if (!runCatching { events.getNextEvent(event) }.getOrDefault(false)) break
+            val pkg = event.packageName.orEmpty()
+            if (pkg.isBlank() || pkg == context.packageName || SafetyGate.isSensitiveApp(pkg, pkg)) continue
+            val resumed = event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                (Build.VERSION.SDK_INT >= 29 && event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED)
+            val paused = event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND ||
+                (Build.VERSION.SDK_INT >= 29 && event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED)
+            if (resumed) {
+                foregroundSince.remove(pkg)?.let { previous ->
+                    durations[pkg] = (durations[pkg] ?: 0L) + (event.timeStamp - previous).coerceAtLeast(0L)
+                }
+                foregroundSince[pkg] = event.timeStamp
+            } else if (paused) {
+                foregroundSince.remove(pkg)?.let { began ->
+                    durations[pkg] = (durations[pkg] ?: 0L) + (event.timeStamp - began).coerceAtLeast(0L)
+                }
+            }
+        }
+        foregroundSince.forEach { (pkg, began) ->
+            durations[pkg] = (durations[pkg] ?: 0L) + (now - began).coerceAtLeast(0L)
+        }
+        val rows = durations.entries.asSequence()
+            .filter { it.value >= 5_000L }
+            .sortedByDescending { it.value }
             .take(5)
             .map { usage ->
                 val label = runCatching {
                     context.packageManager.getApplicationLabel(
-                        context.packageManager.getApplicationInfo(usage.packageName, 0)
+                        context.packageManager.getApplicationInfo(usage.key, 0)
                     ).toString()
-                }.getOrDefault(usage.packageName)
-                "${label.take(40)}: ${(usage.totalTimeInForeground / 60_000L).coerceAtLeast(1L)} min"
+                }.getOrDefault(usage.key)
+                "${label.take(40)}: ${(usage.value / 60_000L).coerceAtLeast(1L)} min"
             }.toList()
         if (rows.isEmpty()) return ""
-        return "OWNER-GRANTED APP USAGE CONTEXT (last 30 minutes; on-demand; sensitive apps excluded; not stored): " + rows.joinToString("; ")
+        return "OWNER-GRANTED APP USAGE CONTEXT (foreground time in last 30 minutes; on-demand; sensitive apps excluded; not stored): " + rows.joinToString("; ")
     }
 }
