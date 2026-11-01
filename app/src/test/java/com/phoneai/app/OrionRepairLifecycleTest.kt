@@ -166,6 +166,19 @@ class OrionRepairLifecycleTest {
         assertEquals(1, calls)
     }
 
+    @Test fun applyStartClaimIsAtomicAndSingleUse() {
+        val plan = proposal()
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        val eventId = OrionRepairLifecycle.stageEventId("task-repair-test", digest, "APPLY_STARTED")
+        val repository = OrionConversationRepository.get(context)
+        assertTrue(repository.claimEventForSession(
+            context, sessionId, eventId, "repair_lifecycle", "apply_started", "first claimant"
+        ))
+        assertFalse(repository.claimEventForSession(
+            context, sessionId, eventId, "repair_lifecycle", "apply_started", "second claimant"
+        ))
+    }
+
     @Test fun persistedApplyStartedMarkerBlocksReplayAfterInterruptedDispatch() {
         val plan = proposal()
         val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
