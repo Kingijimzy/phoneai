@@ -589,3 +589,5 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Memory Activity now surfaces prior versions and owner-editable expiry windows; expired entries are retained locally but filtered out of prompt context. Permanent deletion removes the memory's version history and graph metadata.
 
 - Connected approved routine memories to the central brain as non-nagging suggestions and added owner-selected once/daily/weekly reminder scheduling from Memory Activity. Recurrence requires the separate reminder grant and Android notifications; revocation or loss of routine eligibility cancels future work.
+
+- Gemini Live's bounded system instruction now receives the same active conversation evidence and currently granted sensor/device/location/usage/notification/routine summaries as the central brain; its PhoneAI route remains audio-only.
