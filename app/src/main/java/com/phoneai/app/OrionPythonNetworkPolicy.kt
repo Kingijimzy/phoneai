@@ -31,13 +31,12 @@ internal object OrionPythonNetworkPolicy {
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
         if (uri.userInfo != null || uri.fragment != null || (uri.rawQuery?.length ?: 0) > 4096) return null
         val scheme = uri.scheme?.lowercase() ?: return null
-        if (scheme !in setOf("https", "http", "wss", "ws") || uri.host.isNullOrBlank() || uri.port !in -1..65535) return null
+        if (scheme !in setOf("https", "http") || uri.host.isNullOrBlank() || uri.port !in -1..65535) return null
         val host = normalizeHost(uri.host) ?: return null
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!p.getBoolean(host, false)) return null
         val local = isLocalHost(host)
-        if (scheme in setOf("http", "ws") && (!local || !p.getBoolean("$host:plain_http", false))) return null
-        if (scheme == "wss" && local) return null
+        if (scheme == "http" && (!local || !p.getBoolean("$host:plain_http", false))) return null
         if (!local) {
             val addresses = runCatching { InetAddress.getAllByName(host).toList() }.getOrNull() ?: return null
             if (addresses.isEmpty() || addresses.any { it.isAnyLocalAddress || it.isLoopbackAddress ||
