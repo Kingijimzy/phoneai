@@ -21,6 +21,11 @@ internal object OrionMultimodalEvidenceStore {
         val id: String, val sessionId: String, val taskRef: String, val modality: Modality,
         val source: String, val digest: String, val summary: String, val createdAt: Long
     )
+    private fun <T> withDb(context: Context, writable: Boolean, action: (SQLiteDatabase) -> T): T {
+        val helper = Db(context.applicationContext)
+        return try { action(if (writable) helper.writableDatabase else helper.readableDatabase) }
+        finally { helper.close() }
+    }
     private fun hash(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
@@ -57,26 +62,29 @@ internal object OrionMultimodalEvidenceStore {
             put("digest", evidenceDigest); put("summary", safeSummary); put("created_at", created)
         }
         return runCatching {
-            Db(context.applicationContext).writableDatabase.insertWithOnConflict(
-                "evidence", null, values, SQLiteDatabase.CONFLICT_REPLACE
-            ).takeIf { it != -1L }?.let { id }
+            withDb(context, true) { db ->
+                db.insertWithOnConflict("evidence", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+                    .takeIf { it != -1L }?.let { id }
+            }
         }.getOrNull()
     }
 
     fun forSession(context: Context, sessionId: String, limit: Int = 12): List<Evidence> {
         if (sessionId.isBlank()) return emptyList()
-        val out = mutableListOf<Evidence>()
-        Db(context.applicationContext).readableDatabase.rawQuery(
-            "SELECT id,session_id,task_ref,modality,source,digest,summary,created_at FROM evidence WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
-            arrayOf(sessionId.take(160), limit.coerceIn(1, 30).toString())
-        ).use { cursor ->
-            while (cursor.moveToNext()) {
-                val modality = runCatching { Modality.valueOf(cursor.getString(3)) }.getOrNull() ?: continue
-                out += Evidence(cursor.getString(0), cursor.getString(1), cursor.getString(2),
-                    modality, cursor.getString(4), cursor.getString(5), cursor.getString(6), cursor.getLong(7))
+        return withDb(context, false) { db ->
+            val out = mutableListOf<Evidence>()
+            db.rawQuery(
+                "SELECT id,session_id,task_ref,modality,source,digest,summary,created_at FROM evidence WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
+                arrayOf(sessionId.take(160), limit.coerceIn(1, 30).toString())
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val modality = runCatching { Modality.valueOf(cursor.getString(3)) }.getOrNull() ?: continue
+                    out += Evidence(cursor.getString(0), cursor.getString(1), cursor.getString(2),
+                        modality, cursor.getString(4), cursor.getString(5), cursor.getString(6), cursor.getLong(7))
+                }
             }
+            out
         }
-        return out
     }
 
     /** Metadata only: no raw URI, media bytes, OCR text or transcript content enters the prompt. */
@@ -93,7 +101,7 @@ internal object OrionMultimodalEvidenceStore {
     }
 
     fun deleteSession(context: Context, sessionId: String): Int =
-        Db(context.applicationContext).writableDatabase.delete("evidence", "session_id=?", arrayOf(sessionId.take(160)))
+        withDb(context, true) { it.delete("evidence", "session_id=?", arrayOf(sessionId.take(160))) }
     fun deleteTask(context: Context, taskRef: String): Int =
-        Db(context.applicationContext).writableDatabase.delete("evidence", "task_ref=?", arrayOf(taskRef.take(160)))
+        withDb(context, true) { it.delete("evidence", "task_ref=?", arrayOf(taskRef.take(160))) }
 }
