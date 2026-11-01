@@ -27,8 +27,10 @@ internal object ExperiencePolicy {
     private const val DAY = 86_400_000L
 
     /** Only clean, successful task traces may reinforce reusable routines. */
-    fun hasCleanSuccessEvidence(successFlags: List<Boolean>, recordedFailures: Int): Boolean =
-        recordedFailures == 0 && successFlags.isNotEmpty() && successFlags.all { it }
+    fun hasCleanSuccessEvidence(successFlags: List<Boolean>, verifiedFlags: List<Boolean>, recordedFailures: Int): Boolean =
+        recordedFailures == 0 && successFlags.isNotEmpty() &&
+            successFlags.size == verifiedFlags.size &&
+            successFlags.all { it } && verifiedFlags.all { it }
 
     fun gist(request: String): String {
         // Learn task shape, not user content: strip likely credentials and direct identifiers first.

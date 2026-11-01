@@ -26,8 +26,8 @@ class SoulP3EngineTest {
         .put("status", "completed")
         .put("command", command)
         .put("steps", JSONArray()
-            .put(JSONObject().put("tool", firstTool).put("result", "success"))
-            .put(JSONObject().put("tool", secondTool).put("result", "success")))
+            .put(JSONObject().put("tool", firstTool).put("result", "LOCAL VERIFY PASS: task list is visible after action."))
+            .put(JSONObject().put("tool", secondTool).put("result", "LOCAL VERIFY PASS: current screen state matches the requested result.")))
 
     @Test fun probeComparesCandidateToNoHintBaselineAndComposesOnlyWithRepeatedEvidence() {
         val cp = checkpoint("Summarize my saved tasks", "task_list", "read_screen")

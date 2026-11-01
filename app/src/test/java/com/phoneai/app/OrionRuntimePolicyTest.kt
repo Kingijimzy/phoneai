@@ -9,7 +9,7 @@ import org.junit.Test
 class OrionRuntimePolicyTest {
     @Test fun priorityIsClampedAndWorkTypesAreExplicit() {
         assertEquals(
-            listOf("LEARN_FROM_RESULT", "CAPABILITY_RECHECK", "RESTORE_PENDING", "SOUL_WATCH"),
+            listOf("LEARN_FROM_RESULT", "CAPABILITY_RECHECK", "RESTORE_PENDING", "SOUL_WATCH", "PRESENCE_EVENT"),
             OrionRuntime.WorkType.values().map { it.name }
         )
         assertEquals(-10, (-100).coerceIn(-10, 10))
@@ -40,6 +40,38 @@ class OrionRuntimePolicyTest {
             OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.STOPPED, true))
         assertEquals(OrionRuntime.State.DEGRADED,
             OrionRuntimePolicy.stateAfterEnqueue(OrionRuntime.State.DEGRADED, false))
+    }
+
+    @Test fun uncertainStandingOrderIsNotReplayedAfterProcessDeath() {
+        assertFalse(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.SOUL_WATCH))
+        assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.RESTORE_PENDING))
+        assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.CAPABILITY_RECHECK))
+        assertTrue(OrionRuntimePolicy.canReplayAfterProcessDeath(OrionRuntime.WorkType.LEARN_FROM_RESULT))
+    }
+
+    @Test fun retryCheckpointPreservesGoalAndProgressAndSanitizesError() {
+        val original = OrionRuntime.WorkItem(
+            id = "task-1",
+            key = "deploy-release",
+            type = OrionRuntime.WorkType.RESTORE_PENDING,
+            priority = 8,
+            createdAt = 100L,
+            attempts = 0,
+            goal = "Build and verify the release",
+            checkpoint = "unit tests passed"
+        )
+        val retry = OrionRuntimePolicy.retryItem(
+            original, now = 1_000L,
+            error = "network\n timeout while checking result",
+            checkpoint = "APK validation pending"
+        )
+        assertEquals("Build and verify the release", retry?.goal)
+        assertEquals("APK validation pending", retry?.checkpoint)
+        assertEquals("network timeout while checking result", retry?.lastError)
+        assertEquals(1, retry?.attempts)
+        assertEquals(31_000L, retry?.notBefore)
+        assertNull(OrionRuntimePolicy.retryItem(original.copy(attempts = OrionRuntimePolicy.MAX_ATTEMPTS - 1),
+            now = 1_000L, error = "permanent failure"))
     }
 
     @Test fun nextEligibleDelayUsesEarliestQueuedDeadline() {

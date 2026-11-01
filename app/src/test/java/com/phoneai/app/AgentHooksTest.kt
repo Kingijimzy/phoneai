@@ -19,6 +19,13 @@ class AgentHooksTest {
  }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
+ @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
+  val p=AgentHooks.ProofRecorder()
+  p.record("click_text","Action returned. LOCAL VERIFY PASS: visible state changed after this action.")
+  assertTrue(p.snapshot().single().success)
+  assertTrue(p.snapshot().single().verified)
+  assertTrue(AgentHooks.completionDecision("Open Settings",p.snapshot()).allowed)
+ }
  @Test fun clearingProofsPreventsPriorTaskSuccessFromAuthorizingNewTask() {
   val proofs=AgentHooks.ProofRecorder(); proofs.record("open_app","WhatsApp opened")
   assertTrue(AgentHooks.completionDecision("Open WhatsApp",proofs.snapshot()).allowed)

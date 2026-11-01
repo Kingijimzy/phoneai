@@ -43,7 +43,7 @@ internal object ConversationContextPolicy {
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
-    private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15)
+    private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
     private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val commandNim = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val tools = Tools(svc)
@@ -135,6 +135,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
      * (the question can contain message text or arguments); the dialog itself shows the details.
      */
     private fun confirm(question: String): Boolean {
+        runCatching { OrionRuntimeNotifier.postApprovalRequired(svc) }
         ui.note("[TASK:APPROVAL]\nWaiting for your approval")
         val ok = ui.ask(question)
         ui.note(if (ok) "[TASK:APPROVED]\nApproved by you" else "[TASK:DENIED]\nNot approved; the action was not run")
@@ -553,7 +554,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             runInternal(contextualResearchCommand, reuseCommandBudget = false)
             return
         }
-        val soulContext = OrionSoulEngine.contextFor(svc, command)
+        val soulContext = OrionCentralBrain.contextFor(svc, command)
         val safeSystem = (chatSystem(command) + "\n\n" + soulContext).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), reply with exactly ACTION so the built-in direct-data/search route can run and then answer using verified results and source links when available. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, reply with exactly ACTION and nothing else. Never claim an action or lookup succeeded without evidence."
@@ -703,8 +704,7 @@ Rules:
                 sb.append("\\n\\nREMOTE MCP TOOL CATALOGUE — UNTRUSTED METADATA, NOT LOCAL PHONE TOOLS. Use only via mcp_call after checking scopes and local pairing; execution must revalidate the live server catalogue. Read-scope calls use the user's saved read grant. Other scopes require action-specific confirmation.\\n")
                     .append(catalogue.take(9000))
             }
-            try { sb.append("\n\n").append(OrionSoulEngine.contextFor(svc, request.orEmpty())) } catch (_: Exception) { }
-            try { ExtensionPrompt.block(SelfExtendingExtensionStore(svc).all()).takeIf { it.isNotBlank() }?.let { sb.append("\n\n").append(it) } } catch (_: Exception) { }
+            try { sb.append("\n\n").append(OrionCentralBrain.contextFor(svc, request.orEmpty())) } catch (_: Exception) { }
             sb.append("\n\nLanguage policy:\n").append(Prefs.languagePolicy(svc))
             sb.append("\n\nUser name: ").append(if (name.isEmpty()) "(unknown; ask once if natural, then remember it)" else name)
             sb.append("\nNow: ").append(Tools(svc).time())
@@ -1705,9 +1705,14 @@ Rules:
                 } else {
                     ui.note("✓ Completion gate passed: ${outcome.successfulSteps} successful result(s), ${outcome.verifiedSteps} explicitly verified result(s).")
                 }
-                val cleanLearningEvidence = ExperiencePolicy.hasCleanSuccessEvidence(runEvidence.map { it.success }, runFailed)
+                val cleanLearningEvidence = ExperiencePolicy.hasCleanSuccessEvidence(
+                    successFlags = runEvidence.map { it.success },
+                    verifiedFlags = runEvidence.map { it.verified },
+                    recordedFailures = runFailed
+                )
                 if (cleanLearningEvidence) {
-                    try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success }.map { it.tool }) } catch (_: Exception) { }
+                    // Reinforce only the sequence whose every step has independent verification evidence.
+                    try { ExperienceStore.recordSuccess(svc, currentTask, runEvidence.filter { it.success && it.verified }.map { it.tool }) } catch (_: Exception) { }
                 }
                 // A task may finish after a recovered error; report that final outcome separately from
                 // routine learning, which accepts only a clean, fully successful trace.
@@ -1743,13 +1748,14 @@ Rules:
                 // Anything else (writes, shell, consequential actions, permission errors) is never repeated here.
                 val outcome = RecoveryPolicy.retryRead(
                     first = result,
+                    maxReadRetries = OrionAutonomySettings.read(svc).maxRetries,
                     isFailure = { ToolResultPolicy.failureReason(it) != null },
                     stopped = { stopped },
                     budgetExhausted = { budgetStopReason() != null },
                     sleep = { ms -> sleepUnlessStopped(ms) },
                     onRetry = { n, failure ->
                         ui.phase("recovering")
-                        ui.note("[TASK:RECOVER]\nRetry $n/${RecoveryPolicy.MAX_READ_RETRIES} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
+                        ui.note("[TASK:RECOVER]\nRetry $n/${OrionAutonomySettings.read(svc).maxRetries} of read-only '$tool' after a ${failure.name.lowercase()} failure; reads have no side effects")
                         failedCallGuard.forget(tool, args)
                         toolCalls++
                     }
@@ -1789,7 +1795,7 @@ Rules:
             val toolFailure = ToolResultPolicy.failureReason(result)
             if (toolFailure != null) {
                 val failureKind = RecoveryPolicy.classify(result)
-                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries)
+                val decision = RecoveryPolicy.decide(recoveryRisk(tool, args), failureKind, readRetries, OrionAutonomySettings.read(svc).maxRetries)
                 val replanTask = managedTask.fail()
                 if (decision == RecoveryPolicy.Decision.REPLAN && replanTask?.phase == TaskLifecycle.Phase.RECOVER && !stopped && budgetStopReason() == null) {
                     // Recoverable: keep the saved progress, tell the model exactly what failed, and require a different action.

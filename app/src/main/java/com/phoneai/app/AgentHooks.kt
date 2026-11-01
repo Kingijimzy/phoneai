@@ -11,7 +11,8 @@ internal object AgentHooks {
    val ok=!result.trimStart().startsWith("error",true)
    // Screen-change markers and OCR snippets are not proof that a consequential action completed.
    val summary=result.substringBefore("Current screen evidence").substringBefore("SCREEN EVIDENCE")
-   val verified=Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(summary)
+   val verified=summary.contains("LOCAL VERIFY PASS:",ignoreCase=true) ||
+    Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(summary)
    proofs.add(Proof(tool,ok,verified,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
   }
   @Synchronized fun snapshot():List<Proof> = proofs.toList()

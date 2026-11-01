@@ -18,15 +18,48 @@ object AgentCheckpointStore {
     private fun file(c: Context) = File(c.filesDir, "orion_agent_checkpoint.json")
     private val lock = Any()
 
-    fun pending(c: Context): JSONObject? = synchronized(lock) {
-        try {
-            val f = file(c)
-            if (!f.exists()) return@synchronized null
-            JSONObject(f.readText()).takeIf {
+    /** AtomicFile.openRead restores its .bak snapshot if a process died mid-write. */
+    private fun readCheckpoint(c: Context): JSONObject? = try {
+        AtomicFile(file(c)).openRead().bufferedReader().use { JSONObject(it.readText()) }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Delegated checkpoints are namespaced by task ID so parallel workers never share recovery state. */
+    fun beginForTask(c: Context, taskId: String, command: String): Boolean {
+        if (!taskId.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$"))) return false
+        if (!begin(c, command)) return false
+        return synchronized(lock) {
+            val checkpoint = readCheckpoint(c) ?: return@synchronized false
+            checkpoint.put("taskId", taskId)
+            save(c, checkpoint)
+        }
+    }
+
+    fun pendingForTask(c: Context, taskId: String): JSONObject? = synchronized(lock) {
+        readCheckpoint(c)?.takeIf {
+            it.optString("taskId") == taskId &&
                 it.optString("status") in setOf("running", "paused", "recovery_required")
-            }
-        } catch (_: Exception) {
-            null
+        }
+    }
+
+    fun resumeInstructionForTask(c: Context, taskId: String): String? {
+        if (pendingForTask(c, taskId) == null) return null
+        return resumeInstruction(c)
+    }
+
+    fun recoveryRequiredForTask(c: Context, taskId: String, reason: String): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optString("taskId") != taskId) return@synchronized false
+        checkpoint.put("status", "recovery_required")
+            .put("recoveryNotice", reason.take(500))
+            .put("updatedAt", System.currentTimeMillis())
+        save(c, checkpoint)
+    }
+
+    fun pending(c: Context): JSONObject? = synchronized(lock) {
+        readCheckpoint(c)?.takeIf {
+            it.optString("status") in setOf("running", "paused", "recovery_required")
         }
     }
 
@@ -46,16 +79,26 @@ object AgentCheckpointStore {
         save(c, o)
     }
 
-    fun markRunning(c: Context): Boolean = update(c) {
-        it.put("status", "running")
-        // Keep recovery evidence until the user has explicitly acknowledged it.
+    fun markRunning(c: Context): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optBoolean("stopRequested")) return@synchronized false
+        checkpoint.remove("pauseRequested")
+        checkpoint.put("status", "running").put("updatedAt", System.currentTimeMillis())
+        save(c, checkpoint)
+    }
+
+    fun needsRecoveryConfirmationForTask(c: Context, taskId: String): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optString("taskId") != taskId) return@synchronized false
+        CheckpointTransitionPolicy.needsUserConfirmation(checkpoint.optJSONObject("inFlight") != null)
     }
 
     fun needsRecoveryConfirmation(c: Context): Boolean = synchronized(lock) {
         try {
-            val f = file(c)
-            if (!f.exists()) return@synchronized false
-            CheckpointTransitionPolicy.needsUserConfirmation(JSONObject(f.readText()).optJSONObject("inFlight") != null)
+            val checkpoint = AtomicFile(file(c)).openRead().bufferedReader().use { JSONObject(it.readText()) }
+            CheckpointTransitionPolicy.needsUserConfirmation(checkpoint.optJSONObject("inFlight") != null)
+        } catch (_: java.io.FileNotFoundException) {
+            false
         } catch (_: Exception) {
             true
         }
@@ -65,13 +108,11 @@ object AgentCheckpointStore {
     fun acknowledgeRecovery(c: Context, confirmation: String): Boolean {
         if (confirmation.isBlank()) return false
         return synchronized(lock) {
-            val o = try {
-                val f = file(c)
-                if (f.exists()) JSONObject(f.readText()) else null
-            } catch (_: Exception) { null } ?: return@synchronized false
+            val o = readCheckpoint(c) ?: return@synchronized false
             val inFlight = o.optJSONObject("inFlight") ?: return@synchronized false
             val tool = inFlight.optString("tool", "unknown").take(80)
             o.remove("inFlight")
+            o.remove("stopRequested")
             o.put("recoveryNotice", "User confirmed checking the outcome of interrupted action '$tool'. Confirmation: " + confirmation.take(240))
             o.put("status", "paused")
             o.put("updatedAt", System.currentTimeMillis())
@@ -124,11 +165,9 @@ object AgentCheckpointStore {
 
     /** Persist intent before executing any tool; never overwrite an unresolved action marker. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = synchronized(lock) {
-        val existing = try {
-            val f = file(c)
-            if (f.exists()) JSONObject(f.readText()) else null
-        } catch (_: Exception) { null } ?: return@synchronized false
-        if (!CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
+        val existing = readCheckpoint(c) ?: return@synchronized false
+        if (existing.optBoolean("stopRequested") || existing.optBoolean("pauseRequested") ||
+            !CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
         update(c) { o ->
             o.put("inFlight", JSONObject()
                 .put("tool", tool.take(80))
@@ -140,10 +179,7 @@ object AgentCheckpointStore {
 
     /** A result may clear only the matching durable in-flight action. */
     fun record(c: Context, tool: String, args: JSONObject, result: String): Boolean = synchronized(lock) {
-        val existing = try {
-            val f = file(c)
-            if (f.exists()) JSONObject(f.readText()) else null
-        } catch (_: Exception) { null } ?: return@synchronized false
+        val existing = readCheckpoint(c) ?: return@synchronized false
         val inFlight = existing.optJSONObject("inFlight") ?: return@synchronized false
         if (!CheckpointTransitionPolicy.canRecordResult(inFlight.optString("tool"), tool, inFlight.optString("args"), safeArgs(args))) return@synchronized false
         update(c) { o ->
@@ -158,30 +194,63 @@ object AgentCheckpointStore {
             while (steps.length() > MAX_RECORDED_STEPS) steps.remove(0)
             o.put("steps", steps)
             o.remove("inFlight")
+            if (o.optBoolean("stopRequested")) o.put("status", "cancelled")
+            else if (o.optBoolean("pauseRequested")) o.put("status", "paused")
         }
     }
 
-    fun pause(c: Context): Boolean = update(c) { it.put("status", "paused") }
+    fun pause(c: Context): Boolean {
+        val saved = update(c) {
+            if (it.optBoolean("stopRequested")) {
+                it.put("status", if (it.optJSONObject("inFlight") != null) "recovery_required" else "cancelled")
+            } else {
+                it.put("pauseRequested", true).put("status", "paused")
+            }
+        }
+        if (saved) runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        return saved
+    }
 
-    fun complete(c: Context): Boolean {
-        // Never mark a task complete while an action's outcome is still uncertain.
-        if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return false
+    /**
+     * Stop is terminal when no action is in flight. If an action may have been interrupted,
+     * retain its marker and require reconciliation instead of hiding or replaying it.
+     */
+    fun stop(c: Context, reason: String = "User stopped the agent run"): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        val inFlight = checkpoint.optJSONObject("inFlight")
+        checkpoint.put("stopRequested", true)
+        if (inFlight != null) {
+            checkpoint.put("status", "recovery_required")
+            checkpoint.put("recoveryNotice", reason.take(300) + "; the in-flight action outcome is unknown. Inspect current state before continuing.")
+        } else {
+            checkpoint.put("status", "cancelled")
+            checkpoint.put("stoppedAt", System.currentTimeMillis())
+            checkpoint.put("stopReason", reason.take(300))
+        }
+        checkpoint.put("updatedAt", System.currentTimeMillis())
+        save(c, checkpoint)
+    }
+
+    fun complete(c: Context): Boolean = synchronized(lock) {
+        // Serialize completion with Stop/Pause so a racing completion cannot overwrite the user's control.
+        val current = readCheckpoint(c)
+        if (current?.optBoolean("stopRequested") == true || current?.optBoolean("pauseRequested") == true) return@synchronized false
+        if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return@synchronized false
         val saved = update(c) {
             it.put("status", "completed")
             it.remove("inFlight")
             it.remove("recoveryNotice")
         }
-        if (!saved) return false
+        if (!saved) return@synchronized false
+        runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = true) }
         // Route learning is optional; it must never turn a completed task into a failed task.
         try {
-            val checkpoint = JSONObject(file(c).readText())
+            val checkpoint = readCheckpoint(c) ?: throw IllegalStateException("completed checkpoint could not be reopened")
             RouteMemoryStore.recordCompleted(c, checkpoint)
             // Learning is downstream of the durable completion marker and can never change task outcome.
             SoulEngineState.learnFromCompletedCheckpoint(c, checkpoint)
-            val successful = (checkpoint.optJSONArray("steps")?.length() ?: 0)
-            if (successful > 0) SoulEngineState.recordLesson(c, "route", "A completed task was durably checkpointed; verify the same goal's current state before reusing any route.", "success")
         } catch (_: Exception) { }
-        return true
+        true
     }
 
     fun recoveryRequired(c: Context, reason: String): Boolean {
@@ -189,24 +258,24 @@ object AgentCheckpointStore {
             it.put("status", "recovery_required")
             it.put("recoveryNotice", reason.take(500))
         }
-        if (saved) runCatching { SoulEngineState.recordLesson(c, "recovery", reason, "failure") }
+        if (saved) {
+            runCatching { SoulEngineState.recordLesson(c, "recovery", reason, "failure") }
+            runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        }
         return saved
     }
 
     fun clear(c: Context): Boolean = synchronized(lock) {
         try {
-            val f = file(c)
-            if (!f.exists()) true else f.delete()
+            AtomicFile(file(c)).delete()
+            true
         } catch (_: Exception) {
             false
         }
     }
 
     private fun update(c: Context, change: (JSONObject) -> Unit): Boolean = synchronized(lock) {
-        val o = try {
-            val f = file(c)
-            if (f.exists()) JSONObject(f.readText()) else null
-        } catch (_: Exception) { null } ?: return@synchronized false
+        val o = readCheckpoint(c) ?: return@synchronized false
         change(o)
         o.put("updatedAt", System.currentTimeMillis())
         save(c, o)

@@ -84,6 +84,37 @@ class OrionNotificationListener : NotificationListenerService() {
                 recent[sbn.key] = item
                 while (recent.size > 20) recent.remove(recent.keys.first())
             }
+            // Notify the live Soul session without retaining notification contents in its durable queue.
+            // The listener has already excluded sensitive apps and financial/authentication content.
+            val safeEventLabel = "notification from ${app.take(60)}"
+            // Persist the event even when the accessibility service is not currently bound.
+            // This stores no notification body, sender, title, or message text.
+            runCatching {
+                SoulEngineState.recordWatcherStatus(applicationContext, "event_received", safeEventLabel)
+            }
+            val liveService = PhoneAiService.instance
+            if (liveService != null) {
+                liveService.onExternalPresenceEvent(
+                    eventKey = "notification:${pkg.take(80)}",
+                    safeDescription = safeEventLabel
+                )
+            } else {
+                // Keep the event durable when Orion's accessibility service is not bound.
+                // WorkManager may notify the user that recovery is pending, but must not start
+                // AccessibilityService or perform an unattended phone action.
+                runCatching {
+                    val runtime = OrionRuntime(applicationContext)
+                    runtime.start()
+                    runtime.enqueue(
+                        OrionRuntime.WorkType.PRESENCE_EVENT,
+                        "notification:${pkg.take(80)}:${sbn.postTime / 60_000L}",
+                        3,
+                        goal = "Record safe external event: $safeEventLabel",
+                        checkpoint = "source=notification_listener; content=not_retained"
+                    )
+                    runtime.stop()
+                }
+            }
         } catch (_: Exception) {
             // Fail closed: notification content is never logged or forwarded on parsing errors.
         }
