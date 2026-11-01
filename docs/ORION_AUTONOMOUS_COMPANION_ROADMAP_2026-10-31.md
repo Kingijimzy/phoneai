@@ -581,3 +581,5 @@ The Stage 4 implementation has been extended beyond memory/context foundations:
 Latest code validation must be based on the exact PR head workflow result; CI is not a substitute for device validation.
 
 - Gemini Live now receives the shared evidence index and consented short-lived motion context under its own bounded prompt budget. Its current PhoneAI route is audio-only; video input is deliberately not advertised until camera capture and frame transmission are implemented.
+
+- Connected the existing safe notification listener to the NOTIFICATIONS grant: safe in-memory summaries now enter the central brain only with both Android listener access and explicit Orion consent; revocation clears summaries and blocks actions.
