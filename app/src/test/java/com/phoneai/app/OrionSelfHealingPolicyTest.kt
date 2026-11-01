@@ -3,7 +3,7 @@ package com.phoneai.app
 import org.junit.Assert.*
 import org.junit.Test
 
-class OrionSelfHealingPolicyTest {
+class OrionSelfHealingPolicyLifecycleTest {
     @Test fun reversibleTestedIdempotentRepairCanUseOnlyTheExplicitAutoApplyPath() {
         val proposal = OrionRepairProposal(
             id = "repair-1",
