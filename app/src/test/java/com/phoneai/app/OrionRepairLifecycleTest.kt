@@ -21,6 +21,9 @@ class OrionRepairLifecycleTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        // SQLiteOpenHelper is a process singleton; close its connection before deleting the
+        // backing file so each Robolectric test starts from a genuinely fresh database.
+        OrionConversationRepository.get(context).close()
         File(context.filesDir, "orion_evidence_ledger.json").delete()
         context.deleteDatabase("orion_conversations.db")
         OrionConversationRepository.get(context).recordEvent(context, null, "test_seed", "ok", "test session")
@@ -28,6 +31,7 @@ class OrionRepairLifecycleTest {
     }
 
     @After fun tearDown() {
+        OrionConversationRepository.get(context).close()
         File(context.filesDir, "orion_evidence_ledger.json").delete()
         context.deleteDatabase("orion_conversations.db")
     }
