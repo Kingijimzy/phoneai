@@ -51,10 +51,11 @@ class OrionRepairLifecycleTest {
         sandbox: () -> Boolean = { true },
         apply: () -> String? = { "receipt-123" },
         verify: () -> Boolean = { true },
-        rollback: () -> Boolean = { true }
+        rollback: () -> Boolean = { true },
+        verifyRollback: () -> Boolean = { true }
     ) = OrionRepairLifecycle.execute(
         context, sessionId, "task-repair-test", finding(), proposal,
-        "a".repeat(64), ownerApprovalDigest, sandbox, apply, verify, rollback
+        "a".repeat(64), ownerApprovalDigest, sandbox, apply, verify, rollback, verifyRollback
     )
 
     @Test fun safeReversibleRepairRequiresSandboxAndVerifiedApplyReceipt() {
@@ -111,6 +112,23 @@ class OrionRepairLifecycleTest {
             .any { it.tool == "repair_rolled_back" })
     }
 
+    @Test fun rollbackCallbackWithoutRestoredStateProofIsNotReportedAsRolledBack() {
+        var rollbackInvoked = false
+        var restoredCheckInvoked = false
+        val result = execute(
+            proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
+            ownerApprovalDigest = "a".repeat(64),
+            verify = { false },
+            rollback = { rollbackInvoked = true; true },
+            verifyRollback = { restoredCheckInvoked = true; false }
+        )
+        assertEquals(OrionRepairLifecycle.Result.ROLLBACK_FAILED, result.result)
+        assertTrue(rollbackInvoked)
+        assertTrue(restoredCheckInvoked)
+        assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
+            .any { it.tool == "repair_rollback_failed" && it.outcome == OrionEvidenceLedger.Outcome.FAILED })
+    }
+
     @Test fun missingApplyReceiptIsUncertainAndNeverReplayed() {
         var calls = 0
         val result = execute(apply = { calls++; null })
@@ -133,7 +151,7 @@ class OrionRepairLifecycleTest {
         var callbacks = 0
         val result = OrionRepairLifecycle.execute(
             context, sessionId, "task-repair-test", finding(), proposal(), "bad", null,
-            { callbacks++; true }, { callbacks++; "receipt" }, { callbacks++; true }, { callbacks++; true }
+            { callbacks++; true }, { callbacks++; "receipt" }, { callbacks++; true }, { callbacks++; true }, { callbacks++; true }
         )
         assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, result.result)
         assertEquals(0, callbacks)
