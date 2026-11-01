@@ -164,9 +164,10 @@ class OrionConversationRepositoryTest {
         )
         assertEquals(traceId, started?.traceId)
         assertEquals(traceId, completed?.traceId)
-        val stored = repository.eventsForActive(context).filter { it.traceId == traceId }
+        val stored = repository.eventsForTrace(context, traceId)
         assertEquals(2, stored.size)
         assertEquals(setOf("tool", "tool_result"), stored.map { it.type }.toSet())
+        assertTrue(repository.eventsForTrace(context, "invalid").isEmpty())
     }
 
     @Test fun malformedTraceIdsAreNotPersisted() {
