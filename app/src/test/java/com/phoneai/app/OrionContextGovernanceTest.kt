@@ -73,4 +73,10 @@ class OrionContextGovernanceTest {
         assertFalse(OrionSensorContextStore.isFresh(2_000L, 1_000L))
     }
 
+    @Test fun locationContextRejectsStaleOrFutureFixes() {
+        assertTrue(OrionLocationContextProvider.isFresh(1_000L, 1_000L + 60_000L))
+        assertFalse(OrionLocationContextProvider.isFresh(1_000L, 1_000L + 11L * 60L * 1000L))
+        assertFalse(OrionLocationContextProvider.isFresh(2_000L, 1_000L))
+    }
+
 }
