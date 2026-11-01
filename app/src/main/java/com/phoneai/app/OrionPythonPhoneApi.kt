@@ -98,8 +98,8 @@ internal class OrionPythonPhoneApi(
         val service = PhoneAiService.instance ?: return error("Orion Accessibility Service is not connected")
         // Reuse the production screen reader and suppress its potentially sensitive surfaces entirely
         // at the Python boundary rather than returning partially filtered node text.
-        if (!screenSafe(service)) return error("screen reading is blocked on a potentially sensitive surface")
-        return service.readScreen()
+        return screenSnapshotIfSafe(service)
+            ?: error("screen reading is blocked on a potentially sensitive surface")
     }
 
     fun ui_tap_text(text: String): String {
@@ -144,13 +144,16 @@ internal class OrionPythonPhoneApi(
         return service.swipe(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), 350L)
     }
 
-    private fun screenSafe(service: PhoneAiService): Boolean {
-        val root = service.rootInActiveWindow ?: return false
+    private fun screenSafe(service: PhoneAiService): Boolean = screenSnapshotIfSafe(service) != null
+
+    private fun screenSnapshotIfSafe(service: PhoneAiService): String? {
+        val root = service.rootInActiveWindow ?: return null
         val packageName = root.packageName?.toString().orEmpty()
-        if (SafetyGate.isSensitiveApp(packageName, packageName)) return false
+        if (SafetyGate.isSensitiveApp(packageName, packageName)) return null
         val snapshot = service.readScreen()
-        return !snapshot.startsWith("error:") &&
-            !snapshot.contains("(OCR withheld on a potentially sensitive screen)")
+        return snapshot.takeIf {
+            !it.startsWith("error:") && !it.contains("(OCR withheld on a potentially sensitive screen)")
+        }
     }
 
     fun fs_list(): String = workspace.list()
