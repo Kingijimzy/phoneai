@@ -793,6 +793,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         val initialModel = selectedModel(p, vision)
         val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, initialModel)
+        if (vision && !modelCapabilities.vision) {
+            throw AiException("Selected model '$initialModel' is not verified for image input. Choose a vision-capable model.", 400)
+        }
         val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
         val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
         val queue = mutableListOf(initialModel)
