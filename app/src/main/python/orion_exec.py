@@ -157,7 +157,7 @@ def _validate(tree, allow_phone=False):
             phone_valid = (allow_phone and id(node) in allowed_phone_attributes and
                            isinstance(node.value, ast.Name) and node.value.id == "phone" and
                            node.attr in _PHONE_METHODS)
-            safe_result_property = (isinstance(node.value, ast.Name) and node.value.id != "phone" and node.attr in _SAFE_OBJECT_ATTRS)
+            safe_result_property = ((isinstance(node.value, ast.Name) and node.value.id != "phone" and node.attr in _SAFE_OBJECT_ATTRS) or\n                                    (isinstance(node.value, ast.Call) and _path(node.value.func) in {\n                                        "datetime.now", "datetime.datetime.now", "datetime.datetime.fromtimestamp",\n                                        "urllib.parse.urlparse", "urllib.parse.urlsplit"\n                                    } and node.attr in _SAFE_OBJECT_ATTRS))
             if not phone_valid and _path(node) not in _MODULE_PATHS and not safe_result_property:
                 raise Rejected("attribute access is limited to registered phone capabilities and safe module members")
         elif not isinstance(node, _ALLOWED_NODES):
