@@ -579,3 +579,5 @@ The Stage 4 implementation has been extended beyond memory/context foundations:
 6. Verify permission flows, battery behaviour, notification delivery, memory pressure and sensor sampling on the physical Redmi A3 Pro.
 
 Latest code validation must be based on the exact PR head workflow result; CI is not a substitute for device validation.
+
+- Gemini Live now receives the shared evidence index and consented short-lived motion context under its own bounded prompt budget. Its current PhoneAI route is audio-only; video input is deliberately not advertised until camera capture and frame transmission are implemented.
