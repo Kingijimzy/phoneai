@@ -264,6 +264,25 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    /** Retrieve the complete bounded lifecycle for one W3C trace ID, newest first. */
+    @Synchronized
+    fun eventsForTrace(context: Context, traceId: String): List<ChatEvent> {
+        val id = traceId.trim().lowercase()
+        if (!id.matches(Regex("^[a-f0-9]{32}$"))) return emptyList()
+        migrateLegacy(context)
+        val result = mutableListOf<ChatEvent>()
+        readableDatabase.rawQuery(
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id FROM chat_events WHERE trace_id=? ORDER BY created_at ASC",
+            arrayOf(id)
+        ).use { c ->
+            while (c.moveToNext()) result.add(
+                ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+                    c.getString(4), c.getString(5), c.getLong(6), c.getString(7))
+            )
+        }
+        return result
+    }
+
     fun eventsForActive(context: Context): List<ChatEvent> {
         migrateLegacy(context)
         val db = readableDatabase
