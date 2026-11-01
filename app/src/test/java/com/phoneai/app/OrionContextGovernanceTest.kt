@@ -16,7 +16,7 @@ class OrionContextGovernanceTest {
         val live = OrionProviderContextPolicy.capabilities("gemini", "gemini-live", "gemini_live")
         assertTrue(live.audioInput)
         assertTrue(live.audioOutput)
-        assertTrue(live.videoInput)
+        assertFalse(live.videoInput)
         val local = OrionProviderContextPolicy.capabilities("local", "unknown-local-model")
         assertFalse(local.vision)
         assertTrue(OrionProviderContextPolicy.inputBudget(local, 2_000) < local.contextTokens)
