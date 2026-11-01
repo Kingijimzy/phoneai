@@ -263,7 +263,6 @@ class OrionConversationRepository private constructor(context: Context) :
         return out
     }
 
-    @Synchronized
     /** Retrieve the complete bounded lifecycle for one W3C trace ID, newest first. */
     @Synchronized
     fun eventsForTrace(context: Context, traceId: String): List<ChatEvent> {
