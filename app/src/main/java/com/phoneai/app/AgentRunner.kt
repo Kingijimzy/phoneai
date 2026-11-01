@@ -162,6 +162,25 @@ object AgentRunner {
         "Shared task board: currently unavailable."
     }
 
+    /** Planner delegation receives only minimal task labels, never free-form task details or results. */
+    private fun delegatedTaskContext(c: Context): String = try {
+        val active = TaskStore.all(c)
+            .filter { it.status !in setOf("completed", "done", "cancelled", "failed") }
+            .filterNot { SafetyGate.containsSensitiveCredentialText(it.title) }
+            .take(6)
+        if (active.isEmpty()) "Delegated task summary: no shareable active tasks."
+        else buildString {
+            append("Delegated active task summaries (read-only; titles only):")
+            active.forEach { task ->
+                append("\\n- #").append(task.id).append(" [").append(task.status).append("/")
+                    .append(task.priority).append("] ")
+                    .append(AgentPrivacyFilter.safeCommand(task.title).take(120))
+            }
+        }.take(700)
+    } catch (_: Exception) {
+        "Delegated task summaries: currently unavailable."
+    }
+
     /** A delegated coach receives saved strategy/journal context plus brokered public quote evidence only. */
     private fun delegatedCoachContext(c: Context): String = buildString {
         append("DELEGATED TRADING ANALYSIS (read-only):\n")
