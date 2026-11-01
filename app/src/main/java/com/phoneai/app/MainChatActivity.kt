@@ -1390,6 +1390,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     .setItems(arrayOf("Image or photos", "Text document (TXT, MD, CSV, JSON, XML, HTML, LOG)")) { _, which ->
                         val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                             if (which == 0) {
                                 type = "image/*"
                                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -1562,6 +1563,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     type = "image/*"
                     addCategory(Intent.CATEGORY_OPENABLE)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
                 startActivityForResult(Intent.createChooser(picker, "Choose an image for Orion"), 44)
             }, 260L)
