@@ -544,16 +544,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 lastScreenSnapshot = if (tool == "browser_navigate") "ORION_BROWSER_CLOSED_BEFORE_NAVIGATION" else ""
             }
         }
-        // Revalidate the trusted retrieval receipt after any approval dialog and immediately
-        // before dispatch; a long approval wait must not reuse stale memory context.
-        if (retrievalRequired) {
-            OrionRetrieveBeforeActPolicy.blockReason(memoryRetrievalObjective, memoryRetrievalReceipt)?.let { reason ->
-                val blocked = "error: retrieve-before-act blocked '$tool' immediately before dispatch: $reason. No action was dispatched."
-                recordDispatchBlocked(tool, args, "retrieve_before_act_stale_before_dispatch")
-                taskProofs.record(tool, blocked)
-                return blocked
-            }
-        }
         // Stop may be tapped while the approval dialog is open. Recheck immediately
         // before execution so an approved-but-now-cancelled action cannot start afterward.
         AgentDispatchPolicy.cancellationBlockReason(tool, stopped)?.let { reason ->
@@ -563,16 +553,31 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "cancelled_before_execution")
             return cancelled
         }
-        val dispatch = OrionExecutionLoop.dispatch(tool, stopped) {
-            if (tool in nativeUiActions) {
-                val validationArgs = JSONObject(args.toString()).put("tool", tool)
-                val validation = validateAction(validationArgs)
-                if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
-                else exec(tool, args)
-            } else {
-                exec(tool, args)
+        val dispatchAction = {
+            OrionExecutionLoop.dispatch(tool, stopped) {
+                if (tool in nativeUiActions) {
+                    val validationArgs = JSONObject(args.toString()).put("tool", tool)
+                    val validation = validateAction(validationArgs)
+                    if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
+                    else exec(tool, args)
+                } else {
+                    exec(tool, args)
+                }
             }
         }
+        val dispatch = if (retrievalRequired) {
+            when (val gate = OrionRetrieveBeforeActPolicy.dispatchIfValid(
+                memoryRetrievalObjective, memoryRetrievalReceipt, dispatch = dispatchAction
+            )) {
+                is OrionRetrieveBeforeActPolicy.DispatchGate.Allowed -> gate.value
+                is OrionRetrieveBeforeActPolicy.DispatchGate.Blocked -> {
+                    val blocked = "error: retrieve-before-act blocked '$tool' immediately before dispatch: ${gate.reason}. No action was dispatched."
+                    recordDispatchBlocked(tool, args, "retrieve_before_act_stale_before_dispatch")
+                    taskProofs.record(tool, blocked)
+                    return blocked
+                }
+            }
+        } else dispatchAction()
         val result = dispatch.value
         var verifiedResult = result
         if (!result.trimStart().startsWith("error", ignoreCase = true) && shouldVerifyAction) {
