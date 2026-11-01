@@ -72,7 +72,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
         return write(taskId, state)
     }
 
-    @Synchronized fun needsOwner(taskId: String): Boolean = read(taskId)?.optJSONObject("inFlight") != null
+    @Synchronized fun needsOwner(taskId: String): Boolean = read(taskId)?.let { it.optJSONObject("inFlight") != null || it.optString("status") == "recovery_required" } ?: false
 
     @Synchronized fun requireRecovery(taskId: String, reason: String): Boolean {
         val state = read(taskId) ?: return false
@@ -84,7 +84,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
     @Synchronized fun acknowledge(taskId: String, ownerConfirmation: String): Boolean {
         if (ownerConfirmation.isBlank()) return false
         val state = read(taskId) ?: return false
-        if (state.optJSONObject("inFlight") == null) return false
+        if (state.optJSONObject("inFlight") == null && state.optString("status") != "recovery_required") return false
         state.remove("inFlight").put("status", "paused")
             .put("ownerConfirmedAt", System.currentTimeMillis())
             .put("ownerConfirmation", ownerConfirmation.take(240))
