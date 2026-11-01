@@ -622,5 +622,16 @@ class OrionConversationRepository private constructor(context: Context) :
             instance ?: synchronized(this) {
                 instance ?: OrionConversationRepository(context).also { instance = it }
             }
+
+        /**
+         * Robolectric creates isolated application contexts while this process singleton can
+         * outlive an individual test sandbox. Reset the helper itself, not just its DB file,
+         * so the next test cannot keep a Context from a previous sandbox.
+         */
+        @Synchronized
+        internal fun resetForTests() {
+            instance?.close()
+            instance = null
+        }
     }
 }
