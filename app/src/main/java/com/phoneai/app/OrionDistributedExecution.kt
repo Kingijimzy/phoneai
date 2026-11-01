@@ -141,7 +141,9 @@ internal class OrionLangGraphTransport(
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 30_000
 ) {
-    internal fun endpointForValidation(): String = endpoint\n\n    fun submit(task: OrionTaskEnvelope): JSONObject {
+    internal fun endpointForValidation(): String = endpoint
+
+    fun submit(task: OrionTaskEnvelope): JSONObject {
         require(task.validate().isEmpty()) { "invalid_task_envelope" }
         val uri = URL(endpoint)
         require(uri.protocol.equals("https", true) && uri.host.isNotBlank()) { "langgraph_requires_https" }
@@ -257,7 +259,7 @@ internal class OrionExecutionCoordinator(
             if (updated == null) heartbeatFailure.set(true) else activeLease.set(updated)
         }, heartbeatMs, heartbeatMs, java.util.concurrent.TimeUnit.MILLISECONDS)
 
-        try {
+        return try {
             if (tasks.isCancellationRequested(taskId)) {
                 leases.release(activeLease.get())
                 tasks.markRecovered(taskId)
@@ -293,7 +295,7 @@ internal class OrionExecutionCoordinator(
                 }
             }
         } catch (_: Exception) {
-            AgentCheckpointStore.recoveryRequiredForTask(context, task.taskId,
+            taskCheckpoints.requireRecovery(task.taskId,
                 "Delegated task $taskId threw while executing. The action outcome is unknown; inspect before replay.")
             OrionCoordinatedResult.Deferred(taskId, "worker_exception_outcome_unknown")
         } finally {
