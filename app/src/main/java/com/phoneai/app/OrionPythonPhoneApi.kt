@@ -193,6 +193,24 @@ internal class OrionPythonPhoneApi(
         finally { output.delete() }
     }
 
+    /** Persistent WebSocket sessions survive separate Python tool invocations within this app process. */
+    fun ws_connect(url: String): String = OrionPythonWebSocketTransport.connect(context, url)
+
+    fun ws_send(sessionId: String, text: String): String {
+        if (readOnly) return error("WebSocket sends are disabled by the read-only autonomy profile")
+        return OrionPythonWebSocketTransport.send(context, sessionId, text, confirm = confirm)
+    }
+
+    fun ws_send_binary(sessionId: String, base64: String): String {
+        if (readOnly) return error("WebSocket sends are disabled by the read-only autonomy profile")
+        return OrionPythonWebSocketTransport.send(context, sessionId, base64, binaryBase64 = true, confirm = confirm)
+    }
+
+    fun ws_receive(sessionId: String, timeoutMs: Int): String =
+        OrionPythonWebSocketTransport.receive(context, sessionId, timeoutMs.toLong())
+
+    fun ws_close(sessionId: String): String = OrionPythonWebSocketTransport.close(sessionId)
+
     /** GET is autonomous for explicitly owner-granted hosts; POST requires per-call approval unless the host has a write grant. */
     fun http_get(url: String): String = request(url, "GET", "", requireApproval = false)
 
