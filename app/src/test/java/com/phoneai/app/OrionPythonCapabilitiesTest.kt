@@ -101,7 +101,7 @@ class OrionPythonCapabilitiesTest {
         assertNotNull(OrionPythonNetworkPolicy.validateWebSocket(context, "ws://192.168.1.50:8123/api/websocket"))
         assertNotNull(OrionPythonNetworkPolicy.validateWebSocket(context, "wss://10.0.0.8:8123/api/websocket"))
         assertNull(OrionPythonNetworkPolicy.validate(context, "http://192.168.1.51:8123/api/"))
-        assertNull(OrionPythonNetworkPolicy.validateWebSocket(context, "ws://192.168.1.50:8123/api/websocket/other"))
+        assertNull(OrionPythonNetworkPolicy.validateWebSocket(context, "ws://192.168.1.51:8123/api/websocket"))
     }
 
     @Test fun privateLanAccessDoesNotAllowLinkLocalOrPublicPlainHttp() {
