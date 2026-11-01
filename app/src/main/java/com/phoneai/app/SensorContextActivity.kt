@@ -193,7 +193,7 @@ class SensorContextActivity : Activity() {
             setSingleLine(true)
         }
         val allowHttp = android.widget.CheckBox(this).apply { text = "Allow plain HTTP (local endpoints only)" }
-        val allowWrites = android.widget.CheckBox(this).apply { text = "Allow HTTP POST without asking each time" }
+        val allowWrites = android.widget.CheckBox(this).apply { text = "Allow HTTP POST and WebSocket sends without asking each time" }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
