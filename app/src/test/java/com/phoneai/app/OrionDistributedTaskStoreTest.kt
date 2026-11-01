@@ -11,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionDistributedTaskStoreTest {
-    private fun context(): Context = RuntimeEnvironment.getApplication<Context>().also {
+    private fun context(): Context = RuntimeEnvironment.getApplication().also {
         it.filesDir.listFiles()?.filter { f -> f.name.startsWith("orion_distributed_tasks") }?.forEach { f -> f.delete() }
     }
 
