@@ -52,6 +52,10 @@ class OrionNotificationListener : NotificationListenerService() {
 
     private fun capture(sbn: StatusBarNotification) {
         try {
+            if (!OrionSensorConsent.read(this, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return
+            }
             val pkg = sbn.packageName.orEmpty()
             val app = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
@@ -198,6 +202,10 @@ class OrionNotificationListener : NotificationListenerService() {
             if (key.isBlank()) return "error: notification key is required"
             if (normalized !in setOf("reply", "dismiss")) return "error: action must be reply or dismiss"
             val service = instance ?: return "error: enable Orion Notification access first"
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return "error: Orion notification context is disabled; enable its grant in Sensor & context permissions."
+            }
             val allowed = synchronized(lock) { recent.containsKey(key) }
             if (!allowed) return "error: notification is unavailable or was filtered for safety"
             val sbn = try { service.activeNotifications?.firstOrNull { it.key == key } }
@@ -231,9 +239,40 @@ class OrionNotificationListener : NotificationListenerService() {
             }
         }
 
+        /** Re-evaluate app-level consent without changing Android's separate notification-listener grant. */
+        fun refreshConsent() {
+            val service = instance ?: return
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return
+            }
+            try { service.activeNotifications?.forEach { service.capture(it) } } catch (_: Exception) { }
+        }
+
+        /** Bounded safe notification context for the central brain; no notification keys are exposed. */
+        fun contextSummary(): String {
+            val service = instance ?: return ""
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return ""
+            }
+            val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis }.take(5) }
+            if (items.isEmpty()) return ""
+            return buildString {
+                appendLine("OWNER-GRANTED SAFE NOTIFICATION CONTEXT (in-memory only; sensitive apps/content filtered)")
+                items.forEach { item ->
+                    appendLine("- ${item.app}: ${item.title} — ${item.text}".take(260))
+                }
+                appendLine("These are recent notifications, not proof of user intent or task completion.")
+            }.take(1_300)
+        }
+
         fun readSafeNotifications(): String {
-            if (instance == null) {
-                return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry. Orion excludes banking, payment, password, card, CVV, OTP, and security-code notifications."
+            val service = instance
+                ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry."
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return "Orion notification context is disabled. Enable the Notification context grant in Settings → Sensor & context permissions."
             }
             val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis } }
             if (items.isEmpty()) {

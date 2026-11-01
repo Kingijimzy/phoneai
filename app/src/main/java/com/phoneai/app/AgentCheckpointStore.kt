@@ -27,13 +27,29 @@ object AgentCheckpointStore {
 
     fun pending(c: Context): JSONObject? = synchronized(lock) {
         readCheckpoint(c)?.takeIf {
-            it.optString("status") in setOf("running", "paused", "recovery_required")
+            it.optString("status") in setOf("running", "waiting_for_children", "paused", "recovery_required")
         }
     }
 
     /** Stable across resume, unique across separate tasks even when their request text is identical. */
     fun evidenceTaskId(c: Context): String? = synchronized(lock) {
         readCheckpoint(c)?.optString("taskId")?.takeIf { it.isNotBlank() }
+    }
+
+    /** A specialist must stop accepting work when its exact parent checkpoint is paused/stopped. */
+    fun cancellationRequested(c: Context, taskId: String?): Boolean {
+        if (taskId.isNullOrBlank()) return false
+        return synchronized(lock) {
+            val active = readCheckpoint(c)
+            if (active?.optString("taskId") == taskId) {
+                active.optBoolean("stopRequested") || active.optBoolean("pauseRequested") ||
+                    active.optString("status") !in setOf("running", "waiting_for_children")
+            } else {
+                // An archived checkpoint is never an execution authority, even if it was
+                // waiting for children when a newer chat objective replaced it.
+                true
+            }
+        }
     }
 
     private fun safeCommand(command: String): String = AgentPrivacyFilter.safeCommand(
@@ -45,7 +61,7 @@ object AgentCheckpointStore {
         File(c.filesDir, "orion_agent_checkpoints").also { it.mkdirs() }
 
     private fun isPending(o: JSONObject): Boolean =
-        o.optString("status") in setOf("running", "paused", "recovery_required")
+        o.optString("status") in setOf("running", "waiting_for_children", "paused", "recovery_required")
 
     /** Archive an independent unfinished task without copying it into chat history. */
     private fun archive(c: Context, checkpoint: JSONObject): Boolean {
@@ -101,6 +117,7 @@ object AgentCheckpointStore {
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
         val existing = readCheckpoint(c)
         if (existing?.optString("status") == "running") return@synchronized false
+        val previousParentId = existing?.takeIf { isPending(it) }?.optString("taskId")
         if (existing != null && isPending(existing) && !archive(c, existing)) return@synchronized false
         val now = System.currentTimeMillis()
         val o = JSONObject()
@@ -110,7 +127,11 @@ object AgentCheckpointStore {
             .put("startedAt", now)
             .put("updatedAt", now)
             .put("steps", JSONArray())
-        save(c, o)
+        val saved = save(c, o)
+        if (saved && !previousParentId.isNullOrBlank()) {
+            runCatching { OrionWorkerJobStore(c).cancelParent(previousParentId, "parent_replaced_by_new_objective") }
+        }
+        saved
     }
 
     fun markRunning(c: Context): Boolean = synchronized(lock) {
@@ -228,6 +249,7 @@ object AgentCheckpointStore {
     }
 
     fun pause(c: Context): Boolean {
+        val parentTaskId = evidenceTaskId(c)
         val saved = update(c) {
             if (it.optBoolean("stopRequested")) {
                 it.put("status", if (it.optJSONObject("inFlight") != null) "recovery_required" else "cancelled")
@@ -235,7 +257,10 @@ object AgentCheckpointStore {
                 it.put("pauseRequested", true).put("status", "paused")
             }
         }
-        if (saved) runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        if (saved) {
+            parentTaskId?.let { id -> runCatching { OrionWorkerJobStore(c).cancelParent(id, "parent_paused") } }
+            runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
+        }
         return saved
     }
 
@@ -256,7 +281,13 @@ object AgentCheckpointStore {
             checkpoint.put("stopReason", reason.take(300))
         }
         checkpoint.put("updatedAt", System.currentTimeMillis())
-        save(c, checkpoint)
+        val saved = save(c, checkpoint)
+        if (saved) {
+            checkpoint.optString("taskId").takeIf { it.isNotBlank() }?.let { id ->
+                runCatching { OrionWorkerJobStore(c).cancelParent(id, "parent_stopped") }
+            }
+        }
+        saved
     }
 
     fun complete(c: Context): Boolean = synchronized(lock) {
@@ -264,6 +295,12 @@ object AgentCheckpointStore {
         val current = readCheckpoint(c)
         if (current?.optBoolean("stopRequested") == true || current?.optBoolean("pauseRequested") == true) return@synchronized false
         if (!CheckpointTransitionPolicy.canComplete(needsRecoveryConfirmation(c))) return@synchronized false
+        val taskId = current?.optString("taskId").orEmpty()
+        // A chat turn may finish while delegated work is still queued/running. Keep the
+        // objective alive until the final child reports a durable terminal receipt.
+        if (taskId.isNotBlank() && runCatching { OrionWorkerJobStore(c).hasPendingForParent(taskId) }.getOrDefault(true)) {
+            return@synchronized update(c) { it.put("status", "waiting_for_children") }
+        }
         val saved = update(c) {
             it.put("status", "completed")
             it.remove("inFlight")

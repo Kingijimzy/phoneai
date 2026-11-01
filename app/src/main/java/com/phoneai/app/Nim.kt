@@ -791,7 +791,8 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
             else -> maxTokens
         }
-        val queue = mutableListOf(selectedModel(p, vision))
+        val initialModel = selectedModel(p, vision)
+        val queue = mutableListOf(initialModel)
         val tried = HashSet<String>()
         val rateLimitRetried = HashSet<String>()
         var refilled = false
@@ -809,6 +810,19 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
+            val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, model)
+            if (vision && !modelCapabilities.vision) {
+                lastNote = "Model $model is not verified for image input; skipping this model."
+                continue
+            }
+            // Recompute budgets for every fallback model; context limits can differ within a provider.
+            val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
+            val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
+            val originalImageCount = OrionProviderContextPolicy.newestUserImageCount(messages)
+            val retainedImageCount = OrionProviderContextPolicy.newestUserImageCount(requestMessages)
+            if (vision && retainedImageCount < originalImageCount) {
+                throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 413)
+            }
             attempts++
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
@@ -817,24 +831,24 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val payload: String
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, messages, tokens, temperature)
+                payload = anthropicBody(model, requestMessages, boundedTokens, temperature)
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
-                for (i in 0 until messages.length()) {
-                    val message = messages.optJSONObject(i) ?: continue
+                for (i in 0 until requestMessages.length()) {
+                    val message = requestMessages.optJSONObject(i) ?: continue
                     input.put(JSONObject().put("role", message.optString("role", "user"))
                         .put("content", message.opt("content") ?: ""))
                 }
                 payload = JSONObject().put("model", model).put("input", input)
-                    .put("max_output_tokens", tokens).put("temperature", temperature).toString()
+                    .put("max_output_tokens", boundedTokens).put("temperature", temperature).toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
                     .put("model", model)
-                    .put("messages", messages)
+                    .put("messages", requestMessages)
                     .put("temperature", temperature)
-                    .put("max_tokens", tokens)
+                    .put("max_tokens", boundedTokens)
                 if (onDelta != null && !vision) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))

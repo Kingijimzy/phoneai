@@ -62,7 +62,15 @@ internal object ExperiencePolicy {
     fun merge(list: List<Experience>, new: Experience): List<Experience> {
         val out = list.toMutableList()
         if (new.kind == "worked") {
-            out.removeAll { it.kind == "failure" && it.tool in new.steps.split(">") && MemoryRanking.similarity(it.task, new.task) >= 0.5 }
+            // A newer clean, independently verified routine supersedes both unresolved failures
+            // and older recovered-failure advice for the same task/tool family. Keep corrections
+            // and unrelated task lessons; they remain useful and are not evidence of tool failure.
+            val provenTools = new.steps.split(">").filter { it.isNotBlank() }.toSet()
+            out.removeAll {
+                it.kind in setOf("failure", "resolved_failure") &&
+                    it.tool in provenTools &&
+                    MemoryRanking.similarity(it.task, new.task) >= 0.5
+            }
         }
         val i = out.indexOfFirst {
             it.kind == new.kind && it.tool == new.tool && it.category == new.category &&

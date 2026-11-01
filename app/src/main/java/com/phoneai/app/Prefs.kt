@@ -391,6 +391,8 @@ object Prefs {
     fun setModelRouting(c: Context, v: Boolean) = sp(c).edit().putBoolean("model_routing", v).apply()
     fun companionChar(c: Context): Int = sp(c).getInt("companion_char", 0)
     fun setCompanionChar(c: Context, v: Int) = sp(c).edit().putInt("companion_char", v).apply()
+    fun lastChatSeen(c: Context): Long = sp(c).getLong("chat_last_seen", 0L)
+    fun setLastChatSeen(c: Context, v: Long) = sp(c).edit().putLong("chat_last_seen", v).apply()
     fun companionVoice(c: Context): Boolean = sp(c).getBoolean("companion_voice", false)
     fun setCompanionVoice(c: Context, v: Boolean) = sp(c).edit().putBoolean("companion_voice", v).apply()
     fun neuralVoice(c: Context): Boolean = sp(c).getBoolean("neural_voice", false)

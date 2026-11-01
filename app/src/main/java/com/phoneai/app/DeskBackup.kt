@@ -16,9 +16,9 @@ internal object DeskBackup {
 
     fun allowed(key: String): Boolean = key !in skipKeys && secretWords.none { key.lowercase().contains(it) }
 
-    class Restored(val prefs: Map<String, Map<String, Any>>, val journal: JSONArray)
+    class Restored(val prefs: Map<String, Map<String, Any>>, val journal: JSONArray, val memory: List<String> = emptyList())
 
-    fun build(prefs: Map<String, Map<String, Any?>>, journal: JSONArray, now: Long): String {
+    fun build(prefs: Map<String, Map<String, Any?>>, journal: JSONArray, now: Long, memory: List<String> = emptyList()): String {
         val files = JSONObject()
         for ((file, map) in prefs) {
             if (file !in FILES) continue
@@ -38,7 +38,7 @@ internal object DeskBackup {
             files.put(file, o)
         }
         return JSONObject().put("app", "orion-desk").put("v", VERSION).put("createdAt", now)
-            .put("prefs", files).put("journal", journal).toString(2)
+            .put("prefs", files).put("journal", journal).put("memory", JSONArray(memory.take(200))).toString(2)
     }
 
     /** Throws IllegalArgumentException with a readable message when the file is not a usable backup. */
@@ -70,9 +70,10 @@ internal object DeskBackup {
             }
             out[file] = m
         }
-        return Restored(out, root.optJSONArray("journal") ?: JSONArray())
+        val mem = root.optJSONArray("memory")?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.take(200) }.orEmpty()
+        return Restored(out, root.optJSONArray("journal") ?: JSONArray(), mem)
     }
 
     fun summary(r: Restored): String =
-        "${r.prefs.values.sumOf { it.size }} desk settings, ${r.journal.length()} journal trades"
+        "${r.prefs.values.sumOf { it.size }} desk settings, ${r.journal.length()} journal trades, ${r.memory.size} memory notes"
 }

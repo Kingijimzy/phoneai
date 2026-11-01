@@ -75,6 +75,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeStatus get() = chatUiState.status
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
+    private val composeCompanionLook = mutableStateOf(0)
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
@@ -1389,6 +1390,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     .setItems(arrayOf("Image or photos", "Text document (TXT, MD, CSV, JSON, XML, HTML, LOG)")) { _, which ->
                         val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                             if (which == 0) {
                                 type = "image/*"
                                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -1493,6 +1495,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
+        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
         composeChatTitle.value = getSharedPreferences("orion_chat_history", MODE_PRIVATE).getString("active_title", "Orion")?.take(48)?.ifBlank { "Orion" } ?: "Orion"
         val composeRoot = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
@@ -1500,6 +1503,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 OrionComposeChatScreen(
                     lines = composeLines,
                     status = composeStatus.value,
+                    companionLook = composeCompanionLook.value,
+                    onCompanionLookChanged = { look ->
+                        val safeLook = look.coerceIn(0, 2)
+                        composeCompanionLook.value = safeLook
+                        Prefs.setCompanionChar(this@MainChatActivity, safeLook)
+                    },
                     chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
                     selectedImages = composeSelectedImages.value,
@@ -1521,7 +1530,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
                     onRetry = { prompt -> PhoneAiService.instance?.retryLastResponse(prompt) },
                     onEditSend = { original, edited -> PhoneAiService.instance?.editAndResend(original, edited) }
                 )
@@ -1554,6 +1563,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     type = "image/*"
                     addCategory(Intent.CATEGORY_OPENABLE)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
                 startActivityForResult(Intent.createChooser(picker, "Choose an image for Orion"), 44)
             }, 260L)
@@ -1724,6 +1734,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onResume() {
         super.onResume()
+        runCatching {
+            onChatEvents(OrionConversationRepository.get(this).eventsForActive(this))
+        }
         refreshProviderModelChip()
         if (livePulse?.isStarted != true) livePulse?.start()
         val service = PhoneAiService.instance
@@ -1948,7 +1961,19 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         if (imageUris.isNotEmpty()) {
             val question = value.ifBlank { "Describe these images and explain anything important I should notice. Compare them when useful." }
             addMessage("me", question)
-            imageUris.forEach { addImageBubble(it) }
+            imageUris.forEach { uri ->
+                addImageBubble(uri)
+                runCatching {
+                    OrionMultimodalEvidenceStore.record(
+                        applicationContext,
+                        ChatHistoryStore.activeSessionId(applicationContext),
+                        modality = OrionMultimodalEvidenceStore.Modality.IMAGE,
+                        source = "main_chat_attachment",
+                        reference = uri.toString(),
+                        summary = "Image attached to this conversation; re-open the original content URI before future visual analysis."
+                    )
+                }
+            }
             selectedImageUris.clear()
             composeSelectedImages.value = emptyList()
             refreshImagePreview(null)
@@ -2101,7 +2126,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             // Lifecycle events are stored separately from transcript messages. Reload them
             // after the active-session pointer changes so restored chats show only their own events.
             val activeEvents = runCatching {
-                PhoneAiService.instance?.activeChatEvents().orEmpty()
+                OrionConversationRepository.get(this@MainChatActivity).eventsForActive(this@MainChatActivity)
             }.getOrDefault(emptyList())
             onChatEvents(activeEvents)
         }

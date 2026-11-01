@@ -34,6 +34,33 @@ class OrionConversationRepositoryTest {
         resetRepositorySingleton()
     }
 
+    @Test fun specialistEventIsIdempotentAndTargetsItsOriginalArchivedSession() {
+        val first = listOf("me" to "original specialist request", "ai" to "I will delegate this")
+        repository.saveActive(context, first)
+        val originId = repository.activeSessionId(context)!!
+        repository.archiveAndClear(context, first)
+
+        val second = listOf("me" to "a different active chat", "ai" to "separate conversation")
+        repository.saveActive(context, second)
+        val activeId = repository.activeSessionId(context)!!
+        assertFalse(originId == activeId)
+
+        val firstWrite = repository.recordEventForSession(
+            context, originId, "specialist-job-stable-id", "specialist_result", "completed", "Research evidence ready"
+        )
+        val duplicateWrite = repository.recordEventForSession(
+            context, originId, "specialist-job-stable-id", "specialist_result", "completed", "Research evidence ready"
+        )
+        assertNotNull(firstWrite)
+        assertEquals(firstWrite?.id, duplicateWrite?.id)
+        assertEquals(activeId, repository.activeSessionId(context))
+
+        assertNotNull(repository.restoreArchivedById(context, originId))
+        val events = repository.eventsForActive(context).filter { it.id == "specialist-job-stable-id" }
+        assertEquals(1, events.size)
+        assertEquals("Research evidence ready", events.single().summary)
+    }
+
     @Test fun switchingSessionsRestoresTheExactArchivedSessionById() {
         val first = listOf("me" to "first question", "ai" to "first answer")
         repository.saveActive(context, first)
@@ -123,6 +150,32 @@ class OrionConversationRepositoryTest {
             org.json.JSONArray().put(org.json.JSONObject().put("kind", "me").put("text", "stale legacy data")).toString()
         ).commit()
         assertEquals(activeExpected, repository.loadActive(context))
+    }
+
+    @Test fun toolLifecycleEventsShareValidatedTraceIdAcrossStartAndOutcome() {
+        val traceId = "0123456789abcdef0123456789abcdef"
+        val started = repository.recordEvent(
+            context, messageId = null, type = "tool", status = "started",
+            summary = "tool=browser_search", traceId = traceId
+        )
+        val completed = repository.recordEvent(
+            context, messageId = null, type = "tool_result", status = "success",
+            summary = "tool=browser_search; outcome=completed", traceId = traceId
+        )
+        assertEquals(traceId, started?.traceId)
+        assertEquals(traceId, completed?.traceId)
+        val stored = repository.eventsForTrace(context, traceId)
+        assertEquals(2, stored.size)
+        assertEquals(setOf("tool", "tool_result"), stored.map { it.type }.toSet())
+        assertTrue(repository.eventsForTrace(context, "invalid").isEmpty())
+    }
+
+    @Test fun malformedTraceIdsAreNotPersisted() {
+        val event = repository.recordEvent(
+            context, null, "tool", "started", "tool=browser_search", "not-a-w3c-trace-id"
+        )
+        assertNotNull(event)
+        assertNull(event?.traceId)
     }
 
     @Test fun persistedLifecycleEventRedactsCredentialLikeValues() {
@@ -299,4 +352,33 @@ class OrionConversationRepositoryTest {
         assertNull(repository.findTranscriptEvidence(context, "user", "I accept a decision that was never said here."))
     }
 
+
+    @Test fun selfDiagnosticActivityIsPersistedInTheActiveChatTimeline() {
+        repository.saveActive(context, listOf("me" to "Orion, self diagnose"))
+        val event = repository.recordEvent(
+            context, null, "self_diagnostic", "completed",
+            "Local self-diagnostic completed: tools=137, structural errors=0"
+        )
+        assertNotNull(event)
+        val saved = repository.eventsForActive(context).single { it.type == "self_diagnostic" }
+        assertEquals("completed", saved.status)
+        assertTrue(saved.summary.contains("structural errors=0"))
+    }
+
+    @Test fun voiceTranscriptTurnsPersistIntoTheSameSearchableConversationIndex() {
+        repository.saveActive(context, listOf(
+            "me" to "Earlier typed question about Orion memory",
+            "ai" to "We discussed persistent memory."
+        ))
+        val transcript = repository.loadActive(context).toMutableList()
+        transcript += "me" to "I usually review my trading journal after the London session"
+        transcript += "ai" to "I will keep that routine in context when you approve the memory proposal."
+        repository.saveActive(context, transcript)
+
+        val hit = repository.searchHistory(context, "trading journal London session", 5)
+            .first { it.snippet.contains("trading journal", ignoreCase = true) }
+        assertEquals("me", hit.role)
+        assertTrue(hit.title.contains("Earlier typed question"))
+        assertTrue(hit.after.contains("keep that routine"))
+    }
 }

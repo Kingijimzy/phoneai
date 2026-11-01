@@ -115,7 +115,7 @@ fun OrionComposeShell(
                     label = "orion-page"
                 ) { page ->
                     when (page) {
-                        "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
+                        "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenAgents, onOpenMemory)
                         "Tools" -> ToolsPage(onOpenFeature)
                         else -> SettingsPage(onOpenSettings)
                     }
@@ -136,121 +136,118 @@ private fun HomePage(
     onOpenBrowser: () -> Unit,
     onOpenTasks: () -> Unit,
     onOpenUtilities: () -> Unit,
-    onOpenSettings: (String?) -> Unit
+    onOpenSettings: (String?) -> Unit,
+    onOpenTrading: () -> Unit,
+    onOpenAgents: () -> Unit,
+    onOpenMemory: () -> Unit
 ) {
+    val setupNeeded = status.contains("0 AI provider", true)
+    val controlOff = status.contains("not enabled", true)
     Column(
         Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState())
-            .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+            .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(Modifier.fillMaxWidth().padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF1C1C1C))
-                    .border(1.dp, Silver.copy(alpha = .55f), RoundedCornerShape(14.dp)),
+                Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
+                    .background(PanelRaised).border(1.dp, Hairline, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.AutoAwesome, null, tint = Silver, modifier = Modifier.size(23.dp))
-            }
+            ) { Icon(Icons.Rounded.AutoAwesome, null, tint = Silver, modifier = Modifier.size(21.dp)) }
             Spacer(Modifier.width(11.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("ORION", color = Copy, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text("PERSONAL AI ASSISTANT", color = Muted, fontSize = 9.sp, letterSpacing = 1.1.sp)
+                Text("YOUR PERSONAL COMPANION", color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
             }
             Spacer(Modifier.weight(1f))
             Row(
                 Modifier.clip(CircleShape).background(Panel).border(1.dp, Hairline, CircleShape)
-                    .clickable { onOpenSettings(null) }.padding(horizontal = 11.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    .clickable { onOpenSettings(null) }.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                val statusLabel = when {
-                    status.contains("0 AI provider", true) -> "SET UP AI"
-                    status.contains("not enabled", true) -> "CONTROL OFF"
-                    else -> "READY"
-                }
-                Box(Modifier.size(7.dp).clip(CircleShape).background(if (statusLabel == "READY") Silver else Muted))
-                Text(statusLabel, color = Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Box(Modifier.size(7.dp).clip(CircleShape).background(if (setupNeeded || controlOff) Muted else Silver))
+                Text("SYSTEM", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Rounded.ChevronRight, null, tint = Muted, modifier = Modifier.size(13.dp))
             }
         }
 
-        // Classic, opaque home surface: no spherical orb, teal glow, or liquid-glass treatment.
-        val setupNeeded = status.contains("0 AI provider", true)
-        val controlOff = status.contains("not enabled", true)
+        // The home screen is an overview of the companion. Chat remains the single front door.
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                .background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(22.dp))
-                .padding(horizontal = 18.dp, vertical = 18.dp)
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Panel)
+                .border(1.dp, Hairline, RoundedCornerShape(22.dp)).padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("ORION", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                    Text(
-                        "PERSONAL AI  /  ${if (setupNeeded) "SETUP NEEDED" else if (controlOff) "PHONE CONTROL OFF" else "READY"}",
-                        color = Muted, fontSize = 9.sp, letterSpacing = 1.sp
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(7, 12, 18, 11, 6).forEachIndexed { index, height ->
-                        Box(
-                            Modifier.width(3.dp).height(height.dp).clip(RoundedCornerShape(2.dp))
-                                .background(if (index == 2) Silver else Hairline)
-                        )
-                    }
-                }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Silver))
+                Text("CENTRAL BRAIN", color = Silver, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                Spacer(Modifier.weight(1f))
+                Text("ONE ORION · ONE CONVERSATION", color = Muted, fontSize = 8.sp, letterSpacing = .5.sp)
             }
-            Spacer(Modifier.height(20.dp))
             Text(
                 when {
-                    setupNeeded -> "Connect an AI provider"
-                    controlOff -> "Chat is ready. Phone control is off."
-                    else -> "Orion is ready"
+                    setupNeeded -> "Connect Orion's intelligence"
+                    controlOff -> "Your companion is ready to talk"
+                    else -> "What should we work on?"
                 },
-                color = Copy, fontSize = 21.sp, fontWeight = FontWeight.SemiBold
+                color = Copy, fontSize = 23.sp, lineHeight = 29.sp, fontWeight = FontWeight.SemiBold
             )
-            Spacer(Modifier.height(7.dp))
             Text(
                 when {
-                    setupNeeded -> "Add a provider key in Settings, or configure a supported local model."
-                    controlOff -> "Ask questions normally, or enable screen access when you want Orion to operate apps."
-                    else -> "Ask a question, talk naturally, or give Orion a task."
+                    setupNeeded -> "Connect an AI provider in Settings before starting model-powered work."
+                    controlOff -> "Chat is available. Phone actions remain unavailable until the required device access is enabled."
+                    else -> "Ask once. Orion can plan, use connected capabilities, coordinate specialists and bring the result back here."
                 },
-                color = Muted, fontSize = 13.sp, lineHeight = 19.sp
+                color = Muted, fontSize = 12.sp, lineHeight = 18.sp
             )
-            Spacer(Modifier.height(17.dp))
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(Silver).clickable(onClick = onOpenVoice).padding(vertical = 14.dp),
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Silver)
+                    .clickable(onClick = onOpenChat).padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
             ) {
-                Icon(Icons.Rounded.GraphicEq, null, tint = Ink, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Start a live conversation", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Icon(Icons.Rounded.ChatBubbleOutline, null, tint = Ink, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(9.dp))
+                Text("Open Orion Chat", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(7.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = Ink, modifier = Modifier.size(18.dp))
+            }
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(PanelRaised)
+                    .clickable(onClick = onOpenVoice).padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.GraphicEq, null, tint = Silver, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(9.dp))
+                Text("Continue by voice", color = Copy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                Text("SAME BRAIN", color = Muted, fontSize = 8.sp, letterSpacing = .8.sp)
             }
         }
 
-        Text("What would you like to do?", color = Copy, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        // Focus the home surface: one live action, two distinct destinations, and one workflow entry.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeActionCard("Chat with Orion", "Ask, reason, create", Icons.Rounded.ChatBubbleOutline, Modifier.weight(1f), onOpenChat)
-            HomeActionCard("Explore the web", "Research when you ask", Icons.Rounded.Public, Modifier.weight(1f), onOpenBrowser)
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Text("YOUR WORKSPACE", color = Copy, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("Connected areas Orion can coordinate from the main conversation.", color = Muted, fontSize = 11.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                HomeActionCard("Tasks & workflows", "Objectives, progress and recovery", Icons.Rounded.TaskAlt, Modifier.weight(1f), onOpenTasks)
+                HomeActionCard("Specialist team", "Delegate and review agent work", Icons.Rounded.SmartToy, Modifier.weight(1f), onOpenAgents)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                HomeActionCard("Trading Desk", "Markets, analysis and journal", Icons.Rounded.Bolt, Modifier.weight(1f), onOpenTrading)
+                HomeActionCard("Memory & learning", "Review saved context and lessons", Icons.Rounded.Memory, Modifier.weight(1f), onOpenMemory)
+            }
         }
 
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                .background(Panel)
-                .border(1.dp, Hairline, RoundedCornerShape(18.dp))
-                .clickable(onClick = onOpenTasks).padding(horizontal = 15.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Rounded.TaskAlt, null, tint = Silver, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Tasks & workflows", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("Continue a saved task or teach Orion a routine", color = Muted, fontSize = 11.sp)
-            }
-            Icon(Icons.Rounded.ChevronRight, null, tint = Muted, modifier = Modifier.size(20.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("CONNECTED CAPABILITIES", color = Copy, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            ActionRow("Research & browser", "Ask Orion to research and return evidence in chat", Icons.Rounded.Public, onOpenBrowser)
+            ActionRow("Teach a workflow", "Record a repeatable procedure for Orion to learn", Icons.Rounded.AutoAwesome, onOpenUtilities)
+            ActionRow("System access & integrations", "Review provider setup, permissions and connected services", Icons.Rounded.Tune) { onOpenSettings(null) }
         }
+
+        Text(
+            "Status is based on locally available setup information. A registered capability is not proof that a live service or background worker is currently running.",
+            color = Muted, fontSize = 10.sp, lineHeight = 15.sp
+        )
     }
 }
 

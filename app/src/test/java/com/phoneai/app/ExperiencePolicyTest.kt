@@ -60,4 +60,38 @@ class ExperiencePolicyTest {
         assertFalse(gist.contains("sk_live"))
     }
 
+    @Test fun laterCleanSuccessRetiresResolvedFailureForTheProvenToolSequence() {
+        val old = Experience(
+            ExperiencePolicy.gist("Open Settings and inspect notification access"),
+            "open_app", "resolved_failure", "target_not_found", "old recovery guidance",
+            2, now - 1_000L, correction = "Changed approach to click_text",
+            verification = "Later step independently verified"
+        )
+        val unrelated = fail("Play music on YouTube", "open_app", "network_or_timeout")
+        val learned = Experience(
+            ExperiencePolicy.gist("Open Settings and inspect notification access"),
+            "open_app", "worked", "", "", 1, now, "open_app>click_text"
+        )
+
+        val merged = ExperiencePolicy.merge(listOf(old, unrelated), learned)
+
+        assertFalse(merged.any { it.kind == "resolved_failure" })
+        assertTrue("unrelated task lesson must remain", merged.any { it.task == unrelated.task && it.kind == "failure" })
+        assertTrue(merged.any { it.kind == "worked" && it.steps == "open_app>click_text" })
+    }
+
+    @Test fun cleanSuccessOnlyRetiresFailuresForToolsInItsVerifiedSequence() {
+        val task = "Open Settings and inspect notification access"
+        val first = fail(task, "open_app", "target_not_found")
+        val second = fail(task, "click_text", "target_not_found")
+        val otherTool = fail(task, "read_screen", "other_failure")
+        val worked = Experience(ExperiencePolicy.gist(task), "open_app", "worked", "", "", 1, now, "open_app>click_text")
+
+        val merged = ExperiencePolicy.merge(listOf(first, second, otherTool), worked)
+
+        assertFalse(merged.any { it.tool == "open_app" && it.kind == "failure" })
+        assertFalse(merged.any { it.tool == "click_text" && it.kind == "failure" })
+        assertTrue(merged.any { it.tool == "read_screen" && it.kind == "failure" })
+    }
+
 }

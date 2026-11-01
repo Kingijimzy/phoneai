@@ -259,6 +259,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 repeat(4) {
                     val runtime = orionRuntime ?: return@repeat
                     val item = runtime.claimNext() ?: return@repeat
+                    val brainTracked = item.type in setOf(
+                        OrionRuntime.WorkType.SOUL_WATCH,
+                        OrionRuntime.WorkType.PRESENCE_EVENT,
+                        OrionRuntime.WorkType.LEARN_FROM_RESULT,
+                        OrionRuntime.WorkType.RESTORE_PENDING
+                    )
+                    if (brainTracked) recordChatEvent(
+                        "runtime", "started",
+                        "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                            "; checkpoint=" + item.checkpoint.take(100) + "; attempt=" + item.attempts
+                    )
                     try {
                         when (item.type) {
                             OrionRuntime.WorkType.RESTORE_PENDING -> {
@@ -308,11 +319,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 }
                             }
                         }
-                        if (runtime.complete(item) && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                        val completed = runtime.complete(item)
+                        if (completed && brainTracked) recordChatEvent(
+                            "runtime", "completed",
+                            "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                                "; checkpoint=" + item.checkpoint.take(100)
+                        )
+                        if (completed && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = true)
                         }
                     } catch (error: Exception) {
                         val retryQueued = runtime.fail(item, error.javaClass.simpleName + ": " + error.message.orEmpty())
+                        if (brainTracked) recordChatEvent(
+                            "runtime", if (retryQueued) "retry_scheduled" else "failed",
+                            "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                                "; attempt=" + (item.attempts + 1) + "; retry=" + retryQueued +
+                                "; error=" + error.javaClass.simpleName
+                        )
                         if (!retryQueued && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
                             OrionRuntimeNotifier.postResult(this, item, success = false)
                         }
@@ -740,10 +763,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     /** Persist only bounded, secret-free activity metadata in the active chat session. */
-    fun recordChatEvent(type: String, status: String, summary: String, messageId: String? = null) {
+    fun recordChatEvent(type: String, status: String, summary: String, messageId: String? = null, traceId: String? = null) {
         try {
             val repository = OrionConversationRepository.get(this)
-            repository.recordEvent(this, messageId, type, status, summary)
+            repository.recordEvent(this, messageId, type, status, summary, traceId)
             // Persist first, then publish the canonical session event list to the open chat.
             // This keeps tool/approval status visible immediately and restores it after reattach.
             val events = repository.eventsForActive(this)
@@ -755,6 +778,15 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =
         try { OrionConversationRepository.get(this).eventsForActive(this) } catch (_: Exception) { emptyList() }
+
+    /** Recent durable events are read-only evidence supplied to the parent Agent on each turn. */
+    internal fun brainActivityBriefForBrain(): String = try {
+        val recent = OrionConversationRepository.get(this).eventsForActive(this).takeLast(4)
+        if (recent.isEmpty()) "no recorded chat activity events"
+        else recent.joinToString(" | ") { event ->
+            event.type + "/" + event.status + ": " + event.summary.take(150)
+        }.take(720)
+    } catch (_: Exception) { "chat activity ledger unavailable; do not infer background progress" }
 
     private fun rewindTranscriptToPrompt(prompt: String): Boolean {
         val rewound = TranscriptEditPolicy.rewind(transcript.toList(), prompt) ?: return false
@@ -2103,6 +2135,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun note(text: String) {
+        // Specialist lifecycle messages are durable chat events, not transient UI-only notes.
+        // The event is committed to the active conversation before the open chat is notified.
+        val specialist = Regex("^\\[SPECIALIST:(ASSIGNED|RETURNED|FAILED)]\\s*\\n?([\\s\\S]*)$")
+            .find(text.trim())
+        if (specialist != null) {
+            val status = specialist.groupValues[1].lowercase()
+            val summary = specialist.groupValues[2].trim().take(1100)
+            recordChatEvent("specialist", status, summary)
+            return
+        }
         appendTranscript("note", text)
         main.post {
             mainChatListener?.onMessage("note", text)
@@ -2112,6 +2154,18 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 showStrip(text)
             }
         }
+    }
+
+    /** Compact runtime truth for the central Agent; never implies Android can keep a process alive forever. */
+    internal fun runtimeBriefForBrain(): String {
+        val runtime = orionRuntime ?: return "runtime=not_connected; durable recovery is delegated to WorkManager when available"
+        val snapshot = runtime.snapshot()
+        val pending = runtime.pendingItems().take(5).joinToString("; ") {
+            it.type.name.lowercase() + ":" + it.key.take(48) + if (it.checkpoint.isNotBlank()) "@" + it.checkpoint.take(64) else ""
+        }.ifBlank { "none" }
+        return "runtime=" + snapshot.state.name.lowercase() + "; queued=" + snapshot.queued +
+            "; last_event=" + snapshot.lastEvent.take(64) + "; pending=[" + pending +
+            "]. Android/HyperOS may suspend or kill the process; persisted checkpoints and recovery wake-ups are best-effort, not guaranteed continuous execution."
     }
 
     override fun phase(p: String) {
@@ -2376,7 +2430,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (nodes.size + ocrElements.size + visualElements.size < 3) {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
-        return sb.toString().take(2800)
+        val rendered = sb.toString().take(2800)
+        if (!sensitiveScreen && OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
+            runCatching {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(rendered.toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it) }
+                OrionMultimodalEvidenceStore.record(
+                    this,
+                    ChatHistoryStore.activeSessionId(this),
+                    modality = OrionMultimodalEvidenceStore.Modality.SCREEN,
+                    source = "accessibility_ocr_screen",
+                    digest = digest,
+                    summary = "Non-sensitive screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
+                )
+            }
+        }
+        return rendered
     }
 
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {
