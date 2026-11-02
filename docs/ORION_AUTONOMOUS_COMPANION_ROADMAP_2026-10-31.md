@@ -742,3 +742,45 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Software work continues against the Living Companion exit gate. Remaining proof includes repair proposal → sandbox test → owner approval → apply/verify/rollback integration; permission/retention tests across every ambient source; explicit user-initiated evidence reopening with persisted URI-grant verification; cross-provider/process-restart continuity; and cross-agent scope enforcement.
 - Exact-head CI and physical Redmi A3 Pro/HyperOS acceptance are mandatory independent gates. CI cannot prove Android permission screens, background limits, battery impact, notification delivery, thermal/memory behaviour, or voice reliability on the actual device.
 - Stage 4 must remain IN PROGRESS until each remaining software acceptance test has a concrete test/receipt and the physical-device matrix is recorded. No main-branch change or Stage 5 worker deployment is implied by this continuation.
+
+
+## Branch reconciliation audit — 2026-11-02
+
+This audit supersedes any implication that a green CI run on an individual stacked PR proves the complete Stage 4–7 release candidate is integrated.
+
+### Current branch graph (verified from GitHub PR metadata)
+
+**Stage 4 repair / Python chain**
+- #132 `orion/close-direct-tool-bypasses` → #145 `orion/autonomous-companion-roadmap-20261031` → #154 `orion/stage4-repair-centralbrain-20261101` → #155 `orion/stage4-sandbox-autonomy-20261101` → #156 `orion/stage4-python-capabilities-20261101`.
+- #154 exact head `9c3a947e`: CI passed (run #41290327088).
+- #155 previous exact head `4fd87f21`: CI failed during unit-test compilation because `OrionRepairLifecycleTest.kt:76` referenced undefined `approvalPrompts`. The test was corrected in `81c14d4e0a31601113dd08e56d77a54fcc662683`; exact-head CI #41508322531 is queued/running. Do not mark #155 green until this run passes.
+- #156 exact head `706d0d55`: CI run #41328400861 passed. Its base branch has since received the #155 correction, so validate the resulting stacked merge state again.
+
+**Separate Central Brain / UI / historical stage chain**
+- #112 Stage 3 memory nudges → #113 Stage 4 persistent scheduler → #114 Stage 5 Propose–Probe–Compose → #115 Stage 6 bounded subagents → #116 Stage 7 verification gate → #117 unified central brain/recovery/self-extension/autonomy controls → #118 owner security controls → #119 graphite UI → #120 navigation.
+- This chain is separate from #145–#156. #117 is not an ancestor of #156.
+- #157 Stage 6 proactive operation is based directly on #117's `orion/stage-5-one-central-brain`, not on #156 and not on #120.
+- #158 activity timeline is based on #157.
+- #157 exact head `c468d2ea`: Android and PRoot CI passed (runs #41475348911 and #41475349031).
+- #158 exact head `517fb50e`: Android CI passed (run #41496418379).
+- The successful #157/#158 runs do not validate the #154–#156 Python/repair stack, and the #156 run does not validate #157/#158. These branches have divergent histories and overlapping core files including Agent, AgentCheckpointStore, AgentPolicy, OrionCentralBrain and PhoneAiService.
+
+### Release blockers and integration rules
+
+1. Keep all PRs draft/unmerged while branch ancestry and overlapping-file changes are reconciled. Do not merge #157/#158 independently into main or treat them as a substitute for #156.
+2. Build one explicit integration branch from the validated Stage 4 dependency chain, then port the Stage 6 watcher, owner-control/UI, and activity-timeline changes in dependency order. Resolve semantic conflicts in shared execution, checkpoint, policy, service and chat owners; do not blindly retarget bases.
+3. Include the owner-control/UI chain (#118–#120) in the integration review; these are not currently ancestors of #157/#158.
+4. Retain Stage 5's hold decision. The older #117 chain contains Stage 5 features and is currently a dependency of #157; decide which narrowly-scoped Central Brain/control pieces must be ported without silently declaring Stage 5 resumed.
+5. Re-run exact-head Android unit tests, restricted Python tests, APK packaging/signature validation and PRoot candidate validation on the final integrated SHA.
+6. Stage 7 physical acceptance is still required on the confirmed current device (POCO F3, Android 13, Snapdragon 870 / Adreno 650). CI cannot certify Accessibility, HyperOS/Doze scheduling, notifications, voice, install/data migration, private LAN/WebSocket, cancellation, or sustained stability.
+
+### Completion status
+
+- Source-branch inventory and dependency graph: **audited; integration not complete**.
+- Stage 4 repair: #154 green; #155 corrected, exact-head CI pending; #156 previously green but must be revalidated after parent correction.
+- Stage 6 watcher and activity timeline: each has green CI on its own branch; **not integrated with Stage 4**.
+- Owner-control/UI (#118–#120): source branches exist; not included in #157/#158 ancestry and not physically accepted.
+- Stage 7 release gate (#116): exists on the older stage chain; **not run as the combined final release gate**.
+- Physical device acceptance: **not performed**.
+
+No stage may be marked complete based only on an isolated branch build. Completion requires a single integrated SHA, exact-head CI, APK artifact verification and recorded physical-device evidence.
