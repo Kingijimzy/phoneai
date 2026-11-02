@@ -808,3 +808,16 @@ This confirms the issue is broader than a single overlapping file: the active fe
 
 ### Latest Stage 4 test correction
 - PR #155 head `fdaca230d31aea67e46b47bfe55d130459fbd703` corrects the owner-rejection test's plan digest to include the EXTERNAL execution boundary. Exact-head CI run #41509441062 is still running as of this audit; no pass claim until completion.
+
+
+## Unified integration candidate opened — 2026-11-02
+
+A controlled integration branch now exists: `orion/stage4-7-integration-20261102`.
+
+- It is anchored on updated Stage 6 PR #157 head `61b4a0ec`, which is based on PR #120 and therefore inherits owner controls (#118), graphite UI (#119), and navigation (#120).
+- Draft PR #160 integrates the complete Stage 4 dependency chain (#130 → #131 → #132 → #145 → #154 → #155 → #156) into that anchor.
+- PR #160 has 263 changed files because it carries the complete dependency stack, not merely PR #156's final 37-file increment. The changed-file union was cross-checked against the source PRs; this is an integration-scale diff and must be reviewed, not treated as a narrow patch.
+- GitHub currently reports PR #160 as mergeable. Exact-head integrated CI run #41511173661 is in progress. No merge until it passes and the diff is reviewed.
+- PR #158's timeline branch remains separate and will be ported/retargeted onto the integrated candidate after #160 passes.
+- PR #159 was a temporary integration probe and is closed without merge. It changed no source branch and no default-branch code.
+- All source PRs remain draft/unmerged. Stage 5 remains on hold. Physical-device acceptance remains mandatory.
