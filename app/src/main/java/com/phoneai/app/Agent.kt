@@ -127,13 +127,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     outputTail = safe(result.takeLast(1_200), 400),
                     exitCode = Regex("(?i)(?:exit(?: code)?|status)\\s*[:=]\\s*(-?\\d+)").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 )
-            tool in setOf("workspace_write", "workspace_read", "file_read", "file_write", "file_list") ->
+            tool in setOf("workspace_write", "workspace_read", "file_read", "file_write", "file_list") || tool.contains("file_") ->
                 OrionActivityEvidence.File(
-                    displayPath = safe(args.optString("path").ifBlank { "workspace file" }, 240),
+                    displayPath = safe(args.optString("path").ifBlank { args.optString("file_path").ifBlank { "workspace file" } }, 240),
                     byteCount = Regex("(?i)(\\d+)\\s*bytes?").find(result)?.groupValues?.getOrNull(1)?.toLongOrNull(),
                     operation = safe(tool.substringAfterLast('_'), 40)
                 )
-            tool in setOf("git_diff", "code_diff", "apply_patch", "git_apply") -> {
+            tool.contains("diff") || tool.contains("patch") -> {
                 val additions = Regex("(\\d+)\\s+insertions?").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
                 val deletions = Regex("(\\d+)\\s+deletions?").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
                 OrionActivityEvidence.CodeDiff(
@@ -143,9 +143,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     summary = safe(result.replace("\\n", " "), 300)
                 )
             }
-            tool in setOf("ask_agent", "create_agent", "delegate_task", "spawn_agent") ->
+            tool.contains("agent") || tool.contains("delegate") ->
                 OrionActivityEvidence.AgentHandoff(
-                    agentId = safe(args.optString("agent").ifBlank { args.optString("id").ifBlank { "specialist" } }, 96),
+                    agentId = safe(args.optString("agent").ifBlank { args.optString("agent_id").ifBlank { args.optString("id").ifBlank { "specialist" } } }, 96),
                     parentTaskId = args.optString("parent_task_id").takeIf { it.isNotBlank() },
                     objective = safe(args.optString("task").ifBlank { args.optString("objective").ifBlank { args.optString("name") } }, 300),
                     status = if (failed) "failed" else "returned"
