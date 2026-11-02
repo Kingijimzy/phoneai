@@ -351,6 +351,11 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         if (event.summary.isNotBlank()) Text(event.summary, color = Color(0xFFB8B8B8), fontSize = 12.sp, lineHeight = 17.sp, maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 7.dp)) {
             Text(java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(event.timestampMs)), color = Color(0xFF858585), fontSize = 9.sp)
+            event.elapsedMs?.let { duration ->
+                val seconds = duration / 1000L
+                val elapsedLabel = if (seconds < 60) "${seconds}s" else if (seconds < 3600) "${seconds / 60}m${seconds % 60}s" else "${seconds / 3600}h${(seconds % 3600) / 60}m"
+                Text("  ·  $elapsedLabel", color = Color(0xFF858585), fontSize = 9.sp)
+            }
             event.agentId?.let { Text("  ·  $it", color = Color(0xFF858585), fontSize = 9.sp) }
             Spacer(Modifier.weight(1f))
             Text(if (expanded) "LESS" else "EVIDENCE", color = Color(0xFFAAAAAA), fontSize = 9.sp)
