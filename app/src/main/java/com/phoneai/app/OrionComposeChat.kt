@@ -362,10 +362,40 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         }
         AnimatedVisibility(expanded, enter = fadeIn(tween(160))) {
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                event.evidence.take(8).forEach { evidence ->
-                    Text("• $evidence", color = Color(0xFFD0D0D0), fontSize = 11.sp, lineHeight = 16.sp)
+                event.typedEvidence.take(8).forEach { evidence ->
+                    when (evidence) {
+                        is OrionActivityEvidence.Browser -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("BROWSER · ${evidence.title}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            if (evidence.url.isNotBlank()) Text(evidence.url, color = Color(0xFFB8C5D8), fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            evidence.excerpt?.let { Text(it, color = Color(0xFFAAAAAA), fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+                        }
+                        is OrionActivityEvidence.Terminal -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("TERMINAL · ${evidence.commandLabel}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            if (evidence.outputTail.isNotBlank()) Text(evidence.outputTail, color = Color(0xFFB8B8B8), fontSize = 10.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                            evidence.exitCode?.let { Text("Exit code $it", color = if (it == 0) Color(0xFFB8CDBD) else Color(0xFFE09B9B), fontSize = 9.sp) }
+                        }
+                        is OrionActivityEvidence.File -> Text(
+                            "FILE · ${evidence.operation} · ${evidence.displayPath}" + (evidence.byteCount?.let { " · $it bytes" } ?: ""),
+                            color = Color(0xFFD0D0D0), fontSize = 11.sp, lineHeight = 16.sp
+                        )
+                        is OrionActivityEvidence.CodeDiff -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("CODE DIFF · ${evidence.fileLabel} · +${evidence.additions} / -${evidence.deletions}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(evidence.summary, color = Color(0xFFB8B8B8), fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        }
+                        is OrionActivityEvidence.AgentHandoff -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("AGENT · ${evidence.agentId} · ${evidence.status}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(evidence.objective, color = Color(0xFFB8B8B8), fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            evidence.parentTaskId?.let { Text("Parent task $it", color = Color(0xFF858585), fontSize = 9.sp) }
+                        }
+                    }
                 }
-                if (event.evidence.isEmpty()) Text("No additional evidence was attached to this event.", color = Color(0xFF858585), fontSize = 11.sp)
+                if (event.typedEvidence.isEmpty()) {
+                    event.evidence.take(8).forEach { evidence ->
+                        Text("• $evidence", color = Color(0xFFD0D0D0), fontSize = 11.sp, lineHeight = 16.sp)
+                    }
+                    if (event.evidence.isEmpty()) Text("No additional evidence was attached to this event.", color = Color(0xFF858585), fontSize = 11.sp)
+                }
+                event.parentTaskId?.let { Text("Parent $it", color = Color(0xFF777777), fontSize = 9.sp) }
                 Text("Task ${event.taskId}", color = Color(0xFF777777), fontSize = 9.sp)
             }
         }
