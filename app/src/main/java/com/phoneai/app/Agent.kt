@@ -73,6 +73,32 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return "[TASK:${if (failed) "FAILED" else "RESULT"}]\n$tool — $detail"
     }
 
+    /** Build compact, sanitized evidence from real tool outputs and safe identifiers. */
+    private fun activityEvidence(tool: String, args: JSONObject, result: String): String {
+        val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        fun safe(value: String, limit: Int) = OrionEvidenceSanitizer.text(value, limit)
+        val detail = when {
+            tool.startsWith("browser_") || tool in setOf("open_url", "fetch_url", "research_web", "web_search") -> {
+                val raw = args.optString("url").ifBlank { args.optString("target") }
+                val url = ChatBrowserUrlPolicy.normalize(raw).orEmpty()
+                val title = Regex("(?im)^TITLE:\\s*(.+)$").find(result)?.groupValues?.getOrNull(1).orEmpty()
+                listOf("Browser", safe(title.ifBlank { "Web result" }, 100), safe(url, 220),
+                    safe(result.replace("\n", " "), 180)).filter { it.isNotBlank() }.joinToString(" · ")
+            }
+            tool in setOf("shell", "python_exec", "termux_command") ->
+                listOf("Terminal", safe(if (tool == "python_exec") "Python execution" else if (tool == "shell") "Shell command" else "Termux command", 80),
+                    safe(result.replace("\n", " "), 220)).joinToString(" · ")
+            tool in setOf("workspace_write", "workspace_read") ->
+                listOf("File", safe(args.optString("path"), 180), safe(result.replace("\n", " "), 160)).joinToString(" · ")
+            tool in setOf("ask_agent", "create_agent") ->
+                listOf("Agent hand-off", safe(args.optString("agent").ifBlank { args.optString("id") }, 80),
+                    safe(args.optString("task").ifBlank { args.optString("name") }, 180),
+                    if (failed) "failed" else "returned").joinToString(" · ")
+            else -> ""
+        }
+        return detail.take(480)
+    }
+
     private fun aiOneShot(instruction: String, data: String): String {
         val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
         return commandNim.chat(msgs, false, 450, 0.3).trim()
@@ -2495,8 +2521,9 @@ Rules:
             else -> "error: unknown tool $tool"
         }
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
-        svc.recordChatEvent("tool_result", if (failed) "error" else "result",
-            "Tool: $tool — " + result.replace("\n", " ").take(360))
+        val summary = "Tool: $tool — " + result.replace("\n", " ").take(280) +
+            activityEvidence(tool, a, result).takeIf { it.isNotBlank() }?.let { " | Evidence: $it" }.orEmpty()
+        svc.recordChatEvent("tool_result", if (failed) "error" else "result", summary)
         return result
     }
 
