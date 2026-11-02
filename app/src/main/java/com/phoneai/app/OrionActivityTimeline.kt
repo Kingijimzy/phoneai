@@ -82,7 +82,7 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     kind = OrionActivityKind.APPROVAL; status = OrionActivityStatus.WAITING
                     title = "Approval required"
                 }
-                line.startsWith("[TASK:FAILED]") || line.endsWith(":FAILED]") -> {
+                line.startsWith("[TASK:FAILED]") -> {
                     kind = OrionActivityKind.ERROR; status = OrionActivityStatus.FAILED
                     title = detail.ifBlank { "Action failed" }
                 }
