@@ -147,6 +147,8 @@ internal object AgentHooks {
      merged.add(Proof(event.tool, true, false, event.summary))
     OrionEvidenceLedger.Outcome.FAILED, OrionEvidenceLedger.Outcome.DENIED, OrionEvidenceLedger.Outcome.RECOVERY ->
      merged.add(Proof(event.tool, false, false, event.summary))
+    // Context retrieval is a preflight fact, never evidence that the requested action ran.
+    OrionEvidenceLedger.Outcome.CONTEXT_RETRIEVED -> Unit
    }
   }
   val success=merged.filter{it.success}

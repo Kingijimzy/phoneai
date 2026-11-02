@@ -339,6 +339,44 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             transcripts.addLast(prefix + text.trim())
             while (transcripts.size > 6) transcripts.removeFirst()
             transcriptView.text = transcripts.joinToString("\\n")
+            persistLiveTurn(fromModel, text)
+        }
+    }
+
+    /** Persist final live transcripts as text in the shared SQLite conversation index. Raw audio is never stored. */
+    private fun persistLiveTurn(fromModel: Boolean, text: String) {
+        val clean = text.trim().take(4_000)
+        if (clean.isBlank() || MemoryGovernancePolicy.sensitivity(clean) == "sensitive") return
+        runCatching {
+            if (!fromModel) {
+                MemoryAutoIndexer.observe(this, clean)
+                    ?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }
+                    ?.let { proposal ->
+                        OrionConversationRepository.get(this).recordEvent(
+                            this, null, "memory_proposal", "pending",
+                            "Suggested memory from Gemini Live for owner review: category=${proposal.category}"
+                        )
+                    }
+            }
+            val transcript = ChatHistoryStore.load(this).toMutableList()
+            val turn = (if (fromModel) "ai" else "me") to clean
+            if (transcript.lastOrNull() != turn) {
+                transcript += turn
+                ChatHistoryStore.save(this, transcript)
+            }
+            if (OrionSensorConsent.read(this, OrionSensorScope.MICROPHONE).active()) {
+                OrionMultimodalEvidenceStore.record(
+                    this,
+                    ChatHistoryStore.activeSessionId(this),
+                    modality = OrionMultimodalEvidenceStore.Modality.AUDIO_TRANSCRIPT,
+                    source = "gemini_live_final_transcript",
+                    digest = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(clean.toByteArray(Charsets.UTF_8))
+                        .joinToString("") { "%02x".format(it) },
+                    summary = if (fromModel) "Assistant speech transcript is available in the shared conversation history; raw audio was not stored."
+                        else "User speech transcript is available in the shared conversation history; raw audio was not stored."
+                )
+            }
         }
     }
 

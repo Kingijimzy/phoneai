@@ -83,7 +83,7 @@ class SoulEngineActivity : ComponentActivity() {
                         onOpenTasks = { open(TaskCenterActivity::class.java) },
                         onOpenAgents = { open(AgentsActivity::class.java) },
                         onOpenMemory = { open(MemoryActivity::class.java) },
-                        onOpenTrading = { runCatching { startActivity(AgentChatActivity.workspaceIntent(this)) } },
+                        onOpenTrading = { runCatching { startActivity(TradingDeskActivity.intent(this)) } },
                         onOpenBrowser = { startActivity(Intent(this@SoulEngineActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")) },
                         onOpenSettings = { startActivity(Intent(this@SoulEngineActivity, SettingsActivity::class.java)) },
                         onOpenCapabilityReport = { open(OrionCapabilityReportActivity::class.java) },

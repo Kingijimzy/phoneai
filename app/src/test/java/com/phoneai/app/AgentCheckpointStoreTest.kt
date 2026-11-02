@@ -158,6 +158,68 @@ class AgentCheckpointStoreTest {
         assertNotNull(second)
         assertNotEquals(first, second)
     }
+    @Test fun parentPauseAndStopAreVisibleToChildDelegationByExactTaskId() {
+        assertTrue(AgentCheckpointStore.begin(context, "Coordinate a research specialist"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(parentId)
+        assertFalse(AgentCheckpointStore.cancellationRequested(context, parentId))
+        assertTrue("A worker with an unknown parent must fail closed instead of outliving an unverified parent",
+            AgentCheckpointStore.cancellationRequested(context, "different-task"))
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+
+        assertTrue(AgentCheckpointStore.clear(context))
+        assertTrue(AgentCheckpointStore.begin(context, "Coordinate another specialist"))
+        val stoppedParent = AgentCheckpointStore.evidenceTaskId(context)
+        assertTrue(AgentCheckpointStore.stop(context, "User cancelled parent objective"))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, stoppedParent))
+    }
+
+    @Test fun archivedPausedParentRemainsCancelledForItsDelegatedWorker() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent objective"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertTrue(AgentCheckpointStore.begin(context, "Unrelated new objective"))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+    }
+
+    @Test fun parentWaitsForDelegatedChildrenAndCompletesAfterLastChildReceipt() {
+        assertTrue(AgentCheckpointStore.begin(context, "Research a topic with a specialist"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val child = store.enqueue(parentId, "Summarise verified findings", OrionWorkerJobStore.Kind.ANALYSIS)
+        assertNotNull(child)
+
+        assertTrue("Chat-turn completion must not close an objective with pending children",
+            AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertFalse("Waiting parent remains valid for its exact child", AgentCheckpointStore.cancellationRequested(context, parentId))
+
+        assertTrue(store.claimNext { it == parentId } != null)
+        assertTrue(store.complete(child!!.id, "Findings saved"))
+        assertFalse(store.hasPendingForParent(parentId))
+        assertTrue("Final child receipt should allow parent completion", AgentCheckpointStore.pending(context) == null)
+        assertEquals(parentId, AgentCheckpointStore.evidenceTaskId(context))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+    }
+
+    @Test fun replacingWaitingParentInvalidatesItsQueuedChildren() {
+        assertTrue(AgentCheckpointStore.begin(context, "Delegate a background analysis"))
+        val oldParent = AgentCheckpointStore.evidenceTaskId(context)!!
+        val child = OrionWorkerJobStore(context).enqueue(
+            oldParent, "Analyse the saved task", OrionWorkerJobStore.Kind.ANALYSIS
+        )
+        assertNotNull(child)
+        assertTrue(AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+
+        assertTrue(AgentCheckpointStore.begin(context, "A new unrelated user objective"))
+        assertTrue("An archived waiting parent must never authorize its queued child",
+            AgentCheckpointStore.cancellationRequested(context, oldParent))
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED,
+            OrionWorkerJobStore(context).all().first { it.id == child!!.id }.status)
+    }
+
     @Test fun tasksExecutorOwnsDurableCheckpointRecoveryBoundary() {
         assertTrue(OrionTasksCapabilityExecutor.beginRun(context, "Inspect the app after restart"))
         assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "open_app", JSONObject().put("name", "Settings")))

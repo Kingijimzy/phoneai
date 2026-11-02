@@ -288,6 +288,74 @@ class TaskCenterActivity : Activity() {
             add(listHost, card, 16)
         }
 
+        // Specialist delegation receipts are a separate, durable record from ordinary
+        // phone-tool activity. They show what a worker was asked to analyse and its scope,
+        // without presenting unsupported pause/cancel controls as if workers were background jobs.
+        val delegations = OrionAgentDelegation.latest(this, 5).asReversed()
+        val delegationCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = panel()
+        }
+        delegationCard.addView(label("SPECIALIST WORKERS", 10f, Theme.SILVER, true))
+        delegationCard.addView(label(
+            if (delegations.isEmpty()) "No specialist delegations recorded yet"
+            else "${delegations.size} recent delegation receipts · newest first",
+            13f, Theme.TEXT, true
+        ).apply { setPadding(0, dp(5), 0, 0) })
+        delegationCard.addView(label(
+            "Workers currently return scoped analysis to Orion. The parent agent retains approval and action authority; these receipts do not mean background execution is available.",
+            10f, Theme.MUTED
+        ).apply { setPadding(0, dp(5), 0, dp(3)) })
+        if (delegations.isEmpty()) {
+            add(delegationCard, label(
+                "Ask Orion to delegate a research, trading-analysis or planning task to a specialist. The result will appear here after it is recorded.",
+                12f, Theme.MUTED
+            ), 8)
+        } else delegations.forEach { receipt ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(10), 0, dp(8))
+            }
+            val identity = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val agentId = receipt.optString("agentId", "specialist").ifBlank { "specialist" }
+            val status = receipt.optString("status", "unknown").uppercase(Locale.getDefault())
+            identity.addView(label(agentId.replace('_', ' ').uppercase(Locale.getDefault()), 12f, Theme.TEXT, true),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            val statusColor = when (status.lowercase(Locale.ROOT)) {
+                "completed" -> Theme.SILVER
+                "running" -> 0xFFE7BD7B.toInt()
+                "failed" -> Theme.DANGER
+                else -> Theme.MUTED
+            }
+            identity.addView(label(status, 9f, statusColor, true))
+            row.addView(identity)
+            row.addView(label(receipt.optString("objective", "Objective unavailable").take(260),
+                12f, Theme.TEXT_SECONDARY).apply { setPadding(0, dp(5), 0, 0) })
+            val parent = receipt.optString("parentTaskId").takeIf { it.isNotBlank() }?.let { "Parent task · $it" }
+                ?: "Parent task · not attached"
+            val access = receipt.optString("access", "scope unavailable").replace('_', ' ')
+            val started = time(receipt.optLong("startedAt"))
+            val finishedAt = receipt.optLong("finishedAt")
+            val timing = if (finishedAt > 0L) "Started $started · finished ${time(finishedAt)}"
+                else "Started $started · awaiting recorded completion"
+            row.addView(label("$parent · $access", 10f, Theme.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+            row.addView(label(timing, 10f, Theme.MUTED).apply { setPadding(0, dp(3), 0, 0) })
+            val result = receipt.optString("summary")
+            if (result.isNotBlank()) {
+                row.addView(label(result.take(360), 11f, Theme.MUTED).apply { setPadding(0, dp(5), 0, 0) })
+            }
+            delegationCard.addView(row)
+            if (receipt !== delegations.last()) {
+                delegationCard.addView(View(this).apply { setBackgroundColor(Theme.LINE) },
+                    LinearLayout.LayoutParams(-1, dp(1)))
+            }
+        }
+        add(listHost, delegationCard, 16)
+
         // Recent tool activity is deliberately separate from the task board: it is an
         // audit trail of tool names and outcomes, not a copy of private inputs or screen text.
         val events = ActionLogStore.all(this).take(12)

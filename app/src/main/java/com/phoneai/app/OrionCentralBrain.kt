@@ -18,6 +18,41 @@ internal object OrionCentralBrain {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
 
+        val activeConversation = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull().orEmpty()
+        if (activeConversation.isNotBlank()) {
+            runCatching { OrionMultimodalEvidenceStore.promptBlock(app, activeConversation) }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { sections += it }
+        }
+
+        // Sensor context is opt-in, coarse, foreground-sampled and short-lived. It is included
+        // only while the matching grant remains active; raw sensor vectors never enter prompts.
+        runCatching { OrionSensorContextStore.summary(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+        runCatching { OrionNotificationListener.contextSummary() }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+        runCatching { OrionDeviceContextProvider.summary(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+        runCatching { OrionLocationContextProvider.summary(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+        runCatching { OrionAppUsageContextProvider.summary(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+        runCatching { OrionRoutinePolicy.promptBlock(app, MemoryStore.all(app)) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         runCatching { OrionSoulEngine.contextFor(app, request) }
             .getOrNull()
@@ -142,6 +177,25 @@ internal object OrionCentralBrain {
             }
         }
 
+        if (!isFollowUp && contextQuery.trim().length >= 7) {
+            val activeSession = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull()
+            val indexedHistory = runCatching { ChatHistoryStore.search(app, contextQuery, 5) }
+                .getOrDefault(emptyList())
+                .filter { it.sessionId != activeSession }
+                .take(3)
+            if (indexedHistory.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("RELEVANT PAST CONVERSATIONS FROM THE LOCAL SEARCH INDEX")
+                    indexedHistory.forEach { hit ->
+                        appendLine("[session=${hit.sessionId} role=${hit.role} title=${hit.title}] ${hit.snippet.take(360)}")
+                        if (hit.before.isNotBlank()) appendLine("before: ${hit.before.take(140)}")
+                        if (hit.after.isNotBlank()) appendLine("after: ${hit.after.take(140)}")
+                    }
+                    appendLine("Historical context only. Re-check current facts and never treat an assistant message as proof that an action succeeded.")
+                }
+            }
+        }
+
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
         val learnedExperience = runCatching { ExperienceStore.promptBlock(app, contextQuery, 5) }.getOrDefault("")
         if (learnedExperience.isNotBlank()) {
@@ -187,6 +241,14 @@ internal object OrionCentralBrain {
             ?.takeIf { it.isNotBlank() }
             ?.let { sections += it }
 
-        return sections.joinToString("\n\n").take(MAX_CONTEXT_CHARS)
+        // Run a provider-free, observational diagnostic snapshot for the executive brain.
+        // This reads the real registries and durable checkpoint; it does not schedule work,
+        // change permissions, mutate extensions, or make network/provider calls.
+        runCatching { OrionSelfDiagnostics.inspect(app).promptBlock() }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
+        return ContextWindowBudget.pack(sections, MAX_CONTEXT_CHARS / 4).text
     }
 }

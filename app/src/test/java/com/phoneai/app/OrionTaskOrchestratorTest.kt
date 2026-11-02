@@ -87,10 +87,12 @@ class OrionTaskOrchestratorTest {
         assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "weather")!!.contains("disabled"))
     }
 
-    @Test fun dispatchGuardBlocksNonActionableConversationAndAmbiguousGoals() {
+    @Test fun goalClassifierDoesNotOverrideLiveRegisteredCapabilityDispatch() {
         val conversation = OrionTaskOrchestrator.build("hello", listOf(tool("weather")), packs, true)
-        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(conversation, "weather")!!.contains("not ready"))
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(conversation, "weather"))
         val ambiguous = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
-        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(ambiguous, "connect_service")!!.contains("not ready"))
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(ambiguous, "connect_service"))
+        // Clarification remains a planner instruction; it is not a fake missing-permission error.
+        assertTrue(ambiguous.promptLines().any { it.contains("ask one focused clarification") })
     }
 }

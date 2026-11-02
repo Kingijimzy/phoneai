@@ -77,6 +77,24 @@ class SelfExtendingExtensionsTest {
         assertNull(store.enabled(extension.id))
     }
 
+    @Test fun persistedSourceTamperingInvalidatesPreviouslyApprovedExtension() {
+        val extension = draft()
+        assertTrue(store.saveDraft(extension))
+        assertTrue(store.promote(extension.id, ExtensionTestReport(true, extension.sourceSha256, "passed"), userApproved = true))
+        assertNotNull(store.enabled(extension.id))
+
+        val file = context.filesDir.resolve("orion_generated_extensions.json")
+        // Mutate the persisted JSON field rather than searching for raw source text:
+        // AtomicFile stores JSON-escaped newlines, so the source string is not present
+        // verbatim in the serialized file.
+        val registry = JSONObject(file.readText())
+        val entries = registry.getJSONArray("extensions")
+        entries.getJSONObject(0).put("source", "def run(value):\\n    return 'tampered'")
+        file.writeText(registry.toString())
+
+        assertNull(store.enabled(extension.id))
+    }
+
     @Test fun registryCorruptionFailsClosedWithoutOverwritingEvidence() {
         val file = context.filesDir.resolve("orion_generated_extensions.json")
         file.writeText("{ broken")

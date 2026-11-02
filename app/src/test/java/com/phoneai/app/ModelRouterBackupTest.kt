@@ -21,6 +21,12 @@ class ModelRouterBackupTest {
         assertNull(ModelRouter.modelFor(ModelRouter.Tier.DEEP, "nvidia", false, false, verified))
     }
 
+    @Test fun memoryNotesRoundTrip() {
+        val r = DeskBackup.parse(DeskBackup.build(emptyMap(), JSONArray(), 1L, listOf("[rule] never risk more than 1%", "my entry is on a retest")))
+        assertEquals(listOf("[rule] never risk more than 1%", "my entry is on a retest"), r.memory)
+        assertTrue(DeskBackup.parse("""{"app":"orion-desk","v":1}""").memory.isEmpty())
+    }
+
     @Test fun backupRoundTripsAndDropsSecretsAndSafetyState() {
         val prefs = mapOf(
             "trading_desk" to mapOf<String, Any?>("strategies" to "[1]", "kill" to true, "loss_streak" to 4, "paper" to "{}", "api_key" to "abc", "n" to 3L, "f" to 1.5f, "b" to true),

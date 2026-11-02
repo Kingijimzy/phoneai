@@ -48,7 +48,9 @@ internal object AgentChatStore {
 class AgentChatActivity : Activity() {
     companion object {
         const val EXTRA_AGENT = "agent_id"
-        /** Trading workspace entry: open the specialist coach chat as the desk front door. */
+
+        /** The trading workspace: the coach chat is the front door of the desk. */
+        private const val LOOKS = 5 // orb, fox, robot (drawn), dot-matrix orb, hologram head
         fun workspaceIntent(c: Context): Intent = Intent(c, AgentChatActivity::class.java).putExtra(EXTRA_AGENT, "coach")
         private const val REQUEST_IMAGE = 7422
     }
@@ -58,51 +60,260 @@ class AgentChatActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var attachLabel: TextView
-    private lateinit var sendButton: Button
-    private lateinit var activityStatus: TextView
     private val turns = mutableListOf<AgentRunner.Turn>()
     private var pendingImage: String? = null
     @Volatile private var busy = false
     @Volatile private var screenDestroyed = false
     private var deskStatus: TextView? = null
+    private var pnlText: TextView? = null
+    private var moodText: TextView? = null
+    private var mascot: CompanionView? = null
+    private var orb: OrbView? = null
+    private var holo: HologramView? = null
+    private var look = 0
+    private var liveState = CompanionView.Activity.IDLE
+    private var lastStrip = "ORION"
+    private var lastLine = ""
+    private var listeningNow = false
+    private var speakingNow = false
+    private var wakeOn = false
+    private var wake: OfflineWakeWordDetector? = null
+    private var voice: Voice? = null
+    private var lastMood: CompanionMood.Mood? = null
+    private var lastSpokeAt = 0L
+    private var prevRealized: Double? = null
+    private var greeted = false
+    private var handsFree = false
+    private var currentGroup = 0
+    private var chipRow: LinearLayout? = null
+    private var tabRow: LinearLayout? = null
+    private var tabsHolder: android.widget.HorizontalScrollView? = null
+    private var resumed = false
+    private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
+    private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); startWake(); ticker.postDelayed(this, 20_000L) } } }
 
-    override fun onResume() {
-        super.onResume()
-        val status = deskStatus ?: return
+    private fun voiceOut(): Voice = voice ?: Voice(applicationContext).also { v ->
+        v.onSpeaking = { on -> speakingNow = on; postUiIfAlive { setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) } }
+        v.onLevel = { l -> postUiIfAlive { orb?.level = l; holo?.mic(l) } }
+        voice = v
+    }
+
+    /** One place that moves every visual (drawn character, dot-matrix orb, hologram) to the same state. */
+    private fun setLive(a: CompanionView.Activity) {
+        liveState = a
+        mascot?.activity = a
+        orb?.mode = when (a) {
+            CompanionView.Activity.IDLE -> OrbView.Mode.IDLE
+            CompanionView.Activity.THINKING -> OrbView.Mode.THINKING
+            CompanionView.Activity.LISTENING -> OrbView.Mode.LISTENING
+            CompanionView.Activity.SPEAKING -> OrbView.Mode.SPEAKING
+        }
+        pushHolo()
+    }
+
+    private fun pushHolo() {
+        val h = holo ?: return
+        if (h.visibility == android.view.View.VISIBLE) h.show(h.stateName(liveState), lastStrip, lastLine)
+    }
+
+    /** 0 to 2: drawn characters, 3: dot-matrix orb, 4: human-head hologram banner. Tap the character to cycle. */
+    private fun applyLook(i: Int) {
+        look = i.coerceIn(0, LOOKS - 1)
+        Prefs.setCompanionChar(this, look)
+        mascot?.visibility = if (look <= 2) android.view.View.VISIBLE else android.view.View.GONE
+        if (look <= 2) mascot?.character = look
+        orb?.visibility = if (look == 3) android.view.View.VISIBLE else android.view.View.GONE
+        holo?.visibility = if (look == 4) android.view.View.VISIBLE else android.view.View.GONE
+        mascot?.let { if (look <= 2) Motion.enter(it) }
+        pushHolo()
+    }
+
+    private fun refreshDesk() {
+        val strip = pnlText ?: return
         Thread {
-            val line = runCatching { TradingDesk.statusLine(this) }
-                .getOrDefault("Trading desk status unavailable")
+            val t = try { TradingDesk.statusLine(this) } catch (_: Exception) { "Desk status unavailable" }
+            val snap = try { TradingDesk.pnlSnapshot(this) } catch (_: Exception) { null }
             runOnUiThread {
-                if (!screenDestroyed) status.text = line
+                if (uiUnavailable()) return@runOnUiThread
+                deskStatus?.text = t
+                if (snap != null) {
+                    strip.text = snap.strip; moodText?.text = snap.state.line; mascot?.setMood(snap.state.mood)
+                    lastStrip = snap.strip; lastLine = snap.state.line; pushHolo()
+                    val now = System.currentTimeMillis()
+                    val reaction = CompanionLife.reactionTo(prevRealized, snap.realized, snap.equity, lastMood, snap.state.mood)
+                    mascot?.react(reaction)
+                    if (reaction != CompanionLife.Reaction.NONE) { holo?.pulse(0.9f); orb?.pulseMouth() }
+                    prevRealized = snap.realized
+                    if (Prefs.companionVoice(this) && CompanionMood.shouldSpeak(lastMood, snap.state.mood, lastSpokeAt, now)) {
+                        lastSpokeAt = now; voiceOut().speak(snap.state.line)
+                    }
+                    lastMood = snap.state.mood
+                    if (!greeted) {
+                        greeted = true
+                        val seen = Prefs.lastChatSeen(this)
+                        val away = if (seen == 0L) 0L else (now - seen) / 60_000L
+                        if (seen == 0L || away >= 30L) {
+                            val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                            val g = CompanionLife.greeting(hour, away, snap.positions, snap.state.mood, snap.newsMinutes)
+                            addBubble(false, g)
+                            if (Prefs.companionVoice(this)) voiceOut().speak(g)
+                        }
+                    }
+                }
             }
         }.start()
     }
 
-    override fun onDestroy() {
-        screenDestroyed = true
-        super.onDestroy()
+    private fun micTap() {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 91); return
+        }
+        if (busy) return
+        listeningNow = true
+        input.hint = "Listening…"
+        setLive(CompanionView.Activity.LISTENING)
+        voiceOut().listen(
+            onText = { t -> postUiIfAlive {
+                input.hint = "Ask, or upload a chart…"
+                listeningNow = false
+                setLive(CompanionView.Activity.IDLE)
+                if (!t.isNullOrBlank()) { input.setText(t); send() }
+                else if (handsFree) ticker.postDelayed({ if (handsFree && resumed && !busy && !uiUnavailable()) micTap() }, 700L)
+            } },
+            onPartial = { partial -> postUiIfAlive { input.setText(partial); input.setSelection(input.text.length) } },
+            onProblem = { m -> postUiIfAlive {
+                android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show()
+                listeningNow = false
+                setLive(CompanionView.Activity.IDLE)
+                if (handsFree) { handsFree = false; selectGroup(currentGroup) }
+            } }
+        )
     }
+
+    /** Hands-free: listen, send, speak the reply, then listen again until switched off. */
+    private fun toggleHandsFree() {
+        handsFree = !handsFree
+        selectGroup(currentGroup)
+        if (handsFree) {
+            android.widget.Toast.makeText(this, "Hands-free on. Speak after the character starts listening. Tap Talk again to stop.", android.widget.Toast.LENGTH_LONG).show()
+            micTap()
+        } else {
+            voice?.stopSpeaking(); setLive(CompanionView.Activity.IDLE)
+        }
+    }
+
+    /** In-chat wake word: say "Orion" and the mic opens. Uses the offline model installed in Settings; audio stays on the device until it fires. */
+    private fun toggleWake() {
+        if (wakeOn) { wakeOn = false; stopWake(); selectGroup(currentGroup); return }
+        when {
+            Prefs.wake(this) -> android.widget.Toast.makeText(this, "The global wake word is on in Settings and the microphone can only serve one. Turn it off there first.", android.widget.Toast.LENGTH_LONG).show()
+            !WakeWordModelInstaller.isInstalled(this) -> android.widget.Toast.makeText(this, "Install the offline wake-word model in Settings first. The wake word is \"Orion\".", android.widget.Toast.LENGTH_LONG).show()
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED ->
+                requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 92)
+            else -> { wakeOn = true; startWake(); selectGroup(currentGroup)
+                android.widget.Toast.makeText(this, "Say \"Orion\", then your request.", android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    private fun startWake() {
+        if (!wakeOn || wake != null || listeningNow || speakingNow || busy || !resumed) return
+        val d = OfflineWakeWordDetector(applicationContext, onWake = {
+            postUiIfAlive { stopWake(); if (wakeOn && resumed) micTap() }
+        }, onError = { m -> postUiIfAlive { wakeOn = false; stopWake(); android.widget.Toast.makeText(this, m, android.widget.Toast.LENGTH_LONG).show(); selectGroup(currentGroup) } })
+        if (d.start()) wake = d else { wakeOn = false; selectGroup(currentGroup) }
+    }
+
+    private fun stopWake() { wake?.stop(); wake = null }
+
+    private fun toggleVoice() {
+        val on = !Prefs.companionVoice(this); Prefs.setCompanionVoice(this, on)
+        if (!on) voice?.stopSpeaking()
+        selectGroup(currentGroup)
+    }
+
+    private fun runAction(a: String) {
+        when (a) {
+            "quote" -> quoteDialog()
+            "review" -> { input.setText("Review my trade: pair, side, entry, stop, exit and why I took it: "); input.setSelection(input.text.length) }
+            "risk" -> riskDialog()
+            "desk" -> startActivity(TradingDeskActivity.intent(this))
+            "brain" -> startActivity(Intent(this, SoulEngineActivity::class.java))
+            "voice" -> toggleVoice()
+            "talk" -> toggleHandsFree()
+            "mic" -> micTap()
+            "wake" -> toggleWake()
+            "caps" -> addBubble(false, "Here is what I can do for you:\n" + DeskCapabilities.items.joinToString("\n") { "- ${it.name}: ${it.does}" })
+            "tour" -> addBubble(false, DeskTour.text)
+            "health" -> {
+                val wait = addBubble(false, "Checking your setup…")
+                Thread {
+                    val t = try { DeskHealth.text(TradingDesk.healthItems(this)) } catch (_: Exception) { "I could not run the setup check." }
+                    postUiIfAlive { wait.text = Markdown.render(t) }
+                }.start()
+            }
+            "learned" -> notesDialog()
+            "clear" -> { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() }
+        }
+    }
+
+    private fun chipLabel(c: ChatGroups.Chip): String = when (c.action) {
+        "voice" -> "Voice: " + (if (Prefs.companionVoice(this)) "on" else "off")
+        "talk" -> if (handsFree) "Talk: on" else "Talk"
+        "wake" -> if (wakeOn) "Wake: on" else "Wake"
+        else -> c.label
+    }
+
+    /** Shows one group of quick actions, with a short staggered entrance. */
+    private fun selectGroup(i: Int) {
+        currentGroup = i
+        val row = chipRow ?: return
+        val g = ChatGroups.coach[i]
+        row.removeAllViews()
+        g.chips.forEachIndexed { n, c ->
+            val b = smallButton(chipLabel(c)) { if (c.prompt != null) quick(c.prompt) else runAction(c.action!!) }
+            row.addView(b, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+            Motion.enter(b, n)
+        }
+        val tabs = tabRow ?: return
+        for (k in 0 until tabs.childCount) {
+            val t = tabs.getChildAt(k) as TextView
+            val on = k == i
+            t.setTextColor(if (on) Theme.ON_ACCENT else Theme.MUTED)
+            (t.background as GradientDrawable).setColor(if (on) Theme.CYAN else Theme.PANEL)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val granted = grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (requestCode == 91 && granted) micTap()
+        if (requestCode == 92 && granted) toggleWake()
+    }
+
+    override fun onPause() {
+        resumed = false; ticker.removeCallbacks(tick)
+        if (agent.id == "coach") Prefs.setLastChatSeen(this, System.currentTimeMillis())
+        if (handsFree) { handsFree = false; voice?.stopSpeaking(); setLive(CompanionView.Activity.IDLE) }
+        stopWake()
+        super.onPause()
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN || ev.actionMasked == android.view.MotionEvent.ACTION_MOVE) mascot?.lookAt(ev.rawX, ev.rawY)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onDestroy() { screenDestroyed = true; ticker.removeCallbacks(tick); stopWake(); holo?.destroy(); holo = null; voice?.shutdown(); voice = null; super.onDestroy() }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    private fun setBusyState(value: Boolean, message: String = "") {
-        busy = value
-        if (::sendButton.isInitialized) {
-            sendButton.isEnabled = !value
-            sendButton.text = if (value) "Working…" else "Send"
-            sendButton.alpha = if (value) 0.55f else 1f
-        }
-        if (::activityStatus.isInitialized) {
-            activityStatus.text = message
-            activityStatus.visibility = if (message.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
-        }
-    }
+    private fun uiUnavailable(): Boolean = screenDestroyed || isFinishing || isDestroyed
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        if (::input.isInitialized) outState.putString("agent_chat_draft", input.text.toString())
-        if (::scroll.isInitialized) outState.putInt("agent_chat_scroll_y", scroll.scrollY)
-        outState.putBoolean("agent_chat_was_busy", busy)
-        super.onSaveInstanceState(outState)
+    private fun postUiIfAlive(action: () -> Unit) {
+        runOnUiThread {
+            if (uiUnavailable()) return@runOnUiThread
+            action()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -110,27 +321,44 @@ class AgentChatActivity : Activity() {
         agent = AgentProfiles.find(intent.getStringExtra(EXTRA_AGENT)) ?: AgentProfiles.all.first()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG) }
 
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), statusBarPad(), dp(14), dp(10)) }
-        header.addView(smallButton("‹") { finish() }.apply {
-            textSize = 27f
-            contentDescription = "Back to agent workspace"
-            minWidth = dp(42)
-        }, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(12) })
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), statusBarPad(), dp(84), dp(10)) }
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(TextView(this).apply { text = agent.name; textSize = 20f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD })
         titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(header, -1, -2)
         if (agent.id == "coach") {
-            deskStatus = TextView(this).apply {
-                text = "Trading desk: loading status…"
-                textSize = 11f
-                setTextColor(Theme.MUTED)
-                setPadding(dp(18), 0, dp(18), dp(8))
-                contentDescription = "Trading desk status; tap to open desk"
-                setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Theme.LINE) }
+                clipToOutline = true
             }
-            root.addView(deskStatus, -1, -2)
+            val holoView = HologramView(this).apply { visibility = android.view.View.GONE; setOnClickListener { applyLook((look + 1) % LOOKS) } }
+            holo = holoView
+            card.addView(holoView, LinearLayout.LayoutParams(-1, dp(190)))
+            val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(14), dp(8)) }
+            card.addView(top, -1, -2)
+            val face = CompanionView(this).apply { setOnClickListener { applyLook((look + 1) % LOOKS) } }
+            mascot = face
+            val orbView = OrbView(this).apply { visibility = android.view.View.GONE; setOnClickListener { applyLook((look + 1) % LOOKS) } }
+            orb = orbView
+            val holder = android.widget.FrameLayout(this)
+            holder.addView(face, android.widget.FrameLayout.LayoutParams(-1, -1))
+            holder.addView(orbView, android.widget.FrameLayout.LayoutParams(-1, -1))
+            top.addView(holder, LinearLayout.LayoutParams(dp(88), dp(88)))
+            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+            pnlText = TextView(this).apply { textSize = 15f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD; text = "Live PnL: loading…" }
+            moodText = TextView(this).apply { textSize = 12f; setTextColor(Theme.TEXT); setPadding(0, dp(2), 0, 0) }
+            deskStatus = TextView(this).apply {
+                textSize = 11f; setTextColor(Theme.MUTED); setPadding(0, dp(4), 0, 0)
+                text = "Desk: loading…"
+                setOnClickListener { startActivity(TradingDeskActivity.intent(this@AgentChatActivity)) }
+            }
+            col.addView(pnlText); col.addView(moodText); col.addView(deskStatus)
+            top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+            root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(14), 0, dp(14), dp(8)) })
+            Motion.enter(card)
+            applyLook(Prefs.companionChar(this).coerceIn(0, LOOKS - 1))
         }
 
         run {
@@ -138,56 +366,40 @@ class AgentChatActivity : Activity() {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
             fun chip(label: String, click: () -> Unit) = row.addView(smallButton(label, click), LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
             if (agent.id == "coach") {
-            chip("Match playbook") { quick("Match my playbook now: scan every instrument in it, rank what fits my rules, and warn me about news or session problems.") }
-            chip("News & sessions") { quick("What high-impact news and which sessions matter for my playbook pairs in the next 24 hours?") }
-            chip("Simulate") { quick("Simulate my playbook on recent history for the pairs in it and tell me honestly whether the numbers show an edge.") }
-            chip("Forecast") { quick("Give me a forecast for the main pair in my playbook using my strategy, its simulated record, the news calendar and headlines.") }
-            chip("Desk") { startActivity(Intent(this, TradingActivity::class.java)) }
-            chip("Brain") { startActivity(Intent(this, SoulEngineActivity::class.java)) }
-
-            chip("Find setups") { quick("Find me the best trade setups on my watchlist right now and judge them against my strategy.") }
-            chip("Market outlook") { quick("Give me your outlook for my watchlist: bias, key levels and what would invalidate it.") }
-            chip("Daily briefing") { quick("Give me my trading briefing: outlook for my watchlist, the best setups, and one risk to watch today.") }
-            chip("Review my trade") { input.setText("Review my trade: pair, side, entry, stop, exit and why I took it: "); input.setSelection(input.text.length) }
-            chip("Risk calculator") { riskDialog() }
-            chip("Weekly review") { quick("Review my week: use my journal stats and track record, name my best and worst habits, and give me one rule to add.") }
-            chip("Quote") { quoteDialog() }
+                val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
+                tabRow = tabs
+                ChatGroups.coach.forEachIndexed { i, g ->
+                    tabs.addView(TextView(this).apply {
+                        text = g.name; textSize = 12f; gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
+                        setPadding(dp(14), dp(7), dp(14), dp(7))
+                        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat() }
+                        setOnClickListener { selectGroup(i) }
+                        Motion.pressFeedback(this)
+                    }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
+                }
+                tabsHolder = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(tabs) }
+                chipRow = row
             }
             if (agent.id == "research") {
                 chip("Market news") { quick("What is the latest market news today and what is moving crypto, gold and the dollar?") }
                 chip("Quote") { quoteDialog() }
             }
-            chip("Tasks") { startActivity(Intent(this, TaskCenterActivity::class.java)) }
-            chip("Memory") { startActivity(Intent(this, MemoryActivity::class.java)) }
-            chip("Learned") { notesDialog() }
-            chip("Clear") {
-                AlertDialog.Builder(this).setTitle("Clear specialist chat?")
-                    .setMessage("This removes this specialist's saved conversation from this phone. Learned notes are kept.")
-                    .setNegativeButton("Keep", null)
-                    .setPositiveButton("Clear") { _, _ ->
-                        turns.clear()
-                        AgentChatStore.clear(this, agent.id)
-                        messages.removeAllViews()
-                        greet()
-                    }.show()
+            if (agent.id != "coach") {
+                chip("Learned") { notesDialog() }
+                chip("Clear") { runAction("clear") }
             }
             chips.addView(row)
+            tabsHolder?.let { root.addView(it, -1, -2) }
             root.addView(chips, -1, -2)
+            if (agent.id == "coach") selectGroup(0)
         }
         scroll = ScrollView(this)
         messages = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(14)) }
         scroll.addView(messages, -1, -2)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        attachLabel = TextView(this).apply { textSize = 12f; setTextColor(Theme.SILVER); setPadding(dp(18), dp(4), dp(18), 0); visibility = android.view.View.GONE }
+        attachLabel = TextView(this).apply { textSize = 12f; setTextColor(Theme.CYAN); setPadding(dp(18), dp(4), dp(18), 0); visibility = android.view.View.GONE }
         root.addView(attachLabel, -1, -2)
-        activityStatus = TextView(this).apply {
-            textSize = 11f
-            setTextColor(Theme.MUTED)
-            setPadding(dp(18), dp(3), dp(18), dp(2))
-            visibility = android.view.View.GONE
-        }
-        root.addView(activityStatus, -1, -2)
 
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(14)) }
         if (agent.acceptsImages) bar.addView(smallButton("Chart") { pickImage() })
@@ -195,29 +407,22 @@ class AgentChatActivity : Activity() {
             hint = if (agent.acceptsImages) "Ask, or upload a chart…" else "Message ${agent.name}…"
             setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); textSize = 15f
             maxLines = 5
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
             background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Theme.LINE) }
             setPadding(dp(16), dp(10), dp(16), dp(10))
         }
         bar.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
-        sendButton = smallButton("Send") { send() }
-        bar.addView(sendButton)
+        bar.addView(smallButton("Send") { send() })
         root.addView(bar, -1, -2)
         setContentView(root)
-        input.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) { send(); true } else false
-        }
 
         turns.addAll(AgentChatStore.load(this, agent.id))
         if (turns.isEmpty()) greet() else turns.forEach { addBubble(it.role == "user", it.text) }
-        savedInstanceState?.getString("agent_chat_draft")?.let { input.setText(it); input.setSelection(input.text.length) }
-        savedInstanceState?.getInt("agent_chat_scroll_y")?.let { y -> scroll.post { scroll.scrollTo(0, y) } }
-        if (savedInstanceState?.getBoolean("agent_chat_was_busy") == true) {
-            val interrupted = "The previous reply was interrupted when this screen was recreated. Your earlier messages are saved; send the request again when ready."
-            addBubble(false, interrupted)
-            turns.add(AgentRunner.Turn("assistant", interrupted))
-            AgentChatStore.save(this, agent.id, turns)
-        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        if (deskStatus != null) { ticker.removeCallbacks(tick); tick.run() }
     }
 
     private fun statusBarPad(): Int {
@@ -263,10 +468,7 @@ class AgentChatActivity : Activity() {
                             else -> "I don't recognise \"$sym\". Try a Bybit symbol, a forex pair such as EURUSD, or gold, oil, SPX."
                         }
                     } catch (e: Exception) { "Quote failed: " + (e.message ?: e.javaClass.simpleName).take(120) }
-                    runOnUiThread {
-                        if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
-                        AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show()
-                    }
+                    postUiIfAlive { AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show() }
                 }.start()
             }.setNegativeButton("Cancel", null).show()
     }
@@ -284,7 +486,7 @@ class AgentChatActivity : Activity() {
 
     private fun greet() {
         val hello = when (agent.id) {
-            "coach" -> "Tell me your strategy in your own words, upload a chart, or say \"find me setups\". I'll judge trades against your rules and your journal."
+            "coach" -> "Tell me your strategy in your own words, upload a chart, or say \"find me setups\". I'll judge trades against your rules and your journal.\n\nNew here? Open the Start tab for a tour, what I can do, and a setup check."
             "research" -> "Ask me anything that needs current facts. I'll search, answer first, and show sources."
             "coder" -> "Paste code or an error and tell me what you want."
             "planner" -> "Give me a goal and a deadline."
@@ -328,6 +530,7 @@ class AgentChatActivity : Activity() {
                 val result = Trading.placeProposal(this, t) { question ->
                     val latch = java.util.concurrent.CountDownLatch(1); var ok = false
                     runOnUiThread {
+                        if (uiUnavailable()) { latch.countDown(); return@runOnUiThread }
                         AlertDialog.Builder(this).setTitle("Confirm order").setMessage(question)
                             .setPositiveButton("Place") { _, _ -> ok = true; latch.countDown() }
                             .setNegativeButton("Cancel") { _, _ -> latch.countDown() }
@@ -336,10 +539,7 @@ class AgentChatActivity : Activity() {
                     latch.await(120, java.util.concurrent.TimeUnit.SECONDS); ok
                 }
                 if (result.startsWith("Order placed")) AgentLessons.addTagged(this, "coach", "trade", result.take(200))
-                runOnUiThread {
-                    if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
-                    status.text = result
-                }
+                postUiIfAlive { status.text = result }
             }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Dismiss") { messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
@@ -369,7 +569,7 @@ class AgentChatActivity : Activity() {
         row.addView(smallButton("Accept") { TradingDesk.accept(this, st); say("Added to your playbook. I will track results and watch for matches.") }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Accept & match") {
             TradingDesk.accept(this, st); say("Added. Matching now…")
-            Thread { val r = try { TradingDesk.scan(this, st.instruments.ifEmpty { TradingDesk.followSymbols(this) }) } catch (e: Exception) { "Match failed: " + (e.message ?: "") }; runOnUiThread { say(r) } }.start()
+            Thread { val r = try { TradingDesk.scan(this, st.instruments.ifEmpty { TradingDesk.followSymbols(this) }) } catch (e: Exception) { "Match failed: " + (e.message ?: "") }; postUiIfAlive { say(r) } }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Dismiss") { TradingDesk.dismissPending(this, st.name); messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
         card.addView(row); card.addView(status)
@@ -388,7 +588,7 @@ class AgentChatActivity : Activity() {
                 val args = org.json.JSONObject().put("action", "open").put("symbol", p.symbol).put("side", if (p.long) "buy" else "sell").put("usd", p.usd).put("stop", p.stop).put("setup_type", "coach")
                 p.target?.let { args.put("target", it) }
                 val r = TradingDesk.run(this, "paper_trade", args)
-                runOnUiThread { say(r) }
+                postUiIfAlive { say(r) }
             }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         if (DerivDesk.hasToken(this) && DerivProtocol.symbolFor(p.symbol) != null) {
@@ -398,6 +598,7 @@ class AgentChatActivity : Activity() {
                     val r = DerivDesk.trade(this, p) { question ->
                         val latch = java.util.concurrent.CountDownLatch(1); var ok = false
                         runOnUiThread {
+                            if (uiUnavailable()) { latch.countDown(); return@runOnUiThread }
                             AlertDialog.Builder(this).setTitle("Confirm Deriv trade").setMessage(question)
                                 .setPositiveButton("Place") { _, _ -> ok = true; latch.countDown() }
                                 .setNegativeButton("Cancel") { _, _ -> latch.countDown() }
@@ -416,11 +617,7 @@ class AgentChatActivity : Activity() {
     }
 
     private fun pickImage() {
-        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         try { startActivityForResult(pick, REQUEST_IMAGE) } catch (_: Exception) { Toast.makeText(this, "No image picker is available.", Toast.LENGTH_LONG).show() }
     }
 
@@ -428,16 +625,11 @@ class AgentChatActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_IMAGE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        try {
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (_: Exception) {
-            // Some document providers grant a temporary read-only URI; the image is
-            // encoded immediately below, so persistent access is optional.
-        }
+        val readGrant = (data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0
+        if (readGrant) runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         Thread {
             val encoded = try { encodeImage(uri) } catch (e: Exception) { null }
-            runOnUiThread {
-                if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
+            postUiIfAlive {
                 if (encoded == null) {
                     Toast.makeText(this, "Could not read that image. Try a screenshot or a smaller picture.", Toast.LENGTH_LONG).show()
                 } else {
@@ -498,7 +690,7 @@ class AgentChatActivity : Activity() {
         // Safe, bounded Python snippets run automatically. Do not show a per-task
         // approval card: the user has already explicitly asked "run it". Android/Termux's
         // one-time OS permission remains required and cannot be bypassed by an app.
-        setBusyState(true, "Running Python in Termux…")
+        busy = true
         val waiting = addBubble(false, "Running Python in Termux…")
         val encoded = Base64.encodeToString(source.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         Thread {
@@ -509,7 +701,7 @@ class AgentChatActivity : Activity() {
             }
             runOnUiThread {
                 val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
-                if (screenDestroyed || isFinishing || isDestroyed) {
+                if (uiUnavailable()) {
                     val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shown)) }
                     AgentChatStore.save(applicationContext, agent.id, recovered)
                     return@runOnUiThread
@@ -517,7 +709,7 @@ class AgentChatActivity : Activity() {
                 waiting.text = Markdown.render(shown)
                 turns.add(AgentRunner.Turn("assistant", shown))
                 AgentChatStore.save(this, agent.id, turns)
-                setBusyState(false)
+                busy = false
                 scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
         }.start()
@@ -560,28 +752,30 @@ class AgentChatActivity : Activity() {
             addBubble(true, text)
             turns.add(AgentRunner.Turn("user", text))
             val waiting = addBubble(false, "Handing this request to Orion's shared tool executor…")
-            setBusyState(true, "Orion is using a shared phone tool…")
+            busy = true
             AgentChatStore.save(this, agent.id, turns)
             if (service == null) {
                 val message = "I can't run this request from the specialist chat because Orion's accessibility service is not connected. Enable Orion's service and try again. No action was performed."
                 transitionReply(waiting, message)
                 turns.add(AgentRunner.Turn("assistant", message))
                 AgentChatStore.save(this, agent.id, turns)
-                setBusyState(false)
+                busy = false
                 return
             }
             service.executeSharedToolRequest(text, "specialist agent " + agent.name) { result ->
                 val shownResult = result.ifBlank { "The tool executor returned no final response. Check Orion's task transcript." }
-                if (screenDestroyed || isFinishing || isDestroyed) {
-                    val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shownResult)) }
-                    AgentChatStore.save(applicationContext, agent.id, recovered)
-                    return@executeSharedToolRequest
+                runOnUiThread {
+                    if (uiUnavailable()) {
+                        val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shownResult)) }
+                        AgentChatStore.save(applicationContext, agent.id, recovered)
+                        return@runOnUiThread
+                    }
+                    transitionReply(waiting, shownResult)
+                    turns.add(AgentRunner.Turn("assistant", shownResult))
+                    AgentChatStore.save(this, agent.id, turns)
+                    busy = false
+                    scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
                 }
-                transitionReply(waiting, shownResult)
-                turns.add(AgentRunner.Turn("assistant", shownResult))
-                AgentChatStore.save(this, agent.id, turns)
-                setBusyState(false)
-                scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
             return
         }
@@ -593,21 +787,18 @@ class AgentChatActivity : Activity() {
         val shown = if (image != null) "[chart attached] $text" else text
         addBubble(true, shown.trim())
         val waiting = addBubble(false, "Thinking…")
-        setBusyState(true, "Orion is thinking…")
+        busy = true
+        setLive(CompanionView.Activity.THINKING)
         val history = turns.toList()
         Thread {
             var trades: List<TradeProposals.Trade> = emptyList()
             var strategies: List<StrategySpec> = emptyList()
             var papers: List<DeskProposals.Paper> = emptyList()
-            val reply = try { AgentRunner.runFull(this, agent, history, text, image).also {
-                trades = it.trades
-                strategies = it.strategies
-                papers = it.papers
-            }.text }
+            val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades; strategies = it.strategies; papers = it.papers }.text }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
                 val finalReply = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
-                if (screenDestroyed || isFinishing || isDestroyed) {
+                if (uiUnavailable()) {
                     val recovered = history.toMutableList().apply {
                         add(AgentRunner.Turn("user", shown.trim()))
                         add(AgentRunner.Turn("assistant", finalReply))
@@ -619,11 +810,16 @@ class AgentChatActivity : Activity() {
                 strategies.forEach { addStrategyCard(it) }
                 papers.forEach { addPaperCard(it) }
                 transitionReply(waiting, finalReply)
+                setLive(CompanionView.Activity.IDLE)
+                val talk = agent.id == "coach" && (Prefs.companionVoice(this) || handsFree) && reply.isNotBlank()
+                if (talk) voiceOut().speak(reply.take(400)) { postUiIfAlive { if (handsFree && resumed) micTap() } }
+                else if (handsFree && resumed) ticker.postDelayed({ if (handsFree && resumed && !busy) micTap() }, 600L)
+                else ticker.postDelayed({ startWake() }, 1500L)
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
                 turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))
                 AgentChatStore.save(this, agent.id, turns)
-                setBusyState(false)
+                busy = false
                 scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
         }.start()

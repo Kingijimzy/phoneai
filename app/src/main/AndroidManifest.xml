@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Optional explicit bridge to a user-installed Termux terminal; user must enable its external-command setting. -->
@@ -8,6 +8,7 @@
     <!-- Used only for an explicit on-device location request; Android runtime permission remains required. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
@@ -55,6 +56,7 @@
         <activity android:name=".TeachModeActivity" android:exported="false" />
         <activity android:name=".TaskCenterActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".SensorContextActivity" android:exported="false" />
         <activity android:name=".SettingsFeatureActivity" android:exported="false" />
         <activity android:name=".OwnerControlCenterActivity" android:exported="false" android:excludeFromRecents="true" android:finishOnTaskLaunch="true" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
@@ -93,6 +95,7 @@
         <activity android:name=".DeviceUtilitiesActivity" android:exported="false" />
         <activity android:name=".RecordRequestActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity android:name=".TradingActivity" android:exported="false" />
+        <activity android:name=".TradingDeskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".AgentsActivity" android:exported="false" />
         <activity android:name=".AgentChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
 

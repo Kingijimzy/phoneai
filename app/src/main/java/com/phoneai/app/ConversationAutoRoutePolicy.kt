@@ -22,6 +22,13 @@ internal object ConversationAutoRoutePolicy {
     // Short follow-ups such as "test it yourself" resume the tool agent instead of returning a generic disclaimer.
     private val executeFollowUp = Regex("(?i)^\\s*(test|run|execute|try)\\s+(it|that|the code|the script)(\\s+yourself)?[.! ]*\\s*$")
 
+    // Explicit delegation language enters the guarded Agent loop, which records and reviews the worker result.
+    private val subagentTask = Regex(
+        "(?is)\\b(?:delegate|assign|give|hand|send)\\b.{0,120}\\b(?:task|work|job|research|review|code|analysis)\\b.{0,100}\\b(?:agent|subagent|specialist|coder|researcher|planner|writer|coach)\\b|" +
+            "\\b(?:delegate|assign|give|hand|send)\\b.{0,120}\\b(?:agent|subagent|specialist|coder|researcher|planner|writer|coach)\\b.{0,100}\\b(?:task|work|job|to)\\b|" +
+            "\\b(?:ask|tell)\\s+(?:the\\s+)?(?:code\\s+)?(?:agent|subagent|specialist|coder|researcher|planner|writer|coach)\\b.{0,80}\\b(?:to|with)\\b"
+    )
+
     private val publicRepositoryInspection = Regex(
         "(?i)\\b(check|inspect|explain|describe|summari[sz]e|tell me about|what is|what's|read)\\b.*" +
             "\\b(github|git hub)\\b.*\\b(repo|repository|project)\\s+(?:called\\s+|named\\s+|is\\s+)?[a-z0-9_.-]{2,100}\\b|" +
@@ -44,6 +51,7 @@ internal object ConversationAutoRoutePolicy {
             directRuntimeCommand.containsMatchIn(text) ||
             terminalCodeTask.containsMatchIn(text) ||
             executeFollowUp.matches(text) ||
+            subagentTask.containsMatchIn(text) ||
             publicRepositoryInspection.containsMatchIn(text) ||
             repositoryNameBeforeType.containsMatchIn(text) ||
             explicitWebsiteVisit.containsMatchIn(text)

@@ -10,7 +10,7 @@ import org.json.JSONObject
  * after an ambiguous outcome; only the connector's handshake/catalogue methods may reconnect.
  */
 internal object OrionMcpCapabilityExecutor {
-    private val supportedTools = setOf("mcp_status", "mcp_list_tools", "mcp_call")
+    private val supportedTools = setOf("mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
@@ -24,6 +24,10 @@ internal object OrionMcpCapabilityExecutor {
         "mcp_status" -> tools.mcpStatus()
         "mcp_list_tools" -> tools.mcpListTools()
         "mcp_call" -> callTool(args, service, tools, confirm)
+        "mcp_list_resources" -> tools.mcpListResources(args.optString("cursor"))
+        "mcp_read_resource" -> tools.mcpReadResource(args.optString("uri"))
+        "mcp_list_prompts" -> tools.mcpListPrompts(args.optString("cursor"))
+        "mcp_get_prompt" -> tools.mcpGetPrompt(args.optString("name"), args.optJSONObject("arguments") ?: JSONObject())
         else -> "error: MCP executor does not implement '$tool'."
     }
 

@@ -14,7 +14,7 @@ import java.security.MessageDigest
  * acceptance as proof of goal completion.
  */
 internal object OrionEvidenceLedger {
-    enum class Outcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, DENIED, RECOVERY }
+    enum class Outcome { VERIFIED, EXECUTED_UNVERIFIED, FAILED, DENIED, RECOVERY, CONTEXT_RETRIEVED }
 
     private const val MAX_EVENTS = 240
     private const val MAX_TEXT = 320
@@ -84,6 +84,32 @@ internal object OrionEvidenceLedger {
         .put("summary", safeSummary(tool, result))
     )
 
+    /**
+     * Records only metadata proving that objective-scoped memory retrieval completed.
+     * The objective itself and retrieved text are never persisted; only a one-way digest is kept.
+     */
+    fun recordMemoryRetrieval(
+        context: Context,
+        taskId: String,
+        objective: String,
+        source: String,
+        retrievedChars: Int
+    ): Boolean {
+        if (objective.isBlank() || source != "persistent_memory_context" || retrievedChars < 0) return false
+        val now = System.currentTimeMillis()
+        return append(context, JSONObject()
+            .put("id", digest("$now|memory_retrieval|$taskId|$objective").take(24))
+            .put("taskId", safeTaskId(taskId))
+            .put("backend", "memory")
+            .put("tool", "retrieve_before_act")
+            .put("outcome", Outcome.CONTEXT_RETRIEVED.name)
+            .put("startedAt", now)
+            .put("finishedAt", now)
+            .put("argsFingerprint", digest(objective))
+            .put("summary", "Objective-scoped memory context retrieved; source=$source; chars=$retrievedChars.")
+        )
+    }
+
     /** Records policy/capability denials that happen before the backend is entered. */
     fun recordBlocked(context: Context, taskId: String, tool: String, category: String, args: JSONObject = JSONObject()): Boolean =
         append(context, JSONObject()
@@ -97,6 +123,44 @@ internal object OrionEvidenceLedger {
             .put("argsFingerprint", digest(args.toString()))
             .put("summary", "Dispatch denied before execution: " + category.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48))
         )
+    /**
+     * Persist a repair lifecycle receipt in the existing evidence ledger. The plan digest is
+     * retained as a fingerprint only; proposal text, source code and approval credentials never
+     * enter the ledger.
+     */
+    fun recordRepairStage(
+        context: Context,
+        taskId: String,
+        stage: String,
+        planDigest: String,
+        summary: String,
+        verified: Boolean = false,
+        failed: Boolean = false
+    ): Boolean {
+        val safeStage = stage.take(32)
+        if (safeStage !in setOf("PROPOSED", "SANDBOX_PASSED", "SANDBOX_FAILED", "AWAITING_OWNER",
+                "OWNER_APPROVED", "OWNER_REJECTED", "APPLY_STARTED", "APPLY_UNCERTAIN", "APPLIED", "VERIFIED",
+                "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")) return false
+        if (!planDigest.matches(Regex("^[a-fA-F0-9]{64}$"))) return false
+        val now = System.currentTimeMillis()
+        val result = summary.replace(Regex("[\\r\\n\\t]+"), " ").take(MAX_TEXT)
+        return append(context, JSONObject()
+            .put("id", digest("$now|repair|$safeStage|$taskId|$planDigest").take(24))
+            .put("taskId", safeTaskId(taskId))
+            .put("backend", "repair_lifecycle")
+            .put("tool", "repair_$safeStage".lowercase())
+            .put("outcome", when {
+                failed -> Outcome.FAILED.name
+                verified -> Outcome.VERIFIED.name
+                else -> Outcome.EXECUTED_UNVERIFIED.name
+            })
+            .put("startedAt", now)
+            .put("finishedAt", now)
+            .put("argsFingerprint", planDigest.lowercase())
+            .put("summary", result)
+        )
+    }
+
     /** Recovery is a first-class event; it never authorizes or replays an action. */
     fun recordRecovery(context: Context, taskId: String, tool: String, strategy: String, reason: String): Boolean =
         append(context, JSONObject()

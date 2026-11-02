@@ -30,7 +30,7 @@ internal object OrionCapabilityAdapters {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         ),
-        Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call"),
+        Backend.MCP to setOf("mcp_status", "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt"),
         Backend.DEVICE to setOf(
             "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications",
             "media_status", "media_control", "play_media", "chrome_search", "resolve_contact",
@@ -44,7 +44,7 @@ internal object OrionCapabilityAdapters {
         Backend.COMMUNICATION to setOf("telegram_status", "telegram_inbox", "telegram_send", "dial", "sms", "notification_action"),
         Backend.MEMORY to setOf("remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search",
             "graph_link", "graph_query", "self_review", "undo_last", "undo_status"),
-        Backend.TASKS to setOf("ask_agent", "create_agent", "task_list", "task_add", "task_update",
+        Backend.TASKS to setOf("ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update",
             "task_delete", "ask_user", "morning_brief", "standing_order"),
         Backend.RESEARCH to setOf("web_search", "live_news", "live_web_search", "fetch_url", "research_web",
             "weather", "github_public", "github_search_repositories", "bybit_public_ticker", "live_sports"),
