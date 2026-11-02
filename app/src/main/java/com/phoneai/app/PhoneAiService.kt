@@ -757,7 +757,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     /** Persist only bounded, secret-free activity metadata in the active chat session. */
-    fun recordChatEvent(
+    internal fun recordChatEvent(
         type: String,
         status: String,
         summary: String,
