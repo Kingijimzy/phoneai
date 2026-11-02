@@ -28,6 +28,7 @@ Record Android version, app version, commit SHA, result (PASS/FAIL/BLOCKED), and
 - [ ] Python/Linux runtime detection distinguishes available, unavailable, and unverified states; no unsupported runtime is reported as ready.
 - [ ] Memory nudge: explicit, non-sensitive preference can be proposed, saved only after review, and recalled after restart. Sensitive material is not suggested for saving.
 - [ ] Watcher: status is visible; commands `run subagents`, `show subagent report`, and `show agents` respond without dispatching tools or changing policies.
+- [ ] Live watcher: with Core + Proactive enabled and Accessibility Service connected, a service connection and foreground-window transition produce a bounded observation; disabling either pack prevents further live observations; reconnect resumes observation. Verify no screenshot/audio capture is started by this observer.
 - [ ] Disabled packs remain disabled after a watcher tick and subagent run.
 - [ ] Scheduler: pause/resume/remove and run history persist; verify behavior after app restart and after battery optimization/idle. Record OS scheduling delays rather than claiming exact-time guarantees.
 - [ ] Voice: start listening, speak a short test, confirm a visible transcript, response, and audible speech. If any stage fails, record which one.
