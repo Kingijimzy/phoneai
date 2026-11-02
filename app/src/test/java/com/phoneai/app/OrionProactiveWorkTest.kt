@@ -16,13 +16,17 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OrionProactiveWorkTest {
-    @Test fun scheduleRegistrationIsDurableAndIdempotent() {
+    private fun initializedContext(): Context {
         val context = RuntimeEnvironment.getApplication() as Context
         WorkManagerTestInitHelper.initializeTestWorkManager(
             context,
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.ERROR).build()
         )
+        return context
+    }
 
+    @Test fun scheduleRegistrationIsDurableAndIdempotent() {
+        val context = initializedContext()
         AgentPolicy.setEnabled(context, "orion_core", true)
         AgentPolicy.setEnabled(context, "proactive", true)
         OrionProactiveWork.ensureScheduled(context)
@@ -35,12 +39,9 @@ class OrionProactiveWorkTest {
         assertTrue("Registered heartbeat must not be cancelled", work.single().state != WorkInfo.State.CANCELLED)
         assertTrue(work.single().tags.contains("orion_stage6_proactive_heartbeat"))
     }
-    @Test fun disablingEitherOwnerPackCancelsTheHeartbeat() {
-        val context = RuntimeEnvironment.getApplication() as Context
-        WorkManagerTestInitHelper.initializeTestWorkManager(
-            context,
-            Configuration.Builder().setMinimumLoggingLevel(android.util.Log.ERROR).build()
-        )
+
+    @Test fun disablingProactivePackCancelsTheHeartbeat() {
+        val context = initializedContext()
         AgentPolicy.setEnabled(context, "orion_core", true)
         AgentPolicy.setEnabled(context, "proactive", true)
         OrionProactiveWork.ensureScheduled(context)
@@ -50,5 +51,18 @@ class OrionProactiveWorkTest {
         AgentPolicy.setEnabled(context, "proactive", false)
         val work = manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
         assertTrue("Disabling Proactive must cancel its periodic heartbeat", work.all { it.state == WorkInfo.State.CANCELLED })
+    }
+
+    @Test fun disablingCorePackCancelsTheHeartbeat() {
+        val context = initializedContext()
+        AgentPolicy.setEnabled(context, "orion_core", true)
+        AgentPolicy.setEnabled(context, "proactive", true)
+        OrionProactiveWork.ensureScheduled(context)
+        val manager = WorkManager.getInstance(context)
+        assertEquals(1, manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get().size)
+
+        AgentPolicy.setEnabled(context, "orion_core", false)
+        val work = manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
+        assertTrue("Disabling Orion Core must cancel the proactive heartbeat", work.all { it.state == WorkInfo.State.CANCELLED })
     }
 }
