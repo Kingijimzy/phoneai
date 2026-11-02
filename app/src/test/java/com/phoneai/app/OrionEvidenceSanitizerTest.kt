@@ -35,6 +35,18 @@ class OrionEvidenceSanitizerTest {
         assertEquals(0L, file.byteCount)
     }
 
+    @Test fun typedEvidenceJsonRoundTripSanitizesEveryField() {
+        val original = OrionActivityEvidence.Terminal(
+            "session-1", "run tests", "Bearer abcdefghijklmnop", 0
+        )
+        val restored = OrionActivityEvidence.fromJson(original.toJson().toString()) as OrionActivityEvidence.Terminal
+        assertEquals("session-1", restored.sessionId)
+        assertEquals("run tests", restored.commandLabel)
+        assertTrue(restored.outputTail.contains("[redacted]"))
+        assertTrue(!restored.outputTail.contains("abcdefghijklmnop"))
+        assertEquals(0, restored.exitCode)
+    }
+
     @Test fun diffAndHandoffEvidenceAreBounded() {
         val diff = OrionEvidenceSanitizer.evidence(
             OrionActivityEvidence.CodeDiff("f".repeat(300), -2, 3, "summary")
