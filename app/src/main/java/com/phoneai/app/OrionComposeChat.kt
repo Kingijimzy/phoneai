@@ -422,6 +422,8 @@ internal fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     activityEvents: List<OrionActivityEvent> = emptyList(),
     status: String,
+    companionLook: Int,
+    onCompanionLookChanged: (Int) -> Unit,
     chatTitle: String,
     commandMode: Boolean,
     selectedImages: List<Uri>,
