@@ -95,6 +95,7 @@ internal object OrionEvidenceSanitizer {
             val prefix = match.groupValues.getOrNull(1)?.trim().orEmpty()
             if (prefix.isBlank()) "[redacted]" else "$prefix=[redacted]"
         } }
+        safe = safe.replace(Regex("(?i)(https?://[^\\s?#]+)[?#][^\\s]*"), "$1")
         return safe.take(max)
     }
 
@@ -124,6 +125,8 @@ internal object OrionEvidenceSanitizer {
         val value = text(raw, 500)
         val uri = runCatching { java.net.URI(value) }.getOrNull() ?: return ""
         if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() || uri.userInfo != null) return ""
-        return value
+        return runCatching {
+            java.net.URI(uri.scheme, null, uri.host, uri.port, uri.path, null, null).toASCIIString()
+        }.getOrDefault("")
     }
 }
