@@ -195,6 +195,22 @@ class OrionConversationRepositoryTest {
         assertFalse(evidence.excerpt!!.contains("secret-value"))
     }
 
+    @Test fun concurrentSameToolCallsKeepDistinctStartResultCorrelation() {
+        repository.saveActive(context, listOf("me" to "run two lookups", "ai" to "starting"))
+        repository.recordEvent(context, null, "tool", "started", "Tool: browser_search", correlationId = "tool-a")
+        repository.recordEvent(context, null, "tool", "started", "Tool: browser_search", correlationId = "tool-b")
+        repository.recordEvent(context, null, "tool_result", "result", "Tool: browser_search — result B", correlationId = "tool-b")
+        repository.recordEvent(context, null, "tool_result", "result", "Tool: browser_search — result A", correlationId = "tool-a")
+
+        val events = repository.eventsForActive(context)
+        val starts = events.filter { it.type == "tool" && it.status == "started" }.associateBy { it.correlationId }
+        val results = events.filter { it.type == "tool_result" }.associateBy { it.correlationId }
+        assertEquals(setOf("tool-a", "tool-b"), starts.keys)
+        assertEquals(setOf("tool-a", "tool-b"), results.keys)
+        assertEquals("Tool: browser_search", starts[results["tool-a"]!!.correlationId]!!.summary)
+        assertEquals("Tool: browser_search", starts[results["tool-b"]!!.correlationId]!!.summary)
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
