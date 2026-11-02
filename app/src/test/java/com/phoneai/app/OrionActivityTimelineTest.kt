@@ -45,6 +45,9 @@ class OrionActivityTimelineTest {
         val failed = OrionActivityTimeline.fromLegacyNote("task-1", "[SHELL:FAILED]\npython main.py", 30)!!
         assertEquals(OrionActivityKind.CODING, failed.kind)
         assertEquals(OrionActivityStatus.FAILED, failed.status)
+        val browserFailed = OrionActivityTimeline.fromLegacyNote("task-1", "[BROWSER:FAILED]\nSearch request", 35)!!
+        assertEquals(OrionActivityKind.RESEARCH, browserFailed.kind)
+        assertEquals(OrionActivityStatus.FAILED, browserFailed.status)
         val done = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:COMPLETE]\nVerified output", 40)!!
         assertEquals(OrionActivityStatus.SUCCEEDED, done.status)
     }
