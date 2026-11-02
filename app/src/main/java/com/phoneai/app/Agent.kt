@@ -99,6 +99,60 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return detail.take(480)
     }
 
+    /** Typed evidence is derived from the actual tool result and persisted separately from its display summary. */
+    private fun activityEvidencePayload(
+        tool: String,
+        args: JSONObject,
+        result: String,
+        correlationId: String
+    ): OrionActivityEvidence? {
+        val failed = result.trimStart().startsWith("error", ignoreCase = true)
+        val safe = { value: String, limit: Int -> OrionEvidenceSanitizer.text(value, limit) }
+        return when {
+            tool.startsWith("browser_") || tool in setOf("open_url", "fetch_url", "research_web", "web_search", "browser_handoff") -> {
+                val raw = args.optString("url").ifBlank { args.optString("target") }
+                    .ifBlank { Regex("(?im)^URL:\\s*(https?://\\S+)").find(result)?.groupValues?.getOrNull(1).orEmpty() }
+                val url = ChatBrowserUrlPolicy.normalize(raw).orEmpty()
+                OrionActivityEvidence.Browser(
+                    title = safe(Regex("(?im)^TITLE:\\s*(.+)$").find(result)?.groupValues?.getOrNull(1).orEmpty().ifBlank { tool.replace('_', ' ') }, 120),
+                    url = url,
+                    excerpt = safe(result.replace(Regex("(?s)^.*?UNTRUSTED WEBPAGE CONTENT:\\s*"), "").replace("\\n", " "), 360).ifBlank { null }
+                )
+            }
+            tool in setOf("shell", "python_exec", "termux_command") ->
+                OrionActivityEvidence.Terminal(
+                    sessionId = correlationId,
+                    commandLabel = safe(if (tool == "python_exec") "Python execution" else if (tool == "shell") args.optString("command").ifBlank { "Shell command" } else "Termux command", 120),
+                    outputTail = safe(result.takeLast(1_200), 400),
+                    exitCode = Regex("(?i)(?:exit(?: code)?|status)\\s*[:=]\\s*(-?\\d+)").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                )
+            tool in setOf("workspace_write", "workspace_read", "file_read", "file_write", "file_list") ->
+                OrionActivityEvidence.File(
+                    displayPath = safe(args.optString("path").ifBlank { "workspace file" }, 240),
+                    byteCount = Regex("(?i)(\\d+)\\s*bytes?").find(result)?.groupValues?.getOrNull(1)?.toLongOrNull(),
+                    operation = safe(tool.substringAfterLast('_'), 40)
+                )
+            tool in setOf("git_diff", "code_diff", "apply_patch", "git_apply") -> {
+                val additions = Regex("(\\d+)\\s+insertions?").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                val deletions = Regex("(\\d+)\\s+deletions?").find(result)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                OrionActivityEvidence.CodeDiff(
+                    fileLabel = safe(args.optString("path").ifBlank { "Code changes" }, 160),
+                    additions = additions,
+                    deletions = deletions,
+                    summary = safe(result.replace("\\n", " "), 300)
+                )
+            }
+            tool in setOf("ask_agent", "create_agent", "delegate_task", "spawn_agent") ->
+                OrionActivityEvidence.AgentHandoff(
+                    agentId = safe(args.optString("agent").ifBlank { args.optString("id").ifBlank { "specialist" } }, 96),
+                    parentTaskId = args.optString("parent_task_id").takeIf { it.isNotBlank() },
+                    objective = safe(args.optString("task").ifBlank { args.optString("objective").ifBlank { args.optString("name") } }, 300),
+                    status = if (failed) "failed" else "returned"
+                )
+            else -> null
+        }?.let { OrionEvidenceSanitizer.evidence(it) }
+    }
+
     private fun aiOneShot(instruction: String, data: String): String {
         val msgs = JSONArray().put(msg("system", instruction)).put(msg("user", data.take(4000)))
         return commandNim.chat(msgs, false, 450, 0.3).trim()
@@ -2111,7 +2165,8 @@ Rules:
     }
 
     private fun exec(tool: String, a: JSONObject): String {
-        svc.recordChatEvent("tool", "started", "Tool: $tool")
+        val correlationId = UUID.randomUUID().toString()
+        svc.recordChatEvent("tool", "started", "Tool: $tool", correlationId = correlationId)
         val safetyBlock = SafetyGate.blockReason(
             tool,
             when (tool) {
@@ -2124,17 +2179,17 @@ Rules:
             svc.currentPackageName(),
             svc.currentAppLabel()
         )
-        if (safetyBlock != null) return "error: safety gate blocked action. $safetyBlock"
+        if (safetyBlock != null) { val blocked = "error: safety gate blocked action. $safetyBlock"; svc.recordChatEvent("tool_result", "error", "Tool: $tool — $blocked", correlationId = correlationId); return blocked }
         val screenSensitiveActions = setOf("click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key")
         if (tool in screenSensitiveActions) {
             val currentScreen = try { svc.readScreen().also { lastScreenSnapshot = it } } catch (_: Exception) { "" }
             if (SafetyGate.isSensitiveActionScreen(currentScreen, svc.currentPackageName())) {
-                return "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."
+                val blocked = "error: safety gate paused interaction because the visible screen appears to involve money, account security, credentials, or an irreversible action. Handle this screen manually."; svc.recordChatEvent("tool_result", "error", "Tool: $tool — $blocked", correlationId = correlationId); return blocked
             }
         }
         if (tool in setOf("browser_click", "browser_click_verify", "browser_type", "browser_scroll")) {
             val browserBlock = BrowserAutomation.sensitivePageReason()
-            if (browserBlock != null) return "error: safety gate blocked browser action. $browserBlock"
+            if (browserBlock != null) { val blocked = "error: safety gate blocked browser action. $browserBlock"; svc.recordChatEvent("tool_result", "error", "Tool: $tool — $blocked", correlationId = correlationId); return blocked }
         }
         val skillId = activeSkillId
         if (skillId != null) {
@@ -2142,11 +2197,11 @@ Rules:
             var decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, false)
             if (!decision.allowed && decision.reason.contains("approval", ignoreCase = true)) {
                 if (!confirm("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
-                    return "error: user denied skill action"
+                    val blocked = "error: user denied skill action"; svc.recordChatEvent("tool_result", "error", "Tool: $tool — $blocked", correlationId = correlationId); return blocked
                 }
                 decision = SkillRegistry.authorize(svc, skillId, tool, activeSkillCalls, elapsed, true)
             }
-            if (!decision.allowed) return "error: skill blocked: " + decision.reason
+            if (!decision.allowed) { val blocked = "error: skill blocked: " + decision.reason; svc.recordChatEvent("tool_result", "error", "Tool: $tool — $blocked", correlationId = correlationId); return blocked }
             activeSkillCalls++
         }
         val result = when (tool) {
@@ -2523,7 +2578,9 @@ Rules:
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         val summary = "Tool: $tool — " + result.replace("\n", " ").take(280) +
             activityEvidence(tool, a, result).takeIf { it.isNotBlank() }?.let { " | Evidence: $it" }.orEmpty()
-        svc.recordChatEvent("tool_result", if (failed) "error" else "result", summary)
+        val typedEvidence = activityEvidencePayload(tool, a, result, correlationId)
+        svc.recordChatEvent("tool_result", if (failed) "error" else "result", summary,
+            correlationId = correlationId, evidence = typedEvidence)
         return result
     }
 
