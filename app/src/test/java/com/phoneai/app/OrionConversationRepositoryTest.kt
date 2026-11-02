@@ -168,6 +168,33 @@ class OrionConversationRepositoryTest {
         assertEquals(listOf(firstEvent.id), repository.eventsForActive(context).map { it.id })
     }
 
+    @Test fun typedEvidenceAndCorrelationSurviveDatabaseReopen() {
+        repository.saveActive(context, listOf("me" to "research", "ai" to "checking sources"))
+        val event = repository.recordEvent(
+            context,
+            messageId = "message-typed",
+            type = "tool_result",
+            status = "success",
+            summary = "Tool: browser_search — page loaded",
+            correlationId = "tool-correlation-123",
+            evidence = OrionActivityEvidence.Browser(
+                "Docs", "https://example.com/reference", "access_token=secret-value"
+            )
+        )
+        assertNotNull(event)
+        repository.close()
+        resetRepositorySingleton()
+        repository = OrionConversationRepository.get(context)
+
+        val restored = repository.eventsForActive(context).single()
+        assertEquals("tool-correlation-123", restored.correlationId)
+        val evidence = OrionActivityEvidence.fromJson(restored.evidenceJson) as OrionActivityEvidence.Browser
+        assertEquals("Docs", evidence.title)
+        assertEquals("https://example.com/reference", evidence.url)
+        assertTrue(evidence.excerpt!!.contains("[redacted]"))
+        assertFalse(evidence.excerpt!!.contains("secret-value"))
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
