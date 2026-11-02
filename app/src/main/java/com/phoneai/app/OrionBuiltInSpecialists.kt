@@ -23,7 +23,7 @@ internal class OrionBuiltInSpecialists(private val context: Context) {
     )
 
     private fun specialist(role: OrionSpecialist, id: String, run: (OrionTaskEnvelope) -> OrionWorkerResult): OrionTaskWorker =
-        OrionSpecialistWorker(id, role, OrionSpecialistHandler(run))
+        OrionTaskSpecialistWorker(id, role, OrionSpecialistHandler(run))
 
     private fun success(kind: String, task: OrionTaskEnvelope, payload: JSONObject): OrionWorkerResult {
         val body = JSONObject().put("schema", 1).put("task_id", task.taskId)
