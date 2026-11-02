@@ -9,6 +9,18 @@ import android.content.Context
  * at most one already-opted-in standing order. It never calls an LLM, enables packs, changes
  * permissions, edits source code, or performs an unapproved consequential action.
  */
+internal object OrionContinuousWatcherPolicy {
+    const val COOLDOWN_MS = 30_000L
+
+    fun shouldObserve(
+        coreEnabled: Boolean,
+        proactiveEnabled: Boolean,
+        serviceConnected: Boolean,
+        elapsedSinceLastObservationMs: Long
+    ): Boolean = coreEnabled && proactiveEnabled && serviceConnected &&
+        elapsedSinceLastObservationMs >= COOLDOWN_MS
+}
+
 internal object SoulEngineWatcher {
     data class TickResult(
         val status: String,

@@ -155,4 +155,5 @@ dependencies {
     testImplementation("org.json:json:20240303")
     // Robolectric supplies real Android SQLite and SharedPreferences for repository lifecycle tests.
     testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.work:work-testing:2.9.1")
 }

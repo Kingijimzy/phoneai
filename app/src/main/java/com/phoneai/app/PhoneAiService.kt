@@ -79,6 +79,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var runtimeRetryRunnable: Runnable? = null
     @Volatile private var runtimeRetryAtElapsed = 0L
     @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
+    @Volatile private var lastContinuousWatcherAt = 0L
     @Volatile private var approvedRoutineReplayName = ""
     @Volatile private var approvedRoutineReplayAt = 0L
 
@@ -150,24 +151,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- lifecycle
 
-    // Keep standing orders alive even when no new window/accessibility event arrives.
-    // StandingOrders owns each order's persisted interval; this trigger only wakes the queue.
-    private val soulWatchTick = object : Runnable {
-        override fun run() {
-            val runtime = orionRuntime
-            if (runtime != null &&
-                runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch-periodic", 2)) {
-                scheduleRuntimeDrain()
-            }
-            main.postDelayed(this, 5 * 60_000L)
-        }
-    }
-
-    private fun scheduleSoulWatchTick() {
-        main.removeCallbacks(soulWatchTick)
-        main.postDelayed(soulWatchTick, 60_000L)
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -205,7 +188,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         decisionScheduler = scheduler
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
-        scheduleSoulWatchTick()
+        OrionProactiveWork.ensureScheduled(this)
+        requestContinuousWatcherObservation("service_connected")
         showBubble()
         startWake()
     }
@@ -218,6 +202,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Resume the bounded local queue only when a fresh real window event arrives.
             if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
             decisionScheduler?.onWindowChanged(event.packageName?.toString())
+            requestContinuousWatcherObservation("window_changed")
             scheduleRuntimeDrain()
         }
     }
@@ -245,6 +230,38 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             )) return false
         scheduleRuntimeDrain()
         return true
+    }
+
+    /**
+     * Keep the Soul watcher attached to the live AccessibilityService event stream.
+     * Meaningful foreground-window transitions trigger a bounded local observation;
+     * a cooldown coalesces rapid app/window churn. The periodic WorkManager job remains
+     * a recovery/standing-order fallback, not the primary observer.
+     */
+    private fun requestContinuousWatcherObservation(reason: String) {
+        val now = SystemClock.elapsedRealtime()
+        synchronized(this) {
+            val elapsed = if (lastContinuousWatcherAt == 0L) Long.MAX_VALUE else now - lastContinuousWatcherAt
+            val shouldObserve = OrionContinuousWatcherPolicy.shouldObserve(
+                coreEnabled = AgentPolicy.enabled(this, "orion_core"),
+                proactiveEnabled = AgentPolicy.enabled(this, "proactive"),
+                serviceConnected = instance === this,
+                elapsedSinceLastObservationMs = elapsed
+            )
+            if (!shouldObserve) return
+            lastContinuousWatcherAt = now
+        }
+        worker.execute {
+            if (instance !== this ||
+                !AgentPolicy.enabled(this, "orion_core") ||
+                !AgentPolicy.enabled(this, "proactive")) return@execute
+            runCatching { SoulEngineWatcher.run(this) }.onFailure {
+                AgentPolicy.log(
+                    this, "soul_watcher", "continuous_observation", null,
+                    "event=$reason; failure=" + it.javaClass.simpleName
+                )
+            }
+        }
     }
 
     private fun scheduleRuntimeDrain() {
@@ -361,7 +378,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        main.removeCallbacks(soulWatchTick)
         orionRuntime?.stop()
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
         runtimeRetryRunnable = null

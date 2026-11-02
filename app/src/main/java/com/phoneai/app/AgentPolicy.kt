@@ -19,7 +19,7 @@ object AgentPolicy {
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
         Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
-        Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
+        Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
@@ -44,6 +44,7 @@ object AgentPolicy {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
         log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
+        if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
     fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
     fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {

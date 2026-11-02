@@ -25,6 +25,38 @@ object AgentCheckpointStore {
         null
     }
 
+    /** Delegated checkpoints are namespaced by task ID so parallel workers never share recovery state. */
+    fun beginForTask(c: Context, taskId: String, command: String): Boolean {
+        if (!taskId.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$"))) return false
+        if (!begin(c, command)) return false
+        return synchronized(lock) {
+            val checkpoint = readCheckpoint(c) ?: return@synchronized false
+            checkpoint.put("taskId", taskId)
+            save(c, checkpoint)
+        }
+    }
+
+    fun pendingForTask(c: Context, taskId: String): JSONObject? = synchronized(lock) {
+        readCheckpoint(c)?.takeIf {
+            it.optString("taskId") == taskId &&
+                it.optString("status") in setOf("running", "paused", "recovery_required")
+        }
+    }
+
+    fun resumeInstructionForTask(c: Context, taskId: String): String? {
+        if (pendingForTask(c, taskId) == null) return null
+        return resumeInstruction(c)
+    }
+
+    fun recoveryRequiredForTask(c: Context, taskId: String, reason: String): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optString("taskId") != taskId) return@synchronized false
+        checkpoint.put("status", "recovery_required")
+            .put("recoveryNotice", reason.take(500))
+            .put("updatedAt", System.currentTimeMillis())
+        save(c, checkpoint)
+    }
+
     fun pending(c: Context): JSONObject? = synchronized(lock) {
         readCheckpoint(c)?.takeIf {
             it.optString("status") in setOf("running", "paused", "recovery_required")
@@ -59,6 +91,12 @@ object AgentCheckpointStore {
         checkpoint.remove("pauseRequested")
         checkpoint.put("status", "running").put("updatedAt", System.currentTimeMillis())
         save(c, checkpoint)
+    }
+
+    fun needsRecoveryConfirmationForTask(c: Context, taskId: String): Boolean = synchronized(lock) {
+        val checkpoint = readCheckpoint(c) ?: return@synchronized false
+        if (checkpoint.optString("taskId") != taskId) return@synchronized false
+        CheckpointTransitionPolicy.needsUserConfirmation(checkpoint.optJSONObject("inFlight") != null)
     }
 
     fun needsRecoveryConfirmation(c: Context): Boolean = synchronized(lock) {
