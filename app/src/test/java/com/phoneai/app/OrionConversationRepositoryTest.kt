@@ -211,6 +211,15 @@ class OrionConversationRepositoryTest {
         assertEquals("Tool: browser_search", starts[results["tool-b"]!!.correlationId]!!.summary)
     }
 
+    @Test fun cancellationAndInterruptionLifecycleEventsPersistSeparately() {
+        repository.saveActive(context, listOf("me" to "long task", "ai" to "working"))
+        repository.recordEvent(context, null, "cancelled", "cancelled", "Owner requested cancellation")
+        repository.recordEvent(context, null, "interrupted", "interrupted", "Accessibility service interrupted")
+        val restored = repository.eventsForActive(context)
+        assertEquals(listOf("cancelled", "interrupted"), restored.map { it.type })
+        assertEquals(listOf("cancelled", "interrupted"), restored.map { it.status })
+    }
+
     private fun resetRepositorySingleton() {
         val field = OrionConversationRepository::class.java.getDeclaredField("instance")
         field.isAccessible = true
