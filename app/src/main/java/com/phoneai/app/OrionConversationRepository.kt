@@ -11,7 +11,7 @@ import java.util.UUID
 /**
  * Device-local, structured conversation store inspired by NanoMuse's session/message repository.
  * The existing SharedPreferences archive is imported once, then SQLite is the source of truth.
- * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
+ * Message bodies stay on-device; only bounded, sanitized typed activity evidence is stored, never raw tool payloads or secrets.
  */
 class OrionConversationRepository private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 3) {
