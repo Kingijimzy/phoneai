@@ -19,10 +19,16 @@ class OrionCapabilityAdaptersTest {
             "python_exec" to OrionCapabilityAdapters.Backend.PYTHON,
             "extension_run" to OrionCapabilityAdapters.Backend.PYTHON,
             "workspace_write" to OrionCapabilityAdapters.Backend.FILES,
+            "save_file" to OrionCapabilityAdapters.Backend.FILES,
             "browser_navigate" to OrionCapabilityAdapters.Backend.BROWSER,
+            "play_media" to OrionCapabilityAdapters.Backend.DEVICE,
+            "chrome_search" to OrionCapabilityAdapters.Backend.DEVICE,
+            "github_search_repositories" to OrionCapabilityAdapters.Backend.RESEARCH,
             "mcp_call" to OrionCapabilityAdapters.Backend.MCP,
             "click" to OrionCapabilityAdapters.Backend.DEVICE,
-            "skills_list" to OrionCapabilityAdapters.Backend.SKILLS
+            "skills_list" to OrionCapabilityAdapters.Backend.SKILLS,
+            "self_diagnose" to OrionCapabilityAdapters.Backend.DIAGNOSTICS,
+            "repair_apply" to OrionCapabilityAdapters.Backend.DIAGNOSTICS
         )
         expected.forEach { (tool, backend) ->
             assertEquals(tool, backend, OrionCapabilityAdapters.route(tool)?.backend)
@@ -66,6 +72,10 @@ class OrionCapabilityAdaptersTest {
             "remember" to OrionCapabilityAdapters.Backend.MEMORY,
             "task_add" to OrionCapabilityAdapters.Backend.TASKS,
             "web_search" to OrionCapabilityAdapters.Backend.RESEARCH,
+            "live_sports" to OrionCapabilityAdapters.Backend.RESEARCH,
+            "telegram_send" to OrionCapabilityAdapters.Backend.COMMUNICATION,
+            "sms" to OrionCapabilityAdapters.Backend.COMMUNICATION,
+            "notification_action" to OrionCapabilityAdapters.Backend.COMMUNICATION,
             "alarm" to OrionCapabilityAdapters.Backend.UTILITIES,
             "trade_history_summary" to OrionCapabilityAdapters.Backend.TRADING_READONLY,
             "gaming_session_summary" to OrionCapabilityAdapters.Backend.GAMING
@@ -74,4 +84,168 @@ class OrionCapabilityAdaptersTest {
             assertEquals(tool, backend, OrionCapabilityAdapters.route(tool)?.backend)
         }
     }
+
+    @Test fun everyDeviceAndMcpRouteHasAConcreteDedicatedExecutor() {
+        val device = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.DEVICE }
+        val mcp = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.MCP }
+
+        assertTrue("Device backend must not be empty", device.isNotEmpty())
+        assertTrue("MCP backend must not be empty", mcp.isNotEmpty())
+        device.forEach { assertTrue("Missing device executor for ${it.tool}", OrionDeviceCapabilityExecutor.supports(it.tool)) }
+        mcp.forEach { assertTrue("Missing MCP executor for ${it.tool}", OrionMcpCapabilityExecutor.supports(it.tool)) }
+    }
+    @Test fun everyIntegrationAndSkillRouteHasAConcreteDedicatedExecutor() {
+        val integrations = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.INTEGRATIONS }
+        val skills = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.SKILLS }
+
+        assertTrue("Integrations backend must not be empty", integrations.isNotEmpty())
+        assertTrue("Skills backend must not be empty", skills.isNotEmpty())
+        integrations.forEach {
+            assertTrue("Missing integrations executor for ${it.tool}", OrionIntegrationCapabilityExecutor.supports(it.tool))
+        }
+        skills.forEach {
+            assertTrue("Missing skills executor for ${it.tool}", OrionSkillsCapabilityExecutor.supports(it.tool))
+        }
+    }
+
+    @Test fun skillsExecutorValidatesManifestConstraints() {
+        val valid = PhoneAiSkill(
+            id = "test_skill",
+            version = "1.0.0",
+            description = "A bounded test skill.",
+            allowedTools = setOf("read_screen"),
+            maxCalls = 3,
+            maxDurationMs = 10_000L,
+            requiresApproval = true,
+            enabled = false
+        )
+        assertTrue(OrionSkillsCapabilityExecutor.validate(valid).allowed)
+        assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(allowedTools = setOf("not_a_tool"))).allowed)
+        assertFalse(OrionSkillsCapabilityExecutor.validate(valid.copy(maxCalls = 21)).allowed)
+    }
+
+    @Test fun everyResearchAndCommunicationRouteHasAConcreteDedicatedExecutor() {
+        val research = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.RESEARCH }
+        val communication = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.COMMUNICATION }
+
+        assertTrue("Research backend must not be empty", research.isNotEmpty())
+        assertTrue("Communication backend must not be empty", communication.isNotEmpty())
+        research.forEach {
+            assertTrue("Missing research executor for ${it.tool}", OrionResearchCapabilityExecutor.supports(it.tool))
+        }
+        communication.forEach {
+            assertTrue("Missing communication executor for ${it.tool}", OrionCommunicationCapabilityExecutor.supports(it.tool))
+        }
+        assertFalse("Notification actions belong to communication, not device", 
+            OrionCapabilityAdapters.routes().any {
+                it.tool == "notification_action" && it.backend == OrionCapabilityAdapters.Backend.DEVICE
+            })
+    }
+
+
+    @Test fun everyMemoryAndTasksRouteHasAConcreteDedicatedExecutor() {
+        val memory = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.MEMORY }
+        val tasks = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.TASKS }
+
+        assertTrue("Memory backend must not be empty", memory.isNotEmpty())
+        assertTrue("Tasks backend must not be empty", tasks.isNotEmpty())
+        memory.forEach {
+            assertTrue("Missing memory executor for ${it.tool}", OrionMemoryCapabilityExecutor.supports(it.tool))
+        }
+        tasks.forEach {
+            assertTrue("Missing tasks executor for ${it.tool}", OrionTasksCapabilityExecutor.supports(it.tool))
+        }
+        assertEquals(OrionCapabilityAdapters.Backend.MEMORY, OrionCapabilityAdapters.route("undo_last")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.MEMORY, OrionCapabilityAdapters.route("undo_status")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.TASKS, OrionCapabilityAdapters.route("ask_user")?.backend)
+    }
+
+    
+    @Test fun everyUtilityRouteHasAConcreteDedicatedExecutor() {
+        val utilities = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.UTILITIES }
+        assertEquals(
+            setOf("settings", "alarm", "timer", "volume", "flashlight", "copy", "battery",
+                "time", "wait", "device_info", "device_location"),
+            utilities.map { it.tool }.toSet()
+        )
+        utilities.forEach {
+            assertTrue("Missing utilities executor for ${it.tool}", OrionUtilitiesCapabilityExecutor.supports(it.tool))
+        }
+        assertEquals(OrionCapabilityAdapters.Backend.UTILITIES, OrionCapabilityAdapters.route("device_location")?.backend)
+        assertEquals(OrionCapabilityAdapters.Backend.UTILITIES, OrionCapabilityAdapters.route("wait")?.backend)
+    }
+    
+    @Test fun everyTradingReadOnlyRouteHasAConcreteDedicatedExecutor() {
+        val trading = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.TRADING_READONLY }
+        assertEquals(setOf("trade_history_summary"), trading.map { it.tool }.toSet())
+        trading.forEach {
+            assertTrue("Missing trading read-only executor for ${it.tool}", OrionTradingReadOnlyCapabilityExecutor.supports(it.tool))
+        }
+    }
+    
+    @Test fun everyGamingRouteHasAConcreteDedicatedExecutor() {
+        val gaming = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.GAMING }
+        assertEquals(
+            setOf("gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"),
+            gaming.map { it.tool }.toSet()
+        )
+        gaming.forEach {
+            assertTrue("Missing gaming executor for ${it.tool}", OrionGamingCapabilityExecutor.supports(it.tool))
+        }
+    }
+    
+    @Test fun everyPythonRouteHasAConcreteDedicatedExecutor() {
+        val python = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.PYTHON }
+        assertEquals(
+            setOf("python_exec", "extension_list", "extension_create", "extension_test",
+                "extension_enable", "extension_run", "extension_disable"),
+            python.map { it.tool }.toSet()
+        )
+        python.forEach {
+            assertTrue("Missing Python executor for ${it.tool}", OrionPythonCapabilityExecutor.supports(it.tool))
+        }
+    }
+    
+    @Test fun saveFileIsRegisteredToTheFilesRuntimeOwner() {
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("save_file"))
+        assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route("save_file")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, "save_file"))
+    }
+
+    @Test fun diagnosticsAndRepairRoutesHaveConcreteRuntimeImplementation() {
+        assertTrue(OrionDiagnosticsCapabilityExecutor.supports("self_diagnose"))
+        assertTrue(OrionDiagnosticsCapabilityExecutor.supports("repair_apply"))
+        assertEquals(ToolAccess.READ, ToolRegistry.access("repair_apply"))
+        assertEquals("orion_core", AgentPolicy.packForTool("repair_apply"))
+    }
+
+    @Test fun everyRegisteredRouteHasAConcreteRuntimeImplementation() {
+        val routes = OrionCapabilityAdapters.routes()
+        assertEquals(ToolRegistry.all.size, routes.size)
+        val unsupported = routes.filterNot { OrionRuntimeCapabilityExecutor.supports(it.backend, it.tool) }
+        assertTrue(
+            "Registered routes without concrete runtime support: " +
+                unsupported.joinToString { "${it.backend}:${it.tool}" },
+            unsupported.isEmpty()
+        )
+    }
+    
+    @Test fun directPythonExecutionRunsWithoutInteractiveApprovalInsideRestrictedSandbox() {
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
+    }
+
 }

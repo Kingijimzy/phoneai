@@ -85,6 +85,25 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.all { it.available })
     }
 
+    @Test fun screenControlIsNotEligibleUntilAccessibilityAndDisclosureAreVerified() {
+        val pack = AgentPolicy.packForTool("tap") ?: "phone_control"
+        val unknown = OrionCapabilityDiscovery.discover(
+            listOf(tool("tap", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true
+        )
+        assertFalse(unknown.tools.single().available)
+        assertTrue(unknown.tools.single().reason.contains("accessibility"))
+
+        val granted = OrionCapabilityDiscovery.discover(
+            listOf(tool("tap", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            permissionStates = mapOf("accessibility" to OrionCapabilityDiscovery.PermissionState.GRANTED)
+        )
+        assertTrue(granted.tools.single().available)
+    }
+
     @Test fun missingLocationPermissionNamesTheExactPrerequisite() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("device_location")),
@@ -103,7 +122,7 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true
         )
         assertEquals(1, snapshot.availableCount)
-        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited)") })
+        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited,not-live-tested)") })
     }
 
     @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
@@ -150,6 +169,19 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(prompt.contains("Do not invent extra application-level restrictions"))
         assertTrue(prompt.contains("actual Android OS/runtime permissions"))
         assertTrue(prompt.contains("explicit confirmations required for consequential actions"))
+    }
+
+    @Test fun promptNeverConfusesEligibilityWithLiveExecutionVerification() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("weather")),
+            setOf("trading_research"),
+            termuxReady = true
+        )
+        val prompt = snapshot.promptLines().joinToString("\n")
+        assertTrue(prompt.contains("eligible under current settings"))
+        assertTrue(prompt.contains("runtime health verified=0"))
+        assertTrue(prompt.contains("not proof of live execution"))
+        assertTrue(prompt.contains("Never describe an eligible tool as tested"))
     }
 
     @Test fun integrationStateIsReportedAsSuppliedAndNotInvented() {

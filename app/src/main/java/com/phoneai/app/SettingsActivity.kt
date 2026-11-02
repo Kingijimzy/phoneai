@@ -367,6 +367,27 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** Convenient in-app legal notice required for GPL-covered interactive UI. */
+    private fun showOpenSourceLicenses() {
+        val notice = "PHONEAI — GPL-3.0-or-later\n\n" +
+            "PhoneAI is free software: you may copy, modify, and convey it under the GNU General Public License, version 3 or (at your option) any later version. The complete license text is available from the VIEW FULL GPL LICENSE action below.\n\n" +
+            "NO WARRANTY: to the extent permitted by law, this program is provided without warranty, including implied warranties of merchantability or fitness for a particular purpose. See GPLv3 sections 15 and 16.\n\n" +
+            "NANOMUSE COMPONENT: ToolLoopDetector is adapted from nanoMuse, Copyright (C) nanoMuse contributors, and is licensed under GPLv3. The PhoneAI adaptation changes its package and logging adapter.\n\n" +
+            "HERMES AGENT COMPONENTS: The model-output repetition guard and head/tail tool-output truncation are Kotlin adaptations of MIT-licensed Hermes Agent code, Copyright (c) 2025 Nous Research. The MIT license is included in licenses/HERMES-MIT-LICENSE.txt and the source adaptations are identified in THIRD_PARTY_NOTICES.md.\n\n" +
+            "CORRESPONDING SOURCE: the PhoneAI source repository and third-party notices are publicly available at github.com/Kingijimzy/phoneai. Preserve the nanoMuse attribution and license notices when redistributing. Other bundled components may carry separate licenses listed in THIRD_PARTY_NOTICES.md."
+        AlertDialog.Builder(this)
+            .setTitle("Open-source licenses")
+            .setMessage(notice)
+            .setPositiveButton("VIEW FULL GPL LICENSE") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/blob/orion/gpl-nanomuse-integration-20261031-v2/LICENSE")))
+            }
+            .setNeutralButton("THIRD-PARTY NOTICES") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/blob/orion/gpl-nanomuse-integration-20261031-v2/THIRD_PARTY_NOTICES.md")))
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
@@ -435,6 +456,9 @@ class SettingsActivity : Activity() {
         add(col, button("Soul Engine · live system dashboard", true) {
             startActivity(Intent(this, SoulEngineActivity::class.java))
         }, 8)
+        add(col, button("Open-source licenses & legal notices", false) {
+            showOpenSourceLicenses()
+        }, 8)
         
         // ---- 1. setup
         val s1 = card(col, "Access & permissions")
@@ -452,6 +476,9 @@ class SettingsActivity : Activity() {
         )
         add(s1, button("Open Accessibility settings", true) {
             AccessibilityDisclosure.requestSettings(this)
+        }, 8)
+        add(s1, button("Sensor & context permissions", false) {
+            startActivity(Intent(this, SensorContextActivity::class.java))
         }, 8)
         add(s1, button("Enable Orion Private Keyboard", false) {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
@@ -532,6 +559,19 @@ class SettingsActivity : Activity() {
                 "6. Open Recent apps and lock Orion if your launcher offers a lock option.\n\n" +
                 "Xiaomi changes these labels by OS version and region. Orion cannot enable the vendor's Autostart switch itself; confirm each setting manually.")
         }, 8)
+        add(updateCard, button("Open Android battery optimization settings", false) {
+            runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                .onFailure { Toast.makeText(this, "Battery optimization settings are unavailable on this Android build.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(updateCard, button("Open Orion app details · HyperOS permissions", false) {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }.onFailure { Toast.makeText(this, "App details settings could not be opened.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(updateCard, text(
+            "HyperOS note: Orion cannot silently enable Xiaomi Autostart or exempt itself from battery management. Enable Autostart and No restrictions manually where your MIUI/HyperOS version exposes them. WorkManager jobs are durable/deferred, not guaranteed sub-second. An open Python WebSocket starts a visible data-sync foreground notification and stops it when all sessions close; Android/HyperOS can still stop it after force-stop, vendor cleanup or foreground-service time limits. Python WebSocket transport does not secretly activate the microphone; audio capture still requires the existing owner-started voice flow and microphone permission.",
+            12f, Theme.MUTED
+        ), 8)
         add(updateCard, button("OPPO / realme background & overlay guide", false) {
             showInfoDialog("OPPO / realme permissions",
                 "For ColorOS / realme UI (labels vary by version):\n\n" +

@@ -39,6 +39,10 @@ class ExtensionSandbox(unittest.TestCase):
         self.assertEqual(o.run("print(len([1,2]) + 1)").strip(), "3")
         self.assertEqual(o.run("a=2\na *= 3\nprint(a)").strip(), "6")
 
+    def test_calculator_exponentiation_is_supported(self):
+        self.assertEqual(o.run("print(2 ** 5)").strip(), "32")
+        self.assertEqual(o.run("print(100 / 4)").strip(), "25.0")
+
 
 if __name__ == "__main__":
     unittest.main()

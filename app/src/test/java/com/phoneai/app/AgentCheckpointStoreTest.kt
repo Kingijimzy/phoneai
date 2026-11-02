@@ -24,6 +24,7 @@ class AgentCheckpointStoreTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         AgentCheckpointStore.clear(context)
+        ExperienceStore.clear(context)
     }
 
     @Test fun interruptedInFlightActionRequiresInspectionAndIsNotAutomaticallyReplayed() {
@@ -98,6 +99,53 @@ class AgentCheckpointStoreTest {
         assertTrue(resume.contains("Opened Settings"))
     }
 
+    @Test fun completedRecoveryStoresFailureCauseCorrectionAndVerificationForFutureTasks() {
+        val request = "Open Settings and inspect notification access"
+        assertTrue(AgentCheckpointStore.begin(context, request))
+
+        val failedArgs = JSONObject().put("name", "Settings")
+        assertTrue(AgentCheckpointStore.beginStep(context, "open_app", failedArgs))
+        assertTrue(AgentCheckpointStore.record(context, "open_app", failedArgs, "error: target not found"))
+        ExperienceStore.recordFailure(context, request, "open_app", "error: target not found")
+
+        val correctedArgs = JSONObject().put("text", "Notification access")
+        assertTrue(AgentCheckpointStore.beginStep(context, "click_text", correctedArgs))
+        assertTrue(AgentCheckpointStore.record(context, "click_text", correctedArgs,
+            "action returned\\nLOCAL VERIFY PASS: visible state changed after action."))
+        assertTrue(AgentCheckpointStore.complete(context))
+
+        val lesson = ExperienceStore.all(context).single()
+        assertEquals("resolved_failure", lesson.kind)
+        assertTrue(lesson.category.isNotBlank())
+        assertTrue(lesson.correction.contains("open_app") && lesson.correction.contains("click_text"))
+        assertTrue(lesson.verification.contains("completion gate passed"))
+        val prompt = ExperienceStore.promptBlock(context, request)
+        assertTrue(prompt.contains("LEARNED RESOLUTION"))
+        assertTrue(prompt.contains("click_text"))
+        assertTrue(prompt.contains("verification"))
+    }
+
+    @Test fun redactedPrivateFailureCanBeResolvedWithoutPersistingItsPayload() {
+        val request = "Send a Telegram update and verify delivery"
+        assertTrue(AgentCheckpointStore.begin(context, request))
+        val privateArgs = JSONObject().put("text", "private message body")
+        assertTrue(AgentCheckpointStore.beginStep(context, "telegram_send", privateArgs))
+        assertTrue(AgentCheckpointStore.record(context, "telegram_send", privateArgs, "error: network timeout"))
+        ExperienceStore.recordFailure(context, request, "telegram_send", "error: network timeout")
+
+        val correctedArgs = JSONObject().put("text", "Delivery status")
+        assertTrue(AgentCheckpointStore.beginStep(context, "click_text", correctedArgs))
+        assertTrue(AgentCheckpointStore.record(context, "click_text", correctedArgs,
+            "LOCAL VERIFY PASS: delivery status is visible."))
+        assertTrue(AgentCheckpointStore.complete(context))
+
+        val lesson = ExperienceStore.all(context).single()
+        assertEquals("resolved_failure", lesson.kind)
+        assertEquals("network_or_timeout", lesson.category)
+        assertFalse(lesson.correction.contains("private message body"))
+        assertFalse(lesson.verification.contains("private message body"))
+    }
+
     @Test fun evidenceTaskIdentityIsUniqueAndStableAcrossResume() {
         assertTrue(AgentCheckpointStore.begin(context, "repeatable request"))
         val first = AgentCheckpointStore.evidenceTaskId(context)
@@ -109,5 +157,119 @@ class AgentCheckpointStoreTest {
         val second = AgentCheckpointStore.evidenceTaskId(context)
         assertNotNull(second)
         assertNotEquals(first, second)
+    }
+    @Test fun parentPauseAndStopAreVisibleToChildDelegationByExactTaskId() {
+        assertTrue(AgentCheckpointStore.begin(context, "Coordinate a research specialist"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        assertNotNull(parentId)
+        assertFalse(AgentCheckpointStore.cancellationRequested(context, parentId))
+        assertTrue("A worker with an unknown parent must fail closed instead of outliving an unverified parent",
+            AgentCheckpointStore.cancellationRequested(context, "different-task"))
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+
+        assertTrue(AgentCheckpointStore.clear(context))
+        assertTrue(AgentCheckpointStore.begin(context, "Coordinate another specialist"))
+        val stoppedParent = AgentCheckpointStore.evidenceTaskId(context)
+        assertTrue(AgentCheckpointStore.stop(context, "User cancelled parent objective"))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, stoppedParent))
+    }
+
+    @Test fun archivedPausedParentRemainsCancelledForItsDelegatedWorker() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent objective"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)
+        assertTrue(AgentCheckpointStore.pause(context))
+        assertTrue(AgentCheckpointStore.begin(context, "Unrelated new objective"))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+    }
+
+    @Test fun parentWaitsForDelegatedChildrenAndCompletesAfterLastChildReceipt() {
+        assertTrue(AgentCheckpointStore.begin(context, "Research a topic with a specialist"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val child = store.enqueue(parentId, "Summarise verified findings", OrionWorkerJobStore.Kind.ANALYSIS)
+        assertNotNull(child)
+
+        assertTrue("Chat-turn completion must not close an objective with pending children",
+            AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertFalse("Waiting parent remains valid for its exact child", AgentCheckpointStore.cancellationRequested(context, parentId))
+
+        assertTrue(store.claimNext { it == parentId } != null)
+        assertTrue(store.complete(child!!.id, "Findings saved"))
+        assertFalse(store.hasPendingForParent(parentId))
+        assertTrue("Final child receipt should allow parent completion", AgentCheckpointStore.pending(context) == null)
+        assertEquals(parentId, AgentCheckpointStore.evidenceTaskId(context))
+        assertTrue(AgentCheckpointStore.cancellationRequested(context, parentId))
+    }
+
+    @Test fun replacingWaitingParentInvalidatesItsQueuedChildren() {
+        assertTrue(AgentCheckpointStore.begin(context, "Delegate a background analysis"))
+        val oldParent = AgentCheckpointStore.evidenceTaskId(context)!!
+        val child = OrionWorkerJobStore(context).enqueue(
+            oldParent, "Analyse the saved task", OrionWorkerJobStore.Kind.ANALYSIS
+        )
+        assertNotNull(child)
+        assertTrue(AgentCheckpointStore.complete(context))
+        assertEquals("waiting_for_children", AgentCheckpointStore.pending(context)?.optString("status"))
+
+        assertTrue(AgentCheckpointStore.begin(context, "A new unrelated user objective"))
+        assertTrue("An archived waiting parent must never authorize its queued child",
+            AgentCheckpointStore.cancellationRequested(context, oldParent))
+        assertEquals(OrionWorkerJobStore.Status.CANCELLED,
+            OrionWorkerJobStore(context).all().first { it.id == child!!.id }.status)
+    }
+
+    @Test fun tasksExecutorOwnsDurableCheckpointRecoveryBoundary() {
+        assertTrue(OrionTasksCapabilityExecutor.beginRun(context, "Inspect the app after restart"))
+        assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "open_app", JSONObject().put("name", "Settings")))
+        assertTrue(OrionTasksCapabilityExecutor.needsRecoveryConfirmation(context))
+        val pending = OrionTasksCapabilityExecutor.pendingCheckpoint(context)
+        assertNotNull(pending)
+        assertTrue(pending!!.has("inFlight"))
+
+        assertTrue(OrionTasksCapabilityExecutor.acknowledgeRecovery(context, "I checked the phone and Settings is open"))
+        assertFalse(OrionTasksCapabilityExecutor.needsRecoveryConfirmation(context))
+        assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "read_screen", JSONObject()))
+    }
+
+
+
+    @Test fun newTaskStartsWithoutDestroyingPausedWorkAndContinueRestoresOldest() {
+        assertTrue(AgentCheckpointStore.begin(context, "Research Android AI and save the findings"))
+        val originalId = AgentCheckpointStore.evidenceTaskId(context)
+        val args = JSONObject().put("query", "Android on-device AI")
+        assertTrue(AgentCheckpointStore.beginStep(context, "live_web_search", args))
+        assertTrue(AgentCheckpointStore.record(context, "live_web_search", args, "Search results returned"))
+        assertTrue(AgentCheckpointStore.pause(context))
+
+        assertTrue("A separate task should start while the previous task remains archived",
+            AgentCheckpointStore.begin(context, "Create an unrelated calculator"))
+        assertEquals("Create an unrelated calculator", AgentCheckpointStore.pending(context)?.optString("command"))
+        assertTrue(AgentCheckpointStore.hasArchivedPending(context))
+
+        assertTrue(AgentCheckpointStore.complete(context))
+        assertTrue(AgentCheckpointStore.activateOldestArchived(context))
+        val preserved = AgentCheckpointStore.pending(context)
+        assertNotNull(preserved)
+        assertEquals("Research Android AI and save the findings", preserved!!.optString("command"))
+        assertEquals(originalId, AgentCheckpointStore.evidenceTaskId(context))
+        assertEquals(1, preserved.optJSONArray("steps")?.length())
+        assertFalse(AgentCheckpointStore.hasArchivedPending(context))
+    }
+
+    @Test fun recoveryRequiredTaskCanBeParkedWhileAnotherTaskStarts() {
+        assertTrue(AgentCheckpointStore.begin(context, "Send a message and inspect delivery"))
+        assertTrue(AgentCheckpointStore.beginStep(context, "telegram_send", JSONObject().put("message", "hello")))
+        assertTrue(AgentCheckpointStore.stop(context, "Process interrupted during send"))
+
+        assertEquals("recovery_required", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertTrue(AgentCheckpointStore.begin(context, "Start another task"))
+        assertEquals("Start another task", AgentCheckpointStore.pending(context)?.optString("command"))
+        assertTrue(AgentCheckpointStore.hasArchivedPending(context))
+        assertTrue(AgentCheckpointStore.complete(context))
+        assertTrue(AgentCheckpointStore.activateOldestArchived(context))
+        assertEquals("recovery_required", AgentCheckpointStore.pending(context)?.optString("status"))
+        assertTrue(AgentCheckpointStore.needsRecoveryConfirmation(context))
     }
 }

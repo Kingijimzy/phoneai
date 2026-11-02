@@ -5,9 +5,39 @@ import org.json.JSONObject
 /**
  * Concrete local-runtime and file capability executor.
  * This owns the execution implementation for these backend families; Agent remains responsible
- * for task planning, policy gates, approvals, evidence and recovery.
+ * for task planning, policy gates, approvals and evidence; Tasks owns durable checkpoint/recovery operations.
  */
 internal object OrionRuntimeCapabilityExecutor {
+    /**
+     * Static owner audit for every registered route. This is deliberately separate from dispatch:
+     * a route is considered implemented only when its exact tool has a concrete executor case.
+     */
+    fun supports(backend: OrionCapabilityAdapters.Backend, tool: String): Boolean = when (backend) {
+        OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
+        OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read")
+        OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
+            "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
+            "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
+            "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
+            "browser_tabs", "browser_upload", "browser_close"
+        )
+        OrionCapabilityAdapters.Backend.CORE -> false
+    }
+
     fun execute(
         backend: OrionCapabilityAdapters.Backend,
         tool: String,
@@ -16,21 +46,44 @@ internal object OrionRuntimeCapabilityExecutor {
         tools: Tools,
         stopped: () -> Boolean,
         confirm: (String) -> Boolean = { false },
-        openBrowser: (String) -> Unit = {}
+        openBrowser: (String) -> Unit = {},
+        validateAction: (JSONObject) -> String = { "error: action validation callback unavailable" },
+        verifyAction: (JSONObject) -> String = { "error: action verification callback unavailable" },
+        verifySend: (JSONObject) -> String = { "error: send verification callback unavailable" },
+        look: (String) -> String = { "error: screen interpretation callback unavailable" },
+        play: (String, Int) -> String = { _, _ -> "error: game-control callback unavailable" },
+        readScreen: () -> String = { service.readScreen() },
+        githubAccountRead: (String) -> String = { "error: GitHub account reader callback unavailable" },
+        researchCancelled: java.util.concurrent.atomic.AtomicBoolean = java.util.concurrent.atomic.AtomicBoolean(false),
+        askUser: (String, List<String>, String) -> String = { _, _, _ -> "" },
+        pythonExecutor: OrionPythonCapabilityExecutor? = null
     ): String? = when (backend) {
+        OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
+            tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
+        )
+        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools, confirm)
+        OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.execute(tool, args, service, tools, githubAccountRead)
+        OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.execute(tool, args, service)
+        OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.execute(tool, args, service, tools, researchCancelled)
+        OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm)
+        OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.execute(tool, args, service, tools, stopped)
+        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
+        OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.execute(tool, args, tools, stopped)
+        OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.execute(tool, args, service, confirm)
+        OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)
+        OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.execute(tool, args, service, stopped)
+        OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(service, args.optString("command"), stopped)
             else -> null
         }
-        OrionCapabilityAdapters.Backend.PYTHON -> when (tool) {
-            "python_exec" -> tools.pythonExec(args.optString("code"))
-            else -> null
-        }
+        OrionCapabilityAdapters.Backend.PYTHON -> pythonExecutor?.execute(tool, args, confirm, stopped)
         OrionCapabilityAdapters.Backend.FILES -> when (tool) {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
+            "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
             "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
             else -> null

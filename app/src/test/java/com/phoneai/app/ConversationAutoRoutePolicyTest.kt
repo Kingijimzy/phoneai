@@ -51,6 +51,13 @@ class ConversationAutoRoutePolicyTest {
         ))
     }
 
+    @Test fun explicitSubagentAssignmentsEnterTheParentOrchestrator() {
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent("Give the coder agent a task to inspect this bug"))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent("Delegate the research task to the specialist"))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent("Ask the planner agent to break this project into steps"))
+        assertFalse(ConversationAutoRoutePolicy.requiresToolAgent("I have an agent at work"))
+    }
+
     @Test fun ordinaryConversationDoesNotRouteToTools() {
         assertFalse(ConversationAutoRoutePolicy.requiresToolAgent("What is Python used for?"))
         assertFalse(ConversationAutoRoutePolicy.requiresToolAgent("Tell me about GitHub as a company"))

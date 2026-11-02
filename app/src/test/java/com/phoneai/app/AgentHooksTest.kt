@@ -6,6 +6,11 @@ import org.junit.Test
 
 class AgentHooksTest {
  @Test fun blocksUnrequestedSend(){assertNotNull(AgentHooks.scopeBlockReason("Open WhatsApp and draft a message","click_text",JSONObject().put("text","Send")))}
+ @Test fun weatherToolCannotHijackUnrelatedEngineeringRequests() {
+  val audit = "ORION full execution reliability audit: test all capabilities and integration tests wherever possible."
+  assertNotNull(AgentHooks.scopeBlockReason(audit, "weather", JSONObject().put("location", "all capabilities and integration tests wherever possible")))
+  assertNull(AgentHooks.scopeBlockReason("What's the weather in Lagos, Nigeria today?", "weather", JSONObject().put("location", "Lagos, Nigeria")))
+ }
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
  @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
   listOf("Do not send this message to Alex","Don't send this message to Alex","Never send this message","Draft a message to Amma without sending","Prepare a reply but do not send it").forEach { request ->
@@ -122,6 +127,30 @@ class AgentHooksTest {
             OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED, 1L, 2L, "hash", "command returned")
         val decision = AgentHooks.completionDecision("Send a message to Amma", emptyList(), listOf(event))
         assertFalse(decision.allowed)
+    }
+
+    @Test fun durableMemoryRetrievalIsNotActionCompletionEvidence() {
+        val event = OrionEvidenceLedger.Event(
+            "memory-1", "task", "memory", "retrieve_before_act",
+            OrionEvidenceLedger.Outcome.CONTEXT_RETRIEVED, 1L, 2L, "objective-hash",
+            "Objective-scoped memory context retrieved; source=persistent_memory_context; chars=420."
+        )
+        assertFalse(
+            "Memory retrieval must not satisfy even a harmless action completion gate",
+            AgentHooks.completionDecision("Open Settings", emptyList(), listOf(event)).allowed
+        )
+        assertFalse(
+            "Memory retrieval must never satisfy a consequential completion gate",
+            AgentHooks.completionDecision("Send a message", emptyList(), listOf(event)).allowed
+        )
+        val verified = OrionEvidenceLedger.Event(
+            "action-1", "task", "device", "open_app",
+            OrionEvidenceLedger.Outcome.VERIFIED, 2L, 3L, "action-hash", "app visibly opened"
+        )
+        assertTrue(
+            "A separate verified action event remains valid alongside retrieval metadata",
+            AgentHooks.completionDecision("Open Settings", emptyList(), listOf(event, verified)).allowed
+        )
     }
 
     @Test fun durableFailureAndRecoveryEventsNeverCountAsSuccess() {
