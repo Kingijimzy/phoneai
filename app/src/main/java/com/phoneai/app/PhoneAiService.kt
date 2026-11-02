@@ -209,6 +209,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onInterrupt() {
         orionRuntime?.pause("accessibility_interrupted")
+        if (running) recordChatEvent("interrupted", "interrupted", "Accessibility service interruption paused the active task; verify state before resuming.")
     }
 
     /** Called by optional system event sources; never starts the accessibility service. */
@@ -1893,7 +1894,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     private fun stopAll() {
         handsActive = false
+        val hadActiveTask = running
         agent.stop()
+        if (hadActiveTask) recordChatEvent("cancelled", "cancelled", "Owner requested task cancellation; execution is stopping.")
         voice.stopSpeaking()
         voice.stopListening()
         listening = false
