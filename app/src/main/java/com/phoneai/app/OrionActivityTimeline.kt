@@ -20,7 +20,9 @@ data class OrionActivityEvent(
     val agentId: String? = null,
     val parentTaskId: String? = null,
     val evidence: List<String> = emptyList(),
-    val elapsedMs: Long? = null
+    val elapsedMs: Long? = null,
+    val typedEvidence: List<OrionActivityEvidence> = emptyList(),
+    val correlationId: String? = null
 ) {
     init {
         require(eventId.isNotBlank())
