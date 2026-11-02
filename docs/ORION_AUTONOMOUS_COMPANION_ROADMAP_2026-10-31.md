@@ -805,3 +805,13 @@ Latest code validation must be based on the exact PR head workflow result; CI is
 - Fixed the external-boundary owner-rejection test to calculate its digest with the exact execution boundary. Exact-head CI at commit `7f70f04259f538b8ccc858687b9b3b5d20e52dd6` passed: restricted Python tests, 1,090 Android unit tests, debug APK assembly, APK package/signature validation and artifact upload. This green run predates the final foreground-worker, manifest, WebSocket-queue and symlink-hardening commits; the newer head must pass separately.
 - Remaining Stage 4 software gates: broader registered repair adapters; cross-agent memory-scope and provider/process-restart continuity tests; ambient-source grant/revoke/expiry acceptance across every source; multimodal evidence reopening/URI-grant persistence; and complete end-to-end voice/MCP/background continuity.
 - Device gate remains BLOCKED until the physical Redmi A3 Pro / HyperOS acceptance matrix is executed. Stage 4 remains IN PROGRESS and Stage 5 remains on hold.
+
+
+## Stage 4–7 integration status update — 2026-11-02 20:05 UTC
+
+- Stage 6 + owner-control/navigation dependencies have been merged into the isolated integration branch at `83e2f46775a690c885a0693a30622bace58b7f90` via integration PR #162. Default branch `main` is unchanged.
+- The combined build previously exposed a duplicate `OrionSpecialistWorker` declaration: the generic typed task adapter in `OrionDistributedExecution.kt` collided with the Android WorkManager worker in `OrionSpecialistWorker.kt`.
+- The generic adapter is now named `OrionTaskSpecialistWorker`; its registry and regression test were updated. The WorkManager worker retains its Android worker name and type.
+- Owner Control Center now controls the same `AgentPolicy.proactive` gate consumed by the Stage 6 event-driven watcher; it reports the actual AccessibilityService connection and updates the WorkManager fallback interval using `ExistingPeriodicWorkPolicy.UPDATE`.
+- PR #160 is the Stage 4 dependency-chain integration into the Stage 6 + owner-control base. It remains draft/unmerged pending a fresh exact-head combined CI run and review.
+- Stage 7 typed evidence and stable tool correlation are being strengthened separately in PR #158; the final integrated CI and physical POCO F3 acceptance remain required.
