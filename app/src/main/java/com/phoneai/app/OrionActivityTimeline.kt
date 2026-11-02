@@ -3,11 +3,11 @@ package com.phoneai.app
 import java.util.LinkedHashMap
 
 /** A truthful, timestamped event emitted by the execution layer and rendered in chat. */
-enum class OrionActivityKind {
+internal enum class OrionActivityKind {
     THINKING, RESEARCH, CODING, TOOL, DELEGATION, APPROVAL, ERROR, COMPLETION, INTERRUPTED, CANCELLED
 }
 
-enum class OrionActivityStatus { ACTIVE, WAITING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
+internal enum class OrionActivityStatus { ACTIVE, WAITING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
 
 internal data class OrionActivityEvent(
     val eventId: String,
