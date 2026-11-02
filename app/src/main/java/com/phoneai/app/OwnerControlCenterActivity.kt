@@ -424,7 +424,7 @@ class OwnerControlCenterActivity : Activity() {
             "Secrets — provider and exchange credentials are masked in UI and excluded from audit events; manage or rotate them in Settings.",
             "Android permissions — controlled by Android. Orion can report grant state and open system settings, but cannot silently grant itself access.",
             "Accessibility and notification access — user-enabled Android special access; Android can revoke these independently.",
-            "Background execution — owner can start/stop the Watcher, set its scan interval, inspect requested/running state and open battery settings; Android/HyperOS can still kill or defer it.",
+            "Background execution — owner can enable/disable the proactive policy, set the WorkManager fallback interval, inspect AccessibilityService connection and open battery settings; Android/HyperOS can still kill or defer it.",
             "Network/provider limits — provider quotas, billing, model availability and server-side refusals are controlled externally.",
             "OpenAI/system safety instructions — external to this app and not configurable or bypassable from Orion.",
             "Hard security invariants — certain checks cannot be disabled through app preferences; the app must fail closed when required proof or authorization is absent.",
