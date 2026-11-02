@@ -44,7 +44,7 @@ class OrionEvidenceSanitizerTest {
         assertEquals("run tests", restored.commandLabel)
         assertTrue(restored.outputTail.contains("[redacted]"))
         assertTrue(!restored.outputTail.contains("abcdefghijklmnop"))
-        assertEquals(0, restored.exitCode)
+        assertEquals(0, restored.exitCode ?: -1)
     }
 
     @Test fun diffAndHandoffEvidenceAreBounded() {
