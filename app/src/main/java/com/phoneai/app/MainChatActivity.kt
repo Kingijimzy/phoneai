@@ -2066,24 +2066,48 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     OrionActivityKind.TOOL -> event.type.replace('_', ' ').replaceFirstChar { it.uppercase() }
                 }
                 val toolName = Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(event.summary)?.groupValues?.get(1)
-                val startEvent = if (event.type == "tool_result" && toolName != null) {
-                    events.asSequence().filter { it.type == "tool" && it.status == "started" && it.createdAt <= event.createdAt }
-                        .filter { Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(it.summary)?.groupValues?.get(1) == toolName }
-                        .maxByOrNull { it.createdAt }
+                val startEvent = if (event.type == "tool_result") {
+                    val correlated = event.correlationId?.takeIf { it.isNotBlank() }?.let { correlation ->
+                        events.firstOrNull { it.type == "tool" && it.status == "started" && it.correlationId == correlation }
+                    }
+                    correlated ?: if (event.correlationId.isNullOrBlank() && toolName != null) {
+                        // Compatibility adapter for events persisted before schema v3.
+                        events.asSequence().filter { it.type == "tool" && it.status == "started" && it.createdAt <= event.createdAt }
+                            .filter { Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(it.summary)?.groupValues?.get(1) == toolName }
+                            .maxByOrNull { it.createdAt }
+                    } else null
                 } else null
-                val resolvedKind = if (event.type == "tool_result" && toolName != null) when {
-                    toolName.contains("browser") || toolName.contains("search") || toolName.contains("web") -> OrionActivityKind.RESEARCH
-                    toolName.contains("shell") || toolName.contains("python") || toolName.contains("file") || toolName.contains("code") -> OrionActivityKind.CODING
-                    else -> OrionActivityKind.TOOL
-                } else kind
-                val resolvedTitle = toolName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: title
+                val typedEvidence = event.evidenceJson?.let { OrionActivityEvidence.fromJson(it) }?.let { listOf(it) }.orEmpty()
+                val handoff = typedEvidence.filterIsInstance<OrionActivityEvidence.AgentHandoff>().firstOrNull()
+                val resolvedKind = when {
+                    handoff != null -> OrionActivityKind.DELEGATION
+                    typedEvidence.any { it is OrionActivityEvidence.Browser } -> OrionActivityKind.RESEARCH
+                    typedEvidence.any { it is OrionActivityEvidence.Terminal || it is OrionActivityEvidence.File || it is OrionActivityEvidence.CodeDiff } -> OrionActivityKind.CODING
+                    event.type == "tool_result" && toolName != null -> when {
+                        toolName.contains("browser") || toolName.contains("search") || toolName.contains("web") -> OrionActivityKind.RESEARCH
+                        toolName.contains("shell") || toolName.contains("python") || toolName.contains("file") || toolName.contains("code") -> OrionActivityKind.CODING
+                        else -> OrionActivityKind.TOOL
+                    }
+                    else -> kind
+                }
+                val resolvedTitle = when (val evidence = typedEvidence.firstOrNull()) {
+                    is OrionActivityEvidence.Browser -> evidence.title.ifBlank { "Browser research" }
+                    is OrionActivityEvidence.Terminal -> evidence.commandLabel.ifBlank { "Terminal operation" }
+                    is OrionActivityEvidence.File -> "${evidence.operation.replaceFirstChar { it.uppercase() }} file"
+                    is OrionActivityEvidence.CodeDiff -> "Code changes · ${evidence.fileLabel}"
+                    is OrionActivityEvidence.AgentHandoff -> "Agent hand-off · ${evidence.agentId}"
+                    null -> toolName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: title
+                }
                 val evidenceText = event.summary.substringAfter(" | Evidence:", "").trim()
                 val safeEvidence = evidenceText.takeIf { it.isNotBlank() }?.let { OrionEvidenceSanitizer.text(it, 480) }
                 val displaySummary = event.summary.substringBefore(" | Evidence:").take(420)
                 val typed = OrionActivityEvent(
                     eventId = event.id, taskId = event.sessionId, kind = resolvedKind, status = status,
                     title = resolvedTitle, summary = displaySummary, timestampMs = event.createdAt.coerceAtLeast(0L),
-                    evidence = listOfNotNull(safeEvidence), elapsedMs = startEvent?.let { (event.createdAt - it.createdAt).coerceAtLeast(0L) }
+                    agentId = handoff?.agentId, parentTaskId = handoff?.parentTaskId,
+                    evidence = if (typedEvidence.isEmpty()) listOfNotNull(safeEvidence) else emptyList(),
+                    elapsedMs = startEvent?.let { (event.createdAt - it.createdAt).coerceAtLeast(0L) },
+                    typedEvidence = typedEvidence, correlationId = event.correlationId
                 )
                 if (liveActivityEvents.none { it.eventId == typed.eventId }) {
                     liveActivityEvents.add(typed)
