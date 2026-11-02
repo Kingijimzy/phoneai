@@ -2030,7 +2030,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
         runOnUiThread {
-            events.sortedBy { it.createdAt }.forEach { event ->
+            events.sortedWith(compareBy<OrionConversationRepository.ChatEvent> { it.createdAt }.thenBy { it.id }).forEach { event ->
                 val kind = when (event.type.lowercase()) {
                     "thinking", "plan", "reflection" -> OrionActivityKind.THINKING
                     "research", "browser", "web_search" -> OrionActivityKind.RESEARCH
