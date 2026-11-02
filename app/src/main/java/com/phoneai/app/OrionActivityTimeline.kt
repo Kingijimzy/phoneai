@@ -9,7 +9,7 @@ enum class OrionActivityKind {
 
 enum class OrionActivityStatus { ACTIVE, WAITING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED }
 
-data class OrionActivityEvent(
+internal data class OrionActivityEvent(
     val eventId: String,
     val taskId: String,
     val kind: OrionActivityKind,
