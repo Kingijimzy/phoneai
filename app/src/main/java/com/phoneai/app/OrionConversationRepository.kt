@@ -132,7 +132,7 @@ class OrionConversationRepository private constructor(context: Context) :
             if (it.moveToFirst()) it.getString(0) else return emptyList()
         }
         val result = ArrayList<ChatEvent>()
-        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at,correlation_id,evidence_json FROM chat_events WHERE session_id=? ORDER BY created_at ASC", arrayOf(id)).use { c ->
+        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at,correlation_id,evidence_json FROM chat_events WHERE session_id=? ORDER BY created_at ASC, id ASC", arrayOf(id)).use { c ->
             while (c.moveToNext()) result.add(ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getLong(6),
                 c.getString(7), c.getString(8)))
         }
