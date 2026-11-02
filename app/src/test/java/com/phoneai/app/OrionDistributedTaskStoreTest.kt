@@ -61,7 +61,7 @@ class OrionDistributedTaskStoreTest {
     }
 
     @Test fun specialistWorkersEnforceRequestedRoleAndReturnHandlerEvidence() {
-        val worker = OrionSpecialistWorker("research-1", OrionSpecialist.RESEARCH) {
+        val worker = OrionTaskSpecialistWorker("research-1", OrionSpecialist.RESEARCH) {
             OrionWorkerResult.Success("evidence:research")
         }
         val task = OrionTaskEnvelope.create("research", OrionTaskEnvelope.Kind.RESEARCH,
