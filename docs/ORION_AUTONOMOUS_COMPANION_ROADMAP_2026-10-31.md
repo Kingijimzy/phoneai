@@ -784,3 +784,27 @@ This audit supersedes any implication that a green CI run on an individual stack
 - Physical device acceptance: **not performed**.
 
 No stage may be marked complete based only on an isolated branch build. Completion requires a single integrated SHA, exact-head CI, APK artifact verification and recorded physical-device evidence.
+
+
+## Integration attempt result — 2026-11-02 19:25 UTC
+
+A temporary draft PR #159 tested direct integration of Stage 4 PR #156 into a branch anchored at Stage 6 PR #157. It was closed without merge after GitHub reported a 1,267-commit comparison and 263 changed files. It is not a narrow feature-only merge and must not be merged as-is.
+
+Current default branch head at audit: `main = 4b11353dffbf6db064836403d8210ed4b2902f40`.
+Comparisons against that main head:
+- Stage 6 head `c468d2ea`: diverged, 622 commits ahead / 3 behind, 163 changed files.
+- Stage 4 Python head `706d0d55`: diverged, 1,802 commits ahead / 3 behind, 300 changed files.
+- Stage 7 timeline head `517fb50e`: diverged, 643 commits ahead / 3 behind, 168 changed files.
+
+This confirms the issue is broader than a single overlapping file: the active feature branches have diverged substantially from the current default branch and from one another. Do not force-update main, retarget/merge these PRs directly, or treat GitHub's transient mergeable=true flag as semantic validation.
+
+### Required safe recovery
+1. Establish a clean integration base from the intended current source of truth; verify whether `main` is deliberately stale or whether the active Orion development branch is the intended release baseline. Do not assume either without owner/repository history evidence.
+2. Recover feature-only patches from the Stage 4 dependency chain (#132 → #145 → #154 → #155 → #156), Stage 6 (#117 → #157), Stage 7 (#158), and owner-control/graphite/navigation (#118 → #120).
+3. Port feature patches onto the chosen base in dependency order, manually reconcile shared files (AgentPolicy, AgentCheckpointStore, OrionCentralBrain, PhoneAiService, Agent and chat owners), and preserve tests. Do not overlay entire stale trees.
+4. Run exact-head CI on the unified candidate, including Android unit tests, Python policy tests, APK signing/package validation and PRoot validation.
+5. Complete physical acceptance on the confirmed current POCO F3 / Android 13 / Snapdragon 870, including Accessibility, notification access, background recovery, private LAN/WebSocket, provider setup, voice, browser, trading read-only alerts, memory, task interruption/reconnect and stability.
+6. Keep all source PRs draft/unmerged until the integrated candidate is accepted. Stage 5 remains on hold; no next stage starts before Stage 7 acceptance.
+
+### Latest Stage 4 test correction
+- PR #155 head `fdaca230d31aea67e46b47bfe55d130459fbd703` corrects the owner-rejection test's plan digest to include the EXTERNAL execution boundary. Exact-head CI run #41509441062 is still running as of this audit; no pass claim until completion.
