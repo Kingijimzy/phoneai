@@ -51,7 +51,7 @@ internal object OrionEvidenceSanitizer {
         require(max in 1..2000)
         var safe = value.orEmpty().replace(Regex("[\\r\\n\\t]+"), " ").trim()
         secretPatterns.forEach { safe = it.replace(safe) { match ->
-            val prefix = match.groupValues.firstOrNull()?.substringBefore(Regex("[:=]"))?.trim().orEmpty()
+            val prefix = match.groupValues.getOrNull(1)?.trim().orEmpty()
             if (prefix.isBlank()) "[redacted]" else "$prefix=[redacted]"
         } }
         return safe.take(max)
