@@ -63,7 +63,8 @@ class AgentChatActivity : Activity() {
     private val turns = mutableListOf<AgentRunner.Turn>()
     private var pendingImage: String? = null
     @Volatile private var busy = false
-    private var deskStatus: TextView? = null
+    private var pillRow: LinearLayout? = null
+    private var aiChip: TextView? = null
     private var pnlText: TextView? = null
     private var moodText: TextView? = null
     private var mascot: CompanionView? = null
@@ -95,6 +96,87 @@ class AgentChatActivity : Activity() {
         v.onSpeaking = { on -> speakingNow = on; setLive(if (on) CompanionView.Activity.SPEAKING else CompanionView.Activity.IDLE) }
         v.onLevel = { l -> orb?.level = l; holo?.mic(l) }
         voice = v
+    }
+
+    private fun actionPill(label: String, click: () -> Unit) = TextView(this).apply {
+        text = label; textSize = 12f; setTextColor(Theme.TEXT); gravity = Gravity.CENTER; maxLines = 1
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(16).toFloat() }
+        setOnClickListener { click() }
+        Motion.pressFeedback(this)
+    }
+
+    private fun fillPills(parts: List<String>) {
+        val row = pillRow ?: return
+        row.removeAllViews()
+        parts.forEach { p ->
+            val danger = p.contains("REAL") || p.contains("KILL")
+            row.addView(TextView(this).apply {
+                text = p; textSize = 11f; maxLines = 1
+                setTextColor(if (danger) Theme.DANGER else Theme.MUTED)
+                setPadding(dp(10), dp(4), dp(10), dp(4))
+                background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(12).toFloat(); setStroke(dp(1), if (danger) Theme.DANGER else Theme.LINE) }
+                setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
+            }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+        }
+    }
+
+    /** Shows which AI answers this chat, so a missing provider is never a mystery. */
+    private fun updateAiChip() {
+        val chip = aiChip ?: return
+        val p = Prefs.provider(this, false)
+        val ready = Prefs.hasKey(this, p.id) || p.noKey
+        if (ready) {
+            chip.text = "AI · ${p.label} · ${Prefs.model(this, p, false).substringAfterLast('/')}"
+            chip.setTextColor(Theme.TEXT)
+        } else {
+            chip.text = "No AI provider · tap to set up"
+            chip.setTextColor(Theme.DANGER)
+        }
+    }
+
+    private fun aiDialog() {
+        val list = Providers.all
+        val labels = list.map { (if (Prefs.hasKey(this, it.id) || it.noKey) "✓  " else "○  ") + it.label }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Choose the AI for this chat")
+            .setItems(labels) { _, i ->
+                val p = list[i]
+                if (Prefs.hasKey(this, p.id) || p.noKey) {
+                    Prefs.setProvider(this, false, p.id)
+                    if (p.hasVision) Prefs.setProvider(this, true, p.id)
+                    updateAiChip()
+                    Toast.makeText(this, "Using ${p.label}.", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Add a key for ${p.label} in Settings first.", Toast.LENGTH_LONG).show()
+                    startActivity(Intent(this, SettingsActivity::class.java))
+                }
+            }
+            .setNeutralButton("Settings") { _, _ -> startActivity(Intent(this, SettingsActivity::class.java)) }
+            .setNegativeButton("Close", null).show()
+    }
+
+    /** Everything Orion remembers about you and your trading, in one place, with JSON export and restore. */
+    private fun memoryDialog() {
+        val notes = AgentLessons.list(this, "coach").size
+        val plays = TradingDesk.strategies(this).size
+        val journal = TradeHistoryStore.all(this).size
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(4)) }
+        col.addView(TextView(this).apply {
+            textSize = 14f; setTextColor(Theme.TEXT)
+            text = "Learned notes: $notes\nPlaybook: $plays strateg${if (plays == 1) "y" else "ies"}\nTrade journal: $journal trades\nThis chat: ${turns.size} messages"
+        })
+        col.addView(TextView(this).apply {
+            textSize = 12f; setTextColor(Theme.MUTED); setPadding(0, dp(8), 0, dp(10))
+            text = "The backup is one JSON file with your playbook, practice account, watchlists, journal and learned notes. It never contains API keys or tokens."
+        })
+        lateinit var dlg: AlertDialog
+        fun btn(label: String, click: () -> Unit) = col.addView(smallButton(label) { dlg.dismiss(); click() }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(6) })
+        btn("View and edit learned notes") { notesDialog() }
+        btn("Export JSON backup") { DeskBackupIO.pickExport(this) }
+        btn("Restore from JSON backup") { DeskBackupIO.pickRestore(this) }
+        dlg = AlertDialog.Builder(this).setTitle("Memory & files").setView(col).setNegativeButton("Close", null).create()
+        dlg.show()
     }
 
     /** One place that moves every visual (drawn character, dot-matrix orb, hologram) to the same state. */
@@ -129,12 +211,18 @@ class AgentChatActivity : Activity() {
 
     private fun refreshDesk() {
         val strip = pnlText ?: return
+        // paint what is known locally right away, then let the network parts fill in
+        fillPills(TradingDesk.statusParts(this)); updateAiChip()
         Thread {
-            val t = try { TradingDesk.statusLine(this) } catch (_: Exception) { "Desk status unavailable" }
+            TradingDesk.warmCalendar()
+            val parts = try { TradingDesk.statusParts(this) } catch (_: Exception) { null }
+            if (parts != null) runOnUiThread { if (!isDestroyed) fillPills(parts) }
+        }.start()
+        Thread {
             val snap = try { TradingDesk.pnlSnapshot(this) } catch (_: Exception) { null }
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
-                deskStatus?.text = t
+                if (snap == null) { moodText?.text = "Live numbers are unavailable right now. Open the Desk to check your setup."; return@runOnUiThread }
                 if (snap != null) {
                     strip.text = snap.strip; moodText?.text = snap.state.line; mascot?.setMood(snap.state.mood)
                     lastStrip = snap.strip; lastLine = snap.state.line; pushHolo()
@@ -243,11 +331,13 @@ class AgentChatActivity : Activity() {
             "wake" -> toggleWake()
             "caps" -> addBubble(false, "Here is what I can do for you:\n" + DeskCapabilities.items.joinToString("\n") { "- ${it.name}: ${it.does}" })
             "tour" -> addBubble(false, DeskTour.text)
+            "ai" -> aiDialog()
+            "memory" -> memoryDialog()
             "health" -> {
                 val wait = addBubble(false, "Checking your setup…")
                 Thread {
                     val t = try { DeskHealth.text(TradingDesk.healthItems(this)) } catch (_: Exception) { "I could not run the setup check." }
-                    runOnUiThread { if (!isDestroyed) { wait.text = Markdown.render(t) } }
+                    runOnUiThread { if (!isDestroyed) { wait.text = Markdown.render(MarkdownTables.flatten(t)) } }
                 }.start()
             }
             "learned" -> notesDialog()
@@ -270,7 +360,7 @@ class AgentChatActivity : Activity() {
         row.removeAllViews()
         g.chips.forEachIndexed { n, c ->
             val b = smallButton(chipLabel(c)) { if (c.prompt != null) quick(c.prompt) else runAction(c.action!!) }
-            row.addView(b, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
+            row.addView(b, LinearLayout.LayoutParams(-2, dp(36)).apply { marginEnd = dp(8) })
             Motion.enter(b, n)
         }
         val tabs = tabRow ?: return
@@ -335,17 +425,26 @@ class AgentChatActivity : Activity() {
             val holder = android.widget.FrameLayout(this)
             holder.addView(face, android.widget.FrameLayout.LayoutParams(-1, -1))
             holder.addView(orbView, android.widget.FrameLayout.LayoutParams(-1, -1))
-            top.addView(holder, LinearLayout.LayoutParams(dp(88), dp(88)))
-            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
-            pnlText = TextView(this).apply { textSize = 15f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD; text = "Live PnL: loading…" }
-            moodText = TextView(this).apply { textSize = 12f; setTextColor(Theme.TEXT); setPadding(0, dp(2), 0, 0) }
-            deskStatus = TextView(this).apply {
-                textSize = 11f; setTextColor(Theme.MUTED); setPadding(0, dp(4), 0, 0)
-                text = "Desk: loading…"
-                setOnClickListener { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }
-            }
-            col.addView(pnlText); col.addView(moodText); col.addView(deskStatus)
+            top.addView(holder, LinearLayout.LayoutParams(dp(72), dp(72)))
+            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }
+            pnlText = TextView(this).apply { textSize = 17f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD; text = TradingDesk.quickStrip(this@AgentChatActivity) }
+            moodText = TextView(this).apply { textSize = 12f; setTextColor(Theme.MUTED); setPadding(0, dp(3), 0, dp(6)); text = "Checking your desk…" }
+            col.addView(pnlText); col.addView(moodText)
+            val pills = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pillRow = pills
+            col.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(pills) }, -1, -2)
             top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+            fillPills(TradingDesk.statusParts(this))
+            // action row: AI provider, memory and files, desk
+            card.addView(android.view.View(this).apply { setBackgroundColor(Theme.LINE) }, LinearLayout.LayoutParams(-1, dp(1)))
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), dp(8), dp(10), dp(8)) }
+            val ai = actionPill("") { aiDialog() }
+            aiChip = ai
+            actions.addView(ai, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+            actions.addView(actionPill("Memory & files") { memoryDialog() }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+            actions.addView(actionPill("Desk") { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }, LinearLayout.LayoutParams(-2, -2))
+            card.addView(actions, -1, -2)
+            updateAiChip()
             root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(14), 0, dp(14), dp(8)) })
             Motion.enter(card)
             applyLook(Prefs.companionChar(this).coerceIn(0, LOOKS - 1))
@@ -412,7 +511,7 @@ class AgentChatActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
-        if (deskStatus != null) { ticker.removeCallbacks(tick); tick.run() }
+        if (pnlText != null) { ticker.removeCallbacks(tick); tick.run() }
     }
 
     private fun statusBarPad(): Int {
@@ -487,7 +586,7 @@ class AgentChatActivity : Activity() {
 
     private fun addBubble(user: Boolean, text: String): TextView {
         val bubble = TextView(this).apply {
-            this.text = if (user) text else Markdown.render(text); textSize = 15f
+            this.text = if (user) text else Markdown.render(MarkdownTables.flatten(text)); textSize = 14.5f
             if (!user) movementMethod = LinkMovementMethod.getInstance()
             setTextColor(if (user) Theme.ON_ACCENT else Theme.TEXT)
             setTextIsSelectable(true)
@@ -611,6 +710,7 @@ class AgentChatActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (DeskBackupIO.onResult(this, requestCode, resultCode == RESULT_OK, data?.data) { refreshDesk() }) return
         if (requestCode != REQUEST_IMAGE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         Thread {
@@ -687,7 +787,7 @@ class AgentChatActivity : Activity() {
             }
             runOnUiThread {
                 val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
-                waiting.text = Markdown.render(shown)
+                waiting.text = Markdown.render(MarkdownTables.flatten(shown))
                 turns.add(AgentRunner.Turn("assistant", shown))
                 AgentChatStore.save(this, agent.id, turns)
                 busy = false
@@ -700,7 +800,7 @@ class AgentChatActivity : Activity() {
     private fun transitionReply(view: TextView, value: String) {
         view.animate().cancel()
         view.animate().alpha(0.35f).setDuration(100).withEndAction {
-            view.text = Markdown.render(value)
+            view.text = Markdown.render(MarkdownTables.flatten(value))
             view.alpha = 0.35f
             view.animate().alpha(1f).setDuration(190)
                 .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
