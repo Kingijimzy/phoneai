@@ -239,10 +239,16 @@ class PhoneAiService : AccessibilityService(), AgentUi {
      * a recovery/standing-order fallback, not the primary observer.
      */
     private fun requestContinuousWatcherObservation(reason: String) {
-        if (!AgentPolicy.enabled(this, "orion_core") || !AgentPolicy.enabled(this, "proactive")) return
         val now = SystemClock.elapsedRealtime()
         synchronized(this) {
-            if (now - lastContinuousWatcherAt < 30_000L) return
+            val elapsed = if (lastContinuousWatcherAt == 0L) Long.MAX_VALUE else now - lastContinuousWatcherAt
+            val shouldObserve = OrionContinuousWatcherPolicy.shouldObserve(
+                coreEnabled = AgentPolicy.enabled(this, "orion_core"),
+                proactiveEnabled = AgentPolicy.enabled(this, "proactive"),
+                serviceConnected = instance === this,
+                elapsedSinceLastObservationMs = elapsed
+            )
+            if (!shouldObserve) return
             lastContinuousWatcherAt = now
         }
         worker.execute {
