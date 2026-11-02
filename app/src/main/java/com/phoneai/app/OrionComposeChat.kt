@@ -302,6 +302,71 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
     }
     return out.toAnnotatedString()
 }
+
+@Composable
+private fun OrionComposeActivityCard(event: OrionActivityEvent) {
+    var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
+    val label = when (event.kind) {
+        OrionActivityKind.THINKING -> "THINKING"
+        OrionActivityKind.RESEARCH -> "RESEARCH"
+        OrionActivityKind.CODING -> "CODING"
+        OrionActivityKind.TOOL -> "TOOL EXECUTION"
+        OrionActivityKind.DELEGATION -> "AGENT HAND-OFF"
+        OrionActivityKind.APPROVAL -> "APPROVAL"
+        OrionActivityKind.ERROR -> "ERROR"
+        OrionActivityKind.COMPLETION -> "COMPLETED"
+        OrionActivityKind.INTERRUPTED -> "INTERRUPTED"
+        OrionActivityKind.CANCELLED -> "CANCELLED"
+    }
+    val status = when (event.status) {
+        OrionActivityStatus.ACTIVE -> "ACTIVE"
+        OrionActivityStatus.WAITING -> "WAITING"
+        OrionActivityStatus.SUCCEEDED -> "DONE"
+        OrionActivityStatus.FAILED -> "FAILED"
+        OrionActivityStatus.CANCELLED -> "CANCELLED"
+        OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
+    }
+    val accent = when (event.status) {
+        OrionActivityStatus.ACTIVE -> Color(0xFFD1D1D1)
+        OrionActivityStatus.WAITING -> Color(0xFFE0C58A)
+        OrionActivityStatus.SUCCEEDED -> Color(0xFFB8CDBD)
+        OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
+        else -> Color(0xFFAAAAAA)
+    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF171717))
+            .border(1.dp, Color(0xFF484848), RoundedCornerShape(14.dp))
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 13.dp, vertical = 11.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(event.title, color = Color(0xFFF0F0F0), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(label, color = ChatMuted, fontSize = 9.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            Text(status, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF252525)).padding(horizontal = 8.dp, vertical = 5.dp))
+        }
+        if (event.summary.isNotBlank()) Text(event.summary, color = Color(0xFFB8B8B8), fontSize = 12.sp, lineHeight = 17.sp, maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 7.dp)) {
+            Text(java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(event.timestampMs)), color = Color(0xFF858585), fontSize = 9.sp)
+            event.agentId?.let { Text("  ·  $it", color = Color(0xFF858585), fontSize = 9.sp) }
+            Spacer(Modifier.weight(1f))
+            Text(if (expanded) "LESS" else "EVIDENCE", color = Color(0xFFAAAAAA), fontSize = 9.sp)
+        }
+        AnimatedVisibility(expanded, enter = fadeIn(tween(160))) {
+            Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                event.evidence.take(8).forEach { evidence ->
+                    Text("• $evidence", color = Color(0xFFD0D0D0), fontSize = 11.sp, lineHeight = 16.sp)
+                }
+                if (event.evidence.isEmpty()) Text("No additional evidence was attached to this event.", color = Color(0xFF858585), fontSize = 11.sp)
+                Text("Task ${event.taskId}", color = Color(0xFF777777), fontSize = 9.sp)
+            }
+        }
+    }
+}
+
 private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
@@ -320,6 +385,7 @@ data class OrionChatLine(
 @Composable
 fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
+    activityEvents: List<OrionActivityEvent> = emptyList(),
     status: String,
     chatTitle: String,
     commandMode: Boolean,
@@ -557,6 +623,9 @@ fun OrionComposeChatScreen(
                             keyboardController?.show()
                         } else null
                     )
+                }
+                itemsIndexed(activityEvents, key = { _, event -> "activity-${event.eventId}" }) { _, event ->
+                    OrionComposeActivityCard(event)
                 }
                 if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }
             }
