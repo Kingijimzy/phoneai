@@ -91,7 +91,7 @@ class OrionConversationRepository private constructor(context: Context) :
 
     /** Store bounded, secret-free lifecycle evidence for tools and approvals in the active session. */
     @Synchronized
-    fun recordEvent(
+    internal fun recordEvent(
         context: Context,
         messageId: String?,
         type: String,
