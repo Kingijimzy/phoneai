@@ -33,9 +33,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     companion object {
         const val EXTRA_PICK_IMAGE = "com.phoneai.app.PICK_IMAGE_ON_OPEN"
         const val EXTRA_INITIAL_PROMPT = "com.phoneai.app.EXTRA_INITIAL_PROMPT"
-        const val EXTRA_FORCE_COMMAND = "com.phoneai.app.EXTRA_FORCE_COMMAND"
-        private const val STATE_COMMAND_MODE = "orion_chat_command_mode"
-        private const val STATE_PENDING_INITIAL_PROMPT = "orion_pending_initial_prompt"
         const val EXTRA_OPEN_BROWSER_URL = "com.phoneai.app.EXTRA_OPEN_BROWSER_URL"
     }
     private lateinit var messages: LinearLayout
@@ -44,13 +41,12 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private lateinit var providerModelChip: TextView
     private lateinit var input: EditText
     private lateinit var send: TextView
-    private lateinit var stop: LinearLayout
+    private lateinit var stop: TextView
     private val selectedImageUris = mutableListOf<Uri>()
     private var selectedDocumentName: String? = null
     private var selectedDocumentText: String? = null
     private var imagePreviewPanel: LinearLayout? = null
     private var commandMode = false
-    private var pendingInitialPrompt: String? = null
     private lateinit var talkModeChip: LinearLayout
     private lateinit var commandModeChip: LinearLayout
     private lateinit var talkModeIcon: OrionIconView
@@ -75,11 +71,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private val composeStatus get() = chatUiState.status
     private val composeChatTitle get() = chatUiState.chatTitle
     private val composeCommandMode get() = chatUiState.commandMode
-    private val composeCompanionLook = mutableStateOf(0)
     private val composeSelectedImages get() = chatUiState.selectedImages
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
     private val streamingBuffer = StringBuilder()
+    private val liveActivityEvents = mutableStateListOf<OrionActivityEvent>()
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -100,7 +96,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private fun animateIn(view: View, delay: Long = 0L) {
         view.alpha = 0f
         view.translationY = dp(8).toFloat()
-        view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(Theme.MOTION_MEDIUM_MS.toLong())
+        view.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(260)
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
     }
 
@@ -120,15 +116,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putBoolean(STATE_COMMAND_MODE, commandMode)
-        pendingInitialPrompt?.let { outState.putString(STATE_PENDING_INITIAL_PROMPT, it) }
-        super.onSaveInstanceState(outState)
-    }
-
     private fun refreshModeSelector() {
         if (!::talkModeChip.isInitialized || !::commandModeChip.isInitialized) return
-        composeCommandMode.value = commandMode
         val talkSelected = !commandMode
         talkModeChip.background = rounded(if (talkSelected) 0xFF2B2B2B.toInt() else 0xFF161616.toInt(),
             16, if (talkSelected) 0xFF787878.toInt() else 0xFF333333.toInt())
@@ -496,35 +485,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }.show()
             "terminal" -> startActivity(Intent(this, TerminalActivity::class.java))
             "browser" -> startActivity(Intent(this, BrowserActivity::class.java))
-            "chat_files" -> {
-                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    type = "image/*"
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                }
-                startActivityForResult(Intent.createChooser(picker, "Attach images to this chat"), 44)
-            }
-            "attach_text" -> {
-                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    type = "*/*"
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
-                        "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
-                        "application/json", "application/xml", "text/xml", "text/html"
-                    ))
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-                }
-                startActivityForResult(Intent.createChooser(picker, "Attach a supported text document"), 45)
-            }
-            "tasks" -> startActivity(Intent(this, TaskCenterActivity::class.java))
-            "keyboard" -> {
-                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                imm.showInputMethodPicker()
-            }
-            "agents" -> startActivity(Intent(this, AgentsActivity::class.java))
+            "chat_files" -> AlertDialog.Builder(this)
+                .setTitle("Chat files")
+                .setMessage("Orion can attach and analyse images from the composer. A searchable file shelf for all conversation attachments is not implemented yet.")
+                .setPositiveButton("OK", null).show()
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
-            "orion_hub" -> startActivity(Intent(this, CapabilityBoardActivity::class.java))
             "capabilities" -> showToolCatalog()
             "feedback" -> showFeedbackDialog()
             "notifications" -> openNotificationSettings()
@@ -723,11 +688,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 background = rounded(0xFF151515.toInt(), 20, 0xFF303030.toInt())
             }
             empty.tag = "no saved conversations yet"
-            empty.addView(OrionIconView(this@MainChatActivity).apply {
-                icon = "history"
-                tint = Theme.SILVER
-                contentDescription = "Chat history"
-            }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { gravity = Gravity.CENTER })
+            empty.addView(label("◷", 34f, 0xFFBDBDBD.toInt(), true).apply { gravity = Gravity.CENTER })
             empty.addView(label("No saved conversations yet", 18f, 0xFFF1F1F1.toInt(), true).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(7)) })
             empty.addView(label("When you start a new chat, Orion keeps the previous conversation here.", 13f, 0xFF9B9B9B.toInt()).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER })
             rows.addView(empty, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -744,9 +705,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
-                top.addView(historyActionButton("Rename") {
-                    showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
-                }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
                 top.addView(historyActionButton("Delete") {
                     AlertDialog.Builder(this@MainChatActivity)
                         .setTitle("Delete this conversation?")
@@ -792,50 +750,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
         animateIn(root)
-    }
-
-    private fun showRenameArchivedChatDialog(sessionId: String, currentTitle: String, historyDialog: android.app.Dialog) {
-        val input = EditText(this).apply {
-            setText(currentTitle)
-            setSelection(text.length)
-            hint = "Conversation name"
-            setSingleLine(true)
-            setTextColor(0xFFF1F1F1.toInt())
-            setHintTextColor(0xFF858585.toInt())
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = rounded(0xFF171717.toInt(), 12, 0xFF3A3A3A.toInt())
-        }
-        val wrap = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(8), dp(18), 0)
-            addView(label("Give this saved conversation a name you can recognise later.", 12f, 0xFF9B9B9B.toInt()))
-            addView(input, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(10) })
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Rename conversation")
-            .setView(wrap)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Save", null)
-            .create().also { renameDialog ->
-                renameDialog.setOnShowListener {
-                    renameDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                        val title = input.text.toString().trim()
-                        if (title.isBlank()) {
-                            input.error = "Enter a name"
-                            return@setOnClickListener
-                        }
-                        val saved = ChatHistoryStore.renameArchivedById(this, sessionId, title)
-                        if (saved) {
-                            Toast.makeText(this, "Conversation renamed", Toast.LENGTH_SHORT).show()
-                            renameDialog.dismiss()
-                            historyDialog.dismiss()
-                            showChatHistory()
-                        } else {
-                            Toast.makeText(this, "Could not rename this conversation", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                }
-            }.show()
     }
 
     private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
@@ -1052,11 +966,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        commandMode = savedInstanceState?.getBoolean(STATE_COMMAND_MODE)
-            ?: intent.getBooleanExtra(EXTRA_FORCE_COMMAND, false)
-        pendingInitialPrompt = savedInstanceState?.getString(STATE_PENDING_INITIAL_PROMPT)
-            ?: intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }
-        composeCommandMode.value = commandMode
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
@@ -1104,22 +1013,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         titleCol.addView(personality)
         refreshPersonalityLabel(personality)
         header.addView(titleCol, LinearLayout.LayoutParams(0, -2, 1f))
-        stop = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        stop = label("■", 13f, Theme.CYAN, true).apply {
             gravity = Gravity.CENTER
             contentDescription = "Stop current Orion task"
-            background = rounded(0xFF1D1D1D.toInt(), 14, Theme.LINE_STRONG)
+            background = rounded(0xFF1D1D1D.toInt(), 14, 0xFF7B7B7B.toInt())
             setPadding(dp(11), dp(10), dp(11), dp(10))
-            isClickable = true
-            isFocusable = true
             visibility = View.GONE
-            addView(OrionIconView(this@MainChatActivity).apply {
-                icon = "stop"
-                tint = Theme.SILVER
-                contentDescription = null
-            }, LinearLayout.LayoutParams(dp(20), dp(20)))
             setOnClickListener {
                 PhoneAiService.instance?.stopCurrentTask()
+                text = "…"
                 isEnabled = false
                 Toast.makeText(this@MainChatActivity, "Asked Orion to stop.", Toast.LENGTH_SHORT).show()
             }
@@ -1390,7 +1292,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     .setItems(arrayOf("Image or photos", "Text document (TXT, MD, CSV, JSON, XML, HTML, LOG)")) { _, which ->
                         val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                             if (which == 0) {
                                 type = "image/*"
                                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -1495,20 +1396,14 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(dock, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4); bottomMargin = dp(1) })
         animateIn(dock, 120)
         composeChatActive = true
-        composeCompanionLook.value = Prefs.companionChar(this).coerceIn(0, 2)
         composeChatTitle.value = getSharedPreferences("orion_chat_history", MODE_PRIVATE).getString("active_title", "Orion")?.take(48)?.ifBlank { "Orion" } ?: "Orion"
         val composeRoot = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 OrionComposeChatScreen(
                     lines = composeLines,
+                    activityEvents = liveActivityEvents,
                     status = composeStatus.value,
-                    companionLook = composeCompanionLook.value,
-                    onCompanionLookChanged = { look ->
-                        val safeLook = look.coerceIn(0, 2)
-                        composeCompanionLook.value = safeLook
-                        Prefs.setCompanionChar(this@MainChatActivity, safeLook)
-                    },
                     chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
                     selectedImages = composeSelectedImages.value,
@@ -1530,7 +1425,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     },
                     onModeChange = { enabled -> commandMode = enabled; composeCommandMode.value = enabled },
                     onSend = { message -> input.setText(message); sendMessage() },
-                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
+                    onPickImage = { val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }; startActivityForResult(Intent.createChooser(picker, "Choose up to 4 images"), 44) }, onRemoveImage = { index -> if (index in selectedImageUris.indices) selectedImageUris.removeAt(index); composeSelectedImages.value = selectedImageUris.toList(); refreshImagePreview(selectedImageUris.firstOrNull()) }, onVoice = { startActivity(Intent(this@MainChatActivity, LiveConversationActivity::class.java)) }, onBrowser = { url -> showChatBrowserPopup(url) }, onTasks = { startActivity(Intent(this@MainChatActivity, TaskCenterActivity::class.java)) }, onMenuAction = { action -> handleChatMenuAction(action) }, onStop = { if (::stop.isInitialized) stop.performClick() },
                     onRetry = { prompt -> PhoneAiService.instance?.retryLastResponse(prompt) },
                     onEditSend = { original, edited -> PhoneAiService.instance?.editAndResend(original, edited) }
                 )
@@ -1540,17 +1435,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         // Do not inject a fake assistant turn into a new conversation. Leaving the transcript
         // empty lets OrionComposeChatScreen render its actual welcome/prompts state; restored
         // sessions arrive through onTranscriptRestored from the service.
-        pendingInitialPrompt?.let {
-            window.decorView.postDelayed({
-                val initialPrompt = pendingInitialPrompt
-                if (initialPrompt != null && !isFinishing && !isDestroyed && ::input.isInitialized) {
-                    // Clear only when the composer is ready to dispatch. If Android recreates
-                    // this Activity before the callback runs, the pending prompt is saved again.
-                    pendingInitialPrompt = null
-                    input.setText(initialPrompt)
-                    sendMessage()
-                }
-            }, 500L)
+        if (savedInstanceState == null) {
+            intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }?.let { initialPrompt ->
+                window.decorView.postDelayed({
+                    if (!isFinishing && !isDestroyed && ::input.isInitialized) {
+                        input.setText(initialPrompt)
+                        sendMessage()
+                    }
+                }, 500L)
+            }
         }
         intent.getStringExtra(EXTRA_OPEN_BROWSER_URL)?.takeIf { it.isNotBlank() }?.let { target ->
             window.decorView.post { if (!isFinishing && !isDestroyed) showChatBrowserPopup(target) }
@@ -1563,7 +1456,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     type = "image/*"
                     addCategory(Intent.CATEGORY_OPENABLE)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
                 startActivityForResult(Intent.createChooser(picker, "Choose an image for Orion"), 44)
             }, 260L)
@@ -1734,9 +1626,6 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onResume() {
         super.onResume()
-        runCatching {
-            onChatEvents(OrionConversationRepository.get(this).eventsForActive(this))
-        }
         refreshProviderModelChip()
         if (livePulse?.isStarted != true) livePulse?.start()
         val service = PhoneAiService.instance
@@ -1961,19 +1850,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         if (imageUris.isNotEmpty()) {
             val question = value.ifBlank { "Describe these images and explain anything important I should notice. Compare them when useful." }
             addMessage("me", question)
-            imageUris.forEach { uri ->
-                addImageBubble(uri)
-                runCatching {
-                    OrionMultimodalEvidenceStore.record(
-                        applicationContext,
-                        ChatHistoryStore.activeSessionId(applicationContext),
-                        modality = OrionMultimodalEvidenceStore.Modality.IMAGE,
-                        source = "main_chat_attachment",
-                        reference = uri.toString(),
-                        summary = "Image attached to this conversation; re-open the original content URI before future visual analysis."
-                    )
-                }
-            }
+            imageUris.forEach { addImageBubble(it) }
             selectedImageUris.clear()
             composeSelectedImages.value = emptyList()
             refreshImagePreview(null)
@@ -2029,6 +1906,25 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         val isNote = kind == "note"
+        if (isNote) {
+            val activity = OrionActivityTimeline.fromLegacyNote(
+                taskId = "active-conversation",
+                note = text,
+                timestampMs = System.currentTimeMillis()
+            )
+            if (activity != null) {
+                val card = OrionLiveActivityCard(this, activity)
+                val cardParams = LinearLayout.LayoutParams(-1, -2).apply {
+                    setMargins(0, dp(3), 0, dp(5))
+                }
+                messages.addView(card, cardParams)
+                card.alpha = 0f
+                card.translationY = dp(6).toFloat()
+                card.animate().alpha(1f).translationY(0f).setDuration(180).start()
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                return
+            }
+        }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12), dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12))
@@ -2126,7 +2022,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             // Lifecycle events are stored separately from transcript messages. Reload them
             // after the active-session pointer changes so restored chats show only their own events.
             val activeEvents = runCatching {
-                OrionConversationRepository.get(this@MainChatActivity).eventsForActive(this@MainChatActivity)
+                PhoneAiService.instance?.activeChatEvents().orEmpty()
             }.getOrDefault(emptyList())
             onChatEvents(activeEvents)
         }
@@ -2134,18 +2030,92 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
         runOnUiThread {
-            events.forEach { event ->
-                val marker = when (event.type) {
-                    "approval" -> "[APPROVAL:${event.status.uppercase()}]"
-                    "tool" -> "[TOOL:${event.status.uppercase()}]"
-                    "tool_result" -> "[TOOL_RESULT:${event.status.uppercase()}]"
-                    else -> "[EVENT:${event.type.uppercase()}:${event.status.uppercase()}]"
+            events.sortedWith(compareBy<OrionConversationRepository.ChatEvent> { it.createdAt }.thenBy { it.id }).forEach { event ->
+                val kind = when (event.type.lowercase()) {
+                    "thinking", "plan", "reflection" -> OrionActivityKind.THINKING
+                    "research", "browser", "web_search" -> OrionActivityKind.RESEARCH
+                    "coding", "code", "file", "shell" -> OrionActivityKind.CODING
+                    "delegation", "agent", "handoff", "subagent" -> OrionActivityKind.DELEGATION
+                    "approval" -> OrionActivityKind.APPROVAL
+                    "error", "tool_error" -> OrionActivityKind.ERROR
+                    "completion", "complete", "task_complete" -> OrionActivityKind.COMPLETION
+                    "interrupted" -> OrionActivityKind.INTERRUPTED
+                    "cancelled", "canceled" -> OrionActivityKind.CANCELLED
+                    "tool", "tool_result" -> OrionActivityKind.TOOL
+                    else -> OrionActivityKind.TOOL
                 }
-                val content = "$marker\n${event.summary}"
-                if (composeLines.none { it.kind == "note" && it.text == content }) {
-                    composeLines.add(OrionChatLine(event.id.hashCode().toLong(), "note", content))
+                val status = when (event.status.lowercase()) {
+                    "running", "active", "started", "in_progress" -> OrionActivityStatus.ACTIVE
+                    "waiting", "pending", "approval_required" -> OrionActivityStatus.WAITING
+                    "success", "succeeded", "complete", "completed", "ok", "result", "approved" -> OrionActivityStatus.SUCCEEDED
+                    "denied", "failed", "error" -> OrionActivityStatus.FAILED
+                    "cancelled", "canceled" -> OrionActivityStatus.CANCELLED
+                    "interrupted", "paused" -> OrionActivityStatus.INTERRUPTED
+                    else -> if (kind == OrionActivityKind.APPROVAL) OrionActivityStatus.WAITING else OrionActivityStatus.ACTIVE
+                }
+                val title = when (kind) {
+                    OrionActivityKind.THINKING -> "Planning next step"
+                    OrionActivityKind.RESEARCH -> "Research activity"
+                    OrionActivityKind.CODING -> "Code or terminal activity"
+                    OrionActivityKind.DELEGATION -> "Agent hand-off"
+                    OrionActivityKind.APPROVAL -> "Approval required"
+                    OrionActivityKind.ERROR -> "Execution error"
+                    OrionActivityKind.COMPLETION -> "Task completed"
+                    OrionActivityKind.INTERRUPTED -> "Task interrupted"
+                    OrionActivityKind.CANCELLED -> "Task cancelled"
+                    OrionActivityKind.TOOL -> event.type.replace('_', ' ').replaceFirstChar { it.uppercase() }
+                }
+                val toolName = Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(event.summary)?.groupValues?.get(1)
+                val startEvent = if (event.type == "tool_result") {
+                    val correlated = event.correlationId?.takeIf { it.isNotBlank() }?.let { correlation ->
+                        events.firstOrNull { it.type == "tool" && it.status == "started" && it.correlationId == correlation }
+                    }
+                    correlated ?: if (event.correlationId.isNullOrBlank() && toolName != null) {
+                        // Compatibility adapter for events persisted before schema v3.
+                        events.asSequence().filter { it.type == "tool" && it.status == "started" && it.createdAt <= event.createdAt }
+                            .filter { Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(it.summary)?.groupValues?.get(1) == toolName }
+                            .maxByOrNull { it.createdAt }
+                    } else null
+                } else null
+                val typedEvidence = event.evidenceJson?.let { OrionActivityEvidence.fromJson(it) }?.let { listOf(it) }.orEmpty()
+                val handoff = typedEvidence.filterIsInstance<OrionActivityEvidence.AgentHandoff>().firstOrNull()
+                val resolvedKind = when {
+                    handoff != null -> OrionActivityKind.DELEGATION
+                    typedEvidence.any { it is OrionActivityEvidence.Browser } -> OrionActivityKind.RESEARCH
+                    typedEvidence.any { it is OrionActivityEvidence.Terminal || it is OrionActivityEvidence.File || it is OrionActivityEvidence.CodeDiff } -> OrionActivityKind.CODING
+                    event.type == "tool_result" && toolName != null -> when {
+                        toolName.contains("browser") || toolName.contains("search") || toolName.contains("web") -> OrionActivityKind.RESEARCH
+                        toolName.contains("shell") || toolName.contains("python") || toolName.contains("file") || toolName.contains("code") -> OrionActivityKind.CODING
+                        else -> OrionActivityKind.TOOL
+                    }
+                    else -> kind
+                }
+                val resolvedTitle = when (val evidence = typedEvidence.firstOrNull()) {
+                    is OrionActivityEvidence.Browser -> evidence.title.ifBlank { "Browser research" }
+                    is OrionActivityEvidence.Terminal -> evidence.commandLabel.ifBlank { "Terminal operation" }
+                    is OrionActivityEvidence.File -> "${evidence.operation.replaceFirstChar { it.uppercase() }} file"
+                    is OrionActivityEvidence.CodeDiff -> "Code changes · ${evidence.fileLabel}"
+                    is OrionActivityEvidence.AgentHandoff -> "Agent hand-off · ${evidence.agentId}"
+                    null -> toolName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: title
+                }
+                val evidenceText = event.summary.substringAfter(" | Evidence:", "").trim()
+                val safeEvidence = evidenceText.takeIf { it.isNotBlank() }?.let { OrionEvidenceSanitizer.text(it, 480) }
+                val displaySummary = event.summary.substringBefore(" | Evidence:").take(420)
+                val typed = OrionActivityEvent(
+                    eventId = event.id, taskId = event.sessionId, kind = resolvedKind, status = status,
+                    title = resolvedTitle, summary = displaySummary, timestampMs = event.createdAt.coerceAtLeast(0L),
+                    agentId = handoff?.agentId, parentTaskId = handoff?.parentTaskId,
+                    evidence = if (typedEvidence.isEmpty()) listOfNotNull(safeEvidence) else emptyList(),
+                    elapsedMs = startEvent?.let { (event.createdAt - it.createdAt).coerceAtLeast(0L) },
+                    typedEvidence = typedEvidence, correlationId = event.correlationId
+                )
+                if (liveActivityEvents.none { it.eventId == typed.eventId }) {
+                    liveActivityEvents.add(typed)
                 }
             }
+            val retained = liveActivityEvents.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId }).takeLast(300)
+            liveActivityEvents.clear()
+            liveActivityEvents.addAll(retained)
         }
     }
 
@@ -2153,6 +2123,28 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             val changed = lastMode != mode
             lastMode = mode
+            if (changed && (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING || mode == OrbView.Mode.WAITING_APPROVAL)) {
+                val phase = when (mode) {
+                    OrbView.Mode.THINKING -> "Preparing a response"
+                    OrbView.Mode.ACTING -> "Executing the current tool or action"
+                    OrbView.Mode.WAITING_APPROVAL -> "Waiting for owner approval"
+                    else -> "Working"
+                }
+                liveActivityEvents.add(OrionActivityEvent(
+                    eventId = "phase-${mode.name}-${System.currentTimeMillis()}",
+                    taskId = "active-session",
+                    kind = when (mode) {
+                        OrbView.Mode.THINKING -> OrionActivityKind.THINKING
+                        OrbView.Mode.WAITING_APPROVAL -> OrionActivityKind.APPROVAL
+                        else -> OrionActivityKind.TOOL
+                    },
+                    status = if (mode == OrbView.Mode.WAITING_APPROVAL) OrionActivityStatus.WAITING else OrionActivityStatus.ACTIVE,
+                    title = phase,
+                    summary = "Live phase reported by Orion runtime",
+                    timestampMs = System.currentTimeMillis()
+                ))
+                while (liveActivityEvents.size > 300) liveActivityEvents.removeAt(0)
+            }
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
                 OrbView.Mode.IDLE -> Triple("READY", Theme.MUTED, Pair(Theme.BG, Theme.LINE))
                 OrbView.Mode.LISTENING -> Triple("LISTENING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
@@ -2188,7 +2180,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
             stop.visibility = if (busy) View.VISIBLE else View.GONE
             stop.isEnabled = busy
-            // The stop control keeps its vector stop glyph; only enabled state changes.
+            stop.text = "■"
             if (busy) {
                 stop.animate().cancel()
                 stop.scaleX = .94f
