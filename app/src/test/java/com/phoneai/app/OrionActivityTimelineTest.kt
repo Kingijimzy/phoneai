@@ -37,15 +37,15 @@ class OrionActivityTimelineTest {
     }
 
     @Test fun legacyLifecycleNotesMapToTypedStates() {
-        val active = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:RUNNING]\\nRunning browser_search", 10)!!
+        val active = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:RUNNING]\nRunning browser_search", 10)!!
         assertEquals(OrionActivityKind.TOOL, active.kind)
         assertEquals(OrionActivityStatus.ACTIVE, active.status)
-        val approval = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:APPROVAL]\\nConfirm sending", 20)!!
+        val approval = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:APPROVAL]\nConfirm sending", 20)!!
         assertEquals(OrionActivityStatus.WAITING, approval.status)
-        val failed = OrionActivityTimeline.fromLegacyNote("task-1", "[SHELL:FAILED]\\npython main.py", 30)!!
+        val failed = OrionActivityTimeline.fromLegacyNote("task-1", "[SHELL:FAILED]\npython main.py", 30)!!
         assertEquals(OrionActivityKind.CODING, failed.kind)
         assertEquals(OrionActivityStatus.FAILED, failed.status)
-        val done = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:COMPLETE]\\nVerified output", 40)!!
+        val done = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:COMPLETE]\nVerified output", 40)!!
         assertEquals(OrionActivityStatus.SUCCEEDED, done.status)
     }
 
