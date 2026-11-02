@@ -73,6 +73,8 @@ class OrionRepairLifecycleTest {
         val result = execute(apply = { applied++; "receipt-123" })
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
         assertEquals(1, applied)
+        assertFalse(OrionEvidenceLedger.events(context, "task-repair-test")
+            .any { it.tool == "repair_awaiting_owner" })
         assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
             .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
     }
