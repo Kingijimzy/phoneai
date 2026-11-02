@@ -84,3 +84,27 @@ CI remains authoritative for the configured PRoot/Python checks and APK signatur
 | Final decision | BLOCKED pending device acceptance |
 
 The Android workflow's configured build/test/Python/package/signature steps all completed successfully on the exact tested SHA. The PRoot workflow also completed successfully on that same SHA. APK release publication was skipped by the workflow; the APK remains available as a CI artifact. These CI results do not establish runtime behavior on a physical device.
+
+
+## Stage 4–7 integration gate update — 2026-11-02
+
+The current stacked PR dependencies are being reconciled:
+- PR #157 (Stage 6) now targets PR #120's navigation branch, inheriting owner controls (#118) and graphite UI (#119).
+- PR #158 (activity timeline) remains stacked on PR #157 and inherits that UI/control base.
+- Stage 4 repair/Python (#132 → #145 → #154 → #155 → #156) has its own stack. PR #156 was rebased onto the updated #155 parent branch and is now reported mergeable; exact-head CI is still running.
+- These stacks are not yet one release candidate. Do not merge or mark Stage 7 accepted until Stage 4 is safely ported into the same candidate and all exact-head checks pass.
+
+### Required physical acceptance
+Record results on the confirmed current POCO F3 / Android 13 / Snapdragon 870:
+1. Fresh install and upgrade install with preservation of app data and credentials.
+2. Provider connection, streaming chat, attachments, cancellation, retry and restored conversation.
+3. Accessibility grant/revoke, foreground-window observation, watcher start/stop and owner policy enforcement.
+4. WorkManager scheduling, process death, reboot recovery and HyperOS battery restrictions.
+5. Scoped Python standard library, workspace read/write, approved HTTP/HTTPS and private-LAN HTTP/HTTPS.
+6. WebSocket text/binary lifecycle, reconnect, screen-off behavior and foreground notification.
+7. Browser tabs/preview, MCP tool execution, nested task evidence, concurrent tool correlation and event replay.
+8. Trading Desk read-only market data/alerts; confirm no automatic order placement.
+9. Memory review/approval/rejection, knowledge graph updates and privacy redaction.
+10. Live voice microphone permission, interruption, resume and sustained stability.
+
+CI is not a substitute for these device checks. Stage 5 remains on hold; no later stage begins before this gate passes.
