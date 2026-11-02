@@ -44,6 +44,7 @@ object AgentPolicy {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
         log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
+        if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
     fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
     fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {
