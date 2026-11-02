@@ -57,7 +57,6 @@ internal object OrionSoulEngine {
             integration = planner
         )
         val session = runCatching { SoulEngineState.snapshot(context) }.getOrNull()
-        if (request.isNotBlank() && request.length >= 8) runCatching { SoulEngineState.setGoal(context, request) }
         val relatedMemory = runCatching { SoulEngineState.relatedContext(context, request, 3) }.getOrDefault(emptyList())
         val lines = mutableListOf<String>()
         lines += "ORION SOUL ENGINE — LIVE LOCAL CONTEXT"

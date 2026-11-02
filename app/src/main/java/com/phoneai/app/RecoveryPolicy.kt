@@ -60,7 +60,8 @@ internal object RecoveryPolicy {
         !stopped && !budgetExhausted && readRetriesUsed < maxReadRetries.coerceIn(0, 4)
 
     /** Backoff before read retry number [attempt] (1-based): 0.8 s, then 1.6 s. */
-    fun backoffMillis(attempt: Int): Long = 800L * attempt.coerceIn(1, 2)
+    fun backoffMillis(attempt: Int, baseBackoffSeconds: Int = 1): Long =
+        (baseBackoffSeconds.coerceIn(1, 300) * 1000L) * (1L shl (attempt - 1).coerceIn(0, 1))
 
     /** Evidence sent to the model before a replan. It names the failure and forbids repeating it unchanged. */
     fun replanNudge(tool: String, failure: Failure, evidence: String): String =
@@ -84,6 +85,7 @@ internal object RecoveryPolicy {
         sleep: (Long) -> Unit,
         onRetry: (attempt: Int, failure: Failure) -> Unit,
         maxReadRetries: Int = MAX_READ_RETRIES,
+        baseBackoffSeconds: Int = 1,
         attempt: () -> String
     ): ReadOutcome {
         var result = first
@@ -94,7 +96,7 @@ internal object RecoveryPolicy {
             if (!canRetryRead(stopped(), budgetExhausted(), retries, maxReadRetries)) break
             retries++
             onRetry(retries, failure)
-            sleep(backoffMillis(retries))
+            sleep(backoffMillis(retries, baseBackoffSeconds))
             if (stopped()) break
             result = attempt()
         }

@@ -16,6 +16,17 @@ class ConversationAutoRoutePolicyTest {
         assertTrue(ConversationAutoRoutePolicy.requiresToolAgent("which python3"))
     }
 
+    @Test fun routesTerminalCodeCreationAndExecutionFromTalkMode() {
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent(
+            "write a calculator code in python and execute it Linux terminal"
+        ))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent(
+            "create a Python script and run it in the Linux terminal"
+        ))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent("test it yourself"))
+        assertTrue(ConversationAutoRoutePolicy.requiresToolAgent("run the script yourself"))
+    }
+
     @Test fun routesPublicRepositoryInspectionWithoutPrivateAccountAccess() {
         assertTrue(ConversationAutoRoutePolicy.requiresToolAgent(
             "check my GitHub repo phoneai and tell me what it is about"

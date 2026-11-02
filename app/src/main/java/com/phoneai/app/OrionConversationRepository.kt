@@ -242,6 +242,15 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    fun renameArchivedById(context: Context, sessionId: String, title: String): Boolean {
+        migrateLegacy(context)
+        val safeTitle = title.replace(Regex("\\s+"), " ").trim().take(80)
+        if (safeTitle.isBlank()) return false
+        val values = ContentValues().apply { put("title", safeTitle); put("updated_at", System.currentTimeMillis()) }
+        return writableDatabase.update("sessions", values, "id=? AND is_active=0", arrayOf(sessionId)) == 1
+    }
+
+    @Synchronized
     fun deleteArchivedById(context: Context, sessionId: String): Boolean {
         migrateLegacy(context)
         return writableDatabase.delete("sessions", "id=? AND is_active=0", arrayOf(sessionId)) > 0

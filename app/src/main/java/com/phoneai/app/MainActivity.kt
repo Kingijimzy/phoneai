@@ -36,6 +36,10 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
  * existing activities continue to own the agent, browser, settings, and device integrations.
  */
 class MainActivity : ComponentActivity() {
+    companion object {
+        @Volatile private var crashDiagnosticsInstalled = false
+    }
+
     private lateinit var content: FrameLayout
     private lateinit var statusLabel: TextView
     private var selectedTab = "Home"
@@ -169,21 +173,18 @@ class MainActivity : ComponentActivity() {
             setContent {
                 OrionComposeShell(
                     status = statusState.value,
-                    onOpenChat = { startActivity(Intent(this@MainActivity, MainChatActivity::class.java)) },
-                    onOpenVoice = { startActivity(Intent(this@MainActivity, LiveConversationActivity::class.java)) },
-                    onOpenBrowser = { startActivity(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")) },
-                    onOpenTasks = { startActivity(Intent(this@MainActivity, TaskCenterActivity::class.java)) },
-                    onOpenSettings = { section ->
-                        val intent = Intent(this@MainActivity, SettingsActivity::class.java)
-                        if (section != null) intent.putExtra("open_section", section)
-                        startActivity(intent)
-                    },
-                    onOpenUtilities = { startActivity(Intent(this@MainActivity, TeachModeActivity::class.java)) },
-                    onOpenTrading = { startActivity(Intent(this@MainActivity, TradingActivity::class.java)) },
-                    onOpenMemory = { startActivity(Intent(this@MainActivity, MemoryActivity::class.java)) },
-                    onOpenAgents = { startActivity(Intent(this@MainActivity, AgentsActivity::class.java)) },
-                    onOpenSoulEngine = { startActivity(Intent(this@MainActivity, SoulEngineActivity::class.java)) },
-                    onOpenExtensions = { startActivity(Intent(this@MainActivity, SelfExtensionLabActivity::class.java)) }
+                    onOpenChat = { launchDestination(Intent(this@MainActivity, MainChatActivity::class.java), "MainChatActivity") },
+                    onOpenVoice = { launchDestination(Intent(this@MainActivity, LiveConversationActivity::class.java), "LiveConversationActivity") },
+                    onOpenBrowser = { launchDestination(Intent(this@MainActivity, BrowserActivity::class.java).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/"), "BrowserActivity") },
+                    onOpenTasks = { launchDestination(Intent(this@MainActivity, TaskCenterActivity::class.java), "TaskCenterActivity") },
+                    onOpenSettings = { section -> openSettingsSection(section) },
+                    onOpenUtilities = { launchDestination(Intent(this@MainActivity, TeachModeActivity::class.java), "TeachModeActivity") },
+                    onOpenTrading = { launchDestination(Intent(this@MainActivity, TradingActivity::class.java), "TradingActivity") },
+                    onOpenMemory = { launchDestination(Intent(this@MainActivity, MemoryActivity::class.java), "MemoryActivity") },
+                    onOpenAgents = { launchDestination(Intent(this@MainActivity, AgentsActivity::class.java), "AgentsActivity") },
+                    onOpenSoulEngine = { launchDestination(Intent(this@MainActivity, SoulEngineActivity::class.java), "SoulEngineActivity") },
+                    onOpenExtensions = { launchDestination(Intent(this@MainActivity, SelfExtensionLabActivity::class.java), "SelfExtensionLabActivity") },
+                    onOpenFeature = { route -> openFeature(route) }
                 )
             }
         }
@@ -191,23 +192,133 @@ class MainActivity : ComponentActivity() {
         showPreviousCrashIfPresent()
         AccessibilityDisclosure.showFirstRun(this)
     }
+    private fun launchDestination(intent: Intent, destination: String) {
+        val diagnostics = getSharedPreferences("orion_navigation_diagnostics", MODE_PRIVATE)
+        diagnostics.edit()
+            .putString("pending_destination", destination)
+            .putLong("launch_requested_at", System.currentTimeMillis())
+            .apply()
+        try {
+            startActivity(intent)
+        } catch (error: Exception) {
+            diagnostics.edit().remove("pending_destination").apply()
+            AgentPolicy.log(this, "navigation:$destination", "open", false, error.javaClass.simpleName + ": " + (error.message ?: "launch failed"))
+            Toast.makeText(this, "Orion could not open $destination. The error was recorded for diagnostics.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Send a settings shortcut to the feature that owns it. The legacy control
+     * room remains the fallback only for controls without a dedicated screen.
+     */
+    private fun openSettingsSection(section: String?) {
+        val destination: Class<out android.app.Activity>
+        val intent: Intent
+        when (section) {
+            "providers", "voice", "character", "permissions", "recording" -> {
+                destination = SettingsFeatureActivity::class.java
+                intent = Intent(this, destination).putExtra(SettingsFeatureActivity.EXTRA_SECTION, section)
+            }
+            "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
+            "routines" -> { destination = TaskCenterActivity::class.java; intent = Intent(this, destination) }
+            "skills" -> { destination = AgentControlActivity::class.java; intent = Intent(this, destination) }
+            "knowledge" -> { destination = KnowledgeGraphActivity::class.java; intent = Intent(this, destination) }
+            "integrations" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
+            "health" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }
+            "browser" -> {
+                destination = BrowserActivity::class.java
+                intent = Intent(this, destination).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/")
+            }
+            "tools" -> { destination = DeviceUtilitiesActivity::class.java; intent = Intent(this, destination) }
+            else -> {
+                destination = SettingsActivity::class.java
+                intent = Intent(this, destination)
+                if (section != null) intent.putExtra("open_section", section)
+            }
+        }
+        launchDestination(intent, destination.simpleName + (section?.let { "/$it" } ?: ""))
+    }
+
+    private fun openFeature(route: String) {
+        val destination: Class<out android.app.Activity>
+        val intent: Intent
+        when (route) {
+            "settings.providers", "settings.voice", "settings.character", "settings.memory",
+            "settings.skills", "settings.knowledge", "settings.integrations", "settings.permissions", "settings.routines",
+            "settings.health", "settings.recording", "settings.browser", "settings.tools", "settings.all" -> {
+                openSettingsSection(route.substringAfter("settings.").takeUnless { it == "all" })
+                return
+            }
+            "chat" -> { destination = MainChatActivity::class.java; intent = Intent(this, destination) }
+            "live" -> { destination = LiveConversationActivity::class.java; intent = Intent(this, destination) }
+            "browser" -> { destination = BrowserActivity::class.java; intent = Intent(this, destination).putExtra(BrowserActivity.EXTRA_URL, "https://duckduckgo.com/") }
+            "tasks" -> { destination = TaskCenterActivity::class.java; intent = Intent(this, destination) }
+            "agents" -> { destination = AgentsActivity::class.java; intent = Intent(this, destination) }
+            "teach" -> { destination = TeachModeActivity::class.java; intent = Intent(this, destination) }
+            "memory" -> { destination = MemoryActivity::class.java; intent = Intent(this, destination) }
+            "knowledge_graph" -> { destination = KnowledgeGraphActivity::class.java; intent = Intent(this, destination) }
+            "proactive" -> { destination = ProactiveActivity::class.java; intent = Intent(this, destination) }
+            "trading" -> { destination = TradingActivity::class.java; intent = Intent(this, destination) }
+            "gaming" -> { destination = GamingCoachActivity::class.java; intent = Intent(this, destination) }
+            "device_utilities" -> { destination = DeviceUtilitiesActivity::class.java; intent = Intent(this, destination) }
+            "soul_engine" -> { destination = SoulEngineActivity::class.java; intent = Intent(this, destination) }
+            "watcher" -> { destination = SoulWatcherActivity::class.java; intent = Intent(this, destination) }
+            "extensions" -> { destination = SelfExtensionLabActivity::class.java; intent = Intent(this, destination) }
+            "terminal" -> { destination = TerminalActivity::class.java; intent = Intent(this, destination) }
+            "workspace" -> { destination = WorkspaceShellActivity::class.java; intent = Intent(this, destination) }
+            "cloud_coding" -> { destination = CursorCloudAgentActivity::class.java; intent = Intent(this, destination) }
+            "capabilities" -> { destination = CapabilityBoardActivity::class.java; intent = Intent(this, destination) }
+            "capability_report" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }
+            "agent_control" -> { destination = AgentControlActivity::class.java; intent = Intent(this, destination) }
+            "termux_bridge" -> { destination = TermuxBridgeActivity::class.java; intent = Intent(this, destination) }
+            "owner_control" -> { destination = OwnerControlCenterActivity::class.java; intent = Intent(this, destination) }
+            "gemini_live" -> { destination = GeminiLiveActivity::class.java; intent = Intent(this, destination) }
+            else -> {
+                Toast.makeText(this, "This Orion destination is not registered yet: $route", Toast.LENGTH_LONG).show()
+                AgentPolicy.log(this, "navigation:$route", "resolve", false, "route is not registered")
+                return
+            }
+        }
+        launchDestination(intent, destination.simpleName)
+    }
 
     /**
      * Diagnostic reports stay in app-private storage. No crash data is uploaded.
      * The default handler also records failures in secondary activities such as Chat and Settings.
      */
     private fun installCrashRecorder() {
-        val app = applicationContext
+        if (crashDiagnosticsInstalled) return
+        crashDiagnosticsInstalled = true
+        val app = application
         val previous = Thread.getDefaultUncaughtExceptionHandler()
+        app.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: android.app.Activity, state: Bundle?) {}
+            override fun onActivityStarted(activity: android.app.Activity) {}
+            override fun onActivityResumed(activity: android.app.Activity) {
+                app.getSharedPreferences("orion_navigation_diagnostics", Context.MODE_PRIVATE).edit()
+                    .putString("last_activity", activity.javaClass.simpleName)
+                    .putLong("last_resumed_at", System.currentTimeMillis())
+                    .remove("pending_destination")
+                    .apply()
+            }
+            override fun onActivityPaused(activity: android.app.Activity) {}
+            override fun onActivityStopped(activity: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: android.app.Activity) {}
+        })
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             try {
                 val writer = StringWriter()
                 PrintWriter(writer).use { error.printStackTrace(it) }
+                val nav = app.getSharedPreferences("orion_navigation_diagnostics", Context.MODE_PRIVATE)
                 val report = buildString {
                     appendLine("Orion crash report")
                     appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date()))
                     appendLine("Thread: " + thread.name)
                     appendLine("Android: " + android.os.Build.VERSION.RELEASE + " (SDK " + android.os.Build.VERSION.SDK_INT + ")")
+                    appendLine("Last resumed screen: " + nav.getString("last_activity", "unknown"))
+                    appendLine("Pending destination: " + nav.getString("pending_destination", "none"))
+                    appendLine("Launch requested at: " + nav.getLong("launch_requested_at", 0L))
                     appendLine()
                     append(writer.toString().take(24000))
                 }
@@ -448,7 +559,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, MemoryActivity::class.java))
         }, 8)
         gap(workspace, action("Skills studio", "Manage Orion's available capabilities") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
+            openSettingsSection("skills")
         }, 8)
 
         val statusCard = LinearLayout(this).apply {
@@ -492,7 +603,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, TeachModeActivity::class.java))
         }, 8)
         gap(agent, action("Skills studio", "Manage enabled skills and their permissions") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "skills"))
+            openSettingsSection("skills")
         }, 8)
         gap(agent, action("Memory & routines", "Browse, search, edit, and delete Orion’s local memories") {
             startActivity(Intent(this, MemoryActivity::class.java))
@@ -556,19 +667,19 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, MainChatActivity::class.java))
         }, 15)
         gap(page, action("AI providers & models", "API keys, model selection, vision, quota saving") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "providers"))
+            openSettingsSection("providers")
         }, 15)
         gap(page, action("Voice & character", "Voice, speech speed, avatar, and personality") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "voice"))
+            openSettingsSection("voice")
         })
         gap(page, action("Memory & routines", "Search and manage Orion’s saved local memories") {
             startActivity(Intent(this, MemoryActivity::class.java))
         })
         gap(page, action("Integrations", "Telegram, remote MCP, connection status") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra("open_section", "integrations"))
+            openSettingsSection("integrations")
         })
         gap(page, action("Permissions & diagnostics", "Accessibility, microphone, network and device tools") {
-            startActivity(Intent(this, SettingsActivity::class.java))
+            openSettingsSection(null)
         })
         gap(page, action("Open full-screen chat", "A separate conversation from the quick-command panel") {
             startActivity(Intent(this, MainChatActivity::class.java))

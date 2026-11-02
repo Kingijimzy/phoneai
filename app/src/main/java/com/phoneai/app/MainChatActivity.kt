@@ -33,6 +33,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     companion object {
         const val EXTRA_PICK_IMAGE = "com.phoneai.app.PICK_IMAGE_ON_OPEN"
         const val EXTRA_INITIAL_PROMPT = "com.phoneai.app.EXTRA_INITIAL_PROMPT"
+        const val EXTRA_FORCE_COMMAND = "com.phoneai.app.EXTRA_FORCE_COMMAND"
+        private const val STATE_COMMAND_MODE = "orion_chat_command_mode"
+        private const val STATE_PENDING_INITIAL_PROMPT = "orion_pending_initial_prompt"
         const val EXTRA_OPEN_BROWSER_URL = "com.phoneai.app.EXTRA_OPEN_BROWSER_URL"
     }
     private lateinit var messages: LinearLayout
@@ -47,6 +50,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var selectedDocumentText: String? = null
     private var imagePreviewPanel: LinearLayout? = null
     private var commandMode = false
+    private var pendingInitialPrompt: String? = null
     private lateinit var talkModeChip: LinearLayout
     private lateinit var commandModeChip: LinearLayout
     private lateinit var talkModeIcon: OrionIconView
@@ -115,8 +119,15 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_COMMAND_MODE, commandMode)
+        pendingInitialPrompt?.let { outState.putString(STATE_PENDING_INITIAL_PROMPT, it) }
+        super.onSaveInstanceState(outState)
+    }
+
     private fun refreshModeSelector() {
         if (!::talkModeChip.isInitialized || !::commandModeChip.isInitialized) return
+        composeCommandMode.value = commandMode
         val talkSelected = !commandMode
         talkModeChip.background = rounded(if (talkSelected) 0xFF2B2B2B.toInt() else 0xFF161616.toInt(),
             16, if (talkSelected) 0xFF787878.toInt() else 0xFF333333.toInt())
@@ -484,11 +495,35 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }.show()
             "terminal" -> startActivity(Intent(this, TerminalActivity::class.java))
             "browser" -> startActivity(Intent(this, BrowserActivity::class.java))
-            "chat_files" -> AlertDialog.Builder(this)
-                .setTitle("Chat files")
-                .setMessage("Orion can attach and analyse images from the composer. A searchable file shelf for all conversation attachments is not implemented yet.")
-                .setPositiveButton("OK", null).show()
+            "chat_files" -> {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    type = "image/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                startActivityForResult(Intent.createChooser(picker, "Attach images to this chat"), 44)
+            }
+            "attach_text" -> {
+                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                        "text/plain", "text/markdown", "text/csv", "text/tab-separated-values",
+                        "application/json", "application/xml", "text/xml", "text/html"
+                    ))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                startActivityForResult(Intent.createChooser(picker, "Attach a supported text document"), 45)
+            }
+            "tasks" -> startActivity(Intent(this, TaskCenterActivity::class.java))
+            "keyboard" -> {
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showInputMethodPicker()
+            }
+            "agents" -> startActivity(Intent(this, AgentsActivity::class.java))
             "skills" -> startActivity(Intent(this, AgentControlActivity::class.java))
+            "orion_hub" -> startActivity(Intent(this, CapabilityBoardActivity::class.java))
             "capabilities" -> showToolCatalog()
             "feedback" -> showFeedbackDialog()
             "notifications" -> openNotificationSettings()
@@ -708,6 +743,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 }
                 val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 top.addView(label(chat.title.ifBlank { "Untitled conversation" }, 16f, 0xFFF0F0F0.toInt(), true), LinearLayout.LayoutParams(0, -2, 1f))
+                top.addView(historyActionButton("Rename") {
+                    showRenameArchivedChatDialog(chat.sessionId, chat.title, dialog)
+                }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(5) })
                 top.addView(historyActionButton("Delete") {
                     AlertDialog.Builder(this@MainChatActivity)
                         .setTitle("Delete this conversation?")
@@ -753,6 +791,50 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         dialog.window?.setBackgroundDrawable(rounded(0xFF090909.toInt(), 0))
         dialog.window?.setLayout(-1, -1)
         animateIn(root)
+    }
+
+    private fun showRenameArchivedChatDialog(sessionId: String, currentTitle: String, historyDialog: android.app.Dialog) {
+        val input = EditText(this).apply {
+            setText(currentTitle)
+            setSelection(text.length)
+            hint = "Conversation name"
+            setSingleLine(true)
+            setTextColor(0xFFF1F1F1.toInt())
+            setHintTextColor(0xFF858585.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(0xFF171717.toInt(), 12, 0xFF3A3A3A.toInt())
+        }
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), 0)
+            addView(label("Give this saved conversation a name you can recognise later.", 12f, 0xFF9B9B9B.toInt()))
+            addView(input, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(10) })
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Rename conversation")
+            .setView(wrap)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", null)
+            .create().also { renameDialog ->
+                renameDialog.setOnShowListener {
+                    renameDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val title = input.text.toString().trim()
+                        if (title.isBlank()) {
+                            input.error = "Enter a name"
+                            return@setOnClickListener
+                        }
+                        val saved = ChatHistoryStore.renameArchivedById(this, sessionId, title)
+                        if (saved) {
+                            Toast.makeText(this, "Conversation renamed", Toast.LENGTH_SHORT).show()
+                            renameDialog.dismiss()
+                            historyDialog.dismiss()
+                            showChatHistory()
+                        } else {
+                            Toast.makeText(this, "Could not rename this conversation", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }.show()
     }
 
     private fun showArchivedConversation(sessionId: String, title: String, messages: List<Pair<String, String>>, date: String) {
@@ -969,6 +1051,11 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        commandMode = savedInstanceState?.getBoolean(STATE_COMMAND_MODE)
+            ?: intent.getBooleanExtra(EXTRA_FORCE_COMMAND, false)
+        pendingInitialPrompt = savedInstanceState?.getString(STATE_PENDING_INITIAL_PROMPT)
+            ?: intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }
+        composeCommandMode.value = commandMode
         window.statusBarColor = Theme.BG
         window.navigationBarColor = Theme.BG
         val root = LinearLayout(this).apply {
@@ -1444,15 +1531,17 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         // Do not inject a fake assistant turn into a new conversation. Leaving the transcript
         // empty lets OrionComposeChatScreen render its actual welcome/prompts state; restored
         // sessions arrive through onTranscriptRestored from the service.
-        if (savedInstanceState == null) {
-            intent.getStringExtra(EXTRA_INITIAL_PROMPT)?.takeIf { it.isNotBlank() }?.let { initialPrompt ->
-                window.decorView.postDelayed({
-                    if (!isFinishing && !isDestroyed && ::input.isInitialized) {
-                        input.setText(initialPrompt)
-                        sendMessage()
-                    }
-                }, 500L)
-            }
+        pendingInitialPrompt?.let {
+            window.decorView.postDelayed({
+                val initialPrompt = pendingInitialPrompt
+                if (initialPrompt != null && !isFinishing && !isDestroyed && ::input.isInitialized) {
+                    // Clear only when the composer is ready to dispatch. If Android recreates
+                    // this Activity before the callback runs, the pending prompt is saved again.
+                    pendingInitialPrompt = null
+                    input.setText(initialPrompt)
+                    sendMessage()
+                }
+            }, 500L)
         }
         intent.getStringExtra(EXTRA_OPEN_BROWSER_URL)?.takeIf { it.isNotBlank() }?.let { target ->
             window.decorView.post { if (!isFinishing && !isDestroyed) showChatBrowserPopup(target) }

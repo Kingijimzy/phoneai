@@ -232,7 +232,15 @@ class SettingsActivity : Activity() {
         b.background = g
         b.elevation = 0f
         b.stateListAnimator = null
-        b.setOnClickListener { onClick() }
+        b.setOnClickListener {
+            try {
+                onClick()
+            } catch (error: Exception) {
+                val detail = error.javaClass.simpleName + ": " + (error.message ?: "action failed")
+                runCatching { AgentPolicy.log(this, "settings_button:$label", "activate", false, detail) }
+                Toast.makeText(this, "Couldn't open this setting. The failure was recorded; check app permissions or installed apps.", Toast.LENGTH_LONG).show()
+            }
+        }
         Motion.pressFeedback(b)
         return b
     }
@@ -948,33 +956,43 @@ class SettingsActivity : Activity() {
         // Show setup first; keep advanced configuration out of the way until requested.
         listOf(updateCard, s2, sk, s3, s4, s5, browser, s6, s7).forEach { setCardExpanded(it, false) }
 
-        val shortcuts = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        listOf(
-            "SETUP" to s1,
+        // Compact, fully visible settings index: no sideways scrolling or hidden destinations.
+        val shortcutItems = listOf(
+            "ACCESS" to s1,
             "HEALTH" to updateCard,
-            "AI" to s2,
+            "AI MODELS" to s2,
             "VOICE" to s3,
             "KNOWLEDGE" to sk,
             "MEMORY" to s4,
+            "RECORDING" to s5,
             "BROWSER" to browser,
             "TOOLS" to s6,
             "INTEGRATIONS" to s7
-        ).forEach { (label, target) ->
-            shortcuts.addView(quickJump(label, target, sv),
-                LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
-        }
-        val shortcutScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
+        )
+        val shortcutGrid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(0, dp(2), 0, dp(3))
-            addView(shortcuts, ViewGroup.LayoutParams(-2, -2))
         }
-        col.addView(shortcutScroll, 2, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(10)
+        shortcutItems.chunked(3).forEach { group ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            group.forEach { (label, target) ->
+                row.addView(quickJump(label, target, sv), LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    rightMargin = dp(6)
+                    bottomMargin = dp(6)
+                })
+            }
+            if (group.size < 3) {
+                repeat(3 - group.size) {
+                    row.addView(View(this), LinearLayout.LayoutParams(0, dp(1), 1f).apply { rightMargin = dp(6) })
+                }
+            }
+            shortcutGrid.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+        col.addView(shortcutGrid, 2, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(8)
             bottomMargin = dp(2)
         })
 
@@ -984,15 +1002,50 @@ class SettingsActivity : Activity() {
                 if (!isFinishing && !isDestroyed) startOpenRouterSignIn()
             }
         } else {
-            when (intent.getStringExtra("open_section")) {
-                "knowledge" -> knowledgeDialog()
-                "memory" -> memoryDialog()
-                "skills" -> skillsDialog()
-                "routines" -> routinesDialog()
-                "character" -> characterDialog()
-                "voice" -> voiceDialog()
-                "providers" -> providerDialog(false)
-                "integrations" -> telegramDialog()
+            val requestedSection = intent.getStringExtra("open_section")
+            val target = when (requestedSection) {
+                "permissions" -> s1
+                "health" -> updateCard
+                "providers" -> s2
+                "knowledge" -> sk
+                "voice", "character" -> s3
+                "memory", "routines", "skills" -> s4
+                "recording" -> s5
+                "browser" -> browser
+                "tools" -> s6
+                "integrations" -> s7
+                else -> null
+            }
+            if (target != null) {
+                setCardExpanded(target, true)
+                val sectionTitle = target.contentDescription?.toString() ?: "Settings"
+                // A section shortcut should open the selected controls, not dump the user
+                // into the entire legacy settings index with the requested card buried below.
+                val backButton = (0 until col.childCount)
+                    .map { col.getChildAt(it) }
+                    .firstOrNull { it is Button && it.text.toString().contains("Back to Orion") }
+                for (index in 0 until col.childCount) {
+                    val child = col.getChildAt(index)
+                    val keep = child === header || child === target || child === backButton
+                    if (!keep) child.visibility = View.GONE
+                }
+                add(col, text(sectionTitle.uppercase(), 11f, Theme.MUTED, true).apply {
+                    letterSpacing = .12f
+                    setPadding(dp(2), dp(14), dp(2), dp(2))
+                }, 2)
+                // The section title was appended; move it directly above the selected card.
+                val focusTitle = col.getChildAt(col.childCount - 1)
+                col.removeView(focusTitle)
+                col.addView(focusTitle, col.indexOfChild(target))
+                (backButton as? Button)?.text = "‹  Back"
+                window.decorView.post {
+                    if (!isFinishing && !isDestroyed) {
+                        sv.smoothScrollTo(0, (target.top - dp(16)).coerceAtLeast(0))
+                    }
+                }
+                if (requestedSection == "character") {
+                    window.decorView.postDelayed({ if (!isFinishing && !isDestroyed) characterDialog() }, 220)
+                }
             }
         }
     }

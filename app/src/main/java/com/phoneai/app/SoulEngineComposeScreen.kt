@@ -78,6 +78,10 @@ internal fun SoulEngineComposeScreen(
     status: String,
     metrics: String,
     selfTest: String,
+    goal: String,
+    mode: SoulEngineState.Mode,
+    onSaveGoal: (String, SoulEngineState.Mode) -> Unit,
+    onRunGoal: (String) -> Unit,
     onRefresh: () -> Unit,
     onSelfTest: () -> Unit,
     onOpenChat: () -> Unit,
@@ -98,6 +102,8 @@ internal fun SoulEngineComposeScreen(
 ) {
     var editingProposal by remember { mutableStateOf<SoulEngineState.Proposal?>(null) }
     var editedTitle by remember { mutableStateOf("") }
+    var goalDraft by remember(goal) { mutableStateOf(goal) }
+    var selectedMode by remember(mode) { mutableStateOf(mode) }
     MaterialTheme(colorScheme = darkColorScheme(
         primary = EngineSilver,
         onPrimary = EngineInk,
@@ -134,6 +140,47 @@ internal fun SoulEngineComposeScreen(
                 }
 
                 EngineCoreToggle(coreEnabled, onCoreEnabledChange)
+
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
+                        .border(1.dp, EngineLine, RoundedCornerShape(18.dp)).padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    SectionTitle("SOUL CONFIGURATION", "Change Orion's active objective and interaction mode")
+                    OutlinedTextField(
+                        value = goalDraft,
+                        onValueChange = { goalDraft = it.take(180) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Current goal") },
+                        placeholder = { Text("What should Orion focus on?") },
+                        singleLine = false,
+                        minLines = 2,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = EngineWhite, fontSize = 12.sp)
+                    )
+                    Text("INTERACTION MODE", color = EngineMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        EngineButton(if (selectedMode == SoulEngineState.Mode.TALK) "✓ TALK" else "TALK", Icons.Rounded.ChatBubbleOutline, Modifier.weight(1f)) {
+                            selectedMode = SoulEngineState.Mode.TALK
+                        }
+                        EngineButton(if (selectedMode == SoulEngineState.Mode.COMMAND) "✓ COMMAND" else "COMMAND", Icons.Rounded.TaskAlt, Modifier.weight(1f)) {
+                            selectedMode = SoulEngineState.Mode.COMMAND
+                        }
+                    }
+                    Text(
+                        if (selectedMode == SoulEngineState.Mode.TALK) "Talk prioritizes conversation and explanation. It does not disable approved tools." else "Command prioritizes explicit task execution. Existing policy gates and confirmations still apply.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                    EngineButton("Save Soul configuration", Icons.Rounded.CheckCircle, Modifier.fillMaxWidth()) {
+                        onSaveGoal(goalDraft, selectedMode)
+                    }
+                    EngineButton("Run objective now · Command", Icons.Rounded.Bolt, Modifier.fillMaxWidth()) {
+                        onRunGoal(goalDraft)
+                    }
+                    Text(
+                        "Saving changes the stored objective only. Run objective now sends it to Orion's Command agent for execution and outcome verification. Background execution requires a separately configured schedule.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
+                    )
+                }
 
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
@@ -233,6 +280,28 @@ internal fun SoulEngineComposeScreen(
                             TextButton(onClick = { editingProposal = null }) { Text("Cancel", color = EngineMuted) }
                         },
                         containerColor = EnginePanel
+                    )
+                }
+
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(EnginePanel)
+                        .border(1.dp, EngineLine, RoundedCornerShape(18.dp)).padding(15.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SectionTitle("WHAT THE SOUL ENGINE CAN DO", "Available local workflows, surfaced in one place")
+                    Text(
+                        "• Audit registered tools, enabled capability packs and current blockers\\n" +
+                            "• Check accessibility and active-window screen-perception readiness\\n" +
+                            "• Review evidence-backed learning proposals before accepting or rejecting them\\n" +
+                            "• Review or pause memory suggestions; saved memories remain under your control\\n" +
+                            "• Manage read-only schedules and inspect their last outcomes and failures\\n" +
+                            "• Run dry-run probes, inspect composition drafts and coordinate bounded local subagents\\n" +
+                            "• Open the capability report to see setup requirements and limitations",
+                        color = EngineSilver, fontSize = 11.sp, lineHeight = 17.sp
+                    )
+                    Text(
+                        "The watcher diagnoses and proposes. It does not silently grant Android permissions, rewrite app code, or claim a repair without verification.",
+                        color = EngineMuted, fontSize = 10.sp, lineHeight = 15.sp
                     )
                 }
 

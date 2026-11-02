@@ -88,7 +88,8 @@ fun OrionComposeShell(
     onOpenMemory: () -> Unit = {},
     onOpenAgents: () -> Unit = {},
     onOpenSoulEngine: () -> Unit = {},
-    onOpenExtensions: () -> Unit = {}
+    onOpenExtensions: () -> Unit = {},
+    onOpenFeature: (String) -> Unit = {}
 ) {
     var selected by remember { mutableStateOf("Home") }
     val scheme = darkColorScheme(
@@ -115,7 +116,7 @@ fun OrionComposeShell(
                 ) { page ->
                     when (page) {
                         "Home" -> HomePage(status, onOpenChat, onOpenVoice, onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings)
-                        "Tools" -> ToolsPage(onOpenBrowser, onOpenTasks, onOpenUtilities, onOpenSettings, onOpenTrading, onOpenMemory, onOpenAgents, onOpenSoulEngine, onOpenExtensions)
+                        "Tools" -> ToolsPage(onOpenFeature)
                         else -> SettingsPage(onOpenSettings)
                     }
                 }
@@ -276,77 +277,119 @@ private fun HomeActionCard(
 }
 
 @Composable
-private fun ToolsPage(
-    onOpenBrowser: () -> Unit,
-    onOpenTasks: () -> Unit,
-    onOpenUtilities: () -> Unit,
-    onOpenSettings: (String?) -> Unit,
-    onOpenTrading: () -> Unit,
-    onOpenMemory: () -> Unit,
-    onOpenAgents: () -> Unit,
-    onOpenSoulEngine: () -> Unit,
-    onOpenExtensions: () -> Unit
-) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        PageHeading("Tools & skills", "Your capabilities, one clear workspace.")
-        ActionRow("Orion Browser", "Web navigation and assisted research", Icons.Rounded.Public, onOpenBrowser)
-        ActionRow("Task centre", "Saved tasks and routines", Icons.Rounded.TaskAlt, onOpenTasks)
-        ActionRow("Agents", "Trading Coach, Research, Code, Planner, Writer", Icons.Rounded.SmartToy, onOpenAgents)
-        ActionRow("Soul Engine Command Center", "System readiness, connected workspaces and self-test", Icons.Rounded.Hub, onOpenSoulEngine)
-        ActionRow("Self-extension lab", "Create, sandbox-test, approve and manage generated skills", Icons.Rounded.AutoAwesome, onOpenExtensions)
-        ActionRow("Trading desk", "Bybit market scanner, journal and watchlist", Icons.Rounded.TaskAlt, onOpenTrading)
-        ActionRow("Memory", "What Orion remembers; pin, edit or delete", Icons.Rounded.Memory, onOpenMemory)
-        ActionRow("Teach mode", "Record a workflow for Orion to repeat", Icons.Rounded.SmartToy, onOpenUtilities)
-        ActionRow("AI providers", "Models, API connections and selection", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
-        ActionRow("Voice & interaction", "Voice controls and assistant behavior", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
+private fun ToolsPage(onOpenFeature: (String) -> Unit) {
+    var showRegisteredTools by remember { mutableStateOf(false) }
 
-        Spacer(Modifier.height(4.dp))
-        Text("AVAILABLE AGENT TOOLS", color = Silver, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp)
-        Text(
-            "Access labels come from the same registry that builds Orion's tool prompt and scope guard.",
-            color = Muted,
-            fontSize = 12.sp
+    data class Feature(
+        val title: String,
+        val detail: String,
+        val icon: androidx.compose.ui.graphics.vector.ImageVector,
+        val route: String
+    )
+    val groups = listOf(
+        "EVERYDAY ASSISTANT" to listOf(
+            Feature("Chat with Orion", "The main conversation, commands and image attachments", Icons.Rounded.ChatBubbleOutline, "chat"),
+            Feature("Live conversation", "Speak with Orion using the standard voice experience", Icons.Rounded.GraphicEq, "live"),
+            Feature("Orion Browser", "Open pages and run assisted research", Icons.Rounded.Public, "browser"),
+            Feature("Tasks & workflows", "Saved tasks, reminders and repeatable routines", Icons.Rounded.TaskAlt, "tasks")
+        ),
+        "WORK, MEMORY & LEARNING" to listOf(
+            Feature("Agent workspace", "Trading Coach, Research, Code, Planner and Writer agents", Icons.Rounded.SmartToy, "agents"),
+            Feature("Teach mode", "Teach Orion a workflow and review recorded steps", Icons.Rounded.AutoAwesome, "teach"),
+            Feature("Memory", "Review, edit, pin and manage remembered information", Icons.Rounded.Memory, "memory"),
+            Feature("Knowledge graph", "Explore linked knowledge and saved context", Icons.Rounded.Hub, "knowledge_graph"),
+            Feature("Proactive work", "Scheduled briefings and proactive task controls", Icons.Rounded.Bolt, "proactive")
+        ),
+        "TRADING, GAMES & DEVICE" to listOf(
+            Feature("Trading desk", "Market tools, watchlists, journal and analysis", Icons.Rounded.TaskAlt, "trading"),
+            Feature("Gaming Coach", "Game-focused coaching and supported device workflows", Icons.Rounded.SmartToy, "gaming"),
+            Feature("Device utilities", "Network Radar, Game Sentinel and file tools", Icons.Rounded.Tune, "device_utilities")
+        ),
+        "SYSTEM, EXTENSIONS & DEVELOPMENT" to listOf(
+            Feature("Soul Engine", "System dashboard, readiness and self-tests", Icons.Rounded.Hub, "soul_engine"),
+            Feature("Watcher", "Background watcher status and controls", Icons.Rounded.Bolt, "watcher"),
+            Feature("Self-extension lab", "Build, sandbox-test and manage reusable extensions", Icons.Rounded.AutoAwesome, "extensions"),
+            Feature("Terminal", "Termux bridge and supported terminal workflows", Icons.Rounded.Tune, "terminal"),
+            Feature("Workspace files", "Scoped file workspace with allowlisted operations", Icons.Rounded.Memory, "workspace"),
+            Feature("Cloud coding agent", "Connected coding-agent workspace", Icons.Rounded.SmartToy, "cloud_coding"),
+            Feature("Capability & integrations board", "Connected services, permissions and capability gaps", Icons.Rounded.Public, "capabilities"),
+            Feature("Capability report", "Inspect the current capability and readiness report", Icons.Rounded.Shield, "capability_report"),
+            Feature("Approval & capabilities", "Approval mode, trusted sessions and tool access", Icons.Rounded.Shield, "agent_control"),
+            Feature("Termux bridge", "Optional external terminal runtime with explicit approval", Icons.Rounded.Tune, "termux_bridge"),
+            Feature("Owner Control Center", "Private autonomy, recovery, extension and Watcher controls", Icons.Rounded.Settings, "owner_control")
+        ),
+        "ADVANCED VOICE" to listOf(
+            Feature("Gemini Live (experimental)", "Optional live provider mode; uses its own API quota", Icons.Rounded.Mic, "gemini_live")
         )
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            ToolRegistry.all.forEach { definition ->
-                val readOnly = definition.access == ToolAccess.READ
-                val badgeColor = if (readOnly) Silver else Color(0xFFE7BD7B)
-                val badgeBackground = if (readOnly) Color(0xFF242424) else Color(0xFF302820)
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Panel)
-                        .border(1.dp, Hairline, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Column(
-                        Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
+    )
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
+    ) {
+        PageHeading("Feature directory", "Every major Orion destination, grouped by what it helps you do.")
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Panel)
+                .border(1.dp, Hairline, RoundedCornerShape(14.dp)).padding(13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(Icons.Rounded.Widgets, null, tint = Silver, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("Platform map", color = Copy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("${groups.sumOf { it.second.size }} destinations · ${ToolRegistry.all.size} registered tools", color = Muted, fontSize = 11.sp)
+            }
+            Text("DIRECT", color = Silver, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+
+        groups.forEach { (heading, features) ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(heading, color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                features.forEach { feature ->
+                    ActionRow(feature.title, feature.detail, feature.icon) { onOpenFeature(feature.route) }
+                }
+            }
+        }
+
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel)
+                .border(1.dp, Hairline, RoundedCornerShape(16.dp)).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().clickable { showRegisteredTools = !showRegisteredTools },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Registered agent tools", color = Copy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("${ToolRegistry.all.size} registered contracts · access labels from the live registry", color = Muted, fontSize = 11.sp)
+                }
+                Text(if (showRegisteredTools) "HIDE" else "VIEW", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+            if (showRegisteredTools) {
+                Text("These are tool contracts, not separate app pages. Availability still depends on the current capability, permission and policy state.", color = Muted, fontSize = 11.sp)
+                ToolRegistry.all.forEach { definition ->
+                    val readOnly = definition.access == ToolAccess.READ
+                    val badgeColor = if (readOnly) Silver else Color(0xFFE7BD7B)
+                    val badgeBackground = if (readOnly) Color(0xFF242424) else Color(0xFF302820)
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(PanelRaised)
+                            .border(1.dp, Hairline, RoundedCornerShape(11.dp)).padding(horizontal = 11.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(9.dp)
                     ) {
-                        Text(definition.name, color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(definition.name, color = Copy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(definition.description, color = Muted, fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        }
                         Text(
-                            definition.description,
-                            color = Muted,
-                            fontSize = 11.sp,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
+                            definition.access.name,
+                            Modifier.clip(RoundedCornerShape(7.dp)).background(badgeBackground)
+                                .border(1.dp, badgeColor.copy(alpha = .45f), RoundedCornerShape(7.dp))
+                                .padding(horizontal = 7.dp, vertical = 5.dp),
+                            color = badgeColor, fontSize = 8.sp, fontWeight = FontWeight.SemiBold
                         )
                     }
-                    Text(
-                        definition.access.name,
-                        Modifier.clip(RoundedCornerShape(8.dp))
-                            .background(badgeBackground)
-                            .border(1.dp, badgeColor.copy(alpha = .45f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                        color = badgeColor,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
                 }
             }
         }
@@ -356,15 +399,30 @@ private fun ToolsPage(
 @Composable
 private fun SettingsPage(onOpenSettings: (String?) -> Unit) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        PageHeading("Settings", "Shape how Orion works with you.")
-        ActionRow("AI providers", "Manage Gemini, NVIDIA and other models", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
-        ActionRow("Voice & character", "Speech, voice and interaction modes", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
-        ActionRow("Memory & routines", "Review stored context and routines", Icons.Rounded.Memory) { onOpenSettings("memory") }
-        ActionRow("Integrations", "Connect supported services", Icons.Rounded.Tune) { onOpenSettings("integrations") }
-        ActionRow("All settings", "Permissions, privacy and app options", Icons.Rounded.Settings) { onOpenSettings(null) }
+        PageHeading("Settings", "Choose one settings area at a time. Each shortcut opens its own section.")
+        Text("AI & MODELS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Providers & model selection", "Dedicated controls for API connections, chat model, vision model and fallback", Icons.Rounded.AutoAwesome) { onOpenSettings("providers") }
+        Text("VOICE & INTERACTION", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Voice, wake word & speech", "Dedicated voice page for microphone, speech and live-call controls", Icons.Rounded.GraphicEq) { onOpenSettings("voice") }
+        ActionRow("Response style & character", "Dedicated character page for personality and response presentation", Icons.Rounded.SmartToy) { onOpenSettings("character") }
+        Text("MEMORY & LEARNING", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Memory & routines", "Review saved memory, routines and learning controls", Icons.Rounded.Memory) { onOpenSettings("memory") }
+        ActionRow("Skill Studio", "Manage registered skills and reusable procedures", Icons.Rounded.AutoAwesome) { onOpenSettings("skills") }
+        ActionRow("Knowledge base", "Import and manage local reference documents", Icons.Rounded.Hub) { onOpenSettings("knowledge") }
+        Text("CONNECTED SERVICES", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Integrations & MCP", "Telegram, MCP servers, connection checks and scopes", Icons.Rounded.Public) { onOpenSettings("integrations") }
+        Text("DEVICE & PRIVACY", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Permissions & device access", "Accessibility, microphone, notifications, keyboard and location access", Icons.Rounded.Shield) { onOpenSettings("permissions") }
+        ActionRow("Orion health & updates", "Installed version, permission checks, diagnostics and release status", Icons.Rounded.Shield) { onOpenSettings("health") }
+        Text("AUTOMATION & LOCAL TOOLS", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("Screen recording", "Recording controls and saved screen-capture settings", Icons.Rounded.Settings) { onOpenSettings("recording") }
+        ActionRow("Browser & automation", "Browser handoff and assisted navigation settings", Icons.Rounded.Public) { onOpenSettings("browser") }
+        ActionRow("Phone tools & diagnostics", "Network Radar, Game Sentinel, files and local device utilities", Icons.Rounded.Tune) { onOpenSettings("tools") }
+        Text("SYSTEM", color = Silver, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        ActionRow("All settings & permissions", "Open the complete settings index and advanced configuration", Icons.Rounded.Settings) { onOpenSettings(null) }
     }
 }
 

@@ -103,7 +103,7 @@ class OrionCapabilityDiscoveryTest {
             termuxReady = true
         )
         assertEquals(1, snapshot.availableCount)
-        assertTrue(snapshot.promptLines().any { it.contains("weather(read)") })
+        assertTrue(snapshot.promptLines().any { it.contains("weather(read,available_limited)") })
     }
 
     @Test fun mcpCallIsBlockedUntilEndpointIsConfiguredAndPaired() {
@@ -162,4 +162,50 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.promptLines().any { it.contains("github=saved-unverified") })
         assertFalse(snapshot.promptLines().any { it.contains("github=connected") })
     }
+    @Test fun discoveryUsesCapabilityRegistryAsTheSingleStateAuthority() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("weather")),
+            setOf("trading_research"),
+            termuxReady = true
+        )
+        val fact = snapshot.tools.single()
+        assertEquals(CapabilityRegistry.State.AVAILABLE_LIMITED, fact.state)
+        assertTrue(fact.available)
+        assertTrue(fact.reason.contains("not tested yet"))
+    }
+
+    @Test fun explicitToolDenyIsReflectedInTheLiveCapabilitySnapshot() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("shell", ToolAccess.WRITE)),
+            setOf("workspace_shell"),
+            termuxReady = false,
+            deniedTools = setOf("shell")
+        )
+        val fact = snapshot.tools.single()
+        assertFalse(fact.available)
+        assertEquals(CapabilityRegistry.State.DISABLED, fact.state)
+        assertTrue(fact.reason.contains("explicitly set"))
+    }
+
+    @Test fun duplicateToolDefinitionsAreReportedInsteadOfSilentlyHidden() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("weather"), tool("weather", ToolAccess.WRITE)),
+            setOf("trading_research"),
+            termuxReady = true
+        )
+        assertEquals(1, snapshot.registeredCount)
+        assertTrue(snapshot.blockers.any { it.contains("duplicate tool registrations") })
+    }
+
+    @Test fun missingPackAndMissingPermissionResolveThroughRegistryPrecedence() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("resolve_contact")),
+            emptySet(),
+            termuxReady = true,
+            permissionStates = mapOf("contacts" to OrionCapabilityDiscovery.PermissionState.MISSING)
+        )
+        assertEquals(CapabilityRegistry.State.DISABLED, snapshot.tools.single().state)
+        assertTrue(snapshot.tools.single().reason.contains("disabled"))
+    }
+
 }

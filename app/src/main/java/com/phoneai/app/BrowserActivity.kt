@@ -338,9 +338,21 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(webContainer, LinearLayout.LayoutParams(-1, 0, 1f))
 
         setContentView(root)
-        val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { "https://duckduckgo.com/" }
-        createTab(initial, true)
+        val restoredUrls = savedInstanceState?.getStringArrayList("orion_browser_tab_urls")
+        val restoredIndex = savedInstanceState?.getInt("orion_browser_active_tab") ?: 0
+        if (!restoredUrls.isNullOrEmpty()) {
+            restoredUrls.take(8).forEachIndexed { index, url -> createTab(url, index == restoredIndex.coerceIn(0, restoredUrls.lastIndex)) }
+        } else {
+            val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { "https://duckduckgo.com/" }
+            createTab(initial, true)
+        }
         updateControls()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putStringArrayList("orion_browser_tab_urls", ArrayList(browserTabs.map { it.url ?: "https://duckduckgo.com/" }))
+        outState.putInt("orion_browser_active_tab", activeTabIndex)
+        super.onSaveInstanceState(outState)
     }
 
 
@@ -363,10 +375,12 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                 }
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     if (view === web && !url.isNullOrBlank()) address.setText(url)
-                    if (view === web) title.text = "LOADING PAGE"
-                    progress.visibility = View.VISIBLE
-                    progress.progress = 5
-                    updateControls()
+                    if (view === web) {
+                        title.text = "LOADING PAGE"
+                        progress.visibility = View.VISIBLE
+                        progress.progress = 5
+                        updateControls()
+                    }
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     if (view === web) {
@@ -377,6 +391,26 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                         updateControls()
                     }
                     renderTabs()
+                }
+
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                    super.onReceivedError(view, request, error)
+                    if (view === web && request?.isForMainFrame == true) {
+                        progress.visibility = View.GONE
+                        title.text = "PAGE COULDN'T LOAD"
+                        agentResult.text = "The page could not load. Check your connection, address, or try Reload."
+                        updateControls()
+                    }
+                }
+
+                override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: android.webkit.WebResourceResponse?) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (view === web && request?.isForMainFrame == true) {
+                        progress.visibility = View.GONE
+                        title.text = "HTTP ERROR"
+                        agentResult.text = "The website returned an HTTP error. You can retry, go back, or check the address."
+                        updateControls()
+                    }
                 }
             }
             web.webChromeClient = object : WebChromeClient() {

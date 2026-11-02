@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -342,21 +343,40 @@ class TaskCenterActivity : Activity() {
         block.addView(label("#" + task.id + "  " + task.title, 15f, Theme.TEXT, true))
         block.addView(label(statusName(task.status) + " · " + task.priority.uppercase(Locale.getDefault()),
             10f, statusColor(task.status), true).apply { setPadding(0, dp(4), 0, 0) })
-        block.addView(label(statusExplanation(task.status), 10f, Theme.MUTED).apply {
+        block.addView(label(statusExplanation(task), 10f, Theme.MUTED).apply {
             setPadding(0, dp(4), 0, 0)
         })
         head.addView(block, LinearLayout.LayoutParams(0, -2, 1f))
         head.addView(iconButton("more", "Task options") { taskMenu(task) }, LinearLayout.LayoutParams(dp(42), dp(42)))
         card.addView(head)
         if (task.details.isNotBlank()) add(card, label(task.details, 12f, Theme.MUTED), 7)
+        if (task.resultSummary.isNotBlank()) {
+            val resultLabel = when (task.status) {
+                "completed", "done" -> "VERIFIED RESULT"
+                "paused" -> "SAVED CHECKPOINT"
+                "failed" -> "EXECUTION OUTCOME"
+                else -> "LATEST RESULT"
+            }
+            val resultColor = when (task.status) {
+                "completed", "done" -> Theme.OK
+                "paused" -> 0xFFFFCF70.toInt()
+                "failed" -> 0xFFFF8D8D.toInt()
+                else -> Theme.MUTED
+            }
+            add(card, label(resultLabel, 10f, resultColor, true), 8)
+            add(card, label(task.resultSummary, 12f, Theme.MUTED), 3)
+        }
         add(card, label((task.dueAt?.let { "Due " + time(it) } ?: "No due date") + " · Updated " + time(task.updatedAt),
             10f, Theme.MUTED), 7)
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (task.status == "running" || task.status == "in_progress") {
-            actions.addView(button("Pause") { change(task, "paused") })
-        } else if (task.status != "completed" && task.status != "done") {
-            actions.addView(button(if (task.status == "paused") "Resume" else "Start", true) { change(task, "running") })
+            actions.addView(button("Open run") { openTaskInChat(task) }, LinearLayout.LayoutParams(-2, dp(42)))
+            actions.addView(button("Pause") { pauseTaskExecution(task) }, LinearLayout.LayoutParams(-2, dp(42)).apply { leftMargin = dp(6) })
+        } else if (task.status != "completed" && task.status != "done" && task.status != "cancelled") {
+            actions.addView(button(if (task.status == "paused") "Resume" else "Run in chat", true) {
+                openTaskInChat(task)
+            }, LinearLayout.LayoutParams(-2, dp(42)))
         }
         if (task.status != "completed" && task.status != "done") {
             actions.addView(button("Complete") { change(task, "completed") }.apply { setTextColor(Theme.OK) },
@@ -372,6 +392,147 @@ class TaskCenterActivity : Activity() {
         }
         card.addView(actionScroll, LinearLayout.LayoutParams(-1, -2))
         return card
+    }
+
+    /**
+     * The task board is a tracker, not an execution engine. "Run in chat" hands
+     * the saved goal to the real chat/agent dispatcher instead of falsely
+     * marking a task as running without doing any work.
+     */
+    private fun pauseTaskExecution(task: OrionTask) {
+        val checkpoint = AgentCheckpointStore.pending(this)
+        val command = checkpoint?.optString("command").orEmpty()
+        if (checkpoint != null && !command.contains("saved task #" + task.id, ignoreCase = true)) {
+            Toast.makeText(this, "Another agent session is active. Open its recovery card before changing this task.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (checkpoint == null) {
+            val activeService = PhoneAiService.instance
+            if (activeService?.isTaskRunning() == true) {
+                Toast.makeText(this, "Orion is still working, but this task has no linked checkpoint yet. Open chat and use Stop there; this button will not pretend the worker paused.", Toast.LENGTH_LONG).show()
+                return
+            }
+            // No worker is active and no checkpoint exists: this is a board-only status change.
+            if (TaskStore.update(this, task.id, status = "paused")) {
+                Toast.makeText(this, "Task moved to Paused. No active worker was running.", Toast.LENGTH_LONG).show()
+                refresh()
+            } else errorToast()
+            return
+        }
+        val service = PhoneAiService.instance
+        if (service == null) {
+            Toast.makeText(this, "Orion's execution service is not connected. The task was not marked paused.", Toast.LENGTH_LONG).show()
+            return
+        }
+        service.stopCurrentTask()
+        if (AgentCheckpointStore.pause(this) && TaskStore.update(this, task.id, status = "paused")) {
+            Toast.makeText(this, "Execution paused and checkpoint saved.", Toast.LENGTH_LONG).show()
+            refresh()
+        } else {
+            Toast.makeText(this, "Pause could not be confirmed. Inspect the saved run before retrying.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openTaskInChat(task: OrionTask) {
+        // Opening an already-running task is navigation only; never submit its prompt twice.
+        if (task.status == "running" || task.status == "in_progress") {
+            val service = PhoneAiService.instance
+            if (service?.isTaskRunning() != true) {
+                val checkpoint = AgentCheckpointStore.pending(this)
+                val command = checkpoint?.optString("command").orEmpty()
+                if (checkpoint == null) {
+                    if (TaskStore.update(this, task.id, status = "queued")) {
+                        refresh()
+                        Toast.makeText(this, "The previous run is no longer active and has no saved checkpoint. The task was returned to Queued; run it again when ready.", Toast.LENGTH_LONG).show()
+                    } else errorToast()
+                    return
+                }
+                if (!command.contains("saved task #" + task.id, ignoreCase = true)) {
+                    Toast.makeText(this, "A different task owns the saved agent checkpoint. Inspect that recovery session first.", Toast.LENGTH_LONG).show()
+                    return
+                }
+            }
+            try { startActivity(Intent(this, MainChatActivity::class.java)) }
+            catch (error: Exception) {
+                Toast.makeText(this, "Could not reopen the active chat: " + (error.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+        if (task.status == "paused") {
+            val checkpoint = AgentCheckpointStore.pending(this)
+            if (checkpoint != null) {
+                val command = checkpoint.optString("command")
+                if (!command.contains("saved task #" + task.id, ignoreCase = true)) {
+                    Toast.makeText(this, "A different task owns the saved agent checkpoint. Inspect that recovery session first.", Toast.LENGTH_LONG).show()
+                    return
+                }
+                if (PhoneAiService.instance == null) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Orion phone control is not connected")
+                        .setMessage("The saved execution checkpoint is still here. Enable Orion's Accessibility service, then return and resume this task.")
+                        .setNegativeButton("CLOSE", null)
+                        .setPositiveButton("OPEN SETTINGS") { _, _ ->
+                            try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                            catch (_: Exception) { Toast.makeText(this, "Open Android Settings → Accessibility manually.", Toast.LENGTH_LONG).show() }
+                        }
+                        .show()
+                    return
+                }
+                if (!TaskStore.update(this, task.id, status = "running")) {
+                    errorToast()
+                    return
+                }
+                try {
+                    startActivity(Intent(this, MainChatActivity::class.java)
+                        .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, "continue")
+                        .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true))
+                    refresh()
+                } catch (error: Exception) {
+                    TaskStore.update(this, task.id, status = "paused")
+                    refresh()
+                    Toast.makeText(this, "Could not reopen the saved checkpoint: " + (error.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+        }
+        // Do not mark a task as running if the real execution service is unavailable.
+        // MainChatActivity would otherwise open, reject the prompt, and leave a false
+        // running state on the board.
+        if (PhoneAiService.instance == null) {
+            AlertDialog.Builder(this)
+                .setTitle("Orion phone control is not connected")
+                .setMessage("Enable Orion in Android Accessibility settings, then return here and run this task again. The task will remain saved and queued.")
+                .setNegativeButton("CLOSE", null)
+                .setPositiveButton("OPEN SETTINGS") { _, _ ->
+                    try { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                    catch (_: Exception) {
+                        Toast.makeText(this, "Could not open Accessibility settings. Open Android Settings → Accessibility manually.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                .show()
+            return
+        }
+        val prompt = buildString {
+            append("Work on saved task #").append(task.id).append(": ").append(task.title)
+            if (task.details.isNotBlank()) append("\\nDetails: ").append(task.details)
+            append("\\nPriority: ").append(task.priority)
+            append("\\nTreat this as an explicit request to carry out the task using available registered capabilities. First inspect what is possible, ask only for essential missing information or required approval, execute permitted steps, verify the result, and clearly report any blocker. Do not mark the task complete unless there is evidence.")
+        }
+        val previous = task.status
+        if (!TaskStore.update(this, task.id, status = "running", resultSummary = "")) {
+            errorToast()
+            return
+        }
+        try {
+            startActivity(Intent(this, MainChatActivity::class.java)
+                .putExtra(MainChatActivity.EXTRA_INITIAL_PROMPT, prompt)
+                .putExtra(MainChatActivity.EXTRA_FORCE_COMMAND, true))
+            refresh()
+        } catch (error: Exception) {
+            TaskStore.update(this, task.id, status = previous)
+            refresh()
+            Toast.makeText(this, "Could not open Orion chat to run this task: ${error.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun taskMenu(task: OrionTask) {
@@ -456,14 +617,17 @@ class TaskCenterActivity : Activity() {
             .setPositiveButton("Confirm") { _, _ -> change(task, status) }.show()
     }
     private fun change(task: OrionTask, status: String) {
-        if (TaskStore.update(this, task.id, status = status)) refresh() else errorToast()
+        // Manual status changes must not inherit an old agent verification summary.
+        val clearOldOutcome = status in setOf("queued", "running", "completed", "failed", "cancelled")
+        if (TaskStore.update(this, task.id, status = status,
+                resultSummary = if (clearOldOutcome) "" else null)) refresh() else errorToast()
     }
-    private fun statusExplanation(status: String) = when (status) {
+    private fun statusExplanation(task: OrionTask) = when (task.status) {
         "queued", "open" -> "Saved and waiting; this task is not executing."
         "running", "in_progress" -> "Marked running on the task board; check the agent session for live execution."
-        "paused" -> "Paused; saved task details remain available to resume."
-        "completed", "done" -> "Marked complete here; confirm the actual goal in its evidence or result."
-        "failed" -> "Marked failed; inspect the activity log before retrying."
+        "paused" -> if (task.resultSummary.isNotBlank()) "Paused with a saved execution checkpoint; inspect any uncertain action before resuming." else "Paused; saved task details remain available to resume."
+        "completed", "done" -> if (task.resultSummary.isNotBlank()) "Agent completion gate passed; review the attached result summary." else "Marked complete manually; no agent completion evidence is attached."
+        "failed" -> if (task.resultSummary.isNotBlank()) "Execution ended without verified completion; review the outcome before retrying." else "Marked failed; inspect the activity log before retrying."
         "cancelled" -> "Cancelled; no further task-board progress is expected."
         else -> "Status is saved locally; inspect the task session for execution evidence."
     }

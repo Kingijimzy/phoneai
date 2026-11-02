@@ -42,15 +42,25 @@ internal object SoulEngineState {
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun safeText(raw: String, max: Int = MAX_LABEL): String {
+        // Opaque UUIDs are identifiers, not phone numbers. Protect them while the shared
+        // privacy filter redacts phone-like digit sequences in ordinary user text.
+        val uuidPattern = Regex("(?i)\\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\b")
+        val identifiers = mutableListOf<String>()
+        val protected = uuidPattern.replace(raw) { match ->
+            val token = "__ORION_UUID_${identifiers.size}__"
+            identifiers += match.value
+            token
+        }
         // If the label itself appears to contain a secret/code, omit the whole label instead of guessing boundaries.
-        if (Regex("(?i)\\b(password|passcode|one[- ]time code|otp|recovery phrase|seed phrase|private key)\\b").containsMatchIn(raw)) {
+        if (Regex("(?i)\\b(password|passcode|one[- ]time code|otp|recovery phrase|seed phrase|private key)\\b").containsMatchIn(protected)) {
             return "[sensitive content omitted]"
         }
-        var s = AgentPrivacyFilter.safeCommand(raw).replace(Regex("\\s+"), " ").trim()
+        var s = AgentPrivacyFilter.safeCommand(protected).replace(Regex("\\s+"), " ").trim()
         s = s.replace(Regex("(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]+"), "[REDACTED]")
         s = s.replace(Regex("(?i)\\b(api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|secret|authorization|pin|otp|passcode)\\b\\s*[:=]\\s*[^\\s,;]+"), "[REDACTED]")
         s = s.replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "[EMAIL]")
         s = s.replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL]")
+        identifiers.forEachIndexed { index, value -> s = s.replace("__ORION_UUID_${index}__", value) }
         return s.take(max)
     }
 

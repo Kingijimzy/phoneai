@@ -56,18 +56,51 @@ class AgentChatActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var attachLabel: TextView
+    private lateinit var sendButton: Button
+    private lateinit var activityStatus: TextView
     private val turns = mutableListOf<AgentRunner.Turn>()
     private var pendingImage: String? = null
     @Volatile private var busy = false
+    @Volatile private var screenDestroyed = false
+
+    override fun onDestroy() {
+        screenDestroyed = true
+        super.onDestroy()
+    }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun setBusyState(value: Boolean, message: String = "") {
+        busy = value
+        if (::sendButton.isInitialized) {
+            sendButton.isEnabled = !value
+            sendButton.text = if (value) "Working…" else "Send"
+            sendButton.alpha = if (value) 0.55f else 1f
+        }
+        if (::activityStatus.isInitialized) {
+            activityStatus.text = message
+            activityStatus.visibility = if (message.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (::input.isInitialized) outState.putString("agent_chat_draft", input.text.toString())
+        if (::scroll.isInitialized) outState.putInt("agent_chat_scroll_y", scroll.scrollY)
+        outState.putBoolean("agent_chat_was_busy", busy)
+        super.onSaveInstanceState(outState)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         agent = AgentProfiles.find(intent.getStringExtra(EXTRA_AGENT)) ?: AgentProfiles.all.first()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Theme.BG) }
 
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), statusBarPad(), dp(84), dp(10)) }
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), statusBarPad(), dp(14), dp(10)) }
+        header.addView(smallButton("‹") { finish() }.apply {
+            textSize = 27f
+            contentDescription = "Back to agent workspace"
+            minWidth = dp(42)
+        }, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(12) })
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(TextView(this).apply { text = agent.name; textSize = 20f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD })
         titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
@@ -91,8 +124,20 @@ class AgentChatActivity : Activity() {
                 chip("Market news") { quick("What is the latest market news today and what is moving crypto, gold and the dollar?") }
                 chip("Quote") { quoteDialog() }
             }
+            chip("Tasks") { startActivity(Intent(this, TaskCenterActivity::class.java)) }
+            chip("Memory") { startActivity(Intent(this, MemoryActivity::class.java)) }
             chip("Learned") { notesDialog() }
-            chip("Clear") { turns.clear(); AgentChatStore.clear(this, agent.id); messages.removeAllViews(); greet() }
+            chip("Clear") {
+                AlertDialog.Builder(this).setTitle("Clear specialist chat?")
+                    .setMessage("This removes this specialist's saved conversation from this phone. Learned notes are kept.")
+                    .setNegativeButton("Keep", null)
+                    .setPositiveButton("Clear") { _, _ ->
+                        turns.clear()
+                        AgentChatStore.clear(this, agent.id)
+                        messages.removeAllViews()
+                        greet()
+                    }.show()
+            }
             chips.addView(row)
             root.addView(chips, -1, -2)
         }
@@ -101,8 +146,15 @@ class AgentChatActivity : Activity() {
         scroll.addView(messages, -1, -2)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        attachLabel = TextView(this).apply { textSize = 12f; setTextColor(Theme.CYAN); setPadding(dp(18), dp(4), dp(18), 0); visibility = android.view.View.GONE }
+        attachLabel = TextView(this).apply { textSize = 12f; setTextColor(Theme.SILVER); setPadding(dp(18), dp(4), dp(18), 0); visibility = android.view.View.GONE }
         root.addView(attachLabel, -1, -2)
+        activityStatus = TextView(this).apply {
+            textSize = 11f
+            setTextColor(Theme.MUTED)
+            setPadding(dp(18), dp(3), dp(18), dp(2))
+            visibility = android.view.View.GONE
+        }
+        root.addView(activityStatus, -1, -2)
 
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(14)) }
         if (agent.acceptsImages) bar.addView(smallButton("Chart") { pickImage() })
@@ -110,16 +162,29 @@ class AgentChatActivity : Activity() {
             hint = if (agent.acceptsImages) "Ask, or upload a chart…" else "Message ${agent.name}…"
             setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); textSize = 15f
             maxLines = 5
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
             background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Theme.LINE) }
             setPadding(dp(16), dp(10), dp(16), dp(10))
         }
         bar.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
-        bar.addView(smallButton("Send") { send() })
+        sendButton = smallButton("Send") { send() }
+        bar.addView(sendButton)
         root.addView(bar, -1, -2)
         setContentView(root)
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) { send(); true } else false
+        }
 
         turns.addAll(AgentChatStore.load(this, agent.id))
         if (turns.isEmpty()) greet() else turns.forEach { addBubble(it.role == "user", it.text) }
+        savedInstanceState?.getString("agent_chat_draft")?.let { input.setText(it); input.setSelection(input.text.length) }
+        savedInstanceState?.getInt("agent_chat_scroll_y")?.let { y -> scroll.post { scroll.scrollTo(0, y) } }
+        if (savedInstanceState?.getBoolean("agent_chat_was_busy") == true) {
+            val interrupted = "The previous reply was interrupted when this screen was recreated. Your earlier messages are saved; send the request again when ready."
+            addBubble(false, interrupted)
+            turns.add(AgentRunner.Turn("assistant", interrupted))
+            AgentChatStore.save(this, agent.id, turns)
+        }
     }
 
     private fun statusBarPad(): Int {
@@ -165,7 +230,10 @@ class AgentChatActivity : Activity() {
                             else -> "I don't recognise \"$sym\". Try a Bybit symbol, a forex pair such as EURUSD, or gold, oil, SPX."
                         }
                     } catch (e: Exception) { "Quote failed: " + (e.message ?: e.javaClass.simpleName).take(120) }
-                    runOnUiThread { AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show() }
+                    runOnUiThread {
+                        if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
+                        AlertDialog.Builder(this).setTitle("Quote").setMessage(out).setPositiveButton("OK", null).show()
+                    }
                 }.start()
             }.setNegativeButton("Cancel", null).show()
     }
@@ -235,7 +303,10 @@ class AgentChatActivity : Activity() {
                     latch.await(120, java.util.concurrent.TimeUnit.SECONDS); ok
                 }
                 if (result.startsWith("Order placed")) AgentLessons.addTagged(this, "coach", "trade", result.take(200))
-                runOnUiThread { status.text = result }
+                runOnUiThread {
+                    if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
+                    status.text = result
+                }
             }.start()
         }, LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
         row.addView(smallButton("Dismiss") { messages.removeView(card) }, LinearLayout.LayoutParams(-2, dp(38)))
@@ -246,7 +317,11 @@ class AgentChatActivity : Activity() {
     }
 
     private fun pickImage() {
-        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
         try { startActivityForResult(pick, REQUEST_IMAGE) } catch (_: Exception) { Toast.makeText(this, "No image picker is available.", Toast.LENGTH_LONG).show() }
     }
 
@@ -254,9 +329,16 @@ class AgentChatActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_IMAGE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+            // Some document providers grant a temporary read-only URI; the image is
+            // encoded immediately below, so persistent access is optional.
+        }
         Thread {
             val encoded = try { encodeImage(uri) } catch (e: Exception) { null }
             runOnUiThread {
+                if (screenDestroyed || isFinishing || isDestroyed) return@runOnUiThread
                 if (encoded == null) {
                     Toast.makeText(this, "Could not read that image. Try a screenshot or a smaller picture.", Toast.LENGTH_LONG).show()
                 } else {
@@ -317,7 +399,7 @@ class AgentChatActivity : Activity() {
         // Safe, bounded Python snippets run automatically. Do not show a per-task
         // approval card: the user has already explicitly asked "run it". Android/Termux's
         // one-time OS permission remains required and cannot be bypassed by an app.
-        busy = true
+        setBusyState(true, "Running Python in Termux…")
         val waiting = addBubble(false, "Running Python in Termux…")
         val encoded = Base64.encodeToString(source.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         Thread {
@@ -328,10 +410,15 @@ class AgentChatActivity : Activity() {
             }
             runOnUiThread {
                 val shown = if (result.startsWith("error", true)) "Execution failed; no success is claimed.\n$result" else "Execution result:\n$result"
+                if (screenDestroyed || isFinishing || isDestroyed) {
+                    val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shown)) }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@runOnUiThread
+                }
                 waiting.text = Markdown.render(shown)
                 turns.add(AgentRunner.Turn("assistant", shown))
                 AgentChatStore.save(this, agent.id, turns)
-                busy = false
+                setBusyState(false)
                 scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
         }.start()
@@ -374,22 +461,27 @@ class AgentChatActivity : Activity() {
             addBubble(true, text)
             turns.add(AgentRunner.Turn("user", text))
             val waiting = addBubble(false, "Handing this request to Orion's shared tool executor…")
-            busy = true
+            setBusyState(true, "Orion is using a shared phone tool…")
             AgentChatStore.save(this, agent.id, turns)
             if (service == null) {
                 val message = "I can't run this request from the specialist chat because Orion's accessibility service is not connected. Enable Orion's service and try again. No action was performed."
                 transitionReply(waiting, message)
                 turns.add(AgentRunner.Turn("assistant", message))
                 AgentChatStore.save(this, agent.id, turns)
-                busy = false
+                setBusyState(false)
                 return
             }
             service.executeSharedToolRequest(text, "specialist agent " + agent.name) { result ->
                 val shownResult = result.ifBlank { "The tool executor returned no final response. Check Orion's task transcript." }
+                if (screenDestroyed || isFinishing || isDestroyed) {
+                    val recovered = turns.toMutableList().apply { add(AgentRunner.Turn("assistant", shownResult)) }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@executeSharedToolRequest
+                }
                 transitionReply(waiting, shownResult)
                 turns.add(AgentRunner.Turn("assistant", shownResult))
                 AgentChatStore.save(this, agent.id, turns)
-                busy = false
+                setBusyState(false)
                 scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
             return
@@ -402,20 +494,29 @@ class AgentChatActivity : Activity() {
         val shown = if (image != null) "[chart attached] $text" else text
         addBubble(true, shown.trim())
         val waiting = addBubble(false, "Thinking…")
-        busy = true
+        setBusyState(true, "Orion is thinking…")
         val history = turns.toList()
         Thread {
             var trades: List<TradeProposals.Trade> = emptyList()
             val reply = try { AgentRunner.runFull(this, agent, history, text, image).also { trades = it.trades }.text }
                 catch (e: Exception) { "I couldn't answer: " + (e.message ?: e.javaClass.simpleName).take(220) }
             runOnUiThread {
+                val finalReply = reply.ifBlank { "No answer came back. Check your AI provider in Settings." }
+                if (screenDestroyed || isFinishing || isDestroyed) {
+                    val recovered = history.toMutableList().apply {
+                        add(AgentRunner.Turn("user", shown.trim()))
+                        add(AgentRunner.Turn("assistant", finalReply))
+                    }
+                    AgentChatStore.save(applicationContext, agent.id, recovered)
+                    return@runOnUiThread
+                }
                 trades.forEach { addTradeCard(it) }
-                transitionReply(waiting, reply.ifBlank { "No answer came back. Check your AI provider in Settings." })
+                transitionReply(waiting, finalReply)
                 // The image is not stored in history; only the text turn is.
                 turns.add(AgentRunner.Turn("user", shown.trim()))
                 turns.add(AgentRunner.Turn("assistant", reply.ifBlank { "No answer came back." }))
                 AgentChatStore.save(this, agent.id, turns)
-                busy = false
+                setBusyState(false)
                 scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
             }
         }.start()
