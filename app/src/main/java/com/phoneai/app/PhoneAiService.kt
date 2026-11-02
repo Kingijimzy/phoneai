@@ -79,6 +79,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var runtimeRetryRunnable: Runnable? = null
     @Volatile private var runtimeRetryAtElapsed = 0L
     @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
+    @Volatile private var lastContinuousWatcherAt = 0L
     @Volatile private var approvedRoutineReplayName = ""
     @Volatile private var approvedRoutineReplayAt = 0L
 
@@ -188,6 +189,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
         OrionProactiveWork.ensureScheduled(this)
+        requestContinuousWatcherObservation("service_connected")
         showBubble()
         startWake()
     }
@@ -200,6 +202,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Resume the bounded local queue only when a fresh real window event arrives.
             if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
             decisionScheduler?.onWindowChanged(event.packageName?.toString())
+            requestContinuousWatcherObservation("window_changed")
             scheduleRuntimeDrain()
         }
     }
@@ -227,6 +230,32 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             )) return false
         scheduleRuntimeDrain()
         return true
+    }
+
+    /**
+     * Keep the Soul watcher attached to the live AccessibilityService event stream.
+     * Meaningful foreground-window transitions trigger a bounded local observation;
+     * a cooldown coalesces rapid app/window churn. The periodic WorkManager job remains
+     * a recovery/standing-order fallback, not the primary observer.
+     */
+    private fun requestContinuousWatcherObservation(reason: String) {
+        if (!AgentPolicy.enabled(this, "orion_core") || !AgentPolicy.enabled(this, "proactive")) return
+        val now = SystemClock.elapsedRealtime()
+        synchronized(this) {
+            if (now - lastContinuousWatcherAt < 30_000L) return
+            lastContinuousWatcherAt = now
+        }
+        worker.execute {
+            if (instance !== this ||
+                !AgentPolicy.enabled(this, "orion_core") ||
+                !AgentPolicy.enabled(this, "proactive")) return@execute
+            runCatching { SoulEngineWatcher.run(this) }.onFailure {
+                AgentPolicy.log(
+                    this, "soul_watcher", "continuous_observation", null,
+                    "event=$reason; failure=" + it.javaClass.simpleName
+                )
+            }
+        }
     }
 
     private fun scheduleRuntimeDrain() {
