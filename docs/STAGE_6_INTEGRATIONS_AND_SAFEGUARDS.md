@@ -68,3 +68,14 @@ PhoneAI can save a user-selected MCP Streamable HTTP endpoint and optional beare
 ## Public crypto market data
 
 PhoneAI can query Bybit public spot tickers for symbols such as BTCUSDT and ETHUSDT without a key. The method is read-only and cannot submit orders. It reports last price and basic 24-hour fields; it is not a signal, does not provide derivatives funding/open interest, and does not replace the Orion trading-analysis stack. FX feeds remain unconnected. API/network availability and symbol support require live verification.
+
+## Live Soul watcher — event-driven observation
+
+The primary Soul watcher is now attached to the already-enabled Android AccessibilityService event stream:
+- It performs an initial local observation when the service connects and reacts to meaningful foreground-window changes.
+- Rapid window churn is coalesced by a 30-second cooldown; observations run on the service worker executor, not on Android's accessibility callback thread.
+- Live observation requires both the owner-controlled `orion_core` and `proactive` packs and a connected AccessibilityService. Disabling either pack stops new live observations.
+- WorkManager remains as a durable recovery / scheduled-standing-order fallback after process death or reboot; it is not the primary live observer.
+- The observer does not continuously capture screenshots, record audio, or inspect every text/content event. It responds to meaningful window transitions and reads only the local capability state already available to the accessibility service.
+- Android or HyperOS can still disable/restrict the AccessibilityService, force-stop the app, or defer fallback work. Orion reports the service connection state and resumes observation when Android reconnects it; uninterrupted operation cannot be guaranteed by an app.
+- The watcher remains bounded and policy-gated: it does not grant permissions, enable packs, or bypass approval for consequential actions.
