@@ -6,7 +6,7 @@ import org.json.JSONObject
  * Safe, bounded evidence attached to activity cards. Raw tool arguments, environment variables,
  * cookies, headers, credentials and full terminal output must never enter this model.
  */
-internal sealed class OrionActivityEvidence {
+sealed class OrionActivityEvidence {
     data class Browser(
         val title: String,
         val url: String,
