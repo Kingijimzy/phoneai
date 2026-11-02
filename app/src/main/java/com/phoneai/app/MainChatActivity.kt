@@ -2096,6 +2096,28 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         runOnUiThread {
             val changed = lastMode != mode
             lastMode = mode
+            if (changed && (mode == OrbView.Mode.THINKING || mode == OrbView.Mode.ACTING || mode == OrbView.Mode.WAITING_APPROVAL)) {
+                val phase = when (mode) {
+                    OrbView.Mode.THINKING -> "Preparing a response"
+                    OrbView.Mode.ACTING -> "Executing the current tool or action"
+                    OrbView.Mode.WAITING_APPROVAL -> "Waiting for owner approval"
+                    else -> "Working"
+                }
+                liveActivityEvents.add(OrionActivityEvent(
+                    eventId = "phase-${mode.name}-${System.currentTimeMillis()}",
+                    taskId = "active-session",
+                    kind = when (mode) {
+                        OrbView.Mode.THINKING -> OrionActivityKind.THINKING
+                        OrbView.Mode.WAITING_APPROVAL -> OrionActivityKind.APPROVAL
+                        else -> OrionActivityKind.TOOL
+                    },
+                    status = if (mode == OrbView.Mode.WAITING_APPROVAL) OrionActivityStatus.WAITING else OrionActivityStatus.ACTIVE,
+                    title = phase,
+                    summary = "Live phase reported by Orion runtime",
+                    timestampMs = System.currentTimeMillis()
+                ))
+                while (liveActivityEvents.size > 300) liveActivityEvents.removeAt(0)
+            }
             val state: Triple<String, Int, Pair<Int, Int>> = when (mode) {
                 OrbView.Mode.IDLE -> Triple("READY", Theme.MUTED, Pair(Theme.BG, Theme.LINE))
                 OrbView.Mode.LISTENING -> Triple("LISTENING", Theme.CYAN, Pair(Theme.BG, Theme.LINE))
