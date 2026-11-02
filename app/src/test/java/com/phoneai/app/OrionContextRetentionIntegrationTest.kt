@@ -69,4 +69,25 @@ class OrionContextRetentionIntegrationTest {
         assertFalse(OrionSensorConsent.read(context, OrionSensorScope.LOCATION, staleCopy.expiresAt).active())
         assertFalse(OrionSensorConsent.read(context, OrionSensorScope.LOCATION, staleCopy.grantedAt).active())
     }
+    @Test fun deviceStateProviderRequiresItsOwnGrantAndReturnsOnlyOnDemandSnapshot() {
+        assertEquals("", OrionDeviceContextProvider.summary(context))
+        OrionSensorConsent.grant(context, OrionSensorScope.DEVICE_STATE, 60_000L)
+        val summary = OrionDeviceContextProvider.summary(context)
+        assertTrue(summary.startsWith("OWNER-GRANTED DEVICE STATE"))
+        assertTrue(summary.contains("on-demand snapshot; not stored"))
+    }
+
+    @Test fun locationAndAppUsageProvidersRequireTheirOwnGrantsAndPlatformAccess() {
+        assertEquals("", OrionLocationContextProvider.summary(context))
+        assertEquals("", OrionAppUsageContextProvider.summary(context))
+
+        OrionSensorConsent.grant(context, OrionSensorScope.LOCATION, 60_000L)
+        OrionSensorConsent.grant(context, OrionSensorScope.APP_USAGE, 60_000L)
+
+        // Robolectric does not grant Android location or Usage Access merely because Orion's
+        // app-level consent exists. The providers must still fail closed at the OS boundary.
+        assertEquals("", OrionLocationContextProvider.summary(context))
+        assertEquals("", OrionAppUsageContextProvider.summary(context))
+    }
+
 }

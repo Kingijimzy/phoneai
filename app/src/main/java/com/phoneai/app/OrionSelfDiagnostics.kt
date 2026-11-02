@@ -1,6 +1,11 @@
 package com.phoneai.app
 
+import android.Manifest
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.Settings
+import androidx.core.content.ContextCompat
 
 /** Local, provider-free health inspection for the central brain. */
 internal data class OrionDiagnosticReport(
@@ -71,6 +76,68 @@ internal object OrionSelfDiagnostics {
         val verifiedEnabled = extensions.count { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) }
         extensions.filter { it.enabled && (!it.verified || it.sourceSha256 != SelfExtendingExtensionPolicy.sha256(it.source)) }.forEach {
             add("extension_registry", "Enabled extension failed integrity check", "Extension '${it.id}' is enabled but is not verified against its current source hash.", OrionFindingSeverity.CRITICAL, "Extension:${it.id}")
+        }
+
+        val pythonWorkspace = runCatching { OrionPythonWorkspace(app).rootStatus() }.getOrNull()
+        when (pythonWorkspace) {
+            OrionPythonWorkspace.RootStatus.MISSING -> add(
+                "python_workspace", "Python workspace root is missing",
+                "The fixed app-private workspace directory has not been created; bounded Python file capabilities may need repair.",
+                OrionFindingSeverity.WARNING, "OrionPythonWorkspace:root_missing"
+            )
+            OrionPythonWorkspace.RootStatus.UNSAFE -> add(
+                "python_workspace", "Python workspace path is unsafe",
+                "A workspace ancestor is a symlink or the root is not a readable/writable directory; automatic repair is blocked.",
+                OrionFindingSeverity.CRITICAL, "OrionPythonWorkspace:root_unsafe"
+            )
+            OrionPythonWorkspace.RootStatus.READY, null -> Unit
+        }
+
+        // Report the real Android half of each active consent grant. An Orion scope toggle
+        // is not an Android permission and must never be presented as proof of OS access.
+        fun androidPermissionGranted(permission: String): Boolean =
+            ContextCompat.checkSelfPermission(app, permission) == PackageManager.PERMISSION_GRANTED
+
+        if (OrionSensorConsent.read(app, OrionSensorScope.LOCATION).active() &&
+            !androidPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION) &&
+            !androidPermissionGranted(Manifest.permission.ACCESS_COARSE_LOCATION)) {
+            add("android_permissions", "Location grant lacks Android permission",
+                "Orion location consent is active, but Android has not granted fine or coarse location access.",
+                OrionFindingSeverity.WARNING, "Android:ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION")
+        }
+        if (OrionSensorConsent.read(app, OrionSensorScope.CONTACTS).active() &&
+            !androidPermissionGranted(Manifest.permission.READ_CONTACTS)) {
+            add("android_permissions", "Contacts grant lacks Android permission",
+                "Orion contacts consent is active, but Android READ_CONTACTS permission is not granted.",
+                OrionFindingSeverity.WARNING, "Android:READ_CONTACTS")
+        }
+        if (OrionSensorConsent.read(app, OrionSensorScope.MICROPHONE).active() &&
+            !androidPermissionGranted(Manifest.permission.RECORD_AUDIO)) {
+            add("android_permissions", "Microphone grant lacks Android permission",
+                "Orion microphone consent is active, but Android RECORD_AUDIO permission is not granted.",
+                OrionFindingSeverity.WARNING, "Android:RECORD_AUDIO")
+        }
+        if (OrionSensorConsent.read(app, OrionSensorScope.SCREEN_CONTEXT).active()) {
+            val component = ComponentName(app, PhoneAiService::class.java).flattenToString()
+            val enabled = Settings.Secure.getString(
+                app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ).orEmpty().split(':').any { it.equals(component, ignoreCase = true) }
+            if (!enabled || PhoneAiService.instance == null) {
+                add("android_accessibility", "Accessibility bridge is not connected",
+                    "Screen-context consent is active, but Orion's Android accessibility service is not both enabled and connected.",
+                    OrionFindingSeverity.WARNING, "Android:ENABLED_ACCESSIBILITY_SERVICES|PhoneAiService.instance")
+            }
+        }
+        if (OrionSensorConsent.read(app, OrionSensorScope.NOTIFICATIONS).active()) {
+            val component = ComponentName(app, OrionNotificationListener::class.java).flattenToString()
+            val enabled = Settings.Secure.getString(
+                app.contentResolver, "enabled_notification_listeners"
+            ).orEmpty().split(':').any { it.equals(component, ignoreCase = true) }
+            if (!enabled) {
+                add("android_notifications", "Notification listener is not enabled",
+                    "Orion notification consent is active, but Android Notification access is not enabled for Orion.",
+                    OrionFindingSeverity.WARNING, "Android:enabled_notification_listeners")
+            }
         }
 
         val runtimeState = runCatching { PhoneAiService.instance?.runtimeBriefForBrain() }.getOrNull()

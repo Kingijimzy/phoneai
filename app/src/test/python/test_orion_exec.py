@@ -61,6 +61,76 @@ else:
         out = orion_exec.run("print('x' * 4000)")
         self.assertLessEqual(len(out), 5000)
 
+    def test_registered_phone_capabilities_are_available_only_to_direct_runner(self):
+        class FakePhone:
+            def battery(self):
+                return '{"level":77}'
+
+        self.assertIn("77", orion_exec.run("print(phone.battery())", phone_api=FakePhone()))
+        self.assertIn("policy rejected", orion_exec.run_extension("RESULT = phone.battery()", "{}"))
+
+    def test_phone_attribute_escape_and_unregistered_methods_are_rejected(self):
+        class FakePhone:
+            def battery(self):
+                return "ok"
+
+        self.assertIn("policy rejected", orion_exec.run("print(phone.__class__)", phone_api=FakePhone()))
+        self.assertIn("policy rejected", orion_exec.run("print(phone.delete_everything())", phone_api=FakePhone()))
+
+    def test_safe_standard_library_imports(self):
+        code = """import json
+import math
+import re
+from datetime import datetime
+import urllib.parse
+parsed = urllib.parse.urlparse("http://192.168.1.2:8123/api")\nprint(json.dumps({"sqrt": math.sqrt(81), "match": bool(re.search("home", "homeassistant")), "host": parsed.hostname, "year": datetime.now().year}))
+"""
+        out = orion_exec.run(code)
+        self.assertNotIn("error:", out)
+        self.assertIn('"sqrt": 9.0', out)
+        self.assertIn('"match": true', out)
+        self.assertIn('"host": "192.168.1.2"', out)
+
+    def test_safe_asyncio_subset_is_bounded(self):
+        self.assertIn("completed", orion_exec.run("import asyncio\nasyncio.run(asyncio.sleep(0.01))"))
+        self.assertIn("limited to one second", orion_exec.run("import asyncio\nasyncio.run(asyncio.sleep(2))"))
+
+    def test_imports_do_not_open_files_or_network(self):
+        self.assertIn("policy rejected", orion_exec.run("import urllib.request"))
+        self.assertIn("policy rejected", orion_exec.run("import asyncio.subprocess"))
+        self.assertIn("policy rejected", orion_exec.run("from json import *"))
+
+    def test_safe_json_dict_helpers_and_regex_limits(self):
+        out = orion_exec.run('import json\ndata = json.loads("{\\"count\\": 4}")\nprint(data.get("count"))')
+        self.assertEqual(out, "4\n")
+        self.assertIn("quantified groups", orion_exec.run('import re\nprint(re.search("(a+)+$", "a" * 100))'))
+
+    def test_accessibility_status_and_websocket_methods_are_registered_phone_calls(self):
+        class FakePhone:
+            def accessibility_status(self):
+                return '{"service_connected": true}'
+            def ws_connect(self, url):
+                return '{"session_id": "test-session"}'
+            def ws_connect_with_headers(self, url, headers):
+                return '{"session_id": "auth-session"}'
+            def ws_send(self, session_id, text):
+                return '{"sent": true}'
+            def ws_receive(self, session_id, timeout_ms):
+                return '{"type": "text", "data": "ok"}'
+            def ws_close(self, session_id):
+                return '{"closed": true}'
+        code = """print(phone.accessibility_status())
+print(phone.ws_connect("wss://example.test/live"))
+print(phone.ws_connect_with_headers("wss://example.test/live", "{}"))
+print(phone.ws_send("test-session", "hello"))
+print(phone.ws_receive("test-session", 100))
+print(phone.ws_close("test-session"))
+"""
+        output = orion_exec.run(code, phone_api=FakePhone())
+        self.assertNotIn("error:", output)
+        self.assertIn('"service_connected": true', output)
+        self.assertIn('"type": "text"', output)
+
 
 if __name__ == "__main__":
     unittest.main()
