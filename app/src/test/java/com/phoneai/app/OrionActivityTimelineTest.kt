@@ -29,6 +29,26 @@ class OrionActivityTimelineTest {
         assertTrue(timeline.snapshot("another-task").isEmpty())
     }
 
+    @Test fun typedEvidenceAndCorrelationRemainAttachedDuringReplay() {
+        val evidence = OrionActivityEvidence.AgentHandoff("research-agent", "parent-1", "Find primary sources", "running")
+        val event = OrionActivityEvent(
+            eventId = "handoff-1",
+            taskId = "task-1",
+            kind = OrionActivityKind.DELEGATION,
+            status = OrionActivityStatus.ACTIVE,
+            title = "Research hand-off",
+            summary = "Delegated research",
+            timestampMs = 50,
+            typedEvidence = listOf(evidence),
+            correlationId = "handoff-correlation"
+        )
+        val timeline = OrionActivityTimeline()
+        timeline.replay(listOf(event))
+        val restored = timeline.snapshot().single()
+        assertEquals("handoff-correlation", restored.correlationId)
+        assertEquals("parent-1", (restored.typedEvidence.single() as OrionActivityEvidence.AgentHandoff).parentTaskId)
+    }
+
     @Test fun elapsedTimeClampsClockSkewAndFormatsLongRuns() {
         assertEquals("0s", OrionActivityTimeline.elapsedLabel(2_000, 1_000))
         assertEquals("12s", OrionActivityTimeline.elapsedLabel(1_000, 13_000))
