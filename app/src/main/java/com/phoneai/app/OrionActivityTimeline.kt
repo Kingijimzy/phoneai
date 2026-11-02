@@ -92,6 +92,10 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                     kind = OrionActivityKind.CANCELLED; status = OrionActivityStatus.CANCELLED
                     title = "Task cancelled"
                 }
+                line.startsWith("[TASK:INTERRUPTED]") -> {
+                    kind = OrionActivityKind.INTERRUPTED; status = OrionActivityStatus.INTERRUPTED
+                    title = "Task interrupted"
+                }
                 line.startsWith("[TASK:COMPLETE]") || line.startsWith("[TASK:RECORD]") -> {
                     kind = OrionActivityKind.COMPLETION; status = OrionActivityStatus.SUCCEEDED
                     title = detail.ifBlank { "Task completed" }
