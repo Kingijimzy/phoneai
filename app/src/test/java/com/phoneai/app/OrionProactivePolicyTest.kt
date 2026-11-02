@@ -16,5 +16,9 @@ class OrionProactivePolicyTest {
         assertTrue(OrionProactivePolicy.INTERVAL_MINUTES >= 15L)
         assertTrue(OrionProactivePolicy.FLEX_MINUTES in 1L until OrionProactivePolicy.INTERVAL_MINUTES)
         assertTrue(OrionProactivePolicy.MAX_RETRIES in 1..5)
+        assertTrue(OrionProactivePolicy.intervalMinutes(5) == 15L)
+        assertTrue(OrionProactivePolicy.intervalMinutes(15) == 15L)
+        assertTrue(OrionProactivePolicy.intervalMinutes(60) == 60L)
+        assertTrue(OrionProactivePolicy.intervalMinutes(999) == 120L)
     }
 }
