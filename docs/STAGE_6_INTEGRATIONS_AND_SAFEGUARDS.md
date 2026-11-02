@@ -79,3 +79,14 @@ The primary Soul watcher is now attached to the already-enabled Android Accessib
 - The observer does not continuously capture screenshots, record audio, or inspect every text/content event. It responds to meaningful window transitions and reads only the local capability state already available to the accessibility service.
 - Android or HyperOS can still disable/restrict the AccessibilityService, force-stop the app, or defer fallback work. Orion reports the service connection state and resumes observation when Android reconnects it; uninterrupted operation cannot be guaranteed by an app.
 - The watcher remains bounded and policy-gated: it does not grant permissions, enable packs, or bypass approval for consequential actions.
+
+
+## Stage 4–7 integration stack update — 2026-11-02
+
+This Stage 6 PR is now based on `orion/navigation-feature-directory` (PR #120), which stacks the owner-control/security, graphite UI and feature-navigation work from PRs #118–#120 on the shared Central Brain base (PR #117).
+
+- PR #157 head remains `c468d2ea`; its prior Android and PRoot CI runs validate that original head in isolation.
+- GitHub currently reports this retargeted PR as mergeable, but the new base composition requires a fresh exact-head build before acceptance.
+- PR #158 remains stacked on this branch and therefore inherits the #118–#120 UI/control chain.
+- Stage 4 repair/Python (#132 → #145 → #154 → #155 → #156) remains a separate chain and must be reconciled before a unified release candidate is declared.
+- Preserve owner approval, capability grants, privacy boundaries and task cancellation. Stage 5 remains on hold.
