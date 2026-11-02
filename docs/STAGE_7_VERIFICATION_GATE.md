@@ -67,3 +67,20 @@ From the repository root:
 ```
 
 CI remains authoritative for the configured PRoot/Python checks and APK signature/package validation. Do not substitute a local build for those workflow steps.
+
+
+## CI evidence — 2026-11-02
+
+| Field | Value |
+|---|---|
+| PR / branch | [#157](https://github.com/Kingijimzy/phoneai/pull/157) / `orion/stage-6-proactive-operations` |
+| Tested commit SHA | `0b3e6e1122c3ce5358af5dcbd445fad58ec806bc` |
+| Android workflow | [Run 41472669020](https://github.com/Kingijimzy/phoneai/actions/runs/41472669020) — PASS |
+| PRoot workflow | [Run 41472668674](https://github.com/Kingijimzy/phoneai/actions/runs/41472668674) — PASS |
+| APK artifact | `PhoneAI-apk`, artifact ID `13156561084`, 56,656,329 bytes |
+| APK SHA-256 | `feb01b07a20bd66d5875e286934bc8baebae5a333d9c915f4235f945ecf3fe2a` |
+| Automated checks | PASS — Android unit tests, restricted Python sandbox, debug APK, package/signature validation, pinned PRoot candidate build |
+| Device checks | BLOCKED — no live Redmi A3 Pro test evidence available in this CI session |
+| Final decision | BLOCKED pending device acceptance |
+
+The Android workflow's configured build/test/Python/package/signature steps all completed successfully on the exact tested SHA. The PRoot workflow also completed successfully on that same SHA. APK release publication was skipped by the workflow; the APK remains available as a CI artifact. These CI results do not establish runtime behavior on a physical device.
