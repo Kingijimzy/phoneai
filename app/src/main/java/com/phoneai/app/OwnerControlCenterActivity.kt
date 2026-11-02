@@ -331,39 +331,37 @@ class OwnerControlCenterActivity : Activity() {
             }.setNegativeButton("DONE", null).show()
     }
 
-    private fun watcherRunning(): Boolean = runCatching {
-        @Suppress("DEPRECATION")
-        (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getRunningServices(Int.MAX_VALUE)
-            .any { it.service.className == WatchService::class.java.name }
-    }.getOrDefault(false)
+    private fun watcherRunning(): Boolean = PhoneAiService.instance != null
 
     private fun showWatcherControls() {
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
-        val running = watcherRunning()
-        val requested = Prefs.watchOn(this)
+        val serviceConnected = watcherRunning()
+        val coreEnabled = AgentPolicy.enabled(this, "orion_core")
+        val requested = AgentPolicy.enabled(this, "proactive")
         val batteryExempt = if (android.os.Build.VERSION.SDK_INT >= 23) pm.isIgnoringBatteryOptimizations(packageName) else true
-        val message = "Watcher requested: ${if (requested) "ON" else "OFF"}\n" +
-            "Service process visible: ${if (running) "RUNNING" else "NOT RUNNING"}\n" +
-            "Battery optimization exemption: ${if (batteryExempt) "EXEMPT" else "NOT EXEMPT"}\n" +
-            "Android/HyperOS may still stop or defer background work. A running flag is not proof of uninterrupted execution."
-        val watcherActive = requested && running
+        val message = "Proactive watcher policy: ${if (requested) "ON" else "OFF"}\\n" +
+            "Orion Core: ${if (coreEnabled) "ON" else "OFF"}\\n" +
+            "Accessibility service: ${if (serviceConnected) "CONNECTED" else "NOT CONNECTED"}\\n" +
+            "Scheduled fallback: ${if (coreEnabled && requested) "ENABLED" else "DISABLED"}\\n" +
+            "Fallback interval: ${OrionProactivePolicy.intervalMinutes(Prefs.watchMinutes(this))} minutes\\n" +
+            "Battery optimization exemption: ${if (batteryExempt) "EXEMPT" else "NOT EXEMPT"}\\n" +
+            "Android/HyperOS may still stop or defer background work. A connected service or scheduled request is not proof of uninterrupted execution."
         AlertDialog.Builder(this).setTitle("Watcher & background status")
             .setMessage(message)
-            .setPositiveButton(if (watcherActive) "STOP WATCHER" else "START / RESTART WATCHER") { _, _ ->
-                if (watcherActive) {
-                    WatchService.stop(this)
-                    AgentPolicy.log(this, "owner-watcher", "stop", true, "watcher stopped by owner")
-                } else {
-                    WatchService.start(this)
-                    val started = Prefs.watchOn(this)
-                    AgentPolicy.log(this, "owner-watcher", "start", started, if (started) "watcher start requested" else "watcher start failed")
-                }
+            .setPositiveButton(if (requested) "DISABLE PROACTIVE WATCHER" else "ENABLE PROACTIVE WATCHER") { _, _ ->
+                AgentPolicy.setEnabled(this, "proactive", !requested)
+                // Retire the legacy polling service so the event-driven AccessibilityService
+                // observer and WorkManager fallback are the single authoritative watcher path.
+                WatchService.stop(this)
+                OrionProactiveWork.refresh(this)
+                AgentPolicy.log(this, "owner-watcher", if (requested) "disable" else "enable", true,
+                    if (requested) "proactive watcher disabled by owner" else "proactive watcher enabled by owner")
                 showWatcherControls()
             }
-            .setNeutralButton("INTERVAL") { _, _ ->
-                chooseInt("Watcher interval (minutes)", listOf(5, 10, 15, 30, 60, 120), Prefs.watchMinutes(this)) { minutes ->
+            .setNeutralButton("FALLBACK INTERVAL") { _, _ ->
+                chooseInt("Scheduled fallback interval (minutes)", listOf(15, 30, 60, 120), Prefs.watchMinutes(this)) { minutes ->
                     Prefs.setWatchMinutes(this, minutes)
-                    if (Prefs.watchOn(this)) { WatchService.stop(this); WatchService.start(this) }
+                    OrionProactiveWork.refresh(this)
                     showWatcherControls()
                 }
             }
