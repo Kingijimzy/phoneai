@@ -340,7 +340,9 @@ class OrionRepairLifecycleTest {
 
     @Test fun centralBrainPersistsOwnerRejectionAndNeverApplies() {
         val plan = proposal(OrionRepairRisk.EXTERNAL_SIDE_EFFECT, approval = true)
-        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
+        val digest = OrionRepairLifecycle.expectedPlanDigest(
+            sessionId, "task-repair-test", finding(), plan, OrionRepairExecutionBoundary.EXTERNAL
+        )
         var applyCalls = 0
         val rejected = OrionCentralBrain.executeRepairProposal(
             context, sessionId, "task-repair-test", finding(), plan, digest,
