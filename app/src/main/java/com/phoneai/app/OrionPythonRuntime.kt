@@ -7,12 +7,12 @@ import com.chaquo.python.android.AndroidPlatform
 /**
  * Bundled ARM64 Python runtime. This is intentionally a constrained data-processing interpreter,
  * not a general OS shell: imports, attributes, filesystem/network access and arbitrary callables are
- * rejected by the bundled AST policy. Caller must obtain explicit action approval first.
+ * rejected by the bundled AST policy. It is a capability-free sandbox, not a general-purpose runtime.
  */
 internal object OrionPythonRuntime {
     @Synchronized
-    fun execute(context: Context, code: String, explicitlyApproved: Boolean): String {
-        PythonExecutionPolicy.rejection(code, explicitlyApproved, PythonExecutionPolicy.maxCodeChars(context))?.let { return "error: $it" }
+    fun execute(context: Context, code: String): String {
+        PythonExecutionPolicy.rejection(code, PythonExecutionPolicy.maxCodeChars(context))?.let { return "error: $it" }
         return try {
             if (!Python.isStarted()) Python.start(AndroidPlatform(context.applicationContext))
             Python.getInstance().getModule("orion_exec").callAttr("run", code, PythonExecutionPolicy.maxCodeChars(context)).toString().take(5_200)

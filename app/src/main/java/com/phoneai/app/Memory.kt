@@ -125,7 +125,10 @@ object MemoryStore {
             dup.reviewStatus = reviewStatus
             dup.evidence = evidence.take(240)
             if (!save(c)) { restoreFields(dup, old); return@synchronized null }
-            runCatching { OrionKnowledgeGraph.indexMemory(c, dup) }
+            runCatching { OrionKnowledgeGraph.forgetMemory(c, dup.id) }
+            if (MemoryGovernancePolicy.canUseInPrompt(dup.reviewStatus, dup.sensitivity)) {
+                runCatching { OrionKnowledgeGraph.indexMemory(c, dup) }
+            }
             return@synchronized copyOf(dup)
         }
         val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
@@ -144,7 +147,11 @@ object MemoryStore {
                 save(c)
                 return@synchronized null
             }
-            runCatching { OrionKnowledgeGraph.indexMemory(c, replaced) }
+            // Remove superseded terms before indexing the new version under the same memory ID.
+            runCatching { OrionKnowledgeGraph.forgetMemory(c, replaced.id) }
+            if (MemoryGovernancePolicy.canUseInPrompt(replaced.reviewStatus, replaced.sensitivity)) {
+                runCatching { OrionKnowledgeGraph.indexMemory(c, replaced) }
+            }
             return@synchronized copyOf(replaced)
         }
         val id = (list.maxOfOrNull { it.id } ?: 0) + 1
@@ -213,6 +220,9 @@ object MemoryStore {
             save(c)
             return@synchronized false
         }
+        // Approval/rejection changes graph visibility. Never leave edges from an earlier
+        // approved version reachable after the memory becomes pending, rejected or superseded.
+        runCatching { OrionKnowledgeGraph.forgetMemory(c, memory.id) }
         if (superseded != null) runCatching { OrionKnowledgeGraph.forgetMemory(c, superseded.id) }
         if (status == "approved") runCatching { OrionKnowledgeGraph.indexMemory(c, memory) }
         true
@@ -241,6 +251,7 @@ object MemoryStore {
             save(c)
             return@synchronized false
         }
+        runCatching { OrionKnowledgeGraph.forgetMemory(c, id) }
         true
     }
 

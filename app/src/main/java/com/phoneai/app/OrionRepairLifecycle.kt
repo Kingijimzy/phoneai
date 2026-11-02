@@ -10,7 +10,7 @@ import java.security.MessageDigest
  * postcondition, and rollback restores captured prior state. Uncertain receipts are never replayed.
  */
 internal object OrionRepairLifecycle {
-    enum class Result { VERIFIED, AWAITING_OWNER, SANDBOX_FAILED, POLICY_BLOCKED, APPLY_FAILED,
+    enum class Result { VERIFIED, AWAITING_OWNER, OWNER_REJECTED, SANDBOX_FAILED, POLICY_BLOCKED, APPLY_FAILED,
         APPLY_OUTCOME_UNCERTAIN, ROLLED_BACK, ROLLBACK_FAILED, PERSISTENCE_FAILED }
 
     data class Receipt(val result: Result, val planDigest: String, val detail: String)
@@ -24,7 +24,8 @@ internal object OrionRepairLifecycle {
      */
     fun expectedPlanDigest(
         sessionId: String, taskId: String,
-        finding: OrionDiagnosticFinding, proposal: OrionRepairProposal
+        finding: OrionDiagnosticFinding, proposal: OrionRepairProposal,
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): String {
         fun field(value: String): String = "${value.length}:$value"
         val canonical = listOf(
@@ -33,7 +34,7 @@ internal object OrionRepairLifecycle {
             finding.evidenceRefs.sorted().joinToString("") { field(it) },
             proposal.id, proposal.findingId, proposal.summary, proposal.risk.name,
             proposal.isIdempotent.toString(), proposal.hasRollback.toString(),
-            proposal.requiredOwnerApproval.toString()
+            proposal.requiredOwnerApproval.toString(), proposal.suspicious.toString(), executionBoundary.name
         ).joinToString("") { field(it) }
         return sha256(canonical)
     }
@@ -41,14 +42,36 @@ internal object OrionRepairLifecycle {
     fun stageEventId(taskId: String, planDigest: String, stage: String): String =
         "repair-" + sha256("$taskId|${planDigest.lowercase()}|${stage.uppercase()}").take(48)
 
+    private fun hasStageReceipt(
+        context: Context, sessionId: String, taskId: String, planDigest: String, stage: String
+    ): Boolean {
+        val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
+            it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
+                it.argsFingerprint == planDigest
+        }
+        val chatHas = runCatching {
+            OrionConversationRepository.get(context).hasEventForSession(
+                context, sessionId, stageEventId(taskId, planDigest, stage)
+            )
+        }.getOrDefault(false)
+        return ledgerHas || chatHas
+    }
+
+    /** Idempotently mirrors a lifecycle stage into both durable stores. */
     private fun emit(context: Context, sessionId: String, taskId: String, stage: String,
         planDigest: String, summary: String, verified: Boolean = false, failed: Boolean = false): Boolean {
-        val ledgerSaved = OrionEvidenceLedger.recordRepairStage(
+        val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
+            it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
+                it.argsFingerprint == planDigest
+        }
+        val eventId = stageEventId(taskId, planDigest, stage)
+        val repository = OrionConversationRepository.get(context)
+        val chatHas = runCatching { repository.hasEventForSession(context, sessionId, eventId) }.getOrDefault(false)
+        val ledgerSaved = ledgerHas || OrionEvidenceLedger.recordRepairStage(
             context, taskId, stage, planDigest, summary, verified, failed
         )
-        val eventId = stageEventId(taskId, planDigest, stage)
-        val chatSaved = runCatching {
-            OrionConversationRepository.get(context).recordEventForSession(
+        val chatSaved = chatHas || runCatching {
+            repository.recordEventForSession(
                 context, sessionId, eventId, "repair_lifecycle", stage.lowercase(), summary
             ) != null
         }.getOrDefault(false)
@@ -63,14 +86,15 @@ internal object OrionRepairLifecycle {
         context: Context, sessionId: String, taskId: String,
         finding: OrionDiagnosticFinding, proposal: OrionRepairProposal, planDigest: String,
         ownerApprovalDigest: String?, sandboxTest: () -> Boolean, apply: () -> String?,
-        verify: () -> Boolean, rollback: () -> Boolean, verifyRollback: () -> Boolean
+        verify: () -> Boolean, rollback: () -> Boolean, verifyRollback: () -> Boolean,
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): Receipt {
         val app = context.applicationContext
         val digest = planDigest.lowercase()
         val expectedDigest = if (sessionId.isNotBlank() && taskId.isNotBlank() &&
             finding.isActionable() && finding.id == proposal.findingId && proposal.id.isNotBlank() &&
             proposal.summary.isNotBlank() && proposal.hasRollback) {
-            expectedPlanDigest(sessionId, taskId, finding, proposal)
+            expectedPlanDigest(sessionId, taskId, finding, proposal, executionBoundary)
         } else ""
         val ownerApproved = ownerApprovalDigest?.equals(expectedDigest, ignoreCase = true) == true
         if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$")) ||
@@ -82,7 +106,7 @@ internal object OrionRepairLifecycle {
 
         // A plan may be applied only once. An interrupted/uncertain apply is reconciled
         // manually; a previous owner approval is never silently reused after process restart.
-        val terminalOrUncertain = setOf("APPLY_STARTED", "APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
+        val terminalOrUncertain = setOf("OWNER_REJECTED", "APPLY_STARTED", "APPLIED", "APPLY_UNCERTAIN", "VERIFIED",
             "ROLLBACK_REQUIRED", "ROLLED_BACK", "ROLLBACK_FAILED")
         val durableTerminalReceipt = terminalOrUncertain.any { stage ->
             val eventId = "repair-" + sha256("$taskId|$digest|${stage}").take(48)
@@ -97,22 +121,36 @@ internal object OrionRepairLifecycle {
         }
 
         if (!emit(app, sessionId, taskId, "PROPOSED", digest,
-                "Repair proposal recorded; risk=${proposal.risk}; approval_required=${proposal.requiredOwnerApproval}.")) {
+                "Repair proposal recorded; risk=${proposal.risk}; boundary=${executionBoundary.name}; approval_required=${proposal.requiredOwnerApproval || proposal.suspicious}.")) {
             return Receipt(Result.PERSISTENCE_FAILED, digest, "Proposal receipt failed; repair was not tested or applied.")
         }
 
-        val sandboxPassed = runCatching { sandboxTest() }.getOrDefault(false)
-        if (!emit(app, sessionId, taskId, if (sandboxPassed) "SANDBOX_PASSED" else "SANDBOX_FAILED",
-                digest, if (sandboxPassed) "Isolated repair test passed." else "Isolated repair test failed or was uncertain.",
-                failed = !sandboxPassed)) {
-            return Receipt(Result.PERSISTENCE_FAILED, digest, "Sandbox receipt failed; application is blocked.")
+        // Resume a previously tested plan after process death or an owner-approval pause.
+        // A durable SANDBOX_PASSED receipt is sufficient to skip the isolated test; a failed
+        // test is terminal for this digest and is never silently rerun as though it had passed.
+        val sandboxPassed = when {
+            hasStageReceipt(app, sessionId, taskId, digest, "SANDBOX_FAILED") -> false
+            hasStageReceipt(app, sessionId, taskId, digest, "SANDBOX_PASSED") -> true
+            else -> {
+                val passed = runCatching { sandboxTest() }.getOrDefault(false)
+                val stage = if (passed) "SANDBOX_PASSED" else "SANDBOX_FAILED"
+                val saved = emit(app, sessionId, taskId, stage, digest,
+                    if (passed) "Isolated repair test passed." else "Isolated repair test failed or was uncertain.",
+                    failed = !passed)
+                if (!saved) return Receipt(Result.PERSISTENCE_FAILED, digest,
+                    "Sandbox receipt failed; application is blocked and the test result must be reconciled.")
+                passed
+            }
         }
         if (!sandboxPassed) return Receipt(Result.SANDBOX_FAILED, digest, "Sandbox validation failed; repair was not applied.")
 
-        val approvalRequired = proposal.requiredOwnerApproval ||
-            proposal.risk != OrionRepairRisk.REVERSIBLE || !proposal.isIdempotent
+        // Only the trusted adapter can declare the execution boundary. Sandbox data mutations
+        // are autonomous when isolated, idempotent and rollback-backed; dangerous/suspicious
+        // work and every external effect still require owner approval.
+        val approvalRequired = OrionSelfHealingPolicy.requiresOwnerApproval(proposal, executionBoundary)
         val safeAutoApply = OrionSelfHealingPolicy.mayAutoApply(
-            proposal.copy(status = OrionRepairStatus.TEST_PASSED, testPassed = true)
+            proposal.copy(status = OrionRepairStatus.TEST_PASSED, testPassed = true),
+            executionBoundary
         )
         if (approvalRequired && !ownerApproved) {
             val saved = emit(app, sessionId, taskId, "AWAITING_OWNER", digest,
@@ -127,7 +165,7 @@ internal object OrionRepairLifecycle {
             }
         } else if (!safeAutoApply) {
             return Receipt(Result.POLICY_BLOCKED, digest,
-                "Repair does not meet the reversible, idempotent, rollback-backed auto-apply policy.")
+                "Repair does not meet the risk-aware, boundary-specific, idempotent and rollback-backed auto-apply policy.")
         }
 
         // Atomically claim the one-shot transition before entering any side-effecting adapter.
@@ -186,6 +224,21 @@ internal object OrionRepairLifecycle {
                 "Verification failed; rollback completed and restored state was independently verified.")
             else -> Receipt(Result.ROLLBACK_FAILED, digest, "Rollback failed or was uncertain; manual intervention required.")
         }
+    }
+
+
+    /** Persist an explicit rejection for this exact immutable plan; it cannot later be replayed. */
+    fun recordOwnerRejection(
+        context: Context, sessionId: String, taskId: String, planDigest: String
+    ): Receipt {
+        val digest = planDigest.lowercase()
+        if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$"))) {
+            return Receipt(Result.POLICY_BLOCKED, digest, "Owner rejection did not match a valid repair identity.")
+        }
+        val saved = emit(context.applicationContext, sessionId, taskId, "OWNER_REJECTED", digest,
+            "Owner declined this exact repair plan; application was not dispatched.", failed = true)
+        return Receipt(if (saved) Result.OWNER_REJECTED else Result.PERSISTENCE_FAILED, digest,
+            if (saved) "Owner rejected this repair; no application occurred." else "Owner decision could not be persisted; no application occurred.")
     }
 
     /**
