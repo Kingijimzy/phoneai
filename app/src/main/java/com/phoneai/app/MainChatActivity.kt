@@ -2077,10 +2077,13 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     else -> OrionActivityKind.TOOL
                 } else kind
                 val resolvedTitle = toolName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: title
+                val evidenceText = Regex("(?i)\\\\| Evidence: (.+)$").find(event.summary)?.groupValues?.getOrNull(1).orEmpty()
+                val safeEvidence = evidenceText.takeIf { it.isNotBlank() }?.let { OrionEvidenceSanitizer.text(it, 480) }
+                val displaySummary = event.summary.substringBefore(" | Evidence:").take(420)
                 val typed = OrionActivityEvent(
                     eventId = event.id, taskId = event.sessionId, kind = resolvedKind, status = status,
-                    title = resolvedTitle, summary = event.summary, timestampMs = event.createdAt.coerceAtLeast(0L),
-                    evidence = emptyList(), elapsedMs = startEvent?.let { (event.createdAt - it.createdAt).coerceAtLeast(0L) }
+                    title = resolvedTitle, summary = displaySummary, timestampMs = event.createdAt.coerceAtLeast(0L),
+                    evidence = listOfNotNull(safeEvidence), elapsedMs = startEvent?.let { (event.createdAt - it.createdAt).coerceAtLeast(0L) }
                 )
                 if (liveActivityEvents.none { it.eventId == typed.eventId }) {
                     liveActivityEvents.add(typed)
