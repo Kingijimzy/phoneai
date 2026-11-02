@@ -418,7 +418,7 @@ data class OrionChatLine(
 )
 
 @Composable
-fun OrionComposeChatScreen(
+internal fun OrionComposeChatScreen(
     lines: List<OrionChatLine>,
     activityEvents: List<OrionActivityEvent> = emptyList(),
     status: String,
