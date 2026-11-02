@@ -72,7 +72,7 @@ internal object OrionProactiveWork {
                 flex, TimeUnit.MINUTES
             ).addTag(UNIQUE_NAME).build()
             WorkManager.getInstance(app).enqueueUniquePeriodicWork(
-                UNIQUE_NAME, ExistingPeriodicWorkPolicy.REPLACE, request
+                UNIQUE_NAME, ExistingPeriodicWorkPolicy.UPDATE, request
             )
         }.onFailure {
             AgentPolicy.log(
