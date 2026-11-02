@@ -9,12 +9,12 @@ import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 /**
- * Stage 6 durable proactive heartbeat.
+ * Stage 6 durable proactive recovery / scheduled-work fallback.
  *
- * Unlike the accessibility-service Handler tick, this periodic WorkManager job survives
- * ordinary process death and is restored by WorkManager after reboot. It is deliberately
- * inexact: Android/HyperOS owns execution timing and may defer it for battery policy.
- * The worker never starts the AccessibilityService or bypasses shared action policy.
+ * Primary Soul observation is event-driven from the connected AccessibilityService.
+ * This inexact WorkManager job is a recovery and standing-order fallback after ordinary
+ * process death or reboot; Android/HyperOS may defer it for battery policy. It never
+ * starts the AccessibilityService or bypasses shared action policy.
  */
 internal class OrionProactiveWorker(
     appContext: Context,
