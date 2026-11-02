@@ -82,6 +82,8 @@ class OrionConversationRepository private constructor(context: Context) :
             summary TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             trace_id TEXT,
+            correlation_id TEXT,
+            evidence_json TEXT,
             FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )""")
         db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
