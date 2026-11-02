@@ -46,6 +46,10 @@ internal object OrionProactivePolicy {
     /** Both the central brain and the separately opt-in proactive pack must be enabled. */
     fun shouldRun(coreEnabled: Boolean, proactiveEnabled: Boolean): Boolean =
         coreEnabled && proactiveEnabled
+
+    /** WorkManager's periodic minimum is 15 minutes; the owner dial controls only this fallback cadence. */
+    fun intervalMinutes(requestedMinutes: Int): Long =
+        requestedMinutes.coerceIn(INTERVAL_MINUTES.toInt(), 120).toLong()
 }
 
 internal object OrionProactiveWork {
@@ -61,9 +65,11 @@ internal object OrionProactiveWork {
                 WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
                 return@runCatching
             }
+            val interval = OrionProactivePolicy.intervalMinutes(Prefs.watchMinutes(app))
+            val flex = minOf(OrionProactivePolicy.FLEX_MINUTES, interval - 1L)
             val request = PeriodicWorkRequestBuilder<OrionProactiveWorker>(
-                OrionProactivePolicy.INTERVAL_MINUTES, TimeUnit.MINUTES,
-                OrionProactivePolicy.FLEX_MINUTES, TimeUnit.MINUTES
+                interval, TimeUnit.MINUTES,
+                flex, TimeUnit.MINUTES
             ).addTag(UNIQUE_NAME).build()
             WorkManager.getInstance(app).enqueueUniquePeriodicWork(
                 UNIQUE_NAME, ExistingPeriodicWorkPolicy.KEEP, request
