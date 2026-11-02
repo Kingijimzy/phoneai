@@ -171,7 +171,7 @@ internal class OrionLangGraphTransport(
 /** Specialist roles share one worker contract and must supply evidence references on success. */
 internal enum class OrionSpecialist { RESEARCH, CODING, DIAGNOSTICS, TRADING_ANALYSIS, VERIFICATION }
 internal fun interface OrionSpecialistHandler { fun run(task: OrionTaskEnvelope): OrionWorkerResult }
-internal class OrionSpecialistWorker(
+internal class OrionTaskSpecialistWorker(
     override val workerId: String,
     private val specialist: OrionSpecialist,
     private val handler: OrionSpecialistHandler
