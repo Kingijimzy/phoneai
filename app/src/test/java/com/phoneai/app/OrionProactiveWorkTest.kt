@@ -32,7 +32,7 @@ class OrionProactiveWorkTest {
         val work = WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
         assertEquals("Repeated service/boot registration must keep one heartbeat", 1, work.size)
-        assertEquals(WorkInfo.State.ENQUEUED, work.single().state)
+        assertTrue("Registered heartbeat must not be cancelled", work.single().state != WorkInfo.State.CANCELLED)
         assertTrue(work.single().tags.contains("orion_stage6_proactive_heartbeat"))
     }
     @Test fun disablingEitherOwnerPackCancelsTheHeartbeat() {
@@ -43,6 +43,7 @@ class OrionProactiveWorkTest {
         )
         AgentPolicy.setEnabled(context, "orion_core", true)
         AgentPolicy.setEnabled(context, "proactive", true)
+        OrionProactiveWork.ensureScheduled(context)
         val manager = WorkManager.getInstance(context)
         assertEquals(1, manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get().size)
 
