@@ -2047,8 +2047,8 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                 val status = when (event.status.lowercase()) {
                     "running", "active", "started", "in_progress" -> OrionActivityStatus.ACTIVE
                     "waiting", "pending", "approval_required" -> OrionActivityStatus.WAITING
-                    "success", "succeeded", "complete", "completed", "ok" -> OrionActivityStatus.SUCCEEDED
-                    "failed", "error" -> OrionActivityStatus.FAILED
+                    "success", "succeeded", "complete", "completed", "ok", "result", "approved" -> OrionActivityStatus.SUCCEEDED
+                    "denied", "failed", "error" -> OrionActivityStatus.FAILED
                     "cancelled", "canceled" -> OrionActivityStatus.CANCELLED
                     "interrupted", "paused" -> OrionActivityStatus.INTERRUPTED
                     else -> if (kind == OrionActivityKind.APPROVAL) OrionActivityStatus.WAITING else OrionActivityStatus.ACTIVE
@@ -2065,15 +2065,22 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     OrionActivityKind.CANCELLED -> "Task cancelled"
                     OrionActivityKind.TOOL -> event.type.replace('_', ' ').replaceFirstChar { it.uppercase() }
                 }
+                val toolName = Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(event.summary)?.groupValues?.get(1)
+                val startEvent = if (event.type == "tool_result" && toolName != null) {
+                    events.asSequence().filter { it.type == "tool" && it.status == "started" && it.createdAt <= event.createdAt }
+                        .filter { Regex("(?i)Tool:\\s*([a-z0-9_]+)").find(it.summary)?.groupValues?.get(1) == toolName }
+                        .maxByOrNull { it.createdAt }
+                } else null
+                val resolvedKind = if (event.type == "tool_result" && toolName != null) when {
+                    toolName.contains("browser") || toolName.contains("search") || toolName.contains("web") -> OrionActivityKind.RESEARCH
+                    toolName.contains("shell") || toolName.contains("python") || toolName.contains("file") || toolName.contains("code") -> OrionActivityKind.CODING
+                    else -> OrionActivityKind.TOOL
+                } else kind
+                val resolvedTitle = toolName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: title
                 val typed = OrionActivityEvent(
-                    eventId = event.id,
-                    taskId = event.sessionId,
-                    kind = kind,
-                    status = status,
-                    title = title,
-                    summary = event.summary,
-                    timestampMs = event.createdAt.coerceAtLeast(0L),
-                    evidence = emptyList()
+                    eventId = event.id, taskId = event.sessionId, kind = resolvedKind, status = status,
+                    title = resolvedTitle, summary = event.summary, timestampMs = event.createdAt.coerceAtLeast(0L),
+                    evidence = emptyList(), elapsedMs = startEvent?.let { (event.createdAt - it.createdAt).coerceAtLeast(0L) }
                 )
                 if (liveActivityEvents.none { it.eventId == typed.eventId }) {
                     liveActivityEvents.add(typed)
