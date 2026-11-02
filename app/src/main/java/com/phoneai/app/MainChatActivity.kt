@@ -2077,7 +2077,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     else -> OrionActivityKind.TOOL
                 } else kind
                 val resolvedTitle = toolName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() } ?: title
-                val evidenceText = Regex("(?i)\\\\| Evidence: (.+)$").find(event.summary)?.groupValues?.getOrNull(1).orEmpty()
+                val evidenceText = event.summary.substringAfter(" | Evidence:", "").trim()
                 val safeEvidence = evidenceText.takeIf { it.isNotBlank() }?.let { OrionEvidenceSanitizer.text(it, 480) }
                 val displaySummary = event.summary.substringBefore(" | Evidence:").take(420)
                 val typed = OrionActivityEvent(
