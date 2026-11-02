@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 /** What the agent uses to talk to the person. */
 interface AgentUi {
