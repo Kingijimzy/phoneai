@@ -1904,6 +1904,25 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             }
         }
         val isNote = kind == "note"
+        if (isNote) {
+            val activity = OrionActivityTimeline.fromLegacyNote(
+                taskId = "active-conversation",
+                note = text,
+                timestampMs = System.currentTimeMillis()
+            )
+            if (activity != null) {
+                val card = OrionLiveActivityCard(this, activity)
+                val cardParams = LinearLayout.LayoutParams(-1, -2).apply {
+                    setMargins(0, dp(3), 0, dp(5))
+                }
+                messages.addView(card, cardParams)
+                card.alpha = 0f
+                card.translationY = dp(6).toFloat()
+                card.animate().alpha(1f).translationY(0f).setDuration(180).start()
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                return
+            }
+        }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12), dp(if (isNote) 12 else 15), dp(if (isNote) 9 else 12))
