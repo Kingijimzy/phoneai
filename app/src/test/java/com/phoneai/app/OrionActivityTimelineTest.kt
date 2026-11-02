@@ -70,6 +70,9 @@ class OrionActivityTimelineTest {
         assertEquals(OrionActivityStatus.FAILED, browserFailed.status)
         val done = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:COMPLETE]\nVerified output", 40)!!
         assertEquals(OrionActivityStatus.SUCCEEDED, done.status)
+        val interrupted = OrionActivityTimeline.fromLegacyNote("task-1", "[TASK:INTERRUPTED]\nService interrupted", 45)!!
+        assertEquals(OrionActivityKind.INTERRUPTED, interrupted.kind)
+        assertEquals(OrionActivityStatus.INTERRUPTED, interrupted.status)
     }
 
     @Test fun unrelatedNotesAreNotPresentedAsExecutionEvidence() {
