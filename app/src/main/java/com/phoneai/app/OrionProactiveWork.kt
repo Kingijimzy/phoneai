@@ -51,14 +51,21 @@ internal object OrionProactivePolicy {
 internal object OrionProactiveWork {
     private const val UNIQUE_NAME = "orion_stage6_proactive_heartbeat"
 
-    /** Idempotent registration; KEEP preserves the existing periodic schedule. */
-    fun ensureScheduled(context: Context) {
+    /** Keep scheduling synchronized with the owner-controlled Core + Proactive switches. */
+    fun ensureScheduled(context: Context) = refresh(context)
+
+    fun refresh(context: Context) {
         runCatching {
+            val app = context.applicationContext
+            if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) {
+                WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_NAME)
+                return@runCatching
+            }
             val request = PeriodicWorkRequestBuilder<OrionProactiveWorker>(
                 OrionProactivePolicy.INTERVAL_MINUTES, TimeUnit.MINUTES,
                 OrionProactivePolicy.FLEX_MINUTES, TimeUnit.MINUTES
             ).addTag(UNIQUE_NAME).build()
-            WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
+            WorkManager.getInstance(app).enqueueUniquePeriodicWork(
                 UNIQUE_NAME, ExistingPeriodicWorkPolicy.KEEP, request
             )
         }.onFailure {
