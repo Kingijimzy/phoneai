@@ -75,6 +75,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var composeChatActive = false
     private var streamingMessageId: Long? = null
     private val streamingBuffer = StringBuilder()
+    private val liveActivityEvents = mutableStateListOf<OrionActivityEvent>()
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
@@ -1401,6 +1402,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             setContent {
                 OrionComposeChatScreen(
                     lines = composeLines,
+                    activityEvents = liveActivityEvents,
                     status = composeStatus.value,
                     chatTitle = composeChatTitle.value,
                     commandMode = composeCommandMode.value,
@@ -2028,18 +2030,58 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
 
     override fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {
         runOnUiThread {
-            events.forEach { event ->
-                val marker = when (event.type) {
-                    "approval" -> "[APPROVAL:${event.status.uppercase()}]"
-                    "tool" -> "[TOOL:${event.status.uppercase()}]"
-                    "tool_result" -> "[TOOL_RESULT:${event.status.uppercase()}]"
-                    else -> "[EVENT:${event.type.uppercase()}:${event.status.uppercase()}]"
+            events.sortedBy { it.createdAt }.forEach { event ->
+                val kind = when (event.type.lowercase()) {
+                    "thinking", "plan", "reflection" -> OrionActivityKind.THINKING
+                    "research", "browser", "web_search" -> OrionActivityKind.RESEARCH
+                    "coding", "code", "file", "shell" -> OrionActivityKind.CODING
+                    "delegation", "agent", "handoff", "subagent" -> OrionActivityKind.DELEGATION
+                    "approval" -> OrionActivityKind.APPROVAL
+                    "error", "tool_error" -> OrionActivityKind.ERROR
+                    "completion", "complete", "task_complete" -> OrionActivityKind.COMPLETION
+                    "interrupted" -> OrionActivityKind.INTERRUPTED
+                    "cancelled", "canceled" -> OrionActivityKind.CANCELLED
+                    "tool", "tool_result" -> OrionActivityKind.TOOL
+                    else -> OrionActivityKind.TOOL
                 }
-                val content = "$marker\n${event.summary}"
-                if (composeLines.none { it.kind == "note" && it.text == content }) {
-                    composeLines.add(OrionChatLine(event.id.hashCode().toLong(), "note", content))
+                val status = when (event.status.lowercase()) {
+                    "running", "active", "started", "in_progress" -> OrionActivityStatus.ACTIVE
+                    "waiting", "pending", "approval_required" -> OrionActivityStatus.WAITING
+                    "success", "succeeded", "complete", "completed", "ok" -> OrionActivityStatus.SUCCEEDED
+                    "failed", "error" -> OrionActivityStatus.FAILED
+                    "cancelled", "canceled" -> OrionActivityStatus.CANCELLED
+                    "interrupted", "paused" -> OrionActivityStatus.INTERRUPTED
+                    else -> if (kind == OrionActivityKind.APPROVAL) OrionActivityStatus.WAITING else OrionActivityStatus.ACTIVE
+                }
+                val title = when (kind) {
+                    OrionActivityKind.THINKING -> "Planning next step"
+                    OrionActivityKind.RESEARCH -> "Research activity"
+                    OrionActivityKind.CODING -> "Code or terminal activity"
+                    OrionActivityKind.DELEGATION -> "Agent hand-off"
+                    OrionActivityKind.APPROVAL -> "Approval required"
+                    OrionActivityKind.ERROR -> "Execution error"
+                    OrionActivityKind.COMPLETION -> "Task completed"
+                    OrionActivityKind.INTERRUPTED -> "Task interrupted"
+                    OrionActivityKind.CANCELLED -> "Task cancelled"
+                    OrionActivityKind.TOOL -> event.type.replace('_', ' ').replaceFirstChar { it.uppercase() }
+                }
+                val typed = OrionActivityEvent(
+                    eventId = event.id,
+                    taskId = event.sessionId,
+                    kind = kind,
+                    status = status,
+                    title = title,
+                    summary = event.summary,
+                    timestampMs = event.createdAt.coerceAtLeast(0L),
+                    evidence = emptyList()
+                )
+                if (liveActivityEvents.none { it.eventId == typed.eventId }) {
+                    liveActivityEvents.add(typed)
                 }
             }
+            val retained = liveActivityEvents.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId }).takeLast(300)
+            liveActivityEvents.clear()
+            liveActivityEvents.addAll(retained)
         }
     }
 
