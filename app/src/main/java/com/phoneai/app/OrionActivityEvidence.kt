@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import org.json.JSONObject
+
 /**
  * Safe, bounded evidence attached to activity cards. Raw tool arguments, environment variables,
  * cookies, headers, credentials and full terminal output must never enter this model.
@@ -37,6 +39,45 @@ internal sealed class OrionActivityEvidence {
         val objective: String,
         val status: String
     ) : OrionActivityEvidence()
+
+    fun toJson(): JSONObject {
+        val safe = OrionEvidenceSanitizer.evidence(this)
+        return when (safe) {
+            is Browser -> JSONObject().put("type", "browser").put("title", safe.title)
+                .put("url", safe.url).put("excerpt", safe.excerpt ?: JSONObject.NULL)
+            is Terminal -> JSONObject().put("type", "terminal").put("session_id", safe.sessionId)
+                .put("command_label", safe.commandLabel).put("output_tail", safe.outputTail)
+                .put("exit_code", safe.exitCode ?: JSONObject.NULL)
+            is File -> JSONObject().put("type", "file").put("display_path", safe.displayPath)
+                .put("byte_count", safe.byteCount ?: JSONObject.NULL).put("operation", safe.operation)
+            is CodeDiff -> JSONObject().put("type", "code_diff").put("file_label", safe.fileLabel)
+                .put("additions", safe.additions).put("deletions", safe.deletions).put("summary", safe.summary)
+            is AgentHandoff -> JSONObject().put("type", "agent_handoff").put("agent_id", safe.agentId)
+                .put("parent_task_id", safe.parentTaskId ?: JSONObject.NULL).put("objective", safe.objective)
+                .put("status", safe.status)
+        }
+    }
+
+    companion object {
+        fun fromJson(raw: String?): OrionActivityEvidence? {
+            if (raw.isNullOrBlank() || raw.length > 2_000) return null
+            val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+            val item = when (json.optString("type")) {
+                "browser" -> Browser(json.optString("title"), json.optString("url"), json.optString("excerpt").takeIf { it.isNotBlank() && it != "null" })
+                "terminal" -> Terminal(json.optString("session_id"), json.optString("command_label"),
+                    json.optString("output_tail"), if (json.has("exit_code") && !json.isNull("exit_code")) json.optInt("exit_code") else null)
+                "file" -> File(json.optString("display_path"),
+                    if (json.has("byte_count") && !json.isNull("byte_count")) json.optLong("byte_count") else null,
+                    json.optString("operation"))
+                "code_diff" -> CodeDiff(json.optString("file_label"), json.optInt("additions"), json.optInt("deletions"), json.optString("summary"))
+                "agent_handoff" -> AgentHandoff(json.optString("agent_id"),
+                    json.optString("parent_task_id").takeIf { it.isNotBlank() && it != "null" },
+                    json.optString("objective"), json.optString("status"))
+                else -> null
+            }
+            return item?.let { OrionEvidenceSanitizer.evidence(it) }
+        }
+    }
 }
 
 /** Redacts common credential formats and enforces strict display bounds before persistence/rendering. */
