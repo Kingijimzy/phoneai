@@ -48,7 +48,9 @@ internal object ChatGroups {
         Group("Start", listOf(
             Chip("What can you do?", action = "caps"),
             Chip("Setup check", action = "health"),
-            Chip("Tour", action = "tour")
+            Chip("Tour", action = "tour"),
+            Chip("AI provider", action = "ai"),
+            Chip("Memory & files", action = "memory")
         )),
         Group("Market", listOf(
             Chip("Find setups", "Find me the best trade setups on my watchlist right now and judge them against my strategy."),
