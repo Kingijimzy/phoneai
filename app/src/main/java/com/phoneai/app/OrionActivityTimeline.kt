@@ -19,7 +19,8 @@ internal data class OrionActivityEvent(
     val timestampMs: Long,
     val agentId: String? = null,
     val parentTaskId: String? = null,
-    val evidence: List<String> = emptyList()
+    val evidence: List<String> = emptyList(),
+    val elapsedMs: Long? = null
 ) {
     init {
         require(eventId.isNotBlank())
