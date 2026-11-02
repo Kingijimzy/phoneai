@@ -15,11 +15,12 @@ class OrionEvidenceSanitizerTest {
     }
 
     @Test fun browserEvidenceAllowsHttpAndHttpsWithoutCredentials() {
-        val https = OrionEvidenceSanitizer.evidence(OrionActivityEvidence.Browser("Docs", "https://example.com/a"))
+        val https = OrionEvidenceSanitizer.evidence(OrionActivityEvidence.Browser("Docs", "https://example.com/a?access_token=secret#fragment"))
             as OrionActivityEvidence.Browser
         val credentials = OrionEvidenceSanitizer.evidence(OrionActivityEvidence.Browser("Bad", "https://user:pass@example.com"))
             as OrionActivityEvidence.Browser
         assertEquals("https://example.com/a", https.url)
+        assertTrue(!https.url.contains("secret"))
         assertEquals("", credentials.url)
     }
 
