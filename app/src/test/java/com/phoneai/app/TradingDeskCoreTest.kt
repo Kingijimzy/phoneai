@@ -18,6 +18,15 @@ class TradingDeskCoreTest {
         assertEquals(10.0, v.riskUsd, 1e-9); assertEquals(0.1, v.riskPct, 1e-9); assertEquals(2.0, v.rewardToRisk!!, 1e-9)
     }
 
+    @Test fun nonFiniteAndInvalidSideInputsAreAlwaysBlocked() {
+        assertFalse(TradingRisk.evaluate(long(Double.NaN), acct, limits, now).allowed)
+        assertFalse(TradingRisk.evaluate(long(500.0, entry = Double.POSITIVE_INFINITY), acct, limits, now).allowed)
+        assertFalse(TradingRisk.evaluate(long(500.0, target = Double.NaN), acct, limits, now).allowed)
+        assertFalse(TradingRisk.evaluate(Order("BTCUSDT", "hold", 500.0, 100.0, 99.0, 102.0), acct, limits, now).allowed)
+        assertFalse(TradingRisk.evaluate(long(500.0), acct.copy(equity = Double.NaN), limits, now).allowed)
+        assertEquals(0.0, TradingRisk.sizeForRisk(10_000.0, Double.POSITIVE_INFINITY, 100.0, 90.0), 0.0)
+    }
+
     @Test fun missingOrWrongSideStopIsBlocked() {
         assertFalse(TradingRisk.evaluate(long(500.0, stop = 100.0), acct, limits, now).allowed)
         assertFalse(TradingRisk.evaluate(long(500.0, stop = 101.0), acct, limits, now).allowed)
