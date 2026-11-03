@@ -164,7 +164,7 @@ internal class LinuxRuntimeInstaller(
         // A normal non-zero apk exit is not necessarily corruption (for example, a package may
         // not exist). Keep recovery armed only for timeout or process-killed exit codes.
         val packageRecoveryRequired = packageMutation &&
-            (result.timedOut || result.exitCode in setOf(9, 137, 143))
+            (result.cancelled || result.timedOut || result.exitCode in setOf(9, 137, 143))
         if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
         return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."
         else if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
