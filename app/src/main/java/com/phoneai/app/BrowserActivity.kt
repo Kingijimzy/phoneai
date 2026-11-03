@@ -338,8 +338,16 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(webContainer, LinearLayout.LayoutParams(-1, 0, 1f))
 
         setContentView(root)
+        val browserPrefs = getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE)
         val restoredUrls = savedInstanceState?.getStringArrayList("orion_browser_tab_urls")
-        val restoredIndex = savedInstanceState?.getInt("orion_browser_active_tab") ?: 0
+            ?: browserPrefs.getString("tab_urls", null)?.let { raw ->
+                runCatching {
+                    val array = org.json.JSONArray(raw)
+                    ArrayList<String>().apply { for (i in 0 until minOf(array.length(), 8)) add(array.optString(i)) }
+                }.getOrNull()
+            }
+        val restoredIndex = savedInstanceState?.getInt("orion_browser_active_tab")
+            ?: browserPrefs.getInt("active_tab", 0)
         if (!restoredUrls.isNullOrEmpty()) {
             restoredUrls.take(8).forEachIndexed { index, url -> createTab(url, index == restoredIndex.coerceIn(0, restoredUrls.lastIndex)) }
         } else {
@@ -349,9 +357,22 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         updateControls()
     }
 
+    private fun persistBrowserSession() {
+        if (browserTabs.isEmpty()) return
+        val urls = browserTabs.map { it.url ?: "https://duckduckgo.com/" }
+            .filter { runCatching { Uri.parse(it).scheme == "https" }.getOrDefault(false) }
+            .take(8)
+        getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE).edit()
+            .putString("tab_urls", org.json.JSONArray(urls).toString())
+            .putInt("active_tab", activeTabIndex.coerceIn(0, maxOf(0, urls.lastIndex)))
+            .putLong("updated_at", System.currentTimeMillis())
+            .apply()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putStringArrayList("orion_browser_tab_urls", ArrayList(browserTabs.map { it.url ?: "https://duckduckgo.com/" }))
         outState.putInt("orion_browser_active_tab", activeTabIndex)
+        persistBrowserSession()
         super.onSaveInstanceState(outState)
     }
 
@@ -391,6 +412,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                         updateControls()
                     }
                     renderTabs()
+                    persistBrowserSession()
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
@@ -482,6 +504,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (select || browserTabs.size == 1) selectTab(browserTabs.lastIndex)
         tab.loadUrl(validatedBrowserUrl(url))
         renderTabs()
+        persistBrowserSession()
     }
 
     private fun validatedBrowserUrl(input: String): String {
@@ -507,6 +530,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         address.setText(web.url.orEmpty())
         renderTabs()
         updateControls()
+        persistBrowserSession()
     }
 
     private fun closeTab(index: Int) {
@@ -523,6 +547,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (index < activeTabIndex) activeTabIndex--
         else if (index == activeTabIndex) activeTabIndex = minOf(index, browserTabs.lastIndex)
         selectTab(activeTabIndex)
+        persistBrowserSession()
     }
 
     private fun renderTabs() {
@@ -595,6 +620,8 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         web.loadUrl(candidate)
         renderTabs()
         updateControls()
+        persistBrowserSession()
+        persistBrowserSession()
     }
 
     override fun onBackPressed() {
@@ -678,6 +705,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             tab.destroy()
         }
         browserTabs.clear()
+        persistBrowserSession()
         try { CookieManager.getInstance().flush() } catch (_: Exception) { }
         super.onDestroy()
     }
