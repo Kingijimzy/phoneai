@@ -65,7 +65,11 @@ internal object TradingDesk {
         val now = System.currentTimeMillis()
         val blackout = MarketCalendar.inBlackout(events(now), now, MarketCalendar.currenciesFor(symbol))
         val acct = TradingRisk.Account(
-            equity = equity, dayStartEquity = dayStartEquity(c, equity, now, account), openPositions = 0,
+            equity = equity,
+            // Fetch the live non-zero position count before approving another entry. If Bybit
+            // cannot provide it, the caller fails closed and no order is submitted.
+            openPositions = Bybit.positionList(c).length(),
+            dayStartEquity = dayStartEquity(c, equity, now, account),
             tradesToday = tradesToday(c, now), consecutiveLosses = sp(c).getInt("loss_streak", 0), lastLossAtMillis = sp(c).getLong("last_loss", 0L)
         )
         val v = TradingRisk.evaluate(TradingRisk.Order(symbol, side, usd, entry, stop, target), acct, limits(c), now, killSwitch(c), blackout)
