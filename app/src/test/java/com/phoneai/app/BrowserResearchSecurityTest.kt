@@ -12,6 +12,11 @@ class BrowserResearchSecurityTest {
         assertTrue(result.error.orEmpty().contains("HTTPS"))
     }
 
+    @Test fun rejectsCredentialBearingUrlsBeforeOpeningAnyConnection() {
+        val result = BrowserResearch.fetch("https://user:secret@example.com/")
+        assertFalse(result.isSuccess)
+    }
+
     @Test fun rejectsNonWebSchemesBeforeOpeningAnyConnection() {
         val result = BrowserResearch.fetch("file:///etc/passwd")
         assertFalse(result.isSuccess)
