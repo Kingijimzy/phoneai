@@ -242,7 +242,7 @@ internal object ToolRegistry {
         Regex("(?i)\\b(code|coding|program|python|script|calculator|file|folder|save|download|build|compile|test|apk|linux|termux|shell|extension|skill)\\b") to setOf(
             "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run",
             "extension_disable", "find_files", "open_file", "save_file", "termux_command", "shell",
-            "python_exec", "workspace_write", "workspace_read", "skills_list"
+            "python_exec", "workspace_list", "workspace_write", "workspace_read", "skills_list"
         ),
         Regex("(?i)\\b(message|send|telegram|sms|email|gmail|call|contact|notification|publish|post|social|communication)\\b") to setOf(
             "resolve_contact", "telegram_status", "telegram_inbox", "telegram_send", "dial", "sms",
