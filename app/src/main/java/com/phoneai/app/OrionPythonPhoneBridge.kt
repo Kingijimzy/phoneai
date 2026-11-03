@@ -187,7 +187,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
         internal fun bootstrapSource(): String {
             val pythonMethods = registeredMethods.joinToString(", ") { "\"$it\"" }
             return """
-import os, json, urllib.request, urllib.error
+import os, json, sys, urllib.request, urllib.error
 class _OrionPhone:
     _allowed = {$pythonMethods}
     def __getattr__(self, name):
@@ -214,6 +214,20 @@ class _OrionPhone:
             return result.get("result")
         return call
 phone = _OrionPhone()
+def _orion_audit(event, args):
+    if event == "socket.getaddrinfo":
+        host = args[0] if args else None
+        if host not in ("127.0.0.1", "::1", "localhost"):
+            raise PermissionError("Use the owner-approved phone network facade.")
+    elif event == "socket.connect":
+        address = args[1] if len(args) > 1 else None
+        host = address[0] if isinstance(address, tuple) and address else None
+        port = address[1] if isinstance(address, tuple) and len(address) > 1 else None
+        if host not in ("127.0.0.1", "::1") or int(port or -1) != int(os.environ["ORION_PHONE_API_PORT"]):
+            raise PermissionError("Use phone.http_get/http_post/phone.ws_* for network access.")
+    elif event in ("socket.bind", "subprocess.Popen", "os.system", "os.exec", "os.spawn", "os.fork", "ctypes.dlopen"):
+        raise PermissionError("This Python runtime does not expose raw sockets, subprocesses or native loading.")
+sys.addaudithook(_orion_audit)
 with open("/workspace/orion_main.py", "rb") as source_file:
     exec(compile(source_file.read(), "/workspace/orion_main.py", "exec"),
          {"__name__": "__main__", "phone": phone})
