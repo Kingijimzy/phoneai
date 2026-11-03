@@ -141,8 +141,8 @@ internal class OrionPythonCapabilityExecutor(
     }
 
     companion object {
-        /** The direct Python sandbox is capability-free; execution itself needs no confirmation. */
-        fun requiresExplicitApproval(tool: String): Boolean = false
+        /** PRoot runs under the app UID; direct CPython is trusted code until OS-level isolation exists. */
+        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
 
         private val supportedTools = setOf(
             "python_exec", "extension_list", "extension_create", "extension_test",
