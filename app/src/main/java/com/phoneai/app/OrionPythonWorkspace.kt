@@ -55,6 +55,36 @@ internal class OrionPythonWorkspace(context: Context) {
 
     @Synchronized fun rootExists(): Boolean = root.exists()
 
+    /**
+     * Measures the actual guest-visible workspace without following symbolic links.
+     * This detects quota overrun from direct CPython writes; it is deliberately not described
+     * as a hard in-flight quota because PRoot has no filesystem quota boundary.
+     */
+    @Synchronized fun usageBytes(): Long? {
+        if (rootStatus() != RootStatus.READY) return null
+        var total = 0L
+        val stack = ArrayDeque<File>()
+        stack.add(root)
+        while (stack.isNotEmpty()) {
+            val current = stack.removeLast()
+            val children = current.listFiles() ?: return null
+            for (child in children) {
+                if (java.nio.file.Files.isSymbolicLink(child.toPath())) return null
+                if (child.isDirectory) stack.add(child)
+                else if (child.isFile) {
+                    total += child.length()
+                    if (total > MAX_TOTAL_BYTES) return total
+                } else return null
+            }
+        }
+        return total
+    }
+
+    @Synchronized fun quotaStatus(): String {
+        val used = usageBytes() ?: return "unsafe"
+        return if (used <= MAX_TOTAL_BYTES) "ok" else "exceeded"
+    }
+
     @Synchronized fun list(): String {
         ensureRoot()
         return root.walkTopDown().filter { it != root && it.isFile && !it.isHidden }
