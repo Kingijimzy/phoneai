@@ -244,6 +244,8 @@ class AgentChatActivity : Activity() {
             "wake" -> toggleWake()
             "caps" -> addBubble(false, "Here is what I can do for you:\n" + DeskCapabilities.items.joinToString("\n") { "- ${it.name}: ${it.does}" })
             "tour" -> addBubble(false, DeskTour.text)
+            "ai" -> startActivity(Intent(this, SettingsActivity::class.java))
+            "memory" -> startActivity(Intent(this, MemoryActivity::class.java))
             "health" -> {
                 val wait = addBubble(false, "Checking your setup…")
                 Thread {
@@ -497,7 +499,7 @@ class AgentChatActivity : Activity() {
 
     private fun addBubble(user: Boolean, text: String): TextView {
         val bubble = TextView(this).apply {
-            this.text = if (user) text else Markdown.render(text); textSize = 15f
+            this.text = if (user) text else Markdown.render(MarkdownTables.flatten(text)); textSize = 15f
             if (!user) movementMethod = LinkMovementMethod.getInstance()
             setTextColor(if (user) Theme.ON_ACCENT else Theme.TEXT)
             setTextIsSelectable(true)
