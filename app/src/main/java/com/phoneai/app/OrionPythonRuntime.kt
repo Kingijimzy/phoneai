@@ -56,11 +56,19 @@ internal object OrionPythonRuntime {
             if (!confirm("Install CPython 3, pip and the Alpine build tools into Orion's persistent Linux runtime? This downloads packages from Alpine repositories.")) {
                 return "Python script saved. CPython is not installed in Alpine; approve package installation or install python3 py3-pip from Orion Terminal."
             }
+            // The acceptance workload requires full CPython and its standard library only.
+            // py3-pip and build-base are unnecessary, large dependency trees on a 4–8 GB phone
+            // and were the source of avoidable package-install failures. apk add refreshes indexes
+            // as needed; do not run a separate apk update that doubles downloads.
             val install = installer.execute(
-                manifest, "apk update && apk add --no-cache python3 py3-pip build-base",
+                "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
                 180_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
-            if (!install.startsWith("exit=0")) return "error: CPython package installation failed.\n${install.take(MAX_OUTPUT_CHARS)}"
+            if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\\n${install.take(MAX_OUTPUT_CHARS)}"
+            val verified = installer.execute(manifest, "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'", 12_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
+            if (!verified.startsWith("exit=0") || !verified.contains("Python 3.")) {
+                return "error: apk reported success but CPython verification failed; execution was not started.\\n${verified.take(MAX_OUTPUT_CHARS)}"
+            }
         }
 
         // CPython can write directly through the bind mount, bypassing OrionPythonWorkspace.write().
