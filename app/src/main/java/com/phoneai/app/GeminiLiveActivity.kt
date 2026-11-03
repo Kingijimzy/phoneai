@@ -28,6 +28,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: GeminiLiveSession? = null
+    @Volatile private var liveConversationId: String? = null
     private var attachedService: PhoneAiService? = null
     @Volatile private var active = false
     @Volatile private var liveConnected = false
@@ -229,6 +230,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             finish()
             return
         }
+        liveConversationId = ChatHistoryStore.activeSessionId(this)
         active = true
         liveConnected = false
         microphoneEnabled = true
