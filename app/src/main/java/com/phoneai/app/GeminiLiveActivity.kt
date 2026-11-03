@@ -358,11 +358,12 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                         )
                     }
             }
-            val transcript = ChatHistoryStore.load(this).toMutableList()
-            val turn = (if (fromModel) "ai" else "me") to clean
-            if (transcript.lastOrNull() != turn) {
-                transcript += turn
-                ChatHistoryStore.save(this, transcript)
+            // Live sessions stay attached to the chat that was active when the call began.
+            // A chat switch during the call must not redirect this transcript into another chat.
+            liveConversationId?.let { sessionId ->
+                ChatHistoryStore.appendTurnToSession(
+                    this, sessionId, if (fromModel) "ai" else "me", clean
+                )
             }
             if (OrionSensorConsent.read(this, OrionSensorScope.MICROPHONE).active()) {
                 OrionMultimodalEvidenceStore.record(
