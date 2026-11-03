@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, feature/phoneai-integrated-character-agent]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 # Cancel stale builds on the same ref so every commit does not queue another full
