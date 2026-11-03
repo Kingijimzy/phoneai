@@ -176,7 +176,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
     companion object {
         private const val MAX_REQUEST_BYTES = 8 * 1024 * 1024
         private const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-        internal val registeredMethods = linkedSetOf(
+        internal val registeredMethods: Set<String> = setOf(
             "battery", "location", "notifications", "contacts",
             "accessibility_open_settings", "accessibility_status", "accessibility_screen",
             "ui_tap_text", "ui_tap", "ui_swipe", "fs_list", "fs_read", "fs_write", "shell",
