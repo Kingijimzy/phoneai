@@ -240,4 +240,27 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().reason.contains("disabled"))
     }
 
+
+    @Test fun notificationActionsRequireNotificationAccess() {
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("notification_action", ToolAccess.WRITE)),
+            setOf("messaging"),
+            termuxReady = true,
+            permissionStates = mapOf("notification_access" to OrionCapabilityDiscovery.PermissionState.MISSING)
+        )
+        assertFalse(snapshot.tools.single().available)
+        assertTrue(snapshot.tools.single().reason.contains("notification_access"))
+    }
+
+    @Test fun flashlightDoesNotRequireCameraPermission() {
+        val pack = AgentPolicy.packForTool("flashlight") ?: "phone_control"
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("flashlight", ToolAccess.WRITE)),
+            setOf(pack),
+            termuxReady = true,
+            permissionStates = mapOf("camera" to OrionCapabilityDiscovery.PermissionState.MISSING)
+        )
+        assertTrue(snapshot.tools.single().available)
+    }
+
 }
