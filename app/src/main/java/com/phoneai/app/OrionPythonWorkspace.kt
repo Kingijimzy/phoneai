@@ -12,6 +12,7 @@ internal class OrionPythonWorkspace(context: Context) {
     companion object {
         const val MAX_FILE_BYTES = 2 * 1024 * 1024
         const val MAX_TOTAL_BYTES = 20L * 1024 * 1024
+        private const val MAX_ENTRIES = 2048
         private val NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,179}$")
     }
     enum class RootStatus { MISSING, READY, UNSAFE }
@@ -63,12 +64,15 @@ internal class OrionPythonWorkspace(context: Context) {
     @Synchronized fun usageBytes(): Long? {
         if (rootStatus() != RootStatus.READY) return null
         var total = 0L
+        var entries = 0
         val stack = ArrayDeque<File>()
         stack.add(root)
         while (stack.isNotEmpty()) {
             val current = stack.removeLast()
             val children = current.listFiles() ?: return null
             for (child in children) {
+                entries++
+                if (entries > MAX_ENTRIES) return MAX_TOTAL_BYTES + 1L
                 if (java.nio.file.Files.isSymbolicLink(child.toPath())) return null
                 if (child.isDirectory) stack.add(child)
                 else if (child.isFile) {
