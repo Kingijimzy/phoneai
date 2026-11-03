@@ -170,3 +170,27 @@ The candidate contains the typed activity evidence model, timeline projection, c
 5. Do not merge this candidate to `main` until the exact-head workflow passes, source/security review is complete, and device acceptance is signed off by the owner.
 
 Stage 5 remains on hold until these release blockers are closed.
+
+## Latest exact-head verification — 2026-11-03 01:10 UTC
+
+This section supersedes the earlier pending status above.
+
+| Field | Value |
+|---|---|
+| Candidate | PR #166 |
+| Exact tested SHA | `ea687bcbe7a0d24dd0442bbebad49b15a4ddf2ba` |
+| GitHub Actions | [Run 41557383316](https://github.com/Kingijimzy/phoneai/actions/runs/41557383316) — SUCCESS |
+| Android unit tests | PASS |
+| Restricted Python sandbox tests | PASS |
+| PRoot build and ABI staging | PASS |
+| APK package/signature validation | PASS |
+| APK artifact | [PhoneAI-apk, artifact 13195510502](https://github.com/Kingijimzy/phoneai/actions/runs/41557383316/artifacts/13195510502) |
+| Artifact size | 57,361,096 bytes |
+| Artifact SHA-256 | `7c27e4244d61c8cc88956382f00ca2191ce96a77157ac6be78d7dc3b816f6710` |
+| GitHub Release | Not published; workflow release step was skipped |
+| Physical device acceptance | NOT RUN |
+| Merge decision | HOLD |
+
+The exact-head run includes the additional TradingRisk validation and regression tests committed before this SHA. This confirms source-level regression coverage and APK production by CI; it does not prove the app's live exchange, network, voice, accessibility, lifecycle, or provider journeys work on a physical device.
+
+The artifact is debug-signed and is not a production release. Preserve the candidate branch and do not merge until the network-security review, complete diff review, release-signing plan, and owner-run physical-device acceptance are complete.
