@@ -367,7 +367,10 @@ internal object SoulEngineState {
             if (s.goal.isNotBlank()) add("current goal: " + s.goal)
             s.proposals.filter { it.status == ProposalStatus.ACCEPTED || it.status == ProposalStatus.EDITED }
                 .forEach { add("accepted ${it.kind.name.lowercase()} hint: ${it.title}; tools=${it.allowedTools.joinToString()}") }
-            s.lessons.forEach { add("lesson (${it.outcome}): ${it.summary}") }
+            // Generated/observed lessons are learning records, not trusted prompt context.
+            // Only a nudge explicitly saved by the owner may cross this retrieval boundary.
+            s.lessons.filter { it.outcome == "user_saved_memory" }
+                .forEach { add("owner-approved lesson: ${it.summary}") }
         }
         entries.map { entry ->
             val words = entry.lowercase(Locale.ROOT).split(Regex("[^a-z0-9]+")).filter { it.length >= 3 }.toSet()
