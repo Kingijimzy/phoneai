@@ -357,11 +357,35 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         updateControls()
     }
 
+    /**
+     * Persist navigation continuity without persisting URL-carried credentials.
+     * OAuth codes, access tokens, signed query values and fragments must not be
+     * copied into app preferences or saved-instance state.
+     */
+    private fun restorableSessionUrl(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val uri = Uri.parse(raw)
+            if (uri.scheme != "https" || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) return null
+            val sensitiveKeys = setOf(
+                "token", "access_token", "refresh_token", "id_token", "code",
+                "authorization", "auth", "password", "passwd", "secret", "api_key",
+                "apikey", "client_secret", "signature", "sig", "session", "sessionid"
+            )
+            val builder = uri.buildUpon().fragment(null).clearQuery()
+            for (name in uri.queryParameterNames) {
+                if (name.lowercase() !in sensitiveKeys) {
+                    for (value in uri.getQueryParameters(name)) builder.appendQueryParameter(name, value)
+                }
+            }
+            builder.build().toString()
+        } catch (_: Exception) { null }
+    }
+
     private fun persistBrowserSession() {
         if (browserTabs.isEmpty()) return
-        val urls = browserTabs.map { it.url ?: "https://duckduckgo.com/" }
-            .filter { runCatching { Uri.parse(it).scheme == "https" }.getOrDefault(false) }
-            .take(8)
+        val urls = browserTabs.mapNotNull { restorableSessionUrl(it.url) }.take(8)
+        if (urls.isEmpty()) return
         getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE).edit()
             .putString("tab_urls", org.json.JSONArray(urls).toString())
             .putInt("active_tab", activeTabIndex.coerceIn(0, maxOf(0, urls.lastIndex)))
@@ -370,7 +394,10 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putStringArrayList("orion_browser_tab_urls", ArrayList(browserTabs.map { it.url ?: "https://duckduckgo.com/" }))
+        outState.putStringArrayList(
+            "orion_browser_tab_urls",
+            ArrayList(browserTabs.mapNotNull { restorableSessionUrl(it.url) })
+        )
         outState.putInt("orion_browser_active_tab", activeTabIndex)
         persistBrowserSession()
         super.onSaveInstanceState(outState)
