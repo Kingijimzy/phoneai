@@ -44,8 +44,11 @@ internal object OrionRecoveryPlanner {
                 text.contains("invalid") && (tool.contains("click") || tool == "type") ->
                 Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "The target or arguments did not resolve; refresh screen evidence and select a grounded target instead of reusing stale arguments.")
             text.contains("timeout") || text.contains("temporarily unavailable") ||
-                text.contains("rate limit") || text.contains("429") ->
-                Guidance(Strategy.ASK_USER_TO_RESOLVE, "A transient external failure occurred; avoid rapid retries and report the blocker or wait for an explicit continuation.")
+                text.contains("rate limit") || text.contains("429") ||
+                text.contains("empty response") || text.contains("empty reply") ||
+                text.contains("http 5") || text.contains("error 5") ||
+                text.contains("temporar") && text.contains("409") ->
+                Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "A transient provider or network failure occurred; preserve the checkpoint, rotate to an eligible provider or alternate read-only source, and retry within the shared request budget. If all providers are cooling down, pause resumably instead of abandoning the goal.")
             text.contains("sensitive") || text.contains("safety") || text.contains("refuses") ||
                 text.contains("blocked by safety") || text.contains("consequential") ->
                 Guidance(Strategy.STOP_AND_REPORT, "A safety boundary blocked the action; do not search for a bypass.")

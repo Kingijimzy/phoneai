@@ -1,14 +1,8 @@
 package com.phoneai.app
 
 /**
- * Cross-provider fallback is deliberately rate-limit-only.
- *
- * Keep the selected provider as the primary. Move to a backup only when that provider
- * explicitly returns HTTP 429 and automatic switching is enabled. Timeouts, empty replies,
- * unsupported models, invalid credentials, network failures, and billing errors must be
- * surfaced to the user rather than silently spending another provider's quota.
- *
- * The caller filters provider eligibility and the shared command request budget bounds attempts.
+ * Cross-provider fallback for transient provider failures. Authentication, billing, offline,
+ * cancellation, explicit user stops, and exhausted request budgets must not trigger rotation.
  */
 internal object ProviderFallbackPolicy {
     /** Maximum backup providers considered after the selected primary. */
@@ -24,15 +18,29 @@ internal object ProviderFallbackPolicy {
             message.contains("invalid api key") ||
             message.contains("unauthorized") ||
             message.contains("authentication") ||
+            message.contains("billing") ||
+            message.contains("out of credit") ||
             message.contains("cannot connect") ||
             message.contains("check internet") ||
+            message.contains("unknownhost") ||
             message.contains("sockettimeout") ||
+            message.contains("network unavailable") ||
             message.contains("reached orion's 15-request budget") ||
             message.contains("paid-provider use is off") ||
             message.contains("blocked the request")) return false
 
-        // Do not infer permission to rotate from message text. Only an explicit HTTP 429
-        // response from the current provider permits a backup attempt.
-        return error is AiException && error.httpStatus == 429
+        // A parsed HTTP status takes precedence; only known transient statuses rotate.
+        // Without a parsed status, use a narrow message allowlist for timeout/empty replies.
+        if (error is AiException && error.httpStatus != null) {
+            val status = error.httpStatus
+            return status == 429 || status == 408 || status == 425 ||
+                status == 500 || status == 502 || status == 503 || status == 504 ||
+                (status == 409 && (message.contains("temporar") ||
+                    message.contains("conflict") || message.contains("overload") ||
+                    message.contains("try again")))
+        }
+        val transient = listOf("timeout", "timed out", "empty response", "empty reply",
+            "temporarily unavailable", "overloaded", "try again", "connection reset")
+        return transient.any { message.contains(it) }
     }
 }

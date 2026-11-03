@@ -32,7 +32,7 @@ object AgentPolicy {
      * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
      * lives in orion_core) and wrongly tells the user the feature does not exist. Risky packs stay opt-in.
      */
-    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research")
+    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research", "phone_control")
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
