@@ -6,15 +6,15 @@ Stage 7 is a release gate, not another autonomous feature. It separates evidence
 
 ### A. Source and automated checks
 - [ ] Verify the tested commit SHA is the exact pull-request head.
-- [ ] Android unit tests pass, including Stage 3 memory nudges, Stage 4 scheduler, Stage 5 probe/compose, and Stage 6 subagents.
+- [ ] Android unit tests pass, including Stage 3 memory nudges, Stage 4 scheduler, and Stage 6 subagents. Stage 5 remains on hold and is not a release prerequisite.
 - [ ] Bundled Python policy tests pass.
 - [ ] Debug APK builds successfully.
 - [ ] APK package/application ID, ARM64 ABI, and signing certificate are validated by CI.
 - [ ] No test is skipped or silently converted to success to hide a failure.
 - [ ] Review the complete workflow log for warnings or skipped verification steps.
 
-### B. Device acceptance — Redmi A3 Pro
-Use the APK artifact produced by the same successful workflow run. Install it over the existing app only when Android reports the signing key is compatible. If Android reports a signature conflict, stop and investigate; do not tell the user to uninstall and lose app data as a first response.
+### B. Device acceptance — POCO F3 / Snapdragon 870 / Android 13
+Use the APK artifact produced by the same successful workflow run. Confirm the device is the POCO F3 / Snapdragon 870 / Android 13 (or update this record if the test device changed). Install it over the existing app only when Android reports the signing key is compatible. If Android reports a signature conflict, stop and investigate; do not tell the user to uninstall and lose app data as a first response.
 
 Record Android version, app version, commit SHA, result (PASS/FAIL/BLOCKED), and a short sanitized note for each check.
 
