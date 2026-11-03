@@ -20,6 +20,13 @@ import kotlin.math.sin
  * their eyes, think while a reply loads, listen while you talk, talk with their mouth, and react to wins, losses and alerts.
  * Animation stops when the system animation scale is off. Tap to switch look.
  */
+internal fun companionActivityForChatStatus(status: String): CompanionView.Activity = when (status.trim().lowercase()) {
+    "listening" -> CompanionView.Activity.LISTENING
+    "speaking" -> CompanionView.Activity.SPEAKING
+    "thinking", "working", "needs approval", "needs_approval", "acting", "researching" -> CompanionView.Activity.THINKING
+    else -> CompanionView.Activity.IDLE
+}
+
 internal class CompanionView(context: Context) : View(context) {
     enum class Activity { IDLE, THINKING, LISTENING, SPEAKING }
 

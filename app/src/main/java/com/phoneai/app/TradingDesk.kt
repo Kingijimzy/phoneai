@@ -54,12 +54,22 @@ internal object TradingDesk {
         return cal.second
     }
 
+    /** What is already loaded; never touches the network, so screens can paint instantly. */
+    fun cachedEvents(): List<MarketCalendar.Event> = cal.second
+
+    /** Loads the calendar in the foreground of whatever thread calls it. Call from a background thread. */
+    fun warmCalendar() { try { events() } catch (_: Exception) { } }
+
     /** The gate every real order passes before the approval prompt. Returns null when allowed, else the reason text. */
     fun gateOrder(c: Context, side: String, symbol: String, usd: Double, entry: Double, stop: Double, target: Double?, equity: Double, account: String = "bybit"): String? {
         val now = System.currentTimeMillis()
         val blackout = MarketCalendar.inBlackout(events(now), now, MarketCalendar.currenciesFor(symbol))
         val acct = TradingRisk.Account(
-            equity = equity, dayStartEquity = dayStartEquity(c, equity, now, account), openPositions = 0,
+            equity = equity,
+            // Fetch the live non-zero position count before approving another entry. If Bybit
+            // cannot provide it, the caller fails closed and no order is submitted.
+            openPositions = Bybit.positionList(c).length(),
+            dayStartEquity = dayStartEquity(c, equity, now, account),
             tradesToday = tradesToday(c, now), consecutiveLosses = sp(c).getInt("loss_streak", 0), lastLossAtMillis = sp(c).getLong("last_loss", 0L)
         )
         val v = TradingRisk.evaluate(TradingRisk.Order(symbol, side, usd, entry, stop, target), acct, limits(c), now, killSwitch(c), blackout)
@@ -408,7 +418,7 @@ internal object TradingDesk {
     // ---- setup check
     internal fun healthItems(c: Context): List<DeskHealth.Item> {
         val now = System.currentTimeMillis()
-        val events = try { events(now).size } catch (_: Exception) { 0 }
+        val events = cachedEvents().size
         return DeskHealth.check(DeskHealth.Inputs(
             aiConfigured = Providers.all.any { Prefs.hasKey(c, it.id) || it.noKey },
             bybitKeys = Bybit.hasKeys(c), bybitTestnet = Prefs.bybitTestnet(c), readOnly = Prefs.tradingReadOnly(c),
@@ -443,7 +453,7 @@ internal object TradingDesk {
     /** Numbers behind the strip: Bybit when keys are saved, otherwise the practice account. Network work, call off the main thread. */
     internal fun pnlSnapshot(c: Context): Snap {
         val now = System.currentTimeMillis()
-        val news = MarketCalendar.upcoming(events(now), now, 1, MarketCalendar.Impact.HIGH).firstOrNull()
+        val news = MarketCalendar.upcoming(cachedEvents(), now, 1, MarketCalendar.Impact.HIGH).firstOrNull()
             ?.let { ((it.atMillis - now) / 60_000L).toInt() }
         val kill = killSwitch(c)
         var open = 0.0; var realized = 0.0; var equity = 0.0; var count = 0; var noStop = 0; var streak = 0; var has = false; var practice = false
@@ -482,7 +492,10 @@ internal object TradingDesk {
     }
 
     /** One line for the top of the trading workspace: mode, kill switch, session, next high-impact news, playbook size. */
-    fun statusLine(c: Context): String {
+    fun statusLine(c: Context): String = statusParts(c).joinToString(" · ")
+
+    /** Short labels for the status pills: mode, session, next news, playbook size and the kill switch. Never touches the network. */
+    fun statusParts(c: Context): List<String> {
         val now = System.currentTimeMillis()
         val hour = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).hour
         val mode = when {
@@ -490,13 +503,21 @@ internal object TradingDesk {
             Prefs.bybitTestnet(c) -> "Practice"
             else -> "REAL money"
         }
-        val next = MarketCalendar.upcoming(events(now), now, 48, MarketCalendar.Impact.HIGH).firstOrNull()?.let {
+        val loaded = cachedEvents()
+        val next = if (loaded.isEmpty()) "News loading" else MarketCalendar.upcoming(loaded, now, 48, MarketCalendar.Impact.HIGH).firstOrNull()?.let {
             val m = (it.atMillis - now) / 60_000L
-            "next ${it.currency} ${it.title.take(24)} in " + (if (m < 60) "${m}m" else "${m / 60}h")
-        } ?: "no high-impact news in 48h"
-        val n = strategies(c).size
-        return "$mode · " + MarketSessions.describe(hour).substringBefore('.') + " · " + next + " · playbook $n" +
-            (if (killSwitch(c)) " · KILL SWITCH ON" else "") + "  (tap for Desk)"
+            "${it.currency} ${it.title.take(18)} in " + (if (m < 60) "${m}m" else "${m / 60}h")
+        } ?: "No big news in 48h"
+        val parts = arrayListOf(mode, MarketSessions.describe(hour).substringBefore('.'), next, "Playbook ${strategies(c).size}")
+        if (killSwitch(c)) parts.add("KILL SWITCH ON")
+        return parts
+    }
+
+    /** Instant, local-only line for the PnL strip while the live numbers load. */
+    fun quickStrip(c: Context): String {
+        if (Bybit.hasKeys(c)) return "Bybit connected · updating…"
+        val s = paper(c)
+        return "Practice account · ${"%,.0f".format(Locale.US, s.balance)} USD · ${s.open.size} open"
     }
 
     // ---- tool entry point

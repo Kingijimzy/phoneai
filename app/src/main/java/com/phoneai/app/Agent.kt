@@ -3000,9 +3000,15 @@ Rules:
     /** All capability families enter one adapter boundary before reaching their established backend. */
     private fun exec(tool: String, a: JSONObject): String {
         val startedAt = System.currentTimeMillis()
-        // W3C-compatible 16-byte trace ID; shared by the start and terminal tool receipts.
+        // A trace groups the interaction; a correlation ID pairs this exact dispatch's
+        // start and terminal receipt even when several tools run within the same trace.
         val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
-        svc.recordChatEvent("tool", "started", "Tool: $tool", traceId = traceId)
+        val correlationId = java.util.UUID.randomUUID().toString()
+        svc.recordChatEvent(
+            "tool", "started", "Tool: $tool",
+            traceId = traceId,
+            correlationId = correlationId
+        )
         val result = runCatching { OrionCapabilityAdapters.dispatch(tool, a) { route, args ->
             val preflight = preflightTool(route.tool, args)
             val backendResult = if (preflight != null) preflight else runCatching {
@@ -3043,7 +3049,8 @@ Rules:
             if (failed) "error" else "success",
             "tool=$tool; outcome=${if (failed) "failed" else "completed"}" +
                 if (failureCategory.isNotBlank()) "; category=$failureCategory" else "",
-            traceId = traceId
+            traceId = traceId,
+            correlationId = correlationId
         )
         return result
     }

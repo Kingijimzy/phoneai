@@ -87,6 +87,10 @@ object ChatHistoryStore {
     }
 
     @Synchronized
+    fun appendTurnToSession(context: Context, sessionId: String, role: String, content: String): Boolean =
+        repo(context).appendTurnToSession(context, sessionId, role, content)
+
+    @Synchronized
     fun restoreActive(context: Context, transcript: List<Pair<String, String>>) =
         repo(context).restoreActive(context, transcript)
 

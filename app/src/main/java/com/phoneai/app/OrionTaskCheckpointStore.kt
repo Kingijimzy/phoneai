@@ -53,7 +53,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
     @Synchronized fun beginAction(taskId: String, action: String, inputDigest: String): Boolean {
         if (action.isBlank() || action.length > 100 || !inputDigest.matches(Regex("^[a-f0-9]{64}$"))) return false
         val state = read(taskId) ?: return false
-        if (state.optString("status") !in setOf("running", "paused") || state.optJSONObject("inFlight") != null) return false
+        if (!OrionDelegatedTaskTransitionPolicy.canBeginAction(state.optString("status"), state.optJSONObject("inFlight") != null, state.optBoolean("stopRequested"), state.optBoolean("pauseRequested"))) return false
         state.put("inFlight", JSONObject().put("action", action).put("inputDigest", inputDigest)
             .put("startedAt", System.currentTimeMillis())).put("status", "running")
         state.put("updatedAt", System.currentTimeMillis())
@@ -64,6 +64,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
         val state = read(taskId) ?: return false
         val active = state.optJSONObject("inFlight") ?: return false
         if (active.optString("action") != action) return false
+        if (!OrionDelegatedTaskTransitionPolicy.canRecordAction(state.optString("status"), state.optBoolean("stopRequested"), state.optBoolean("pauseRequested"))) return false
         val steps = state.optJSONArray("steps") ?: JSONArray()
         steps.put(JSONObject().put("action", action.take(100)).put("outcome", outcome.take(500))
             .put("at", System.currentTimeMillis()))
@@ -107,7 +108,7 @@ internal class OrionTaskCheckpointStore(context: Context) {
 
     @Synchronized fun complete(taskId: String): Boolean {
         val state = read(taskId) ?: return false
-        if (state.optJSONObject("inFlight") != null) return false
+        if (!OrionDelegatedTaskTransitionPolicy.canComplete(state.optString("status"), state.optJSONObject("inFlight") != null, state.optBoolean("stopRequested"), state.optBoolean("pauseRequested"))) return false
         state.put("status", "completed").put("updatedAt", System.currentTimeMillis())
         return write(taskId, state)
     }

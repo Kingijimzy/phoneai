@@ -6,15 +6,15 @@ Stage 7 is a release gate, not another autonomous feature. It separates evidence
 
 ### A. Source and automated checks
 - [ ] Verify the tested commit SHA is the exact pull-request head.
-- [ ] Android unit tests pass, including Stage 3 memory nudges, Stage 4 scheduler, Stage 5 probe/compose, and Stage 6 subagents.
+- [ ] Android unit tests pass, including Stage 3 memory nudges, Stage 4 scheduler, and Stage 6 subagents. Stage 5 remains on hold and is not a release prerequisite.
 - [ ] Bundled Python policy tests pass.
 - [ ] Debug APK builds successfully.
 - [ ] APK package/application ID, ARM64 ABI, and signing certificate are validated by CI.
 - [ ] No test is skipped or silently converted to success to hide a failure.
 - [ ] Review the complete workflow log for warnings or skipped verification steps.
 
-### B. Device acceptance — Redmi A3 Pro
-Use the APK artifact produced by the same successful workflow run. Install it over the existing app only when Android reports the signing key is compatible. If Android reports a signature conflict, stop and investigate; do not tell the user to uninstall and lose app data as a first response.
+### B. Device acceptance — POCO F3 / Snapdragon 870 / Android 13
+Use the APK artifact produced by the same successful workflow run. Confirm the device is the POCO F3 / Snapdragon 870 / Android 13 (or update this record if the test device changed). Install it over the existing app only when Android reports the signing key is compatible. If Android reports a signature conflict, stop and investigate; do not tell the user to uninstall and lose app data as a first response.
 
 Record Android version, app version, commit SHA, result (PASS/FAIL/BLOCKED), and a short sanitized note for each check.
 
@@ -84,3 +84,131 @@ CI remains authoritative for the configured PRoot/Python checks and APK signatur
 | Final decision | BLOCKED pending device acceptance |
 
 The Android workflow's configured build/test/Python/package/signature steps all completed successfully on the exact tested SHA. The PRoot workflow also completed successfully on that same SHA. APK release publication was skipped by the workflow; the APK remains available as a CI artifact. These CI results do not establish runtime behavior on a physical device.
+
+
+## Stage 4–7 integration gate update — 2026-11-02
+
+The current stacked PR dependencies are being reconciled:
+- PR #157 (Stage 6) now targets PR #120's navigation branch, inheriting owner controls (#118) and graphite UI (#119).
+- PR #158 (activity timeline) remains stacked on PR #157 and inherits that UI/control base.
+- Stage 4 repair/Python (#132 → #145 → #154 → #155 → #156) has its own stack. PR #156 was rebased onto the updated #155 parent branch and is now reported mergeable; exact-head CI is still running.
+- These stacks are not yet one release candidate. Do not merge or mark Stage 7 accepted until Stage 4 is safely ported into the same candidate and all exact-head checks pass.
+
+### Required physical acceptance
+Record results on the confirmed current POCO F3 / Android 13 / Snapdragon 870:
+1. Fresh install and upgrade install with preservation of app data and credentials.
+2. Provider connection, streaming chat, attachments, cancellation, retry and restored conversation.
+3. Accessibility grant/revoke, foreground-window observation, watcher start/stop and owner policy enforcement.
+4. WorkManager scheduling, process death, reboot recovery and HyperOS battery restrictions.
+5. Scoped Python standard library, workspace read/write, approved HTTP/HTTPS and private-LAN HTTP/HTTPS.
+6. WebSocket text/binary lifecycle, reconnect, screen-off behavior and foreground notification.
+7. Browser tabs/preview, MCP tool execution, nested task evidence, concurrent tool correlation and event replay.
+8. Trading Desk read-only market data/alerts; confirm no automatic order placement.
+9. Memory review/approval/rejection, knowledge graph updates and privacy redaction.
+10. Live voice microphone permission, interruption, resume and sustained stability.
+
+CI is not a substitute for these device checks. Stage 5 remains on hold; no later stage begins before this gate passes.
+
+
+## Integration checkpoint — 2026-11-03
+
+The following is an automated-source checkpoint only. It does not satisfy the physical-device gate.
+
+| Field | Value |
+|---|---|
+| PR / branch | [#166](https://github.com/Kingijimzy/phoneai/pull/166) / `orion/stage7-integration-repair-20261102` |
+| Tested commit SHA | `86b068d3838c89ca96e8a4afca7a5767a9488a05` |
+| Exact-head Actions run | [Run 41553057509](https://github.com/Kingijimzy/phoneai/actions/runs/41553057509) — PASS |
+| Unit tests + debug APK | PASS — `testDebugUnitTest assembleDebug` |
+| PRoot + bundled Python policy | PASS |
+| APK validation | PASS — package, ARM64 PRoot libraries and v2 signature verified |
+| APK artifact | [PhoneAI-apk, artifact 13193072790](https://github.com/Kingijimzy/phoneai/actions/runs/41553057509/artifacts/13193072790), 57,360,059 bytes |
+| Artifact SHA-256 | `4b2a731e52a3ea35d99e8d5b3ff4afb979839da477c88becc201eb3831a96751` |
+| Release publication | SKIPPED — artifact is available; no GitHub Release was published |
+| Physical-device acceptance | BLOCKED — no POCO F3 runtime results recorded |
+| Decision | BLOCKED pending device acceptance and remaining integration/security review |
+
+The passing run verifies the exact SHA above, not any later commit. Any subsequent source or documentation commit must receive its own exact-head workflow result before it is treated as verified.
+
+The candidate contains the typed activity evidence model, timeline projection, chat activity cards, event correlation and SQLite persistence/migration, plus sanitizer, timeline, repository and Markdown tests. PR #165 is not a substitute for this candidate: its earlier exact-head build failed because its older snapshots removed Stage 4/6 repository and command-mode APIs. Keep PR #166 as the repair candidate and reconcile only changes that are not already represented there.
+
+### Network-security review note
+
+`network_security_config.xml` currently enables cleartext at the Android application base-config level. The Python HTTP/WebSocket path applies a separate runtime gate (NETWORK consent, exact-host grant, private-address validation, and explicit plain-HTTP permission for local hosts), and its OkHttp client pins the validated DNS answers and disables redirects. However, the manifest-level cleartext allowance is broader than that Python gate: other app networking code is not automatically constrained by the Python policy. Do not claim app-wide cleartext is restricted until every HTTP-capable client is audited or the transport architecture is changed without breaking approved private-LAN HTTP/WS.
+
+
+## Full-system audit continuation — 2026-11-03
+
+### Additional Trading Desk hardening
+- The live order risk gate now reads the current Bybit open-position list before evaluating the configured position cap. An exchange read error propagates to the order caller; it must never be interpreted as zero open positions.
+- Risk evaluation now rejects non-finite numeric inputs (NaN and infinities), unsupported order sides, invalid account counters, and invalid configured limits.
+- Regression tests were added for NaN/infinite order/account values, invalid side values and non-finite risk sizing.
+- These changes are on the candidate branch and require the new exact-head CI result below before being treated as verified.
+
+### Repository feature inventory — implementation is not device acceptance
+
+| Area | Source/test evidence present | End-to-end acceptance |
+|---|---|---|
+| Central Brain, chat, tool dispatch | Agent, MainChatActivity, capability routing and dispatch-policy tests | Pending provider/device tests |
+| Activity timeline and evidence | Typed events, timeline projection, persistence and sanitizer tests | Pending streaming/reconnect/replay tests on device |
+| Soul Engine and watcher | Soul Engine, watcher, autonomy settings and policy tests | Pending Android lifecycle/background tests |
+| Memory and knowledge graph | Memory governance, ranking, lifecycle and graph tests | Pending user journey, privacy and retention checks |
+| Skills and self-extension | Registry, package codec, install/authorization policy tests | Pending real isolated sandbox receipt and owner-approval journey |
+| Python runtime/workspace | Bundled Python, restricted policy and workspace tests | Pending device filesystem and cancellation tests |
+| HTTP/HTTPS and WebSocket | Exact-host policy, DNS pinning, bounded WS sessions and foreground service | Pending device tests; app-wide cleartext configuration remains too broad |
+| Browser and MCP | Browser policy/automation and MCP routes exist | Pending live browser and connector journeys |
+| Tasks and delegation | Envelopes, checkpoints, orchestration, delegation and lifecycle tests | Pending process-death, resume, cancel and cross-device worker acceptance |
+| Voice and companion | Live conversation, companion life/mood and speech components exist | Pending microphone, interruption, long-session and device audio tests |
+| Trading Desk | PR #161 reconciliation, Bybit tools, risk gate, paper broker and integration tests | Pending exchange/testnet and UI workflows; never enable unattended real orders |
+| Android permissions/background | Manifest, services, receivers, policy and permission controls exist | Pending POCO F3/Android 13 and HyperOS lifecycle acceptance |
+
+### Release blockers that must not be papered over
+1. App-wide cleartext is currently allowed in `network_security_config.xml`; the Python transport's host policy does not automatically constrain every other HTTP client. Audit every network client and redesign the transport boundary before claiming app-wide private-LAN isolation.
+2. No physical POCO F3 acceptance receipt has been recorded for this candidate.
+3. The candidate APK is a debug-signed artifact. A production release key and release-signing workflow are separate requirements.
+4. CI passing does not prove credentials migrate safely, Android background work survives HyperOS, accessibility remains stable, voice is usable, or live provider/exchange integrations succeed.
+5. Do not merge this candidate to `main` until the exact-head workflow passes, source/security review is complete, and device acceptance is signed off by the owner.
+
+Stage 5 remains on hold until these release blockers are closed.
+
+## Latest exact-head verification — 2026-11-03 01:10 UTC
+
+This section supersedes the earlier pending status above.
+
+| Field | Value |
+|---|---|
+| Candidate | PR #166 |
+| Exact tested SHA | `ea687bcbe7a0d24dd0442bbebad49b15a4ddf2ba` |
+| GitHub Actions | [Run 41557383316](https://github.com/Kingijimzy/phoneai/actions/runs/41557383316) — SUCCESS |
+| Android unit tests | PASS |
+| Restricted Python sandbox tests | PASS |
+| PRoot build and ABI staging | PASS |
+| APK package/signature validation | PASS |
+| APK artifact | [PhoneAI-apk, artifact 13195510502](https://github.com/Kingijimzy/phoneai/actions/runs/41557383316/artifacts/13195510502) |
+| Artifact size | 57,361,096 bytes |
+| Artifact SHA-256 | `7c27e4244d61c8cc88956382f00ca2191ce96a77157ac6be78d7dc3b816f6710` |
+| GitHub Release | Not published; workflow release step was skipped |
+| Physical device acceptance | NOT RUN |
+| Merge decision | HOLD |
+
+The exact-head run includes the additional TradingRisk validation and regression tests committed before this SHA. This confirms source-level regression coverage and APK production by CI; it does not prove the app's live exchange, network, voice, accessibility, lifecycle, or provider journeys work on a physical device.
+
+The artifact is debug-signed and is not a production release. Preserve the candidate branch and do not merge until the network-security review, complete diff review, release-signing plan, and owner-run physical-device acceptance are complete.
+
+
+## Browser transport hardening — 2026-11-03
+
+The source audit found two additional public-browser HTTP paths in addition to the Python private-LAN bridge:
+- The interactive WebView browser accepted arbitrary `http://` navigation.
+- The bounded agent BrowserResearch fetcher accepted public HTTP as well as HTTPS.
+
+Both now require HTTPS for browser page navigation/research. WebView mixed content was already configured as `MIXED_CONTENT_NEVER_ALLOW`; top-level HTTP navigation is now blocked as well. BrowserResearch rejects HTTP before opening a connection and has regression tests for HTTP, unsupported schemes, and pre-cancelled requests.
+
+Other inspected direct network clients:
+- Bybit REST endpoints are fixed HTTPS.
+- Gemini Live token requests use HTTPS; live socket endpoints use secure WebSocket.
+- Live web search and voice-asset downloads use HTTPS endpoints.
+- MCP endpoint saving permits HTTPS, or HTTP only for explicit localhost endpoints.
+- Python HTTP/WebSocket remains the one user-granted private-LAN transport; it validates exact host grants, RFC1918/loopback addresses, DNS pins, and requires an explicit plain-HTTP host grant.
+
+The Android base network security config still has app-wide cleartext enabled because dynamic owner-approved private-LAN HTTP hosts cannot be enumerated in a static Android domain allowlist. This remains a platform-level exposure to document and review; source-level restrictions are not equivalent to OS-enforced per-host cleartext policy. Do not describe this as fully closed.

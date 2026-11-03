@@ -14,9 +14,14 @@ import java.util.UUID
  * Message bodies stay on-device; tool payloads and secrets are deliberately not stored here.
  */
 class OrionConversationRepository private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 4) {
+    SQLiteOpenHelper(context.applicationContext, "orion_conversations.db", null, 5) {
 
-    data class ChatEvent(val id: String, val sessionId: String, val messageId: String?, val type: String, val status: String, val summary: String, val createdAt: Long, val traceId: String? = null)
+    data class ChatEvent(
+        val id: String, val sessionId: String, val messageId: String?, val type: String,
+        val status: String, val summary: String, val createdAt: Long,
+        val traceId: String? = null, val correlationId: String? = null,
+        val evidenceJson: String? = null
+    )
 
     data class Session(
         val id: String,
@@ -61,6 +66,10 @@ class OrionConversationRepository private constructor(context: Context) :
         if (oldVersion < 2) createEventsTable(db)
         if (oldVersion < 3) { createObjectiveEvidenceTable(db); createSearchIndex(db, true) }
         if (oldVersion in 2..3) db.execSQL("ALTER TABLE chat_events ADD COLUMN trace_id TEXT")
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE chat_events ADD COLUMN correlation_id TEXT")
+            db.execSQL("ALTER TABLE chat_events ADD COLUMN evidence_json TEXT")
+        }
     }
 
     private fun createEventsTable(db: SQLiteDatabase) {
@@ -73,6 +82,8 @@ class OrionConversationRepository private constructor(context: Context) :
             summary TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             trace_id TEXT,
+            correlation_id TEXT,
+            evidence_json TEXT,
             FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )""")
         db.execSQL("CREATE INDEX IF NOT EXISTS chat_events_session_time ON chat_events(session_id, created_at)")
@@ -104,7 +115,7 @@ class OrionConversationRepository private constructor(context: Context) :
 
     /** Store bounded, secret-free lifecycle evidence for tools and approvals in the active session. */
     @Synchronized
-    fun recordEvent(context: Context, messageId: String?, type: String, status: String, summary: String, traceId: String? = null): ChatEvent? {
+    fun recordEvent(context: Context, messageId: String?, type: String, status: String, summary: String, traceId: String? = null, correlationId: String? = null, evidence: OrionActivityEvidence? = null): ChatEvent? {
         migrateLegacy(context)
         val db = writableDatabase
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -118,10 +129,12 @@ class OrionConversationRepository private constructor(context: Context) :
             prefs.edit().putString(ACTIVE_ID, sessionId).commit()
         }
         val event = ChatEvent(UUID.randomUUID().toString(), sessionId!!, messageId?.take(128),
-            type.take(48), status.take(32), sanitizeEventSummary(summary), System.currentTimeMillis(), traceId?.takeIf { it.matches(Regex("^[a-fA-F0-9]{32}$")) }?.lowercase())
+            type.take(48), status.take(32), sanitizeEventSummary(summary), System.currentTimeMillis(),
+            traceId?.takeIf { it.matches(Regex("^[a-fA-F0-9]{32}$")) }?.lowercase(),
+            correlationId?.take(128), evidence?.let { OrionEvidenceSanitizer.evidence(it).toJson().toString().take(2000) })
         val values = ContentValues().apply {
             put("id", event.id); put("session_id", event.sessionId); put("message_id", event.messageId)
-            put("event_type", event.type); put("status", event.status); put("summary", event.summary); put("created_at", event.createdAt); put("trace_id", event.traceId)
+            put("event_type", event.type); put("status", event.status); put("summary", event.summary); put("created_at", event.createdAt); put("trace_id", event.traceId); put("correlation_id", event.correlationId); put("evidence_json", event.evidenceJson)
         }
         if (db.insert("chat_events", null, values) < 0) return null
         return event
@@ -154,11 +167,11 @@ class OrionConversationRepository private constructor(context: Context) :
         if (inserted >= 0) return event
         // A retry after a crash returns the already-persisted event, never a duplicate.
         return db.rawQuery(
-            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id FROM chat_events WHERE id=? AND session_id=?",
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id,correlation_id,evidence_json FROM chat_events WHERE id=? AND session_id=?",
             arrayOf(id, sid)
         ).use { c ->
             if (c.moveToFirst()) ChatEvent(c.getString(0), c.getString(1), c.getString(2),
-                c.getString(3), c.getString(4), c.getString(5), c.getLong(6), c.getString(7)) else null
+                c.getString(3), c.getString(4), c.getString(5), c.getLong(6), c.getString(7), c.getString(8), c.getString(9)) else null
         }
     }
 
@@ -307,12 +320,12 @@ class OrionConversationRepository private constructor(context: Context) :
         migrateLegacy(context)
         val result = mutableListOf<ChatEvent>()
         readableDatabase.rawQuery(
-            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id FROM chat_events WHERE trace_id=? ORDER BY created_at ASC",
+            "SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id,correlation_id,evidence_json FROM chat_events WHERE trace_id=? ORDER BY created_at ASC",
             arrayOf(id)
         ).use { c ->
             while (c.moveToNext()) result.add(
                 ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
-                    c.getString(4), c.getString(5), c.getLong(6), c.getString(7))
+                    c.getString(4), c.getString(5), c.getLong(6), c.getString(7), c.getString(8), c.getString(9))
             )
         }
         return result
@@ -325,8 +338,8 @@ class OrionConversationRepository private constructor(context: Context) :
             if (it.moveToFirst()) it.getString(0) else return emptyList()
         }
         val result = ArrayList<ChatEvent>()
-        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id FROM chat_events WHERE session_id=? ORDER BY created_at ASC", arrayOf(id)).use { c ->
-            while (c.moveToNext()) result.add(ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getLong(6), c.getString(7)))
+        db.rawQuery("SELECT id,session_id,message_id,event_type,status,summary,created_at,trace_id,correlation_id,evidence_json FROM chat_events WHERE session_id=? ORDER BY created_at ASC", arrayOf(id)).use { c ->
+            while (c.moveToNext()) result.add(ChatEvent(c.getString(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getLong(6), c.getString(7), c.getString(8), c.getString(9)))
         }
         return result
     }
@@ -562,7 +575,48 @@ class OrionConversationRepository private constructor(context: Context) :
         } finally { db.endTransaction() }
     }
 
+    /** Append a final live turn to its pinned conversation without changing the active chat. */
     @Synchronized
+    fun appendTurnToSession(context: Context, sessionId: String, role: String, content: String): Boolean {
+        val sid = sessionId.trim().take(128)
+        val turn = clean(listOf(role to content)).singleOrNull() ?: return false
+        if (sid.isBlank() || turn.first !in setOf("me", "ai")) return false
+        migrateLegacy(context)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            if (!sessionExists(db, sid)) return false
+            val last = db.rawQuery(
+                "SELECT role,content FROM messages WHERE session_id=? ORDER BY sort_order DESC LIMIT 1",
+                arrayOf(sid)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) to cursor.getString(1) else null
+            }
+            if (last == turn) {
+                db.setTransactionSuccessful()
+                return true
+            }
+            val nextOrder = db.rawQuery(
+                "SELECT COALESCE(MAX(sort_order),-1)+1 FROM messages WHERE session_id=?",
+                arrayOf(sid)
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            val now = System.currentTimeMillis()
+            insertMessage(db, sid, turn.first, turn.second, now, nextOrder)
+            val existingTitle = db.rawQuery("SELECT title FROM sessions WHERE id=?", arrayOf(sid)).use {
+                if (it.moveToFirst()) it.getString(0) else "New chat"
+            }
+            val title = if (existingTitle == "New chat" && turn.first == "me") titleFor(readMessages(db, sid)) else existingTitle
+            db.update("sessions", ContentValues().apply {
+                put("title", title)
+                put("updated_at", now)
+            }, "id=?", arrayOf(sid))
+            db.setTransactionSuccessful()
+            return true
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun restoreActive(context: Context, transcript: List<Pair<String, String>>) = saveActive(context, transcript)
 
     private fun insertSession(db: SQLiteDatabase, id: String, title: String, timestamp: Long, active: Boolean, turns: List<Pair<String, String>>) {

@@ -371,7 +371,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             web.webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val uri = request?.url ?: return true
-                    return uri.scheme != "https" && uri.scheme != "http"
+                    return uri.scheme != "https"
                 }
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     if (view === web && !url.isNullOrBlank()) address.setText(url)
@@ -488,9 +488,11 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         val raw = input.trim()
         val candidate = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
             "https://duckduckgo.com/?q=" + URLEncoder.encode(raw, "UTF-8")
-        } else if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+        } else if (raw.startsWith("https://", true)) raw else if (raw.startsWith("http://", true)) {
+            return "https://duckduckgo.com/"
+        } else "https://$raw"
         val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
-        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
+        if (uri == null || uri.scheme != "https" || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
             return "https://duckduckgo.com/"
         }
         return candidate
@@ -576,14 +578,17 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (raw.isBlank()) return
         val candidate = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
             "https://duckduckgo.com/?q=" + URLEncoder.encode(raw, "UTF-8")
-        } else if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) {
+        } else if (raw.startsWith("https://", true)) {
             raw
+        } else if (raw.startsWith("http://", true)) {
+            Toast.makeText(this, "Unencrypted HTTP pages are blocked in Orion Browser. Use HTTPS or the explicitly approved Python private-LAN bridge.", Toast.LENGTH_LONG).show()
+            return
         } else {
             "https://$raw"
         }
         val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
-        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
-            Toast.makeText(this, "Enter a valid website or search query.", Toast.LENGTH_SHORT).show()
+        if (uri == null || uri.scheme != "https" || uri.host.isNullOrBlank()) {
+            Toast.makeText(this, "Enter a valid HTTPS website or search query.", Toast.LENGTH_SHORT).show()
             return
         }
         address.setText(candidate)
