@@ -5,7 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionCapabilityAdaptersTest {
-    @Test fun everyRegisteredToolHasExactlyOneAdapterRoute() {
+    
+    @Test fun workspaceListHasOneConcreteFilesRoute() {
+        assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route("workspace_list")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, "workspace_list"))
+    }
+
+@Test fun everyRegisteredToolHasExactlyOneAdapterRoute() {
         val routes = OrionCapabilityAdapters.routes()
         assertEquals(ToolRegistry.all.size, routes.size)
         assertEquals(ToolRegistry.all.map { it.name }.toSet(), routes.map { it.tool }.toSet())
