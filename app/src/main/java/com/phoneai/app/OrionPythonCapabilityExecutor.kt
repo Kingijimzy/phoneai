@@ -141,8 +141,14 @@ internal class OrionPythonCapabilityExecutor(
     }
 
     companion object {
-        /** The direct Python sandbox is capability-free; execution itself needs no confirmation. */
-        fun requiresExplicitApproval(tool: String): Boolean = false
+        /**
+         * Full CPython runs inside PRoot under Orion's Android UID. It is not an OS
+         * sandbox and arbitrary Python can open sockets or access anything the app UID
+         * can access. Until an isolated execution UID/network namespace is available,
+         * every direct CPython run is treated as trusted code and requires owner approval.
+         * Generated extensions remain on the separate restricted data-transform runtime.
+         */
+        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
 
         private val supportedTools = setOf(
             "python_exec", "extension_list", "extension_create", "extension_test",
