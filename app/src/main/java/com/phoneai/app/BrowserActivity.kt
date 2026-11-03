@@ -382,23 +382,42 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         } catch (_: Exception) { null }
     }
 
+    /**
+     * Keep the selected index aligned with the filtered URL list. Tabs that are
+     * blank, non-HTTPS, or credential-bearing are deliberately omitted; their
+     * removal must not shift the restored selection onto a different tab.
+     */
+    private fun restorableSessionSnapshot(): Pair<ArrayList<String>, Int> {
+        val urls = ArrayList<String>()
+        var selected = -1
+        browserTabs.forEachIndexed { index, tab ->
+            val safeUrl = restorableSessionUrl(tab.url) ?: return@forEachIndexed
+            if (urls.size >= 8) return@forEachIndexed
+            if (index == activeTabIndex) selected = urls.size
+            urls.add(safeUrl)
+        }
+        return urls to selected.coerceIn(0, maxOf(0, urls.lastIndex))
+    }
+
     private fun persistBrowserSession() {
-        if (browserTabs.isEmpty()) return
-        val urls = browserTabs.mapNotNull { restorableSessionUrl(it.url) }.take(8)
-        if (urls.isEmpty()) return
-        getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE).edit()
+        val (urls, selectedIndex) = restorableSessionSnapshot()
+        val prefs = getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE)
+        if (urls.isEmpty()) {
+            // Clear stale state when every tab is transient or the activity closes.
+            prefs.edit().clear().apply()
+            return
+        }
+        prefs.edit()
             .putString("tab_urls", org.json.JSONArray(urls).toString())
-            .putInt("active_tab", activeTabIndex.coerceIn(0, maxOf(0, urls.lastIndex)))
+            .putInt("active_tab", selectedIndex)
             .putLong("updated_at", System.currentTimeMillis())
             .apply()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putStringArrayList(
-            "orion_browser_tab_urls",
-            ArrayList(browserTabs.mapNotNull { restorableSessionUrl(it.url) })
-        )
-        outState.putInt("orion_browser_active_tab", activeTabIndex)
+        val (urls, selectedIndex) = restorableSessionSnapshot()
+        outState.putStringArrayList("orion_browser_tab_urls", urls)
+        outState.putInt("orion_browser_active_tab", selectedIndex)
         persistBrowserSession()
         super.onSaveInstanceState(outState)
     }
