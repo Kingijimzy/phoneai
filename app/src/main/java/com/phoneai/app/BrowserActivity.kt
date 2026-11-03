@@ -506,7 +506,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                     val guessed = URLUtil.guessFileName(url, contentDisposition, mimeType)
                     // Never allow a server-provided filename to escape Downloads or contain controls.
                     val safeName = guessed.map { ch ->
-                        if (ch == '/' || ch == '\\\\' || ch.code < 32) '_' else ch
+                        if (ch == '/' || ch == '\\' || ch.code < 32) '_' else ch
                     }.joinToString("").trim().take(120).ifBlank { "orion-download" }
                     val fileName = safeName
                     val request = DownloadManager.Request(downloadUri).apply {
