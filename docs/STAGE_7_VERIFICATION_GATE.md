@@ -135,3 +135,38 @@ The candidate contains the typed activity evidence model, timeline projection, c
 ### Network-security review note
 
 `network_security_config.xml` currently enables cleartext at the Android application base-config level. The Python HTTP/WebSocket path applies a separate runtime gate (NETWORK consent, exact-host grant, private-address validation, and explicit plain-HTTP permission for local hosts), and its OkHttp client pins the validated DNS answers and disables redirects. However, the manifest-level cleartext allowance is broader than that Python gate: other app networking code is not automatically constrained by the Python policy. Do not claim app-wide cleartext is restricted until every HTTP-capable client is audited or the transport architecture is changed without breaking approved private-LAN HTTP/WS.
+
+
+## Full-system audit continuation — 2026-11-03
+
+### Additional Trading Desk hardening
+- The live order risk gate now reads the current Bybit open-position list before evaluating the configured position cap. An exchange read error propagates to the order caller; it must never be interpreted as zero open positions.
+- Risk evaluation now rejects non-finite numeric inputs (NaN and infinities), unsupported order sides, invalid account counters, and invalid configured limits.
+- Regression tests were added for NaN/infinite order/account values, invalid side values and non-finite risk sizing.
+- These changes are on the candidate branch and require the new exact-head CI result below before being treated as verified.
+
+### Repository feature inventory — implementation is not device acceptance
+
+| Area | Source/test evidence present | End-to-end acceptance |
+|---|---|---|
+| Central Brain, chat, tool dispatch | Agent, MainChatActivity, capability routing and dispatch-policy tests | Pending provider/device tests |
+| Activity timeline and evidence | Typed events, timeline projection, persistence and sanitizer tests | Pending streaming/reconnect/replay tests on device |
+| Soul Engine and watcher | Soul Engine, watcher, autonomy settings and policy tests | Pending Android lifecycle/background tests |
+| Memory and knowledge graph | Memory governance, ranking, lifecycle and graph tests | Pending user journey, privacy and retention checks |
+| Skills and self-extension | Registry, package codec, install/authorization policy tests | Pending real isolated sandbox receipt and owner-approval journey |
+| Python runtime/workspace | Bundled Python, restricted policy and workspace tests | Pending device filesystem and cancellation tests |
+| HTTP/HTTPS and WebSocket | Exact-host policy, DNS pinning, bounded WS sessions and foreground service | Pending device tests; app-wide cleartext configuration remains too broad |
+| Browser and MCP | Browser policy/automation and MCP routes exist | Pending live browser and connector journeys |
+| Tasks and delegation | Envelopes, checkpoints, orchestration, delegation and lifecycle tests | Pending process-death, resume, cancel and cross-device worker acceptance |
+| Voice and companion | Live conversation, companion life/mood and speech components exist | Pending microphone, interruption, long-session and device audio tests |
+| Trading Desk | PR #161 reconciliation, Bybit tools, risk gate, paper broker and integration tests | Pending exchange/testnet and UI workflows; never enable unattended real orders |
+| Android permissions/background | Manifest, services, receivers, policy and permission controls exist | Pending POCO F3/Android 13 and HyperOS lifecycle acceptance |
+
+### Release blockers that must not be papered over
+1. App-wide cleartext is currently allowed in `network_security_config.xml`; the Python transport's host policy does not automatically constrain every other HTTP client. Audit every network client and redesign the transport boundary before claiming app-wide private-LAN isolation.
+2. No physical POCO F3 acceptance receipt has been recorded for this candidate.
+3. The candidate APK is a debug-signed artifact. A production release key and release-signing workflow are separate requirements.
+4. CI passing does not prove credentials migrate safely, Android background work survives HyperOS, accessibility remains stable, voice is usable, or live provider/exchange integrations succeed.
+5. Do not merge this candidate to `main` until the exact-head workflow passes, source/security review is complete, and device acceptance is signed off by the owner.
+
+Stage 5 remains on hold until these release blockers are closed.
