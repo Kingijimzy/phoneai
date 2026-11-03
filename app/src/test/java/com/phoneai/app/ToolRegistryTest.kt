@@ -5,7 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolRegistryTest {
-    @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
+        @Test fun workspaceListIsRegisteredAndReadOnly() {
+        val tool = ToolRegistry.all.single { it.name == "workspace_list" }
+        assertEquals(ToolAccess.READ, tool.access)
+        assertEquals("workspace_shell", AgentPolicy.packForTool("workspace_list"))
+        assertTrue(OrionPythonCapabilityExecutor.supports("workspace_list"))
+    }
+
+@Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
         assertTrue(ToolRegistry.all.any { it.name == "device_location" })
         assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
     }
