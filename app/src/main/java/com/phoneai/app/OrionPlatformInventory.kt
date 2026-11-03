@@ -35,9 +35,18 @@ internal object OrionPlatformInventory {
                 else OrionCapabilityDiscovery.PermissionState.MISSING
             }.getOrElse { OrionCapabilityDiscovery.PermissionState.UNKNOWN }
 
+        val fineLocation = runtimePermission(Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarseLocation = runtimePermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val locationState = when {
+            fineLocation == OrionCapabilityDiscovery.PermissionState.GRANTED ||
+                coarseLocation == OrionCapabilityDiscovery.PermissionState.GRANTED -> OrionCapabilityDiscovery.PermissionState.GRANTED
+            fineLocation == OrionCapabilityDiscovery.PermissionState.UNKNOWN ||
+                coarseLocation == OrionCapabilityDiscovery.PermissionState.UNKNOWN -> OrionCapabilityDiscovery.PermissionState.UNKNOWN
+            else -> OrionCapabilityDiscovery.PermissionState.MISSING
+        }
         val permissions = linkedMapOf(
             "contacts" to runtimePermission(Manifest.permission.READ_CONTACTS),
-            "location" to runtimePermission(Manifest.permission.ACCESS_FINE_LOCATION),
+            "location" to locationState,
             "camera" to runtimePermission(Manifest.permission.CAMERA),
             "microphone" to runtimePermission(Manifest.permission.RECORD_AUDIO),
             "notification_access" to specialAccess("enabled_notification_listeners"),
