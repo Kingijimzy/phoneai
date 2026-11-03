@@ -67,6 +67,19 @@ class OrionActivityTimelineTest {
         assertTrue(cards.single().evidence.any { it.contains("FAILED") && it.contains("workspace_read") })
     }
 
+    @Test fun chatProjectionKeepsSeparateTasksAsSeparateStreamCards() {
+        val timeline = OrionActivityTimeline()
+        timeline.append(OrionActivityEvent("a1", "task-a", OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Task A", "started A", 1))
+        timeline.append(OrionActivityEvent("a2", "task-a", OrionActivityKind.TOOL,
+            OrionActivityStatus.SUCCEEDED, "Tool A", "finished A", 2))
+        timeline.append(OrionActivityEvent("b1", "task-b", OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Task B", "started B", 3))
+        val cards = timeline.compactForChat()
+        assertEquals(2, cards.size)
+        assertEquals(setOf("task-stream-task-a", "task-stream-task-b"), cards.map { it.eventId }.toSet())
+    }
+
     @Test fun elapsedTimeClampsClockSkewAndFormatsLongRuns() {
         assertEquals("0s", OrionActivityTimeline.elapsedLabel(2_000, 1_000))
         assertEquals("12s", OrionActivityTimeline.elapsedLabel(1_000, 13_000))
