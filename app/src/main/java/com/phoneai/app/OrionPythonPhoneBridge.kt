@@ -182,7 +182,7 @@ with open("/workspace/orion_main.py", "rb") as source_file:
                 bootstrapSource().toByteArray(Charsets.UTF_8),
                 Base64.URL_SAFE or Base64.NO_WRAP
             )
-            return "import base64;exec(base64.urlsafe_b64decode('$encoded'))"
+            return "import base64;exec(base64.urlsafe_b64decode(\"$encoded\"))"
         }
     }
 }
