@@ -186,4 +186,3 @@ with open("/workspace/orion_main.py", "rb") as source_file:
         }
     }
 }
-}
