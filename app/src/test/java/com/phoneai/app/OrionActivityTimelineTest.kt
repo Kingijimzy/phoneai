@@ -59,7 +59,12 @@ class OrionActivityTimelineTest {
             OrionActivityStatus.FAILED, "workspace_read failed", "tool=workspace_read; outcome=failed", 3, correlationId = "call-1"))
         timeline.append(OrionActivityEvent("finished", "task-1", OrionActivityKind.COMPLETION,
             OrionActivityStatus.SUCCEEDED, "Interaction finished", "interaction processing finished", 4))
-        assertEquals(listOf("tool-result"), timeline.compactForChat().map { it.eventId })
+        val cards = timeline.compactForChat()
+        assertEquals(1, cards.size)
+        assertEquals("task-stream-task-1", cards.single().eventId)
+        assertEquals(OrionActivityStatus.SUCCEEDED, cards.single().status)
+        assertEquals(4, cards.single().evidence.size)
+        assertTrue(cards.single().evidence.any { it.contains("FAILED") && it.contains("workspace_read") })
     }
 
     @Test fun elapsedTimeClampsClockSkewAndFormatsLongRuns() {

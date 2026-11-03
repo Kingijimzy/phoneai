@@ -59,19 +59,37 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
 
     @Synchronized fun clear() = events.clear()
 
-    /** Compact the chat surface: completed correlated events replace their transient start cards. */
-    @Synchronized fun compactForChat(): List<OrionActivityEvent> {
-        val completedCorrelations = events.values
-            .filter { it.status != OrionActivityStatus.ACTIVE }
-            .mapNotNull { it.correlationId }
-            .toSet()
-        return snapshot().filterNot { event ->
-            (event.status == OrionActivityStatus.ACTIVE && event.correlationId != null &&
-                event.correlationId in completedCorrelations) ||
-                (event.kind == OrionActivityKind.THINKING && event.summary.contains("request accepted", true)) ||
-                (event.kind == OrionActivityKind.COMPLETION && event.summary.contains("interaction processing finished", true))
-        }
-    }
+    /**
+     * Chat renders one persistent stream card per task, not one card per event/tool.
+     * Each update replaces the same task card while the event summaries remain available
+     * as expandable evidence inside it.
+     */
+    @Synchronized fun compactForChat(): List<OrionActivityEvent> =
+        snapshot().groupBy { it.taskId }.values.mapNotNull { taskEvents ->
+            val ordered = taskEvents.sortedWith(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
+            val first = ordered.firstOrNull() ?: return@mapNotNull null
+            val latest = ordered.last()
+            val history = ordered.map { event ->
+                val state = when (event.status) {
+                    OrionActivityStatus.ACTIVE -> "RUNNING"
+                    OrionActivityStatus.WAITING -> "WAITING"
+                    OrionActivityStatus.SUCCEEDED -> "DONE"
+                    OrionActivityStatus.FAILED -> "FAILED"
+                    OrionActivityStatus.CANCELLED -> "CANCELLED"
+                    OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
+                }
+                "$state · ${event.title}: ${event.summary}".take(360)
+            }.distinct().takeLast(40)
+            latest.copy(
+                eventId = "task-stream-${latest.taskId}",
+                title = first.title.ifBlank { "Task activity" },
+                summary = latest.summary,
+                evidence = history,
+                typedEvidence = ordered.flatMap { it.typedEvidence }.distinct().takeLast(20),
+                elapsedMs = (latest.timestampMs - first.timestampMs).coerceAtLeast(0L),
+                correlationId = null
+            )
+        }.sortedBy { it.timestampMs }
 
     companion object {
         fun elapsedLabel(startedAtMs: Long, nowMs: Long): String {
