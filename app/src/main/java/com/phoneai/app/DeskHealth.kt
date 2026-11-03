@@ -57,8 +57,8 @@ internal object DeskHealth {
 internal object DeskTour {
     val text = """How this screen works:
 - The card at the top is your live status: PnL, the companion's mood, the next news and the desk mode. Tap the character to switch between the drawn characters, the dot-matrix orb and the hologram head. Tap the status line to open the Desk.
-- The tabs under it hold quick actions: Start, Market, Positions, Strategy, Chain and More. Tap any chip to ask for it, or just type.
-- Upload a TradingView screenshot with Chart and I will turn it into a strategy for your playbook.
+- The chip strip above the message bar holds quick actions. Tap the group name (for example Start) to switch between Start, Market, Positions, Strategy, Chain and More. Tap any chip to ask for it, or just type.
+- Tap + beside the message bar to add a TradingView screenshot and I will turn it into a strategy for your playbook.
 - Voice: the Voice chip speaks alerts and replies, Mic takes one spoken request, Talk keeps a hands-free conversation going, and Wake listens for the word Orion.
 - Desk shows the playbook, simulations, positions, chain watch, what the watcher did, backup, and a setup check.
 - I only read data and make proposals. Any real order needs your tap and passes the risk gate."""

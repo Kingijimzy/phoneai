@@ -65,6 +65,9 @@ class AgentChatActivity : Activity() {
     @Volatile private var busy = false
     private var pillRow: LinearLayout? = null
     private var aiChip: TextView? = null
+    private var pendingKind: ChatKinds.Kind? = null
+    private lateinit var composer: ComposerView
+    private var groupChip: TextView? = null
     private var pnlText: TextView? = null
     private var moodText: TextView? = null
     private var mascot: CompanionView? = null
@@ -86,8 +89,6 @@ class AgentChatActivity : Activity() {
     private var handsFree = false
     private var currentGroup = 0
     private var chipRow: LinearLayout? = null
-    private var tabRow: LinearLayout? = null
-    private var tabsHolder: android.widget.HorizontalScrollView? = null
     private var resumed = false
     private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
     private val tick = object : Runnable { override fun run() { if (resumed) { refreshDesk(); startWake(); ticker.postDelayed(this, 20_000L) } } }
@@ -329,15 +330,20 @@ class AgentChatActivity : Activity() {
             "talk" -> toggleHandsFree()
             "mic" -> micTap()
             "wake" -> toggleWake()
-            "caps" -> addBubble(false, "Here is what I can do for you:\n" + DeskCapabilities.items.joinToString("\n") { "- ${it.name}: ${it.does}" })
-            "tour" -> addBubble(false, DeskTour.text)
+            "caps" -> messages.addView(MessageCards.rows(this, ChatKinds.Kind.GUIDE, "What I can do", DeskCapabilities.items.map { MessageCards.Row("\u2022", Theme.CYAN, it.name, it.does) }), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            "tour" -> addCardBubble(ChatKinds.Kind.GUIDE, Markdown.render(MarkdownTables.flatten(DeskTour.text)))
             "ai" -> aiDialog()
             "memory" -> memoryDialog()
             "health" -> {
-                val wait = addBubble(false, "Checking your setup…")
+                val wait = addCardBubble(ChatKinds.Kind.SETUP, "Checking your setup\u2026")
                 Thread {
-                    val t = try { DeskHealth.text(TradingDesk.healthItems(this)) } catch (_: Exception) { "I could not run the setup check." }
-                    runOnUiThread { if (!isDestroyed) { wait.text = Markdown.render(MarkdownTables.flatten(t)) } }
+                    val items = try { TradingDesk.healthItems(this) } catch (_: Exception) { null }
+                    runOnUiThread {
+                        if (!isDestroyed) {
+                            (wait.parent.parent as? android.view.View)?.let { messages.removeView(it) }
+                            if (items != null) addSetupCard(items) else addBubble(false, "I could not run the setup check.")
+                        }
+                    }
                 }.start()
             }
             "learned" -> notesDialog()
@@ -352,24 +358,49 @@ class AgentChatActivity : Activity() {
         else -> c.label
     }
 
-    /** Shows one group of quick actions, with a short staggered entrance. */
+    private fun stripChip(label: String, accent: Boolean, click: (android.view.View) -> Unit) = TextView(this).apply {
+        text = label; textSize = 13f; gravity = Gravity.CENTER
+        setTextColor(if (accent) Theme.ON_ACCENT else Theme.TEXT)
+        background = GradientDrawable().apply {
+            cornerRadius = dp(18).toFloat()
+            if (accent) setColor(Theme.CYAN) else { setColor(Theme.PANEL); setStroke(dp(1), Theme.LINE) }
+        }
+        setPadding(dp(14), 0, dp(14), 0)
+        setOnClickListener { click(this) }
+        Motion.pressFeedback(this)
+    }
+
+    /** Shows one group of quick actions after a group switch chip, with a short staggered entrance. */
     private fun selectGroup(i: Int) {
         currentGroup = i
         val row = chipRow ?: return
         val g = ChatGroups.coach[i]
         row.removeAllViews()
+        val sw = stripChip(g.name + " \u25BE", true) { v ->
+            val m = android.widget.PopupMenu(this, v)
+            ChatGroups.coach.forEachIndexed { k, grp -> m.menu.add(0, k, k, grp.name) }
+            m.setOnMenuItemClickListener { selectGroup(it.itemId); true }
+            m.show()
+        }
+        groupChip = sw
+        row.addView(sw, LinearLayout.LayoutParams(-2, dp(36)).apply { marginEnd = dp(10) })
         g.chips.forEachIndexed { n, c ->
-            val b = smallButton(chipLabel(c)) { if (c.prompt != null) quick(c.prompt) else runAction(c.action!!) }
+            val b = stripChip(chipLabel(c), false) {
+                if (c.prompt != null) { pendingKind = ChatKinds.forChip(c.label); quick(c.prompt) } else runAction(c.action!!)
+            }
             row.addView(b, LinearLayout.LayoutParams(-2, dp(36)).apply { marginEnd = dp(8) })
             Motion.enter(b, n)
         }
-        val tabs = tabRow ?: return
-        for (k in 0 until tabs.childCount) {
-            val t = tabs.getChildAt(k) as TextView
-            val on = k == i
-            t.setTextColor(if (on) Theme.ON_ACCENT else Theme.MUTED)
-            (t.background as GradientDrawable).setColor(if (on) Theme.CYAN else Theme.PANEL)
+    }
+
+    private fun fillPlainChips() {
+        val row = chipRow ?: return
+        fun chip(label: String, click: () -> Unit) = row.addView(stripChip(label, false) { click() }, LinearLayout.LayoutParams(-2, dp(36)).apply { marginEnd = dp(8) })
+        if (agent.id == "research") {
+            chip("Market news") { quick("What is the latest market news today and what is moving crypto, gold and the dollar?") }
+            chip("Quote") { quoteDialog() }
         }
+        if (agent.id != "coach") { chip("Learned") { notesDialog() }; chip("Clear") { runAction("clear") } }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -404,8 +435,32 @@ class AgentChatActivity : Activity() {
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(18), statusBarPad(), dp(84), dp(10)) }
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(TextView(this).apply { text = agent.name; textSize = 20f; setTextColor(Theme.TEXT); typeface = Typeface.DEFAULT_BOLD })
-        titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
+        if (agent.id == "coach") {
+            val sub = TextView(this).apply { textSize = 12f; setOnClickListener { aiDialog() } }
+            aiChip = sub
+            titles.addView(sub)
+            updateAiChip()
+        } else titles.addView(TextView(this).apply { text = agent.tagline; textSize = 12f; setTextColor(Theme.MUTED) })
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
+        if (agent.id == "coach") {
+            val more = IconButtonView(this, IconButtonView.Glyph.MORE, false)
+            more.contentDescription = "More"
+            more.setOnClickListener {
+                val m = android.widget.PopupMenu(this, more)
+                m.menu.add("AI provider"); m.menu.add("Memory & files"); m.menu.add("Open Desk"); m.menu.add("Change look")
+                m.setOnMenuItemClickListener { mi ->
+                    when (mi.title.toString()) {
+                        "AI provider" -> aiDialog()
+                        "Memory & files" -> memoryDialog()
+                        "Open Desk" -> startActivity(Intent(this, TradingActivity::class.java))
+                        else -> applyLook((look + 1) % LOOKS)
+                    }
+                    true
+                }
+                m.show()
+            }
+            header.addView(more, LinearLayout.LayoutParams(dp(40), dp(40)))
+        }
         root.addView(header, -1, -2)
         if (agent.id == "coach") {
             val card = LinearLayout(this).apply {
@@ -435,73 +490,36 @@ class AgentChatActivity : Activity() {
             col.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(pills) }, -1, -2)
             top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
             fillPills(TradingDesk.statusParts(this))
-            // action row: AI provider, memory and files, desk
-            card.addView(android.view.View(this).apply { setBackgroundColor(Theme.LINE) }, LinearLayout.LayoutParams(-1, dp(1)))
-            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), dp(8), dp(10), dp(8)) }
-            val ai = actionPill("") { aiDialog() }
-            aiChip = ai
-            actions.addView(ai, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
-            actions.addView(actionPill("Memory & files") { memoryDialog() }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
-            actions.addView(actionPill("Desk") { startActivity(Intent(this@AgentChatActivity, TradingActivity::class.java)) }, LinearLayout.LayoutParams(-2, -2))
-            card.addView(actions, -1, -2)
-            updateAiChip()
             root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(14), 0, dp(14), dp(8)) })
             Motion.enter(card)
             applyLook(Prefs.companionChar(this).coerceIn(0, LOOKS - 1))
         }
 
-        run {
-            val chips = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
-            fun chip(label: String, click: () -> Unit) = row.addView(smallButton(label, click), LinearLayout.LayoutParams(-2, dp(38)).apply { marginEnd = dp(8) })
-            if (agent.id == "coach") {
-                val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(14), 0, dp(14), dp(6)) }
-                tabRow = tabs
-                ChatGroups.coach.forEachIndexed { i, g ->
-                    tabs.addView(TextView(this).apply {
-                        text = g.name; textSize = 12f; gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
-                        setPadding(dp(14), dp(7), dp(14), dp(7))
-                        background = GradientDrawable().apply { cornerRadius = dp(20).toFloat() }
-                        setOnClickListener { selectGroup(i) }
-                        Motion.pressFeedback(this)
-                    }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
-                }
-                tabsHolder = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(tabs) }
-                chipRow = row
-            }
-            if (agent.id == "research") {
-                chip("Market news") { quick("What is the latest market news today and what is moving crypto, gold and the dollar?") }
-                chip("Quote") { quoteDialog() }
-            }
-            if (agent.id != "coach") {
-                chip("Learned") { notesDialog() }
-                chip("Clear") { runAction("clear") }
-            }
-            chips.addView(row)
-            tabsHolder?.let { root.addView(it, -1, -2) }
-            root.addView(chips, -1, -2)
-            if (agent.id == "coach") selectGroup(0)
-        }
         scroll = ScrollView(this)
         messages = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(14)) }
         scroll.addView(messages, -1, -2)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        attachLabel = TextView(this).apply { textSize = 12f; setTextColor(Theme.CYAN); setPadding(dp(18), dp(4), dp(18), 0); visibility = android.view.View.GONE }
-        root.addView(attachLabel, -1, -2)
-
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(14)) }
-        if (agent.acceptsImages) bar.addView(smallButton("Chart") { pickImage() })
-        input = EditText(this).apply {
-            hint = if (agent.acceptsImages) "Ask, or upload a chart…" else "Message ${agent.name}…"
-            setTextColor(Theme.TEXT); setHintTextColor(Theme.MUTED); textSize = 15f
-            maxLines = 5
-            background = GradientDrawable().apply { setColor(Theme.PANEL); cornerRadius = dp(22).toFloat(); setStroke(dp(1), Theme.LINE) }
-            setPadding(dp(16), dp(10), dp(16), dp(10))
+        attachLabel = TextView(this).apply {
+            textSize = 12f; setTextColor(Theme.TEXT); setPadding(dp(14), dp(6), dp(14), dp(6)); visibility = android.view.View.GONE
+            background = GradientDrawable().apply { setColor(Theme.PANEL2); cornerRadius = dp(14).toFloat() }
         }
-        bar.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
-        bar.addView(smallButton("Send") { send() })
-        root.addView(bar, -1, -2)
+        root.addView(attachLabel, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(14), dp(4), dp(14), 0) })
+
+        // one suggestion strip above the composer: a group switch, then that group's chips
+        val strip = android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(2)) }
+        chipRow = row
+        strip.addView(row)
+        root.addView(strip, -1, -2)
+        if (agent.id == "coach") selectGroup(0) else fillPlainChips()
+
+        composer = ComposerView(this, agent.acceptsImages, if (agent.id == "coach") "Message Trading Coach" else "Message ${agent.name}")
+        input = composer.input
+        composer.onSend = { send() }
+        composer.onMic = { if (agent.id == "coach") micTap() }
+        composer.onAttach = { pickImage() }
+        root.addView(composer, -1, -2)
         setContentView(root)
 
         turns.addAll(AgentChatStore.load(this, agent.id))
@@ -601,6 +619,25 @@ class AgentChatActivity : Activity() {
         Motion.enter(bubble)
         scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
         return bubble
+    }
+
+    /** A typed assistant card (accent edge, kind label, time). The body is returned so replies can fill it in. */
+    private fun addCardBubble(kind: ChatKinds.Kind, text: CharSequence): TextView {
+        val (card, body) = MessageCards.typed(this, kind, text)
+        messages.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        Motion.enter(card)
+        scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+        return body
+    }
+
+    /** The setup check as a checklist card. */
+    private fun addSetupCard(items: List<DeskHealth.Item>) {
+        val rows = items.map {
+            val c = when (it.level) { DeskHealth.Level.OK -> 0xFF4CD08A.toInt(); DeskHealth.Level.TODO -> 0xFFFFC857.toInt(); DeskHealth.Level.OFF -> Theme.MUTED; DeskHealth.Level.WARN -> Theme.DANGER }
+            MessageCards.Row(DeskHealth.mark(it.level), c, it.name, it.detail)
+        }
+        messages.addView(MessageCards.rows(this, ChatKinds.Kind.SETUP, "Setup check \u00B7 " + DeskHealth.summary(items), rows), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
     }
 
     /** A proposal only. Nothing is sent to Bybit until the user taps Place and confirms the final risk summary. */
@@ -720,9 +757,10 @@ class AgentChatActivity : Activity() {
                     Toast.makeText(this, "Could not read that image. Try a screenshot or a smaller picture.", Toast.LENGTH_LONG).show()
                 } else {
                     pendingImage = encoded
-                    attachLabel.text = "Chart attached · it will be sent with your next message (tap to remove)"
+                    attachLabel.text = "Chart attached  \u00D7  (tap to remove)"
                     attachLabel.visibility = android.view.View.VISIBLE
-                    attachLabel.setOnClickListener { pendingImage = null; attachLabel.visibility = android.view.View.GONE }
+                    composer.hasAttachment = true
+                    attachLabel.setOnClickListener { pendingImage = null; composer.hasAttachment = false; attachLabel.visibility = android.view.View.GONE }
                 }
             }
         }.start()
@@ -856,11 +894,14 @@ class AgentChatActivity : Activity() {
 
         input.setText("")
         pendingImage = null
+        composer.hasAttachment = false
         attachLabel.visibility = android.view.View.GONE
         (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(input.windowToken, 0)
         val shown = if (image != null) "[chart attached] $text" else text
         addBubble(true, shown.trim())
-        val waiting = addBubble(false, "Thinking…")
+        val kind = pendingKind ?: ChatKinds.forText(text) ?: (if (image != null) ChatKinds.Kind.CHART else null)
+        pendingKind = null
+        val waiting = if (kind != null) addCardBubble(kind, "Thinking…") else addBubble(false, "Thinking…")
         busy = true
         setLive(CompanionView.Activity.THINKING)
         val history = turns.toList()
