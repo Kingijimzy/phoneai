@@ -48,12 +48,11 @@ internal object OrionCapabilityDiscovery {
 
     private val permissionRequirements = mapOf(
         "read_notifications" to "notification_access",
+        "notification_action" to "notification_access",
         "media_status" to "notification_access",
         "media_control" to "notification_access",
         "resolve_contact" to "contacts",
         "device_location" to "location",
-        "flashlight" to "camera",
-        "camera_capture" to "camera",
         "record_screen" to "screen_capture"
     )
 
