@@ -185,4 +185,11 @@ class TaskScopePolicyTest {
         ).forEach { assertFalse("Should allow: $it", TradingCommandPolicy.isMutatingCommand(it)) }
     }
 
+
+    @Test fun naturalLanguageInspectionOfSuppliedUrlsRoutesToResearch() {
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Go and check this repository https://github.com/Kingijimzy/phoneai/"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Can you inspect this page https://example.com/docs and explain the workflow"))
+        assertEquals(TaskMode.RESEARCH, TaskScopePolicy.modeFor("Please review https://example.com/report"))
+    }
+
 }
