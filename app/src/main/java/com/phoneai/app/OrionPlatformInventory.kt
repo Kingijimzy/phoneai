@@ -8,55 +8,42 @@ import androidx.core.content.ContextCompat
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
-/**
- * Read-only inventory of owner-controlled platform state. This is sampled on each chat turn;
- * it never grants permissions or starts services. Unknown is reported as unknown, never ON.
- */
+/** Read-only owner permission, skill, pack and worker inventory sampled on every chat turn. */
 internal object OrionPlatformInventory {
-    data class Snapshot(
-        val permissionStates: Map<String, OrionCapabilityDiscovery.PermissionState>,
-        val lines: List<String>
-    )
+    data class Snapshot(val permissionStates: Map<String, OrionCapabilityDiscovery.PermissionState>, val lines: List<String>)
 
     fun read(context: Context): Snapshot {
         val app = context.applicationContext
-        fun runtimePermission(name: String, manifest: String): OrionCapabilityDiscovery.PermissionState =
+        fun runtimePermission(manifest: String) =
             if (ContextCompat.checkSelfPermission(app, manifest) == PackageManager.PERMISSION_GRANTED)
-                OrionCapabilityDiscovery.PermissionState.GRANTED
-            else OrionCapabilityDiscovery.PermissionState.MISSING
-
-        fun secureEnabled(key: String): Boolean = runCatching {
-            Settings.Secure.getString(app.contentResolver, key).orEmpty()
-                .split(':').any { it.startsWith(app.packageName + "/") || it == app.packageName }
+                OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+        fun secureEnabled(key: String) = runCatching {
+            Settings.Secure.getString(app.contentResolver, key).orEmpty().split(':')
+                .any { it.startsWith(app.packageName + "/") || it == app.packageName }
         }.getOrDefault(false)
 
-        val accessibilityEnabled = secureEnabled("enabled_accessibility_services")
-        val notificationEnabled = secureEnabled("enabled_notification_listeners")
+        val accessibility = secureEnabled("enabled_accessibility_services")
+        val notifications = secureEnabled("enabled_notification_listeners")
         val permissions = linkedMapOf(
-            "contacts" to runtimePermission("contacts", Manifest.permission.READ_CONTACTS),
-            "location" to runtimePermission("location", Manifest.permission.ACCESS_FINE_LOCATION),
-            "camera" to runtimePermission("camera", Manifest.permission.CAMERA),
-            "microphone" to runtimePermission("microphone", Manifest.permission.RECORD_AUDIO),
-            "notification_access" to if (notificationEnabled) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
-            "accessibility" to if (accessibilityEnabled) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
+            "contacts" to runtimePermission(Manifest.permission.READ_CONTACTS),
+            "location" to runtimePermission(Manifest.permission.ACCESS_FINE_LOCATION),
+            "camera" to runtimePermission(Manifest.permission.CAMERA),
+            "microphone" to runtimePermission(Manifest.permission.RECORD_AUDIO),
+            "notification_access" to if (notifications) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
+            "accessibility" to if (accessibility) OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
         )
-
         val lines = mutableListOf<String>()
-        fun permissionLabel(key: String, label: String) {
-            val state = permissions[key] ?: OrionCapabilityDiscovery.PermissionState.UNKNOWN
-            val value = when (state) {
-                OrionCapabilityDiscovery.PermissionState.GRANTED -> "ON / granted"
-                OrionCapabilityDiscovery.PermissionState.MISSING -> "OFF / not granted"
-                OrionCapabilityDiscovery.PermissionState.UNKNOWN -> "UNKNOWN / not verified"
+        permissions.forEach { (id, state) ->
+            val label = when (id) {
+                "contacts" -> "Contacts"
+                "location" -> "Location"
+                "camera" -> "Camera"
+                "microphone" -> "Microphone"
+                "notification_access" -> "Notification access"
+                else -> "Accessibility service"
             }
-            lines += "Permission $label: $value."
+            lines += "Permission $label: ${if (state == OrionCapabilityDiscovery.PermissionState.GRANTED) "ON / granted" else "OFF / not granted"}."
         }
-        permissionLabel("contacts", "Contacts")
-        permissionLabel("location", "Location")
-        permissionLabel("camera", "Camera")
-        permissionLabel("microphone", "Microphone")
-        permissionLabel("notification_access", "Notification access")
-        permissionLabel("accessibility", "Accessibility service")
 
         val packs = AgentPolicy.packs.associate { it.id to AgentPolicy.enabled(app, it.id) }
         lines += "Capability packs: " + AgentPolicy.packs.joinToString("; ") {
@@ -64,34 +51,31 @@ internal object OrionPlatformInventory {
         } + "."
 
         val skills = runCatching { SkillRegistry.list(app) }.getOrNull()
-        if (skills == null) {
-            lines += "Skills: UNKNOWN; local skill registry could not be read."
-        } else {
-            lines += "Skills: " + (skills.joinToString("; ") {
-                "${it.id}=${if (it.enabled) "ON" else "OFF"} (tools: ${it.allowedTools.size})"
-            }.ifBlank { "none registered" }) + "."
-            val broken = skills.filter { it.enabled }.filter { skill -> skill.allowedTools.any { ToolRegistry.get(it) == null } }
-            if (broken.isNotEmpty()) lines += "Skill blockers: " + broken.joinToString { "${it.id} references missing tools" } + "."
+        if (skills == null) lines += "Skills: UNKNOWN; local registry could not be read."
+        else {
+            val registeredTools = runCatching { ToolRegistry.names().toSet() }.getOrDefault(emptySet())
+            lines += "Skills: " + skills.joinToString("; ") {
+                "${it.id}=${if (it.enabled) "ON" else "OFF"} (tools=${it.allowedTools.size})"
+            }.ifBlank { "none registered" } + "."
+            val broken = skills.filter { it.enabled && it.allowedTools.any { name -> name !in registeredTools } }
+            if (broken.isNotEmpty()) lines += "Skill blockers: " + broken.joinToString { "${it.id} references unregistered tools" } + "."
         }
 
-        val watchOn = runCatching { Prefs.watchOn(app) }.getOrDefault(false)
-        lines += "Market WatchService owner switch: ${if (watchOn) "ON" else "OFF"} (foreground service process health is not independently verified here)."
-        val coreOn = packs["orion_core"] == true
-        val proactiveOn = packs["proactive"] == true
-        val scheduled = runCatching {
+        val watch = runCatching { Prefs.watchOn(app) }.getOrDefault(false)
+        lines += "Market WatchService switch: ${if (watch) "ON" else "OFF"}; process health is not independently verified."
+        val core = packs["orion_core"] == true
+        val proactive = packs["proactive"] == true
+        val workState = runCatching {
             val infos = WorkManager.getInstance(app)
-                .getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat")
-                .get(2, TimeUnit.SECONDS)
+                .getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get(2, TimeUnit.SECONDS)
             when {
                 infos.isEmpty() -> "NOT SCHEDULED"
-                infos.any { it.state.isFinished } -> infos.first().state.name
                 else -> infos.first().state.name
             }
         }.getOrElse { "UNKNOWN (${it.javaClass.simpleName})" }
-        lines += "Proactive worker: core=${if (coreOn) "ON" else "OFF"}, proactive pack=${if (proactiveOn) "ON" else "OFF"}, WorkManager state=$scheduled. Android may defer scheduled work."
-
-        lines += "Permission request rule: if a required permission is OFF, tell the owner the exact permission and why it is needed, then ask them to grant it in Android settings or the app's permission prompt. Do not claim it is granted and do not repeatedly ask if already granted."
-        lines += "State accuracy: these are sampled settings and registry states. A foreground service being enabled does not prove its process is alive; a connected account still needs verified credentials and a successful request; unsupported or unobservable states must be labelled UNKNOWN."
+        lines += "Proactive worker: core=${if (core) "ON" else "OFF"}, proactive pack=${if (proactive) "ON" else "OFF"}, WorkManager=$workState. Android may defer scheduled work."
+        lines += "PERMISSION REQUEST BEHAVIOUR: before a task, inspect its required permission. If OFF, explain the exact permission and purpose, ask the owner to grant it, and wait. Never claim it is granted or try to bypass Android settings. If UNKNOWN, say it cannot be verified and do not treat it as granted."
+        lines += "STATE HONESTY: owner switches and WorkManager registration are not proof a service process is alive. Provider credentials require verification and successful requests. Label unobservable runtime states UNKNOWN."
         return Snapshot(permissions, lines)
     }
 }
