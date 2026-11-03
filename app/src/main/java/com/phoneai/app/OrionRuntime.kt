@@ -83,14 +83,19 @@ internal class OrionRuntime(context: Context, private val clock: () -> Long = { 
         if (inflight?.id != item.id) return@synchronized false
         inflight = null
         val attempts = item.attempts + 1
-        if (!OrionRuntimePolicy.shouldRetry(attempts)) {
+        val recoveryDials = OrionOwnerDialSettings.read(appContext)
+        if (!OrionRuntimePolicy.shouldRetry(attempts, recoveryDials.recoveryMaxAttempts)) {
             // One exhausted item must not strand unrelated queued work.
             state = if (queue.isNotEmpty()) State.ACTIVE else State.DEGRADED
             eventLocked("work_abandoned:" + item.type.name.lowercase())
             persistLocked()
             return@synchronized false
         }
-        val retry = OrionRuntimePolicy.retryItem(item, clock(), error, checkpoint)
+        val retry = OrionRuntimePolicy.retryItem(
+            item, clock(), error, checkpoint,
+            maxRetries = recoveryDials.recoveryMaxAttempts,
+            baseBackoffMs = recoveryDials.recoveryBackoffSeconds * 1_000L
+        )
             ?: return@synchronized false
         queue.removeAll { it.id == item.id }
         queue.add(retry)

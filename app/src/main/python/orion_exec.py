@@ -128,11 +128,13 @@ def _scope(extra=None):
         scope.update(extra)
     return scope
 
-def run(source):
+def run(source, max_source=MAX_SOURCE):
     if not isinstance(source, str):
         return "error: Python code must be text"
-    if len(source) > MAX_SOURCE:
-        return "error: Python code exceeds 8000 characters"
+    if not isinstance(max_source, int) or max_source < MAX_SOURCE or max_source > 16000:
+        max_source = MAX_SOURCE
+    if len(source) > max_source:
+        return "error: Python code exceeds " + str(max_source) + " characters"
     if not source.strip():
         return "error: Python code is required"
     try:
