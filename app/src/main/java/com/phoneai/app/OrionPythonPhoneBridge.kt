@@ -142,11 +142,11 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
         var previous = -1
         while (true) {
             val value = input.read()
-            if (value < 0) return if (output.size() == 0) null else output.toString(Charsets.US_ASCII.name())
+            if (value < 0) return if (output.size() == 0) null else String(output.toByteArray(), Charsets.US_ASCII)
             if (previous == 13 && value == 10) {
                 val bytes = output.toByteArray()
                 val length = if (bytes.lastOrNull()?.toInt() == 13) bytes.size - 1 else bytes.size
-                return bytes.copyOf(length).toString(Charsets.US_ASCII.name())
+                return String(bytes.copyOf(length), Charsets.US_ASCII)
             }
             output.write(value)
             if (output.size() > maxBytes) throw IllegalArgumentException("header_line_too_large")
