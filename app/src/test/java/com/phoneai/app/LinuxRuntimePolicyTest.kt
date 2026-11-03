@@ -77,7 +77,8 @@ class LinuxRuntimePolicyTest {
             "/data/user/0/com.phoneai.app/files/orion-python/workspace"
         )!!
         assertTrue(args.containsAll(listOf("-b", "/data/user/0/com.phoneai.app/files/orion-python/workspace:/workspace")))
-        assertEquals("/workspace/main.py", args.last())
+        assertEquals("python3 -I /workspace/main.py", args.last())
+        assertTrue(args.last().contains("/workspace/main.py"))
         assertFalse(args.any { it.contains("shared_prefs") || it.contains("databases") })
     }
 
