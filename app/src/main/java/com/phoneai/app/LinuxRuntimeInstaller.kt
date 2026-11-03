@@ -123,11 +123,19 @@ internal class LinuxRuntimeInstaller(
         }
     }
 
-    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L, onOutput: (String) -> Unit = {}): String {
+    fun execute(manifest: LinuxRuntimePolicy.Manifest, command: String, timeoutMs: Long = 60_000L, onOutput: (String) -> Unit = {}, workspaceHostPath: String? = null): String {
         if (!isReady(manifest)) return "error: Alpine runtime is not installed or failed readiness checks. Install/repair the pinned Linux runtime first."
         if (timeoutMs !in 250L..180_000L) return "error: Linux timeout must be between 250 and 180000 ms."
         if (command == "__orion_install__") return "error: internal command is not executable"
-        val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command)
+        val workspace = workspaceHostPath?.let { candidate ->
+            val dir = File(candidate)
+            val canonical = runCatching { dir.canonicalFile }.getOrNull()
+            if (canonical == null || !canonical.isDirectory || !canonical.canRead() || !canonical.canWrite() ||
+                java.nio.file.Files.isSymbolicLink(dir.toPath()) || !canonical.toPath().startsWith(app.filesDir.canonicalFile.toPath()))
+                return "error: Python workspace bind mount rejected by runtime policy."
+            canonical.absolutePath
+        }
+        val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command, workspace)
             ?: return "error: Linux command rejected by runtime policy."
         // Android's resolver is network-specific. Public DNS literals inside a PRoot guest
         // can be unreachable on mobile carriers/private DNS, so mirror the active Android
