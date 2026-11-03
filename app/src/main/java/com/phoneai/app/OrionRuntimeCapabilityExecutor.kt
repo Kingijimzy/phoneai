@@ -16,8 +16,18 @@ internal object OrionRuntimeCapabilityExecutor {
         tools: Tools,
         stopped: () -> Boolean,
         confirm: (String) -> Boolean = { false },
-        openBrowser: (String) -> Unit = {}
+        openBrowser: (String) -> Unit = {},
+        validateAction: (JSONObject) -> String = { "error: action validation callback unavailable" },
+        verifyAction: (JSONObject) -> String = { "error: action verification callback unavailable" },
+        verifySend: (JSONObject) -> String = { "error: send verification callback unavailable" },
+        look: (String) -> String = { "error: screen interpretation callback unavailable" },
+        play: (String, Int) -> String = { _, _ -> "error: game-control callback unavailable" },
+        readScreen: () -> String = { service.readScreen() }
     ): String? = when (backend) {
+        OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
+            tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
+        )
+        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools, confirm)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))

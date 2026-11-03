@@ -74,4 +74,16 @@ class OrionCapabilityAdaptersTest {
             assertEquals(tool, backend, OrionCapabilityAdapters.route(tool)?.backend)
         }
     }
+
+    @Test fun everyDeviceAndMcpRouteHasAConcreteDedicatedExecutor() {
+        val device = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.DEVICE }
+        val mcp = OrionCapabilityAdapters.routes()
+            .filter { it.backend == OrionCapabilityAdapters.Backend.MCP }
+
+        assertTrue("Device backend must not be empty", device.isNotEmpty())
+        assertTrue("MCP backend must not be empty", mcp.isNotEmpty())
+        device.forEach { assertTrue("Missing device executor for ${it.tool}", OrionDeviceCapabilityExecutor.supports(it.tool)) }
+        mcp.forEach { assertTrue("Missing MCP executor for ${it.tool}", OrionMcpCapabilityExecutor.supports(it.tool)) }
+    }
 }
