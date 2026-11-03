@@ -498,8 +498,18 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             }
             web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
                 try {
-                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                    val downloadUri = Uri.parse(url)
+                    if (downloadUri.scheme != "https" || downloadUri.host.isNullOrBlank() || !downloadUri.userInfo.isNullOrBlank()) {
+                        Toast.makeText(this, "Orion only downloads files from valid HTTPS links.", Toast.LENGTH_LONG).show()
+                        return@setDownloadListener
+                    }
+                    val guessed = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    // Never allow a server-provided filename to escape Downloads or contain controls.
+                    val safeName = guessed
+                        .replace(Regex("[\\\\/\\\\\\\\\\u0000-\\\\u001F]"), "_")
+                        .trim().take(120).ifBlank { "orion-download" }
+                    val fileName = safeName
+                    val request = DownloadManager.Request(downloadUri).apply {
                         setMimeType(mimeType)
                         setTitle(fileName)
                         setDescription("Downloading from Orion Browser")
