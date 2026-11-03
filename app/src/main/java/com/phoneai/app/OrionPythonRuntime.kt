@@ -17,12 +17,13 @@ internal object OrionPythonRuntime {
     private const val EXECUTION_TIMEOUT_MS = 120_000L
 
     @Synchronized
-    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }): String {
+    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String {
         val maxChars = PythonExecutionPolicy.maxCodeChars(context)
         if (code.isBlank()) return "error: Python code is required."
         if (code.length > maxChars) return "error: Python code exceeds the active profile limit of $maxChars characters."
         if (code.contains('\u0000')) return "error: Python code contains a forbidden NUL character."
 
+        if (stopped()) return "error: Python execution cancelled before launch."
         val app = context.applicationContext
         val workspace = OrionPythonWorkspace(app)
         val workspaceRoot = when (workspace.rootStatus()) {
@@ -48,14 +49,14 @@ internal object OrionPythonRuntime {
 
         // Package installation is persistent in the app-private Alpine rootfs and requires
         // separate approval because it downloads executable code from Alpine repositories.
-        val probe = installer.execute(manifest, "python3 --version", 8_000L, workspaceHostPath = workspaceRoot.absolutePath)
+        val probe = installer.execute(manifest, "python3 --version", 8_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
         if (!probe.startsWith("exit=0") || !probe.contains("Python 3.")) {
             if (!confirm("Install CPython 3, pip and the Alpine build tools into Orion's persistent Linux runtime? This downloads packages from Alpine repositories.")) {
                 return "Python script saved. CPython is not installed in Alpine; approve package installation or install python3 py3-pip from Orion Terminal."
             }
             val install = installer.execute(
                 manifest, "apk update && apk add --no-cache python3 py3-pip build-base",
-                180_000L, workspaceHostPath = workspaceRoot.absolutePath
+                180_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
             if (!install.startsWith("exit=0")) return "error: CPython package installation failed.\n${install.take(MAX_OUTPUT_CHARS)}"
         }
@@ -64,7 +65,8 @@ internal object OrionPythonRuntime {
             manifest,
             "python3 -I /workspace/$SCRIPT_NAME",
             EXECUTION_TIMEOUT_MS,
-            workspaceHostPath = workspaceRoot.absolutePath
+            workspaceHostPath = workspaceRoot.absolutePath,
+            shouldStop = stopped
         )
         return result.take(MAX_OUTPUT_CHARS)
     }
