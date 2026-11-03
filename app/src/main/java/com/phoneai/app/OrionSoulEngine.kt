@@ -20,13 +20,7 @@ internal object OrionSoulEngine {
             pack != null && pack in enabledPacks
         }.toSet()
         val termuxReady = runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)
-        val notificationAccess = runCatching {
-            Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-                ?.contains(context.packageName) == true
-        }.getOrDefault(false)
-        val contactsPermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
+        val platformInventory = OrionPlatformInventory.read(context)
         val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
         val enabledSkills = skills.filter { it.enabled }
         val planner = try {
@@ -40,12 +34,7 @@ internal object OrionSoulEngine {
             registeredTools = ToolRegistry.all,
             enabledPacks = enabledPacks,
             termuxReady = termuxReady,
-            permissionStates = mapOf(
-                "notification_access" to if (notificationAccess)
-                    OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
-                "contacts" to if (contactsPermission)
-                    OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-            ),
+            permissionStates = platformInventory.permissionStates,
             integrationStates = planner?.let {
                 mapOf(it.provider.name.lowercase() to it.state.name.lowercase().replace('_', '-'))
             } ?: emptyMap()
@@ -65,6 +54,8 @@ internal object OrionSoulEngine {
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
         lines += "Registered tools: ${registeredTools.size}; tools currently usable after pack, bridge, and permission checks: ${capabilitySnapshot.availableCount}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
         lines += capabilitySnapshot.promptLines()
+        lines += platformInventory.lines
+        lines += "LIVE INVENTORY CONTRACT: refreshed for every user message before planning. For each requested action inspect the relevant tool, pack, skill, provider, Android permission and worker state. If a required item is OFF, explain exactly what is off and why it is needed, then ask the owner to enable or grant it and wait. If UNKNOWN, never assume ON. After a setting changes, rediscover before dispatch."
         lines += executionReadiness.promptLines()
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
         val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
