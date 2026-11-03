@@ -576,6 +576,48 @@ class OrionConversationRepository private constructor(context: Context) :
     }
 
     @Synchronized
+    /** Append a final live turn to its pinned conversation without changing the active chat. */
+    @Synchronized
+    fun appendTurnToSession(context: Context, sessionId: String, role: String, content: String): Boolean {
+        val sid = sessionId.trim().take(128)
+        val turn = clean(listOf(role to content)).singleOrNull() ?: return false
+        if (sid.isBlank() || turn.first !in setOf("me", "ai")) return false
+        migrateLegacy(context)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            if (!sessionExists(db, sid)) return false
+            val last = db.rawQuery(
+                "SELECT role,content FROM messages WHERE session_id=? ORDER BY sort_order DESC LIMIT 1",
+                arrayOf(sid)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) to cursor.getString(1) else null
+            }
+            if (last == turn) {
+                db.setTransactionSuccessful()
+                return true
+            }
+            val nextOrder = db.rawQuery(
+                "SELECT COALESCE(MAX(sort_order),-1)+1 FROM messages WHERE session_id=?",
+                arrayOf(sid)
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            val now = System.currentTimeMillis()
+            insertMessage(db, sid, turn.first, turn.second, now, nextOrder)
+            val existingTitle = db.rawQuery("SELECT title FROM sessions WHERE id=?", arrayOf(sid)).use {
+                if (it.moveToFirst()) it.getString(0) else "New chat"
+            }
+            val title = if (existingTitle == "New chat" && turn.first == "me") titleFor(readMessages(db, sid)) else existingTitle
+            db.update("sessions", ContentValues().apply {
+                put("title", title)
+                put("updated_at", now)
+            }, "id=?", arrayOf(sid))
+            db.setTransactionSuccessful()
+            return true
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     fun restoreActive(context: Context, transcript: List<Pair<String, String>>) = saveActive(context, transcript)
 
     private fun insertSession(db: SQLiteDatabase, id: String, title: String, timestamp: Long, active: Boolean, turns: List<Pair<String, String>>) {
