@@ -244,7 +244,7 @@ class OrionCapabilityDiscoveryTest {
     @Test fun notificationActionsRequireNotificationAccess() {
         val snapshot = OrionCapabilityDiscovery.discover(
             listOf(tool("notification_action", ToolAccess.WRITE)),
-            setOf("phone_control"),
+            setOf("messaging"),
             termuxReady = true,
             permissionStates = mapOf("notification_access" to OrionCapabilityDiscovery.PermissionState.MISSING)
         )
