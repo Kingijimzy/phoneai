@@ -146,7 +146,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
             return """
 import os, json, urllib.request, urllib.error
 class _OrionPhone:
-    _allowed = setOf($pythonMethods)
+    _allowed = {$pythonMethods}
     def __getattr__(self, name):
         if name not in self._allowed:
             raise AttributeError("phone API method is not registered: " + name)
