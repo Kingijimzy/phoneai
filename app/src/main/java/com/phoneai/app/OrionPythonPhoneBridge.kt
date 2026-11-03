@@ -225,7 +225,7 @@ def _orion_audit(event, args):
         port = address[1] if isinstance(address, tuple) and len(address) > 1 else None
         if host not in ("127.0.0.1", "::1") or int(port or -1) != int(os.environ["ORION_PHONE_API_PORT"]):
             raise PermissionError("Use phone.http_get/http_post/phone.ws_* for network access.")
-    elif event in ("socket.bind", "subprocess.Popen", "os.system", "os.exec", "os.spawn", "os.fork", "ctypes.dlopen"):
+    elif event in ("socket.bind", "subprocess.Popen", "os.system", "os.exec", "os.spawn", "os.posix_spawn", "os.posix_spawnp", "os.fork", "ctypes.dlopen"):
         raise PermissionError("This Python runtime does not expose raw sockets, subprocesses or native loading.")
 sys.addaudithook(_orion_audit)
 with open("/workspace/orion_main.py", "rb") as source_file:

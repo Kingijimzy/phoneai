@@ -81,7 +81,7 @@ internal object OrionPythonRuntime {
             val bootstrap = OrionPythonPhoneBridge.bootstrapCommand()
             installer.execute(
                 manifest,
-                "ulimit -c 0; ulimit -t 90; ulimit -f 2048; ulimit -n 64; ulimit -u 32; exec python3 -I -c '$bootstrap'",
+                "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32; exec python3 -I -c '$bootstrap'",
                 EXECUTION_TIMEOUT_MS,
                 workspaceHostPath = workspaceRoot.absolutePath,
                 shouldStop = {
