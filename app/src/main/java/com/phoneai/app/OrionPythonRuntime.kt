@@ -14,7 +14,7 @@ import java.io.File
 internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
     private const val MAX_OUTPUT_CHARS = 5_200
-    private const val EXECUTION_TIMEOUT_MS = 120_000L
+    private const val EXECUTION_TIMEOUT_MS = 100_000L
 
     @Synchronized
     fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String {
@@ -63,7 +63,7 @@ internal object OrionPythonRuntime {
 
         val result = installer.execute(
             manifest,
-            "python3 -I /workspace/$SCRIPT_NAME",
+            "ulimit -c 0; ulimit -t 90; ulimit -f 2048; ulimit -n 64; ulimit -u 32; exec python3 -I /workspace/$SCRIPT_NAME",
             EXECUTION_TIMEOUT_MS,
             workspaceHostPath = workspaceRoot.absolutePath,
             shouldStop = stopped
