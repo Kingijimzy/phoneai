@@ -22,6 +22,15 @@ class CheckpointTransitionPolicyTest {
         assertFalse(CheckpointTransitionPolicy.canRecordResult(null, "click_text", "{\"text\":\"Send\"}", "{\"text\":\"Send\"}"))
     }
 
+    @Test fun onlyRunningUnpausedCheckpointCanDispatch() {
+        assertTrue(CheckpointTransitionPolicy.canDispatch("running", false, false, false))
+        assertFalse(CheckpointTransitionPolicy.canDispatch("paused", false, false, false))
+        assertFalse(CheckpointTransitionPolicy.canDispatch("recovery_required", false, false, false))
+        assertFalse(CheckpointTransitionPolicy.canDispatch("running", true, false, false))
+        assertFalse(CheckpointTransitionPolicy.canDispatch("running", false, true, false))
+        assertFalse(CheckpointTransitionPolicy.canDispatch("running", false, false, true))
+    }
+
     @Test fun uncertainActionCannotBeMarkedComplete() {
         assertFalse(CheckpointTransitionPolicy.canComplete(true))
         assertTrue(CheckpointTransitionPolicy.canComplete(false))

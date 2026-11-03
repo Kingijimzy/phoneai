@@ -253,8 +253,7 @@ object AgentCheckpointStore {
     /** Persist intent before executing any tool; never overwrite an unresolved action marker. */
     fun beginStep(c: Context, tool: String, args: JSONObject): Boolean = synchronized(lock) {
         val existing = readCheckpoint(c) ?: return@synchronized false
-        if (existing.optBoolean("stopRequested") || existing.optBoolean("pauseRequested") ||
-            !CheckpointTransitionPolicy.canBeginStep(existing.optJSONObject("inFlight") != null)) return@synchronized false
+        if (!CheckpointTransitionPolicy.canDispatch(existing.optString("status"), existing.optBoolean("stopRequested"), existing.optBoolean("pauseRequested"), existing.optJSONObject("inFlight") != null)) return@synchronized false
         update(c) { o ->
             o.put("inFlight", JSONObject()
                 .put("tool", tool.take(80))

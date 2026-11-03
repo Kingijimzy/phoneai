@@ -44,7 +44,10 @@ class AgentCheckpointStoreTest {
         assertFalse(acknowledged!!.has("inFlight"))
         assertFalse(AgentCheckpointStore.needsRecoveryConfirmation(context))
 
-        // A new attempt is allowed only after the uncertain action has been acknowledged.
+        // Acknowledgement reconciles the uncertain side effect but preserves the paused state.
+        // Explicit resume is required before another capability can be dispatched.
+        assertFalse(AgentCheckpointStore.beginStep(context, "read_screen", JSONObject()))
+        assertTrue(AgentCheckpointStore.markRunning(context))
         assertTrue(AgentCheckpointStore.beginStep(context, "read_screen", JSONObject()))
     }
 
@@ -230,6 +233,9 @@ class AgentCheckpointStoreTest {
 
         assertTrue(OrionTasksCapabilityExecutor.acknowledgeRecovery(context, "I checked the phone and Settings is open"))
         assertFalse(OrionTasksCapabilityExecutor.needsRecoveryConfirmation(context))
+        assertFalse("Recovery acknowledgement must not silently resume execution",
+            OrionTasksCapabilityExecutor.beginStep(context, "read_screen", JSONObject()))
+        assertTrue("The owner must explicitly resume the paused checkpoint", AgentCheckpointStore.markRunning(context))
         assertTrue(OrionTasksCapabilityExecutor.beginStep(context, "read_screen", JSONObject()))
     }
 
