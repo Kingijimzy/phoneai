@@ -108,3 +108,30 @@ Record results on the confirmed current POCO F3 / Android 13 / Snapdragon 870:
 10. Live voice microphone permission, interruption, resume and sustained stability.
 
 CI is not a substitute for these device checks. Stage 5 remains on hold; no later stage begins before this gate passes.
+
+
+## Integration checkpoint — 2026-11-03
+
+The following is an automated-source checkpoint only. It does not satisfy the physical-device gate.
+
+| Field | Value |
+|---|---|
+| PR / branch | [#166](https://github.com/Kingijimzy/phoneai/pull/166) / `orion/stage7-integration-repair-20261102` |
+| Tested commit SHA | `86b068d3838c89ca96e8a4afca7a5767a9488a05` |
+| Exact-head Actions run | [Run 41553057509](https://github.com/Kingijimzy/phoneai/actions/runs/41553057509) — PASS |
+| Unit tests + debug APK | PASS — `testDebugUnitTest assembleDebug` |
+| PRoot + bundled Python policy | PASS |
+| APK validation | PASS — package, ARM64 PRoot libraries and v2 signature verified |
+| APK artifact | [PhoneAI-apk, artifact 13193072790](https://github.com/Kingijimzy/phoneai/actions/runs/41553057509/artifacts/13193072790), 57,360,059 bytes |
+| Artifact SHA-256 | `4b2a731e52a3ea35d99e8d5b3ff4afb979839da477c88becc201eb3831a96751` |
+| Release publication | SKIPPED — artifact is available; no GitHub Release was published |
+| Physical-device acceptance | BLOCKED — no POCO F3 runtime results recorded |
+| Decision | BLOCKED pending device acceptance and remaining integration/security review |
+
+The passing run verifies the exact SHA above, not any later commit. Any subsequent source or documentation commit must receive its own exact-head workflow result before it is treated as verified.
+
+The candidate contains the typed activity evidence model, timeline projection, chat activity cards, event correlation and SQLite persistence/migration, plus sanitizer, timeline, repository and Markdown tests. PR #165 is not a substitute for this candidate: its earlier exact-head build failed because its older snapshots removed Stage 4/6 repository and command-mode APIs. Keep PR #166 as the repair candidate and reconcile only changes that are not already represented there.
+
+### Network-security review note
+
+`network_security_config.xml` currently enables cleartext at the Android application base-config level. The Python HTTP/WebSocket path applies a separate runtime gate (NETWORK consent, exact-host grant, private-address validation, and explicit plain-HTTP permission for local hosts), and its OkHttp client pins the validated DNS answers and disables redirects. However, the manifest-level cleartext allowance is broader than that Python gate: other app networking code is not automatically constrained by the Python policy. Do not claim app-wide cleartext is restricted until every HTTP-capable client is audited or the transport architecture is changed without breaking approved private-LAN HTTP/WS.
