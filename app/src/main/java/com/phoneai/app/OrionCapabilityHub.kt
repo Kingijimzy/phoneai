@@ -28,7 +28,7 @@ internal object OrionCapabilityHub {
     )
 
     private fun permissionStates(context: Context): Map<String, OrionCapabilityDiscovery.PermissionState> =
-        OrionPlatformInventory.read(context.applicationContext).permissionStates
+        OrionPlatformInventory.permissionStates(context.applicationContext)
 
     private fun integrationStates(context: Context): Map<String, String> {
         val result = linkedMapOf<String, String>()

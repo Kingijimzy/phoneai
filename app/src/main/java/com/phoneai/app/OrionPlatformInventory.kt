@@ -15,7 +15,7 @@ internal object OrionPlatformInventory {
         val lines: List<String>
     )
 
-    fun read(context: Context): Snapshot {
+    fun permissionStates(context: Context): Map<String, OrionCapabilityDiscovery.PermissionState> {
         val app = context.applicationContext
         fun runtimePermission(manifest: String): OrionCapabilityDiscovery.PermissionState =
             runCatching {
@@ -44,7 +44,7 @@ internal object OrionPlatformInventory {
                 coarseLocation == OrionCapabilityDiscovery.PermissionState.UNKNOWN -> OrionCapabilityDiscovery.PermissionState.UNKNOWN
             else -> OrionCapabilityDiscovery.PermissionState.MISSING
         }
-        val permissions = linkedMapOf(
+        return linkedMapOf(
             "contacts" to runtimePermission(Manifest.permission.READ_CONTACTS),
             "location" to locationState,
             "camera" to runtimePermission(Manifest.permission.CAMERA),
@@ -52,6 +52,11 @@ internal object OrionPlatformInventory {
             "notification_access" to specialAccess("enabled_notification_listeners"),
             "accessibility" to specialAccess("enabled_accessibility_services")
         )
+    }
+
+    fun read(context: Context): Snapshot {
+        val app = context.applicationContext
+        val permissions = permissionStates(app)
         val labels = mapOf(
             "contacts" to "Contacts",
             "location" to "Location",
