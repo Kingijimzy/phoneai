@@ -18,6 +18,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
     private val token = ByteArray(32).also { SecureRandom().nextBytes(it) }
     private val server = ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))
     private val running = AtomicBoolean(true)
+    @Volatile private var activeSocket: Socket? = null
     private val worker = Thread({ serve() }, "OrionPythonPhoneBridge").apply { isDaemon = true; start() }
 
     fun environment(): Map<String, String> = mapOf(
@@ -28,6 +29,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
     override fun close() {
         if (running.compareAndSet(true, false)) {
             runCatching { server.close() }
+            runCatching { activeSocket?.close() }
             worker.interrupt()
             runCatching { worker.join(300) }
         }
@@ -36,8 +38,12 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
 
     private fun serve() {
         while (running.get()) {
-            try { server.accept().use { socket -> socket.soTimeout = 40_000; handle(socket) } }
-            catch (_: Exception) { if (!running.get()) return }
+            try {
+                val socket = server.accept()
+                activeSocket = socket
+                try { socket.use { it.soTimeout = 40_000; handle(it) } }
+                finally { activeSocket = null }
+            } catch (_: Exception) { if (!running.get()) return }
         }
     }
 
@@ -66,7 +72,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
             respond(socket, 400, JSONObject().put("ok", false).put("error", "unsupported_request_encoding")); return
         }
         val supplied = headers["authorization"]?.removePrefix("Bearer ")?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
-        val expected = Base64.encodeToString(token, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING).toByteArray(Charsets.UTF_8)
+        val expected = Base64.encodeToString(token, Base64.URL_SAFE or Base64.NO_WRAP).toByteArray(Charsets.UTF_8)
         if (!MessageDigest.isEqual(expected, supplied)) { respond(socket, 401, JSONObject().put("ok", false).put("error", "unauthorized")); return }
         val length = headers["content-length"]?.toIntOrNull()
         if (length == null || length !in 2..MAX_REQUEST_BYTES) {
@@ -131,8 +137,45 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
         }
     }
 
+    private fun readLine(input: InputStream, maxBytes: Int): String? {
+        val output = ByteArrayOutputStream()
+        var previous = -1
+        while (true) {
+            val value = input.read()
+            if (value < 0) return if (output.size() == 0) null else output.toString(Charsets.US_ASCII.name())
+            if (previous == 13 && value == 10) {
+                val bytes = output.toByteArray()
+                val length = if (bytes.lastOrNull()?.toInt() == 13) bytes.size - 1 else bytes.size
+                return bytes.copyOf(length).toString(Charsets.US_ASCII.name())
+            }
+            output.write(value)
+            if (output.size() > maxBytes) throw IllegalArgumentException("header_line_too_large")
+            previous = value
+        }
+    }
+
+    private fun respond(socket: Socket, status: Int, body: JSONObject) {
+        val raw = body.toString().toByteArray(Charsets.UTF_8)
+        val responseStatus = if (raw.size > MAX_RESPONSE_BYTES) 413 else status
+        val bytes = if (raw.size > MAX_RESPONSE_BYTES)
+            JSONObject().put("ok", false).put("error", "phone_api_response_too_large").toString().toByteArray(Charsets.UTF_8)
+        else raw
+        val reason = when (responseStatus) {
+            200 -> "OK"; 400 -> "Bad Request"; 401 -> "Unauthorized"
+            404 -> "Not Found"; 413 -> "Payload Too Large"; 431 -> "Request Header Fields Too Large"
+            else -> "Error"
+        }
+        val header = "HTTP/1.1 $responseStatus $reason\\r\\nContent-Type: application/json; charset=utf-8\\r\\nContent-Length: ${bytes.size}\\r\\nConnection: close\\r\\nCache-Control: no-store\\r\\n\\r\\n"
+        socket.getOutputStream().apply {
+            write(header.toByteArray(Charsets.US_ASCII))
+            write(bytes)
+            flush()
+        }
+    }
+
     companion object {
         private const val MAX_REQUEST_BYTES = 8 * 1024 * 1024
+        private const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
         internal val registeredMethods = linkedSetOf(
             "battery", "location", "notifications", "contacts",
             "accessibility_open_settings", "accessibility_status", "accessibility_screen",
