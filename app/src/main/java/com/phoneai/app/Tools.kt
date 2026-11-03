@@ -1122,8 +1122,8 @@ class Tools(
         }
     }
 
-    fun pythonExec(code: String, confirm: (String) -> Boolean = { false }): String =
-        OrionPythonRuntime.execute(svc, code, confirm)
+    fun pythonExec(code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String =
+        OrionPythonRuntime.execute(svc, code, confirm, stopped)
 
     fun shell(command: String, where: String): String =
         if (command.isBlank()) "error: command is required"
