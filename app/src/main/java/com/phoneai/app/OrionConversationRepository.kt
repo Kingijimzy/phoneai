@@ -575,7 +575,6 @@ class OrionConversationRepository private constructor(context: Context) :
         } finally { db.endTransaction() }
     }
 
-    @Synchronized
     /** Append a final live turn to its pinned conversation without changing the active chat. */
     @Synchronized
     fun appendTurnToSession(context: Context, sessionId: String, role: String, content: String): Boolean {
