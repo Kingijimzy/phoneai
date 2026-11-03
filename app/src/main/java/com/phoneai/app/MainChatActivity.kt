@@ -2172,20 +2172,9 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
                     correlationId = event.correlationId
                 )
             })
-            composeActivityEvents.value = projection.snapshot()
-            // Keep legacy transcript notes for compatibility with older chat history rendering.
-            events.forEach { event ->
-                val marker = when (event.type) {
-                    "approval" -> "[APPROVAL:${event.status.uppercase()}]"
-                    "tool" -> "[TOOL:${event.status.uppercase()}]"
-                    "tool_result" -> "[TOOL_RESULT:${event.status.uppercase()}]"
-                    else -> "[EVENT:${event.type.uppercase()}:${event.status.uppercase()}]"
-                }
-                val content = "$marker\n${event.summary}"
-                if (composeLines.none { it.kind == "note" && it.text == content }) {
-                    composeLines.add(OrionChatLine(event.id.hashCode().toLong(), "note", content))
-                }
-            }
+            composeActivityEvents.value = projection.compactForChat()
+            // Activity events have their own compact timeline cards. Do not mirror them
+            // into transcript notes: that rendered every tool twice.
         }
     }
 

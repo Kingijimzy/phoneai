@@ -49,6 +49,19 @@ class OrionActivityTimelineTest {
         assertEquals("parent-1", (restored.typedEvidence.single() as OrionActivityEvidence.AgentHandoff).parentTaskId)
     }
 
+    @Test fun compactChatProjectionDropsTransientAndDuplicateLifecycleCards() {
+        val timeline = OrionActivityTimeline()
+        timeline.append(OrionActivityEvent("accepted", "task-1", OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Request accepted", "request accepted", 1))
+        timeline.append(OrionActivityEvent("tool-start", "task-1", OrionActivityKind.TOOL,
+            OrionActivityStatus.ACTIVE, "workspace_read", "Tool: workspace_read", 2, correlationId = "call-1"))
+        timeline.append(OrionActivityEvent("tool-result", "task-1", OrionActivityKind.ERROR,
+            OrionActivityStatus.FAILED, "workspace_read failed", "tool=workspace_read; outcome=failed", 3, correlationId = "call-1"))
+        timeline.append(OrionActivityEvent("finished", "task-1", OrionActivityKind.COMPLETION,
+            OrionActivityStatus.SUCCEEDED, "Interaction finished", "interaction processing finished", 4))
+        assertEquals(listOf("tool-result"), timeline.compactForChat().map { it.eventId })
+    }
+
     @Test fun elapsedTimeClampsClockSkewAndFormatsLongRuns() {
         assertEquals("0s", OrionActivityTimeline.elapsedLabel(2_000, 1_000))
         assertEquals("12s", OrionActivityTimeline.elapsedLabel(1_000, 13_000))

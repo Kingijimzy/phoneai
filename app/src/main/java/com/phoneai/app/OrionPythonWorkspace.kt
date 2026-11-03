@@ -135,10 +135,22 @@ internal class OrionPythonWorkspace(context: Context) {
         if (!root.exists()) check(root.mkdirs()) { "workspace unavailable" }
         check(rootStatus() == RootStatus.READY) { "workspace unavailable" }
     }
+    /** Accept both host-relative paths and the guest-visible /workspace mount path. */
+    private fun normalizePath(path: String): String? {
+        val relative = when {
+            path.startsWith("/workspace/") -> path.removePrefix("/workspace/")
+            path == "/workspace" -> return null
+            path.startsWith("/") -> return null
+            else -> path
+        }
+        if (!NAME.matches(relative) || relative.split('/').any { it.isBlank() || it == "." || it == ".." }) return null
+        return relative
+    }
+
     private fun resolve(path: String, mustExist: Boolean): File? {
-        if (!NAME.matches(path) || path.startsWith("/") || path.split('/').any { it.isBlank() || it == "." || it == ".." }) return null
+        val relative = normalizePath(path) ?: return null
         ensureRoot()
-        val target = File(root, path)
+        val target = File(root, relative)
         val parent = target.parentFile ?: return null
         if (!insideRoot(parent) || hasSymlink(parent)) return null
         if (mustExist && (!target.exists() || !insideRoot(target) || java.nio.file.Files.isSymbolicLink(target.toPath()))) return null

@@ -2425,6 +2425,11 @@ Rules:
                         ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                         return
                     }
+                    val batchGraph = OrionObjectiveGraph.load(svc)
+                    activeObjectiveId = one.optString("objective_id").ifBlank { step.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" } }
+                    if (activeObjectiveId.isNotBlank()) batchArgs.put("objective_id", activeObjectiveId)
+                    // Persist the exact dispatch arguments. Adding objective_id after beginStep made
+                    // recordStep reject the otherwise valid result as an in-flight argument mismatch.
                     if (!OrionTasksCapabilityExecutor.beginStep(svc, bt, batchArgs)) {
                         OrionTasksCapabilityExecutor.pauseRun(svc)
                         ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
@@ -2432,9 +2437,6 @@ Rules:
                     }
                     toolCalls++
                     ui.note("[TASK:RUNNING]\nRunning $bt")
-                    val batchGraph = OrionObjectiveGraph.load(svc)
-                    activeObjectiveId = one.optString("objective_id").ifBlank { step.optString("objective_id").ifBlank { if (batchGraph?.nodes?.size == 1) batchGraph.nodes.first().id else "" } }
-                    if (activeObjectiveId.isNotBlank()) batchArgs.put("objective_id", activeObjectiveId)
                     if (bt == "ask_agent") {
                         ui.note("[SPECIALIST:ASSIGNED]\nOrion assigned " + batchArgs.optString("agent", "specialist") + ": " +
                             batchArgs.optString("task").take(180) + if (activeObjectiveId.isNotBlank()) "\nParent objective: $activeObjectiveId" else "")

@@ -59,6 +59,20 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
 
     @Synchronized fun clear() = events.clear()
 
+    /** Compact the chat surface: completed correlated events replace their transient start cards. */
+    @Synchronized fun compactForChat(): List<OrionActivityEvent> {
+        val completedCorrelations = events.values
+            .filter { it.status != OrionActivityStatus.ACTIVE }
+            .mapNotNull { it.correlationId }
+            .toSet()
+        return snapshot().filterNot { event ->
+            (event.status == OrionActivityStatus.ACTIVE && event.correlationId != null &&
+                event.correlationId in completedCorrelations) ||
+                (event.kind == OrionActivityKind.THINKING && event.summary.contains("request accepted", true)) ||
+                (event.kind == OrionActivityKind.COMPLETION && event.summary.contains("interaction processing finished", true))
+        }
+    }
+
     companion object {
         fun elapsedLabel(startedAtMs: Long, nowMs: Long): String {
             val seconds = ((nowMs - startedAtMs).coerceAtLeast(0L)) / 1000L
