@@ -112,6 +112,9 @@ internal object OrionObjectiveGraph {
      * so safely bind the call to that node. Multi-node graphs must supply an exact known ID;
      * guessing there could execute work against the wrong dependency.
      */
+    /** Planner bookkeeping must not be mistaken for execution of a graph objective. */
+    fun requiresObjectiveDispatch(tool: String): Boolean = tool !in setOf("task_add")
+
     fun resolveDispatchId(graph: Graph, requestedId: String?): String? {
         val candidate = requestedId?.trim()?.lowercase().orEmpty()
         // Exact model IDs always win. If the model invents an alias or omits the ID,

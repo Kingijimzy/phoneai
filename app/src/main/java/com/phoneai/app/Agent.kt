@@ -292,7 +292,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         // Objective dependencies are enforced at the actual dispatch boundary, not trusted from planner prose.
         val objectiveGraph = OrionObjectiveGraph.load(svc)
-        if (objectiveGraph != null) {
+        // task_add only records planner bookkeeping; it does not execute an objective capability.
+        // Keep the dependency/approval gates on every real capability dispatch below.
+        if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
             val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId)
                 ?: return "error: the planner's objective_id does not match this multi-objective task. Valid IDs: " +
                     objectiveGraph.nodes.joinToString(", ") { it.id } + ". No tool was dispatched."
