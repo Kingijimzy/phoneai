@@ -49,8 +49,9 @@ internal object TradingRisk {
 
     /** Notional dollars to open so that hitting the stop loses exactly [riskPct] of [equity]. */
     fun sizeForRisk(equity: Double, riskPct: Double, entry: Double, stop: Double): Double {
+        if (!equity.isFinite() || !riskPct.isFinite() || !entry.isFinite() || !stop.isFinite()) return 0.0
         val move = abs(entry - stop) / entry
-        if (equity <= 0 || riskPct <= 0 || entry <= 0 || move <= 0) return 0.0
+        if (equity <= 0 || riskPct <= 0 || entry <= 0 || move <= 0 || !move.isFinite()) return 0.0
         return equity * (riskPct / 100.0) / move
     }
 
@@ -63,7 +64,19 @@ internal object TradingRisk {
         newsBlackout: Boolean = false
     ): Verdict {
         val reasons = ArrayList<String>()
-        val move = if (order.entry > 0) abs(order.entry - order.stop) / order.entry else 0.0
+        val numericInputs = listOf(order.usd, order.entry, order.stop, account.equity, account.dayStartEquity,
+            limits.maxOrderUsd, limits.maxRiskPct, limits.maxDailyLossPct, limits.minRewardToRisk) +
+            listOfNotNull(order.target)
+        if (numericInputs.any { !it.isFinite() }) reasons += "Order, account, and risk-limit values must all be finite numbers."
+        if (order.side.lowercase() !in setOf("long", "buy", "short", "sell")) reasons += "Order side must be long/buy or short/sell."
+        if (account.openPositions < 0 || account.tradesToday < 0 || account.consecutiveLosses < 0 ||
+            limits.maxOpenPositions < 1 || limits.maxTradesPerDay < 1 || limits.lossStreakPause < 1 ||
+            limits.pauseMinutes < 0 || limits.maxOrderUsd <= 0 || limits.maxRiskPct <= 0 ||
+            limits.maxDailyLossPct <= 0 || limits.minRewardToRisk < 0) {
+            reasons += "Account counters and configured risk limits are invalid."
+        }
+        val move = if (order.entry > 0 && order.entry.isFinite() && order.stop.isFinite())
+            abs(order.entry - order.stop) / order.entry else 0.0
         val riskUsd = order.usd * move
         val riskPct = if (account.equity > 0) riskUsd / account.equity * 100.0 else 100.0
         val rr = order.target?.let { t ->
