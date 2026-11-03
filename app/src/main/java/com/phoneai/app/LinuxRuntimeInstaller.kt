@@ -154,7 +154,7 @@ internal class LinuxRuntimeInstaller(
             }
         }
         val result = try {
-            runProcess(args, rootfs, timeoutMs, onOutput)
+            runProcess(args, rootfs, timeoutMs, onOutput, shouldStop)
         } catch (failure: IOException) {
             // Keep the marker after interrupted package operations so the next call repairs the rootfs.
             return "error: Linux process I/O failed safely: ${(failure.message ?: failure.javaClass.simpleName).take(240)}"
