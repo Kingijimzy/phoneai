@@ -92,6 +92,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
     }
 
     private fun dispatch(method: String, args: JSONArray): String {
+        require(method in registeredMethods) { "phone_method_not_allowed" }
         fun count(expected: Int) { require(args.length() == expected) { "invalid_argument_count" } }
         fun text(index: Int): String {
             val value = args.opt(index)
@@ -130,47 +131,22 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
         }
     }
 
-    private fun readLine(input: InputStream, maxBytes: Int): String? {
-        val output = ByteArrayOutputStream()
-        var previous = -1
-        while (true) {
-            val value = input.read()
-            if (value < 0) return if (output.size() == 0) null else output.toString(Charsets.US_ASCII.name())
-            if (previous == 13 && value == 10) {
-                val bytes = output.toByteArray()
-                val length = if (bytes.lastOrNull()?.toInt() == 13) bytes.size - 1 else bytes.size
-                return bytes.copyOf(length).toString(Charsets.US_ASCII.name())
-            }
-            output.write(value)
-            if (output.size() > maxBytes) throw IllegalArgumentException("header_line_too_large")
-            previous = value
-        }
-    }
-
-    private fun respond(socket: Socket, status: Int, body: JSONObject) {
-        val bytes = body.toString().toByteArray(Charsets.UTF_8)
-        val reason = when (status) {
-            200 -> "OK"; 400 -> "Bad Request"; 401 -> "Unauthorized"
-            404 -> "Not Found"; 413 -> "Payload Too Large"; 431 -> "Request Header Fields Too Large"
-            else -> "Error"
-        }
-        val header = "HTTP/1.1 $status $reason\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: \${bytes.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
-        socket.getOutputStream().apply { write(header.toByteArray(Charsets.US_ASCII)); write(bytes); flush() }
-    }
-
     companion object {
         private const val MAX_REQUEST_BYTES = 8 * 1024 * 1024
-        fun bootstrapCommand(): String {
-            val source = """
-import os, base64, json, urllib.request, urllib.error
+        internal val registeredMethods = linkedSetOf(
+            "battery", "location", "notifications", "contacts",
+            "accessibility_open_settings", "accessibility_status", "accessibility_screen",
+            "ui_tap_text", "ui_tap", "ui_swipe", "fs_list", "fs_read", "fs_write", "shell",
+            "ws_connect", "ws_connect_with_headers", "ws_send", "ws_send_binary", "ws_receive", "ws_close",
+            "http_get", "http_post"
+        )
+
+        internal fun bootstrapSource(): String {
+            val pythonMethods = registeredMethods.joinToString(", ") { "\"$it\"" }
+            return """
+import os, json, urllib.request, urllib.error
 class _OrionPhone:
-    _allowed = {
-        "battery", "location", "notifications", "contacts",
-        "accessibility_open_settings", "accessibility_status", "accessibility_screen",
-        "ui_tap_text", "ui_tap", "ui_swipe", "fs_list", "fs_read", "fs_write", "shell",
-        "ws_connect", "ws_connect_with_headers", "ws_send", "ws_send_binary", "ws_receive", "ws_close",
-        "http_get", "http_post"
-    }
+    _allowed = setOf($pythonMethods)
     def __getattr__(self, name):
         if name not in self._allowed:
             raise AttributeError("phone API method is not registered: " + name)
@@ -199,8 +175,15 @@ with open("/workspace/orion_main.py", "rb") as source_file:
     exec(compile(source_file.read(), "/workspace/orion_main.py", "exec"),
          {"__name__": "__main__", "phone": phone})
 """
-            val encoded = Base64.encodeToString(source.toByteArray(Charsets.UTF_8), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        }
+
+        fun bootstrapCommand(): String {
+            val encoded = Base64.encodeToString(
+                bootstrapSource().toByteArray(Charsets.UTF_8),
+                Base64.URL_SAFE or Base64.NO_WRAP
+            )
             return "import base64;exec(base64.urlsafe_b64decode('$encoded'))"
         }
     }
+}
 }
