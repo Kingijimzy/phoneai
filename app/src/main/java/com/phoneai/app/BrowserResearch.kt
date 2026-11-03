@@ -37,7 +37,7 @@ object BrowserResearch {
     private const val MAX_REDIRECTS = 3
 
     /**
-     * Fetch one public HTML/text page. Only standard HTTP(S) ports are accepted.
+     * Fetch one public HTML/text page. Only public HTTPS webpages on the standard HTTPS port are accepted.
      * Cancellation is cooperative and checked while reading response bytes.
      */
     fun fetch(rawUrl: String, cancelled: AtomicBoolean = AtomicBoolean(false)): BrowserResearchResult {
@@ -50,7 +50,7 @@ object BrowserResearch {
             } catch (_: Exception) {
                 return fail("Invalid URL.")
             }
-            val safe = validatePublicUrl(uri) ?: return fail("Only public HTTP(S) webpages on standard ports can be fetched.")
+            val safe = validatePublicUrl(uri) ?: return fail("Only public HTTPS webpages on the standard HTTPS port can be fetched.")
             var connection: HttpURLConnection? = null
             try {
                 connection = (URL(safe).openConnection() as? HttpURLConnection)
@@ -112,13 +112,13 @@ object BrowserResearch {
 
     private fun validatePublicUrl(uri: URI): String? {
         val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return null
-        if (scheme != "https" && scheme != "http") return null
+        if (scheme != "https") return null
         if (uri.rawUserInfo != null) return null
         val host = uri.host?.trimEnd('.')?.lowercase(Locale.ROOT) ?: return null
         if (host.isBlank() || host == "localhost" || host.endsWith(".localhost") ||
             host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".test")) return null
         val port = uri.port
-        if (port != -1 && port != 80 && port != 443) return null
+        if (port != -1 && port != 443) return null
         return try {
             // Resolve before connecting; reject private, loopback, link-local, and reserved addresses.
             val addresses = InetAddress.getAllByName(host)
