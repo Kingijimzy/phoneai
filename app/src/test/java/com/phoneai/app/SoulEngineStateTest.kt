@@ -100,6 +100,44 @@ class SoulEngineStateTest {
         assertTrue(proposals.single().detail.contains("proposal only"))
     }
 
+    @Test fun explicitMemoryDetectorOnlyAcceptsClearPreferenceLanguage() {
+        val preference = SoulEngineState.detectExplicitMemoryCandidate("I prefer concise explanations when learning.")
+        assertNotNull(preference)
+        assertEquals("preference", preference!!.first)
+        assertNull(SoulEngineState.detectExplicitMemoryCandidate("What is the weather today?"))
+        assertNull(SoulEngineState.detectExplicitMemoryCandidate("My password is abc123"))
+    }
+
+    @Test fun memoryNudgeIsDeduplicatedAndCanBeSavedOrDismissed() {
+        assertTrue(SoulEngineState.proposeMemoryNudge(
+            context, "preference", "Prefers concise trading explanations", "prefers concise trading explanations"
+        ))
+        val pending = SoulEngineState.snapshot(context).memoryNudges.single()
+        assertEquals(SoulEngineState.NudgeStatus.PENDING, pending.status)
+        assertFalse(SoulEngineState.proposeMemoryNudge(
+            context, "preference", "Prefers concise trading explanations", "prefers concise trading explanations"
+        ))
+        assertTrue(SoulEngineState.reviewMemoryNudge(context, pending.id, SoulEngineState.NudgeStatus.SAVED))
+        assertTrue(SoulEngineState.snapshot(context).lessons.any { it.summary == pending.summary && it.outcome == "user_saved_memory" })
+        assertFalse(SoulEngineState.reviewMemoryNudge(context, pending.id, SoulEngineState.NudgeStatus.DISMISSED))
+    }
+
+    @Test fun memoryNudgeCooldownAndDisableRulesAreRespected() {
+        assertTrue(SoulEngineState.proposeMemoryNudge(context, "preference", "Likes concise summaries", "likes concise summaries"))
+        assertFalse(SoulEngineState.proposeMemoryNudge(context, "routine", "Prefers short morning brief", "short morning brief"))
+        assertTrue(SoulEngineState.configureMemoryNudges(context, enabled = false, cooldownMillis = 3_600_000L))
+        assertFalse(SoulEngineState.proposeMemoryNudge(context, "preference", "Uses dark mode", "uses dark mode"))
+        val rules = SoulEngineState.snapshot(context).memoryNudgeRules
+        assertFalse(rules.enabled)
+        assertTrue(rules.cooldownMillis >= 3_600_000L)
+    }
+
+    @Test fun sensitiveMemoryCandidatesAreRejected() {
+        assertFalse(SoulEngineState.proposeMemoryNudge(context, "account", "My password is abc123", "password"))
+        assertFalse(SoulEngineState.proposeMemoryNudge(context, "security", "Remember this seed phrase", "seed phrase"))
+        assertTrue(SoulEngineState.snapshot(context).memoryNudges.isEmpty())
+    }
+
     @Test fun secretsAndUrlsAreNotKeptInSoulLabels() {
         assertTrue(SoulEngineState.setGoal(context, "Use api_key=abc123 to open https://example.com/private"))
         val saved = context.getSharedPreferences("orion_soul_state_v1", Context.MODE_PRIVATE).getString("state_json", "")!!

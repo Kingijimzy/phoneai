@@ -1833,6 +1833,17 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             return
         }
+        // Stage 3: only explicit preference/memory wording is considered, locally, and the
+        // candidate remains pending until the user reviews it in Watcher. Attachments/documents
+        // are deliberately excluded from this detector.
+        if (imageUris.isEmpty() && documentText.isNullOrBlank()) {
+            val candidate = SoulEngineState.detectExplicitMemoryCandidate(value)
+            if (candidate != null && SoulEngineState.proposeMemoryNudge(
+                    applicationContext, candidate.first, candidate.second
+                )) {
+                Toast.makeText(this, "Possible memory found. Review it in Watcher → Memory nudges.", Toast.LENGTH_LONG).show()
+            }
+        }
         input.setText("")
         if (imageUris.isNotEmpty()) {
             val question = value.ifBlank { "Describe these images and explain anything important I should notice. Compare them when useful." }
