@@ -194,3 +194,21 @@ This section supersedes the earlier pending status above.
 The exact-head run includes the additional TradingRisk validation and regression tests committed before this SHA. This confirms source-level regression coverage and APK production by CI; it does not prove the app's live exchange, network, voice, accessibility, lifecycle, or provider journeys work on a physical device.
 
 The artifact is debug-signed and is not a production release. Preserve the candidate branch and do not merge until the network-security review, complete diff review, release-signing plan, and owner-run physical-device acceptance are complete.
+
+
+## Browser transport hardening — 2026-11-03
+
+The source audit found two additional public-browser HTTP paths in addition to the Python private-LAN bridge:
+- The interactive WebView browser accepted arbitrary `http://` navigation.
+- The bounded agent BrowserResearch fetcher accepted public HTTP as well as HTTPS.
+
+Both now require HTTPS for browser page navigation/research. WebView mixed content was already configured as `MIXED_CONTENT_NEVER_ALLOW`; top-level HTTP navigation is now blocked as well. BrowserResearch rejects HTTP before opening a connection and has regression tests for HTTP, unsupported schemes, and pre-cancelled requests.
+
+Other inspected direct network clients:
+- Bybit REST endpoints are fixed HTTPS.
+- Gemini Live token requests use HTTPS; live socket endpoints use secure WebSocket.
+- Live web search and voice-asset downloads use HTTPS endpoints.
+- MCP endpoint saving permits HTTPS, or HTTP only for explicit localhost endpoints.
+- Python HTTP/WebSocket remains the one user-granted private-LAN transport; it validates exact host grants, RFC1918/loopback addresses, DNS pins, and requires an explicit plain-HTTP host grant.
+
+The Android base network security config still has app-wide cleartext enabled because dynamic owner-approved private-LAN HTTP hosts cannot be enumerated in a static Android domain allowlist. This remains a platform-level exposure to document and review; source-level restrictions are not equivalent to OS-enforced per-host cleartext policy. Do not describe this as fully closed.
