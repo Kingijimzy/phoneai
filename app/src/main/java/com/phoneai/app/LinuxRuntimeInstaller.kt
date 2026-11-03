@@ -166,7 +166,8 @@ internal class LinuxRuntimeInstaller(
         val packageRecoveryRequired = packageMutation &&
             (result.timedOut || result.exitCode in setOf(9, 137, 143))
         if (packageMutation && !packageRecoveryRequired) packageOperationMarker.delete()
-        return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."\n        else if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
+        return if (result.cancelled) "error: Linux command cancelled; the guest process was terminated."
+        else if (result.timedOut) "error: Linux command timed out after ${timeoutMs} ms" +
             if (packageMutation) ". The next Linux command will restore the pinned base rootfs before continuing." else ""
         else "exit=${result.exitCode}\n${result.output}" +
             if (packageRecoveryRequired) "\nPackage operation was interrupted; the next Linux command will restore the pinned base rootfs before continuing." else ""
