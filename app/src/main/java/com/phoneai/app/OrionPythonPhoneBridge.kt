@@ -165,7 +165,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
             404 -> "Not Found"; 413 -> "Payload Too Large"; 431 -> "Request Header Fields Too Large"
             else -> "Error"
         }
-        val header = "HTTP/1.1 $responseStatus $reason\\r\\nContent-Type: application/json; charset=utf-8\\r\\nContent-Length: ${bytes.size}\\r\\nConnection: close\\r\\nCache-Control: no-store\\r\\n\\r\\n"
+        val header = "HTTP/1.1 $responseStatus $reason\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
         socket.getOutputStream().apply {
             write(header.toByteArray(Charsets.US_ASCII))
             write(bytes)
