@@ -128,11 +128,21 @@ internal class LinuxRuntimeInstaller(
         if (timeoutMs !in 250L..180_000L) return "error: Linux timeout must be between 250 and 180000 ms."
         if (command == "__orion_install__") return "error: internal command is not executable"
         val workspace = workspaceHostPath?.let { candidate ->
+            // The guest may see exactly one host directory: Orion's dedicated Python workspace.
+            // A generic "inside filesDir" check would also permit accidental binding of databases,
+            // preferences or other private application state by a future caller.
+            val expected = File(app.filesDir, "orion-python/workspace")
             val dir = File(candidate)
             val canonical = runCatching { dir.canonicalFile }.getOrNull()
-            if (canonical == null || !canonical.isDirectory || !canonical.canRead() || !canonical.canWrite() ||
-                java.nio.file.Files.isSymbolicLink(dir.toPath()) || !canonical.toPath().startsWith(app.filesDir.canonicalFile.toPath()))
+            val expectedCanonical = runCatching { expected.canonicalFile }.getOrNull()
+            if (canonical == null || expectedCanonical == null ||
+                canonical.toPath() != expectedCanonical.toPath() ||
+                !canonical.isDirectory || !canonical.canRead() || !canonical.canWrite() ||
+                java.nio.file.Files.isSymbolicLink(dir.toPath()) ||
+                java.nio.file.Files.isSymbolicLink(expected.toPath()) ||
+                java.nio.file.Files.isSymbolicLink(expected.parentFile.toPath())) {
                 return "error: Python workspace bind mount rejected by runtime policy."
+            }
             canonical.absolutePath
         }
         val args = LinuxRuntimePolicy.prootArgs(proot.absolutePath, rootfs.absolutePath, command, workspace)
