@@ -2551,6 +2551,10 @@ Rules:
                 ui.say("I stopped safely because the task $reason. ${stall.summary()}Progress is saved; raise the budget or continue later.")
                 return
             }
+            val currentGraph = OrionObjectiveGraph.load(svc)
+            activeObjectiveId = step.optString("objective_id").ifBlank { if (currentGraph?.nodes?.size == 1) currentGraph.nodes.first().id else "" }
+            if (activeObjectiveId.isNotBlank()) args.put("objective_id", activeObjectiveId)
+            // The in-flight marker and result receipt must use byte-for-byte equivalent safe args.
             if (!OrionTasksCapabilityExecutor.beginStep(svc, tool, args)) {
                 OrionTasksCapabilityExecutor.pauseRun(svc)
                 ui.say("I could not save the next action before running it, so I stopped safely. No new action was started.")
@@ -2558,9 +2562,6 @@ Rules:
             }
             toolCalls++
             ui.note("[TASK:RUNNING]\nRunning $tool")
-            val currentGraph = OrionObjectiveGraph.load(svc)
-            activeObjectiveId = step.optString("objective_id").ifBlank { if (currentGraph?.nodes?.size == 1) currentGraph.nodes.first().id else "" }
-            if (activeObjectiveId.isNotBlank()) args.put("objective_id", activeObjectiveId)
             if (tool == "ask_agent") {
                 val worker = args.optString("agent").ifBlank { "specialist" }
                 val objective = args.optString("task").take(180)
