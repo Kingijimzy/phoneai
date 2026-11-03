@@ -61,7 +61,7 @@ internal object OrionPythonRuntime {
             // and were the source of avoidable package-install failures. apk add refreshes indexes
             // as needed; do not run a separate apk update that doubles downloads.
             val install = installer.execute(
-                "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
+                manifest, "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
                 180_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
             if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\\n${install.take(MAX_OUTPUT_CHARS)}"
