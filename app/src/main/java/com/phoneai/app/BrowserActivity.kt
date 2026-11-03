@@ -658,7 +658,6 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         renderTabs()
         updateControls()
         persistBrowserSession()
-        persistBrowserSession()
     }
 
     override fun onBackPressed() {
