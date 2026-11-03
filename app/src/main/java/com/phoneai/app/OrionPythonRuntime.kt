@@ -71,15 +71,26 @@ internal object OrionPythonRuntime {
             else -> return "error: Python workspace failed its integrity check; refusing execution."
         }
 
-        val result = installer.execute(
-            manifest,
-            "ulimit -c 0; ulimit -t 90; ulimit -f 2048; ulimit -n 64; ulimit -u 32; exec python3 -I /workspace/$SCRIPT_NAME",
-            EXECUTION_TIMEOUT_MS,
-            workspaceHostPath = workspaceRoot.absolutePath,
-            shouldStop = stopped
-        )
+        val phoneApi = OrionPythonPhoneApi(app, confirm, readOnly = ToolPermissions.level(app) == "read_only")
+        val bridge = try { OrionPythonPhoneBridge(phoneApi) }
+        catch (failure: Exception) {
+            return "error: could not start the private Python-to-Android bridge (${failure.javaClass.simpleName})."
+        }
+        val result = try {
+            val bootstrap = OrionPythonPhoneBridge.bootstrapCommand()
+            installer.execute(
+                manifest,
+                "ulimit -c 0; ulimit -t 90; ulimit -f 2048; ulimit -n 64; ulimit -u 32; exec python3 -I -c '$bootstrap'",
+                EXECUTION_TIMEOUT_MS,
+                workspaceHostPath = workspaceRoot.absolutePath,
+                shouldStop = stopped,
+                extraEnvironment = bridge.environment()
+            )
+        } finally {
+            bridge.close()
+        }
         val quotaAfter = workspace.quotaStatus()
-        if (quotaAfter == "unsafe") return "error: Python finished, but workspace integrity validation failed; inspect the workspace before using its files.\n\${result.take(MAX_OUTPUT_CHARS)}"
+        if (quotaAfter == "unsafe") return "error: Python finished, but workspace integrity validation failed; inspect the workspace before using its files.\n${result.take(MAX_OUTPUT_CHARS)}"
         if (quotaAfter == "exceeded") return "error: Python exceeded the 20 MiB workspace quota. Further execution is blocked until the workspace is cleaned.\n\${result.take(MAX_OUTPUT_CHARS)}"
         return result.take(MAX_OUTPUT_CHARS)
     }
