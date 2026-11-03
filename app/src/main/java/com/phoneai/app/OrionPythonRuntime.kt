@@ -63,6 +63,14 @@ internal object OrionPythonRuntime {
             if (!install.startsWith("exit=0")) return "error: CPython package installation failed.\n${install.take(MAX_OUTPUT_CHARS)}"
         }
 
+        // CPython can write directly through the bind mount, bypassing OrionPythonWorkspace.write().
+        // Refuse to start with an already exhausted/unsafe workspace and audit it again after exit.
+        when (workspace.quotaStatus()) {
+            "ok" -> Unit
+            "exceeded" -> return "error: Python workspace is already over its 20 MiB quota; remove files before execution."
+            else -> return "error: Python workspace failed its integrity check; refusing execution."
+        }
+
         val result = installer.execute(
             manifest,
             "ulimit -c 0; ulimit -t 90; ulimit -f 2048; ulimit -n 64; ulimit -u 32; exec python3 -I /workspace/$SCRIPT_NAME",
@@ -70,6 +78,9 @@ internal object OrionPythonRuntime {
             workspaceHostPath = workspaceRoot.absolutePath,
             shouldStop = stopped
         )
+        val quotaAfter = workspace.quotaStatus()
+        if (quotaAfter == "unsafe") return "error: Python finished, but workspace integrity validation failed; inspect the workspace before using its files.\n\${result.take(MAX_OUTPUT_CHARS)}"
+        if (quotaAfter == "exceeded") return "error: Python exceeded the 20 MiB workspace quota. Further execution is blocked until the workspace is cleaned.\n\${result.take(MAX_OUTPUT_CHARS)}"
         return result.take(MAX_OUTPUT_CHARS)
     }
 
