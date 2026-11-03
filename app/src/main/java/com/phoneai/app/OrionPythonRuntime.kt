@@ -19,7 +19,7 @@ internal object OrionPythonRuntime {
     private const val EXECUTION_TIMEOUT_MS = 100_000L
 
     @Synchronized
-    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String {
+    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}): String {
         val maxChars = PythonExecutionPolicy.maxCodeChars(context)
         if (code.isBlank()) return "error: Python code is required."
         if (code.length > maxChars) return "error: Python code exceeds the active profile limit of $maxChars characters."
@@ -62,7 +62,7 @@ internal object OrionPythonRuntime {
             // as needed; do not run a separate apk update that doubles downloads.
             val install = installer.execute(
                 manifest, "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
-                180_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
+                180_000L, onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
             if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\\n${install.take(MAX_OUTPUT_CHARS)}"
             val verified = installer.execute(manifest, "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'", 12_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
@@ -91,6 +91,7 @@ internal object OrionPythonRuntime {
                 manifest,
                 "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32; exec python3 -I -c '$bootstrap'",
                 EXECUTION_TIMEOUT_MS,
+                onOutput = onOutput,
                 workspaceHostPath = workspaceRoot.absolutePath,
                 shouldStop = {
                     if (stopped()) true

@@ -150,7 +150,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
     private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
     private val commandNim = Nim(svc, commandMode = true, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
-    private val tools = Tools(svc) { tool, args -> executeWithRecoveryGuard(tool, args) }
+    private val lastPythonOutputAt = java.util.concurrent.atomic.AtomicLong(0L)
+    private val pythonOutputBuffer = StringBuilder()
+    private val tools = Tools(svc, { tool, args -> executeWithRecoveryGuard(tool, args) }) { chunk ->
+        val now = android.os.SystemClock.elapsedRealtime()
+        synchronized(pythonOutputBuffer) {
+            pythonOutputBuffer.append(chunk)
+            if (pythonOutputBuffer.length > 1200) pythonOutputBuffer.delete(0, pythonOutputBuffer.length - 1200)
+            val previous = lastPythonOutputAt.get()
+            if (now - previous >= 350L && lastPythonOutputAt.compareAndSet(previous, now)) {
+                val tail = pythonOutputBuffer.toString().takeLast(700).trim()
+                if (tail.isNotBlank()) ui.note("[TASK:OUTPUT]\\n$tail")
+            }
+        }
+    }
     private val ranSteps = JSONArray()
     private val local = Local(
         svc, tools, { t, args -> executeWithRecoveryGuard(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },

@@ -306,14 +306,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 @Composable
 private fun OrionComposeActivityCard(event: OrionActivityEvent) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
-    val status = when (event.status) {
-        OrionActivityStatus.ACTIVE -> "RUNNING"
-        OrionActivityStatus.WAITING -> "WAITING"
-        OrionActivityStatus.SUCCEEDED -> "DONE"
-        OrionActivityStatus.FAILED -> "FAILED"
-        OrionActivityStatus.CANCELLED -> "CANCELLED"
-        OrionActivityStatus.INTERRUPTED -> "PAUSED"
-    }
+    val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
         OrionActivityStatus.ACTIVE -> Color(0xFFD1D1D1)
         OrionActivityStatus.WAITING -> Color(0xFFE0C58A)
@@ -321,75 +314,57 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
         else -> Color(0xFFAAAAAA)
     }
-    val terminal = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
-    val isPython = event.title.contains("python", true) || event.summary.contains("python_exec", true)
+    val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
+        ?: event.summary
+    val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
+    val alpha by pulse.animateFloat(
+        initialValue = if (active) 0.35f else 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(850), repeatMode = RepeatMode.Reverse),
+        label = "task-stream-alpha"
+    )
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
-            .background(Color(0xFF151515))
-            .border(1.dp, Color(0xFF393939), RoundedCornerShape(11.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+            .background(Color(0xFF111111))
+            .border(1.dp, Color(0xFF303030), RoundedCornerShape(9.dp))
             .clickable { expanded = !expanded }
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 9.dp, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(event.title, color = Color(0xFFF0F0F0), fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    when {
-                        terminal != null -> "TERMINAL · ${terminal.commandLabel}"
-                        isPython -> "CPYTHON · LIVE EXECUTION"
-                        else -> event.kind.name.replace('_', ' ')
-                    },
-                    color = ChatMuted, fontSize = 8.sp, letterSpacing = .7.sp,
-                    modifier = Modifier.padding(top = 2.dp), maxLines = 1
-                )
-            }
-            Text(status, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(5.dp)).background(Color(0xFF242424))
-                    .padding(horizontal = 7.dp, vertical = 4.dp))
+            Box(Modifier.size(6.dp).clip(CircleShape).background(accent.copy(alpha = if (active) alpha else 1f)))
+            Spacer(Modifier.width(7.dp))
+            Text(event.title, color = Color(0xFFE8E8E8), fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            Text(
+                when (event.status) {
+                    OrionActivityStatus.ACTIVE -> "RUNNING"
+                    OrionActivityStatus.WAITING -> "APPROVAL"
+                    OrionActivityStatus.SUCCEEDED -> "DONE"
+                    OrionActivityStatus.FAILED -> "FAILED"
+                    OrionActivityStatus.CANCELLED -> "STOPPED"
+                    OrionActivityStatus.INTERRUPTED -> "PAUSED"
+                }, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold
+            )
         }
-        if (terminal != null || isPython) {
-            Column(
-                Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF090B0D)).padding(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("›_", color = Color(0xFFB8CDBD), fontSize = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                    Text(
-                        terminal?.commandLabel ?: "python_exec · CPython",
-                        color = Color(0xFFD7D7D7), fontSize = 9.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                }
-                val output = terminal?.outputTail.orEmpty()
-                Text(
-                    output.ifBlank { if (event.status == OrionActivityStatus.ACTIVE) "Waiting for process output…" else "No terminal output was attached to this event." },
-                    color = Color(0xFFAAAAAA), fontSize = 9.sp, lineHeight = 12.sp,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 3.dp)
-                )
-                terminal?.exitCode?.let { code ->
-                    Text("exit $code", color = if (code == 0) Color(0xFFB8CDBD) else Color(0xFFE09B9B), fontSize = 8.sp)
-                }
-            }
+        if (event.kind == OrionActivityKind.TOOL && (event.title.contains("terminal", true) || event.summary.contains("TASK:OUTPUT", true))) {
+            Text(
+                terminalOutput.lineSequence().lastOrNull().orEmpty().takeLast(180).ifBlank { "Starting process…" },
+                color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 11.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                maxLines = if (expanded) 6 else 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 13.dp, top = 3.dp)
+            )
         } else if (event.summary.isNotBlank()) {
-            Text(event.summary, color = Color(0xFFB8B8B8), fontSize = 10.sp,
-                lineHeight = 13.sp, maxLines = if (expanded) 6 else 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+            Text(event.summary, color = Color(0xFF999999), fontSize = 9.sp,
+                maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
         if (expanded) {
-            Column(Modifier.padding(top = 7.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                event.evidence.takeLast(12).forEach { item ->
-                    Text("· $item", color = Color(0xFFBDBDBD), fontSize = 9.sp, lineHeight = 12.sp)
-                }
-                event.parentTaskId?.let { Text("Parent task $it", color = Color(0xFF777777), fontSize = 8.sp) }
-                Text("Task ${event.taskId}", color = Color(0xFF777777), fontSize = 8.sp)
+            event.evidence.takeLast(10).forEach { line ->
+                Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
             }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text(if (expanded) "LESS" else "DETAILS", color = Color(0xFF888888), fontSize = 8.sp)
+            Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
         }
     }
 }

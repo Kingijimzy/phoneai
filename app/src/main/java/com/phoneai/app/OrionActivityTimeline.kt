@@ -108,6 +108,10 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
             val status: OrionActivityStatus
             val title: String
             when {
+                line.startsWith("[TASK:OUTPUT]") -> {
+                    kind = OrionActivityKind.TOOL; status = OrionActivityStatus.ACTIVE
+                    title = "Python terminal"
+                }
                 line.startsWith("[TASK:RUNNING]") -> {
                     kind = OrionActivityKind.TOOL; status = OrionActivityStatus.ACTIVE
                     title = detail.removePrefix("Running ").ifBlank { "Working" }
