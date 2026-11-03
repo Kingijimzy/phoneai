@@ -26,6 +26,44 @@ internal object OrionRecoveryPlanner {
                 "This is guidance only: re-check live capabilities and all safety/approval policies before any next action."
     }
 
+    /**
+     * Picks only from the caller's freshly checked, registered-and-permitted tool set.
+     * This is a shortlist for the next planner turn, not dispatch authorization.
+     * Safety/approval denials produce no alternative; uncertain outcomes prefer read-only inspection.
+     */
+    fun selectAlternatives(
+        failedTool: String,
+        result: String,
+        registeredAndPermitted: Set<String>,
+        alreadyAttempted: Set<String> = emptySet(),
+        limit: Int = 3
+    ): List<String> {
+        if (limit <= 0) return emptyList()
+        val text = result.lowercase()
+        if (listOf("did not approve", "user declined", "not approved", "blocked by safety",
+                "safety policy", "user denied", "cancelled", "canceled", "task was stopped")
+                .any(text::contains)) return emptyList()
+
+        val preferred = when {
+            listOf("target not found", "ambiguous", "stale", "invalid target").any(text::contains) ->
+                listOf("read_screen", "wait_for", "click_text", "validate_action")
+            listOf("verification", "unverified", "no visible screen change", "timeout", "timed out").any(text::contains) ->
+                listOf("read_screen", "verify_action", "wait_for")
+            listOf("permission", "accessibility", "not enabled", "setup").any(text::contains) ->
+                listOf("read_screen", "list_apps")
+            listOf("provider", "network", "http 5", "503", "429", "rate limit").any(text::contains) ->
+                listOf("read_screen", "find_files", "list_apps")
+            else -> listOf("read_screen", "verify_action", "wait_for", "lookup_app", "list_apps")
+        }
+        return preferred.asSequence()
+            .filter { it != failedTool }
+            .filter { it !in alreadyAttempted }
+            .filter { it in registeredAndPermitted }
+            .distinct()
+            .take(limit)
+            .toList()
+    }
+
     fun forFailure(tool: String, result: String): Guidance {
         val text = result.lowercase()
         return when {

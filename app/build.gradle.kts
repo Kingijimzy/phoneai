@@ -151,4 +151,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android local unit tests use a real org.json implementation; android.jar stubs throw from JSONObject.put().
     testImplementation("org.json:json:20240303")
+    // Robolectric supplies real Android SQLite and SharedPreferences for repository lifecycle tests.
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

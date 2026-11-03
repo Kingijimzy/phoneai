@@ -42,7 +42,7 @@ class AgentControlActivity : Activity() {
         setContentView(scroll)
         addText("ORION / AGENT CONTROL", 10f, Theme.MUTED, true, 0)
         addText("Approval & capabilities", 26f, Theme.TEXT, true, 4)
-        addText("User approval is the limit—not silent power. Packs are off until you enable them. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
+        addText("Core phone and messaging tools are available by default. Optional services may need setup or permission; consequential actions still require confirmation. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to settings") { finish() }
 
         section("APPROVAL MODE")

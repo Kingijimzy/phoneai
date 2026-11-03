@@ -25,5 +25,22 @@ class StandingOrderPolicyTest {
     @Test fun errorsNeverReplaceLastGoodDigest() {
         assertEquals("old-digest",
             StandingOrderPolicy.digestAfterAttempt("old-digest", "error: provider offline", false, false))
+        assertEquals("old-digest",
+            StandingOrderPolicy.digestAfterAttempt("old-digest", "ERROR: provider offline", false, false))
+        assertEquals("old-digest",
+            StandingOrderPolicy.digestAfterAttempt("old-digest", "No unread messages", false, false))
+    }
+
+    @Test fun digestDistinguishesKnownJavaHashCollisions() {
+        // "FB" and "Ea" share String.hashCode(); a persistent alert fingerprint must not.
+        assertEquals("2236", "FB".hashCode().toString())
+        assertEquals("2236", "Ea".hashCode().toString())
+        org.junit.Assert.assertNotEquals(StandingOrderPolicy.digest("FB"), StandingOrderPolicy.digest("Ea"))
+    }
+
+    @Test fun emptyAndErrorResultsNeverTriggerAlertsRegardlessOfCase() {
+        org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "ERROR: provider offline"))
+        org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "nothing new today"))
+        org.junit.Assert.assertFalse(StandingOrderPolicy.shouldNotify("", "Header\n0 matching message(s)."))
     }
 }

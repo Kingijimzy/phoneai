@@ -55,7 +55,7 @@ class CapabilityBoardActivity : Activity() {
         page.removeAllViews()
         page.addView(text("ORION / CAPABILITY BOARD", 10f, 0xFFAAAAAA.toInt(), true))
         page.addView(text("What Orion can reach", 26f, 0xFFF2F2F2.toInt(), true))
-        page.addView(text("Tokens are stored encrypted on this phone and are never sent to the AI. Orion uses them only through its own read-only tools.", 12f, 0xFF9A9A9A.toInt()))
+        page.addView(text("Credentials stay encrypted on this phone and are sent only to the service you configure. Orion may summarize returned data in chat. Never paste passwords or API keys into chat.", 12f, 0xFF9A9A9A.toInt()))
 
         val pack = Switch(this).apply {
             text = "Allow Orion to use connected services"; setTextColor(0xFFE4E4E4.toInt())

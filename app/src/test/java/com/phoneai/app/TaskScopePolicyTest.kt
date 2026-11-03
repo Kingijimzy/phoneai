@@ -36,7 +36,7 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor(request))
         assertNull(TaskScopePolicy.blockReason(request, "open_app"))
         assertNull(TaskScopePolicy.blockReason(request, "read_screen"))
-        assertNotNull(TaskScopePolicy.blockReason(request, "bybit_public_ticker"))
+        assertNull(TaskScopePolicy.blockReason(request, "bybit_public_ticker"))
     }
 
     @Test fun explicitActionIsNotDowngradedByConversationWording() {
@@ -53,21 +53,24 @@ class TaskScopePolicyTest {
         assertEquals(TaskMode.PHONE_AUTOMATION, TaskScopePolicy.modeFor("Open WhatsApp and send good morning"))
     }
 
-    @Test fun chatCannotInvokeToolsEvenIfModelRequestsOne() {
-        assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "read_screen"))
-        assertNotNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "open_app"))
+    @Test fun registeredToolsAreNotBlockedByChatClassificationAlone() {
+        assertNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "read_screen"))
+        assertNull(TaskScopePolicy.blockReason("Explain how Bluetooth works", "open_app"))
+        assertNull(TaskScopePolicy.blockReason("Please search the web for this", "live_web_search"))
     }
 
-    @Test fun researchAndReadOnlyCannotMutateState() {
+    @Test fun researchAndReadOnlyLabelsDoNotOverrideOrionSettings() {
+        // Task labels route intent; they are not a second permission system.
+        // The pack/per-tool settings and dispatch safety gates decide whether these run.
         assertNull(TaskScopePolicy.blockReason("Research Android accessibility online", "web_search"))
-        assertNotNull(TaskScopePolicy.blockReason("Research Android accessibility online", "open_app"))
+        assertNull(TaskScopePolicy.blockReason("Research Android accessibility online", "open_app"))
         assertNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "read_screen"))
-        assertNotNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "type"))
+        assertNull(TaskScopePolicy.blockReason("Read-only inspect my notifications", "type"))
     }
 
-    @Test fun unrelatedSpecialistGroupsAreBlocked() {
-        assertNotNull(TaskScopePolicy.blockReason("Open WhatsApp and read my last chat", "bybit_public_ticker"))
-        assertNotNull(TaskScopePolicy.blockReason("What is the BTC price on Bybit", "telegram_send"))
+    @Test fun registeredSpecialistToolsAreNotBlockedByKeywordCategoryMismatch() {
+        assertNull(TaskScopePolicy.blockReason("Open WhatsApp and read my last chat", "bybit_public_ticker"))
+        assertNull(TaskScopePolicy.blockReason("What is the BTC price on Bybit", "telegram_send"))
         assertNull(TaskScopePolicy.blockReason("What is the BTC price on Bybit", "bybit_public_ticker"))
         assertNull(TaskScopePolicy.blockReason("Open Telegram and read my messages", "telegram_status"))
     }
@@ -80,7 +83,7 @@ class TaskScopePolicyTest {
         val prev = "open WhatsApp and send kingi jimzy good morning"
         val scope = TaskScopePolicy.scopeFor("yes go ahead", prev, 30_000)
         assertNull(TaskScopePolicy.blockReason(scope, "open_app"))
-        assertNotNull(TaskScopePolicy.blockReason("yes go ahead", "open_app"))
+        assertNull(TaskScopePolicy.blockReason("yes go ahead", "open_app"))
     }
 
     @Test fun staleOrLongFollowUpDoesNotInherit() {
@@ -147,14 +150,14 @@ class TaskScopePolicyTest {
         assertNull(result)
     }
 
-    @Test fun fullModeDoesNotBypassTaskScope() {
+    @Test fun fullModeDoesNotApplyFalseKeywordScopeBlockToRegisteredTool() {
         val result = AgentDispatchPolicy.blockReason(
             request = "Explain how Bluetooth works",
             tool = "open_app",
             args = org.json.JSONObject().put("name", "WhatsApp"),
             executionMode = "FULL"
         )
-        assertNotNull(result)
+        assertNull(result)
     }
 
     @Test fun readOnlyTradingBlocksMutationsAcrossCommonWordings() {

@@ -11,6 +11,9 @@ import android.provider.MediaStore
 import android.graphics.Rect
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.location.LocationManager
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
@@ -152,23 +155,63 @@ class Tools(private val svc: PhoneAiService) {
         }
     }
 
+    /** Search public GitHub repositories by name without requiring private account access. */
+    fun githubSearchRepository(name: String): String {
+        val query = name.trim().take(100)
+        if (query.isBlank() || !Regex("^[A-Za-z0-9_. -]{1,100}$").matches(query)) {
+            return "error: provide a simple public repository name"
+        }
+        return try {
+            val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+            val conn = (URL("https://api.github.com/search/repositories?q=" + encoded + "&per_page=5&sort=updated").openConnection() as HttpURLConnection)
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("User-Agent", "PhoneAI-ReadOnly-Integration")
+            val code = conn.responseCode
+            val raw = (if (code in 200..299) conn.inputStream else conn.errorStream)
+                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(80000) }.orEmpty()
+            conn.disconnect()
+            if (code !in 200..299) return "error: GitHub repository search returned HTTP $code"
+            val items = JSONObject(raw).optJSONArray("items") ?: JSONArray()
+            if (items.length() == 0) return "No public repositories matched '$query'."
+            val results = (0 until minOf(5, items.length())).mapNotNull { i ->
+                val obj = items.optJSONObject(i) ?: return@mapNotNull null
+                val full = obj.optString("full_name")
+                if (full.isBlank()) null else "MATCH: $full\nDescription: ${obj.optString("description", "No description provided")}\nURL: ${obj.optString("html_url", "https://github.com/$full")}"
+            }
+            "Public GitHub repository search for '$query':\n" + results.joinToString("\n\n")
+        } catch (e: Exception) {
+            "error: public GitHub search failed: ${e.message ?: "network error"}"
+        }
+    }
+
     /**
      * Read-only public GitHub lookup. Calls a fixed api.github.com endpoint; never accepts
      * arbitrary URLs, never sends a token, and never performs write operations.
-     * section: repo | release | issues | runs
+     * section: repo | readme | release | issues | runs
      */
-    fun githubPublic(owner: String, repository: String, section: String): String {
+    fun githubPublic(owner: String, repository: String, section: String, runId: String? = null): String {
         val safePart = Regex("^[A-Za-z0-9_.-]{1,100}$")
         if (!safePart.matches(owner) || !safePart.matches(repository) ||
             owner == "." || owner == ".." || repository == "." || repository == "..") {
             return "error: provide a public GitHub owner and repository name"
         }
-        val endpoint = when (section.lowercase().trim()) {
+        val normalizedSection = section.lowercase().trim()
+        val endpoint = when (normalizedSection) {
             "repo" -> "repos/$owner/$repository"
+            "readme" -> "repos/$owner/$repository/readme"
             "release" -> "repos/$owner/$repository/releases/latest"
             "issues" -> "repos/$owner/$repository/issues?state=open&per_page=10"
             "runs" -> "repos/$owner/$repository/actions/runs?per_page=5"
-            else -> return "error: section must be repo, release, issues, or runs"
+            "run" -> {
+                if (runId.isNullOrBlank() || !Regex("^[0-9]{1,20}$").matches(runId)) {
+                    return "error: an exact numeric GitHub Actions run ID is required"
+                }
+                "repos/$owner/$repository/actions/runs/$runId"
+            }
+            else -> return "error: section must be repo, readme, release, issues, runs, or run"
         }
         return try {
             val conn = (URL("https://api.github.com/$endpoint").openConnection() as HttpURLConnection)
@@ -198,7 +241,29 @@ class Tools(private val svc: PhoneAiService) {
                 val detail = try { JSONObject(raw).optString("message", "HTTP $code") } catch (_: Exception) { "HTTP $code" }
                 return "GitHub returned $code: ${detail.take(180)}. The repository may be private, missing, or rate-limited."
             }
-            when (section.lowercase().trim()) {
+            when (normalizedSection) {
+                "readme" -> {
+                    val obj = JSONObject(raw)
+                    val encoded = obj.optString("content").replace("\n", "")
+                    if (encoded.isBlank()) "The repository has no readable README content." else {
+                        val decoded = try {
+                            android.util.Base64.decode(encoded, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+                        } catch (_: Exception) { "" }
+                        if (decoded.isBlank()) "error: GitHub returned README content that could not be decoded."
+                        else "README for $owner/$repository:\n" + decoded.take(6000) +
+                            "\n\nSource: " + obj.optString("html_url", "https://github.com/$owner/$repository")
+                    }
+                }
+                "run" -> {
+                    val obj = JSONObject(raw)
+                    "GitHub Actions run #" + obj.optLong("run_number", 0) + " for $owner/$repository\n" +
+                        "Workflow: " + obj.optString("name", "unknown") + "\n" +
+                        "Status: " + obj.optString("status", "unknown") + " | Conclusion: " + obj.optString("conclusion", "pending") + "\n" +
+                        "Branch: " + obj.optString("head_branch", "unknown") + " | Event: " + obj.optString("event", "unknown") + "\n" +
+                        "Commit: " + (obj.optJSONObject("head_commit")?.optString("id", "unknown") ?: "unknown") + "\n" +
+                        "Updated: " + obj.optString("updated_at", "unknown") + "\n" +
+                        "URL: " + obj.optString("html_url", "https://github.com/$owner/$repository/actions/runs/$runId")
+                }
                 "repo" -> {
                     val obj = JSONObject(raw)
                     "Public GitHub repository: ${obj.optString("full_name", "$owner/$repository")}\n" +
@@ -383,7 +448,11 @@ class Tools(private val svc: PhoneAiService) {
                 val u = try { java.net.URI(raw) } catch (_: Exception) { null }
                 if (u == null || u.scheme?.lowercase() !in setOf("http", "https") || u.host.isNullOrBlank())
                     return "error: open_url requires a complete HTTP/HTTPS URL"
-                Intent(Intent.ACTION_VIEW, Uri.parse(raw))
+                // Keep web research inside the conversation: open the chat's compact browser
+                // dialog instead of ejecting the user into a separate browser Activity/app.
+                Intent(svc, MainChatActivity::class.java)
+                    .putExtra(MainChatActivity.EXTRA_OPEN_BROWSER_URL, raw)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             else -> return "error: unsupported system intent. Allowed: settings, wifi_settings, bluetooth_settings, display_settings, app_settings, location_settings, accessibility_settings, notification_settings, dial, maps_search, camera, calendar, clock, sms, alarm, timer, share, open_url"
         }
@@ -680,6 +749,34 @@ class Tools(private val svc: PhoneAiService) {
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         val pct = if (scale > 0) level * 100 / scale else level
         return "battery $pct%" + if (charging) ", charging" else ", not charging"
+    }
+
+    /**
+     * Returns only Android's cached on-device fix. It never enables GPS, uploads coordinates,
+     * or invents a location. A user must grant Android's coarse or fine location permission.
+     */
+    fun deviceLocation(): String {
+        val fine = svc.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarse = svc.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fine && !coarse) {
+            return "error: Android location permission is not granted. Open Orion Settings > Access & permissions and tap Allow location; then approve Android's permission prompt."
+        }
+        val manager = svc.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return "error: Android LocationManager is unavailable."
+        val locations = try {
+            manager.getProviders(true).mapNotNull { provider ->
+                try { manager.getLastKnownLocation(provider) } catch (_: SecurityException) { null }
+            }
+        } catch (_: SecurityException) {
+            return "error: Android denied location access. Check Orion's location permission in system settings."
+        } catch (e: Exception) {
+            return "error: could not read cached device location (${e.javaClass.simpleName})."
+        }
+        val location = locations.maxByOrNull { it.time }
+            ?: return "No cached location fix is available. Open Maps or enable device location, then retry. Orion has not guessed your location."
+        val ageMinutes = ((System.currentTimeMillis() - location.time).coerceAtLeast(0L) / 60_000L)
+        val accuracy = if (location.hasAccuracy()) ", accuracy about ${location.accuracy.toInt()} m" else ""
+        return "Cached device location: ${"%.6f".format(Locale.US, location.latitude)}, ${"%.6f".format(Locale.US, location.longitude)}; fix time ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(location.time))}; age ${ageMinutes} min$accuracy. This is on-device data; Orion did not upload it."
     }
 
     fun time(): String = SimpleDateFormat("EEEE d MMMM yyyy, HH:mm", Locale.getDefault()).format(Date())

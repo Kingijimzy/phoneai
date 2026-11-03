@@ -9,9 +9,15 @@ class PackDefaultsTest {
             .forEach { assertTrue(it, AgentPolicy.defaultOn(AgentPolicy.packForTool(it)!!)) }
     }
 
-    @Test fun riskyPacksStayOptIn() {
-        listOf("phone_control", "termux_bridge", "remote_computer", "messaging", "proactive", "self_evolution")
-            .forEach { assertFalse(it, AgentPolicy.defaultOn(it)) }
+    @Test fun corePhoneAndMessagingToolsAreDiscoverableButOptionalBridgesStayOptIn() {
+        // Core phone and messaging tools are visible from first launch. This does not grant
+        // Android permissions or bypass action confirmations; those remain enforced at dispatch.
+        listOf("phone_control", "messaging").forEach {
+            assertTrue("$it should be enabled by default", AgentPolicy.defaultOn(it))
+        }
+        listOf("termux_bridge", "remote_computer", "proactive", "self_evolution").forEach {
+            assertFalse("$it must remain opt-in", AgentPolicy.defaultOn(it))
+        }
     }
 
     @Test fun everyDefaultOnPackExists() {

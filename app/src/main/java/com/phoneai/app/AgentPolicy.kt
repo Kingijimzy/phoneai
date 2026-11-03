@@ -28,11 +28,14 @@ object AgentPolicy {
     fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
     fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
     /**
-     * Packs that are safe to have on from the first launch: they are local, read-only, or already gated by
-     * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
-     * lives in orion_core) and wrongly tells the user the feature does not exist. Risky packs stay opt-in.
+     * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
+     * This only makes their tools available: Android OS permissions and consequential-action confirmations
+     * still apply. Optional bridges and remote/proactive services remain opt-in until configured.
      */
-    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research")
+    internal val defaultOnPacks = setOf(
+        "orion_core", "connected_services", "workspace_shell", "self_test",
+        "gaming_hobby", "trading_research", "phone_control", "messaging"
+    )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
@@ -93,16 +96,17 @@ object AgentPolicy {
 
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
+        "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
         "play", "look" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
-        "trade_history_summary" -> "trading_research"
+        "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview", "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
         "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
-        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
+        "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
         "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
         "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",

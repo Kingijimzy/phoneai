@@ -39,4 +39,34 @@ class OrionRecoveryPlannerTest {
         assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
         assertTrue(guidance.reason.contains("stale arguments"))
     }
+    @Test fun alternativeSelectionUsesOnlyPermittedRegisteredDifferentTools() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "click",
+            result = "error: target not found",
+            registeredAndPermitted = setOf("click", "read_screen", "wait_for", "shell"),
+            alreadyAttempted = setOf("shell")
+        )
+        assertEquals(listOf("read_screen", "wait_for"), selected)
+        assertTrue(selected.none { it == "click" || it == "shell" })
+    }
+
+    @Test fun deniedOrCancelledActionsNeverGetAlternativeShortlist() {
+        listOf("error: user did not approve", "error: blocked by safety policy", "error: task was stopped")
+            .forEach { result ->
+                assertTrue(OrionRecoveryPlanner.selectAlternatives(
+                    "click", result, setOf("read_screen", "click")
+                ).isEmpty())
+            }
+    }
+
+    @Test fun uncertainOutcomePrefersReadOnlyInspectionAndRespectsLimit() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "browser_click",
+            result = "error: verification unavailable; outcome unverified",
+            registeredAndPermitted = setOf("read_screen", "verify_action", "wait_for", "click_text"),
+            limit = 2
+        )
+        assertEquals(listOf("read_screen", "verify_action"), selected)
+    }
+
 }

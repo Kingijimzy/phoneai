@@ -79,7 +79,7 @@ internal object SoulWatch {
     fun run(c: Context): String {
         val now = System.currentTimeMillis()
         val notes = ArrayList<String>()
-        try { val posted = LifeLoop.tick(c); if (posted > 0) notes += "standing_orders:$posted" } catch (_: Exception) { }
+        try { val tick = SoulEngineWatcher.run(c); notes += "watcher:${tick.status}:${tick.action}" } catch (_: Exception) { }
         if (!SoulPolicy.due(lastTick(c), now)) return notes.joinToString(",").ifBlank { "not_due" }
         if (!enabled(c)) {
             sp(c).edit().putLong("soul_watch_last", now).apply()

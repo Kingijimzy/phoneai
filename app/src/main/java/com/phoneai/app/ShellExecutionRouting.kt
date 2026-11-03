@@ -11,8 +11,16 @@ internal object ShellExecutionRouting {
         else -> Backend.INVALID
     }
 
-    /** Linux commands always require explicit confirmation, including the Alpine alias. */
-    fun requiresApproval(where: String?): Boolean = backend(where) == Backend.LINUX
+    /**
+     * Linux backend selection is not itself a reason to interrupt the user. The command policy
+     * decides: safe diagnostics run automatically, while unknown/mutating commands still require
+     * confirmation through ShellPolicy.
+     */
+    fun requiresApproval(where: String?, command: String? = null): Boolean {
+        if (backend(where) != Backend.LINUX) return false
+        val value = command?.trim().orEmpty()
+        return value.isBlank() || ShellPolicy.classify(value) != ShellRisk.SAFE
+    }
 
     /** Recognize package database mutations even when chained after a shell separator. */
     fun isPackageOperation(command: String): Boolean =
