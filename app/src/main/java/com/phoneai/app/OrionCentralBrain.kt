@@ -249,6 +249,36 @@ internal object OrionCentralBrain {
             ?.takeIf { it.isNotBlank() }
             ?.let { sections += it }
 
+        // Repair proposals, sandbox results, owner decisions, apply claims and verification
+        // receipts are read from the same durable evidence ledger used by execution.
+        runCatching { OrionRepairLifecycle.promptBlock(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
         return ContextWindowBudget.pack(sections, MAX_CONTEXT_CHARS / 4).text
     }
+
+    /**
+     * Canonical Central Brain entry point for a repair transaction. Callers must supply
+     * an owner approval digest obtained from an explicit confirmation of this exact plan.
+     * All side-effecting callbacks remain app-owned adapters; model output is never executed.
+     */
+    fun executeRepairProposal(
+        context: Context,
+        sessionId: String,
+        taskId: String,
+        finding: OrionDiagnosticFinding,
+        proposal: OrionRepairProposal,
+        planDigest: String,
+        ownerApprovalDigest: String?,
+        sandboxTest: () -> Boolean,
+        apply: () -> String?,
+        verify: () -> Boolean,
+        rollback: () -> Boolean,
+        verifyRollback: () -> Boolean
+    ): OrionRepairLifecycle.Receipt = OrionRepairLifecycle.execute(
+        context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
+        ownerApprovalDigest, sandboxTest, apply, verify, rollback, verifyRollback
+    )
 }

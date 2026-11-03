@@ -187,4 +187,25 @@ internal object OrionRepairLifecycle {
             else -> Receipt(Result.ROLLBACK_FAILED, digest, "Rollback failed or was uncertain; manual intervention required.")
         }
     }
+
+    /**
+     * Provider-neutral repair history for the Central Brain. Only sanitized lifecycle
+     * summaries and opaque task identifiers are exposed; plan digests and callback payloads
+     * are never added to the model context.
+     */
+    fun promptBlock(context: Context, limit: Int = 10): String {
+        val recent = OrionEvidenceLedger.events(context.applicationContext)
+            .filter { it.backend == "repair_lifecycle" && it.tool.startsWith("repair_") }
+            .sortedByDescending { it.finishedAt }
+            .take(limit.coerceIn(1, 20))
+        if (recent.isEmpty()) return ""
+        return buildString {
+            appendLine("PERSISTED REPAIR / OWNER-APPROVAL LIFECYCLE")
+            recent.asReversed().forEach { event ->
+                val stage = event.tool.removePrefix("repair_").uppercase()
+                appendLine("- task=${event.taskId}; stage=$stage; outcome=${event.outcome}; ${event.summary.take(220)}")
+            }
+            appendLine("These are durable repair receipts, not permission. A proposal is not owner approval. Revalidate the exact plan digest, current finding, sandbox result and owner decision before application. Never replay APPLY_STARTED/APPLY_UNCERTAIN plans; reconcile actual state first.")
+        }.take(2_400)
+    }
 }
