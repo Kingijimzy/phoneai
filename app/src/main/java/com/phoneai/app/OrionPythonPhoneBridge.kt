@@ -22,7 +22,7 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
 
     fun environment(): Map<String, String> = mapOf(
         "ORION_PHONE_API_PORT" to server.localPort.toString(),
-        "ORION_PHONE_API_TOKEN" to Base64.encodeToString(token, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        "ORION_PHONE_API_TOKEN" to Base64.encodeToString(token, Base64.URL_SAFE or Base64.NO_WRAP)
     )
 
     override fun close() {

@@ -91,7 +91,7 @@ internal object OrionPythonRuntime {
         }
         val quotaAfter = workspace.quotaStatus()
         if (quotaAfter == "unsafe") return "error: Python finished, but workspace integrity validation failed; inspect the workspace before using its files.\n${result.take(MAX_OUTPUT_CHARS)}"
-        if (quotaAfter == "exceeded") return "error: Python exceeded the 20 MiB workspace quota. Further execution is blocked until the workspace is cleaned.\n\${result.take(MAX_OUTPUT_CHARS)}"
+        if (quotaAfter == "exceeded") return "error: Python exceeded the 20 MiB workspace quota. Further execution is blocked until the workspace is cleaned.\n${result.take(MAX_OUTPUT_CHARS)}"
         return result.take(MAX_OUTPUT_CHARS)
     }
 
