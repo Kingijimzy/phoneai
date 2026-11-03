@@ -53,8 +53,8 @@ internal object OrionPythonRuntime {
         // separate approval because it downloads executable code from Alpine repositories.
         val probe = installer.execute(manifest, "python3 --version", 8_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
         if (!probe.startsWith("exit=0") || !probe.contains("Python 3.")) {
-            if (!confirm("Install CPython 3, pip and the Alpine build tools into Orion's persistent Linux runtime? This downloads packages from Alpine repositories.")) {
-                return "Python script saved. CPython is not installed in Alpine; approve package installation or install python3 py3-pip from Orion Terminal."
+            if (!confirm("Install full CPython 3 and its standard library into Orion's persistent Alpine runtime? This downloads the Python runtime package from the configured Alpine repositories; pip and compiler toolchains are not required.")) {
+                return "Python script saved. CPython is not installed in Alpine; approve the CPython package installation from Orion's configured Alpine repository."
             }
             // The acceptance workload requires full CPython and its standard library only.
             // py3-pip and build-base are unnecessary, large dependency trees on a 4–8 GB phone
