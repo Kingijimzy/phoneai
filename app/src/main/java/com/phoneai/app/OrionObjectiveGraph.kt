@@ -115,14 +115,31 @@ internal object OrionObjectiveGraph {
     /** Planner bookkeeping must not be mistaken for execution of a graph objective. */
     fun requiresObjectiveDispatch(tool: String): Boolean = tool !in setOf("task_add")
 
-    fun resolveDispatchId(graph: Graph, requestedId: String?): String? {
+    fun resolveDispatchId(graph: Graph, requestedId: String?, tool: String = ""): String? {
         val candidate = requestedId?.trim()?.lowercase().orEmpty()
-        // Exact model IDs always win. If the model invents an alias or omits the ID,
-        // bind only when the runtime state makes the target unambiguous:
-        // one currently-running objective (multi-tool step), otherwise one ready objective.
-        return graph.nodes.firstOrNull { it.id == candidate }?.id
-            ?: graph.nodes.singleOrNull { it.status == Status.RUNNING }?.id
-            ?: graph.ready().singleOrNull()?.id
+        graph.nodes.firstOrNull { it.id == candidate }?.let { return it.id }
+
+        // Repair model/tool naming mismatches by matching the capability to a unique ready
+        // objective. This never picks between ambiguous objectives and never bypasses dependencies.
+        val hints = when (tool.lowercase()) {
+            "open_app", "lookup_app", "list_apps", "open_deep_link", "system_intent",
+            "read_screen", "look", "battery", "device_info" -> setOf("phone", "device", "app", "capability")
+            "python_exec" -> setOf("python", "diagnostic", "script", "execute")
+            "workspace_read" -> setOf("verify", "report", "workspace", "read")
+            "workspace_write", "save_file" -> setOf("save", "report", "file", "workspace", "script")
+            "phone_battery", "phone.*" -> setOf("phone", "device", "battery", "capability")
+            else -> setOf(tool.lowercase().replace(Regex("[^a-z0-9]+"), "_"))
+        }
+        val ready = graph.ready()
+        val semanticMatches = ready.filter { node ->
+            val words = (node.id + " " + node.title).lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }.toSet()
+            hints.any { hint -> hint in words || (hint.length > 4 && node.title.contains(hint, ignoreCase = true)) }
+        }
+        if (semanticMatches.size == 1) return semanticMatches.single().id
+
+        // A running objective is the only safe target for follow-up calls in a multi-tool step.
+        return graph.nodes.singleOrNull { it.status == Status.RUNNING }?.id
+            ?: ready.singleOrNull()?.id
             ?: graph.nodes.singleOrNull()?.id
     }
 

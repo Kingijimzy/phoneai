@@ -308,7 +308,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // task_add only records planner bookkeeping; it does not execute an objective capability.
         // Keep the dependency/approval gates on every real capability dispatch below.
         if (objectiveGraph != null && OrionObjectiveGraph.requiresObjectiveDispatch(tool)) {
-            val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId)
+            val objectiveId = OrionObjectiveGraph.resolveDispatchId(objectiveGraph, activeObjectiveId, tool)
                 ?: return "error: the planner's objective_id does not match this multi-objective task. Valid IDs: " +
                     objectiveGraph.nodes.joinToString(", ") { it.id } + ". No tool was dispatched."
             // Keep the canonical persisted ID for the evidence receipt written after execution.
