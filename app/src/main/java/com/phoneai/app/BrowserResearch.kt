@@ -76,13 +76,14 @@ object BrowserResearch {
                     .get().build()
                 val call = client.newCall(request)
                 if (cancelled.get()) call.cancel()
+                var redirectUrl: String? = null
                 call.execute().use { response ->
                     if (cancelled.get()) return fail("Cancelled.")
                     if (response.code in listOf(301, 302, 303, 307, 308)) {
                         if (redirect == MAX_REDIRECTS) return fail("Too many redirects.")
                         val location = response.header("Location") ?: return fail("Redirect had no destination.")
-                        current = uri.resolve(location).toString()
-                        continue
+                        redirectUrl = uri.resolve(location).toString()
+                        return@use
                     }
                     if (!response.isSuccessful) return fail("Website returned HTTP ${response.code}.")
                     val type = (response.header("Content-Type") ?: "").lowercase(Locale.ROOT)
@@ -112,6 +113,10 @@ object BrowserResearch {
                     val text = toReadableText(raw).take(MAX_TEXT_CHARS)
                     if (text.isBlank()) return fail("No readable text was found on this page.")
                     return BrowserResearchResult(page = BrowserResearchPage(safeUrl, title, text, type))
+                }
+                if (redirectUrl != null) {
+                    current = redirectUrl!!
+                    continue
                 }
             } catch (_: java.net.SocketTimeoutException) {
                 return fail("Website request timed out.")
