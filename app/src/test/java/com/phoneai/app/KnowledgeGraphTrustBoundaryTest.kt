@@ -31,7 +31,7 @@ class KnowledgeGraphTrustBoundaryTest {
     @Test fun extractedGraphFactsRemainProposalsUntilOwnerApproval() {
         assertEquals(1, KnowledgeGraph.learnFrom(context, "I prefer concise practical explanations."))
         assertTrue(KnowledgeGraph.all(context).isEmpty())
-        assertTrue(KnowledgeGraph.promptBlock(context, "concise explanations").isBlank())
+        assertTrue(KnowledgeGraph.promptBlock(context, "my preference").isBlank())
         assertTrue(KnowledgeGraph.query(context, "user").contains("no owner-approved"))
 
         val proposal = MemoryStore.all(context).single()
@@ -39,21 +39,21 @@ class KnowledgeGraphTrustBoundaryTest {
         assertFalse(MemoryGovernancePolicy.canUseInPrompt(proposal.reviewStatus, proposal.sensitivity))
 
         assertTrue(MemoryStore.setReviewStatus(context, proposal.id, "approved"))
-        assertTrue(KnowledgeGraph.promptBlock(context, "concise explanations").contains("concise"))
+        assertTrue(KnowledgeGraph.promptBlock(context, "my preference").contains("concise"))
         assertTrue(KnowledgeGraph.query(context, "user").contains("owner-approved data"))
     }
 
     @Test fun directGraphLinkCannotCreateTrustedFact() {
-        assertTrue(KnowledgeGraph.link(context, "user", "prefers", "offline tools"))
+        assertTrue(KnowledgeGraph.link(context, "user", "prefers", "my preference"))
         assertTrue(KnowledgeGraph.all(context).isEmpty())
         assertEquals("pending", MemoryStore.all(context).single().reviewStatus)
     }
 
     @Test fun revokingApprovalImmediatelyRemovesGraphRetrieval() {
         val memory = MemoryStore.addOwnerConfirmed(context, "fact", "User prefers offline tools")!!
-        assertTrue(KnowledgeGraph.promptBlock(context, "offline tools").contains("offline"))
+        assertTrue(KnowledgeGraph.promptBlock(context, "my preference").contains("offline"))
         assertTrue(MemoryStore.setReviewStatus(context, memory.id, "rejected"))
-        assertTrue(KnowledgeGraph.promptBlock(context, "offline tools").isBlank())
+        assertTrue(KnowledgeGraph.promptBlock(context, "my preference").isBlank())
         assertTrue(KnowledgeGraph.all(context).isEmpty())
     }
 }
