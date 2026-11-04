@@ -150,6 +150,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch-periodic", 2)) {
                 scheduleRuntimeDrain()
             }
+            runDueAutonomyGoal()
             main.postDelayed(this, 5 * 60_000L)
         }
     }
@@ -157,6 +158,31 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun scheduleSoulWatchTick() {
         main.removeCallbacks(soulWatchTick)
         main.postDelayed(soulWatchTick, 60_000L)
+    }
+
+    /**
+     * Run at most one due scheduled goal. Never while a user task is running, and never
+     * unless background autonomy was explicitly enabled. The normal gate still applies to
+     * every action, so consequential steps ask (and fail closed if nobody answers).
+     */
+    private fun runDueAutonomyGoal() {
+        if (!Prefs.autonomyEnabled(this)) return
+        if (running || !::agent.isInitialized) return
+        val goal = AutonomyGoalStore.due(this, System.currentTimeMillis()).firstOrNull() ?: return
+        AutonomyGoalStore.markRan(this, goal.id, "started")
+        worker.execute {
+            running = true
+            try {
+                agent.run(goal.prompt)
+                AutonomyGoalStore.markRan(this, goal.id, "ran")
+                main.post { mainChatListener?.onMessage("note", "Scheduled goal ${goal.id} finished.") }
+            } catch (e: Exception) {
+                AutonomyGoalStore.markRan(this, goal.id, "error: " + (e.message ?: "failed"))
+                main.post { mainChatListener?.onMessage("note", "Scheduled goal ${goal.id} failed: " + (e.message ?: "error")) }
+            } finally {
+                main.post { finishRun() }
+            }
+        }
     }
 
     override fun onServiceConnected() {

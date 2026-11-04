@@ -1885,6 +1885,15 @@ Rules:
             "vault_request" -> tools.vaultRequest(a.optString("name"), a.optString("host"), a.optString("style"))
             "vault_get" -> tools.vaultGet(a.optString("name"), a.optString("url"))
             "standing_order" -> tools.standingOrder(a.optString("action"), a.optString("kind"), a.optInt("every_minutes", 60))
+            "goal_add" -> AutonomyGoalStore.add(svc, a.optString("prompt"), a.optInt("every_minutes", 120))
+            "goal_list" -> "Scheduled goals (background autonomy ${if (Prefs.autonomyEnabled(svc)) "ON" else "OFF"}):\n" + AutonomyGoalStore.describe(svc)
+            "goal_remove" -> AutonomyGoalStore.remove(svc, a.optString("id"))
+            "goal_toggle" -> AutonomyGoalStore.setEnabled(svc, a.optString("id"), a.optBoolean("enabled", true))
+            "autonomy_toggle" -> {
+                Prefs.setAutonomyEnabled(svc, a.optBoolean("enabled", true))
+                if (Prefs.autonomyEnabled(svc)) "Background autonomy is on. Orion will run due goals while the service is alive; routine steps run, consequential actions still ask (and time out safely if you are away)." else "Background autonomy is off. Scheduled goals will not run until you turn it back on."
+            }
+            "autonomy_status" -> "Background autonomy is ${if (Prefs.autonomyEnabled(svc)) "on" else "off"}. " + AutonomyGoalStore.describe(svc)
             "capability_note" -> tools.capabilityNote(a.optString("goal"), a.optString("provider"))
             "morning_brief" -> tools.morningBrief()
             "create_agent" -> tools.createAgent(a.optString("id"), a.optString("name"), a.optString("tagline"), a.optString("persona"))
