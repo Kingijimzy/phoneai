@@ -26,7 +26,7 @@ internal object FastIntents {
                 val app = when {
                     label.startsWith("youtube") || label == "yt music" -> "youtube music"
                     label.startsWith("spotify") -> "spotify"
-                    else -> null // generic music app: prefer installed YT Music / Spotify
+                    else -> null
                 }
                 return Intent.PlayMedia(OPEN_APP_ONLY, app)
             }
@@ -41,7 +41,7 @@ internal object FastIntents {
             if (q.isNotEmpty() && !gameWords.containsMatchIn(q) && (app != null || musicWords.containsMatchIn(" $q "))) return Intent.PlayMedia(q, app)
         }
 
-        Regex("^(?:open|go to|launch)\\s+(?:google chrome|chrome)(?:\\s+(and|then))?\\s+(?:search|google|look up|find)(?:\\s+for)?\\s+(.+)$").find(t)?.let {
+        Regex("^(?:open|go to|launch)\\s+(?:google chrome|chrome)(?:\\s+(?:and|then))?\\s+(?:search|google|look up|find)(?:\\s+for)?\\s+(.+)$").find(t)?.let {
             return Intent.ChromeSearch(it.groupValues[1].trim())
         }
         Regex("^(?:search|google|look up|find)\\s+(?:for\\s+)?(.+?)\\s+(?:on|in|using|with)\\s+(?:google chrome|chrome|google)$").find(t)?.let {
