@@ -41,6 +41,8 @@ class OrionProjectWorkspaceTest {
         val created = projects.create("demo", "python")
         assertTrue(created.startsWith("PROJECT CREATED:"))
         assertTrue(workspace.read("projects/demo/main.py").contains("def main"))
+        assertTrue(workspace.read("projects/demo/.gitignore").contains("__pycache__/"))
+        assertTrue(workspace.list().contains("projects/demo/.gitignore"))
         assertTrue(workspace.read("projects/demo/tests/test_main.py").contains("unittest"))
         assertTrue(projects.list().contains("demo (python)"))
         assertTrue(projects.inspect("demo").contains("tests/test_main.py"))
