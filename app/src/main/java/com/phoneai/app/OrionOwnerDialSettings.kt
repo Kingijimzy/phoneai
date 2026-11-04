@@ -3,7 +3,7 @@ package com.phoneai.app
 import android.content.Context
 
 /** Owner-configurable dials. These preferences tune Orion; they never remove mandatory trust boundaries. */
-internal enum class OrionPythonProfile { GUARDED, DEVELOPER }
+internal enum class OrionPythonProfile { GUARDED, DEVELOPER, FULL }
 
 internal data class OrionOwnerDials(
     val autoActivateVerifiedExtensions: Boolean = false,
@@ -37,9 +37,10 @@ internal object OrionOwnerDialSettings {
             .apply()
     }
 
-    /** A profile can relax ergonomics and size limits, never the sandbox or approval requirement. */
+    /** GUARDED/DEVELOPER relax size only. FULL (owner opt-in, set in the credential-gated Owner Control Centre) also lifts the in-guest socket/subprocess block; per-run approval and the guest isolation stay. */
     fun pythonMaxCodeChars(context: Context): Int = when (read(context).pythonProfile) {
         OrionPythonProfile.GUARDED -> 8_000
         OrionPythonProfile.DEVELOPER -> 16_000
+        OrionPythonProfile.FULL -> PythonExecutionPolicy.FULL_MAX_CODE_CHARS
     }
 }

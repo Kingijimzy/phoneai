@@ -17,9 +17,10 @@ internal object OrionPythonRuntime {
     private const val SCRIPT_NAME = "orion_main.py"
     private const val MAX_OUTPUT_CHARS = 5_200
     private const val EXECUTION_TIMEOUT_MS = 100_000L
+    private const val FULL_EXECUTION_TIMEOUT_MS = 300_000L
 
     @Synchronized
-    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}): String {
+    fun execute(context: Context, code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }, onOutput: (String) -> Unit = {}, toolInvoker: ((String, org.json.JSONObject) -> String)? = null): String {
         val maxChars = PythonExecutionPolicy.maxCodeChars(context)
         if (code.isBlank()) return "error: Python code is required."
         if (code.length > maxChars) return "error: Python code exceeds the active profile limit of $maxChars characters."
@@ -79,18 +80,20 @@ internal object OrionPythonRuntime {
             else -> return "error: Python workspace failed its integrity check; refusing execution."
         }
 
-        val phoneApi = OrionPythonPhoneApi(app, confirm, readOnly = ToolPermissions.level(app) == "read_only")
+        val phoneApi = OrionPythonPhoneApi(app, confirm, readOnly = ToolPermissions.level(app) == "read_only", toolInvoker = toolInvoker)
         val bridge = try { OrionPythonPhoneBridge(phoneApi) }
         catch (failure: Exception) {
             return "error: could not start the private Python-to-Android bridge (${failure.javaClass.simpleName})."
         }
         var quotaExceededDuringRun = false
         val result = try {
-            val bootstrap = OrionPythonPhoneBridge.bootstrapCommand()
+            val full = OrionOwnerDialSettings.read(app).pythonProfile == OrionPythonProfile.FULL
+            val bootstrap = OrionPythonPhoneBridge.bootstrapCommand(full)
+            val limits = if (full) "ulimit -c 0; ulimit -t 280; ulimit -f 65536; ulimit -n 256; ulimit -u 128" else "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32"
             installer.execute(
                 manifest,
-                "ulimit -c 0; ulimit -t 90; ulimit -f 4096; ulimit -n 64; ulimit -u 32; cd /workspace && exec python3 -I -c '$bootstrap'",
-                EXECUTION_TIMEOUT_MS,
+                "$limits; cd /workspace && exec python3 -I -c '$bootstrap'",
+                if (full) FULL_EXECUTION_TIMEOUT_MS else EXECUTION_TIMEOUT_MS,
                 onOutput = onOutput,
                 workspaceHostPath = workspaceRoot.absolutePath,
                 shouldStop = {

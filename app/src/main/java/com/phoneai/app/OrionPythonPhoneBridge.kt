@@ -132,6 +132,16 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
             "ws_receive" -> { count(2); require(args.opt(1) is Number) { "argument_2_must_be_number" }; api.ws_receive(text(0), args.optInt(1)) }
             "ws_close" -> { count(1); api.ws_close(text(0)) }
             "http_get" -> { count(1); api.http_get(text(0)) }
+            "tool" -> {
+                count(2)
+                val raw = args.opt(1)
+                val toolArgs = when (raw) {
+                    is JSONObject -> raw
+                    is String -> JSONObject(raw)
+                    else -> throw IllegalArgumentException("argument_2_must_be_object")
+                }
+                api.tool(text(0), toolArgs)
+            }
             "http_post" -> { count(2); api.http_post(text(0), text(1)) }
             else -> throw IllegalArgumentException("phone_method_not_allowed")
         }
@@ -181,10 +191,10 @@ internal class OrionPythonPhoneBridge(private val api: OrionPythonPhoneApi) : Cl
             "accessibility_open_settings", "accessibility_status", "accessibility_screen",
             "ui_tap_text", "ui_tap", "ui_swipe", "fs_list", "fs_read", "fs_write", "shell",
             "ws_connect", "ws_connect_with_headers", "ws_send", "ws_send_binary", "ws_receive", "ws_close",
-            "http_get", "http_post"
+            "http_get", "http_post", "tool"
         )
 
-        internal fun bootstrapSource(): String {
+        internal fun bootstrapSource(full: Boolean = false): String {
             val pythonMethods = registeredMethods.joinToString(", ") { "\"$it\"" }
             return """
 import os, json, sys, urllib.request, urllib.error
@@ -205,7 +215,7 @@ class _OrionPhone:
                 method="POST"
             )
             try:
-                with urllib.request.urlopen(request, timeout=40) as response:
+                with urllib.request.urlopen(request, timeout=(280 if name == "tool" else 40)) as response:
                     result = json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as error:
                 result = json.loads(error.read().decode("utf-8"))
@@ -229,16 +239,16 @@ def _orion_audit(event, args):
             raise PermissionError("Use phone.http_get/http_post/phone.ws_* for network access.")
     elif event in ("socket.bind", "subprocess.Popen", "os.system", "os.exec", "os.spawn", "os.posix_spawn", "os.posix_spawnp", "os.fork", "ctypes.dlopen"):
         raise PermissionError("This Python runtime does not expose raw sockets, subprocesses or native loading.")
-sys.addaudithook(_orion_audit)
+${if (full) "# FULL profile (owner opt-in): raw sockets, subprocesses and native loading are allowed inside the guest." else "sys.addaudithook(_orion_audit)"}
 with open("/workspace/orion_main.py", "rb") as source_file:
     exec(compile(source_file.read(), "/workspace/orion_main.py", "exec"),
          {"__name__": "__main__", "phone": phone})
 """
         }
 
-        fun bootstrapCommand(): String {
+        fun bootstrapCommand(full: Boolean = false): String {
             val encoded = Base64.encodeToString(
-                bootstrapSource().toByteArray(Charsets.UTF_8),
+                bootstrapSource(full).toByteArray(Charsets.UTF_8),
                 Base64.URL_SAFE or Base64.NO_WRAP
             )
             return "import base64;exec(base64.urlsafe_b64decode(\"$encoded\"))"
