@@ -5,7 +5,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
-/** App-private persistent Python workspace. Paths cannot escape this directory or follow symlinks. */
+/** Shared app-private coding workspace for Python, Alpine shell and project file tools. Paths cannot escape or follow symlinks. */
 internal class OrionPythonWorkspace(context: Context) {
     private val filesDir = context.applicationContext.filesDir
     private val root = File(filesDir, "orion-python/workspace")
