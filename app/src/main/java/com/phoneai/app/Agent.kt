@@ -1245,7 +1245,8 @@ Rules:
         // Instant path: common commands need no AI at all.
         ui.phase("acting")
         val quick = try {
-            if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command)) local.tryRun(command) else null
+            if (!resumeRequest && !browserActionTask && activeSkillId == null && !requiresToolPolicy(command) &&
+                (!LocalActionPolicy.requiresPhoneControl(command) || AgentPolicy.enabled(svc, "phone_control"))) local.tryRun(command) else null
         } catch (e: Exception) {
             null
         }
