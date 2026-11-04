@@ -663,7 +663,7 @@ internal fun OrionComposeChatScreen(
                 }
                 // Keep the conversation primary: show one live task card for the latest
                 // task only. Full event history remains available from the Tasks surface.
-                activityEvents.lastOrNull()?.let { event ->
+                OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
                     item(key = "activity-${event.eventId}") { OrionComposeActivityCard(event) }
                 }
                 val assistantAlreadyStreaming = lines.lastOrNull()?.let {
