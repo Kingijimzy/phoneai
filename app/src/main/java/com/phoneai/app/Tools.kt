@@ -813,23 +813,9 @@ class Tools(
      * Starts playback with one intent. Media apps that support "play from search" (YouTube Music, Spotify)
      * begin playing directly; otherwise YouTube search results open in the YouTube app.
      */
-    fun playMedia(query: String, app: String?): String {
-        val wanted = MediaPlaybackPolicy.candidates(app).firstOrNull { installed(it) }
-            ?: return MediaPlaybackPolicy.unavailable(app, query)
-        val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
-            .putExtra(android.app.SearchManager.QUERY, query)
-            .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-            .setPackage(wanted)
-        val result = launch(i, 300)
-        val label = MediaPlaybackPolicy.label(wanted)
-        return if (result == "ok") {
-            // Intent delivery is not proof of audible playback. The caller must use media_status
-            // or observable media-session state before reporting that the track is playing.
-            "playback request sent to $label for '$query'; actual playback is not yet verified"
-        } else {
-            "error: $label did not accept the playback request for '$query' ($result). No browser or web-search fallback was opened."
-        }
-    }
+    fun playMedia(query: String, app: String?): String =
+        MediaPlayRouting.play(svc, query, app, ::installed, ::launch)
+
 
     /** Opens a search in the real Chrome app (or the default browser), never Orion's internal browser. */
     fun chromeSearch(query: String): String {
@@ -1121,9 +1107,7 @@ class Tools(
     }
 
     fun pythonExec(code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String =
-        OrionPythonRuntime.execute(svc, code, confirm, stopped, onPythonOutput) { name, a ->
-            delegatedCapabilityDispatch?.invoke(name, a) ?: "error: tool dispatch is not available in this session."
-        }
+        OrionPythonRuntime.execute(svc, code, confirm, stopped, onPythonOutput)
 
     fun shell(command: String, where: String): String =
         if (command.isBlank()) "error: command is required"

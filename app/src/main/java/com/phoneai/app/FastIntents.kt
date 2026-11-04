@@ -7,6 +7,9 @@ internal object FastIntents {
         class ChromeSearch(val query: String) : Intent()
     }
 
+    /** Sentinel query: open the music app only; do not start a web YouTube search. */
+    const val OPEN_APP_ONLY = "__OPEN_APP__"
+
     private val polite = Regex("^(?:hey orion[, ]*|orion[, ]*|please |pls |can you |could you |would you |i want you to |i want to |go ahead and )+")
     private val musicWords = Regex("\\b(music|song|songs|playlist|mix|album|beats?|hits|remix|lofi|radio|video|videos|afrobeats?|gospel|worship|podcast)\\b| by ")
     private val gameWords = Regex("\\b(game|games|fc mobile|chess|ludo|pubg|cod|fortnite|minecraft)\\b")
@@ -15,6 +18,18 @@ internal object FastIntents {
         var t = raw.lowercase().trim().replace(Regex("[?!.,]+$"), "")
         t = t.replace(polite, "").trim()
         if (t.isEmpty()) return null
+
+        // "open music app" / "open YouTube Music" / "launch Spotify" → native app, not web.
+        Regex("^(?:open|launch|start|go to)\\s+(?:the\\s+)?(youtube music|yt music|spotify|music(?:\\s+app)?)\\s*$")
+            .find(t)?.let { m ->
+                val label = m.groupValues[1].trim()
+                val app = when {
+                    label.startsWith("youtube") || label == "yt music" -> "youtube music"
+                    label.startsWith("spotify") -> "spotify"
+                    else -> null
+                }
+                return Intent.PlayMedia(OPEN_APP_ONLY, app)
+            }
 
         Regex("^(?:open|launch|go to|start)\\s+(youtube music|youtube|spotify)\\s+(?:and|then)\\s+play\\s+(?:me\\s+)?(?:some\\s+)?(.+)$").find(t)?.let {
             val q = it.groupValues[2].trim()
