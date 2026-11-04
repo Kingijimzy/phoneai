@@ -227,6 +227,9 @@ def _safe_method(obj, name, *args):
             count = args[2] if len(args) > 2 else -1
             if len(new) > 1000: raise Rejected("replacement text is too large")
             count = min(obj.count(old), MAX_SEQ) if count < 0 else min(int(count), MAX_SEQ)
+            growth = max(0, len(new) - len(old)) * count
+            if len(obj) + growth > MAX_SEQ:
+                raise Rejected("string result exceeds the size limit")
             result = obj.replace(old, new, count)
             _check_seq(len(result))
             return result
