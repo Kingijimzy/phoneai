@@ -8,6 +8,8 @@ import datetime as _datetime
 import math as _math
 import re as _re
 import types as _types
+import sys as _sys
+import time as _time
 import urllib.parse as _urllib_parse
 
 MAX_SOURCE = 8000
@@ -17,6 +19,8 @@ MAX_RANGE = 1000
 MAX_SEQ = 10000
 MAX_INT_BITS = 4096
 MAX_INPUT = 8000
+MAX_RUN_SECONDS = 5.0
+MAX_EXTENSION_SECONDS = 2.0
 
 class Rejected(Exception):
     pass
@@ -321,6 +325,23 @@ def _scope(extra=None):
         scope.update(extra)
     return scope
 
+def _exec_with_deadline(code, scope, timeout_seconds):
+    """Cooperative bytecode deadline; C-extension calls retain their own bounds."""
+    deadline = _time.monotonic() + max(0.05, min(float(timeout_seconds), 10.0))
+    previous_trace = _sys.gettrace()
+
+    def deadline_trace(frame, event, arg):
+        if event in ("call", "line", "return", "exception") and _time.monotonic() >= deadline:
+            raise Rejected("execution exceeded its time limit")
+        return deadline_trace
+
+    try:
+        _sys.settrace(deadline_trace)
+        exec(code, scope, scope)
+    finally:
+        _sys.settrace(previous_trace)
+
+
 def run(source, max_source=MAX_SOURCE, phone_api=None):
     if not isinstance(source, str):
         return "error: Python code must be text"
@@ -335,7 +356,7 @@ def run(source, max_source=MAX_SOURCE, phone_api=None):
         output = io.StringIO()
         scope = _scope({"phone": phone_api} if phone_api is not None else None)
         with contextlib.redirect_stdout(output):
-            exec(code, scope, scope)
+            _exec_with_deadline(code, scope, MAX_RUN_SECONDS)
         result = output.getvalue()
         return result[:MAX_OUTPUT] if result else "Python completed (no printed output)."
     except Rejected as exc:
@@ -361,7 +382,7 @@ def run_extension(source, input_json):
         output = io.StringIO()
         scope = _scope({"INPUT": data})
         with contextlib.redirect_stdout(output):
-            exec(code, scope, scope)
+            _exec_with_deadline(code, scope, MAX_EXTENSION_SECONDS)
         result = scope.get("RESULT")
         printed = output.getvalue()[:MAX_OUTPUT]
         return json.dumps({"ok": True, "result": result, "printed": printed})
