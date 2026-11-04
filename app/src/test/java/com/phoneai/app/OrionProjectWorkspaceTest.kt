@@ -55,6 +55,7 @@ class OrionProjectWorkspaceTest {
         assertTrue(workspace.read("projects/webapp/src/cli.js").contains("main()"))
         assertTrue(projects.create("mobile_app", "kotlin").startsWith("PROJECT CREATED:"))
         assertTrue(workspace.read("projects/mobile_app/build.gradle.kts").contains("kotlin(\"jvm\")"))
+        assertTrue(workspace.read("projects/mobile_app/build.gradle.kts").contains("application { mainClass.set(\"MainKt\") }"))
         assertTrue(projects.create("android_demo", "android").startsWith("PROJECT CREATED:"))
         assertTrue(workspace.read("projects/android_demo/app/build.gradle.kts").contains("compileSdk = 35"))
         assertTrue(workspace.read("projects/android_demo/app/src/main/java/com/example/app_android_demo/MainActivity.kt").contains("class MainActivity"))
