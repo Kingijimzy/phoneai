@@ -20,13 +20,7 @@ internal object OrionSoulEngine {
             pack != null && pack in enabledPacks
         }.toSet()
         val termuxReady = runCatching { TermuxBridgeRunner.readiness(context) == null }.getOrDefault(false)
-        val notificationAccess = runCatching {
-            Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-                ?.contains(context.packageName) == true
-        }.getOrDefault(false)
-        val contactsPermission = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
+        val platformInventory = OrionPlatformInventory.read(context)
         val skills = try { SkillRegistry.list(context) } catch (_: Exception) { emptyList() }
         val enabledSkills = skills.filter { it.enabled }
         val planner = try {
@@ -36,26 +30,18 @@ internal object OrionSoulEngine {
             )
         } catch (_: Exception) { null }
 
-        val capabilitySnapshot = OrionCapabilityDiscovery.discover(
+        // One deterministic request-time coordinator owns goal classification, live
+        // capability discovery, integration state and readiness. Agent still owns dispatch,
+        // approval, cancellation and verification; this layer never grants permission.
+        val taskContext = OrionTaskOrchestrator.build(
+            request = request,
             registeredTools = ToolRegistry.all,
             enabledPacks = enabledPacks,
             termuxReady = termuxReady,
-            permissionStates = mapOf(
-                "notification_access" to if (notificationAccess)
-                    OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING,
-                "contacts" to if (contactsPermission)
-                    OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-            ),
-            integrationStates = planner?.let {
-                mapOf(it.provider.name.lowercase() to it.state.name.lowercase().replace('_', '-'))
-            } ?: emptyMap()
-        )
-
-        val executionReadiness = OrionExecutionReadiness.plan(
-            goal = OrionGoalUnderstanding.understand(request),
-            capabilities = capabilitySnapshot,
+            permissionStates = platformInventory.permissionStates,
             integration = planner
         )
+        val capabilitySnapshot = taskContext.capabilities
         val session = runCatching { SoulEngineState.snapshot(context) }.getOrNull()
         val relatedMemory = runCatching { SoulEngineState.relatedContext(context, request, 3) }.getOrDefault(emptyList())
         val lines = mutableListOf<String>()
@@ -64,8 +50,9 @@ internal object OrionSoulEngine {
         lines += "GOAL UNDERSTANDING RULES: treat short follow-ups such as continue, go ahead, do it, and try again as referring to the active conversation task when context exists. Keep greetings and small talk conversational without tool calls. For real tasks, identify the outcome and target, inspect available capabilities, execute only through registered tools, then verify observable results. Ask one focused question only when a necessary target is genuinely ambiguous. A recognized goal never grants account access or approval."
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
         lines += "Registered tools: ${registeredTools.size}; tools currently usable after pack, bridge, and permission checks: ${capabilitySnapshot.availableCount}. Enabled skills: ${enabledSkills.joinToString { it.id }.ifBlank { "none" }}."
-        lines += capabilitySnapshot.promptLines()
-        lines += executionReadiness.promptLines()
+        lines += taskContext.promptLines()
+        lines += platformInventory.lines
+        lines += "LIVE INVENTORY CONTRACT: refreshed for every user message before planning. For each requested action inspect the relevant tool, pack, skill, provider, Android permission and worker state. If a required item is OFF, explain exactly what is off and why it is needed, then ask the owner to enable or grant it and wait. If UNKNOWN, never assume ON. After a setting changes, rediscover before dispatch."
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
         val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
         lines += "SELF-EXTENDING TOOL STATUS: " + generatedExtensions.size + " saved extension(s); " + generatedExtensions.count { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) } + " enabled, verified, source-hash-matching extension(s)."

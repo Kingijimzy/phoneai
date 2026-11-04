@@ -12,6 +12,7 @@ internal class OrionPythonWorkspace(context: Context) {
     companion object {
         const val MAX_FILE_BYTES = 2 * 1024 * 1024
         const val MAX_TOTAL_BYTES = 20L * 1024 * 1024
+        private const val MAX_ENTRIES = 2048
         private val NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,179}$")
     }
     enum class RootStatus { MISSING, READY, UNSAFE }
@@ -54,6 +55,39 @@ internal class OrionPythonWorkspace(context: Context) {
     }
 
     @Synchronized fun rootExists(): Boolean = root.exists()
+
+    /**
+     * Measures the actual guest-visible workspace without following symbolic links.
+     * This detects quota overrun from direct CPython writes; it is deliberately not described
+     * as a hard in-flight quota because PRoot has no filesystem quota boundary.
+     */
+    @Synchronized fun usageBytes(): Long? {
+        if (rootStatus() != RootStatus.READY) return null
+        var total = 0L
+        var entries = 0
+        val stack = ArrayDeque<File>()
+        stack.add(root)
+        while (stack.isNotEmpty()) {
+            val current = stack.removeLast()
+            val children = current.listFiles() ?: return null
+            for (child in children) {
+                entries++
+                if (entries > MAX_ENTRIES) return MAX_TOTAL_BYTES + 1L
+                if (java.nio.file.Files.isSymbolicLink(child.toPath())) return null
+                if (child.isDirectory) stack.add(child)
+                else if (child.isFile) {
+                    total += child.length()
+                    if (total > MAX_TOTAL_BYTES) return total
+                } else return null
+            }
+        }
+        return total
+    }
+
+    @Synchronized fun quotaStatus(): String {
+        val used = usageBytes() ?: return "unsafe"
+        return if (used <= MAX_TOTAL_BYTES) "ok" else "exceeded"
+    }
 
     @Synchronized fun list(): String {
         ensureRoot()
@@ -101,10 +135,22 @@ internal class OrionPythonWorkspace(context: Context) {
         if (!root.exists()) check(root.mkdirs()) { "workspace unavailable" }
         check(rootStatus() == RootStatus.READY) { "workspace unavailable" }
     }
+    /** Accept both host-relative paths and the guest-visible /workspace mount path. */
+    private fun normalizePath(path: String): String? {
+        val relative = when {
+            path.startsWith("/workspace/") -> path.removePrefix("/workspace/")
+            path == "/workspace" -> return null
+            path.startsWith("/") -> return null
+            else -> path
+        }
+        if (!NAME.matches(relative) || relative.split('/').any { it.isBlank() || it == "." || it == ".." }) return null
+        return relative
+    }
+
     private fun resolve(path: String, mustExist: Boolean): File? {
-        if (!NAME.matches(path) || path.startsWith("/") || path.split('/').any { it.isBlank() || it == "." || it == ".." }) return null
+        val relative = normalizePath(path) ?: return null
         ensureRoot()
-        val target = File(root, path)
+        val target = File(root, relative)
         val parent = target.parentFile ?: return null
         if (!insideRoot(parent) || hasSymlink(parent)) return null
         if (mustExist && (!target.exists() || !insideRoot(target) || java.nio.file.Files.isSymbolicLink(target.toPath()))) return null

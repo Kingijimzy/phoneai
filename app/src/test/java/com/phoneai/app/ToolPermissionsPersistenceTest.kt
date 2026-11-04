@@ -68,7 +68,7 @@ class ToolPermissionsPersistenceTest {
             context, "phone_control", writeTool, dangerous = false,
             toolMode = ToolPermissions.mode(context, writeTool), askedThisTask = false
         )
-        assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
     }
 
     @Test fun deterministicReadCannotRunInPlanMode() {

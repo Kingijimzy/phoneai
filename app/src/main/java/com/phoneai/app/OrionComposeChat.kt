@@ -306,26 +306,7 @@ internal fun formatOrionMarkdown(source: String): AnnotatedString {
 @Composable
 private fun OrionComposeActivityCard(event: OrionActivityEvent) {
     var expanded by rememberSaveable(event.eventId) { mutableStateOf(false) }
-    val label = when (event.kind) {
-        OrionActivityKind.THINKING -> "THINKING"
-        OrionActivityKind.RESEARCH -> "RESEARCH"
-        OrionActivityKind.CODING -> "CODING"
-        OrionActivityKind.TOOL -> "TOOL EXECUTION"
-        OrionActivityKind.DELEGATION -> "AGENT HAND-OFF"
-        OrionActivityKind.APPROVAL -> "APPROVAL"
-        OrionActivityKind.ERROR -> "ERROR"
-        OrionActivityKind.COMPLETION -> "COMPLETED"
-        OrionActivityKind.INTERRUPTED -> "INTERRUPTED"
-        OrionActivityKind.CANCELLED -> "CANCELLED"
-    }
-    val status = when (event.status) {
-        OrionActivityStatus.ACTIVE -> "ACTIVE"
-        OrionActivityStatus.WAITING -> "WAITING"
-        OrionActivityStatus.SUCCEEDED -> "DONE"
-        OrionActivityStatus.FAILED -> "FAILED"
-        OrionActivityStatus.CANCELLED -> "CANCELLED"
-        OrionActivityStatus.INTERRUPTED -> "INTERRUPTED"
-    }
+    val active = event.status == OrionActivityStatus.ACTIVE
     val accent = when (event.status) {
         OrionActivityStatus.ACTIVE -> Color(0xFFD1D1D1)
         OrionActivityStatus.WAITING -> Color(0xFFE0C58A)
@@ -333,73 +314,91 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
         OrionActivityStatus.FAILED -> Color(0xFFE09B9B)
         else -> Color(0xFFAAAAAA)
     }
+    val terminalOutput = event.evidence.lastOrNull { it.contains("Python terminal", true) || it.contains("TASK:OUTPUT", true) }
+        ?: event.summary
+    val pulse = rememberInfiniteTransition(label = "task-stream-pulse")
+    val alpha by pulse.animateFloat(
+        initialValue = if (active) 0.35f else 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(850), repeatMode = RepeatMode.Reverse),
+        label = "task-stream-alpha"
+    )
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF171717))
-            .border(1.dp, Color(0xFF484848), RoundedCornerShape(14.dp))
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+            .background(Color(0xFF111111))
+            .border(1.dp, Color(0xFF303030), RoundedCornerShape(9.dp))
             .clickable { expanded = !expanded }
-            .padding(horizontal = 13.dp, vertical = 11.dp)
+            .padding(horizontal = 9.dp, vertical = 6.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(event.title, color = Color(0xFFF0F0F0), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(label, color = ChatMuted, fontSize = 9.sp, letterSpacing = 1.sp, modifier = Modifier.padding(top = 4.dp))
-            }
-            Text(status, color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF252525)).padding(horizontal = 8.dp, vertical = 5.dp))
+            Box(Modifier.size(6.dp).clip(CircleShape).background(accent.copy(alpha = if (active) alpha else 1f)))
+            Spacer(Modifier.width(7.dp))
+            Text(event.title, color = Color(0xFFE8E8E8), fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            Text(
+                when (event.status) {
+                    OrionActivityStatus.ACTIVE -> "RUNNING"
+                    OrionActivityStatus.WAITING -> "APPROVAL"
+                    OrionActivityStatus.SUCCEEDED -> "DONE"
+                    OrionActivityStatus.FAILED -> "FAILED"
+                    OrionActivityStatus.CANCELLED -> "STOPPED"
+                    OrionActivityStatus.INTERRUPTED -> "PAUSED"
+                }, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold
+            )
         }
-        if (event.summary.isNotBlank()) Text(event.summary, color = Color(0xFFB8B8B8), fontSize = 12.sp, lineHeight = 17.sp, maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 7.dp)) {
-            Text(java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(event.timestampMs)), color = Color(0xFF858585), fontSize = 9.sp)
-            event.elapsedMs?.let { duration ->
-                val seconds = duration / 1000L
-                val elapsedLabel = if (seconds < 60) "${seconds}s" else if (seconds < 3600) "${seconds / 60}m${seconds % 60}s" else "${seconds / 3600}h${(seconds % 3600) / 60}m"
-                Text("  ·  $elapsedLabel", color = Color(0xFF858585), fontSize = 9.sp)
+        val terminalEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
+        if (terminalEvidence != null) {
+            Text(
+                "$ " + terminalEvidence.commandLabel,
+                color = Color(0xFFB8B8B8), fontSize = 9.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                modifier = Modifier.padding(start = 13.dp, top = 4.dp)
+            )
+            if (terminalEvidence.outputTail.isNotBlank()) {
+                Text(
+                    terminalEvidence.outputTail.takeLast(400),
+                    color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 12.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(start = 13.dp, top = 2.dp)
+                        .clip(RoundedCornerShape(5.dp)).background(Color(0xFF080808)).padding(6.dp)
+                )
             }
-            event.agentId?.let { Text("  ·  $it", color = Color(0xFF858585), fontSize = 9.sp) }
-            Spacer(Modifier.weight(1f))
-            Text(if (expanded) "LESS" else "EVIDENCE", color = Color(0xFFAAAAAA), fontSize = 9.sp)
+            terminalEvidence.exitCode?.let { code ->
+                Text("exit $code", color = if (code == 0) Color(0xFFB8CDBD) else Color(0xFFE09B9B),
+                    fontSize = 8.sp, modifier = Modifier.padding(start = 13.dp, top = 2.dp))
+            }
+        } else if (event.kind == OrionActivityKind.TOOL && (event.title.contains("terminal", true) || event.summary.contains("TASK:OUTPUT", true))) {
+            Text(
+                terminalOutput.lineSequence().lastOrNull().orEmpty().takeLast(180).ifBlank { "Starting process…" },
+                color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 11.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                maxLines = if (expanded) 6 else 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 13.dp, top = 3.dp)
+            )
+        } else if (event.summary.isNotBlank()) {
+            Text(event.summary, color = Color(0xFF999999), fontSize = 9.sp,
+                maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 13.dp, top = 2.dp))
         }
-        AnimatedVisibility(expanded, enter = fadeIn(tween(160))) {
-            Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                event.typedEvidence.take(8).forEach { evidence ->
-                    when (evidence) {
-                        is OrionActivityEvidence.Browser -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("BROWSER · ${evidence.title}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            if (evidence.url.isNotBlank()) Text(evidence.url, color = Color(0xFFB8C5D8), fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            evidence.excerpt?.let { Text(it, color = Color(0xFFAAAAAA), fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
-                        }
-                        is OrionActivityEvidence.Terminal -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("TERMINAL · ${evidence.commandLabel}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            if (evidence.outputTail.isNotBlank()) Text(evidence.outputTail, color = Color(0xFFB8B8B8), fontSize = 10.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                            evidence.exitCode?.let { Text("Exit code $it", color = if (it == 0) Color(0xFFB8CDBD) else Color(0xFFE09B9B), fontSize = 9.sp) }
-                        }
-                        is OrionActivityEvidence.File -> Text(
-                            "FILE · ${evidence.operation} · ${evidence.displayPath}" + (evidence.byteCount?.let { " · $it bytes" } ?: ""),
-                            color = Color(0xFFD0D0D0), fontSize = 11.sp, lineHeight = 16.sp
-                        )
-                        is OrionActivityEvidence.CodeDiff -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("CODE DIFF · ${evidence.fileLabel} · +${evidence.additions} / -${evidence.deletions}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            Text(evidence.summary, color = Color(0xFFB8B8B8), fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        }
-                        is OrionActivityEvidence.AgentHandoff -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("AGENT · ${evidence.agentId} · ${evidence.status}", color = Color(0xFFE0E0E0), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            Text(evidence.objective, color = Color(0xFFB8B8B8), fontSize = 10.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                            evidence.parentTaskId?.let { Text("Parent task $it", color = Color(0xFF858585), fontSize = 9.sp) }
-                        }
-                    }
-                }
-                if (event.typedEvidence.isEmpty()) {
-                    event.evidence.take(8).forEach { evidence ->
-                        Text("• $evidence", color = Color(0xFFD0D0D0), fontSize = 11.sp, lineHeight = 16.sp)
-                    }
-                    if (event.evidence.isEmpty()) Text("No additional evidence was attached to this event.", color = Color(0xFF858585), fontSize = 11.sp)
-                }
-                event.parentTaskId?.let { Text("Parent $it", color = Color(0xFF777777), fontSize = 9.sp) }
-                Text("Task ${event.taskId}", color = Color(0xFF777777), fontSize = 9.sp)
+        if (expanded) {
+            event.evidence.takeLast(10).forEach { line ->
+                Text(line, color = Color(0xFFAAAAAA), fontSize = 8.sp, lineHeight = 11.sp)
             }
+            Text("Task ${event.taskId}", color = Color(0xFF666666), fontSize = 8.sp)
         }
     }
+}
+
+internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
+    if (item.kind != "note") return false
+    val text = item.text
+    return listOf(
+        "[TASK:RUNNING]", "[TASK:OUTPUT]", "[TASK:APPROVAL]", "[TASK:RECOVER]",
+        "[TASK:FAILED]", "[TASK:COMPLETE]", "[TASK:CANCELLED]", "[TASK:INTERRUPTED]",
+        "[TOOL:", "[TOOL_RESULT:", "[APPROVAL:", "[EVENT:", "[SHELL:", "[BROWSER:", "[SPECIALIST:"
+    ).any { text.startsWith(it) }
 }
 
 private val ChatInk = Color(0xFF050505)
@@ -637,15 +636,16 @@ internal fun OrionComposeChatScreen(
                 }
             }
         } else {
+            val visibleLines = lines.filterNot(::isCompactExecutionNote)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
             ) {
-                itemsIndexed(lines, key = { _, item -> item.id }) { index, item ->
+                itemsIndexed(visibleLines, key = { _, item -> item.id }) { index, item ->
                     val previousUserMessage = if (item.kind == "ai") {
-                        lines.take(index).lastOrNull { it.kind == "me" }?.text
+                        visibleLines.take(index).lastOrNull { it.kind == "me" }?.text
                     } else null
                     ChatBubble(
                         item = item,

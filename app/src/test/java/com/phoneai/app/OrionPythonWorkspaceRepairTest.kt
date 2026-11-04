@@ -41,6 +41,16 @@ class OrionPythonWorkspaceRepairTest {
         File(context.filesDir, "orion_evidence_ledger.json").delete()
     }
 
+    @Test fun guestVisibleWorkspacePathsResolveToTheSamePrivateFiles() {
+        val workspace = OrionPythonWorkspace(context)
+        assertTrue(workspace.write("orion_acceptance_test/diagnostic.py", "print('ORION_OK')").startsWith("saved "))
+        assertEquals("print('ORION_OK')", workspace.read("/workspace/orion_acceptance_test/diagnostic.py"))
+        assertTrue(workspace.write("/workspace/orion_acceptance_test/report.json", "{\"ok\":true}").startsWith("saved "))
+        assertEquals("{\"ok\":true}", workspace.read("orion_acceptance_test/report.json"))
+        assertTrue(workspace.read("/workspace/missing.txt").startsWith("error:"))
+        assertTrue(workspace.read("/data/local/tmp/escape.txt").startsWith("error:"))
+    }
+
     @Test fun diagnosticsReportMissingWorkspaceRootWithEvidence() {
         val report = OrionSelfDiagnostics.inspect(context)
         assertTrue(report.findings.any {

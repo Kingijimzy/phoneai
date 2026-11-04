@@ -33,7 +33,8 @@ import org.json.JSONObject
 /** The extra abilities the agent can use besides touching the screen. All run on the worker thread. */
 class Tools(
     private val svc: PhoneAiService,
-    private val delegatedCapabilityDispatch: ((String, JSONObject) -> String)? = null
+    private val delegatedCapabilityDispatch: ((String, JSONObject) -> String)? = null,
+    private val onPythonOutput: (String) -> Unit = {}
 ) {
 
     private fun launch(i: Intent, settleMs: Long = 1200): String {
@@ -1122,8 +1123,8 @@ class Tools(
         }
     }
 
-    fun pythonExec(code: String, confirm: (String) -> Boolean = { false }): String =
-        OrionPythonRuntime.execute(svc, code, confirm)
+    fun pythonExec(code: String, confirm: (String) -> Boolean = { false }, stopped: () -> Boolean = { false }): String =
+        OrionPythonRuntime.execute(svc, code, confirm, stopped, onPythonOutput)
 
     fun shell(command: String, where: String): String =
         if (command.isBlank()) "error: command is required"

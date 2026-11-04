@@ -5,7 +5,8 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionCapabilityAdaptersTest {
-    @Test fun everyRegisteredToolHasExactlyOneAdapterRoute() {
+    
+@Test fun everyRegisteredToolHasExactlyOneAdapterRoute() {
         val routes = OrionCapabilityAdapters.routes()
         assertEquals(ToolRegistry.all.size, routes.size)
         assertEquals(ToolRegistry.all.map { it.name }.toSet(), routes.map { it.tool }.toSet())
@@ -209,7 +210,7 @@ class OrionCapabilityAdaptersTest {
         val python = OrionCapabilityAdapters.routes()
             .filter { it.backend == OrionCapabilityAdapters.Backend.PYTHON }
         assertEquals(
-            setOf("python_exec", "extension_list", "extension_create", "extension_test",
+            setOf("python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
                 "extension_enable", "extension_run", "extension_disable"),
             python.map { it.tool }.toSet()
         )
@@ -242,8 +243,8 @@ class OrionCapabilityAdaptersTest {
         )
     }
     
-    @Test fun directPythonExecutionRunsWithoutInteractiveApprovalInsideRestrictedSandbox() {
-        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+    @Test fun directPythonRequiresOwnerApprovalBecauseProotSharesAppUid() {
+        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
     }

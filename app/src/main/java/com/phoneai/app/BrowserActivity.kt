@@ -338,8 +338,16 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(webContainer, LinearLayout.LayoutParams(-1, 0, 1f))
 
         setContentView(root)
+        val browserPrefs = getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE)
         val restoredUrls = savedInstanceState?.getStringArrayList("orion_browser_tab_urls")
-        val restoredIndex = savedInstanceState?.getInt("orion_browser_active_tab") ?: 0
+            ?: browserPrefs.getString("tab_urls", null)?.let { raw ->
+                runCatching {
+                    val array = org.json.JSONArray(raw)
+                    ArrayList<String>().apply { for (i in 0 until minOf(array.length(), 8)) add(array.optString(i)) }
+                }.getOrNull()
+            }
+        val restoredIndex = savedInstanceState?.getInt("orion_browser_active_tab")
+            ?: browserPrefs.getInt("active_tab", 0)
         if (!restoredUrls.isNullOrEmpty()) {
             restoredUrls.take(8).forEachIndexed { index, url -> createTab(url, index == restoredIndex.coerceIn(0, restoredUrls.lastIndex)) }
         } else {
@@ -349,9 +357,68 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         updateControls()
     }
 
+    /**
+     * Persist navigation continuity without persisting URL-carried credentials.
+     * OAuth codes, access tokens, signed query values and fragments must not be
+     * copied into app preferences or saved-instance state.
+     */
+    private fun restorableSessionUrl(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val uri = Uri.parse(raw)
+            if (uri.scheme != "https" || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) return null
+            val sensitiveKeys = setOf(
+                "token", "access_token", "refresh_token", "id_token", "code",
+                "authorization", "auth", "password", "passwd", "secret", "api_key",
+                "apikey", "client_secret", "signature", "sig", "session", "sessionid"
+            )
+            val builder = uri.buildUpon().fragment(null).clearQuery()
+            for (name in uri.queryParameterNames) {
+                if (name.lowercase() !in sensitiveKeys) {
+                    for (value in uri.getQueryParameters(name)) builder.appendQueryParameter(name, value)
+                }
+            }
+            builder.build().toString()
+        } catch (_: Exception) { null }
+    }
+
+    /**
+     * Keep the selected index aligned with the filtered URL list. Tabs that are
+     * blank, non-HTTPS, or credential-bearing are deliberately omitted; their
+     * removal must not shift the restored selection onto a different tab.
+     */
+    private fun restorableSessionSnapshot(): Pair<ArrayList<String>, Int> {
+        val urls = ArrayList<String>()
+        var selected = -1
+        browserTabs.forEachIndexed { index, tab ->
+            val safeUrl = restorableSessionUrl(tab.url) ?: return@forEachIndexed
+            if (urls.size >= 8) return@forEachIndexed
+            if (index == activeTabIndex) selected = urls.size
+            urls.add(safeUrl)
+        }
+        return urls to selected.coerceIn(0, maxOf(0, urls.lastIndex))
+    }
+
+    private fun persistBrowserSession() {
+        val (urls, selectedIndex) = restorableSessionSnapshot()
+        val prefs = getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE)
+        if (urls.isEmpty()) {
+            // Clear stale state when every tab is transient or the activity closes.
+            prefs.edit().clear().apply()
+            return
+        }
+        prefs.edit()
+            .putString("tab_urls", org.json.JSONArray(urls).toString())
+            .putInt("active_tab", selectedIndex)
+            .putLong("updated_at", System.currentTimeMillis())
+            .apply()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putStringArrayList("orion_browser_tab_urls", ArrayList(browserTabs.map { it.url ?: "https://duckduckgo.com/" }))
-        outState.putInt("orion_browser_active_tab", activeTabIndex)
+        val (urls, selectedIndex) = restorableSessionSnapshot()
+        outState.putStringArrayList("orion_browser_tab_urls", urls)
+        outState.putInt("orion_browser_active_tab", selectedIndex)
+        persistBrowserSession()
         super.onSaveInstanceState(outState)
     }
 
@@ -391,6 +458,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                         updateControls()
                     }
                     renderTabs()
+                    persistBrowserSession()
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
@@ -449,8 +517,18 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             }
             web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
                 try {
-                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                    val downloadUri = Uri.parse(url)
+                    if (downloadUri.scheme != "https" || downloadUri.host.isNullOrBlank() || !downloadUri.userInfo.isNullOrBlank()) {
+                        Toast.makeText(this, "Orion only downloads files from valid HTTPS links.", Toast.LENGTH_LONG).show()
+                        return@setDownloadListener
+                    }
+                    val guessed = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    // Never allow a server-provided filename to escape Downloads or contain controls.
+                    val safeName = guessed.map { ch ->
+                        if (ch == '/' || ch == '\\' || ch.code < 32) '_' else ch
+                    }.joinToString("").trim().take(120).ifBlank { "orion-download" }
+                    val fileName = safeName
+                    val request = DownloadManager.Request(downloadUri).apply {
                         setMimeType(mimeType)
                         setTitle(fileName)
                         setDescription("Downloading from Orion Browser")
@@ -482,6 +560,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (select || browserTabs.size == 1) selectTab(browserTabs.lastIndex)
         tab.loadUrl(validatedBrowserUrl(url))
         renderTabs()
+        persistBrowserSession()
     }
 
     private fun validatedBrowserUrl(input: String): String {
@@ -507,6 +586,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         address.setText(web.url.orEmpty())
         renderTabs()
         updateControls()
+        persistBrowserSession()
     }
 
     private fun closeTab(index: Int) {
@@ -523,6 +603,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (index < activeTabIndex) activeTabIndex--
         else if (index == activeTabIndex) activeTabIndex = minOf(index, browserTabs.lastIndex)
         selectTab(activeTabIndex)
+        persistBrowserSession()
     }
 
     private fun renderTabs() {
@@ -595,6 +676,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         web.loadUrl(candidate)
         renderTabs()
         updateControls()
+        persistBrowserSession()
     }
 
     override fun onBackPressed() {
@@ -678,6 +760,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             tab.destroy()
         }
         browserTabs.clear()
+        persistBrowserSession()
         try { CookieManager.getInstance().flush() } catch (_: Exception) { }
         super.onDestroy()
     }

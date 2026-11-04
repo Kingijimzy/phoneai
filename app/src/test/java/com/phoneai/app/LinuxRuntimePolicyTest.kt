@@ -71,4 +71,21 @@ class LinuxRuntimePolicyTest {
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "a".repeat(LinuxRuntimePolicy.MAX_COMMAND + 1)))
         assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "ls\u0000"))
     }
+    @Test fun pythonWorkspaceBindIsExplicitAndPrivate() {
+        val args = LinuxRuntimePolicy.prootArgs(
+            "/data/app/lib/libproot.so", "/data/files/linux/rootfs", "python3 -I /workspace/main.py",
+            "/data/user/0/com.phoneai.app/files/orion-python/workspace"
+        )!!
+        assertTrue(args.containsAll(listOf("-b", "/data/user/0/com.phoneai.app/files/orion-python/workspace:/workspace")))
+        assertEquals("python3 -I /workspace/main.py", args.last())
+        assertTrue(args.last().contains("/workspace/main.py"))
+        assertFalse(args.any { it.contains("shared_prefs") || it.contains("databases") })
+    }
+
+    @Test fun rejectsUnsafePythonWorkspaceBindPaths() {
+        assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "python3 x.py", "relative/workspace"))
+        assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "python3 x.py", "/data/files/../secrets"))
+        assertNull(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", "python3 x.py", "/data/work:guest"))
+    }
+
 }

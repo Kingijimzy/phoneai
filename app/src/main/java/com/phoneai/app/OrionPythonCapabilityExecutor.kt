@@ -33,8 +33,9 @@ internal class OrionPythonCapabilityExecutor(
             "python_exec" -> {
                 val code = args.optString("code")
                 if (stopped()) "error: task was stopped before Python execution."
-                else tools.pythonExec(code, confirm)
+                else tools.pythonExec(code, confirm, stopped)
             }
+            "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
             "extension_create" -> createDraft(args)
             "extension_test" -> testDraft(args, stopped)
@@ -141,11 +142,11 @@ internal class OrionPythonCapabilityExecutor(
     }
 
     companion object {
-        /** The direct Python sandbox is capability-free; execution itself needs no confirmation. */
-        fun requiresExplicitApproval(tool: String): Boolean = false
+        /** PRoot runs under the app UID; direct CPython is trusted code until OS-level isolation exists. */
+        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
 
         private val supportedTools = setOf(
-            "python_exec", "extension_list", "extension_create", "extension_test",
+            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
             "extension_enable", "extension_run", "extension_disable"
         )
         fun supports(tool: String): Boolean = tool in supportedTools

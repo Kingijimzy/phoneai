@@ -49,6 +49,49 @@ class OrionActivityTimelineTest {
         assertEquals("parent-1", (restored.typedEvidence.single() as OrionActivityEvidence.AgentHandoff).parentTaskId)
     }
 
+    @Test fun compactChatProjectionDropsTransientAndDuplicateLifecycleCards() {
+        val timeline = OrionActivityTimeline()
+        timeline.append(OrionActivityEvent("accepted", "task-1", OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Request accepted", "request accepted", 1))
+        timeline.append(OrionActivityEvent("tool-start", "task-1", OrionActivityKind.TOOL,
+            OrionActivityStatus.ACTIVE, "workspace_read", "Tool: workspace_read", 2, correlationId = "call-1"))
+        timeline.append(OrionActivityEvent("tool-result", "task-1", OrionActivityKind.ERROR,
+            OrionActivityStatus.FAILED, "workspace_read failed", "tool=workspace_read; outcome=failed", 3, correlationId = "call-1"))
+        timeline.append(OrionActivityEvent("finished", "task-1", OrionActivityKind.COMPLETION,
+            OrionActivityStatus.SUCCEEDED, "Interaction finished", "interaction processing finished", 4))
+        val cards = timeline.compactForChat()
+        assertEquals(1, cards.size)
+        assertEquals("task-stream-task-1", cards.single().eventId)
+        assertEquals(OrionActivityStatus.SUCCEEDED, cards.single().status)
+        assertEquals(4, cards.single().evidence.size)
+        assertTrue(cards.single().evidence.any { it.contains("FAILED") && it.contains("workspace_read") })
+    }
+
+    @Test fun untracedEventsFallBackToSessionStreamInsteadOfMessageCards() {
+        val sessionTask = "session-session-42"
+        val timeline = OrionActivityTimeline()
+        timeline.append(OrionActivityEvent("accepted", sessionTask, OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Request accepted", "started", 1))
+        timeline.append(OrionActivityEvent("tool", sessionTask, OrionActivityKind.TOOL,
+            OrionActivityStatus.ACTIVE, "Python", "running", 2))
+        timeline.append(OrionActivityEvent("approval", sessionTask, OrionActivityKind.APPROVAL,
+            OrionActivityStatus.WAITING, "Approval", "approved", 3))
+        assertEquals(1, timeline.compactForChat().size)
+    }
+
+    @Test fun chatProjectionKeepsSeparateTasksAsSeparateStreamCards() {
+        val timeline = OrionActivityTimeline()
+        timeline.append(OrionActivityEvent("a1", "task-a", OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Task A", "started A", 1))
+        timeline.append(OrionActivityEvent("a2", "task-a", OrionActivityKind.TOOL,
+            OrionActivityStatus.SUCCEEDED, "Tool A", "finished A", 2))
+        timeline.append(OrionActivityEvent("b1", "task-b", OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Task B", "started B", 3))
+        val cards = timeline.compactForChat()
+        assertEquals(2, cards.size)
+        assertEquals(setOf("task-stream-task-a", "task-stream-task-b"), cards.map { it.eventId }.toSet())
+    }
+
     @Test fun elapsedTimeClampsClockSkewAndFormatsLongRuns() {
         assertEquals("0s", OrionActivityTimeline.elapsedLabel(2_000, 1_000))
         assertEquals("12s", OrionActivityTimeline.elapsedLabel(1_000, 13_000))

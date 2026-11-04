@@ -82,7 +82,9 @@ object AgentPolicy {
         mode = mode(c),
         toolMode = effectiveToolMode,
         // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
-        autonomous = ToolPermissions.level(c) == "autonomous" && !ToolPermissions.hasOverride(c, toolId),
+        // Autopilot applies to routine actions even when a tool has an old ASK override.
+        // Explicit DENY still wins in GatePolicy, and consequential actions still need confirmation.
+        autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
@@ -108,7 +110,7 @@ object AgentPolicy {
         "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
         "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
-        "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
+        "shell", "workspace_list", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",

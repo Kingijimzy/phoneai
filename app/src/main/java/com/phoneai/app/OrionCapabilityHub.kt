@@ -1,9 +1,6 @@
 package com.phoneai.app
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import android.provider.Settings
 
 /**
  * Shared read-only capability snapshot used by the Watcher and diagnostics.
@@ -30,21 +27,8 @@ internal object OrionCapabilityHub {
         val limitations: List<String>
     )
 
-    private fun notificationAccessGranted(context: Context): Boolean = runCatching {
-        val raw = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
-        raw.split(':').any { it.substringBefore('/').equals(context.packageName, ignoreCase = true) }
-    }.getOrDefault(false)
-
-    private fun permissionStates(context: Context): Map<String, OrionCapabilityDiscovery.PermissionState> {
-        val contacts = if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED)
-            OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-        val location = if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-            OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-        val notifications = if (notificationAccessGranted(context))
-            OrionCapabilityDiscovery.PermissionState.GRANTED else OrionCapabilityDiscovery.PermissionState.MISSING
-        return mapOf("contacts" to contacts, "location" to location, "notification_access" to notifications)
-    }
+    private fun permissionStates(context: Context): Map<String, OrionCapabilityDiscovery.PermissionState> =
+        OrionPlatformInventory.permissionStates(context.applicationContext)
 
     private fun integrationStates(context: Context): Map<String, String> {
         val result = linkedMapOf<String, String>()
