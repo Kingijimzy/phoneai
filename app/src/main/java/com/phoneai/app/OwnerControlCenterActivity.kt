@@ -1,0 +1,519 @@
+package com.phoneai.app
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.app.KeyguardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.provider.Settings
+import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+
+/**
+ * Owner-only control surface. Android's device credential is the owner proof; the activity
+ * is non-exported and screenshots are blocked while it is visible.
+ */
+class OwnerControlCenterActivity : Activity() {
+    companion object {
+        private const val REQUEST_OWNER_AUTH = 9184
+        private const val PREFS = "phoneai_owner"
+        private const val AUTH_AT = "owner_auth_at"
+        private const val SESSION_MS = 5 * 60 * 1000L
+    }
+
+    private lateinit var root: LinearLayout
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        window.statusBarColor = Theme.BG
+        window.navigationBarColor = Theme.BG
+        if (hasRecentOwnerAuth()) render() else authenticateOwner()
+    }
+
+    private fun hasRecentOwnerAuth(): Boolean {
+        val at = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(AUTH_AT, 0L)
+        return at > 0L && System.currentTimeMillis() - at in 0..SESSION_MS
+    }
+
+    private fun authenticateOwner() {
+        val keyguard = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        if (!keyguard.isDeviceSecure) {
+            AlertDialog.Builder(this)
+                .setTitle("Secure the phone first")
+                .setMessage("Owner Control Centre is protected by your Android screen lock. Set a PIN, password, or pattern in Android Security settings, then open this panel again.")
+                .setPositiveButton("OPEN SECURITY SETTINGS") { _, _ ->
+                    runCatching { startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) }
+                    finish()
+                }
+                .setNegativeButton("CLOSE") { _, _ -> finish() }
+                .setOnCancelListener { finish() }
+                .show()
+            return
+        }
+        val prompt = keyguard.createConfirmDeviceCredentialIntent(
+            "Verify Orion owner",
+            "Unlock with your Android PIN, password, pattern, or supported biometric."
+        )
+        if (prompt == null) {
+            Toast.makeText(this, "Android could not start owner verification.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(prompt, REQUEST_OWNER_AUTH)
+    }
+
+    @Deprecated("Android device-credential confirmation callback")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_OWNER_AUTH) return
+        if (resultCode == Activity.RESULT_OK) {
+            getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putLong(AUTH_AT, System.currentTimeMillis()).apply()
+            render()
+        } else {
+            Toast.makeText(this, "Owner verification was not completed.", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::root.isInitialized && !hasRecentOwnerAuth()) finish()
+    }
+
+    private fun render() {
+        if (::root.isInitialized) return
+        val scroll = ScrollView(this).apply { setBackgroundColor(Theme.BG); isFillViewport = true }
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(20), dp(18), dp(32))
+        }
+        scroll.addView(root)
+        setContentView(scroll)
+
+        addText("ORION / OWNER ONLY", 10f, Theme.MUTED, true, 0)
+        addText("Orion Full Control Panel", 27f, Theme.TEXT, true, 5)
+        addText("Owner-authenticated runtime controls. Every dial below is connected to an Orion policy or Android settings surface; hard security boundaries and OS controls remain independently enforced.", 13f, Theme.MUTED, false, 8)
+        addButton("‹ Back to Settings") { finish() }
+
+        section("AUTONOMY & EXECUTION")
+        val config = OrionAutonomySettings.read(this)
+        val ownerDials = OrionOwnerDialSettings.read(this)
+        addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} read retries", 13f, Theme.TEXT, true, 5)
+        addText("Extension auto-activation: ${if (ownerDials.autoActivateVerifiedExtensions) "ON · tested drafts only" else "OFF"} · Python: ${ownerDials.pythonProfile.name} · Recovery: ${ownerDials.recoveryMaxAttempts} retries / ${ownerDials.recoveryBackoffSeconds}s base · Watcher: ${if (Prefs.watchOn(this)) "REQUESTED" else "OFF"}", 12f, Theme.MUTED, false, 3)
+        addButton("Configure autonomy, limits and notifications", true) { showAutonomyControlCenter() }
+        addButton("Extension activation dial") { showExtensionControls() }
+        addButton("Python execution profile") { showPythonProfile() }
+        addButton("Recovery retry and backoff dials") { showRecoveryDials() }
+        addButton("Watcher and Android background controls") { showWatcherControls() }
+        section("TOOLS, SKILLS & EXTENSIONS")
+        addText("Registered tools: ${ToolRegistry.all.size} · declarative skills: ${runCatching { SkillRegistry.list(this).size }.getOrDefault(0)} · generated extensions: ${runCatching { SelfExtendingExtensionStore(applicationContext).all().size }.getOrDefault(0)}", 12f, Theme.TEXT, true, 4)
+        addButton("Inspect registered tools and extension inventory") { showRegistryAndExtensions() }
+        addButton("Open self-extension builder") { startActivity(Intent(this, SelfExtensionLabActivity::class.java)) }
+        addButton("Manage declarative skills and capability packs") { startActivity(Intent(this, AgentControlActivity::class.java)) }
+
+        section("AUTONOMY & EXECUTION RULES")
+        addButton("Configure individual tool Allow / Ask / Deny rules") { showToolRules() }
+        addButton("Configure agent approval modes and capability packs") {
+            startActivity(Intent(this, AgentControlActivity::class.java))
+        }
+        addButton("Open task and recovery centre") { startActivity(Intent(this, TaskCenterActivity::class.java)) }
+
+        section("POLICY & RESTRICTION REGISTER")
+        addText("This register describes Orion app-level gates and their current configurability. It does not expose external model-provider or operating-system internal policies.", 12f, Theme.MUTED, false, 4)
+        addButton("Inspect every registered app policy and hard limit") { showPolicyRegister() }
+        addButton("Inspect enforced security invariants") { showSecurityInvariants() }
+
+        section("PRIVACY & SECRETS")
+        addText(secretSummary(), 12f, Theme.TEXT, false, 4)
+        addButton("Inspect / remove stored credentials") { showCredentialManager() }
+        addButton("Add or rotate provider keys and integrations") { startActivity(Intent(this, SettingsActivity::class.java)) }
+        addButton("View Android permission grants") { showPermissionStatus() }
+        addButton("Open Android app permission settings") { openAndroidSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName") }
+        addButton("Open Accessibility service settings") { openAndroidSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
+        addButton("Open notification access settings") { openAndroidSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }
+        addButton("Review local action and policy audit") { showAudit() }
+        addButton("Open memory and learning controls") { startActivity(Intent(this, MemoryActivity::class.java)) }
+        addButton("Open Soul Engine and watcher status") { startActivity(Intent(this, SoulEngineActivity::class.java)) }
+
+        section("OWNER SESSION")
+        addText("Owner verification remains valid for up to five minutes. The panel is excluded from screenshots. Secrets are never written to the audit log.", 12f, Theme.MUTED, false, 4)
+        addButton("Lock Owner Control Centre now", true) {
+            getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(AUTH_AT).apply()
+            finish()
+        }
+    }
+
+    private fun secretSummary(): String {
+        val configured = Providers.all.filter { Prefs.hasKey(this, it.id) }.map { it.label }
+        val bybit = Prefs.bybitKey(this).isNotBlank() && Prefs.bybitSecret(this).isNotBlank()
+        return buildString {
+            append("Provider credentials configured: ")
+            append(if (configured.isEmpty()) "none" else configured.joinToString(", "))
+            append("\nBybit credentials: ")
+            append(if (bybit) "both present (values masked)" else "not fully configured")
+            append("\nCredential values are encrypted by the app vault where supported and are not displayed in this summary.")
+        }
+    }
+
+    private fun showCredentialManager() {
+        val providers = Providers.all
+        val labels = providers.map { p ->
+            p.label + " · " + if (Prefs.hasKey(this, p.id)) "CREDENTIAL STORED" else "not configured"
+        }.toMutableList()
+        labels += "Bybit exchange · " + if (Prefs.bybitKey(this).isNotBlank() && Prefs.bybitSecret(this).isNotBlank()) "BOTH CREDENTIALS STORED" else "not fully configured"
+        AlertDialog.Builder(this).setTitle("Credential vault · values masked")
+            .setItems(labels.toTypedArray()) { _, index ->
+                if (index < providers.size) {
+                    val provider = providers[index]
+                    if (Prefs.hasKey(this, provider.id)) {
+                        AlertDialog.Builder(this).setTitle(provider.label + " credential")
+                            .setMessage("The key is stored in the Android Keystore-backed AES-GCM vault. Its value is intentionally not printed to the screen or audit log.")
+                            .setNeutralButton("REMOVE KEY") { _, _ ->
+                                if (Prefs.setKey(this, provider.id, "")) {
+                                    Toast.makeText(this, provider.label + " credential removed.", Toast.LENGTH_SHORT).show()
+                                } else Toast.makeText(this, "Credential removal failed.", Toast.LENGTH_LONG).show()
+                            }
+                            .setPositiveButton("CLOSE", null).show()
+                    } else {
+                        Toast.makeText(this, "No stored key for " + provider.label, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    AlertDialog.Builder(this).setTitle("Bybit credentials")
+                        .setMessage("Remove both stored Bybit credentials? This does not revoke the API key at Bybit; revoke it in your Bybit account as well.")
+                        .setNegativeButton("CANCEL", null)
+                        .setPositiveButton("REMOVE BOTH") { _, _ ->
+                            val ok = Prefs.setBybit(this, "", "")
+                            Toast.makeText(this, if (ok) "Stored Bybit credentials removed." else "Could not remove stored Bybit credentials.", Toast.LENGTH_LONG).show()
+                        }.show()
+                }
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
+    private fun showAutonomyControlCenter() {
+        val current = OrionAutonomySettings.read(this)
+        val modes = OrionMode.values()
+        val labels = modes.map { "${it.name} · ${OrionAutonomyPolicy.description(it)}" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Autonomy mode")
+            .setSingleChoiceItems(labels, modes.indexOf(current.mode)) { dialog, which ->
+                val selected = modes[which]
+                OrionAutonomySettings.write(this, current.copy(mode = selected))
+                ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(selected))
+                AgentPolicy.log(this, "owner-autonomy", "mode", true, "mode changed to ${selected.name}")
+                dialog.dismiss()
+                showAutonomyBudgets()
+            }
+            .setNegativeButton("CLOSE", null)
+            .setNeutralButton("BUDGETS") { _, _ -> showAutonomyBudgets() }
+            .show()
+    }
+
+    private fun showAutonomyBudgets() {
+        val current = OrionAutonomySettings.read(this)
+        val steps = intArrayOf(4, 8, 12, 20, 30, 40)
+        val requests = intArrayOf(3, 5, 10, 15, 20, 30)
+        val retries = intArrayOf(0, 1, 2, 3, 4)
+        val choices = arrayOf(
+            "Tool steps: ${current.maxToolSteps}",
+            "AI requests: ${current.maxAiRequests}",
+            "Retries: ${current.maxRetries}",
+            "Completion notifications: ${if (current.notifyOnCompletion) "ON" else "OFF"}",
+            "Failure notifications: ${if (current.notifyOnFailure) "ON" else "OFF"}",
+            "Approval notifications: ${if (current.notifyOnApproval) "ON" else "OFF"}"
+        )
+        AlertDialog.Builder(this).setTitle("Autonomy budgets & notifications")
+            .setItems(choices) { _, index ->
+                when (index) {
+                    0 -> chooseInt("Maximum tool steps", steps.toList(), current.maxToolSteps) { v -> OrionAutonomySettings.write(this, current.copy(maxToolSteps = v)); AgentPolicy.setBudgets(this, v, AgentPolicy.maxCalls(this), AgentPolicy.maxMinutes(this)); showAutonomyBudgets() }
+                    1 -> chooseInt("Maximum AI requests", requests.toList(), current.maxAiRequests) { v -> OrionAutonomySettings.write(this, current.copy(maxAiRequests = v)); showAutonomyBudgets() }
+                    2 -> chooseInt("Maximum retries", retries.toList(), current.maxRetries) { v -> OrionAutonomySettings.write(this, current.copy(maxRetries = v)); showAutonomyBudgets() }
+                    3 -> { OrionAutonomySettings.write(this, current.copy(notifyOnCompletion = !current.notifyOnCompletion)); showAutonomyBudgets() }
+                    4 -> { OrionAutonomySettings.write(this, current.copy(notifyOnFailure = !current.notifyOnFailure)); showAutonomyBudgets() }
+                    5 -> { OrionAutonomySettings.write(this, current.copy(notifyOnApproval = !current.notifyOnApproval)); showAutonomyBudgets() }
+                }
+            }.setNegativeButton("DONE", null).show()
+    }
+
+    private fun chooseInt(title: String, values: List<Int>, selected: Int, onChoose: (Int) -> Unit) {
+        AlertDialog.Builder(this).setTitle(title)
+            .setSingleChoiceItems(values.map { it.toString() }.toTypedArray(), values.indexOf(selected).coerceAtLeast(0)) { dialog, which ->
+                onChoose(values[which]); dialog.dismiss()
+            }.setNegativeButton("CANCEL", null).show()
+    }
+
+    private fun showExtensionControls() {
+        val current = OrionOwnerDialSettings.read(this)
+        AlertDialog.Builder(this).setTitle("Extension auto-activation")
+            .setMessage(
+                "Current: ${if (current.autoActivateVerifiedExtensions) "ON" else "OFF"}\n\n" +
+                "When ON, Orion may activate an extension automatically only after its exact source hash passes the restricted Python sandbox tests. " +
+                "This is your advance approval for that narrow promotion step. It does not allow arbitrary code, JavaScript execution, network, files, shell, phone actions, or unregistered tool dispatch. " +
+                "Any source change invalidates the test."
+            )
+            .setNegativeButton("CLOSE", null)
+            .setPositiveButton(if (current.autoActivateVerifiedExtensions) "TURN OFF" else "TURN ON") { _, _ ->
+                OrionOwnerDialSettings.write(this, current.copy(autoActivateVerifiedExtensions = !current.autoActivateVerifiedExtensions))
+                AgentPolicy.log(this, "owner-extension-policy", "auto-activate", true,
+                    if (!current.autoActivateVerifiedExtensions) "owner enabled exact-hash sandbox-tested extension auto-promotion" else "owner disabled extension auto-promotion")
+                Toast.makeText(this, "Extension activation dial updated.", Toast.LENGTH_SHORT).show()
+            }.show()
+    }
+
+    private fun showPythonProfile() {
+        val current = OrionOwnerDialSettings.read(this)
+        val options = arrayOf(
+            "GUARDED · 8,000 characters · explicit approval",
+            "DEVELOPER · 16,000 characters · explicit approval",
+            "FULL · 64,000 characters · raw network, subprocesses · explicit approval"
+        )
+        AlertDialog.Builder(this).setTitle("Python execution profile")
+            .setMessage("GUARDED and DEVELOPER keep the in-guest socket/subprocess block. FULL lifts it, so scripts can use the network, run commands and spawn processes inside Orion's Alpine guest (5-minute limit). Each run still needs your approval, and Python can call any Orion tool with phone.tool(name, args), which goes through the normal approval gates.")
+            .setSingleChoiceItems(options, when (current.pythonProfile) { OrionPythonProfile.GUARDED -> 0; OrionPythonProfile.DEVELOPER -> 1; OrionPythonProfile.FULL -> 2 }) { dialog, which ->
+                val profile = when (which) { 1 -> OrionPythonProfile.DEVELOPER; 2 -> OrionPythonProfile.FULL; else -> OrionPythonProfile.GUARDED }
+                OrionOwnerDialSettings.write(this, current.copy(pythonProfile = profile))
+                AgentPolicy.log(this, "owner-python-policy", "profile", true, "profile set to ${profile.name}")
+                dialog.dismiss()
+                Toast.makeText(this, "Python profile: ${profile.name}", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CLOSE", null).show()
+    }
+
+    private fun showRuntimeRecoveryQueue() {
+        val runtime = runCatching { OrionRuntime(applicationContext) }.getOrNull()
+        val snapshot = runtime?.snapshot()
+        val pending = runCatching { runtime?.pendingItems().orEmpty() }.getOrDefault(emptyList())
+        val body = buildString {
+            append("Runtime state: ").append(snapshot?.state?.name ?: "UNAVAILABLE")
+            append("\nQueued items: ").append(snapshot?.queued ?: 0)
+            append("\nLast event: ").append(snapshot?.lastEvent ?: "unknown")
+            append("\n\n")
+            append(pending.ifEmpty { emptyList() }.joinToString("\n\n") {
+                "${it.type.name} · ${it.key}\nAttempts: ${it.attempts} · ${it.checkpoint.take(180)}"
+            }.ifBlank { "No durable runtime work is waiting." })
+            append("\n\nInterrupted external actions are reconciled, not blindly replayed.")
+        }
+        AlertDialog.Builder(this).setTitle("Durable recovery queue")
+            .setMessage(body).setPositiveButton("OPEN TASK CENTRE") { _, _ ->
+                startActivity(Intent(this, TaskCenterActivity::class.java))
+            }.setNegativeButton("CLOSE", null).show()
+    }
+
+    private fun showRecoveryDials() {
+        val current = OrionOwnerDialSettings.read(this)
+        val rows = arrayOf(
+            "Automatic retry limit: ${current.recoveryMaxAttempts}",
+            "Base backoff: ${current.recoveryBackoffSeconds}s",
+            "Inspect durable recovery queue"
+        )
+        AlertDialog.Builder(this).setTitle("Recovery controls")
+            .setItems(rows) { _, which ->
+                when (which) {
+                    0 -> chooseInt("Automatic retry limit", listOf(0, 1, 2, 3, 4), current.recoveryMaxAttempts) { v ->
+                        OrionOwnerDialSettings.write(this, current.copy(recoveryMaxAttempts = v)); AgentPolicy.log(this, "owner-recovery", "max-retries", true, "max retries=$v"); showRecoveryDials()
+                    }
+                    1 -> chooseInt("Base backoff seconds", listOf(15, 30, 60, 120, 300), current.recoveryBackoffSeconds) { v ->
+                        OrionOwnerDialSettings.write(this, current.copy(recoveryBackoffSeconds = v)); AgentPolicy.log(this, "owner-recovery", "backoff", true, "base backoff=$v seconds"); showRecoveryDials()
+                    }
+                    2 -> showRuntimeRecoveryQueue()
+                }
+            }.setNegativeButton("DONE", null).show()
+    }
+
+    private fun watcherRunning(): Boolean = PhoneAiService.instance != null
+
+    private fun showWatcherControls() {
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val serviceConnected = watcherRunning()
+        val coreEnabled = AgentPolicy.enabled(this, "orion_core")
+        val requested = AgentPolicy.enabled(this, "proactive")
+        val batteryExempt = if (android.os.Build.VERSION.SDK_INT >= 23) pm.isIgnoringBatteryOptimizations(packageName) else true
+        val message = "Proactive watcher policy: ${if (requested) "ON" else "OFF"}\\n" +
+            "Orion Core: ${if (coreEnabled) "ON" else "OFF"}\\n" +
+            "Accessibility service: ${if (serviceConnected) "CONNECTED" else "NOT CONNECTED"}\\n" +
+            "Scheduled fallback: ${if (coreEnabled && requested) "ENABLED" else "DISABLED"}\\n" +
+            "Fallback interval: ${OrionProactivePolicy.intervalMinutes(Prefs.watchMinutes(this))} minutes\\n" +
+            "Battery optimization exemption: ${if (batteryExempt) "EXEMPT" else "NOT EXEMPT"}\\n" +
+            "Android/HyperOS may still stop or defer background work. A connected service or scheduled request is not proof of uninterrupted execution."
+        AlertDialog.Builder(this).setTitle("Watcher & background status")
+            .setMessage(message)
+            .setPositiveButton(if (requested) "DISABLE PROACTIVE WATCHER" else "ENABLE PROACTIVE WATCHER") { _, _ ->
+                AgentPolicy.setEnabled(this, "proactive", !requested)
+                // Retire the legacy polling service so the event-driven AccessibilityService
+                // observer and WorkManager fallback are the single authoritative watcher path.
+                WatchService.stop(this)
+                OrionProactiveWork.refresh(this)
+                AgentPolicy.log(this, "owner-watcher", if (requested) "disable" else "enable", true,
+                    if (requested) "proactive watcher disabled by owner" else "proactive watcher enabled by owner")
+                showWatcherControls()
+            }
+            .setNeutralButton("FALLBACK INTERVAL") { _, _ ->
+                chooseInt("Scheduled fallback interval (minutes)", listOf(15, 30, 60, 120), Prefs.watchMinutes(this)) { minutes ->
+                    Prefs.setWatchMinutes(this, minutes)
+                    OrionProactiveWork.refresh(this)
+                    showWatcherControls()
+                }
+            }
+            .setNegativeButton("BACKGROUND SETTINGS") { _, _ ->
+                runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                    .recoverCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))) }
+            }.show()
+    }
+
+    private fun showRegistryAndExtensions() {
+        val registered = ToolRegistry.all.map { "${it.name} · ${it.access.name.lowercase()}" }.sorted()
+        val extensions = runCatching { SelfExtendingExtensionStore(applicationContext).all() }.getOrDefault(emptyList())
+        val extensionRows = extensions.map { ExtensionStatus.line(it) }
+        val message = buildString {
+            append("REGISTERED TOOL CONTRACTS (").append(registered.size).append(")\n")
+            append(registered.joinToString("\n"))
+            append("\n\nGENERATED EXTENSIONS (").append(extensions.size).append(")\n")
+            append(extensionRows.ifEmpty { listOf("No generated extensions saved.") }.joinToString("\n"))
+            append("\n\nA generated extension is invoked through Orion's already-registered extension tool contract. It does not create a new native tool or bypass capability mapping. New native tools require a reviewed app update and registry entry.")
+        }
+        AlertDialog.Builder(this).setTitle("Tool registry & extension inventory")
+            .setMessage(message).setPositiveButton("CLOSE", null)
+            .setNeutralButton("OPEN BUILDER") { _, _ -> startActivity(Intent(this, SelfExtensionLabActivity::class.java)) }
+            .show()
+    }
+
+    private fun openAndroidSettings(action: String, data: String? = null) {
+        val intent = Intent(action)
+        if (data != null) intent.data = android.net.Uri.parse(data)
+        runCatching { startActivity(intent) }
+            .onFailure { Toast.makeText(this, "Android did not open that settings screen. Open Settings manually.", Toast.LENGTH_LONG).show() }
+    }
+
+    private fun showToolRules() {
+        val tools = ToolRegistry.all.filter { it.name !in ToolPermissionPolicy.alwaysAllowed }
+        fun show() {
+            val labels = tools.map { "${it.name} · ${it.access.name.lowercase()} · ${ToolPermissions.mode(this, it.name).name}" }
+            AlertDialog.Builder(this).setTitle("App tool permissions")
+                .setItems(labels.toTypedArray()) { _, i ->
+                    ToolPermissions.cycle(this, tools[i].name)
+                    show()
+                }
+                .setPositiveButton("Done", null).show()
+        }
+        show()
+    }
+
+    private fun showPolicyRegister() {
+        val entries = listOf(
+            "Tool permissions — configurable Allow / Ask / Deny per registered tool; always-available conversation tools remain reserved.",
+            "Autonomy mode — configurable Talk / Assist / Autopilot / Builder; modes do not erase explicit safety gates.",
+            "Owner dials — exact-hash, sandbox-tested extension auto-promotion; guarded/developer Python code-size profiles with approval retained; configurable durable recovery retries and backoff.",
+            "Tool registry — extensions run through the pre-registered extension tool contract; they cannot self-register arbitrary native tools or add capability mappings.",
+            "Execution budgets — configurable within enforced app caps: 1–40 tool steps, 1–30 AI requests, 0–4 retries.",
+            "Agent approval — configurable Plan / Ask / Allowlist / timed trusted session; trust expires and can be stopped.",
+            "Capability packs — individually enabled only when a working adapter exists; unsupported packs remain unavailable.",
+            "Task checkpoints — Stop / Pause / recovery confirmation prevent uncertain actions from being silently replayed.",
+            "Learning — reusable routes require completed tasks and explicit post-action verification evidence.",
+            "Privacy filtering — sensitive values, email addresses, URLs and phone-like numbers are redacted from recovery metadata.",
+            "Secrets — provider and exchange credentials are masked in UI and excluded from audit events; manage or rotate them in Settings.",
+            "Android permissions — controlled by Android. Orion can report grant state and open system settings, but cannot silently grant itself access.",
+            "Accessibility and notification access — user-enabled Android special access; Android can revoke these independently.",
+            "Background execution — owner can enable/disable the proactive policy, set the WorkManager fallback interval, inspect AccessibilityService connection and open battery settings; Android/HyperOS can still kill or defer it.",
+            "Network/provider limits — provider quotas, billing, model availability and server-side refusals are controlled externally.",
+            "OpenAI/system safety instructions — external to this app and not configurable or bypassable from Orion.",
+            "Hard security invariants — certain checks cannot be disabled through app preferences; the app must fail closed when required proof or authorization is absent.",
+            "Source policy modules — ActionLearningPolicy, AgentDispatchPolicy, AgentPolicy, CheckpointTransitionPolicy, ConversationAutoRoutePolicy, GatePolicy, LinuxRuntimePolicy, OrionKeyboardPolicy, OrionPerformancePolicy, OrionRuntimePolicy, OrionIntegrationCapabilityPolicy, OrionSkillInstallPolicy, ProviderBillingPolicy, ProviderFallbackPolicy, PythonExecutionPolicy, RecoveryPolicy, RoutineReplayCheckpointPolicy, RoutineReplayPolicy, SharedToolSurfacePolicy, ShellPolicy, SkillAuthorizationPolicy, StreamCompletionPolicy, StreamFallbackPolicy, SystemIntentPolicy, TaskScopePolicy, ToolPermissionPolicy, ToolResultPolicy and TranscriptEditPolicy.",
+            "Other app policy modules — AgentPrivacyFilter, OrionSecurityPolicy, ChatBrowserUrlPolicy, GeminiLivePolicy, LiveCallStylePolicy, ResearchRoutingPolicy, ResearchFollowUpPolicy, WakeWordPolicy and McpConnectorScopePolicy. Their implementation constraints are enforced by their owning modules; this panel does not silently rewrite source code or disable invariants."
+        )
+        AlertDialog.Builder(this).setTitle("Orion app policy register")
+            .setMessage(entries.mapIndexed { i, s -> "${i + 1}. $s" }.joinToString("\n\n"))
+            .setPositiveButton("Close", null).show()
+    }
+
+    private fun showSecurityInvariants() {
+        val entries = OrionSecurityPolicy.invariantStatus()
+        AlertDialog.Builder(this).setTitle("Enforced security invariants")
+            .setMessage(entries.mapIndexed { i, value -> "${i + 1}. $value" }.joinToString("\n\n") +
+                "\n\nThese checks are enforced by runtime code, not prompt instructions. Android OS permissions and external provider/platform safeguards remain outside Orion's control.")
+            .setPositiveButton("Close", null).show()
+    }
+
+    private fun showPermissionStatus() {
+        val rows = mutableListOf<String>()
+        fun addPermission(label: String, permission: String) {
+            val granted = checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            rows += "$label: " + if (granted) "GRANTED" else "NOT GRANTED"
+        }
+        addPermission("Microphone", android.Manifest.permission.RECORD_AUDIO)
+        addPermission("Contacts", android.Manifest.permission.READ_CONTACTS)
+        addPermission("Coarse location", android.Manifest.permission.ACCESS_COARSE_LOCATION)
+        addPermission("Fine location", android.Manifest.permission.ACCESS_FINE_LOCATION)
+        if (android.os.Build.VERSION.SDK_INT >= 33) addPermission("Notifications", android.Manifest.permission.POST_NOTIFICATIONS)
+        val notificationAccess = runCatching {
+            Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
+                .split(':').any { it.equals("$packageName/${OrionNotificationListener::class.java.name}", true) }
+        }.getOrDefault(false)
+        rows += "Notification listener special access: " + if (notificationAccess) "GRANTED" else "NOT GRANTED"
+        val accessibility = runCatching {
+            Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                .contains(packageName, true)
+        }.getOrDefault(false)
+        rows += "Accessibility special access: " + if (accessibility) "GRANTED" else "NOT GRANTED"
+        AlertDialog.Builder(this).setTitle("Android permission state")
+            .setMessage(rows.joinToString("\n") + "\n\nAndroid owns these grants. Orion cannot override the system's decision.")
+            .setPositiveButton("Close", null).show()
+    }
+
+    private fun showAudit() {
+        val rows = AgentPolicy.recentLogs(this, 40)
+        AlertDialog.Builder(this).setTitle("Recent policy audit")
+            .setMessage(rows.ifEmpty { listOf("No policy events recorded yet.") }.joinToString("\n\n"))
+            .setPositiveButton("Close", null)
+            .setNeutralButton("Clear") { _, _ ->
+                AlertDialog.Builder(this).setTitle("Clear audit history?")
+                    .setMessage("This deletes local policy audit events.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear") { _, _ ->
+                        getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE).edit().remove("action_log").apply()
+                        Toast.makeText(this, "Local audit history cleared.", Toast.LENGTH_SHORT).show()
+                    }.show()
+            }.show()
+    }
+
+    private fun section(s: String) {
+        val view = TextView(this).apply {
+            text = s; textSize = 10f; setTextColor(Theme.MUTED)
+            typeface = Typeface.DEFAULT_BOLD; letterSpacing = .12f
+            setPadding(0, dp(20), 0, dp(5))
+        }
+        root.addView(view)
+    }
+
+    private fun addText(s: String, size: Float, color: Int, bold: Boolean, top: Int) {
+        val view = TextView(this).apply {
+            text = s; textSize = size; setTextColor(color)
+            if (bold) typeface = Typeface.DEFAULT_BOLD
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setPadding(0, dp(top), 0, dp(2))
+        }
+        root.addView(view)
+    }
+
+    private fun addButton(s: String, primary: Boolean = false, action: () -> Unit) {
+        val button = Button(this).apply {
+            text = s; isAllCaps = false; setTextColor(Theme.TEXT)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(
+                if (primary) 0xFF444444.toInt() else 0xFF222222.toInt()
+            )
+            setOnClickListener { action() }
+        }
+        root.addView(button, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+    }
+}

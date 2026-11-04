@@ -149,6 +149,7 @@ object Trading {
                 riskUsd, riskPct, Prefs.maxRiskPct(c), ok
             )
         }
+        TradingDesk.gateOrder(c, side, sym, usd, px, stop, target, eq)?.let { return it }
         val q = StringBuilder()
         q.append("Place this order? ").append(side.uppercase()).append(" ").append(sym)
             .append(", size ").append(String.format(Locale.US, "%.0f", usd)).append(" dollars at about ").append(Ta.price(px))
@@ -157,7 +158,9 @@ object Trading {
         q.append(String.format(Locale.US, ". Risk about %.2f dollars, %.1f percent of your account. ", riskUsd, riskPct))
         q.append("Mode: ").append(Bybit.modeText(c)).append(".")
         if (!confirm(q.toString())) return "Cancelled. Nothing was placed."
-        return Bybit.order(c, sym, side, usd, stop, target)
+        val res = Bybit.order(c, sym, side, usd, stop, target)
+        TradingDesk.recordTrade(c)
+        return res
     }
 
     /** Entry point for coach-proposed trades: same max-order and max-risk guards plus an explicit confirmation. */

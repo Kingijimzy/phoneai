@@ -26,6 +26,56 @@ internal object OrionRecoveryPlanner {
                 "This is guidance only: re-check live capabilities and all safety/approval policies before any next action."
     }
 
+    /**
+     * Picks only from the caller's freshly checked, registered-and-permitted tool set.
+     * This is a shortlist for the next planner turn, not dispatch authorization.
+     * Safety/approval denials produce no alternative; uncertain outcomes prefer read-only inspection.
+     */
+    fun selectAlternatives(
+        failedTool: String,
+        result: String,
+        registeredAndPermitted: Set<String>,
+        alreadyAttempted: Set<String> = emptySet(),
+        limit: Int = 3
+    ): List<String> {
+        if (limit <= 0) return emptyList()
+        val text = result.lowercase()
+        if (listOf("did not approve", "user declined", "not approved", "blocked by safety",
+                "safety policy", "user denied", "cancelled", "canceled", "task was stopped")
+                .any(text::contains)) return emptyList()
+
+        val preferred = when {
+            listOf("target not found", "ambiguous", "stale", "invalid target").any(text::contains) ->
+                listOf("read_screen", "wait_for", "click_text", "validate_action")
+            (listOf("provider", "network", "http 5", "503", "429", "rate limit").any(text::contains) ||
+                (failedTool in setOf("live_web_search", "web_search", "research_web", "fetch_url", "live_news", "github_public", "github_account_read", "weather") &&
+                    listOf("timeout", "timed out").any(text::contains))) ->
+                when (failedTool) {
+                    "live_web_search", "web_search" -> listOf("research_web", "fetch_url", "live_news", "github_public")
+                    "research_web" -> listOf("live_web_search", "fetch_url", "web_search", "live_news")
+                    "fetch_url" -> listOf("research_web", "live_web_search", "web_search")
+                    "live_news" -> listOf("live_web_search", "research_web", "fetch_url")
+                    "github_public" -> listOf("fetch_url", "research_web", "live_web_search")
+                    "github_account_read" -> listOf("github_public", "fetch_url", "live_web_search")
+                    "weather" -> listOf("live_web_search", "research_web", "fetch_url")
+                    else -> listOf("research_web", "live_web_search", "fetch_url", "web_search")
+                }
+            listOf("verification", "unverified", "no visible screen change", "timeout", "timed out").any(text::contains) ->
+                listOf("read_screen", "verify_action", "wait_for")
+            listOf("permission", "accessibility", "not enabled", "setup").any(text::contains) ->
+                listOf("read_screen", "list_apps")
+
+            else -> listOf("read_screen", "verify_action", "wait_for", "lookup_app", "list_apps")
+        }
+        return preferred.asSequence()
+            .filter { it != failedTool }
+            .filter { it !in alreadyAttempted }
+            .filter { it in registeredAndPermitted }
+            .distinct()
+            .take(limit)
+            .toList()
+    }
+
     fun forFailure(tool: String, result: String): Guidance {
         val text = result.lowercase()
         return when {
@@ -44,8 +94,9 @@ internal object OrionRecoveryPlanner {
                 text.contains("invalid") && (tool.contains("click") || tool == "type") ->
                 Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "The target or arguments did not resolve; refresh screen evidence and select a grounded target instead of reusing stale arguments.")
             text.contains("timeout") || text.contains("temporarily unavailable") ||
-                text.contains("rate limit") || text.contains("429") ->
-                Guidance(Strategy.ASK_USER_TO_RESOLVE, "A transient external failure occurred; avoid rapid retries and report the blocker or wait for an explicit continuation.")
+                text.contains("rate limit") || text.contains("429") || text.contains("503") ||
+                text.contains("http 5") || text.contains("network") ->
+                Guidance(Strategy.CHOOSE_DIFFERENT_METHOD, "A transient provider or network failure occurred; switch to a different registered source/provider and do not repeat the same endpoint immediately. Ask the user only after compatible alternatives are exhausted.")
             text.contains("sensitive") || text.contains("safety") || text.contains("refuses") ||
                 text.contains("blocked by safety") || text.contains("consequential") ->
                 Guidance(Strategy.STOP_AND_REPORT, "A safety boundary blocked the action; do not search for a bypass.")

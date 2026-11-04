@@ -188,7 +188,6 @@ internal object BuiltinCommands {
             val f = ShellRunner.safePath(c, src) ?: return "error: path must be inside the workspace"
             if (!f.isFile) return "error: no such file"; f.readText().take(100_000)
         } else src
-        ExecutionBroker.sourceError(ExecutionBroker.JS, code)?.let { return it }
         return JsSandbox.eval(c, code)
     }
 }
@@ -199,7 +198,7 @@ internal object JsSandbox {
         "(function(){var __o=[];var console={log:function(){__o.push(Array.prototype.slice.call(arguments).map(function(x){return typeof x==='string'?x:JSON.stringify(x)}).join(' '))}};" +
             "try{var __r=eval(" + JSONObject.quote(code) + ");if(__r!==undefined)__o.push(typeof __r==='string'?__r:JSON.stringify(__r));}catch(e){__o.push('error: '+e.message)}return __o.join('\\n')})()"
 
-    fun eval(c: Context, code: String, timeoutMs: Long = ExecutionBroker.JS.timeoutMs): String {
+    fun eval(c: Context, code: String, timeoutMs: Long = 6000): String {
         if (Looper.myLooper() == Looper.getMainLooper()) return "error: js must run off the main thread"
         val latch = CountDownLatch(1); val result = AtomicReference("error: js did not finish (timed out and was stopped)")
         val holder = AtomicReference<WebView?>(null)

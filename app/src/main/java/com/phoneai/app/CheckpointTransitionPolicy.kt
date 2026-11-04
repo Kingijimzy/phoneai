@@ -21,4 +21,7 @@ internal object CheckpointTransitionPolicy {
             inFlightArgs == resultArgs
 
     fun canComplete(hasInFlightAction: Boolean): Boolean = !hasInFlightAction
+
+    fun canDispatch(status: String, stopRequested: Boolean, pauseRequested: Boolean, hasInFlightAction: Boolean): Boolean =
+        status == "running" && !stopRequested && !pauseRequested && !hasInFlightAction
 }

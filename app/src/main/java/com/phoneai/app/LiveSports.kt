@@ -54,7 +54,11 @@ object LiveSports {
             val comp = e.optJSONArray("competitions")?.optJSONObject(0) ?: continue
             val teams = comp.optJSONArray("competitors") ?: continue
             val names = (0 until teams.length()).map { teams.getJSONObject(it).optJSONObject("team")?.optString("displayName").orEmpty() }
-            if (wanted.isNotEmpty() && names.none { n -> wanted.all { n.lowercase().contains(it) || it in n.lowercase().replace("-", " ") } }) continue
+            // Team names may refer to opposite sides of the same fixture.
+            // Match each requested token across the event's team names, not inside one name.
+            if (wanted.isNotEmpty() && wanted.any { token ->
+                    names.none { n -> n.lowercase().replace("-", " ").contains(token) }
+                }) continue
             val home = (0 until teams.length()).map { teams.getJSONObject(it) }.firstOrNull { it.optString("homeAway") == "home" } ?: continue
             val away = (0 until teams.length()).map { teams.getJSONObject(it) }.firstOrNull { it.optString("homeAway") == "away" } ?: continue
             val status = e.optJSONObject("status")?.optJSONObject("type")

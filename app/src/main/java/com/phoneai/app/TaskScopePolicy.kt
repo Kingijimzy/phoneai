@@ -10,8 +10,11 @@ internal object TaskScopePolicy {
     private val readOnlyIntent = Regex(
         "(?i)^\\s*(?:(?:please|can you|could you)\\s+)*(read[- ]only|inspect|inspect only|just read|only read|check only|without changing|do not change|don't change|no changes)\\b"
     )
+    // Explicit URLs plus an inspection verb are actionable research, even when phrased naturally.
+    private val explicitUrl = Regex("(?i)https?://[^\\s<>\\\"]+")
+    private val urlInspectionIntent = Regex("(?i)\\b(check|inspect|open|visit|read|review|summari[sz]e|analy[sz]e|audit|scan|fetch|look at|look into|what is in|tell me about|explain)\\b")
     private val researchIntent = Regex(
-        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|go do|go|do)\\s+)*(research|browse the web|search the web|look up online|search online|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today|search for|look up)\\b"
+        "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to|i want to|i need to|go do|go|do|use)\\s+)*(research|investigate|audit|review|browse(?: the web| online| the internet)?|search(?: the web| online| the internet| the internet for| for| up)?|web_search|look up(?: online)?|find online|check online|check the web|check the internet|google|fetch (?:the )?(?:page|url|website)|open (?:this )?(?:url|website)|use online sources|from online sources|compare online|what is the weather|what's the weather|weather forecast|weather in|forecast for|latest news|news today)\\b"
     )
     // Account/integration work is an actionable task, not ordinary conversation. This only
     // classifies scope; the registered-tool, consent, permission, and provider-auth checks still apply.
@@ -46,6 +49,7 @@ internal object TaskScopePolicy {
         val informationalAppQuestion = Regex("(?i)^(what|why|how|when|where|who|explain|describe|tell me about|compare|list the advantages of)\\b.*\\b(whatsapp|telegram|chrome|youtube|instagram|facebook)\\b.*$|^(what|why|how|when|where|who|explain|describe|tell me about|compare)\\b.*\\b(advantages|features|purpose|used for|difference)\\b.*$" )
         if (informationalAppQuestion.containsMatchIn(text) && !Regex("(?i)\\b(open|launch|close|send|message|text|reply|call|tap|click|type|install|uninstall)\\b").containsMatchIn(text)) return TaskMode.CHAT
         if (readOnlyIntent.containsMatchIn(text)) return TaskMode.READ_ONLY
+        if (explicitUrl.containsMatchIn(text) && urlInspectionIntent.containsMatchIn(text)) return TaskMode.RESEARCH
         // Explicit phone/device intent takes precedence over incidental mentions of websites.
         if (phoneIntent.containsMatchIn(text) || explicitAppAction.containsMatchIn(text) ||
             memoryActionIntent.containsMatchIn(text) || taskActionIntent.containsMatchIn(text) ||
@@ -74,29 +78,15 @@ internal object TaskScopePolicy {
     fun blockReason(request: String, toolName: String): String? {
         val definition = ToolRegistry.find(toolName)
             ?: return "Tool '$toolName' is not registered."
-        val mode = modeFor(request)
-        if (mode == TaskMode.CHAT) {
-            return "This is a conversation task; phone and external tools are outside its scope."
-        }
-        if ((mode == TaskMode.READ_ONLY || mode == TaskMode.RESEARCH) &&
-            definition.access != ToolAccess.READ) {
-            return "$mode tasks may use read-only tools; '$toolName' can change state."
-        }
 
-        val category = categoryOf(toolName) ?: return null
-        val matchingIntent = when (category) {
-            "browser" -> Regex("(?i)\\b(web|website|browse|browser|google|search|url|link|http|site|online|internet|news|weather|research|chrome|download|source|article|restaurants?|hotels?|stores?|shops?|cafes?|services?|nearby|local|recommend)\\b")
-            "trading" -> Regex("(?i)\\b(bybit|trade|trading|crypto|bitcoin|btc|eth|coin|price|ticker|chart|market)\\b")
-            "telegram" -> Regex("(?i)\\btelegram\\b")
-            "mcp" -> Regex("(?i)\\b(mcp|connector|integration|server)\\b")
-            "github" -> Regex("(?i)\\b(github|repo|repository|release|actions|issues)\\b")
-            "tasks" -> Regex("(?i)\\b(task|tasks|todo|remind|reminder|deadline|skill|skills)\\b")
-            "media" -> Regex("(?i)\\b(music|song|play|pause|skip|volume|notification|notifications|media|youtube|spotify)\\b")
-            else -> return null
-        }
-        if (!matchingIntent.containsMatchIn(request)) {
-            return "Task scope is limited to the user's stated purpose; '$toolName' belongs to the unrelated '$category' tool group."
-        }
+        // Intent classification is a routing hint, not an authorization boundary. If a tool is
+        // registered, the task-scope layer must not reject it merely because the request was
+        // classified as CHAT or because another specialist category did not match a keyword.
+        // Capability-pack settings, per-tool permissions, explicit DENY, Android permissions,
+        // safety checks, cancellation, and fresh confirmations remain enforced at dispatch.
+        // Task wording is not a second permission system. Whether a registered tool may
+        // execute is decided by Orion Settings (pack + per-tool mode) and dispatch-time
+        // safety/confirmation gates, not by a guessed intent label.
         return null
     }
 

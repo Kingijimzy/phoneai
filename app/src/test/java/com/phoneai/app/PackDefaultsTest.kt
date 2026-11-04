@@ -5,23 +5,19 @@ import org.junit.Test
 
 class PackDefaultsTest {
     @Test fun theToolsOrionNeedsToHelpItselfAreOnFromFirstLaunch() {
-        listOf(
-            "connect_service", "service_status", "capability_note", "standing_order", "vault_request", "vault_get",
-            "shell", "github_account_read", "gmail_list_messages",
-            "tap", "read_screen", "open_app"
-        ).forEach { assertTrue(it, AgentPolicy.defaultOn(AgentPolicy.packForTool(it)!!)) }
+        listOf("connect_service", "service_status", "capability_note", "standing_order", "vault_request", "vault_get", "shell", "github_account_read", "gmail_list_messages")
+            .forEach { assertTrue(it, AgentPolicy.defaultOn(AgentPolicy.packForTool(it)!!)) }
     }
 
-    @Test fun riskyPacksStayOptIn() {
-        listOf("termux_bridge", "remote_computer", "messaging", "proactive", "self_evolution")
-            .forEach { assertFalse(it, AgentPolicy.defaultOn(it)) }
-    }
-
-    @Test fun phoneControlIsDefaultOnBecauseEveryActionIsStillGated() {
-        // Operating the device is Orion's purpose; GatePolicy still decides every single
-        // action and consequential tools still ask, so phone_control no longer forces the
-        // user to find Agent control > Packs before Orion can do anything on-device.
-        assertTrue(AgentPolicy.defaultOn("phone_control"))
+    @Test fun corePhoneAndMessagingToolsAreDiscoverableButOptionalBridgesStayOptIn() {
+        // Core phone and messaging tools are visible from first launch. This does not grant
+        // Android permissions or bypass action confirmations; those remain enforced at dispatch.
+        listOf("phone_control", "messaging").forEach {
+            assertTrue("$it should be enabled by default", AgentPolicy.defaultOn(it))
+        }
+        listOf("termux_bridge", "remote_computer", "proactive", "self_evolution").forEach {
+            assertFalse("$it must remain opt-in", AgentPolicy.defaultOn(it))
+        }
     }
 
     @Test fun everyDefaultOnPackExists() {

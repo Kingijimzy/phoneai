@@ -11,14 +11,25 @@ internal object ShellExecutionRouting {
         else -> Backend.INVALID
     }
 
-    /** Linux commands always require explicit confirmation, including the Alpine alias. */
-    fun requiresApproval(where: String?): Boolean = backend(where) == Backend.LINUX
+    /**
+     * Linux backend selection is not itself a reason to interrupt the user. The command policy
+     * decides: safe diagnostics run automatically, while unknown/mutating commands still require
+     * confirmation through ShellPolicy.
+     */
+    fun requiresApproval(where: String?, command: String? = null): Boolean {
+        if (backend(where) != Backend.LINUX) return false
+        val value = command?.trim().orEmpty()
+        return value.isBlank() || ShellPolicy.classify(value) != ShellRisk.SAFE
+    }
 
     /** Recognize package database mutations even when chained after a shell separator. */
     fun isPackageOperation(command: String): Boolean =
         Regex("""(^|[;&|]\s*)apk\s+(add|del|upgrade|update|fix)\b""").containsMatchIn(command)
 
-    /** Package operations legitimately need longer than an interactive shell command. */
-    fun commandTimeoutMs(command: String): Long =
-        if (isPackageOperation(command)) 180_000L else 60_000L
+    /** Dependency downloads and project builds legitimately need longer than interactive commands. */
+    fun commandTimeoutMs(command: String): Long {
+        val dependencyOrBuild = Regex("""(^|[;&|]\s*)(npm\s+(install|ci)|pip3?\s+install|(?:\./)?gradlew?\s+.*(?:build\w*|test\w*|assemble\w*))""")
+            .containsMatchIn(command)
+        return if (isPackageOperation(command) || dependencyOrBuild) 180_000L else 60_000L
+    }
 }

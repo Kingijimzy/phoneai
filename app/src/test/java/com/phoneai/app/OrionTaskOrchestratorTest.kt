@@ -54,9 +54,45 @@ class OrionTaskOrchestratorTest {
         assertTrue(context.readiness.requiresApproval)
     }
 
+    @Test fun grantedCapabilityContractIsIncludedInTheActualPlannerContext() {
+        val context = OrionTaskOrchestrator.build(
+            "check current weather", listOf(tool("weather")), packs, termuxReady = true
+        )
+        val prompt = context.promptLines().joinToString("\n")
+        assertTrue(prompt.contains("GRANTED CAPABILITY CONTRACT"))
+        assertTrue(prompt.contains("use its documented functionality fully"))
+        assertTrue(prompt.contains("Do not invent additional application-level restrictions"))
+        assertTrue(prompt.contains("Actual Android permissions"))
+        assertTrue(prompt.contains("EXECUTION ERROR HONESTY CONTRACT"))
+        assertTrue(prompt.contains("is not proof permission is missing"))
+    }
+
     @Test fun clarificationMustPrecedeDispatch() {
         val context = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
         assertTrue(context.goal.needsClarification)
         assertTrue(context.promptLines().any { it.contains("ask one focused clarification") })
+    }
+    @Test fun dispatchGuardAllowsOnlyRegisteredAvailableToolsForActionableGoals() {
+        val context = OrionTaskOrchestrator.build(
+            "run a command in Linux terminal", listOf(tool("shell", ToolAccess.WRITE)), packs, termuxReady = true
+        )
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(context, "shell"))
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "invented_tool")!!.contains("not registered"))
+    }
+
+    @Test fun dispatchGuardBlocksToolsWhenTheirPackIsUnavailable() {
+        val context = OrionTaskOrchestrator.build(
+            "check current weather", listOf(tool("weather")), emptySet(), termuxReady = true
+        )
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "weather")!!.contains("disabled"))
+    }
+
+    @Test fun goalClassifierDoesNotOverrideLiveRegisteredCapabilityDispatch() {
+        val conversation = OrionTaskOrchestrator.build("hello", listOf(tool("weather")), packs, true)
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(conversation, "weather"))
+        val ambiguous = OrionTaskOrchestrator.build("connect my account", listOf(tool("connect_service", ToolAccess.WRITE)), packs, true)
+        assertEquals(null, OrionTaskOrchestrator.dispatchBlockReason(ambiguous, "connect_service"))
+        // Clarification remains a planner instruction; it is not a fake missing-permission error.
+        assertTrue(ambiguous.promptLines().any { it.contains("ask one focused clarification") })
     }
 }

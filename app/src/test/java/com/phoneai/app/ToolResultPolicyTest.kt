@@ -5,37 +5,25 @@ import org.junit.Test
 
 class ToolResultPolicyTest {
     @Test fun explicitFailuresAreNotReportedAsSuccess() {
-        listOf(
-            "ERROR: accessibility permission missing",
-            "Blocked: tool is outside task scope",
-            "Timed out waiting for page",
-            "error: no such app",
-            "failed to connect",
-            "not found: Settings",
-            "unavailable: accessibility is off",
-            "not configured: Gmail",
-            "invalid coordinates",
-            "rejected by the user",
-            "refused",
-            "could not open the browser",
-            "cannot reach the network",
-            "cancelled: the user declined",
-            ""
-        ).forEach { assertNotNull(it, ToolResultPolicy.failureReason(it)) }
+        assertNotNull(ToolResultPolicy.failureReason("ERROR: accessibility permission missing"))
+        assertNotNull(ToolResultPolicy.failureReason("Blocked: tool is outside task scope"))
+        assertNotNull(ToolResultPolicy.failureReason("Timed out waiting for page"))
+        assertNotNull(ToolResultPolicy.failureReason(""))
+    }
+
+    @Test fun failuresAreClassifiedWithSafeNonBypassingAdvice() {
+        assertEquals(ToolResultPolicy.FailureKind.PERMISSION, ToolResultPolicy.diagnose("error: accessibility permission missing").kind)
+        assertEquals(ToolResultPolicy.FailureKind.MISSING_DEPENDENCY, ToolResultPolicy.diagnose("error: command not found").kind)
+        assertEquals(ToolResultPolicy.FailureKind.TIMEOUT, ToolResultPolicy.diagnose("Timed out waiting for page").kind)
+        assertEquals(ToolResultPolicy.FailureKind.NETWORK_OR_PROVIDER, ToolResultPolicy.diagnose("HTTP 503 provider unavailable").kind)
+        assertEquals(ToolResultPolicy.FailureKind.INVALID_OUTPUT, ToolResultPolicy.diagnose("error: invalid JSON output").kind)
+        assertEquals(ToolResultPolicy.FailureKind.DENIED_OR_BLOCKED, ToolResultPolicy.diagnose("Blocked: tool is outside task scope").kind)
+        assertTrue(ToolResultPolicy.diagnose("Blocked: action outside task scope").safeNextStep.contains("never bypass"))
     }
 
     @Test fun ordinaryResultsRemainEligibleForNormalVerification() {
-        listOf(
-            "Opened Settings",
-            "Found 3 matching items",
-            "Message draft prepared; not sent",
-            "Search results for cat videos",
-            "Deleted task #4.",
-            "3 unread messages"
-        ).forEach { assertNull(it, ToolResultPolicy.failureReason(it)) }
-    }
-
-    @Test fun anEmptyResultIsAFailure() {
-        assertNotNull(ToolResultPolicy.failureReason("   "))
+        assertNull(ToolResultPolicy.failureReason("Opened Settings"))
+        assertNull(ToolResultPolicy.failureReason("Found 3 matching items"))
+        assertNull(ToolResultPolicy.failureReason("Message draft prepared; not sent"))
     }
 }

@@ -27,6 +27,10 @@ class ShellExecutionRoutingTest {
         assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("apk add python3 git nodejs npm"))
         assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("apk update && apk upgrade"))
         assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("apk del python3"))
+        assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("npm install express"))
+        assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("pip install requests"))
+        assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("gradle test"))
+        assertEquals(180_000L, ShellExecutionRouting.commandTimeoutMs("./gradlew assembleDebug"))
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("python3 --version"))
         assertEquals(60_000L, ShellExecutionRouting.commandTimeoutMs("echo apk add python3"))
     }

@@ -88,12 +88,12 @@ object GameCoachStore {
         val notes = all(c)
         if (notes.isEmpty()) return "No gaming/hobby session notes yet. Add a short note after a session; it stays on this device."
         val byGame = notes.groupBy { it.game }.entries.sortedByDescending { it.value.size }.take(5)
-        val recent = notes.take(8).joinToString("\n") { n ->
+        val recent = notes.take(8).joinToString("\\n") { n ->
             val mins = if (n.durationMinutes > 0) " · ${n.durationMinutes} min" else ""
             val result = if (n.result.isNotBlank()) " · ${n.result}" else ""
             "• ${n.game}$mins$result — ${n.note.take(140)}"
         }
-        return "Stored local session notes: ${notes.size}. Frequent games/hobbies: ${byGame.joinToString { "${it.key} (${it.value.size})" }}. Recent notes:\n$recent"
+        return "Stored local session notes: ${notes.size}. Frequent games/hobbies: ${byGame.joinToString { "${it.key} (${it.value.size})" }}. Recent notes:\\n$recent"
     }
 }
 

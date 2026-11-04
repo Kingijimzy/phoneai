@@ -71,7 +71,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             for (p in Providers.all) {
                 val configured = p.noKey || Prefs.hasKey(c, p.id)
                 val cd = (((cooldown[p.id] ?: 0L) - now) / 1000).coerceAtLeast(0L)
-                sb.append("\n• ").append(p.label).append(": ")
+                sb.append("\\n• ").append(p.label).append(": ")
                     .append(readinessLabel(configured, p.requiresPaidOptIn, allowPaid, cd))
                 if (configured) {
                     sb.append("; local request counter ").append(usedLastMinute(p.id)).append("/").append(budget(p.id))
@@ -80,10 +80,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 }
                 lastFailure[p.id]?.let { sb.append("; last error: ").append(it.take(140)) }
             }
-            sb.append("\nSelected chat provider: ").append(Prefs.provider(c, false).label)
-            sb.append("\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
-            lastSuccess["chat"]?.let { sb.append("\nLast successful chat: ").append(it) }
-            lastSuccess["vision"]?.let { sb.append("\nLast successful screen-vision: ").append(it) }
+            sb.append("\\nSelected chat provider: ").append(Prefs.provider(c, false).label)
+            sb.append("\\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
+            lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
+            lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
             return sb.toString().trim()
         }
     }
@@ -97,7 +97,11 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         return Prefs.provider(ctx, vision)
     }
 
+    /** Set by a caller that wants a lighter or heavier model for this one request (NVIDIA text only). */
+    @Volatile internal var tier: ModelRouter.Tier? = null
+
     private fun selectedModel(p: Provider, vision: Boolean): String {
+        tier?.let { t -> ModelRouter.modelFor(t, p.id, vision, Prefs.modelRouting(ctx), Prefs.cachedModels(ctx, p.id).toSet())?.let { return it } }
         if (commandMode && !vision && Prefs.commandProviderId(ctx) == p.id) {
             Prefs.commandModelId(ctx)?.let { return it }
         }
@@ -176,7 +180,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         )
     )
 
-    private class Http(val code: Int, val body: String, val retryAfter: Int = -1)
+    internal class Http(val code: Int, val body: String, val retryAfter: Int = -1)
 
     private fun pause(ms: Long) {
         var left = ms
@@ -211,6 +215,21 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
 
     @Volatile
     private var active: HttpURLConnection? = null
+    private val connectionLock = Any()
+
+    /** Atomically attach a new request unless Stop has already cancelled this generation. */
+    private fun attachConnection(conn: HttpURLConnection): Boolean = synchronized(connectionLock) {
+        if (cancelled) false else {
+            active = conn
+            true
+        }
+    }
+
+    private fun detachConnection(conn: HttpURLConnection) {
+        synchronized(connectionLock) {
+            if (active === conn) active = null
+        }
+    }
 
     private val commandRequestBudget = sharedBudget ?: CommandRequestBudget(maxRequests = 15)
 
@@ -223,15 +242,18 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     fun resume() {
-        cancelled = false
+        synchronized(connectionLock) { cancelled = false }
     }
 
-    /** Aborts the request that is in flight. */
+    /** Aborts the request in flight and prevents a concurrently starting request from attaching. */
     fun cancel() {
-        cancelled = true
+        val connection = synchronized(connectionLock) {
+            cancelled = true
+            active
+        }
         try {
-            active?.disconnect()
-        } catch (e: Exception) {
+            connection?.disconnect()
+        } catch (_: Exception) {
         }
     }
 
@@ -243,7 +265,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         noteHit(p.id)
         val readMs = if (p.id == "local") 240000 else readMs0
         val conn = URL(url).openConnection() as HttpURLConnection
-        active = conn
+        if (!attachConnection(conn)) {
+            try { conn.disconnect() } catch (_: Exception) { }
+            throw java.io.IOException("Stopped.")
+        }
         try {
             conn.requestMethod = method
             conn.connectTimeout = 15000
@@ -291,7 +316,119 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val ra = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
             return Http(code, text, ra)
         } finally {
-            conn.disconnect()
+            try { conn.disconnect() } catch (_: Exception) { }
+            detachConnection(conn)
+        }
+    }
+
+    /**
+     * Server-sent event transport for OpenAI-compatible chat completions.
+     * Deltas are emitted as they arrive; HTTP errors before the first delta remain eligible for fallback.
+     */
+    internal fun requestStream(
+        p: Provider, url: String, body: String, key: String, readMs0: Int, onDelta: (String) -> Unit
+    ): Http {
+        if (!commandRequestBudget.tryReserve()) {
+            throw AiException("Stopped before sending another request: this command reached Orion's 15-request budget. No additional HTTP request was made.")
+        }
+        noteHit(p.id)
+        val conn = URL(url).openConnection() as HttpURLConnection
+        if (!attachConnection(conn)) {
+            try { conn.disconnect() } catch (_: Exception) { }
+            throw java.io.IOException("Stopped.")
+        }
+        val answer = StringBuilder()
+        val nonSseBody = StringBuilder()
+        var terminalEventSeen = false
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = if (p.noKey) 180000 else readMs0
+            if (p.anthropicStyle) {
+                conn.setRequestProperty("x-api-key", key)
+                conn.setRequestProperty("anthropic-version", "2023-06-01")
+            } else conn.setRequestProperty("Authorization", "Bearer $key")
+            conn.setRequestProperty("Accept", "text/event-stream")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val error = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                val retry = conn.getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt() ?: -1
+                return Http(code, error, retry)
+            }
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                while (true) {
+                    if (cancelled) throw java.io.IOException("Stopped.")
+                    val line = reader.readLine() ?: break
+                    if (!line.startsWith("data:")) {
+                        if (line.isNotBlank() && !line.startsWith(":")) nonSseBody.append(line)
+                        continue
+                    }
+                    val data = line.substringAfter("data:").trim()
+                    if (data.isEmpty()) continue
+                    if (data == "[DONE]") {
+                        terminalEventSeen = true
+                        break
+                    }
+                    val delta = try {
+                        val root = JSONObject(data)
+                        when {
+                            p.anthropicStyle -> {
+                                val type = root.optString("type")
+                                if (type == "message_stop") {
+                                    terminalEventSeen = true
+                                    break
+                                }
+                                if (type == "content_block_delta") root.optJSONObject("delta")?.optString("text", "") ?: "" else ""
+                            }
+                            p.id == "opencode-zen" -> {
+                                val type = root.optString("type")
+                                if (type == "response.completed" || type == "response.done") {
+                                    terminalEventSeen = true
+                                    break
+                                }
+                                if (type == "response.output_text.delta") root.optString("delta", "")
+                                else if (type == "response.content_part.delta") root.optJSONObject("delta")?.optString("text", "") ?: ""
+                                else ""
+                            }
+                            else -> {
+                                val choices = root.optJSONArray("choices")
+                                choices?.optJSONObject(0)?.optJSONObject("delta")?.optString("content", "") ?: ""
+                            }
+                        }
+                    } catch (_: Exception) { "" }
+                    if (delta.isNotEmpty()) {
+                        answer.append(delta)
+                        onDelta(delta)
+                    }
+                }
+            }
+            if (!StreamCompletionPolicy.isComplete(answer.isNotEmpty(), terminalEventSeen, cancelled)) {
+                throw java.io.IOException(
+                    if (cancelled) "Stream cancelled by user."
+                    else "Stream ended before its completion marker."
+                )
+            }
+            if (answer.isEmpty() && nonSseBody.isNotBlank()) {
+                // Some OpenAI-compatible gateways ignore stream=true and return a normal JSON body.
+                // Preserve compatibility, though that provider cannot deliver incremental deltas.
+                val complete = extract(p, nonSseBody.toString())
+                if (complete.isNotBlank()) {
+                    answer.append(complete)
+                    onDelta(complete)
+                }
+            }
+            val synthetic = when {
+                p.anthropicStyle -> JSONObject().put("content", JSONArray().put(JSONObject().put("type", "text").put("text", answer.toString()))).toString()
+                p.id == "opencode-zen" -> JSONObject().put("output_text", answer.toString()).toString()
+                else -> JSONObject().put("choices", JSONArray().put(JSONObject().put("message", JSONObject().put("content", answer.toString())))).toString()
+            }
+            return Http(200, synthetic, -1)
+        } finally {
+            try { conn.disconnect() } catch (_: Exception) { }
+            detachConnection(conn)
         }
     }
 
@@ -568,7 +705,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     /** A command begins at its explicit caller; the shared budget covers every fallback. */
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false): String {
+    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null): String {
         if (cancelled) throw RuntimeException("Stopped.")
         // Do not reset here: Agent.run() can call chat() several times for one
         // multi-step user command. Its explicit beginCommand() must cover the
@@ -604,22 +741,28 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         } else emptyList()
         val mode = if (vision) "vision" else "chat"
 
+        val failures = ArrayList<String>()
+        val emitted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val delta: ((String) -> Unit)? = onDelta?.let { callback -> { part -> if (part.isNotEmpty()) { emitted.set(true); callback(part) } } }
+
         fun attempt(p: Provider, hasBackup: Boolean): String {
             if (cancelled) throw RuntimeException("Stopped.")
             onStatus?.invoke("Using provider: ${p.label}...")
-            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse)
+            val answer = chatOne(p, messages, vision, maxTokens, temperature, hasBackup, fastResponse, delta)
             lastSuccess[mode] = p.label + " / " + selectedModel(p, vision)
             lastFailure.remove(p.id)
             return answer
         }
-
-        val failures = ArrayList<String>()
         val order = listOf(primary) + backups
         for ((i, p) in order.withIndex()) {
             try {
                 return attempt(p, i < order.size - 1)
             } catch (e: Exception) {
                 if (cancelled) throw RuntimeException("Stopped.")
+                if (!StreamFallbackPolicy.mayTryAnotherProvider(emitted.get(), cancelled)) {
+                    if (emitted.get()) throw RuntimeException("The response was interrupted after partial text. Orion stopped provider fallback to prevent duplicated output. Tap Retry to start a fresh response.", e)
+                    throw RuntimeException("Stopped.", e)
+                }
                 val msg = (e.message ?: "Unknown provider error").take(220)
                 lastFailure[p.id] = msg
                 failures.add(msg)
@@ -636,7 +779,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     private fun chatOne(
-        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false
+        p: Provider, messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, hasBackup: Boolean, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null
     ): String {
         val key = Prefs.key(ctx, p.id)
         // Gemini needs room for its internal thinking. NVIDIA Nemotron 3.5 Super VL
@@ -648,10 +791,13 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             "nvidia" -> if (fastResponse) maxOf(maxTokens, 256) else maxOf(maxTokens, 1024)
             else -> maxTokens
         }
-        val queue = mutableListOf(selectedModel(p, vision))
+        val initialModel = selectedModel(p, vision)
+        val queue = mutableListOf(initialModel)
         val tried = HashSet<String>()
+        val rateLimitRetried = HashSet<String>()
         var refilled = false
         var lastNote = ""
+        var lastHttpStatus: Int? = null
         var attempts = 0
         // Always reserve one bounded same-provider recovery attempt for a stale model ID
         // or empty reply, even when another provider is saved. Otherwise hasBackup forced this
@@ -664,6 +810,19 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (cancelled) throw RuntimeException("Stopped.")
             val model = queue.removeAt(0)
             if (!tried.add(model)) continue
+            val modelCapabilities = OrionProviderContextPolicy.capabilities(p.id, model)
+            if (vision && !modelCapabilities.vision) {
+                lastNote = "Model $model is not verified for image input; skipping this model."
+                continue
+            }
+            // Recompute budgets for every fallback model; context limits can differ within a provider.
+            val boundedTokens = tokens.coerceAtMost(modelCapabilities.maxOutputTokens)
+            val requestMessages = OrionProviderContextPolicy.fitMessages(messages, modelCapabilities, boundedTokens)
+            val originalImageCount = OrionProviderContextPolicy.newestUserImageCount(messages)
+            val retainedImageCount = OrionProviderContextPolicy.newestUserImageCount(requestMessages)
+            if (vision && retainedImageCount < originalImageCount) {
+                throw AiException("The selected model context cannot safely fit all attached images with the current conversation. Start a fresh chat or attach fewer images.", 413)
+            }
             attempts++
             pace(p)
             if (cancelled) throw RuntimeException("Stopped.")
@@ -672,24 +831,25 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             val payload: String
             if (p.anthropicStyle) {
                 url = p.base + "/messages"
-                payload = anthropicBody(model, messages, tokens, temperature)
+                payload = anthropicBody(model, requestMessages, boundedTokens, temperature)
             } else if (p.id == "opencode-zen") {
                 url = p.base + "/responses"
                 val input = JSONArray()
-                for (i in 0 until messages.length()) {
-                    val message = messages.optJSONObject(i) ?: continue
+                for (i in 0 until requestMessages.length()) {
+                    val message = requestMessages.optJSONObject(i) ?: continue
                     input.put(JSONObject().put("role", message.optString("role", "user"))
                         .put("content", message.opt("content") ?: ""))
                 }
                 payload = JSONObject().put("model", model).put("input", input)
-                    .put("max_output_tokens", tokens).put("temperature", temperature).toString()
+                    .put("max_output_tokens", boundedTokens).put("temperature", temperature).toString()
             } else {
                 url = p.base + "/chat/completions"
                 val requestBody = JSONObject()
                     .put("model", model)
-                    .put("messages", messages)
+                    .put("messages", requestMessages)
                     .put("temperature", temperature)
-                    .put("max_tokens", tokens)
+                    .put("max_tokens", boundedTokens)
+                if (onDelta != null && !vision) requestBody.put("stream", true)
                 if (p.id == "nvidia" && model.equals("nvidia/nemotron-3.5-super-vl-120b-a12b", ignoreCase = true)) {
                     requestBody.put("chat_template_kwargs", JSONObject().put("enable_thinking", false))
                 } else if (p.id == "nvidia" && model.lowercase().contains("deepseek-v4")) {
@@ -699,7 +859,9 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             val r: Http? = try {
                 // NVIDIA's DeepSeek V4.1 Flash can have a long first-response delay.
-                request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
+                if (onDelta != null && !vision && !p.anthropicStyle && p.id != "opencode-zen") {
+                    requestStream(p, url, payload, key, if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000, onDelta)
+                } else request(p, "POST", url, payload, key, readMs0 = if (fastResponse) 8000 else if (p.id == "nvidia") 35000 else 22000)
             } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: java.io.IOException) {
@@ -712,6 +874,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             }
             if (r == null) {
                 lastNote = "$model -> no response before timeout"
+                lastHttpStatus = 504
                 // NVIDIA may accept a request but fail to return a first response in time.
                 // Try one alternate catalog model, even in quota-saver mode, then report a
                 // useful timeout diagnostic rather than silently abandoning the provider.
@@ -731,10 +894,16 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw AiException(
                     if (p.id == "nvidia")
                         "NVIDIA timed out waiting for $model. The request was sent, but no response arrived in time. Check NVIDIA model access/status and try again."
-                    else "${p.label}: request timed out. Retry later or use the one configured backup."
+                    else "${p.label}: request timed out. Retry later or use the one configured backup.",
+                    504
                 )
             }
             if (keyBad(r)) throw AiException("${p.label}: key rejected (${r.code}). Save a new key.")
+            if (r.code == 413) {
+                lastHttpStatus = 413
+                cooldown[p.id] = System.currentTimeMillis() + 5000L
+                throw AiException("${p.label}: request payload was too large (HTTP 413). Orion will try another eligible provider if Auto-switch is enabled; this does not necessarily mean your account reached a usage limit.", 413)
+            }
             if (r.code == 429) {
                 val wait = if (r.retryAfter in 1..60) r.retryAfter else 60
                 // OpenRouter may rate-limit one model while another model on the same
@@ -751,13 +920,33 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         continue
                     }
                 }
+                // Do not declare the request exhausted immediately when the provider gives
+                // a short Retry-After. Wait briefly and retry this model once, while remaining
+                // cancellable. Longer waits are better handled by a healthy backup provider.
+                if (wait in 1..5 && rateLimitRetried.add(model) && attempts < maxAttempts) {
+                    onStatus?.invoke("${p.label} rate-limited ${model.substringAfterLast('/')}; waiting ${wait}s before one retry...")
+                    var remainingMs = wait * 1000L
+                    while (remainingMs > 0L) {
+                        if (cancelled || Thread.currentThread().isInterrupted) throw RuntimeException("Stopped.")
+                        val slice = minOf(remainingMs, 200L)
+                        try { Thread.sleep(slice) } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            throw RuntimeException("Stopped.")
+                        }
+                        remainingMs -= slice
+                    }
+                    tried.remove(model)
+                    queue.add(0, model)
+                    continue
+                }
                 cooldown[p.id] = System.currentTimeMillis() + wait.coerceIn(8, 60) * 1000L
-                throw AiException("${p.label}: rate limit reached (429); retry after about ${wait.coerceIn(8, 60)} seconds.", 429)
+                throw AiException("${p.label}: rate limit reached (429); waited/retried when the provider supplied a short delay. ${if (hasBackup) "Trying another eligible provider." else "Retry after about ${wait.coerceIn(8, 60)} seconds or add another provider."}", 429)
             }
             if (r.code == 402) throw AiException("${p.label}: out of credit (402).")
             val modelProblem = r.code == 404 || r.code == 410 || r.code == 422 ||
                 (r.code == 400 && r.body.isNotEmpty())
             if (modelProblem) {
+                lastHttpStatus = r.code
                 lastNote = "$model -> ${r.code} ${r.body.replace("\n", " ").take(100)}"
                 // Retired catalog models must never be persisted as the provider's active choice.
                 // Put distinct known fallbacks immediately after the failed model so quota-saver mode
@@ -770,6 +959,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 continue
             }
             if (r.code in listOf(500, 502, 503, 504)) {
+                lastHttpStatus = r.code
                 // Temporary provider overload is not proof that the key or model is invalid.
                 // Try one alternate model from the same provider before moving to a backup provider.
                 lastNote = "$model -> HTTP ${r.code} ${r.body.replace("\n", " ").take(100)}"
@@ -800,12 +990,12 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                         continue
                     }
                 }
-                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.")
+                throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.", 502)
             }
             Prefs.setModel(ctx, p, vision, model)
             return content
         }
         val kind = if (vision) "vision" else "chat"
-        throw AiException("${p.label}: no $kind model worked. Last: $lastNote")
+        throw AiException("${p.label}: no $kind model worked. Last: $lastNote", lastHttpStatus)
     }
 }

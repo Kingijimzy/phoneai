@@ -152,6 +152,7 @@ object SkillRegistry {
         if (!idPattern.matches(skill.id)) return SkillDecision(false, "Skill ID must be 2–48 lowercase letters, numbers, dots, underscores, or hyphens.")
         if (!versionPattern.matches(skill.version)) return SkillDecision(false, "Version must use MAJOR.MINOR.PATCH format.")
         if (skill.description.isBlank() || skill.description.length > 500) return SkillDecision(false, "Description must be 1–500 characters.")
+        OrionSecurityPolicy.findEmbeddedSecret(skill.description)?.let { return SkillDecision(false, it.message) }
         if (skill.allowedTools.isEmpty()) return SkillDecision(false, "A skill must declare at least one allowed tool.")
         if (skill.allowedTools.any { it !in supportedTools }) return SkillDecision(false, "Skill contains an unsupported tool.")
         if (skill.maxCalls !in 1..20) return SkillDecision(false, "Skill call budget must be between 1 and 20.")

@@ -48,7 +48,13 @@ internal data class TaskLifecycle(
 
     fun resume(): TaskLifecycle? {
         if (phase != Phase.BLOCKED) return null
-        return copy(phase = blockedFrom ?: Phase.PLAN, blockedFrom = null)
+        // A block during execution/verification must resume by replanning, not replaying
+        // a potentially side-effecting action whose outcome may be uncertain.
+        val resumePhase = when (blockedFrom) {
+            Phase.EXECUTE, Phase.VERIFY, Phase.RECOVER, null -> Phase.PLAN
+            else -> blockedFrom
+        }
+        return copy(phase = resumePhase, blockedFrom = null, verified = false)
     }
 
     fun cancel(): TaskLifecycle? = if (isTerminal) null else copy(phase = Phase.CANCELLED, blockedFrom = null)

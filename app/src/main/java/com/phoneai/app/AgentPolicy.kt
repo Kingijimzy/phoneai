@@ -17,9 +17,9 @@ object AgentPolicy {
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
         Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
-        Pack("trading_research", "Trading research", "Public data, coaching, alerts and journal; no auto-orders", true),
+        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real orders remain separately gated and confirmed", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
-        Pack("proactive", "Proactive", "Opt-in local daily task recap notification; no always-on monitoring", true),
+        Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
         Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
@@ -28,15 +28,14 @@ object AgentPolicy {
     fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
     fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
     /**
-     * Packs that are safe to have on from the first launch: they are local, read-only, or already gated by
-     * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
-     * lives in orion_core) and wrongly tells the user the feature does not exist.
-     *
-     * phone_control is included: every tap/typing action is still decided per action by GatePolicy (and
-     * consequential actions still ask), so leaving it off only made Orion refuse to operate the device at all
-     * on a fresh install. Genuinely risky packs stay opt-in.
+     * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
+     * This only makes their tools available: Android OS permissions and consequential-action confirmations
+     * still apply. Optional bridges and remote/proactive services remain opt-in until configured.
      */
-    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research", "phone_control")
+    internal val defaultOnPacks = setOf(
+        "orion_core", "connected_services", "workspace_shell", "self_test",
+        "gaming_hobby", "trading_research", "phone_control", "messaging"
+    )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
@@ -45,6 +44,7 @@ object AgentPolicy {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
         log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
+        if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
     fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
     fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {
@@ -69,19 +69,29 @@ object AgentPolicy {
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
         toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
-    ): GatePolicy.Result = GatePolicy.decide(GatePolicy.Input(
+    ): GatePolicy.Result {
+        val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
+            OrionAutonomySettings.read(c).mode,
+            ToolRegistry.all.firstOrNull { it.name == toolId }?.access
+        )
+        val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
+        return GatePolicy.decide(GatePolicy.Input(
         pack = pack,
         packOn = packs.any { it.id == pack } && enabled(c, pack),
         tool = toolId,
         mode = mode(c),
-        toolMode = toolMode,
+        toolMode = effectiveToolMode,
+        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
+        // Autopilot applies to routine actions even when a tool has an old ASK override.
+        // Explicit DENY still wins in GatePolicy, and consequential actions still need confirmation.
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
         allowlisted = allowed(c, pack, toolId),
         askedThisTask = askedThisTask
-    ))
+        ))
+    }
 
     /** Existing callers keep their RuleResult shape; the decision itself comes from GatePolicy. */
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
@@ -97,27 +107,30 @@ object AgentPolicy {
 
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
-        "play", "look" -> "gaming_hobby"
+        "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
+        "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
-        "shell", "workspace_write", "workspace_read", "python_exec" -> "workspace_shell"
-        "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
+        "shell", "workspace_list", "workspace_write", "workspace_read", "python_exec", "project_create", "project_list", "project_inspect" -> "workspace_shell"
+        "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
-        "trade_history_summary" -> "trading_research"
+        "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
+        "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
+        "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview",
+        "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save",
+        "strategy_record_result", "paper_trade", "trading_kill_switch" -> "trading_research"
         "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset" -> "gaming_hobby"
-        "weather", "live_news", "live_web_search", "web_search", "github_public", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
+        "weather", "live_news", "live_web_search", "live_sports", "web_search", "github_public", "github_search_repositories", "fetch_url", "research_web", "bybit_public_ticker" -> "trading_research"
         "telegram_status", "telegram_inbox", "telegram_send", "sms", "notification_action", "resolve_contact" -> "messaging"
-        "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control",
-        "find_files", "open_file", "list_apps", "list_app_deeplinks", "read_screen", "validate_action", "verify_action",
+        "device_location", "lookup_app", "open_app", "system_intent", "open_deep_link", "read_notifications", "media_status", "media_control", "play_media", "chrome_search",
+        "find_files", "open_file", "save_file", "list_apps", "list_app_deeplinks", "read_screen", "look", "validate_action", "verify_action",
         "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path", "scroll", "type",
         "key", "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify", "browser_click",
         "browser_click_verify", "browser_type", "browser_scroll", "browser_navigate", "browser_back", "browser_tabs",
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
-        "mcp_list_tools", "mcp_call", "record_screen" -> "phone_control"
-        "remember", "update_memory", "forget", "recall", "knowledge_search", "ask_agent", "undo_last", "undo_status",
-        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user",
-        "goal_add", "goal_list", "goal_remove", "goal_toggle", "autonomy_toggle", "autonomy_status",
-        "profile_show", "profile_forget", "skill_install", "skill_export" -> "orion_core"
+        "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
+        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
+        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
         else -> null
     }
 

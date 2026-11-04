@@ -41,6 +41,18 @@ class GatePolicyTest {
         assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(autonomous = true, dangerous = true, mode = AgentPolicy.Mode.ASK)).verdict)
     }
 
+    @Test fun autopilotOverridesRoutineAskSettingButNotDenyOrConsequentialApproval() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(
+            toolMode = ToolMode.ASK, autonomous = true, asked = false, dangerous = false
+        )).verdict)
+        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(
+            toolMode = ToolMode.DENY, autonomous = true, asked = false
+        )).verdict)
+        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(
+            toolMode = ToolMode.ASK, autonomous = true, asked = false, dangerous = true, mode = AgentPolicy.Mode.ASK
+        )).verdict)
+    }
+
     @Test fun consequentialActionNeedsApprovalUnlessTrusted() {
         assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(dangerous = true)).verdict)
         assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true, trusted = true)).verdict)

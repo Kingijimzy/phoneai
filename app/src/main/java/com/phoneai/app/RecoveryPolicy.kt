@@ -43,12 +43,12 @@ internal object RecoveryPolicy {
         }
     }
 
-    fun decide(risk: Risk, failure: Failure, readRetriesUsed: Int): Decision = when {
+    fun decide(risk: Risk, failure: Failure, readRetriesUsed: Int, maxReadRetries: Int = MAX_READ_RETRIES): Decision = when {
         failure == Failure.PERMISSION -> Decision.PAUSE_ASK
         risk == Risk.CONSEQUENTIAL -> Decision.PAUSE_ASK
         failure == Failure.AMBIGUOUS && risk != Risk.READ_ONLY -> Decision.PAUSE_ASK
         risk == Risk.READ_ONLY && (failure == Failure.TRANSIENT || failure == Failure.AMBIGUOUS) ->
-            if (readRetriesUsed < MAX_READ_RETRIES) Decision.RETRY_READ else Decision.REPLAN
+            if (readRetriesUsed < maxReadRetries.coerceIn(0, 4)) Decision.RETRY_READ else Decision.REPLAN
         risk == Risk.READ_ONLY -> Decision.REPLAN
         risk == Risk.DEV_COMMAND -> Decision.REPLAN
         failure == Failure.TARGET_MISSING -> Decision.REPLAN
@@ -56,17 +56,52 @@ internal object RecoveryPolicy {
     }
 
     /** A retry is allowed only while the task is live and within both the tool-call and time budgets. */
-    fun canRetryRead(stopped: Boolean, budgetExhausted: Boolean, readRetriesUsed: Int): Boolean =
-        !stopped && !budgetExhausted && readRetriesUsed < MAX_READ_RETRIES
+    fun canRetryRead(stopped: Boolean, budgetExhausted: Boolean, readRetriesUsed: Int, maxReadRetries: Int = MAX_READ_RETRIES): Boolean =
+        !stopped && !budgetExhausted && readRetriesUsed < maxReadRetries.coerceIn(0, 4)
 
     /** Backoff before read retry number [attempt] (1-based): 0.8 s, then 1.6 s. */
-    fun backoffMillis(attempt: Int): Long = 800L * attempt.coerceIn(1, MAX_READ_RETRIES)
+    fun backoffMillis(attempt: Int, baseBackoffSeconds: Int = 1): Long =
+        (baseBackoffSeconds.coerceIn(1, 300) * 1000L) * (1L shl (attempt - 1).coerceIn(0, 1))
 
     /** Evidence sent to the model before a replan. It names the failure and forbids repeating it unchanged. */
     fun replanNudge(tool: String, failure: Failure, evidence: String): String =
         "RECOVERY: the step '$tool' failed (${failure.name.lowercase()}): ${evidence.take(300)} " +
             "Do not repeat this action unchanged. Diagnose the cause from the evidence, then choose a different, " +
             "safe action or a revised plan. If the cause needs permission, a credential, or the user's judgment, say so and stop."
+
+    /** Outcome of [retryRead]: the last result and how many retries ran. */
+    data class ReadOutcome(val result: String, val retries: Int)
+
+    /**
+     * Runs a read-only step again after a transient or timed-out failure, within [MAX_READ_RETRIES] and the live budgets.
+     * [attempt] performs one dispatch; it is only called again when the policy says a read may be repeated.
+     * Cancellation and budget exhaustion stop further attempts immediately.
+     */
+    fun retryRead(
+        first: String,
+        isFailure: (String) -> Boolean,
+        stopped: () -> Boolean,
+        budgetExhausted: () -> Boolean,
+        sleep: (Long) -> Unit,
+        onRetry: (attempt: Int, failure: Failure) -> Unit,
+        maxReadRetries: Int = MAX_READ_RETRIES,
+        baseBackoffSeconds: Int = 1,
+        attempt: () -> String
+    ): ReadOutcome {
+        var result = first
+        var retries = 0
+        while (isFailure(result)) {
+            val failure = classify(result)
+            if (decide(Risk.READ_ONLY, failure, retries, maxReadRetries) != Decision.RETRY_READ) break
+            if (!canRetryRead(stopped(), budgetExhausted(), retries, maxReadRetries)) break
+            retries++
+            onRetry(retries, failure)
+            sleep(backoffMillis(retries, baseBackoffSeconds))
+            if (stopped()) break
+            result = attempt()
+        }
+        return ReadOutcome(result, retries)
+    }
 
     fun pauseMessage(tool: String, failure: Failure): String = when (failure) {
         Failure.PERMISSION -> "The step '$tool' needs permission or approval before it can run. Grant it, then say continue."

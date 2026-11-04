@@ -22,7 +22,16 @@ object ShellRunner {
     internal class Pending { val latch = CountDownLatch(1); @Volatile var text = "" }
     internal val pending = ConcurrentHashMap<Int, Pending>()
 
-    fun workspace(c: Context): File = File(c.filesDir, "workspace").also { it.mkdirs() }
+    /** One shared project root for shell, CPython and workspace file tools. */
+    fun workspace(c: Context): File {
+        val managed = OrionPythonWorkspace(c.applicationContext)
+        when (managed.rootStatus()) {
+            OrionPythonWorkspace.RootStatus.READY -> Unit
+            OrionPythonWorkspace.RootStatus.MISSING -> check(managed.ensureRootForRepair() != null) { "Orion workspace could not be safely initialized." }
+            OrionPythonWorkspace.RootStatus.UNSAFE -> error("Orion workspace path is unsafe; refusing shell access.")
+        }
+        return File(c.applicationContext.filesDir, "orion-python/workspace")
+    }
 
     private fun currentDirectory(c: Context): File {
         val root = workspace(c).canonicalFile
@@ -64,7 +73,7 @@ object ShellRunner {
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20, onOutput: (String) -> Unit = {}): String {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        ExecutionBroker.sourceError(ExecutionBroker.SHELL, normalized)?.let { return it }
+        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         // Defense in depth: callers must still obtain approval for ASK-class commands.
         if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
             return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
@@ -81,10 +90,9 @@ object ShellRunner {
         return try {
             val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(currentDirectory(c)).redirectErrorStream(true).start()
             val out = StringBuffer()
-            val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(512); while (true) { val n = r.read(buf); if (n < 0) break; val chunk = String(buf, 0, n); synchronized(out) { if (out.length < ExecutionBroker.SHELL.maxOutputChars) out.append(chunk.take(ExecutionBroker.SHELL.maxOutputChars - out.length)) }; runCatching { onOutput(chunk) } } } } catch (_: Exception) { } }
+            val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(512); while (true) { val n = r.read(buf); if (n < 0) break; val chunk = String(buf, 0, n); synchronized(out) { if (out.length < 20000) out.append(chunk.take(20000 - out.length)) }; runCatching { onOutput(chunk) } } } } catch (_: Exception) { } }
             reader.start()
-            val limit = ExecutionBroker.timeoutSeconds(ExecutionBroker.SHELL, timeoutSec)
-            if (!p.waitFor(limit, TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${limit}s and was stopped]" }
+            if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
             (if (p.exitValue() == 0) "" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }
@@ -98,14 +106,12 @@ object ShellRunner {
         }
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        ExecutionBroker.sourceError(ExecutionBroker.TERMUX, normalized)?.let { return it }
+        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
             return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
         }
-        val effectiveTimeout = ExecutionBroker.timeoutSeconds(
-            ExecutionBroker.TERMUX,
-            maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
-        )
+        val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
+            .coerceIn(1L, 180L)
         val id = ids.incrementAndGet()
         val box = Pending(); pending[id] = box
         return try {
@@ -174,24 +180,23 @@ object ShellRunner {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
                         onOutput("Alpine ready. Running command…\n")
-                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput)
+                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput, workspaceHostPath = workspace(c).absolutePath)
                     }
-                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput)
+                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput, workspaceHostPath = workspace(c).absolutePath)
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
 
 
     fun writeFile(c: Context, rel: String, content: String): String {
-        val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
-        if (content.length > 200_000) return "error: file too large (max 200 KB)"
-        return try { f.parentFile?.mkdirs(); f.writeText(content); "wrote ${content.length} chars to workspace/$rel" } catch (e: Exception) { "error: could not write (" + (e.message ?: "").take(100) + ")" }
+        if (content.toByteArray(Charsets.UTF_8).size > 200_000) return "error: file too large (max 200 KB)"
+        val result = OrionPythonWorkspace(c.applicationContext).write(rel, content)
+        return if (result.startsWith("saved ")) "wrote ${content.length} chars to shared workspace/$rel" else result
     }
 
     fun readFile(c: Context, rel: String): String {
-        val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
-        if (!f.isFile) return "error: no such file in the workspace"
-        return try { ShellPolicy.clip(f.readText(), 8000) } catch (e: Exception) { "error: could not read (" + (e.message ?: "").take(100) + ")" }
+        val result = OrionPythonWorkspace(c.applicationContext).read(rel)
+        return if (result.startsWith("error:")) result else ShellPolicy.clip(result, 8000)
     }
 }
 

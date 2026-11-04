@@ -20,8 +20,8 @@ class VoiceWaveView(context: Context) : View(context) {
     /** Recent TTS word event, used as a real speech-activity cue (not claimed as output amplitude). */
     @Volatile var speechPulse: Float = 0f
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
-    private val silver = 0xFFB9E8FF.toInt()
-    private val dimSilver = 0xFF32B8FF.toInt()
+    private val silver = Theme.SILVER
+    private val dimSilver = Theme.LINE_STRONG
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)

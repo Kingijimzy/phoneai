@@ -1,0 +1,335 @@
+package com.phoneai.app
+
+import android.content.Context
+
+/**
+ * Single executive context for every Orion interaction surface.
+ *
+ * This is deliberately an orchestration layer over the app's real registries and stores,
+ * not a second model, tool registry, or action runtime. Chat and Command receive the same
+ * live capability picture and task-continuity contract.
+ */
+internal object OrionCentralBrain {
+    // Keep enough room for the original task, transcript evidence, decisions and recovery
+    // instructions; the lower-priority general Soul Engine snapshot is bounded separately.
+    private const val MAX_CONTEXT_CHARS = 16_000
+
+    /** Queue and dispatch through the same registered specialist runtime used by delegated tasks. */
+    fun enqueueAndDispatch(
+        context: Context,
+        objective: String,
+        kind: OrionTaskEnvelope.Kind,
+        requestedCapabilities: List<String>
+    ): OrionCoordinatedResult {
+        val app = context.applicationContext
+        val task = OrionTaskEnvelope.create(
+            objective = objective,
+            kind = kind,
+            capabilities = requestedCapabilities
+        )
+        val store = OrionDistributedTaskStore(app)
+        if (!store.enqueue(task)) return OrionCoordinatedResult.Failed(task.taskId, "task_enqueue_rejected")
+        return OrionSpecialistRuntime.dispatch(app, task.taskId)
+    }
+
+    fun dispatchDelegatedTask(context: Context, taskId: String): OrionCoordinatedResult =
+        OrionSpecialistRuntime.dispatch(context.applicationContext, taskId)
+
+    /** Remote LangGraph execution is opt-in and requires an HTTPS endpoint plus live token provider. */
+    fun dispatchRemoteTask(
+        context: Context,
+        taskId: String,
+        httpsEndpoint: String,
+        bearerToken: () -> String?
+    ): OrionCoordinatedResult = OrionSpecialistRuntime.dispatchRemote(
+        context.applicationContext, taskId, httpsEndpoint, bearerToken
+    )
+
+    fun contextFor(context: Context, request: String): String {
+        val app = context.applicationContext
+        val sections = mutableListOf<String>()
+        val contextLoadDiagnostics = mutableListOf<String>()
+        fun <T> observed(label: String, fallback: T, block: () -> T): T {
+            return try {
+                val value = block()
+                val state = when (value) { null -> "empty"; is String -> if (value.isBlank()) "empty" else "loaded"; is Collection<*> -> if (value.isEmpty()) "empty" else "loaded"; else -> "loaded" }
+                contextLoadDiagnostics += "$label=$state"
+                value
+            } catch (failure: Exception) { contextLoadDiagnostics += "$label=failed:${failure.javaClass.simpleName}"; fallback }
+        }
+        fun <T> observedNullable(label: String, block: () -> T?): T? {
+            return try { val value = block(); contextLoadDiagnostics += "$label=${if (value == null) "empty" else "loaded"}"; value }
+            catch (failure: Exception) { contextLoadDiagnostics += "$label=failed:${failure.javaClass.simpleName}"; null }
+        }
+        fun addObservedSection(label: String, loader: () -> String?) { observedNullable(label, loader)?.takeIf { it.isNotBlank() }?.let { sections += it } }
+
+        val activeConversation = observed("active_session", "") { ChatHistoryStore.activeSessionId(app) }.orEmpty()
+        if (activeConversation.isNotBlank()) {
+            addObservedSection("multimodal_evidence") { OrionMultimodalEvidenceStore.promptBlock(app, activeConversation) }
+        }
+
+        // Sensor context is opt-in, coarse, foreground-sampled and short-lived. It is included
+        // only while the matching grant remains active; raw sensor vectors never enter prompts.
+        addObservedSection("sensor_context") { OrionSensorContextStore.summary(app) }
+        addObservedSection("notification_context") { OrionNotificationListener.contextSummary() }
+        addObservedSection("device_context") { OrionDeviceContextProvider.summary(app) }
+        addObservedSection("location_context") { OrionLocationContextProvider.summary(app) }
+        addObservedSection("app_usage_context") { OrionAppUsageContextProvider.summary(app) }
+        addObservedSection("routine_policy") { OrionRoutinePolicy.promptBlock(app, MemoryStore.all(app)) }
+
+        // Preserve the existing capability-aware Soul Engine as the source of live state.
+        addObservedSection("soul_engine_context") { OrionSoulEngine.contextFor(app, request)?.take(5_200) }
+
+        // The brain observes the same registries the executor uses; names alone never imply
+        // that a capability is enabled or that an external account is connected.
+        val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
+        val enabledPacks = observed("enabled_packs", emptyList<String>()) { AgentPolicy.packs.filter { AgentPolicy.enabled(app, it.id) }.map { it.id }.sorted() }
+        val skills = observed("skill_registry", emptyList()) { SkillRegistry.list(app) }
+        val enabledSkills = skills.filter { it.enabled }
+        val savedTasks = observed("task_store_preview", emptyList()) { TaskStore.all(app).take(12) }
+        val taskCount = observedNullable("task_store_count") { TaskStore.all(app).size }
+        val distributedTaskSummary = observed("distributed_task_ledger", "delegated_task_ledger=unavailable") { OrionDistributedTaskStore(app).summary() }
+        val extensionRows = observed("extension_store", emptyList()) { SelfExtendingExtensionStore(app).all() }
+        val verifiedExtensions = extensionRows.count {
+            it.enabled && it.verified &&
+                it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source)
+        }
+
+        sections += buildString {
+            appendLine("ORION CENTRAL BRAIN — SHARED EXECUTIVE CONTRACT")
+            appendLine("This is the single coordination layer for Talk, Command, tools, MCP, browser, Android actions, shell/workspace, memory, tasks, schedules, skills, subagents, voice, and verified extensions. These are not separate assistants: use the same current goal and shared app registries.")
+            appendLine("Live inventory: registered_tools=${registered.size}; enabled_packs=${enabledPacks.joinToString().ifBlank { "none" }}; enabled_skills=${enabledSkills.joinToString { it.id }.ifBlank { "none" }}; saved_tasks=${taskCount?.toString() ?: "unavailable"}; $distributedTaskSummary; saved_extensions=${extensionRows.size}; verified_enabled_extensions=$verifiedExtensions.")
+            appendLine("Registered tool names (not a promise of availability): ${registered.take(100).joinToString().ifBlank { "none" }}.")
+            if (savedTasks.isNotEmpty()) {
+                appendLine("PERSISTED TASK CENTRE RECORDS (authoritative task titles/status/details; these are not execution receipts):")
+                savedTasks.forEach { task ->
+                    appendLine("- #${task.id} [${task.status}/${task.priority}] ${task.title}: ${task.details.take(500)}; last_result=${task.resultSummary.take(220)}")
+                }
+                appendLine("When the user names one of these tasks, retrieve and continue that exact record; do not say it is missing merely because the separate execution checkpoint is empty. Distinguish a saved task definition from a running execution checkpoint.")
+            }
+            if (enabledSkills.isNotEmpty()) {
+                appendLine("Enabled skill contracts: " + enabledSkills.take(20).joinToString(" | ") {
+                    "${it.id}: tools=${it.allowedTools.sorted().joinToString(",")}; purpose=${it.description.take(180)}"
+                })
+            }
+            appendLine("ONE GOAL / ONE LEDGER: keep the user's intended outcome, completed steps, pending step, current blocker, evidence, and recovery point connected across every tool call and mode switch. Reuse the same task context; do not restart planning from zero after a provider switch, returning from a browser/connection screen, or a recoverable failure.")
+            appendLine("EXECUTION CYCLE: understand outcome -> inspect live registry and actual connection/permission state -> choose the best available route -> execute through the existing registered executor and its policy -> verify observable result -> update task/checkpoint and sanitized outcome evidence -> continue until complete or a specific blocker remains.")
+            appendLine("ROUTING: prefer an already registered, enabled, working capability; use compatible alternatives when one fails. Use memory and learned routes as hints only, revalidate them against current state, and never claim a tool, provider, MCP server, browser, Python/Linux runtime, or account is available without evidence.")
+            appendLine("RECOVERY: do not repeat the same failed call unchanged. Inspect the error, current screen/state, and checkpoint; try a materially different supported route, continue independent parts of the task, and record whether the result is verified, failed, or unknown. Never report completion merely because a tool was invoked.")
+            appendLine("REPAIR: use self_diagnose to gather current evidence before attempting a fix. repair_apply accepts only a registered repair_id; the app constructs the typed proposal, plan digest, preflight, approval decision, app-owned apply/rollback adapter and verification receipt. Never invent repair IDs or supply shell/source/path commands. Do not call a repair complete until its receipt is VERIFIED. Dangerous, suspicious, external or consequential repairs must wait for the owner-confirmation callback.")
+            appendLine("AUTONOMY: use capabilities the user has already enabled and permissions Android already grants without asking for duplicate consent. Do not invent application-level restrictions. Ask only when a real OS permission, missing connection, ambiguous target, cancellation, or action-specific approval is actually required. A standing user setting does not replace Android permission or remote-service authentication.")
+            appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
+        }
+
+        // Feed the real durable action checkpoint into the same brain. Deliberately expose
+        // only progress metadata, never stored command text, arguments, or tool payloads.
+        val checkpointSummary = runCatching {
+            val saved = AgentCheckpointStore.pending(app)
+            if (saved == null) null else {
+                val steps = saved.optJSONArray("steps")
+                val active = saved.optJSONObject("inFlight")
+                val status = saved.optString("status", "unknown").take(40)
+                val notice = saved.optString("recoveryNotice", "").replace(Regex("\\s+"), " ").take(220)
+                buildString {
+                    appendLine("DURABLE EXECUTION CHECKPOINT")
+                    appendLine("status=$status; recorded_steps=${steps?.length() ?: 0}; in_flight_tool=${active?.optString("tool", "unknown") ?: "none"}.")
+                    if (notice.isNotBlank()) appendLine("recovery_notice=$notice")
+                    appendLine("Resume from this checkpoint when it belongs to the user's current goal. If an in-flight action remains unresolved, inspect its outcome before any possible repeat. Do not restart completed steps without evidence that they need repeating.")
+                }
+            }
+        }.getOrNull()
+        checkpointSummary?.let { sections += it }
+
+        // Resolve short follow-ups against the persisted objective before Talk or Command plans.
+        // This joins the original request, transcript evidence, objective graph, checkpoint,
+        // decisions and learned failure corrections into one provider-neutral continuity frame.
+        val pendingTask = observedNullable("pending_checkpoint") { AgentCheckpointStore.pending(app) }
+        val savedGraph = observedNullable("objective_graph") { OrionObjectiveGraph.load(app) }
+        val savedSoulGoal = observed("soul_goal", "") { SoulEngineState.snapshot(app).goal }
+        val activeObjective = pendingTask?.optString("command")?.takeIf { it.isNotBlank() }
+            ?: savedGraph?.objective?.takeIf { it.isNotBlank() }.orEmpty()
+        val recentTurns = observed("recent_chat_history", emptyList()) { ChatHistoryStore.recent(app, 8) }
+            .asReversed().map { hit ->
+                (if (hit.role == "ai" || hit.role == "assistant") "assistant" else "user") to hit.snippet
+            }
+        val continuity = runCatching {
+            val current = OrionContextualIntentInterpreter.resolve(request, recentTurns, activeObjective)
+            if (current.needsClarification && savedSoulGoal.isNotBlank())
+                OrionContextualIntentInterpreter.resolve(request, recentTurns, savedSoulGoal)
+            else current
+        }.getOrNull()
+        val isFollowUp = continuity != null && !continuity.needsClarification &&
+            continuity.kind != OrionContextualIntentInterpreter.Kind.NEW_OBJECTIVE &&
+            continuity.kind != OrionContextualIntentInterpreter.Kind.HISTORICAL_LOOKUP
+        val continuityObjective = continuity?.resolvedObjective?.takeIf { isFollowUp }
+            ?: activeObjective.takeIf { isFollowUp }.orEmpty()
+        val contextQuery = continuityObjective.takeIf { isFollowUp && it.isNotBlank() } ?: request
+        if (isFollowUp && continuityObjective.isNotBlank()) {
+            val resume = if (pendingTask != null) runCatching { AgentCheckpointStore.resumeInstruction(app) }.getOrNull() else null
+            if (!resume.isNullOrBlank()) {
+                sections += "TASK RESUME INSTRUCTIONS — EXISTING OBJECTIVE, DO NOT RESTART\n" + resume.take(3600)
+            }
+            savedGraph?.let { graph ->
+                sections += OrionObjectiveGraph.prompt(graph) +
+                    "\nNext objective candidates: " + graph.ready().joinToString(" | ") { "${it.id}: ${it.title}" }
+            }
+            val discussion = runCatching { ChatHistoryStore.search(app, continuityObjective, 3) }.getOrDefault(emptyList())
+            if (discussion.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("PREVIOUS DISCUSSIONS FOR THIS OBJECTIVE (durable transcript evidence)")
+                    discussion.forEach { hit ->
+                        appendLine("[session=${hit.sessionId} turn=${hit.turnId} role=${hit.role} time=${hit.timestamp} title=${hit.title}] ${hit.snippet.take(420)}")
+                        if (hit.before.isNotBlank()) appendLine("preceding turn: ${hit.before.take(180)}")
+                        if (hit.after.isNotBlank()) appendLine("following turn: ${hit.after.take(180)}")
+                    }
+                    appendLine("User turns establish requests. Assistant turns provide context only and are never proof that an action succeeded.")
+                }
+            }
+            val decisions = runCatching { OrionDecisionHistoryStore.get(app).search(continuityObjective, 4) }.getOrDefault(emptyList())
+            if (decisions.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("DECISIONS AND UNRESOLVED QUESTIONS FOR THIS OBJECTIVE")
+                    decisions.forEach { d ->
+                        appendLine("- [${d.status}] ${d.topic.take(80)}: ${d.statement.take(350)}; rationale=${d.rationale.take(300)}; rejected=${d.rejectedAlternative.take(180)}; rejection_reason=${d.rejectionReason.take(240)}; source=${d.sourceRole}/${d.sourceSessionId ?: "unknown"}/${d.sourceTurnId ?: "unknown"}")
+                    }
+                    appendLine("Accepted decisions are user-backed constraints; proposals are not accepted. Superseded decisions are historical only. Unresolved questions remain open. Re-check the current request before applying any old decision.")
+                }
+            }
+        }
+
+        if (!isFollowUp && contextQuery.trim().length >= 7) {
+            val activeSession = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull()
+            val indexedHistory = runCatching { ChatHistoryStore.search(app, contextQuery, 5) }
+                .getOrDefault(emptyList())
+                .filter { it.sessionId != activeSession }
+                .take(3)
+            if (indexedHistory.isNotEmpty()) {
+                sections += buildString {
+                    appendLine("RELEVANT PAST CONVERSATIONS FROM THE LOCAL SEARCH INDEX")
+                    indexedHistory.forEach { hit ->
+                        appendLine("[session=${hit.sessionId} role=${hit.role} title=${hit.title}] ${hit.snippet.take(360)}")
+                        if (hit.before.isNotBlank()) appendLine("before: ${hit.before.take(140)}")
+                        if (hit.after.isNotBlank()) appendLine("after: ${hit.after.take(140)}")
+                    }
+                    appendLine("Historical context only. Re-check current facts and never treat an assistant message as proof that an action succeeded.")
+                }
+            }
+        }
+
+        // Retrieve task-specific failure lessons before a similar tool/action is planned.
+        val learnedExperience = observed("execution_lessons", "") { ExperienceStore.promptBlock(app, contextQuery, 5) }
+        if (learnedExperience.isNotBlank()) {
+            sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\n" + learnedExperience +
+                "\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
+        }
+
+        // Capability gap planning is derived from the same live registries as execution.
+        // It prefers reuse and only instructs research/drafting when local evidence is weak.
+        runCatching {
+            CapabilityGapPlanner.assess(
+                request = contextQuery,
+                registeredTools = ToolRegistry.all,
+                enabledSkills = enabledSkills,
+                extensions = extensionRows
+            )
+        }.getOrNull()?.let { sections += it.promptBlock() }
+
+        // Persistent learning is provider-neutral and loaded into the same executive context
+        // for Talk and Command. Lessons and completed routes are hints, never execution authority.
+        runCatching { SoulEngineState.relatedContext(app, contextQuery, limit = 4) }
+            .getOrDefault(emptyList())
+            .takeIf { it.isNotEmpty() }
+            ?.let { lessons ->
+                sections += buildString {
+                    appendLine("RELEVANT PERSISTENT MEMORY (sanitized, device-local)")
+                    lessons.forEach { appendLine("- $it") }
+                    appendLine("Treat these as prior experience, not current facts. Re-check live state, tool availability, permissions, and the user's present intent before reuse. A prior success does not authorize an action.")
+                }
+            }
+
+        runCatching { RouteMemoryStore.promptBlock(app, contextQuery) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { routes ->
+                sections += "REUSABLE COMPLETED PROCEDURES (encrypted local history; planning hints only)\n$routes\nRevalidate every step against current state and current policies. Skip obsolete, unavailable, or unsafe steps; do not replay a route blindly."
+            }
+
+        // Keep extension-specific tool schemas and current status available in both modes,
+        // instead of appending them only to the Command system prompt.
+        runCatching { ExtensionPrompt.block(extensionRows) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
+        // Run a provider-free, observational diagnostic snapshot for the executive brain.
+        // This reads the real registries and durable checkpoint; it does not schedule work,
+        // change permissions, mutate extensions, or make network/provider calls.
+        runCatching { OrionSelfDiagnostics.inspect(app).promptBlock() }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
+        // Repair proposals, sandbox results, owner decisions, apply claims and verification
+        // receipts are read from the same durable evidence ledger used by execution.
+        runCatching { OrionRepairLifecycle.promptBlock(app) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { sections += it }
+
+        val packed = ContextWindowBudget.pack(sections, MAX_CONTEXT_CHARS / 4)
+        val packingReceipt = buildString {
+            appendLine("CENTRAL BRAIN CONTEXT LOAD RECEIPT")
+            appendLine("source_loads=" + contextLoadDiagnostics.joinToString("; ").take(1800))
+            appendLine("sections_loaded=${packed.includedSections}; sections_omitted=${packed.omittedSections}; sections_truncated=${packed.truncatedSections}; estimated_tokens=${packed.estimatedTokens}; budget_tokens=${MAX_CONTEXT_CHARS / 4}.")
+            if (packed.omittedSectionLabels.isNotEmpty()) {
+                appendLine("omitted_context_sections=" + packed.omittedSectionLabels.take(12).joinToString(" | "))
+            }
+            if (packed.truncatedSections > 0 || packed.omittedSections > 0) {
+                appendLine("Some context was clipped or omitted by the deterministic priority packer. Treat unavailable history and memory as unknown; do not infer that an absent section is empty.")
+            }
+        }
+        return packed.text + "\n\n" + packingReceipt
+    }
+
+    /**
+     * Canonical Central Brain repair transaction. Safe isolated operations auto-apply under
+     * OrionRepairLifecycle policy. The UI callback is invoked only after sandbox success and only
+     * when deterministic policy says this exact plan is dangerous, suspicious, external, or
+     * otherwise consequential. A declined plan is durably terminal.
+     */
+    fun executeRepairProposal(
+        context: Context,
+        sessionId: String,
+        taskId: String,
+        finding: OrionDiagnosticFinding,
+        proposal: OrionRepairProposal,
+        planDigest: String,
+        requestOwnerApproval: (String) -> Boolean,
+        sandboxTest: () -> Boolean,
+        apply: () -> String?,
+        verify: () -> Boolean,
+        rollback: () -> Boolean,
+        verifyRollback: () -> Boolean,
+        executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
+    ): OrionRepairLifecycle.Receipt {
+        val first = OrionRepairLifecycle.execute(
+            context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
+            null, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
+        )
+        if (first.result != OrionRepairLifecycle.Result.AWAITING_OWNER) return first
+        val approvalPrompt = buildString {
+            appendLine("Orion safely tested this repair, but it needs your approval before it can be applied.")
+            appendLine("Repair: ${proposal.summary.take(240)}")
+            appendLine("Risk: ${proposal.risk.name}; execution boundary: ${executionBoundary.name}.")
+            append("Plan fingerprint: ").append(planDigest.take(12)).append("…")
+        }
+        val approved = runCatching { requestOwnerApproval(approvalPrompt) }.getOrDefault(false)
+        if (!approved) return OrionRepairLifecycle.recordOwnerRejection(
+            context, sessionId, taskId, planDigest
+        )
+        return OrionRepairLifecycle.execute(
+            context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
+            planDigest, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
+        )
+    }
+}

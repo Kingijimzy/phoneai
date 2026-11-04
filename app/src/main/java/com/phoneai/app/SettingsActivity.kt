@@ -157,7 +157,7 @@ class SettingsActivity : Activity() {
             setPadding(dp(18), dp(12), dp(18), dp(12))
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF21E1E1E.toInt(), 0xF0101010.toInt())).apply { cornerRadius = dp(18).toFloat(); setStroke(dp(1), 0x55464646) }
         }
-        outer.addView(text("ORION  /  SELECT", 10f, Theme.CYAN, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
+        outer.addView(text("ORION  /  SELECT", 10f, Theme.TEXT, true).apply { letterSpacing = .12f; setPadding(0, 0, 0, dp(6)) })
         outer.addView(text(title, 21f, Theme.TEXT, true))
         if (subtitle.isNotBlank()) outer.addView(text(subtitle, 12f, Theme.MUTED).apply { setPadding(0, dp(4), 0, dp(12)) })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -190,7 +190,7 @@ class SettingsActivity : Activity() {
 
     private fun showInfoDialog(title: String, message: String, positive: String = "GOT IT", onPositive: () -> Unit = {}) {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(8)); background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(16).toFloat(); setStroke(dp(1), Theme.LINE) } }
-        body.addView(text("ORION  /  INFORMATION", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
+        body.addView(text("ORION  /  INFORMATION", 10f, Theme.TEXT, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(7)) })
         body.addView(text(title, 20f, Theme.TEXT, true))
         val detail = text(message, 13f, Theme.MUTED).apply { setPadding(0, dp(8), 0, dp(4)); setTextIsSelectable(true) }
         val scroll = ScrollView(this).apply { addView(detail); isFillViewport = true }
@@ -232,7 +232,15 @@ class SettingsActivity : Activity() {
         b.background = g
         b.elevation = 0f
         b.stateListAnimator = null
-        b.setOnClickListener { onClick() }
+        b.setOnClickListener {
+            try {
+                onClick()
+            } catch (error: Exception) {
+                val detail = error.javaClass.simpleName + ": " + (error.message ?: "action failed")
+                runCatching { AgentPolicy.log(this, "settings_button:$label", "activate", false, detail) }
+                Toast.makeText(this, "Couldn't open this setting. The failure was recorded; check app permissions or installed apps.", Toast.LENGTH_LONG).show()
+            }
+        }
         Motion.pressFeedback(b)
         return b
     }
@@ -268,7 +276,7 @@ class SettingsActivity : Activity() {
             }
             addView(OrionIconView(this@SettingsActivity).apply {
                 icon = settingsIcon(title)
-                tint = Theme.CYAN
+                tint = Theme.TEXT
                 contentDescription = null
             }, LinearLayout.LayoutParams(dp(17), dp(17)))
         }, LinearLayout.LayoutParams(dp(30), dp(30)).apply { rightMargin = dp(10) })
@@ -276,6 +284,18 @@ class SettingsActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(OrionIconView(this@SettingsActivity).apply {
+            icon = "chevron-down"
+            tint = Theme.MUTED
+            contentDescription = "Expand or collapse section"
+        }, LinearLayout.LayoutParams(dp(24), dp(30)))
+        heading.isClickable = true
+        heading.isFocusable = true
+        heading.contentDescription = "$title, expanded. Tap to collapse."
+        heading.tag = if (note != null) 2 else 1
+        c.tag = true
+        c.contentDescription = title
+        heading.setOnClickListener { setCardExpanded(c, c.tag != true) }
         c.addView(heading)
         if (note != null) {
             val n = text(note, 13f, Theme.MUTED).apply {
@@ -291,6 +311,19 @@ class SettingsActivity : Activity() {
         c.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(230)
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         return c
+    }
+
+    /** Keep settings compact by default while leaving each section one tap away. */
+    private fun setCardExpanded(card: LinearLayout, expanded: Boolean) {
+        val heading = card.getChildAt(0) as? LinearLayout ?: return
+        val contentStart = heading.tag as? Int ?: 1
+        card.tag = expanded
+        for (index in contentStart until card.childCount) {
+            card.getChildAt(index).visibility = if (expanded) View.VISIBLE else View.GONE
+        }
+        (heading.getChildAt(heading.childCount - 1) as? OrionIconView)?.icon = if (expanded) "chevron-down" else "chevron-right"
+        val title = card.contentDescription?.toString() ?: "Settings section"
+        heading.contentDescription = "$title, ${if (expanded) "expanded. Tap to collapse." else "collapsed. Tap to expand."}"
     }
 
     private fun settingsIcon(title: String): String {
@@ -334,6 +367,27 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** Convenient in-app legal notice required for GPL-covered interactive UI. */
+    private fun showOpenSourceLicenses() {
+        val notice = "PHONEAI — GPL-3.0-or-later\n\n" +
+            "PhoneAI is free software: you may copy, modify, and convey it under the GNU General Public License, version 3 or (at your option) any later version. The complete license text is available from the VIEW FULL GPL LICENSE action below.\n\n" +
+            "NO WARRANTY: to the extent permitted by law, this program is provided without warranty, including implied warranties of merchantability or fitness for a particular purpose. See GPLv3 sections 15 and 16.\n\n" +
+            "NANOMUSE COMPONENT: ToolLoopDetector is adapted from nanoMuse, Copyright (C) nanoMuse contributors, and is licensed under GPLv3. The PhoneAI adaptation changes its package and logging adapter.\n\n" +
+            "HERMES AGENT COMPONENTS: The model-output repetition guard and head/tail tool-output truncation are Kotlin adaptations of MIT-licensed Hermes Agent code, Copyright (c) 2025 Nous Research. The MIT license is included in licenses/HERMES-MIT-LICENSE.txt and the source adaptations are identified in THIRD_PARTY_NOTICES.md.\n\n" +
+            "CORRESPONDING SOURCE: the PhoneAI source repository and third-party notices are publicly available at github.com/Kingijimzy/phoneai. Preserve the nanoMuse attribution and license notices when redistributing. Other bundled components may carry separate licenses listed in THIRD_PARTY_NOTICES.md."
+        AlertDialog.Builder(this)
+            .setTitle("Open-source licenses")
+            .setMessage(notice)
+            .setPositiveButton("VIEW FULL GPL LICENSE") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/blob/orion/gpl-nanomuse-integration-20261031-v2/LICENSE")))
+            }
+            .setNeutralButton("THIRD-PARTY NOTICES") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Kingijimzy/phoneai/blob/orion/gpl-nanomuse-integration-20261031-v2/THIRD_PARTY_NOTICES.md")))
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Theme.BG
@@ -367,14 +421,14 @@ class SettingsActivity : Activity() {
                 cornerRadius = dp(15).toFloat(); setStroke(dp(1), 0x666B6B6B)
             }
             addView(OrionIconView(this@SettingsActivity).apply {
-                icon = "spark"; tint = Theme.CYAN; contentDescription = null
+                icon = "spark"; tint = Theme.TEXT; contentDescription = null
             }, LinearLayout.LayoutParams(dp(25), dp(25)))
         }
         headerTop.addView(brandMark, LinearLayout.LayoutParams(dp(46), dp(46)))
         val brandText = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
-            addView(text("ORION CONTROL", 10f, Theme.CYAN, true).apply { letterSpacing = .16f })
+            addView(text("ORION CONTROL", 10f, Theme.TEXT, true).apply { letterSpacing = .16f })
             addView(text("Personal AI", 17f, Theme.TEXT, true).apply { setPadding(0, dp(3), 0, 0) })
         }
         headerTop.addView(brandText, LinearLayout.LayoutParams(0, -2, 1f))
@@ -386,7 +440,7 @@ class SettingsActivity : Activity() {
             setLineSpacing(dp(1).toFloat(), 1f)
             setPadding(0, dp(22), 0, dp(8))
         })
-        header.addView(text("Tune intelligence, voice, memory and device access from one place.", 13f, Theme.MUTED).apply {
+        header.addView(text("Tap a section title to expand it. Start with setup; optional integrations show what still needs configuration or permission.", 13f, Theme.MUTED).apply {
             setLineSpacing(dp(3).toFloat(), 1f)
         })
         add(col, header, 0)
@@ -396,11 +450,14 @@ class SettingsActivity : Activity() {
         }
         add(col, sectionLabel, 5)
         add(col, button("‹  Back to Orion", false) { finish() }, 8)
-        add(col, button("Agent approval & capability packs", true) {
-            startActivity(Intent(this, AgentControlActivity::class.java))
+        add(col, button("Agent approval & capability packs · owner access", true) {
+            startActivity(Intent(this, OwnerControlCenterActivity::class.java))
         }, 8)
         add(col, button("Soul Engine · live system dashboard", true) {
             startActivity(Intent(this, SoulEngineActivity::class.java))
+        }, 8)
+        add(col, button("Open-source licenses & legal notices", false) {
+            showOpenSourceLicenses()
         }, 8)
         
         // ---- 1. setup
@@ -420,6 +477,9 @@ class SettingsActivity : Activity() {
         add(s1, button("Open Accessibility settings", true) {
             AccessibilityDisclosure.requestSettings(this)
         }, 8)
+        add(s1, button("Sensor & context permissions", false) {
+            startActivity(Intent(this, SensorContextActivity::class.java))
+        }, 8)
         add(s1, button("Enable Orion Private Keyboard", false) {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
         }, 8)
@@ -431,8 +491,25 @@ class SettingsActivity : Activity() {
             "Typing setup: enable Orion Private Keyboard and select it in Android's picker. If Orion asks for the keyboard during a typing action, tap Orion in that picker; it requests restoration of your previous keyboard afterward. Orion selects existing field text before replacement and refuses to type if select-all is unsupported, rather than silently appending duplicates. The keyboard never reads field contents.",
             12f, Theme.MUTED
         ), 8)
+        add(s1, button("Allow location", false) {
+            val missing = arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+                .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                .toTypedArray()
+            if (missing.isEmpty()) {
+                Toast.makeText(this, "Location permission is already granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                requestPermissions(missing, 75)
+            }
+        }, 8)
         add(s1, button("Allow microphone and notifications", false) {
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS), 1)
+            val requested = mutableListOf(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33) requested += Manifest.permission.POST_NOTIFICATIONS
+            val missing = requested.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
+            if (missing.isEmpty()) {
+                Toast.makeText(this, "Microphone and notification runtime permissions are already granted.", Toast.LENGTH_SHORT).show()
+            } else {
+                requestPermissions(missing, 1)
+            }
         }, 8)
         add(s1, button("Open Orion", true) {
             val s = PhoneAiService.instance
@@ -451,7 +528,12 @@ class SettingsActivity : Activity() {
         val updateStatus = text("Installed version: $installedVersion\nUpdate status: not checked yet", 12f, Theme.MUTED)
         updateStatus.typeface = Typeface.MONOSPACE
         add(updateCard, updateStatus, 8)
-        add(updateCard, button("Tool permissions & autonomy", false) { showToolPermissions() }, 8)
+        add(updateCard, button("OWNER CONTROL CENTRE · private", true) {
+            startActivity(android.content.Intent(this, OwnerControlCenterActivity::class.java))
+        }, 8)
+        add(updateCard, button("Tool permissions & autonomy · owner access", false) {
+            startActivity(android.content.Intent(this, OwnerControlCenterActivity::class.java))
+        }, 8)
         add(updateCard, button("Orion Terminal (shell + Termux)", false) { startActivity(android.content.Intent(this, TerminalActivity::class.java)) }, 8)
         add(updateCard, button("Capability board (connect GitHub / Gmail)", false) { startActivity(android.content.Intent(this, CapabilityBoardActivity::class.java)) }, 8)
         add(updateCard, button("Run Orion self-test", true) {
@@ -477,6 +559,19 @@ class SettingsActivity : Activity() {
                 "6. Open Recent apps and lock Orion if your launcher offers a lock option.\n\n" +
                 "Xiaomi changes these labels by OS version and region. Orion cannot enable the vendor's Autostart switch itself; confirm each setting manually.")
         }, 8)
+        add(updateCard, button("Open Android battery optimization settings", false) {
+            runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                .onFailure { Toast.makeText(this, "Battery optimization settings are unavailable on this Android build.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(updateCard, button("Open Orion app details · HyperOS permissions", false) {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }.onFailure { Toast.makeText(this, "App details settings could not be opened.", Toast.LENGTH_LONG).show() }
+        }, 8)
+        add(updateCard, text(
+            "HyperOS note: Orion cannot silently enable Xiaomi Autostart or exempt itself from battery management. Enable Autostart and No restrictions manually where your MIUI/HyperOS version exposes them. WorkManager jobs are durable/deferred, not guaranteed sub-second. An open Python WebSocket starts a visible data-sync foreground notification and stops it when all sessions close; Android/HyperOS can still stop it after force-stop, vendor cleanup or foreground-service time limits. Python WebSocket transport does not secretly activate the microphone; audio capture still requires the existing owner-started voice flow and microphone permission.",
+            12f, Theme.MUTED
+        ), 8)
         add(updateCard, button("OPPO / realme background & overlay guide", false) {
             showInfoDialog("OPPO / realme permissions",
                 "For ColorOS / realme UI (labels vary by version):\n\n" +
@@ -519,7 +614,7 @@ class SettingsActivity : Activity() {
         // ---- 3. AI services
         val s2 = card(
             col, "AI providers & models",
-            "Orion uses your selected primary provider first. It may try at most one backup provider only after an explicit HTTP 429 rate-limit response; other failures stop fallback. A shared per-command request budget and cooldowns prevent rapid key cycling. Simple phone actions (open apps, flashlight, volume, alarms) need no AI request."
+            "Chat and screen vision have independent provider and model selections below. Orion uses each selected provider first; when Auto-switch is enabled, recoverable timeouts, rate limits, temporary server errors, unsupported/retired models, empty replies, and oversized requests can trigger bounded fallback. Authentication, billing, cancellation, safety blocks, and exhausted budgets stop. Simple phone actions need no AI request."
         )
         add(s2, button("Get a free Gemini key", false) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
@@ -539,7 +634,7 @@ class SettingsActivity : Activity() {
         add(s2, chatBtn, 8)
         visionBtn = button("", false) { providerDialog(true) }
         add(s2, visionBtn, 8)
-        switchRow(s2, "Auto-switch to one backup only on HTTP 429", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
+        switchRow(s2, "Auto-switch on recoverable provider errors (up to 2 backups)", Prefs.autoSwitch(this)) { Prefs.setAutoSwitch(this, it) }
         switchRow(s2, "Conserve API quota (fewer retries; recommended)", Prefs.quotaSaver(this)) {
             Prefs.setQuotaSaver(this, it)
         }
@@ -898,30 +993,46 @@ class SettingsActivity : Activity() {
             20
         )
 
-        val shortcuts = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        listOf(
-            "AI" to s2,
+        // Show setup first; keep advanced configuration out of the way until requested.
+        listOf(updateCard, s2, sk, s3, s4, s5, browser, s6, s7).forEach { setCardExpanded(it, false) }
+
+        // Compact, fully visible settings index: no sideways scrolling or hidden destinations.
+        val shortcutItems = listOf(
+            "ACCESS" to s1,
+            "HEALTH" to updateCard,
+            "AI MODELS" to s2,
             "VOICE" to s3,
+            "KNOWLEDGE" to sk,
             "MEMORY" to s4,
+            "RECORDING" to s5,
             "BROWSER" to browser,
             "TOOLS" to s6,
             "INTEGRATIONS" to s7
-        ).forEach { (label, target) ->
-            shortcuts.addView(quickJump(label, target, sv),
-                LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(7) })
-        }
-        val shortcutScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
+        )
+        val shortcutGrid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(0, dp(2), 0, dp(3))
-            addView(shortcuts, ViewGroup.LayoutParams(-2, -2))
         }
-        col.addView(shortcutScroll, 2, LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(10)
+        shortcutItems.chunked(3).forEach { group ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            group.forEach { (label, target) ->
+                row.addView(quickJump(label, target, sv), LinearLayout.LayoutParams(0, -2, 1f).apply {
+                    rightMargin = dp(6)
+                    bottomMargin = dp(6)
+                })
+            }
+            if (group.size < 3) {
+                repeat(3 - group.size) {
+                    row.addView(View(this), LinearLayout.LayoutParams(0, dp(1), 1f).apply { rightMargin = dp(6) })
+                }
+            }
+            shortcutGrid.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+        col.addView(shortcutGrid, 2, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(8)
             bottomMargin = dp(2)
         })
 
@@ -931,15 +1042,50 @@ class SettingsActivity : Activity() {
                 if (!isFinishing && !isDestroyed) startOpenRouterSignIn()
             }
         } else {
-            when (intent.getStringExtra("open_section")) {
-                "knowledge" -> knowledgeDialog()
-                "memory" -> memoryDialog()
-                "skills" -> skillsDialog()
-                "routines" -> routinesDialog()
-                "character" -> characterDialog()
-                "voice" -> voiceDialog()
-                "providers" -> providerDialog(false)
-                "integrations" -> telegramDialog()
+            val requestedSection = intent.getStringExtra("open_section")
+            val target = when (requestedSection) {
+                "permissions" -> s1
+                "health" -> updateCard
+                "providers" -> s2
+                "knowledge" -> sk
+                "voice", "character" -> s3
+                "memory", "routines", "skills" -> s4
+                "recording" -> s5
+                "browser" -> browser
+                "tools" -> s6
+                "integrations" -> s7
+                else -> null
+            }
+            if (target != null) {
+                setCardExpanded(target, true)
+                val sectionTitle = target.contentDescription?.toString() ?: "Settings"
+                // A section shortcut should open the selected controls, not dump the user
+                // into the entire legacy settings index with the requested card buried below.
+                val backButton = (0 until col.childCount)
+                    .map { col.getChildAt(it) }
+                    .firstOrNull { it is Button && it.text.toString().contains("Back to Orion") }
+                for (index in 0 until col.childCount) {
+                    val child = col.getChildAt(index)
+                    val keep = child === header || child === target || child === backButton
+                    if (!keep) child.visibility = View.GONE
+                }
+                add(col, text(sectionTitle.uppercase(), 11f, Theme.MUTED, true).apply {
+                    letterSpacing = .12f
+                    setPadding(dp(2), dp(14), dp(2), dp(2))
+                }, 2)
+                // The section title was appended; move it directly above the selected card.
+                val focusTitle = col.getChildAt(col.childCount - 1)
+                col.removeView(focusTitle)
+                col.addView(focusTitle, col.indexOfChild(target))
+                (backButton as? Button)?.text = "‹  Back"
+                window.decorView.post {
+                    if (!isFinishing && !isDestroyed) {
+                        sv.smoothScrollTo(0, (target.top - dp(16)).coerceAtLeast(0))
+                    }
+                }
+                if (requestedSection == "character") {
+                    window.decorView.postDelayed({ if (!isFinishing && !isDestroyed) characterDialog() }, 220)
+                }
             }
         }
     }
@@ -959,19 +1105,23 @@ class SettingsActivity : Activity() {
         val mic = if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
         val notifications = if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < 33) "allowed" else "not allowed"
         val contacts = if (checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) "allowed" else "not allowed"
+        val locationPermission = when {
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED -> "precise allowed"
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED -> "approximate allowed"
+            else -> "not allowed"
+        }
+        val locationEnabled = runCatching {
+            (getSystemService(LOCATION_SERVICE) as? android.location.LocationManager)?.getProviders(true)?.isNotEmpty() == true
+        }.getOrDefault(false)
         // Android 14+ restricts direct reads of enabled_input_methods for modern target SDKs.
         // Use the public InputMethodManager list instead, and guard the selected-method setting
         // because system settings access can vary by Android version/device policy.
-        val enabledKeyboard = runCatching {
-            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
-                ?.enabledInputMethodList
-                ?.any { it.packageName == packageName } == true
-        }.getOrDefault(false)
-        val selectedKeyboard = runCatching {
+        val enabledKeyboard = KeyboardStatus.enabled(packageName) {
+            (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)?.enabledInputMethodList?.map { it.packageName }
+        }
+        val selectedKeyboard = KeyboardStatus.selected(packageName) {
             Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-                ?.substringBefore('/')
-                ?.equals(packageName, ignoreCase = true) == true
-        }.getOrDefault(false)
+        }
         val notificationListener = runCatching {
             Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
                 ?.split(':')
@@ -990,6 +1140,7 @@ class SettingsActivity : Activity() {
         sb.append("Microphone:    ").append(mic).append("\n")
         sb.append("Notifications: ").append(notifications).append("\n")
         sb.append("Contacts:      ").append(contacts).append("\n")
+        sb.append("Location:      ").append(locationPermission).append(" / device location ").append(if (locationEnabled) "on" else "off").append("\n")
         sb.append("Private keyboard: ").append(if (selectedKeyboard) "selected" else if (enabledKeyboard) "enabled, not selected" else "disabled").append("\n")
         sb.append("Notification access: ").append(if (notificationListener) "enabled" else "disabled").append("\n")
         sb.append("Overlay access: ").append(if (overlayAllowed) "allowed" else "missing").append("\n")
@@ -1220,7 +1371,7 @@ class SettingsActivity : Activity() {
                 setStroke(dp(1), 0x55484848)
             }
         }
-        outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.CYAN, true).apply {
+        outer.addView(text("ORION  /  AI CONNECTIONS", 10f, Theme.TEXT, true).apply {
             letterSpacing = .12f
             setPadding(0, 0, 0, dp(7))
         })
@@ -1250,7 +1401,7 @@ class SettingsActivity : Activity() {
                         if (selected) 0xFF181818.toInt() else 0xE8141414.toInt()
                     )).apply {
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else if (saved) 0xFF363636.toInt() else 0x33383838)
+                    setStroke(dp(1), if (selected) Theme.TEXT else if (saved) 0xFF363636.toInt() else 0x33383838)
                 }
                 isClickable = true
                 isFocusable = true
@@ -1266,7 +1417,7 @@ class SettingsActivity : Activity() {
             }
             val icon = OrionIconView(this).apply {
                 icon = iconName
-                tint = if (saved || selected) Theme.CYAN else Theme.MUTED
+                tint = if (saved || selected) Theme.TEXT else Theme.MUTED
                 background = GradientDrawable().apply {
                     setColor(if (saved || selected) 0xFF303030.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
@@ -1283,11 +1434,11 @@ class SettingsActivity : Activity() {
                 saved -> "KEY SAVED · CONNECTION NOT VERIFIED"
                 else -> "KEY NOT ADDED"
             }
-            details.addView(text(state, 10f, if (saved) Theme.CYAN else Theme.MUTED, true).apply {
+            details.addView(text(state, 10f, if (saved) Theme.TEXT else Theme.MUTED, true).apply {
                 setPadding(0, dp(4), 0, 0)
             })
             card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            if (selected) card.addView(text("ACTIVE", 8f, Theme.CYAN, true).apply {
+            if (selected) card.addView(text("ACTIVE", 8f, Theme.TEXT, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .04f
             }, LinearLayout.LayoutParams(dp(42), dp(30)))
@@ -1337,7 +1488,7 @@ class SettingsActivity : Activity() {
                 cornerRadius = dp(22).toFloat()
                 setStroke(dp(1), 0x55484848)
             }
-            addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.CYAN, true).apply {
+            addView(text("ORION  /  PROVIDER SECURITY", 10f, Theme.TEXT, true).apply {
                 letterSpacing = .1f; setPadding(0, 0, 0, dp(7))
             })
             addView(text(p.label + " API key", 20f, Theme.TEXT, true))
@@ -1356,8 +1507,9 @@ class SettingsActivity : Activity() {
                     box.error = "Paste an API key first"
                     return@setOnClickListener
                 }
-                val chatNeeds = !Prefs.hasKey(this, Prefs.provider(this, false).id)
-                val visionNeeds = !Prefs.hasKey(this, Prefs.provider(this, true).id)
+                // Saving a key must not change provider routing. The Chat AI and
+                // Screen-vision AI pickers own their independent selections; providerDialog()
+                // saves the chosen route before opening this key dialog.
                 if (!Prefs.setKey(this, p.id, k)) {
                     AlertDialog.Builder(this)
                         .setTitle("Secure storage unavailable")
@@ -1366,8 +1518,6 @@ class SettingsActivity : Activity() {
                         .show()
                     return@setOnClickListener
                 }
-                if (chatNeeds) Prefs.setProvider(this, false, p.id)
-                if (visionNeeds && p.hasVision) Prefs.setProvider(this, true, p.id)
                 dialog.dismiss()
                 Toast.makeText(this, p.label + " key saved securely.", Toast.LENGTH_SHORT).show()
                 refresh()
@@ -1383,8 +1533,8 @@ class SettingsActivity : Activity() {
         providerPickerDialog(
             title = if (vision) "Screen-vision AI" else "Chat AI provider",
             subtitle = if (vision)
-                "Choose a provider that supports image understanding."
-            else "Choose which service answers Orion's messages.",
+                "Choose the provider used for screen reading. This selection is independent of Chat AI and has its own saved model."
+            else "Choose the provider used for normal chat. This selection is independent of Screen-vision AI and has its own saved model.",
             providers = providers,
             showKeyState = true
         ) { provider ->
@@ -1835,7 +1985,7 @@ class SettingsActivity : Activity() {
             text = "Require approval for every run"
             isChecked = true
             setTextColor(Theme.TEXT)
-            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.CYAN)
+            buttonTintList = android.content.res.ColorStateList.valueOf(Theme.TEXT)
         }
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1917,7 +2067,7 @@ class SettingsActivity : Activity() {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 intArrayOf(0xFF101010.toInt(), 0xFF171717.toInt(), 0xFF0B0B0B.toInt()))
         }
-        outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.CYAN, true).apply {
+        outer.addView(text("ORION  /  RESPONSE STYLE", 10f, Theme.TEXT, true).apply {
             letterSpacing = .12f; setPadding(0, 0, 0, dp(7))
         })
         outer.addView(text("Choose your personality", 22f, Theme.TEXT, true))
@@ -1934,18 +2084,18 @@ class SettingsActivity : Activity() {
                 background = GradientDrawable().apply {
                     setColor(if (selected) 0xFF1B1B1B.toInt() else 0xFF121212.toInt())
                     cornerRadius = dp(13).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0x33383838)
+                    setStroke(dp(1), if (selected) Theme.TEXT else 0x33383838)
                 }
                 isClickable = true; isFocusable = true
                 contentDescription = profile.label + ", " + descriptions[profile.id].orEmpty()
             }
             card.addView(OrionIconView(this).apply {
                 icon = icons[profile.id] ?: "spark"
-                tint = if (selected) Theme.CYAN else Theme.MUTED
+                tint = if (selected) Theme.TEXT else Theme.MUTED
                 background = GradientDrawable().apply {
                     setColor(if (selected) 0xFF3A3A3A.toInt() else 0xFF202020.toInt())
                     cornerRadius = dp(11).toFloat()
-                    setStroke(dp(1), if (selected) Theme.CYAN else 0x44464646)
+                    setStroke(dp(1), if (selected) Theme.TEXT else 0x44464646)
                 }
                 contentDescription = profile.label
             }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(11) })
@@ -1955,7 +2105,7 @@ class SettingsActivity : Activity() {
                 setPadding(0, dp(3), 0, 0)
             })
             card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
-            if (selected) card.addView(text("ACTIVE", 8f, Theme.CYAN, true).apply {
+            if (selected) card.addView(text("ACTIVE", 8f, Theme.TEXT, true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .03f
             }, LinearLayout.LayoutParams(dp(42), dp(28)))
@@ -2171,7 +2321,7 @@ class SettingsActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(8))
             background = GradientDrawable().apply { setColor(Theme.BG); cornerRadius = dp(20).toFloat(); setStroke(dp(1), Theme.LINE) }
-            addView(text("ORION  /  MEMORY", 10f, Theme.CYAN, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(8)) })
+            addView(text("ORION  /  MEMORY", 10f, Theme.TEXT, true).apply { letterSpacing = .1f; setPadding(0, 0, 0, dp(8)) })
             addView(text(if (m == null) "Add a memory" else "Edit memory", 20f, Theme.TEXT, true))
             addView(box, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
             addView(categoryButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
