@@ -30,6 +30,10 @@ class OrionExecTests(unittest.TestCase):
         out = orion_exec.run("print('x' * 4000)")
         self.assertLessEqual(len(out), 5000)
 
+    def test_rejects_allocation_bombs(self):
+        self.assertIn("huge constant", orion_exec.run("print('x' * 1000000000)"))
+        self.assertIn("huge constant", orion_exec.run("print([0] * 1000000)"))
+
 
 if __name__ == "__main__":
     unittest.main()
