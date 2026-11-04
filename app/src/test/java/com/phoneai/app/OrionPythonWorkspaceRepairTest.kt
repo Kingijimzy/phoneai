@@ -69,7 +69,7 @@ class OrionPythonWorkspaceRepairTest {
 
     @Test fun sharedProjectWorkspaceAllowsDependencyTreesButKeepsListingsFocused() {
         val workspace = OrionPythonWorkspace(context)
-        assertTrue(workspace.write("projects/webapp/project.json", "{\\"language\\":\\"javascript\\"}").startsWith("saved "))
+        assertTrue(workspace.write("projects/webapp/project.json", "{\"language\":\"javascript\"}").startsWith("saved "))
         assertTrue(workspace.write("projects/webapp/src/index.js", "export const ok = true;").startsWith("saved "))
         assertTrue(workspace.write("projects/webapp/node_modules/example/index.js", "module.exports = true;").startsWith("saved "))
         val listing = workspace.list()
