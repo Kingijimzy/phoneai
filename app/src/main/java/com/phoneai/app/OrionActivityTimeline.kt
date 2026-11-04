@@ -102,8 +102,15 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
                 if (cut <= 0) return@forEach
                 val state = line.substring(0, cut).trim()
                 val rest = line.substring(cut + 3)
-                val title = rest.substringBefore(": ").trim().take(80)
-                if (title.isNotBlank()) { byTitle.remove(title); byTitle[title] = state }
+                var title = rest.substringBefore(": ").trim().take(80)
+                var shownState = state
+                val tool = Regex("^tool=([a-z0-9_]+); outcome=([a-z]+)").find(title.ifBlank { rest })
+                if (tool != null) {
+                    title = tool.groupValues[1].replace('_', ' ').replaceFirstChar { it.uppercase() }
+                    shownState = if (tool.groupValues[2] == "failed") "FAILED" else "DONE"
+                }
+                if (title == "request accepted") title = "Request received"
+                if (title.isNotBlank()) { byTitle.remove(title); byTitle[title] = shownState }
             }
             return byTitle.map { ProgressStep(it.value, it.key) }
         }

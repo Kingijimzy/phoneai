@@ -2165,7 +2165,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         main.post { mainChatListener?.onAssistantDelta(text) }
     }
 
-    override fun note(text: String) {
+    override fun note(raw: String) {
+        val text = OrionEvidenceText.strip(raw).ifBlank { raw }
         // Specialist lifecycle messages are durable chat events, not transient UI-only notes.
         // The event is committed to the active conversation before the open chat is notified.
         val specialist = Regex("^\\[SPECIALIST:(ASSIGNED|RETURNED|FAILED)]\\s*\\n?([\\s\\S]*)$")

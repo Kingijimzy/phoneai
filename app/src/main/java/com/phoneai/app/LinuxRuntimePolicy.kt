@@ -29,7 +29,7 @@ internal object LinuxRuntimePolicy {
     // SHA-256 pinned in .github/workflows/build.yml for the APK-packaged Android W^X loader.
     const val PROOT_LOADER_SHA256 = "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
     const val MAX_ROOTFS_BYTES = 300_000_000L
-    const val MAX_COMMAND = 4000
+    const val MAX_COMMAND = 16_000
     private val sha256Pattern = Regex("^[0-9a-f]{64}$")
     private val versionPattern = Regex("^[A-Za-z0-9._-]{1,48}$")
 
