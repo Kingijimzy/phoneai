@@ -25,6 +25,7 @@ class OrionPythonPhoneBridgeTest {
         assertTrue(source.contains("sys.addaudithook(_orion_audit)"))
         assertTrue(source.contains("socket.getaddrinfo"))
         assertTrue(source.contains("subprocess.Popen"))
+        assertTrue(source.contains("sys.path.insert(0, \"/workspace\")"))
         assertTrue(source.contains("/workspace/orion_main.py"))
         assertFalse(source.contains("0.0.0.0"))
         assertFalse(source.contains("getattr(api"))
