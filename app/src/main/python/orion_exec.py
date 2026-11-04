@@ -68,6 +68,19 @@ def _validate(tree):
     if loops > 2:
         raise Rejected("at most two for loops are allowed")
 
+def _validate_multipliers(nodes):
+    """Refuse allocation bombs such as "x" * 1000000000 or [0] * 1000000."""
+    for node in nodes:
+        if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Mult):
+            continue
+        for side in (node.left, node.right):
+            if not isinstance(side, ast.Constant):
+                continue
+            if isinstance(side.value, int) and side.value > 10_000:
+                raise Rejected("multiplication by a huge constant is not allowed")
+            if isinstance(side.value, str) and len(side.value) > 5_000:
+                raise Rejected("oversized string literal is not allowed")
+
 def run(source):
     if not isinstance(source, str):
         return "error: Python code must be text"
@@ -78,6 +91,7 @@ def run(source):
     try:
         tree = ast.parse(source, mode="exec")
         _validate(tree)
+        _validate_multipliers(list(ast.walk(tree)))
         output = io.StringIO()
         scope = {"__builtins__": _SAFE}
         with contextlib.redirect_stdout(output):
