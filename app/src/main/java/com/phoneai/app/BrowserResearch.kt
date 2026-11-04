@@ -164,11 +164,11 @@ object BrowserResearch {
         var value = html
         value = value.replace(Regex("(?is)<!--.*?-->"), " ")
         value = value.replace(Regex("(?is)<(script|style|noscript|svg|iframe|form|nav|footer|header)[^>]*>.*?</\\1>"), " ")
-        value = value.replace(Regex("(?is)<(br|/p|/div|/li|/h[1-6]|/article|/section|/tr)[^>]*>"), "\\n")
+        value = value.replace(Regex("(?is)<(br|/p|/div|/li|/h[1-6]|/article|/section|/tr)[^>]*>"), "\n")
         return decodeEntities(stripTags(value))
             .replace(Regex("[\\t\\x0B\\f\\r ]+"), " ")
-            .replace(Regex(" *\\n *"), "\\n")
-            .replace(Regex("\\n{3,}"), "\\n\\n")
+            .replace(Regex(" *\\n *"), "\n")
+            .replace(Regex("\\n{3,}"), "\n\n")
             .trim()
     }
 

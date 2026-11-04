@@ -174,7 +174,7 @@ object RouteMemoryStore {
                     }
                     .sortedWith(compareByDescending<Triple<JSONObject, Int, Long>> { it.second }.thenByDescending { it.third })
                     .take(3)
-                if (matches.isEmpty()) "" else matches.joinToString("\\n") { (route, _, _) ->
+                if (matches.isEmpty()) "" else matches.joinToString("\n") { (route, _, _) ->
                     val names = route.optJSONArray("tools") ?: JSONArray()
                     val sequence = (0 until names.length()).joinToString(" → ") { names.optString(it) }
                     "- Similar completed task: ${route.optString("task").take(MAX_LABEL)}; tool route: ${sequence.take(280)}"

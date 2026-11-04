@@ -2105,7 +2105,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 VisualElementDetector.Region(it.bounds, it.confidence, it.label)
                             } ?: VisualElementDetector.detect(bitmap, excluded + occupied)
                             val detectorMs = SystemClock.elapsedRealtime() - detectorStartedAt
-                            sb.append("(visual detector: ${if (detected != null) "YOLO TFLite" else "heuristic fallback"}, ${detectorMs} ms)\\n")
+                            sb.append("(visual detector: ${if (detected != null) "YOLO TFLite" else "heuristic fallback"}, ${detectorMs} ms)\n")
                             for (region in regions) {
                                 if (visualElements.size >= 10) break
                                 val scaled = Rect(
@@ -2115,7 +2115,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 if (scaled.width() <= 0 || scaled.height() <= 0) continue
                                 visualElements.add(VisualElementDetector.Region(scaled, region.confidence, region.label))
                                 val id = nodes.size + ocrElements.size + visualElements.lastIndex
-                                sb.append("[$id] visual target (${region.label}, ${(region.confidence * 100).toInt()}% confidence)\\n")
+                                sb.append("[$id] visual target (${region.label}, ${(region.confidence * 100).toInt()}% confidence)\n")
                             }
                             }
                         } finally {

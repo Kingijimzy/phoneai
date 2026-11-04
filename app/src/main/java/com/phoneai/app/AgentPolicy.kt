@@ -30,9 +30,13 @@ object AgentPolicy {
     /**
      * Packs that are safe to have on from the first launch: they are local, read-only, or already gated by
      * per-action approval. Without them Orion cannot even offer to connect GitHub or Gmail (its connect tool
-     * lives in orion_core) and wrongly tells the user the feature does not exist. Risky packs stay opt-in.
+     * lives in orion_core) and wrongly tells the user the feature does not exist.
+     *
+     * phone_control is included: every tap/typing action is still decided per action by GatePolicy (and
+     * consequential actions still ask), so leaving it off only made Orion refuse to operate the device at all
+     * on a fresh install. Genuinely risky packs stay opt-in.
      */
-    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research")
+    internal val defaultOnPacks = setOf("orion_core", "connected_services", "workspace_shell", "self_test", "gaming_hobby", "trading_research", "phone_control")
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */

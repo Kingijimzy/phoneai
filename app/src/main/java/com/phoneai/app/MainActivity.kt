@@ -224,7 +224,7 @@ class MainActivity : ComponentActivity() {
         val report = try { reportFile.readText().take(24000) } catch (_: Exception) { return }
         AlertDialog.Builder(this)
             .setTitle("Orion saved a crash report")
-            .setMessage("Orion closed unexpectedly last time. Copy this report and send it here so I can identify the exact cause. The report stays on your phone until you choose to copy it.\\n\\n" + report.take(1800))
+            .setMessage("Orion closed unexpectedly last time. Copy this report and send it here so I can identify the exact cause. The report stays on your phone until you choose to copy it.\n\n" + report.take(1800))
             .setPositiveButton("Copy report") { _, _ ->
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 clipboard.setPrimaryClip(ClipData.newPlainText("Orion crash report", report))
