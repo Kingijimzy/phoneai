@@ -95,7 +95,9 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish the APK as a release (easy download on your phone)
-        if: github.event_name != 'pull_request'
+        # Only main may publish a release. Branch pushes still build an artifact for
+        # review, but must never become the download users install from Releases.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
