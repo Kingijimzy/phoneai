@@ -17,7 +17,8 @@ internal class OrionProjectWorkspace(context: Context) {
             return "error: supported project templates are python, javascript, kotlin and android."
         }
         val base = prefix + name
-        if (files.list().lineSequence().any { it.startsWith("$base/") }) {
+        if (!files.read("$base/project.json").startsWith("error:") ||
+            files.list().lineSequence().any { it.startsWith("$base/") }) {
             return "error: project '$name' already exists; existing files were left unchanged."
         }
         val manifest = JSONObject()
