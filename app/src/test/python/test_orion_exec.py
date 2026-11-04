@@ -9,6 +9,35 @@ SPEC.loader.exec_module(orion_exec)
 
 
 class OrionExecTests(unittest.TestCase):
+    def test_restricted_runner_deadline_is_enforced_and_trace_restored(self):
+        import sys
+        original = orion_exec.MAX_RUN_SECONDS
+        previous_trace = sys.gettrace()
+        try:
+            orion_exec.MAX_RUN_SECONDS = 0.001
+            result = orion_exec.run("for x in range(1000):\n    for y in range(1000):\n        value = x + y")
+            self.assertIn("time limit", result)
+            self.assertIs(sys.gettrace(), previous_trace)
+        finally:
+            orion_exec.MAX_RUN_SECONDS = original
+
+    def test_extension_runner_deadline_returns_structured_error(self):
+        import json
+        import sys
+        original = orion_exec.MAX_EXTENSION_SECONDS
+        previous_trace = sys.gettrace()
+        try:
+            orion_exec.MAX_EXTENSION_SECONDS = 0.001
+            result = json.loads(orion_exec.run_extension(
+                "for x in range(1000):\n    for y in range(1000):\n        value = x + y",
+                "{}"
+            ))
+            self.assertFalse(result["ok"])
+            self.assertIn("time limit", result["error"])
+            self.assertIs(sys.gettrace(), previous_trace)
+        finally:
+            orion_exec.MAX_EXTENSION_SECONDS = original
+
     def test_basic_arithmetic_and_output(self):
         self.assertEqual(orion_exec.run("print(sum(range(5)))"), "10\n")
 
