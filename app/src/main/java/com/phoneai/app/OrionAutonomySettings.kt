@@ -8,8 +8,8 @@ internal enum class OrionMode { TALK, ASSIST, AUTOPILOT, BUILDER }
 
 internal data class OrionAutonomyConfig(
     val mode: OrionMode = OrionMode.ASSIST,
-    val maxToolSteps: Int = 8,
-    val maxAiRequests: Int = 15,
+    val maxToolSteps: Int = 30,
+    val maxAiRequests: Int = 30,
     val maxRetries: Int = 2,
     val notifyOnCompletion: Boolean = true,
     val notifyOnFailure: Boolean = true,
@@ -56,8 +56,8 @@ internal object OrionAutonomySettings {
         val mode = runCatching { OrionMode.valueOf(p.getString("orion_mode", "ASSIST") ?: "ASSIST") }.getOrDefault(OrionMode.ASSIST)
         return OrionAutonomyPolicy.clamp(OrionAutonomyConfig(
             mode = mode,
-            maxToolSteps = p.getInt("orion_max_tool_steps", 8),
-            maxAiRequests = p.getInt("orion_max_ai_requests", 15),
+            maxToolSteps = p.getInt("orion_max_tool_steps_v2", 30),
+            maxAiRequests = p.getInt("orion_max_ai_requests_v2", 30),
             maxRetries = p.getInt("orion_max_retries", 2),
             notifyOnCompletion = p.getBoolean("orion_notify_completion", true),
             notifyOnFailure = p.getBoolean("orion_notify_failure", true),
@@ -68,8 +68,8 @@ internal object OrionAutonomySettings {
         val v = OrionAutonomyPolicy.clamp(config)
         c.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
             .putString("orion_mode", v.mode.name)
-            .putInt("orion_max_tool_steps", v.maxToolSteps)
-            .putInt("orion_max_ai_requests", v.maxAiRequests)
+            .putInt("orion_max_tool_steps_v2", v.maxToolSteps)
+            .putInt("orion_max_ai_requests_v2", v.maxAiRequests)
             .putInt("orion_max_retries", v.maxRetries)
             .putBoolean("orion_notify_completion", v.notifyOnCompletion)
             .putBoolean("orion_notify_failure", v.notifyOnFailure)

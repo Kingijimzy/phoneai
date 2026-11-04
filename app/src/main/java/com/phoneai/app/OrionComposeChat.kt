@@ -347,6 +347,42 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 }, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold
             )
         }
+        // Progress bar: sweeps while the task runs, fills when it finishes.
+        val sweep by pulse.animateFloat(
+            initialValue = 0f, targetValue = 0.7f,
+            animationSpec = infiniteRepeatable(tween(1100), repeatMode = RepeatMode.Reverse), label = "task-progress-sweep"
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 13.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF262626))) {
+            if (active || event.status == OrionActivityStatus.WAITING) {
+                Spacer(Modifier.weight(sweep.coerceAtLeast(0.001f)))
+                Box(Modifier.weight(0.3f).fillMaxHeight().background(accent))
+                Spacer(Modifier.weight((0.7f - sweep).coerceAtLeast(0.001f)))
+            } else {
+                Box(Modifier.weight(1f).fillMaxHeight().background(accent))
+            }
+        }
+        val steps = OrionActivityTimeline.progressSteps(event.evidence)
+        if (steps.size > 1) {
+            val shown = if (expanded) steps.takeLast(14) else steps.takeLast(4)
+            val finished = steps.count { it.state == "DONE" }
+            Text(
+                "$finished of ${steps.size} steps done" + (event.elapsedMs?.let { "  ·  " + OrionActivityTimeline.elapsedLabel(0L, it) } ?: ""),
+                color = Color(0xFF8A8A8A), fontSize = 9.sp, modifier = Modifier.padding(start = 13.dp, top = 5.dp)
+            )
+            shown.forEach { step ->
+                val mark = when (step.state) {
+                    "DONE" -> "✓"; "FAILED" -> "✕"; "WAITING" -> "…"; "RUNNING" -> "▸"; else -> "•"
+                }
+                val tint = when (step.state) {
+                    "DONE" -> Color(0xFFB8CDBD); "FAILED" -> Color(0xFFE09B9B); "WAITING" -> Color(0xFFE0C58A)
+                    "RUNNING" -> Color(0xFFF0F0F0); else -> Color(0xFF999999)
+                }
+                Row(Modifier.padding(start = 13.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(mark, color = tint.copy(alpha = if (step.state == "RUNNING") alpha else 1f), fontSize = 10.sp, modifier = Modifier.width(14.dp))
+                    Text(step.title, color = tint, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
         val terminalEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
         if (terminalEvidence != null) {
             Text(

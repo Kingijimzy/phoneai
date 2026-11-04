@@ -92,6 +92,22 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         }.sortedBy { it.timestampMs }
 
     companion object {
+        data class ProgressStep(val state: String, val title: String)
+
+        /** Turns the task card's history lines ("RUNNING · title: summary") into one row per step, keeping each step's latest state. */
+        fun progressSteps(evidence: List<String>): List<ProgressStep> {
+            val byTitle = LinkedHashMap<String, String>()
+            evidence.forEach { line ->
+                val cut = line.indexOf(" · ")
+                if (cut <= 0) return@forEach
+                val state = line.substring(0, cut).trim()
+                val rest = line.substring(cut + 3)
+                val title = rest.substringBefore(": ").trim().take(80)
+                if (title.isNotBlank()) { byTitle.remove(title); byTitle[title] = state }
+            }
+            return byTitle.map { ProgressStep(it.value, it.key) }
+        }
+
         /** Chat keeps only the latest task card visible; the Tasks screen owns full history. */
         fun latestChatCard(events: List<OrionActivityEvent>): OrionActivityEvent? =
             events.maxWithOrNull(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
