@@ -85,7 +85,7 @@ _MODULE_PATHS = {
 }
 _ALLOWED_IMPORTS = {"json", "datetime", "math", "re", "asyncio", "urllib.parse"}
 _SAFE_OBJECT_METHODS = {"get", "keys", "values", "items", "lower", "upper", "strip", "lstrip", "rstrip", "split", "rsplit", "splitlines", "join", "replace", "startswith", "endswith", "find", "rfind", "count", "capitalize", "title", "swapcase", "casefold", "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower", "append", "extend", "insert", "pop", "remove", "clear", "sort", "reverse", "copy", "index", "isoformat", "strftime", "timestamp", "weekday", "total_seconds", "group", "groups", "start", "end"}
-_SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds", "get", "keys", "values", "items", "lower", "upper", "strip", "split", "startswith", "endswith"}
+_SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds"} | _SAFE_OBJECT_METHODS
 
 def _path(node):
     if isinstance(node, ast.Name):
@@ -240,6 +240,12 @@ def _safe_method(obj, name, *args):
     raise Rejected("method is not available for this value type")
 
 
+def _join_fstring(parts):
+    result = "".join(str(part) for part in parts)
+    _check_seq(len(result))
+    return result
+
+
 def _safe_fstring_value(value, conversion=-1, format_spec=""):
     if len(format_spec) > 40 or "{" in format_spec or "}" in format_spec:
         raise Rejected("f-string format specification is too complex")
@@ -389,13 +395,22 @@ class _Guard(ast.NodeTransformer):
                 args=[node.func.value, ast.Constant(node.func.attr)] + node.args, keywords=[]), node)
         return node
 
-    def visit_FormattedValue(self, node):
-        self.generic_visit(node)
-        spec = ""
-        if node.format_spec is not None:
-            spec = "".join(part.value for part in node.format_spec.values)
-        return ast.copy_location(ast.Call(func=ast.Name(id="_safe_fstring_value", ctx=ast.Load()),
-            args=[node.value, ast.Constant(node.conversion), ast.Constant(spec)], keywords=[]), node)
+    def visit_JoinedStr(self, node):
+        parts = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(ast.Constant(value.value))
+            elif isinstance(value, ast.FormattedValue):
+                self.visit(value.value)
+                spec = ""
+                if value.format_spec is not None:
+                    spec = "".join(part.value for part in value.format_spec.values)
+                parts.append(ast.Call(func=ast.Name(id="_safe_fstring_value", ctx=ast.Load()),
+                    args=[value.value, ast.Constant(value.conversion), ast.Constant(spec)], keywords=[]))
+            else:
+                raise Rejected("unsupported f-string component")
+        return ast.copy_location(ast.Call(func=ast.Name(id="_join_fstring", ctx=ast.Load()),
+            args=[ast.List(elts=parts, ctx=ast.Load())], keywords=[]), node)
 
     """Routes + and * through size-checked helpers so a short loop cannot grow data without bound."""
     @staticmethod
@@ -434,7 +449,7 @@ def _scope(extra=None):
         steps[0] += 1
         if steps[0] > MAX_STEPS:
             raise Rejected("execution exceeded the 20000-step loop budget")
-    scope = {"__builtins__": dict(_SAFE, __import__=_safe_import), "_add": _add, "_mul": _mul, "_pow": _pow, "_tick": tick, "_safe_method": _safe_method, "_safe_fstring_value": _safe_fstring_value}
+    scope = {"__builtins__": dict(_SAFE, __import__=_safe_import), "_add": _add, "_mul": _mul, "_pow": _pow, "_tick": tick, "_safe_method": _safe_method, "_safe_fstring_value": _safe_fstring_value, "_join_fstring": _join_fstring}
     if extra:
         scope.update(extra)
     return scope
