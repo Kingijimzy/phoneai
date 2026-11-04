@@ -26,7 +26,10 @@ internal object ShellExecutionRouting {
     fun isPackageOperation(command: String): Boolean =
         Regex("""(^|[;&|]\s*)apk\s+(add|del|upgrade|update|fix)\b""").containsMatchIn(command)
 
-    /** Package operations legitimately need longer than an interactive shell command. */
-    fun commandTimeoutMs(command: String): Long =
-        if (isPackageOperation(command)) 180_000L else 60_000L
+    /** Dependency downloads and project builds legitimately need longer than interactive commands. */
+    fun commandTimeoutMs(command: String): Long {
+        val dependencyOrBuild = Regex("""(^|[;&|]\\s*)(npm\\s+(install|ci)|pip3?\\s+install|(?:\\./)?gradle\\s+.*(build|test|assemble))\\b""")
+            .containsMatchIn(command)
+        return if (isPackageOperation(command) || dependencyOrBuild) 180_000L else 60_000L
+    }
 }
