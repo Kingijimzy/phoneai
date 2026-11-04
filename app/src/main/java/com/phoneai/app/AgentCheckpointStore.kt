@@ -36,6 +36,8 @@ object AgentCheckpointStore {
             .replace(Regex("(?i)\\bauthorization\\s*[:=]\\s*(?:bearer\\s+)?[^\\s,;]+"), "authorization=[redacted]")
     )
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
+        // An unfinished task is never silently replaced; the caller must resume or clear it.
+        if (pending(c) != null) return@synchronized false
         val now = System.currentTimeMillis()
         val o = JSONObject()
             .put("command", safeCommand(command))

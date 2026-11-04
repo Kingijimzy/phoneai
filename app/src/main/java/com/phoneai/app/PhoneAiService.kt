@@ -1918,6 +1918,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         refreshMode()
     }
 
+    /** A dialog that never gets an answer must not wedge the single agent worker forever. */
+    private val askTimeoutSeconds = 180L
+
     override fun ask(question: String): Boolean {
         val latch = CountDownLatch(1)
         val answer = AtomicBoolean(false)
@@ -1928,7 +1931,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         if (Prefs.voice(this)) voice.speak(question)
-        latch.await()
+        if (!latch.await(askTimeoutSeconds, TimeUnit.SECONDS)) {
+            main.post { showStrip("That approval timed out, so Orion did not run the action.") }
+            return false
+        }
         return answer.get()
     }
 
@@ -1942,7 +1948,10 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         if (Prefs.voice(this)) voice.speak(question)
-        latch.await()
+        if (!latch.await(askTimeoutSeconds, TimeUnit.SECONDS)) {
+            main.post { showStrip("That question timed out, so Orion continued without an answer.") }
+            return ""
+        }
         return answer.get()
     }
 
