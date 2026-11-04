@@ -73,11 +73,13 @@ internal class OrionProjectWorkspace(context: Context) {
         return when (language) {
         "python" -> mapOf(
             "README.md" to "# $name\n\nPython project. Run with: python3 main.py\nTest with: python3 -m unittest discover -s tests -v\n",
+            ".gitignore" to "__pycache__/\\n.venv/\\n.pytest_cache/\\n*.pyc\\n",
             "main.py" to "def main():\n    print(\"Hello from $name\")\n\nif __name__ == \"__main__\":\n    main()\n",
             "tests/test_main.py" to "import unittest\nfrom main import main\n\nclass MainTests(unittest.TestCase):\n    def test_example(self):\n        self.assertTrue(callable(main))\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
         )
         "javascript" -> mapOf(
             "README.md" to "# $name\n\nJavaScript project. Install packages with npm install. Run with npm start. Test with npm test.\n",
+            ".gitignore" to "node_modules/\\ndist/\\n.env\\n",
             "package.json" to JSONObject().put("name", name.lowercase()).put("version", "1.0.0")
                 .put("private", true).put("type", "module").put("scripts", JSONObject().put("start", "node src/cli.js").put("test", "node --test"))
                 .toString(2) + "\n",
@@ -87,6 +89,7 @@ internal class OrionProjectWorkspace(context: Context) {
         )
         "kotlin" -> mapOf(
             "README.md" to "# $name\n\nKotlin/JVM project. Requires JDK 21+ and Gradle 8.14+. Run: gradle test.\n",
+            ".gitignore" to ".gradle/\\nbuild/\\n.idea/\\n",
             "settings.gradle.kts" to "rootProject.name = \"$name\"\n",
             "build.gradle.kts" to "plugins { kotlin(\"jvm\") version \"2.0.21\" }\n\nrepositories { mavenCentral() }\n\ndependencies { testImplementation(kotlin(\"test-junit5\")); testRuntimeOnly(\"org.junit.jupiter:junit-jupiter-engine:5.10.2\") }\n\ntasks.test { useJUnitPlatform() }\n",
             "src/main/kotlin/Main.kt" to "fun main() {\n    println(\"Hello from $name\")\n}\n",
@@ -94,6 +97,7 @@ internal class OrionProjectWorkspace(context: Context) {
         )
         else -> mapOf(
             "README.md" to "# $name\n\nAndroid application starter. Requires JDK 17+, Gradle 8.9+, Android SDK platform 35 and matching build tools before assembleDebug can run.\n",
+            ".gitignore" to ".gradle/\\nlocal.properties\\n**/build/\\n.idea/\\n",
             "settings.gradle.kts" to "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\ndependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }\nrootProject.name = \"$name\"\ninclude(\":app\")\n",
             "build.gradle.kts" to "plugins { id(\"com.android.application\") version \"8.7.3\" apply false; id(\"org.jetbrains.kotlin.android\") version \"2.0.21\" apply false }\n",
             "app/build.gradle.kts" to "plugins { id(\"com.android.application\"); id(\"org.jetbrains.kotlin.android\") }\n\nandroid { namespace = \"$androidPackage\"; compileSdk = 35; defaultConfig { applicationId = \"$androidPackage\"; minSdk = 23; targetSdk = 35; versionCode = 1; versionName = \"1.0\" } }\n",
