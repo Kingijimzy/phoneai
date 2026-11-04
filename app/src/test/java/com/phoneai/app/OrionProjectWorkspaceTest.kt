@@ -50,6 +50,7 @@ class OrionProjectWorkspaceTest {
         projects = OrionProjectWorkspace(context)
         assertTrue(projects.create("webapp", "javascript").startsWith("PROJECT CREATED:"))
         assertTrue(workspace.read("projects/webapp/package.json").contains("node --test"))
+        assertTrue(workspace.read("projects/webapp/src/cli.js").contains("main()"))
         assertTrue(projects.create("mobile_app", "kotlin").startsWith("PROJECT CREATED:"))
         assertTrue(workspace.read("projects/mobile_app/build.gradle.kts").contains("kotlin(\"jvm\")"))
         assertTrue(projects.create("android_demo", "android").startsWith("PROJECT CREATED:"))
