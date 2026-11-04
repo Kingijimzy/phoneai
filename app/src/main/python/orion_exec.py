@@ -86,7 +86,7 @@ _MODULE_PATHS = {
     "asyncio.run", "asyncio.sleep",
 }
 _ALLOWED_IMPORTS = {"json", "datetime", "math", "re", "asyncio", "urllib.parse"}
-_SAFE_OBJECT_METHODS = {"get", "keys", "values", "items", "lower", "upper", "strip", "lstrip", "rstrip", "split", "rsplit", "splitlines", "join", "replace", "startswith", "endswith", "find", "rfind", "count", "capitalize", "title", "swapcase", "casefold", "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower", "append", "extend", "insert", "pop", "remove", "clear", "sort", "reverse", "copy", "index", "isoformat", "strftime", "timestamp", "weekday", "total_seconds", "group", "groups", "start", "end"}
+_SAFE_OBJECT_METHODS = {"get", "keys", "values", "items", "lower", "upper", "strip", "lstrip", "rstrip", "split", "rsplit", "splitlines", "join", "replace", "startswith", "endswith", "find", "rfind", "count", "capitalize", "title", "swapcase", "casefold", "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower", "partition", "rpartition", "removeprefix", "removesuffix", "center", "ljust", "rjust", "zfill", "expandtabs", "append", "extend", "insert", "pop", "remove", "clear", "sort", "reverse", "copy", "index", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds", "group", "groups", "start", "end"}
 _SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds"} | _SAFE_OBJECT_METHODS
 
 def _path(node):
@@ -233,6 +233,12 @@ def _safe_method(obj, name, *args):
             result = obj.replace(old, new, count)
             _check_seq(len(result))
             return result
+        if name in {"center", "ljust", "rjust", "zfill"}:
+            width = int(args[0]) if args else 0
+            if width > MAX_SEQ: raise Rejected("string result exceeds the size limit")
+        if name == "expandtabs":
+            tabsize = int(args[0]) if args else 8
+            if tabsize > MAX_SEQ: raise Rejected("string result exceeds the size limit")
         result = getattr(obj, name)(*args)
         if isinstance(result, str): _check_seq(len(result))
         return result
@@ -339,7 +345,7 @@ def _validate(tree, allow_phone=False, allow_general_syntax=True):
                 if not isinstance(gen.iter, ast.Call) or not isinstance(gen.iter.func, ast.Name) or gen.iter.func.id != "range":
                     raise Rejected("comprehensions must use bounded range()")
     if loops > 2:
-        raise Rejected("at most two for loops are allowed")
+        raise Rejected("at most two loops are allowed")
 
 def _is_seq(x):
     return isinstance(x, (list, tuple, str))
@@ -377,6 +383,11 @@ def _pow(a, b):
     return pow(a, b)
 
 class _Guard(ast.NodeTransformer):
+    def visit_FunctionDef(self, node):
+        self.generic_visit(node)
+        node.body.insert(0, ast.Expr(value=ast.Call(func=ast.Name(id="_tick", ctx=ast.Load()), args=[], keywords=[])))
+        return node
+
     def visit_For(self, node):
         self.generic_visit(node)
         node.body.insert(0, ast.Expr(value=ast.Call(func=ast.Name(id="_tick", ctx=ast.Load()), args=[], keywords=[])))
