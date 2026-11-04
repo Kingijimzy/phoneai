@@ -872,7 +872,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     if (normalized.equals(actionPrefix, ignoreCase = true)) {
                         // Wait for the next token: the model may be emitting the routing sentinel.
                     } else if (normalized.startsWith("$actionPrefix ", ignoreCase = true) ||
-                        normalized.startsWith("$actionPrefix\\n", ignoreCase = true) ||
+                        normalized.startsWith("$actionPrefix\n", ignoreCase = true) ||
                         normalized.equals("$actionPrefix.", ignoreCase = true)) {
                         visiblePrefix.setLength(0)
                     } else if (!actionPrefix.startsWith(normalized, ignoreCase = true)) {
