@@ -31,9 +31,19 @@ import java.util.concurrent.TimeUnit
 internal class OrionPythonPhoneApi(
     private val context: Context,
     private val confirm: (String) -> Boolean = { false },
-    private val readOnly: Boolean = false
+    private val readOnly: Boolean = false,
+    private val toolInvoker: ((String, JSONObject) -> String)? = null
 ) {
     private val workspace = OrionPythonWorkspace(context)
+    private val toolCalls = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Calls any registered Orion tool through the same gated dispatcher the agent uses (approvals, loop guard, evidence log). */
+    fun tool(name: String, args: JSONObject): String {
+        PythonToolBridgePolicy.check(name, toolCalls.get())?.let { return error(it) }
+        val invoke = toolInvoker ?: return error("tool calls are not available in this run")
+        toolCalls.incrementAndGet()
+        return invoke(name, args)
+    }
 
     fun battery(): String {
         val intent = context.registerReceiver(

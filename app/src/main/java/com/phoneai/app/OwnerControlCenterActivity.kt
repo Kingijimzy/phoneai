@@ -276,12 +276,13 @@ class OwnerControlCenterActivity : Activity() {
         val current = OrionOwnerDialSettings.read(this)
         val options = arrayOf(
             "GUARDED · 8,000 characters · explicit approval",
-            "DEVELOPER · 16,000 characters · explicit approval"
+            "DEVELOPER · 16,000 characters · explicit approval",
+            "FULL · 64,000 characters · raw network, subprocesses · explicit approval"
         )
         AlertDialog.Builder(this).setTitle("Python execution profile")
-            .setMessage("Both profiles retain the bundled restricted interpreter, import/host-access restrictions and explicit approval. There is no safety-off mode.")
-            .setSingleChoiceItems(options, if (current.pythonProfile == OrionPythonProfile.DEVELOPER) 1 else 0) { dialog, which ->
-                val profile = if (which == 1) OrionPythonProfile.DEVELOPER else OrionPythonProfile.GUARDED
+            .setMessage("GUARDED and DEVELOPER keep the in-guest socket/subprocess block. FULL lifts it, so scripts can use the network, run commands and spawn processes inside Orion's Alpine guest (5-minute limit). Each run still needs your approval, and Python can call any Orion tool with phone.tool(name, args), which goes through the normal approval gates.")
+            .setSingleChoiceItems(options, when (current.pythonProfile) { OrionPythonProfile.GUARDED -> 0; OrionPythonProfile.DEVELOPER -> 1; OrionPythonProfile.FULL -> 2 }) { dialog, which ->
+                val profile = when (which) { 1 -> OrionPythonProfile.DEVELOPER; 2 -> OrionPythonProfile.FULL; else -> OrionPythonProfile.GUARDED }
                 OrionOwnerDialSettings.write(this, current.copy(pythonProfile = profile))
                 AgentPolicy.log(this, "owner-python-policy", "profile", true, "profile set to ${profile.name}")
                 dialog.dismiss()
