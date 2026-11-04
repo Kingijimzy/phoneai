@@ -22,6 +22,24 @@ class FastIntentsTest {
         assertEquals("music", r.query); assertNull(r.app)
     }
 
+    @Test fun openMusicAppIsNativeNotWeb() {
+        val r = FastIntents.parse("open music app") as FastIntents.Intent.PlayMedia
+        assertEquals(FastIntents.OPEN_APP_ONLY, r.query)
+        assertNull(r.app)
+    }
+
+    @Test fun openYoutubeMusicApp() {
+        val r = FastIntents.parse("open YouTube Music") as FastIntents.Intent.PlayMedia
+        assertEquals(FastIntents.OPEN_APP_ONLY, r.query)
+        assertEquals("youtube music", r.app)
+    }
+
+    @Test fun openSpotifyApp() {
+        val r = FastIntents.parse("launch Spotify") as FastIntents.Intent.PlayMedia
+        assertEquals(FastIntents.OPEN_APP_ONLY, r.query)
+        assertEquals("spotify", r.app)
+    }
+
     @Test fun gamesAreNotMusic() {
         assertNull(FastIntents.parse("play FC Mobile"))
         assertNull(FastIntents.parse("play a game"))
