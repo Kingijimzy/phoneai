@@ -115,7 +115,7 @@ internal object AgentHooks {
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
-  if(tool in setOf("forget","update_memory","undo_last")) return true
+  if(tool in setOf("forget","update_memory","undo_last","autonomy_toggle")) return true
   if(tool=="notification_action"&&args.optString("action").equals("reply",true)) return true
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"click"->targetLabel;else->""}
   if(risky.containsMatchIn(target)) return true

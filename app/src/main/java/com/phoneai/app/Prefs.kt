@@ -188,6 +188,10 @@ object Prefs {
     fun tradingReadOnly(c: Context): Boolean = sp(c).getBoolean("trading_read_only", true)
     fun setTradingReadOnly(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("trading_read_only", enabled).apply()
 
+    /** Background autonomy is opt-in: scheduled goals spend model quota without a new message. */
+    fun autonomyEnabled(c: Context): Boolean = sp(c).getBoolean("autonomy_enabled", false)
+    fun setAutonomyEnabled(c: Context, enabled: Boolean) = sp(c).edit().putBoolean("autonomy_enabled", enabled).apply()
+
     /** Active task preset changes planning emphasis, never the underlying safety gates. */
     fun taskPreset(c: Context): String = sp(c).getString("task_preset", "GENERAL")?.uppercase()?.takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL"
     fun setTaskPreset(c: Context, preset: String) = sp(c).edit().putString("task_preset", preset.uppercase().takeIf { it in setOf("GENERAL", "TRADING", "GAMING", "RESEARCH") } ?: "GENERAL").apply()
