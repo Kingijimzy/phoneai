@@ -162,9 +162,11 @@ internal object OrionTasksCapabilityExecutor {
             }
         }
         "task_update" -> {
-            if (stopped()) "error: task was stopped before updating the saved task."
-            else {
-                val id = args.optInt("id", -1)
+            val id = args.optInt("id", -1)
+            when {
+                stopped() -> "error: task was stopped before updating the saved task."
+                id <= 0 -> "error: task_update requires a real positive Task Centre task id; it cannot update an objective-graph node. Use complete_objectives with its executor evidence_id to complete a graph objective."
+                else -> {
                 val dueAt = if (args.has("dueAt") && !args.isNull("dueAt")) args.optLong("dueAt") else null
                 val ok = TaskStore.update(
                     service, id,
@@ -176,6 +178,7 @@ internal object OrionTasksCapabilityExecutor {
                     clearDueAt = args.optBoolean("clearDueAt", false)
                 )
                 if (ok) "Updated task #$id." else "error: task #$id was not updated; it may not exist or device storage may be unavailable"
+                }
             }
         }
         "task_delete" -> {
