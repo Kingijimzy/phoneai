@@ -1926,6 +1926,11 @@ Rules:
             return
         }
         if (!resumeRequest && !browserActionTask && !structuredTask && runSavedRoutineCommand(command)) return
+        // Ground every run in live capability/graph context before acting.
+        if (!resumeRequest) {
+            val pre = OrionPreActionContext.assess(svc, command)
+            ui.note("[CONTEXT]\n" + pre.summary)
+        }
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
         if (!resumeRequest && !browserActionTask && !structuredTask) {
             val fast = FastIntents.parse(command)
@@ -2396,8 +2401,9 @@ Rules:
                 graphRepairAttempts++
                 if (graphRepairAttempts > 2) {
                     OrionTasksCapabilityExecutor.pauseRun(svc)
-                    ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")
-                    return
+                    ui.note("[TASK:OBJECTIVE] Model graph failed; installing local fallback and continuing.")
+                    OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)
+                        ?: OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)
                 }
                 history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for every sequential prerequisite. For a request that says 'in that order', every node after the first must depend on an earlier node. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
                 continue
