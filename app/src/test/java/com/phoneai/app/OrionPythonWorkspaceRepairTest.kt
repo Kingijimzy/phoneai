@@ -65,6 +65,17 @@ class OrionPythonWorkspaceRepairTest {
         assertTrue(pythonWorkspace.list().contains(second))
     }
 
+    @Test fun sharedProjectWorkspaceAllowsDependencyTreesButKeepsListingsFocused() {
+        val workspace = OrionPythonWorkspace(context)
+        assertTrue(workspace.write("projects/webapp/project.json", "{\\"language\\":\\"javascript\\"}").startsWith("saved "))
+        assertTrue(workspace.write("projects/webapp/src/index.js", "export const ok = true;").startsWith("saved "))
+        assertTrue(workspace.write("projects/webapp/node_modules/example/index.js", "module.exports = true;").startsWith("saved "))
+        val listing = workspace.list()
+        assertTrue(listing.contains("projects/webapp/src/index.js"))
+        assertFalse(listing.contains("node_modules"))
+        assertEquals(256L * 1024 * 1024, OrionPythonWorkspace.MAX_TOTAL_BYTES)
+    }
+
     @Test fun diagnosticsReportMissingWorkspaceRootWithEvidence() {
         val report = OrionSelfDiagnostics.inspect(context)
         assertTrue(report.findings.any {
