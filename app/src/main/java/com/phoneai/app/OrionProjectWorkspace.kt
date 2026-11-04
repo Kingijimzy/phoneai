@@ -78,7 +78,7 @@ internal class OrionProjectWorkspace(context: Context) {
         "javascript" -> mapOf(
             "README.md" to "# $name\n\nJavaScript project. Install packages with npm install. Run with npm start. Test with npm test.\n",
             "package.json" to JSONObject().put("name", name.lowercase()).put("version", "1.0.0")
-                .put("private", true).put("scripts", JSONObject().put("start", "node src/index.js").put("test", "node --test"))
+                .put("private", true).put("type", "module").put("scripts", JSONObject().put("start", "node src/cli.js").put("test", "node --test"))
                 .toString(2) + "\n",
             "src/index.js" to "export function main() {\n  console.log(\"Hello from $name\");\n}\n\nmain();\n",
             "test/main.test.js" to "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { main } from '../src/index.js';\n\ntest('main is callable', () => { assert.equal(typeof main, 'function'); });\n"
