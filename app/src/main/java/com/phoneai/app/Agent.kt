@@ -45,7 +45,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val tools = Tools(svc)
     private val ranSteps = JSONArray()
     private val local = Local(
-        svc, tools, { t, args -> exec(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
+        svc, tools, { t, args -> executeWithRecoveryGuard(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
         { q -> ui.ask(q) }, { ins, data -> aiOneShot(ins, data) }
     )
     private val history = JSONArray()
@@ -1351,8 +1351,11 @@ Rules:
                     toolCalls++
                     ui.note("[TASK:RUNNING]\nRunning $bt")
                     val br = executeWithRecoveryGuard(bt, batchArgs)
+                    runTools++
+                    val batchFailed = br.trimStart().startsWith("error", ignoreCase = true)
+                    if (batchFailed) runFailed++
                     ui.note(activityNote(bt, batchArgs, br))
-                    record(bt, one.optJSONObject("args") ?: JSONObject(), br)
+                    record(bt, batchArgs, br)
                     if (!AgentCheckpointStore.record(svc, bt, batchArgs, br)) {
                         AgentCheckpointStore.recoveryRequired(svc, "The action returned a result, but that result could not be saved. Verify its outcome before any retry.")
                         ui.say("The action returned, but I could not save its result. I stopped here; please verify what happened before asking me to continue.")
@@ -1364,7 +1367,14 @@ Rules:
                         ui.say("I stopped because the task $reason. ${stall.summary()}Tell me what you want instead, or I can try a different approach.")
                         return
                     }
-                    if (br.startsWith("error")) break
+                    ToolResultPolicy.failureReason(br)?.let { toolFailure ->
+                        // Match the single-step path: a failed batched step pauses the task
+                        // instead of being silently retried by the model with wrong accounting.
+                        AgentCheckpointStore.pause(svc)
+                        ui.phase("error")
+                        ui.say("I couldn't complete the step '$bt'. $toolFailure I paused the task and saved its progress; I have not marked the task complete.")
+                        return
+                    }
                 }
                 history.put(msg("user", "RESULT: " + sb.toString().take(3500)))
                 compact()
@@ -1937,7 +1947,7 @@ Rules:
             }
             "task_delete" -> {
                 val id = a.optInt("id", -1)
-                if (!ui.ask("Delete task #$id permanently?")) "Task deletion cancelled."
+                if (!ui.ask("Delete task #$id permanently?")) "cancelled: the user declined to delete task #$id."
                 else if (TaskStore.delete(svc, id)) "Deleted task #$id."
                 else "error: task #$id was not deleted; it may not exist or device storage may be unavailable"
             }
