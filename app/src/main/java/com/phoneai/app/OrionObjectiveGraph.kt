@@ -274,6 +274,21 @@ internal object OrionObjectiveGraph {
         return Graph(objective, topologicalOrder(nodes))
     }
 
+    /**
+     * Build a safe fallback graph from an already-returned ordered plan. IDs and dependencies
+     * are generated locally; the model cannot inject completion state or evidence.
+     */
+    fun fromPlan(objective: String, titles: List<String>, sequential: Boolean): Graph? {
+        val clean = titles.map { it.trim().take(240) }.filter { it.isNotBlank() }.take(24)
+        if (objective.isBlank() || clean.size !in 2..24) return null
+        val nodes = clean.mapIndexed { index, title ->
+            val id = "step_" + (index + 1)
+            val dependencies = if (sequential && index > 0) listOf("step_$index") else emptyList()
+            Objective(id = id, title = title, dependsOn = dependencies)
+        }
+        return runCatching { Graph(objective.trim().take(1000), topologicalOrder(nodes)) }.getOrNull()
+    }
+
     fun ensureStructuredGraph(context: Context, command: String, sequential: Boolean = true): Graph? {
         val existing = load(context)
         if (existing != null && existing.nodes.size >= 2) return existing
