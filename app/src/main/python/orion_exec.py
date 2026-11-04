@@ -519,7 +519,7 @@ def run_extension(source, input_json):
         return fail("input must be JSON text of at most 8000 characters")
     try:
         data = json.loads(input_json) if input_json.strip() else {}
-        code = _prepare(source, allow_general_syntax=False)
+        code = _prepare(source, allow_general_syntax=True)
         output = io.StringIO()
         scope = _scope({"INPUT": data})
         with contextlib.redirect_stdout(output):
