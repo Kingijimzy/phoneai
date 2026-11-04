@@ -267,7 +267,7 @@ def _safe_fstring_value(value, conversion=-1, format_spec=""):
     return value
 
 
-def _validate(tree, allow_phone=False):
+def _validate(tree, allow_phone=False, allow_general_syntax=True):
     nodes = list(ast.walk(tree))
     function_names = {node.name for node in nodes if isinstance(node, ast.FunctionDef)}
     if len(nodes) > MAX_NODES:
@@ -278,6 +278,8 @@ def _validate(tree, allow_phone=False):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     }
     for node in nodes:
+        if not allow_general_syntax and isinstance(node, (ast.FunctionDef, ast.Return, ast.While, ast.Try, ast.ExceptHandler, ast.Raise, ast.JoinedStr, ast.FormattedValue)):
+            raise Rejected("generated extensions use the restricted data-transform grammar")
         if isinstance(node, ast.FunctionDef):
             if node.decorator_list or node.returns is not None or node.type_comment is not None:
                 raise Rejected("decorated and annotated functions are not supported")
@@ -436,9 +438,9 @@ class _Guard(ast.NodeTransformer):
             return ast.copy_location(ast.Assign(targets=[node.target], value=self._call(name, load, node.value)), node)
         return node
 
-def _prepare(source, allow_phone=False):
+def _prepare(source, allow_phone=False, allow_general_syntax=True):
     tree = ast.parse(source, mode="exec")
-    _validate(tree, allow_phone=allow_phone)
+    _validate(tree, allow_phone=allow_phone, allow_general_syntax=allow_general_syntax)
     tree = ast.fix_missing_locations(_Guard().visit(tree))
     return compile(tree, "<orion-approved-python>", "exec")
 
@@ -506,7 +508,7 @@ def run_extension(source, input_json):
         return fail("input must be JSON text of at most 8000 characters")
     try:
         data = json.loads(input_json) if input_json.strip() else {}
-        code = _prepare(source)
+        code = _prepare(source, allow_general_syntax=False)
         output = io.StringIO()
         scope = _scope({"INPUT": data})
         with contextlib.redirect_stdout(output):
