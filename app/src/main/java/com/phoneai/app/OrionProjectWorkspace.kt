@@ -80,13 +80,14 @@ internal class OrionProjectWorkspace(context: Context) {
             "package.json" to JSONObject().put("name", name.lowercase()).put("version", "1.0.0")
                 .put("private", true).put("type", "module").put("scripts", JSONObject().put("start", "node src/cli.js").put("test", "node --test"))
                 .toString(2) + "\n",
-            "src/index.js" to "export function main() {\n  console.log(\"Hello from $name\");\n}\n\nmain();\n",
+            "src/index.js" to "export function main() {\n  console.log(\"Hello from $name\");\n}\n",
+            "src/cli.js" to "import { main } from './index.js';\nmain();\n",
             "test/main.test.js" to "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { main } from '../src/index.js';\n\ntest('main is callable', () => { assert.equal(typeof main, 'function'); });\n"
         )
         "kotlin" -> mapOf(
             "README.md" to "# $name\n\nKotlin/JVM project. Requires JDK 17+ and Gradle 8.7+. Run: gradle test.\n",
             "settings.gradle.kts" to "rootProject.name = \"$name\"\n",
-            "build.gradle.kts" to "plugins { kotlin(\"jvm\") version \"2.0.21\" }\n\nrepositories { mavenCentral() }\n\ndependencies { testImplementation(kotlin(\"test\")) }\n\ntasks.test { useJUnitPlatform() }\n",
+            "build.gradle.kts" to "plugins { kotlin(\"jvm\") version \"2.0.21\" }\n\nrepositories { mavenCentral() }\n\ndependencies { testImplementation(kotlin(\"test-junit5\")); testRuntimeOnly(\"org.junit.jupiter:junit-jupiter-engine:5.10.2\") }\n\ntasks.test { useJUnitPlatform() }\n",
             "src/main/kotlin/Main.kt" to "fun main() {\n    println(\"Hello from $name\")\n}\n",
             "src/test/kotlin/MainTest.kt" to "import kotlin.test.Test\nimport kotlin.test.assertEquals\n\nclass MainTest {\n    @Test fun example() { assertEquals(42, 40 + 2) }\n}\n"
         )
