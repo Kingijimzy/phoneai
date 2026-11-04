@@ -28,7 +28,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -86,6 +86,9 @@ internal object OrionRuntimeCapabilityExecutor {
             "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
             "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
+            "project_create" -> OrionProjectWorkspace(service).create(args.optString("name"), args.optString("language", "python"))
+            "project_list" -> OrionProjectWorkspace(service).list()
+            "project_inspect" -> OrionProjectWorkspace(service).inspect(args.optString("name"))
             else -> null
         }
         else -> null
