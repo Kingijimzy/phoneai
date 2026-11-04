@@ -814,24 +814,21 @@ class Tools(
      * begin playing directly; otherwise YouTube search results open in the YouTube app.
      */
     fun playMedia(query: String, app: String?): String {
-        val wanted = when (app) {
-            "spotify" -> "com.spotify.music"
-            "youtube music" -> "com.google.android.apps.youtube.music"
-            "youtube" -> null
-            else -> listOf("com.google.android.apps.youtube.music", "com.spotify.music").firstOrNull { installed(it) }
+        val wanted = MediaPlaybackPolicy.candidates(app).firstOrNull { installed(it) }
+            ?: return MediaPlaybackPolicy.unavailable(app, query)
+        val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+            .putExtra(android.app.SearchManager.QUERY, query)
+            .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+            .setPackage(wanted)
+        val result = launch(i, 300)
+        val label = MediaPlaybackPolicy.label(wanted)
+        return if (result == "ok") {
+            // Intent delivery is not proof of audible playback. The caller must use media_status
+            // or observable media-session state before reporting that the track is playing.
+            "playback request sent to $label for '$query'; actual playback is not yet verified"
+        } else {
+            "error: $label did not accept the playback request for '$query' ($result). No browser or web-search fallback was opened."
         }
-        if (wanted != null && installed(wanted)) {
-            val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
-                .putExtra(android.app.SearchManager.QUERY, query)
-                .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-                .setPackage(wanted)
-            val r = launch(i, 300)
-            if (r == "ok") return "playing $query in " + (if (wanted.contains("spotify")) "Spotify" else "YouTube Music")
-        }
-        val v = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
-        if (installed("com.google.android.youtube")) v.setPackage("com.google.android.youtube")
-        val r = launch(v, 300)
-        return if (r == "ok") "opened YouTube results for $query" else r
     }
 
     /** Opens a search in the real Chrome app (or the default browser), never Orion's internal browser. */
