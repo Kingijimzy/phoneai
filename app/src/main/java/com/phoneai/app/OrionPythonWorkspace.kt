@@ -130,6 +130,12 @@ internal class OrionPythonWorkspace(context: Context) {
             "error: workspace write failed (${e.javaClass.simpleName})"
         }
     }
+    @Synchronized fun delete(path: String): Boolean {
+        val file = resolve(path, true) ?: return false
+        if (!file.isFile || java.nio.file.Files.isSymbolicLink(file.toPath())) return false
+        return file.delete()
+    }
+
     private fun ensureRoot() {
         check(rootStatus() != RootStatus.UNSAFE) { "workspace path is unsafe" }
         if (!root.exists()) check(root.mkdirs()) { "workspace unavailable" }
