@@ -1288,7 +1288,7 @@ Rules:
                 val expected = android.content.ComponentName(svc, PhoneAiService::class.java)
                 enabled.split(':').any { component ->
                     android.content.ComponentName.unflattenFromString(component) == expected
-                } && Prefs.accessibilityDisclosureAccepted(svc)
+                }
             }
         )
     }
@@ -2406,7 +2406,9 @@ Rules:
             }
             var proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
             val requiresSequentialGraph = Regex("(?i)\\b(?:depends on one another|in that order|sequential(?:ly)?)\\b").containsMatchIn(inputCommand)
+            val expectedGraphObjective = currentTask.ifBlank { inputCommand }.trim()
             var graphHasRequiredStructure = proposedObjectiveGraph != null &&
+                proposedObjectiveGraph.objective.equals(expectedGraphObjective, ignoreCase = true) &&
                 proposedObjectiveGraph.nodes.size >= 2 &&
                 (!requiresSequentialGraph || proposedObjectiveGraph.nodes.drop(1).all { it.dependsOn.isNotEmpty() })
             // Some providers return a valid ordered plan array but omit/mangle objective_graph.
@@ -2421,6 +2423,7 @@ Rules:
                 if (fallback != null && OrionObjectiveGraph.save(svc, fallback)) {
                     proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
                     graphHasRequiredStructure = proposedObjectiveGraph != null &&
+                        proposedObjectiveGraph.objective.equals(expectedGraphObjective, ignoreCase = true) &&
                         proposedObjectiveGraph.nodes.size >= 2 &&
                         (!requiresSequentialGraph || proposedObjectiveGraph.nodes.drop(1).all { it.dependsOn.isNotEmpty() })
                     if (graphHasRequiredStructure) ui.note("[TASK:PLAN] Saved a deterministic objective graph from the provider's ordered plan.")
