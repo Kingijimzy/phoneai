@@ -2364,6 +2364,10 @@ Rules:
         }
         var damagedReplies = 0
         var graphRepairAttempts = 0
+        // Command-mode model output is structured JSON and must not be exposed token-by-token.
+        // Give the user one natural live progress line while the guarded planner works; tool
+        // details remain in the single compact activity card and the final assistant bubble.
+        ui.stream("I’m working through this now. I’ll check each result before moving on.")
         val stall = SessionStall()
         var promiseNudged = false
         var planAnnounced = false
