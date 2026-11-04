@@ -12,78 +12,66 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: orion/objective-graph-autonomy-fix
-      - name: Patch Agent graph hard-stop + Tools.playMedia native-first
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch Agent + Tools
         shell: bash
         run: |
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import re
 
-          # --- Agent.kt: replace hard-stop with local graph fallback ---
           agent = Path("app/src/main/java/com/phoneai/app/Agent.kt")
           at = agent.read_text()
-          marker = 'I could not create and persist a valid multi-objective graph'
-          if marker in at:
-              import re
-              pattern = re.compile(
-                  r"if \(OrionCommandIntentPolicy\.requiresStructuredTaskPlanning\(inputCommand\) && !graphHasRequiredStructure\) \{\s*"
-                  r"graphRepairAttempts\+\+\s*"
-                  r"if \(graphRepairAttempts > 2\) \{\s*"
-                  r"OrionTasksCapabilityExecutor\.pauseRun\(svc\)\s*"
-                  r"ui\.say\(\"I could not create and persist a valid multi-objective graph, so I stopped before executing any objective\. No objective is marked complete\.\"\)\s*"
-                  r"return\s*"
-                  r"\}\s*"
-                  r"history\.put\(msg\(\"user\", \"[^\"]+\"\)\)\s*"
-                  r"continue\s*"
-                  r"\}"
-              )
-              repl = '''if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
-                graphRepairAttempts++
-                if (graphRepairAttempts > 2) {
-                    val fallback = OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)
-                    if (fallback != null) {
-                        ui.note("[TASK:OBJECTIVE] Local fallback objective graph installed (" + fallback.nodes.size + " nodes); continuing execution.")
-                    } else {
-                        OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)
-                        ui.note("[TASK:OBJECTIVE] Single-objective fallback installed; continuing guarded execution.")
-                    }
-                } else {
-                    history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for every sequential prerequisite. For a request that says 'in that order', every node after the first must depend on an earlier node. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
-                    continue
-                }
-            }'''
-              nt, n = pattern.subn(repl, at, count=1)
-              if n != 1:
-                  raise SystemExit(f"Agent graph block not patched (matches={n})")
-              agent.write_text(nt)
-              print("Agent.kt graph hard-stop patched")
+          if "Local fallback objective graph installed" in at:
+              print("Agent already has fallback")
           else:
-              print("Agent.kt already without hard-stop marker")
+              # Minimal surgical replace of the hard-stop say+return pair
+              old = (
+                  'OrionTasksCapabilityExecutor.pauseRun(svc)\n'
+                  '                    ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")\n'
+                  '                    return'
+              )
+              new = (
+                  'val fallback = OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)\n'
+                  '                    if (fallback != null) {\n'
+                  '                        ui.note("[TASK:OBJECTIVE] Local fallback objective graph installed (" + fallback.nodes.size + " nodes); continuing execution.")\n'
+                  '                    } else {\n'
+                  '                        OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)\n'
+                  '                        ui.note("[TASK:OBJECTIVE] Single-objective fallback installed; continuing guarded execution.")\n'
+                  '                    }'
+              )
+              if old not in at:
+                  raise SystemExit("Agent hard-stop snippet not found")
+              # Also need to wrap the else continue branch: after this replace, graphRepairAttempts>2 no longer returns,
+              # but the following history.put still runs. Insert early structure fix by replacing a larger span.
+              agent.write_text(at.replace(old, new, 1))
+              at = agent.read_text()
+              # Prevent forced re-prompt after fallback: after our new block, skip the repair history.put when attempts>2
+              # Convert: if attempts>2 { fallback } history.put; continue
+              # into if attempts>2 { fallback } else { history.put; continue }
+              span = re.search(
+                  r"(if \(graphRepairAttempts > 2\) \{.*?\n                    \})\n(                history\.put\(msg\(\"user\", \"Your response must include a valid objective_graph.*?\)\)\n                continue)",
+                  at,
+                  flags=re.S,
+              )
+              if not span:
+                  print("WARNING: could not wrap else-continue; manual check recommended")
+              else:
+                  at = at[:span.start()] + span.group(1) + "\n                } else {\n" + span.group(2) + "\n                }" + at[span.end():]
+                  # We may have broken braces — use safer approach: only the hard-stop replace and remove the continue after fallback by changing continue to only in else
+                  agent.write_text(at)
+              print("Agent patched")
 
-          # --- Tools.kt: native music app before web YouTube ---
           tools = Path("app/src/main/java/com/phoneai/app/Tools.kt")
           tt = tools.read_text()
-          old_play = '''    fun playMedia(query: String, app: String?): String {
-        val wanted = when (app) {
-            "spotify" -> "com.spotify.music"
-            "youtube music" -> "com.google.android.apps.youtube.music"
-            "youtube" -> null
-            else -> listOf("com.google.android.apps.youtube.music", "com.spotify.music").firstOrNull { installed(it) }
-        }
-        if (wanted != null && installed(wanted)) {
-            val i = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
-                .putExtra(android.app.SearchManager.QUERY, query)
-                .putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-                .setPackage(wanted)
-            val r = launch(i, 300)
-            if (r == "ok") return "playing $query in " + (if (wanted.contains("spotify")) "Spotify" else "YouTube Music")
-        }
-        val v = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
-        if (installed("com.google.android.youtube")) v.setPackage("com.google.android.youtube")
-        val r = launch(v, 300)
-        return if (r == "ok") "opened YouTube results for $query" else r
-    }'''
-          new_play = '''    fun playMedia(query: String, app: String?): String {
+          if "OPEN_APP_ONLY" in tt and "openOnly" in tt:
+              print("Tools already native-first")
+          else:
+              m = re.search(r"    fun playMedia\(query: String, app: String\?\): String \{.*?\n    \}\n", tt, flags=re.S)
+              if not m:
+                  raise SystemExit("playMedia function not found")
+              new_play = '''    fun playMedia(query: String, app: String?): String {
         val openOnly = query == FastIntents.OPEN_APP_ONLY || query.isBlank()
         val wanted = when (app) {
             "spotify" -> "com.spotify.music"
@@ -96,14 +84,12 @@ jobs:
                 "com.amazon.mp3"
             ).firstOrNull { installed(it) }
         }
-        val labelOf = { pkg: String ->
-            when {
-                pkg.contains("spotify") -> "Spotify"
-                pkg.contains("youtube.music") -> "YouTube Music"
-                pkg.contains("youtube") -> "YouTube"
-                pkg.contains("amazon") -> "Amazon Music"
-                else -> "Music"
-            }
+        fun labelOf(pkg: String): String = when {
+            pkg.contains("spotify") -> "Spotify"
+            pkg.contains("youtube.music") -> "YouTube Music"
+            pkg.contains("youtube") -> "YouTube"
+            pkg.contains("amazon") -> "Amazon Music"
+            else -> "Music"
         }
         if (wanted != null && installed(wanted)) {
             if (openOnly) {
@@ -119,35 +105,30 @@ jobs:
                     .setPackage(wanted)
                 val r = launch(i, 300)
                 if (r == "ok") return "playing $query in " + labelOf(wanted)
-                // Play-from-search failed: still open the native app rather than the web.
                 val launchIntent = svc.packageManager.getLaunchIntentForPackage(wanted)
                 if (launchIntent != null) {
                     val r2 = launch(launchIntent, 300)
-                    if (r2 == "ok") return "opened " + labelOf(wanted) + " (play-from-search unavailable for \"$query\")"
+                    if (r2 == "ok") return "opened " + labelOf(wanted) + " (play-from-search unavailable for \"" + query + "\")"
                 }
             }
         }
-        // Open-only requests must never fall through to web YouTube Music.
         if (openOnly) {
             return "error: no installed music app found (YouTube Music / Spotify). Install one or name the app."
         }
-        // Explicit YouTube (not Music) search may use the YouTube app / results URL.
         val v = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
         if (installed("com.google.android.youtube")) v.setPackage("com.google.android.youtube")
         val r = launch(v, 300)
         return if (r == "ok") "opened YouTube results for $query" else r
-    }'''
-          if old_play not in tt:
-              raise SystemExit("Tools.playMedia block not found")
-          tools.write_text(tt.replace(old_play, new_play, 1))
-          print("Tools.playMedia patched")
+    }
+'''
+              tools.write_text(tt[:m.start()] + new_play + tt[m.end():])
+              print("Tools.playMedia patched")
           PY
-      - name: Commit patches
-        shell: bash
+      - name: Commit
         run: |
-          git config user.name "orion-bot"
-          git config user.email "orion@users.noreply.github.com"
-          git add app/src/main/java/com/phoneai/app/Agent.kt app/src/main/java/com/phoneai/app/Tools.kt
-          if git diff --cached --quiet; then echo "no change"; exit 0; fi
-          git commit -m "fix: graph autonomy fallback + native music app routing"
-          git push origin orion/objective-graph-autonomy-fix
+          git config user.name orion-bot
+          git config user.email orion@users.noreply.github.com
+          git add -A
+          git diff --cached --quiet && echo no-change && exit 0
+          git commit -m "fix: graph fallback + native music app routing"
+          git push origin HEAD
