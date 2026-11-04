@@ -20,6 +20,9 @@ class OrionCapabilityAdaptersTest {
             "python_exec" to OrionCapabilityAdapters.Backend.PYTHON,
             "extension_run" to OrionCapabilityAdapters.Backend.PYTHON,
             "workspace_write" to OrionCapabilityAdapters.Backend.FILES,
+            "project_create" to OrionCapabilityAdapters.Backend.FILES,
+            "project_list" to OrionCapabilityAdapters.Backend.FILES,
+            "project_inspect" to OrionCapabilityAdapters.Backend.FILES,
             "save_file" to OrionCapabilityAdapters.Backend.FILES,
             "browser_navigate" to OrionCapabilityAdapters.Backend.BROWSER,
             "play_media" to OrionCapabilityAdapters.Backend.DEVICE,
@@ -219,6 +222,14 @@ class OrionCapabilityAdaptersTest {
         }
     }
     
+    @Test fun projectToolsAreOwnedByTheSharedWorkspaceAndEnabledPack() {
+        listOf("project_create", "project_list", "project_inspect").forEach { tool ->
+            assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route(tool)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, tool))
+            assertEquals("workspace_shell", AgentPolicy.packForTool(tool))
+        }
+    }
+
     @Test fun saveFileIsRegisteredToTheFilesRuntimeOwner() {
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("save_file"))
         assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route("save_file")?.backend)

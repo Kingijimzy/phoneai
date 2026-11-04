@@ -22,7 +22,16 @@ object ShellRunner {
     internal class Pending { val latch = CountDownLatch(1); @Volatile var text = "" }
     internal val pending = ConcurrentHashMap<Int, Pending>()
 
-    fun workspace(c: Context): File = File(c.filesDir, "workspace").also { it.mkdirs() }
+    /** One shared project root for shell, CPython and workspace file tools. */
+    fun workspace(c: Context): File {
+        val managed = OrionPythonWorkspace(c.applicationContext)
+        when (managed.rootStatus()) {
+            OrionPythonWorkspace.RootStatus.READY -> Unit
+            OrionPythonWorkspace.RootStatus.MISSING -> check(managed.ensureRootForRepair() != null) { "Orion workspace could not be safely initialized." }
+            OrionPythonWorkspace.RootStatus.UNSAFE -> error("Orion workspace path is unsafe; refusing shell access.")
+        }
+        return File(c.applicationContext.filesDir, "orion-python/workspace")
+    }
 
     private fun currentDirectory(c: Context): File {
         val root = workspace(c).canonicalFile
@@ -171,24 +180,23 @@ object ShellRunner {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
                         onOutput("Alpine ready. Running command…\n")
-                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput)
+                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput, workspaceHostPath = workspace(c).absolutePath)
                     }
-                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput)
+                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput, workspaceHostPath = workspace(c).absolutePath)
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
 
 
     fun writeFile(c: Context, rel: String, content: String): String {
-        val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
-        if (content.length > 200_000) return "error: file too large (max 200 KB)"
-        return try { f.parentFile?.mkdirs(); f.writeText(content); "wrote ${content.length} chars to workspace/$rel" } catch (e: Exception) { "error: could not write (" + (e.message ?: "").take(100) + ")" }
+        if (content.toByteArray(Charsets.UTF_8).size > 200_000) return "error: file too large (max 200 KB)"
+        val result = OrionPythonWorkspace(c.applicationContext).write(rel, content)
+        return if (result.startsWith("saved ")) "wrote ${content.length} chars to shared workspace/$rel" else result
     }
 
     fun readFile(c: Context, rel: String): String {
-        val f = safePath(c, rel) ?: return "error: path must be relative and inside Orion's workspace"
-        if (!f.isFile) return "error: no such file in the workspace"
-        return try { ShellPolicy.clip(f.readText(), 8000) } catch (e: Exception) { "error: could not read (" + (e.message ?: "").take(100) + ")" }
+        val result = OrionPythonWorkspace(c.applicationContext).read(rel)
+        return if (result.startsWith("error:")) result else ShellPolicy.clip(result, 8000)
     }
 }
 

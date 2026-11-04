@@ -49,6 +49,33 @@ class OrionPythonWorkspaceRepairTest {
         assertEquals("{\"ok\":true}", workspace.read("orion_acceptance_test/report.json"))
         assertTrue(workspace.read("/workspace/missing.txt").startsWith("error:"))
         assertTrue(workspace.read("/data/local/tmp/escape.txt").startsWith("error:"))
+        assertTrue(workspace.write(".env", "secret=never").startsWith("error:"))
+        assertTrue(workspace.write("projects/demo/.env", "secret=never").startsWith("error:"))
+    }
+
+
+    @Test fun shellAndPythonShareTheSameMultiFileProjectWorkspace() {
+        val pythonWorkspace = OrionPythonWorkspace(context)
+        val first = "projects/demo/src/main.py"
+        val second = "projects/demo/src/helpers.py"
+        assertTrue(ShellRunner.writeFile(context, first, "from helpers import answer\nprint(answer())").startsWith("wrote "))
+        assertTrue(pythonWorkspace.write(second, "def answer():\n    return 42\n").startsWith("saved "))
+        assertEquals("from helpers import answer\nprint(answer())", pythonWorkspace.read(first))
+        assertEquals("def answer():\n    return 42\n", ShellRunner.readFile(context, second))
+        assertEquals(root.canonicalFile, ShellRunner.workspace(context).canonicalFile)
+        assertTrue(pythonWorkspace.list().contains(first))
+        assertTrue(pythonWorkspace.list().contains(second))
+    }
+
+    @Test fun sharedProjectWorkspaceAllowsDependencyTreesButKeepsListingsFocused() {
+        val workspace = OrionPythonWorkspace(context)
+        assertTrue(workspace.write("projects/webapp/project.json", "{\"language\":\"javascript\"}").startsWith("saved "))
+        assertTrue(workspace.write("projects/webapp/src/index.js", "export const ok = true;").startsWith("saved "))
+        assertTrue(workspace.write("projects/webapp/node_modules/example/index.js", "module.exports = true;").startsWith("saved "))
+        val listing = workspace.list()
+        assertTrue(listing.contains("projects/webapp/src/index.js"))
+        assertFalse(listing.contains("node_modules"))
+        assertEquals(256L * 1024 * 1024, OrionPythonWorkspace.MAX_TOTAL_BYTES)
     }
 
     @Test fun diagnosticsReportMissingWorkspaceRootWithEvidence() {

@@ -21,8 +21,38 @@ class ExtensionSandbox(unittest.TestCase):
         self.assertEqual((r["result"], r["printed"]), (1, "hi\n"))
 
     def test_policy_rejections(self):
-        for src in ["import os", "def f(): pass", "while True: pass", "RESULT = INPUT.keys()", "x = open('f')", "x = __import__('os')", "RESULT = (lambda: 1)()"]:
+        for src in ["import os", "while True: pass", "RESULT = INPUT.keys()", "x = open('f')", "x = __import__('os')", "RESULT = (lambda: 1)()"]:
             self.assertFalse(ext(src)["ok"], src)
+
+    def test_functions_while_try_fstrings_and_safe_methods_are_supported(self):
+        source = """def total(values):
+    result = 0
+    for index in range(len(values)):
+        result += values[index]
+    return result
+step = 0
+while step < 3:
+    step += 1
+try:
+    value = 1 / 0
+except ZeroDivisionError:
+    value = 42
+finally:
+    finished = True
+items = [3, 1]
+items.append(2)
+items.sort()
+label = f"sum={total(items):02d}"
+RESULT = {"sum": total(items), "step": step, "value": value, "finished": finished, "items": items, "label": label, "text": "  ORION  ".strip().lower()}
+"""
+        result = ext(source)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["result"], {"sum": 6, "step": 3, "value": 42, "finished": True, "items": [1, 2, 3], "label": "sum=06", "text": "orion"})
+
+    def test_extension_while_loop_is_stopped_by_step_budget(self):
+        result = ext("while True: pass")
+        self.assertFalse(result["ok"])
+        self.assertIn("20000-step loop budget", result["error"])
 
     def test_growth_is_capped(self):
         self.assertFalse(ext("x=[0]\nfor i in range(1000):\n    x = x + x")["ok"])

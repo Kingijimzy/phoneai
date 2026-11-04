@@ -6,6 +6,13 @@ import org.junit.Test
 class ShellPolicyTest {
     private fun r(c: String) = ShellPolicy.classify(c)
 
+    @Test fun languageRuntimeVersionChecksAreReadOnlyAndDoNotRequireApproval() {
+        listOf("python3 --version", "node --version", "npm --version", "java -version", "javac -version", "gradle --version", "kotlinc -version", "which node", "which gradle")
+            .forEach { command -> assertEquals(command, ShellRisk.SAFE, ShellPolicy.classify(command)) }
+        assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk add nodejs npm"))
+        assertEquals(ShellRisk.ASK, ShellPolicy.classify("npm install express"))
+    }
+
     @Test fun harmlessReadCommandsRunAtOnce() {
         listOf("ls -la", "cat notes.txt", "grep -n todo notes.txt | head -5", "echo hi > out.txt", "mkdir -p src/app && touch src/app/a.kt", "git status", "date; uname -a", "python --version", "python3 --version", "python3 -V", "command -v python3", "which python")
             .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }

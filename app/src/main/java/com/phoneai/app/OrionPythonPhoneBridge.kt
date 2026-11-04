@@ -214,6 +214,8 @@ class _OrionPhone:
             return result.get("result")
         return call
 phone = _OrionPhone()
+# Isolated mode excludes the current directory; expose only Orion's private project workspace for sibling imports.
+sys.path.insert(0, "/workspace")
 def _orion_audit(event, args):
     if event == "socket.getaddrinfo":
         host = args[0] if args else None
