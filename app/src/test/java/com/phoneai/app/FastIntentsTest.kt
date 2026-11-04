@@ -12,6 +12,12 @@ class FastIntentsTest {
         assertEquals("afrobeats", r.query); assertEquals("youtube", r.app)
     }
 
+    @Test fun openYoutubeMusicAndPlayNamedTrackUsesDirectMediaRoute() {
+        val result = FastIntents.parse("open YouTube Music and play Asake What Up My G") as FastIntents.Intent.PlayMedia
+        assertEquals("asake what up my g", result.query)
+        assertEquals("youtube music", result.app)
+    }
+
     @Test fun playOnSpotify() {
         val r = FastIntents.parse("play Burna Boy on Spotify") as FastIntents.Intent.PlayMedia
         assertEquals("burna boy", r.query); assertEquals("spotify", r.app)

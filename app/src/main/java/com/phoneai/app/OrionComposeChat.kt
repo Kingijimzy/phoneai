@@ -661,10 +661,17 @@ internal fun OrionComposeChatScreen(
                         } else null
                     )
                 }
-                itemsIndexed(activityEvents, key = { _, event -> "activity-${event.eventId}" }) { _, event ->
-                    OrionComposeActivityCard(event)
+                // Keep the conversation primary: show one live task card for the latest
+                // task only. Full event history remains available from the Tasks surface.
+                OrionActivityTimeline.latestChatCard(activityEvents)?.let { event ->
+                    item(key = "activity-${event.eventId}") { OrionComposeActivityCard(event) }
                 }
-                if (busy) item(key = "orion-thinking-indicator") { ThinkingIndicator() }
+                val assistantAlreadyStreaming = lines.lastOrNull()?.let {
+                    it.kind == "ai" && it.text.isNotBlank()
+                } == true
+                if (busy && !assistantAlreadyStreaming) {
+                    item(key = "orion-thinking-indicator") { ThinkingIndicator() }
+                }
             }
         }
 

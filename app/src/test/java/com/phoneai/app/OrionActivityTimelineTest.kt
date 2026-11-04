@@ -92,6 +92,16 @@ class OrionActivityTimelineTest {
         assertEquals(setOf("task-stream-task-a", "task-stream-task-b"), cards.map { it.eventId }.toSet())
     }
 
+    @Test fun chatSurfaceShowsOnlyTheLatestTaskCardWhileHistoryRemainsInTimeline() {
+        val older = OrionActivityEvent("old", "task-old", OrionActivityKind.TOOL,
+            OrionActivityStatus.SUCCEEDED, "Old task", "completed", 10)
+        val newer = OrionActivityEvent("new", "task-new", OrionActivityKind.TOOL,
+            OrionActivityStatus.ACTIVE, "Current task", "working", 20)
+        assertEquals("new", OrionActivityTimeline.latestChatCard(listOf(older, newer))?.eventId)
+        assertEquals("old", OrionActivityTimeline.latestChatCard(listOf(older))?.eventId)
+        assertNull(OrionActivityTimeline.latestChatCard(emptyList()))
+    }
+
     @Test fun elapsedTimeClampsClockSkewAndFormatsLongRuns() {
         assertEquals("0s", OrionActivityTimeline.elapsedLabel(2_000, 1_000))
         assertEquals("12s", OrionActivityTimeline.elapsedLabel(1_000, 13_000))

@@ -4,6 +4,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OrionObjectiveGraphTest {
+    @Test fun deterministicPlanFallbackCreatesSequentialDependenciesWithoutModelEvidence() {
+        val graph = OrionObjectiveGraph.fromPlan(
+            "Create, test, debug and verify a project",
+            listOf("Create the project", "Implement the feature", "Run tests", "Fix the bug", "Verify all tests"),
+            sequential = true
+        )
+        assertNotNull(graph)
+        assertEquals(listOf("step_1", "step_2", "step_3", "step_4", "step_5"), graph!!.ordered().map { it.id })
+        assertEquals(emptyList<String>(), graph.nodes.first().dependsOn)
+        assertEquals(listOf("step_1"), graph.nodes[1].dependsOn)
+        assertEquals(listOf("step_4"), graph.nodes[4].dependsOn)
+        assertTrue(graph.nodes.all { it.status == OrionObjectiveGraph.Status.PENDING && it.evidence.isEmpty() })
+    }
+
+    @Test fun deterministicPlanFallbackRejectsInsufficientOrBlankPlans() {
+        assertNull(OrionObjectiveGraph.fromPlan("Task", listOf("Only one step"), sequential = true))
+        assertNull(OrionObjectiveGraph.fromPlan(" ", listOf("First", "Second"), sequential = true))
+        assertNull(OrionObjectiveGraph.fromPlan("Task", listOf("First", "  "), sequential = false))
+    }
+
+    @Test fun taskCentreBookkeepingDoesNotConsumeOrRequireObjectiveDispatch() {
+        assertFalse(OrionObjectiveGraph.requiresObjectiveDispatch("task_add"))
+        assertFalse(OrionObjectiveGraph.requiresObjectiveDispatch("task_update"))
+        assertFalse(OrionObjectiveGraph.requiresObjectiveDispatch("task_list"))
+        assertTrue(OrionObjectiveGraph.requiresObjectiveDispatch("workspace_read"))
+        assertTrue(OrionObjectiveGraph.requiresObjectiveDispatch("python_exec"))
+    }
+
     @Test fun parsesAndOrdersDependenciesBeforeDependents() {
         val result = OrionObjectiveGraph.parse(
             """{"objectives":[{"id":"deploy","title":"Deploy after validation","dependsOn":["test"]},{"id":"test","title":"Run tests"},{"id":"audit","title":"Audit source"}]}""",
