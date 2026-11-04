@@ -175,9 +175,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             try {
                 agent.run(goal.prompt)
                 AutonomyGoalStore.markRan(this, goal.id, "ran")
+                LifeLoop.notify(this, "Orion ran a scheduled goal", goal.prompt.take(160) + " — finished. Open Orion to see the result.")
                 main.post { mainChatListener?.onMessage("note", "Scheduled goal ${goal.id} finished.") }
             } catch (e: Exception) {
                 AutonomyGoalStore.markRan(this, goal.id, "error: " + (e.message ?: "failed"))
+                LifeLoop.notify(this, "Orion goal failed", goal.prompt.take(160) + " — " + (e.message ?: "failed"))
                 main.post { mainChatListener?.onMessage("note", "Scheduled goal ${goal.id} failed: " + (e.message ?: "error")) }
             } finally {
                 main.post { finishRun() }

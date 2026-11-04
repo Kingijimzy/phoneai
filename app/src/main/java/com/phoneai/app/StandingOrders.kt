@@ -138,6 +138,21 @@ object LifeLoop {
         return posted
     }
 
+    /** One-off notification for a background goal; same permission and channel rules as standing orders. */
+    fun notify(c: Context, title: String, text: String): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel(CHANNEL, "Orion standing orders", NotificationManager.IMPORTANCE_DEFAULT))
+        val open = PendingIntent.getActivity(c, 84021, c.packageManager.getLaunchIntentForPackage(c.packageName) ?: Intent(), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        @Suppress("DEPRECATION")
+        val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(c, CHANNEL) else android.app.Notification.Builder(c)
+        nm.notify(84200 + title.hashCode().and(0xff), b.setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title).setContentText(text.take(160))
+            .setStyle(android.app.Notification.BigTextStyle().bigText(text.take(900)))
+            .setContentIntent(open).setAutoCancel(true).build())
+        return true
+    }
+
     private fun post(c: Context, kind: String, text: String): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
