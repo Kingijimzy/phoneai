@@ -14,7 +14,7 @@ internal class OrionPythonWorkspace(context: Context) {
         const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
         private const val MAX_ENTRIES = 50_000
         private val IGNORED_LIST_DIRECTORIES = setOf("node_modules", ".gradle", ".git", ".idea", "build", "dist", "target", "__pycache__", ".venv", "venv")
-        private val NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,179}$")
+        private val NAME = Regex("^[A-Za-z0-9.][A-Za-z0-9._/-]{0,179}$")
     }
     enum class RootStatus { MISSING, READY, UNSAFE }
 
@@ -94,7 +94,7 @@ internal class OrionPythonWorkspace(context: Context) {
         ensureRoot()
         return root.walkTopDown()
             .onEnter { it == root || it.name !in IGNORED_LIST_DIRECTORIES }
-            .filter { it != root && it.isFile && !it.isHidden }
+            .filter { it != root && it.isFile && (!it.isHidden || it.name == ".gitignore") }
             .take(500).map { root.toPath().relativize(it.toPath()).toString() }
             .sorted().joinToString("\n").ifBlank { "(workspace empty)" }.take(12_000)
     }
@@ -152,7 +152,10 @@ internal class OrionPythonWorkspace(context: Context) {
             path.startsWith("/") -> return null
             else -> path
         }
-        if (!NAME.matches(relative) || relative.split('/').any { it.isBlank() || it == "." || it == ".." }) return null
+        val segments = relative.split('/')
+        if (!NAME.matches(relative) || segments.any {
+                it.isBlank() || it == "." || it == ".." || (it.startsWith(".") && it != ".gitignore")
+            }) return null
         return relative
     }
 
