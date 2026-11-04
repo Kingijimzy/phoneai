@@ -21,6 +21,7 @@ MAX_INT_BITS = 4096
 MAX_INPUT = 8000
 MAX_RUN_SECONDS = 5.0
 MAX_EXTENSION_SECONDS = 2.0
+MAX_STEPS = 20000
 
 class Rejected(Exception):
     pass
@@ -41,6 +42,7 @@ _SAFE = {
     "list": list, "dict": dict, "set": set, "tuple": tuple,
     "str": str, "int": int, "float": float, "bool": bool,
     "all": all, "any": any, "reversed": reversed,
+    "isinstance": isinstance, "type": type,
 }
 
 _ALLOWED_NODES = (
@@ -52,6 +54,8 @@ _ALLOWED_NODES = (
     ast.UAdd, ast.USub, ast.Not, ast.And, ast.Or,
     ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn,
     ast.ListComp, ast.comprehension, ast.Import, ast.ImportFrom, ast.alias,
+    ast.FunctionDef, ast.arguments, ast.arg, ast.Return, ast.While, ast.Try,
+    ast.ExceptHandler, ast.Raise, ast.JoinedStr, ast.FormattedValue,
 )
 
 _PHONE_METHODS = {
@@ -80,7 +84,7 @@ _MODULE_PATHS = {
     "asyncio.run", "asyncio.sleep",
 }
 _ALLOWED_IMPORTS = {"json", "datetime", "math", "re", "asyncio", "urllib.parse"}
-_SAFE_OBJECT_METHODS = {"get", "keys", "values", "items", "lower", "upper", "strip", "split", "startswith", "endswith", "isoformat", "strftime", "timestamp", "weekday", "total_seconds", "group", "groups", "start", "end"}
+_SAFE_OBJECT_METHODS = {"get", "keys", "values", "items", "lower", "upper", "strip", "lstrip", "rstrip", "split", "rsplit", "splitlines", "join", "replace", "startswith", "endswith", "find", "rfind", "count", "capitalize", "title", "swapcase", "casefold", "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower", "append", "extend", "insert", "pop", "remove", "clear", "sort", "reverse", "copy", "index", "isoformat", "strftime", "timestamp", "weekday", "total_seconds", "group", "groups", "start", "end"}
 _SAFE_OBJECT_ATTRS = {"year", "month", "day", "hour", "minute", "second", "microsecond", "tzinfo", "hostname", "port", "scheme", "netloc", "path", "params", "query", "fragment", "group", "groups", "start", "end", "isoformat", "strftime", "timestamp", "weekday", "date", "time", "total_seconds", "get", "keys", "values", "items", "lower", "upper", "strip", "split", "startswith", "endswith"}
 
 def _path(node):
@@ -187,8 +191,74 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
         return _safe_module("urllib")
     return module
 
+def _safe_method(obj, name, *args):
+    if name not in _SAFE_OBJECT_METHODS:
+        raise Rejected("method is not allowlisted")
+    if isinstance(obj, list):
+        if name in {"append", "insert"}:
+            if len(obj) >= MAX_SEQ: raise Rejected("list size limit exceeded")
+            getattr(obj, name)(*args)
+            return None
+        if name == "extend":
+            values = list(args[0])
+            _check_seq(len(obj) + len(values))
+            obj.extend(values)
+            return None
+        if name == "sort":
+            obj.sort()
+            return None
+        if name in {"reverse", "clear"}:
+            getattr(obj, name)()
+            return None
+        if name in {"pop", "remove"}:
+            return getattr(obj, name)(*args)
+        if name in {"copy", "count", "index"}:
+            return getattr(obj, name)(*args)
+    if isinstance(obj, str):
+        if name == "join":
+            values = list(args[0])
+            if len(values) > MAX_SEQ or sum(len(str(v)) for v in values) + max(0, len(values)-1)*len(obj) > MAX_SEQ:
+                raise Rejected("string result exceeds the size limit")
+            return obj.join(values)
+        if name == "replace":
+            old, new = str(args[0]), str(args[1])
+            count = args[2] if len(args) > 2 else -1
+            if len(new) > 1000: raise Rejected("replacement text is too large")
+            count = min(obj.count(old), MAX_SEQ) if count < 0 else min(int(count), MAX_SEQ)
+            result = obj.replace(old, new, count)
+            _check_seq(len(result))
+            return result
+        result = getattr(obj, name)(*args)
+        if isinstance(result, str): _check_seq(len(result))
+        return result
+    if isinstance(obj, dict) and name in {"get", "keys", "values", "items"}:
+        return getattr(obj, name)(*args)
+    if name in {"isoformat", "strftime", "timestamp", "weekday", "total_seconds", "group", "groups", "start", "end"}:
+        result = getattr(obj, name)(*args)
+        if isinstance(result, str): _check_seq(len(result))
+        return result
+    raise Rejected("method is not available for this value type")
+
+
+def _safe_fstring_value(value, conversion=-1, format_spec=""):
+    if len(format_spec) > 40 or "{" in format_spec or "}" in format_spec:
+        raise Rejected("f-string format specification is too complex")
+    import re as _fmt_re
+    for number in _fmt_re.findall(r"\d+", format_spec):
+        if int(number) > 1000:
+            raise Rejected("f-string width or precision exceeds 1000")
+    if conversion == 114: value = repr(value)
+    elif conversion == 115: value = str(value)
+    elif conversion == 97: value = ascii(value)
+    if format_spec: value = format(value, format_spec)
+    else: value = str(value)
+    _check_seq(len(value))
+    return value
+
+
 def _validate(tree, allow_phone=False):
     nodes = list(ast.walk(tree))
+    function_names = {node.name for node in nodes if isinstance(node, ast.FunctionDef)}
     if len(nodes) > MAX_NODES:
         raise Rejected("script is too complex")
     loops = 0
@@ -197,6 +267,17 @@ def _validate(tree, allow_phone=False):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     }
     for node in nodes:
+        if isinstance(node, ast.FunctionDef):
+            if node.decorator_list or node.returns is not None or node.type_comment is not None:
+                raise Rejected("decorated and annotated functions are not supported")
+            if node.args.vararg or node.args.kwarg or node.args.kwonlyargs or node.args.kw_defaults:
+                raise Rejected("functions support positional parameters only")
+        if isinstance(node, ast.ExceptHandler):
+            if node.type is not None and not (isinstance(node.type, ast.Name) and node.type.id in {"Exception", "ValueError", "TypeError", "ZeroDivisionError", "KeyError", "IndexError"}):
+                raise Rejected("only common safe exception types may be caught")
+        if isinstance(node, ast.FormattedValue):
+            if node.format_spec is not None and any(isinstance(part, ast.FormattedValue) or not isinstance(part, ast.Constant) or not isinstance(part.value, str) for part in node.format_spec.values):
+                raise Rejected("f-string format specification must be literal text")
         if isinstance(node, ast.Attribute):
             phone_valid = (allow_phone and id(node) in allowed_phone_attributes and
                            isinstance(node.value, ast.Name) and node.value.id == "phone" and
@@ -231,17 +312,18 @@ def _validate(tree, allow_phone=False):
                           isinstance(node.func.value, ast.Name) and node.func.value.id == "phone" and
                           node.func.attr in _PHONE_METHODS)
             safe_module = isinstance(node.func, ast.Attribute) and _path(node.func) in _MODULE_PATHS
-            safe_object_method = (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and
-                                  node.func.value.id != "phone" and node.func.attr in _SAFE_OBJECT_METHODS)
-            if not (safe_builtin or safe_phone or safe_module or safe_object_method):
+            safe_object_method = (isinstance(node.func, ast.Attribute) and node.func.attr in _SAFE_OBJECT_METHODS and
+                                  not (isinstance(node.func.value, ast.Name) and node.func.value.id in {"phone", "json", "datetime", "math", "re", "asyncio", "urllib"}))
+            safe_user_function = isinstance(node.func, ast.Name) and node.func.id in function_names
+            if not (safe_builtin or safe_phone or safe_module or safe_object_method or safe_user_function):
                 raise Rejected("only approved built-ins and registered phone capabilities may be called")
             if node.keywords:
                 raise Rejected("keyword arguments are not supported")
         if isinstance(node, ast.Name) and node.id.startswith("_"):
             raise Rejected("private names are not allowed")
-        if isinstance(node, ast.For):
+        if isinstance(node, (ast.For, ast.While)):
             loops += 1
-            if not isinstance(node.iter, ast.Call) or not isinstance(node.iter.func, ast.Name) or node.iter.func.id != "range":
+            if isinstance(node, ast.For) and (not isinstance(node.iter, ast.Call) or not isinstance(node.iter.func, ast.Name) or node.iter.func.id != "range"):
                 raise Rejected("for loops must iterate over bounded range()")
         if isinstance(node, ast.ListComp):
             if len(node.generators) > 1:
@@ -288,6 +370,33 @@ def _pow(a, b):
     return pow(a, b)
 
 class _Guard(ast.NodeTransformer):
+    def visit_For(self, node):
+        self.generic_visit(node)
+        node.body.insert(0, ast.Expr(value=ast.Call(func=ast.Name(id="_tick", ctx=ast.Load()), args=[], keywords=[])))
+        return node
+
+    def visit_While(self, node):
+        self.generic_visit(node)
+        node.body.insert(0, ast.Expr(value=ast.Call(func=ast.Name(id="_tick", ctx=ast.Load()), args=[], keywords=[])))
+        return node
+
+    def visit_Call(self, node):
+        self.generic_visit(node)
+        if isinstance(node.func, ast.Attribute) and node.func.attr in _SAFE_OBJECT_METHODS:
+            if isinstance(node.func.value, ast.Name) and node.func.value.id in {"phone", "json", "datetime", "math", "re", "asyncio", "urllib"}:
+                return node
+            return ast.copy_location(ast.Call(func=ast.Name(id="_safe_method", ctx=ast.Load()),
+                args=[node.func.value, ast.Constant(node.func.attr)] + node.args, keywords=[]), node)
+        return node
+
+    def visit_FormattedValue(self, node):
+        self.generic_visit(node)
+        spec = ""
+        if node.format_spec is not None:
+            spec = "".join(part.value for part in node.format_spec.values)
+        return ast.copy_location(ast.Call(func=ast.Name(id="_safe_fstring_value", ctx=ast.Load()),
+            args=[node.value, ast.Constant(node.conversion), ast.Constant(spec)], keywords=[]), node)
+
     """Routes + and * through size-checked helpers so a short loop cannot grow data without bound."""
     @staticmethod
     def _call(name, left, right):
@@ -320,7 +429,12 @@ def _prepare(source, allow_phone=False):
     return compile(tree, "<orion-approved-python>", "exec")
 
 def _scope(extra=None):
-    scope = {"__builtins__": dict(_SAFE, __import__=_safe_import), "_add": _add, "_mul": _mul, "_pow": _pow}
+    steps = [0]
+    def tick():
+        steps[0] += 1
+        if steps[0] > MAX_STEPS:
+            raise Rejected("execution exceeded the 20000-step loop budget")
+    scope = {"__builtins__": dict(_SAFE, __import__=_safe_import), "_add": _add, "_mul": _mul, "_pow": _pow, "_tick": tick, "_safe_method": _safe_method, "_safe_fstring_value": _safe_fstring_value}
     if extra:
         scope.update(extra)
     return scope
