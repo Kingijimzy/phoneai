@@ -56,10 +56,10 @@ class OrionPythonWorkspaceRepairTest {
         val pythonWorkspace = OrionPythonWorkspace(context)
         val first = "projects/demo/src/main.py"
         val second = "projects/demo/src/helpers.py"
-        assertTrue(ShellRunner.writeFile(context, first, "from helpers import answer\\nprint(answer())").startsWith("wrote "))
-        assertTrue(pythonWorkspace.write(second, "def answer():\\n    return 42\\n").startsWith("saved "))
-        assertEquals("from helpers import answer\\nprint(answer())", pythonWorkspace.read(first))
-        assertEquals("def answer():\\n    return 42\\n", ShellRunner.readFile(context, second))
+        assertTrue(ShellRunner.writeFile(context, first, "from helpers import answer\nprint(answer())").startsWith("wrote "))
+        assertTrue(pythonWorkspace.write(second, "def answer():\n    return 42\n").startsWith("saved "))
+        assertEquals("from helpers import answer\nprint(answer())", pythonWorkspace.read(first))
+        assertEquals("def answer():\n    return 42\n", ShellRunner.readFile(context, second))
         assertEquals(root.canonicalFile, ShellRunner.workspace(context).canonicalFile)
         assertTrue(pythonWorkspace.list().contains(first))
         assertTrue(pythonWorkspace.list().contains(second))
