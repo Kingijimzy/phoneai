@@ -1276,6 +1276,19 @@ Rules:
                         android.content.ComponentName.unflattenFromString(component)?.packageName == svc.packageName
                     }.getOrDefault(false)
                 }
+            },
+            // Accessibility is a special access, not a runtime permission. Read Android's
+            // authoritative enabled-service list; omitting this key made discovery default to
+            // UNKNOWN and the request-time orchestrator block every app-control action.
+            "accessibility" to state {
+                val enabled = android.provider.Settings.Secure.getString(
+                    svc.contentResolver,
+                    android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                ).orEmpty()
+                val expected = android.content.ComponentName(svc, PhoneAiService::class.java)
+                enabled.split(':').any { component ->
+                    android.content.ComponentName.unflattenFromString(component) == expected
+                } && Prefs.accessibilityDisclosureAccepted(svc)
             }
         )
     }
@@ -1849,8 +1862,12 @@ Rules:
         // BrowserActivity tags these requests so general web-search shortcuts cannot steal
         // them and turn an action request into a page summary or a separate search.
         val browserActionTask = command.contains("ORION_BROWSER_ACTION_TASK:", ignoreCase = true)
+        // A deterministic one-intent route must win over generic compound-action classification.
+        // Otherwise "open YouTube Music and play ..." is incorrectly promoted to a graph task
+        // and can be stranded by model-generated planning instead of reaching play_media.
         val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command) &&
-            !OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)
+            !OrionCommandIntentPolicy.isCalculatorExecutionRequest(command) &&
+            FastIntents.parse(command) == null
         if (resumeRequest) {
             if (OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null) {
                 ui.say("I do not have a paused task to resume. Tell me what you would like me to do.")
@@ -2387,11 +2404,28 @@ Rules:
                     }
                 }
             }
-            val proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
+            var proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
             val requiresSequentialGraph = Regex("(?i)\\b(?:depends on one another|in that order|sequential(?:ly)?)\\b").containsMatchIn(inputCommand)
-            val graphHasRequiredStructure = proposedObjectiveGraph != null &&
+            var graphHasRequiredStructure = proposedObjectiveGraph != null &&
                 proposedObjectiveGraph.nodes.size >= 2 &&
                 (!requiresSequentialGraph || proposedObjectiveGraph.nodes.drop(1).all { it.dependsOn.isNotEmpty() })
+            // Some providers return a valid ordered plan array but omit/mangle objective_graph.
+            // Convert that already-visible plan into a deterministic graph instead of spending
+            // repeated model turns asking for JSON the provider may never produce.
+            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
+                val plan = step.optJSONArray("plan")
+                val titles = plan?.let { arr -> (0 until minOf(arr.length(), 24)).map { arr.optString(it).trim() } }.orEmpty()
+                val fallback = OrionObjectiveGraph.fromPlan(
+                    currentTask.ifBlank { inputCommand }, titles, requiresSequentialGraph
+                )
+                if (fallback != null && OrionObjectiveGraph.save(svc, fallback)) {
+                    proposedObjectiveGraph = OrionObjectiveGraph.load(svc)
+                    graphHasRequiredStructure = proposedObjectiveGraph != null &&
+                        proposedObjectiveGraph.nodes.size >= 2 &&
+                        (!requiresSequentialGraph || proposedObjectiveGraph.nodes.drop(1).all { it.dependsOn.isNotEmpty() })
+                    if (graphHasRequiredStructure) ui.note("[TASK:PLAN] Saved a deterministic objective graph from the provider's ordered plan.")
+                }
+            }
             if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
                 graphRepairAttempts++
                 if (graphRepairAttempts > 2) {
