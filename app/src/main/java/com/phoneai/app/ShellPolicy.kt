@@ -15,7 +15,8 @@ internal object ShellPolicy {
     // Keep these anchored: do not turn arbitrary Python scripts or package-manager commands into SAFE.
     private val safeDiagnostics = listOf(
         Regex("""^(?:python(?:3(?:\.\d+)?)?)\s+(?:--version|-V)$"""),
-        Regex("""^(?:command\s+-v|which)\s+(?:python(?:3(?:\.\d+)?)?)$""")
+        Regex("""^(?:command\s+-v|which)\s+(?:python(?:3(?:\.\d+)?)?|node(?:js)?|npm|java|javac|gradle|kotlinc)$"""),
+        Regex("""^(?:node(?:js)?|npm|java|javac|gradle|kotlinc|python(?:3(?:\.\d+)?)?)\s+(?:--version|-version|-V)$""")
     )
 
     // Keep only catastrophic/designed-to-exfiltrate targets as hard blocks. Other
