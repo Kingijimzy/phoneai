@@ -23,7 +23,7 @@ internal object OrionObjectiveGraph {
     ) {
         fun ordered(): List<Objective> = topologicalOrder(nodes)
         fun ready(): List<Objective> = ordered().filter { node ->
-            node.status != Status.COMPLETE && node.status != Status.FAILED &&
+            (node.status == Status.PENDING || node.status == Status.READY || node.status == Status.BLOCKED || node.status == Status.FAILED) &&
                 node.dependsOn.all { dep -> nodes.firstOrNull { it.id == dep }?.status == Status.COMPLETE }
         }
         fun isComplete(): Boolean = nodes.isNotEmpty() && nodes.all { it.status == Status.COMPLETE }
@@ -37,20 +37,21 @@ internal object OrionObjectiveGraph {
     private const val PREFS = "orion_objective_graph"
     private const val LAST_SESSION_KEY = "last_session"
     private fun graphKey(sessionId: String) = "graph_session_" + sessionId
+    private val idPattern = Regex("^[a-z][a-z0-9_-]{0,39}$")
 
     fun parse(raw: String, objective: String, restoreState: Boolean = false): ParseResult {
         val root = try { JSONObject(raw) } catch (_: Exception) { return ParseResult.Invalid("Objective graph is not valid JSON.") }
         val arr = root.optJSONArray("objectives") ?: return ParseResult.Invalid("Objective graph requires an objectives array.")
         if (arr.length() < 1) return ParseResult.Invalid("Objective graph needs at least one objective.")
-        if (arr.length() > 12) return ParseResult.Invalid("Objective graph is limited to 12 objectives.")
+        if (arr.length() > 24) return ParseResult.Invalid("Objective graph is limited to 24 objectives.")
         val nodes = ArrayList<Objective>()
         val seen = HashSet<String>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: return ParseResult.Invalid("Objective entry $i is not an object.")
             val id = o.optString("id").trim().lowercase()
-            if (id.isBlank() || !id.matches(Regex("[a-z0-9_]{1,40}"))) return ParseResult.Invalid("Objective id must be snake_case [a-z0-9_].")
+            if (!idPattern.matches(id)) return ParseResult.Invalid("Objective id must be snake_case [a-z0-9_-].")
             if (!seen.add(id)) return ParseResult.Invalid("Duplicate objective id '$id'.")
-            val title = o.optString("title").trim().ifBlank { o.optString("name").trim() }.take(200)
+            val title = o.optString("title").trim().ifBlank { o.optString("name").trim() }.take(240)
             if (title.isBlank()) return ParseResult.Invalid("Objective '$id' needs a title.")
             val depsArr = o.optJSONArray("dependsOn") ?: o.optJSONArray("depends_on") ?: JSONArray()
             val deps = ArrayList<String>()
@@ -60,10 +61,10 @@ internal object OrionObjectiveGraph {
                 if (d == id) return ParseResult.Invalid("Objective '$id' cannot depend on itself.")
                 deps += d
             }
-            if (deps.size > 6) return ParseResult.Invalid("Objective '$id' has too many dependencies.")
+            if (deps.size > 24) return ParseResult.Invalid("Objective '$id' has too many dependencies.")
             if (deps.size != deps.distinct().size) return ParseResult.Invalid("Objective '$id' has invalid or duplicate dependencies.")
             val status = if (restoreState) {
-                runCatching { Status.valueOf(o.optString("status", "PENDING")) }.getOrDefault(Status.PENDING)
+                runCatching { Status.valueOf(o.optString("status", "PENDING").uppercase()) }.getOrDefault(Status.PENDING)
             } else Status.PENDING
             val evidence = if (restoreState) o.optString("evidence").take(1000) else ""
             nodes += Objective(id, title, deps, status, evidence)
@@ -124,11 +125,32 @@ internal object OrionObjectiveGraph {
 
     fun requiresObjectiveDispatch(tool: String): Boolean = tool !in setOf("task_add")
 
+    /**
+     * Resolve the planner's objective_id at dispatch time.
+     * Models invent descriptive IDs; bind safely to a unique ready/running node without guessing parallel work.
+     */
     fun resolveDispatchId(graph: Graph, requestedId: String?, tool: String = ""): String? {
         val candidate = requestedId?.trim()?.lowercase().orEmpty()
         graph.nodes.firstOrNull { it.id == candidate }?.let { return it.id }
-        if (graph.nodes.size == 1) return graph.nodes.first().id
-        return null
+
+        val hints = when (tool.lowercase()) {
+            "open_app", "lookup_app", "list_apps", "open_deep_link", "system_intent",
+            "read_screen", "look", "battery", "device_info" -> setOf("phone", "device", "app", "capability")
+            "python_exec" -> setOf("python", "diagnostic", "script", "execute")
+            "workspace_read" -> setOf("verify", "report", "workspace", "read")
+            "workspace_write", "save_file" -> setOf("save", "report", "file", "workspace", "script")
+            else -> setOf(tool.lowercase().replace(Regex("[^a-z0-9]+"), "_"))
+        }
+        val ready = graph.ready()
+        val semanticMatches = ready.filter { node ->
+            val words = (node.id + " " + node.title).lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 }.toSet()
+            hints.any { hint -> hint in words || (hint.length > 4 && node.title.contains(hint, ignoreCase = true)) }
+        }
+        if (semanticMatches.size == 1) return semanticMatches.single().id
+
+        return graph.nodes.singleOrNull { it.status == Status.RUNNING }?.id
+            ?: ready.singleOrNull()?.id
+            ?: graph.nodes.singleOrNull()?.id
     }
 
     fun startExecution(context: Context, id: String): Boolean {
