@@ -391,6 +391,16 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
     }
 }
 
+internal fun isCompactExecutionNote(item: OrionChatLine): Boolean {
+    if (item.kind != "note") return false
+    val text = item.text
+    return listOf(
+        "[TASK:RUNNING]", "[TASK:OUTPUT]", "[TASK:APPROVAL]", "[TASK:RECOVER]",
+        "[TASK:FAILED]", "[TASK:COMPLETE]", "[TASK:CANCELLED]", "[TASK:INTERRUPTED]",
+        "[TOOL:", "[TOOL_RESULT:", "[APPROVAL:", "[EVENT:", "[SHELL:", "[BROWSER:", "[SPECIALIST:"
+    ).any { text.startsWith(it) }
+}
+
 private val ChatInk = Color(0xFF050505)
 private val ChatPanel = Color(0xFF141414)
 private val ChatPanelRaised = Color(0xFF202020)
@@ -626,15 +636,16 @@ internal fun OrionComposeChatScreen(
                 }
             }
         } else {
+            val visibleLines = lines.filterNot(::isCompactExecutionNote)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 22.dp, bottom = 20.dp)
             ) {
-                itemsIndexed(lines, key = { _, item -> item.id }) { index, item ->
+                itemsIndexed(visibleLines, key = { _, item -> item.id }) { index, item ->
                     val previousUserMessage = if (item.kind == "ai") {
-                        lines.take(index).lastOrNull { it.kind == "me" }?.text
+                        visibleLines.take(index).lastOrNull { it.kind == "me" }?.text
                     } else null
                     ChatBubble(
                         item = item,
