@@ -86,14 +86,14 @@ internal class OrionProjectWorkspace(context: Context) {
             "test/main.test.js" to "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { main } from '../src/index.js';\n\ntest('main is callable', () => { assert.equal(typeof main, 'function'); });\n"
         )
         "kotlin" -> mapOf(
-            "README.md" to "# $name\n\nKotlin/JVM project. Requires JDK 17+ and Gradle 8.7+. Run: gradle test.\n",
+            "README.md" to "# $name\n\nKotlin/JVM project. Requires JDK 21+ and Gradle 8.14+. Run: gradle test.\n",
             "settings.gradle.kts" to "rootProject.name = \"$name\"\n",
             "build.gradle.kts" to "plugins { kotlin(\"jvm\") version \"2.0.21\" }\n\nrepositories { mavenCentral() }\n\ndependencies { testImplementation(kotlin(\"test-junit5\")); testRuntimeOnly(\"org.junit.jupiter:junit-jupiter-engine:5.10.2\") }\n\ntasks.test { useJUnitPlatform() }\n",
             "src/main/kotlin/Main.kt" to "fun main() {\n    println(\"Hello from $name\")\n}\n",
             "src/test/kotlin/MainTest.kt" to "import kotlin.test.Test\nimport kotlin.test.assertEquals\n\nclass MainTest {\n    @Test fun example() { assertEquals(42, 40 + 2) }\n}\n"
         )
         else -> mapOf(
-            "README.md" to "# $name\n\nAndroid application starter. Build with Gradle after installing a compatible JDK and Android SDK (platform 35 and build tools).\n",
+            "README.md" to "# $name\n\nAndroid application starter. Requires JDK 17+, Gradle 8.9+, Android SDK platform 35 and matching build tools before assembleDebug can run.\n",
             "settings.gradle.kts" to "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\ndependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }\nrootProject.name = \"$name\"\ninclude(\":app\")\n",
             "build.gradle.kts" to "plugins { id(\"com.android.application\") version \"8.7.3\" apply false; id(\"org.jetbrains.kotlin.android\") version \"2.0.21\" apply false }\n",
             "app/build.gradle.kts" to "plugins { id(\"com.android.application\"); id(\"org.jetbrains.kotlin.android\") }\n\nandroid { namespace = \"$androidPackage\"; compileSdk = 35; defaultConfig { applicationId = \"$androidPackage\"; minSdk = 23; targetSdk = 35; versionCode = 1; versionName = \"1.0\" } }\n",
