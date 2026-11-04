@@ -280,9 +280,9 @@ class Tools(private val svc: PhoneAiService) {
             val high = item.optString("highPrice24h", "unknown")
             val low = item.optString("lowPrice24h", "unknown")
             val volume = item.optString("volume24h", "unknown")
-            "Bybit spot ticker for " + clean + " (public market data, not a trading signal):\\nLast price: " + last +
-                "\\n24h change: " + change + "" +
-                "\\n24h high: " + high + "\\n24h low: " + low + "\\n24h base volume: " + volume
+            "Bybit spot ticker for " + clean + " (public market data, not a trading signal):\nLast price: " + last +
+                "\n24h change: " + change + "" +
+                "\n24h high: " + high + "\n24h low: " + low + "\n24h base volume: " + volume
         } catch (e: Exception) { "Bybit market lookup failed (" + e.javaClass.simpleName + ")." }
     }
     fun telegramStatus(): String = TelegramBridge.status(svc)

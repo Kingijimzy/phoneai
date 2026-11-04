@@ -448,7 +448,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         } else {
             val dates = java.text.SimpleDateFormat("d MMM yyyy · h:mm a", java.util.Locale.getDefault())
             chats.forEachIndexed { index, chat ->
-                val preview = chat.messages.lastOrNull()?.second.orEmpty().replace("\\n", " ").trim()
+                val preview = chat.messages.lastOrNull()?.second.orEmpty().replace("\n", " ").trim()
                 val card = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -528,7 +528,7 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
         root.addView(scrollView, LinearLayout.LayoutParams(-1, 0, 1f))
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         actions.addView(historyActionButton("Copy transcript") {
-            val body = messages.joinToString("\\n\\n") { (kind, text) -> (if (kind == "me") "YOU" else "ORION") + "\\n" + text }
+            val body = messages.joinToString("\n\n") { (kind, text) -> (if (kind == "me") "YOU" else "ORION") + "\n" + text }
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
             clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Orion chat history", body))
             Toast.makeText(this@MainChatActivity, "Transcript copied", Toast.LENGTH_SHORT).show()

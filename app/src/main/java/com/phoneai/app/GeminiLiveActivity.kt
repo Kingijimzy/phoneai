@@ -309,7 +309,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                     pendingWakeTranscript = true
                     transcripts.addLast("YOU: $trimmed")
                     while (transcripts.size > 6) transcripts.removeFirst()
-                    transcriptView.text = transcripts.joinToString("\\n")
+                    transcriptView.text = transcripts.joinToString("\n")
                     return@runOnUiThread
                 }
                 val command = SharedToolSurfacePolicy.commandAfterWake(text)
@@ -320,7 +320,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                     lastHandoffCommand = command
                     transcripts.addLast("YOU: Orion, $command")
                     while (transcripts.size > 6) transcripts.removeFirst()
-                    transcriptView.text = transcripts.joinToString("\\n")
+                    transcriptView.text = transcripts.joinToString("\n")
                     val service = PhoneAiService.instance
                     if (service == null) {
                         statusView.text = "ORION ACCESSIBILITY SERVICE UNAVAILABLE"
@@ -338,7 +338,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             val prefix = if (fromModel) "ORION: " else "YOU: "
             transcripts.addLast(prefix + text.trim())
             while (transcripts.size > 6) transcripts.removeFirst()
-            transcriptView.text = transcripts.joinToString("\\n")
+            transcriptView.text = transcripts.joinToString("\n")
         }
     }
 

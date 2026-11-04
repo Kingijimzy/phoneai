@@ -71,7 +71,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             for (p in Providers.all) {
                 val configured = p.noKey || Prefs.hasKey(c, p.id)
                 val cd = (((cooldown[p.id] ?: 0L) - now) / 1000).coerceAtLeast(0L)
-                sb.append("\\n• ").append(p.label).append(": ")
+                sb.append("\n• ").append(p.label).append(": ")
                     .append(readinessLabel(configured, p.requiresPaidOptIn, allowPaid, cd))
                 if (configured) {
                     sb.append("; local request counter ").append(usedLastMinute(p.id)).append("/").append(budget(p.id))
@@ -80,10 +80,10 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 }
                 lastFailure[p.id]?.let { sb.append("; last error: ").append(it.take(140)) }
             }
-            sb.append("\\nSelected chat provider: ").append(Prefs.provider(c, false).label)
-            sb.append("\\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
-            lastSuccess["chat"]?.let { sb.append("\\nLast successful chat: ").append(it) }
-            lastSuccess["vision"]?.let { sb.append("\\nLast successful screen-vision: ").append(it) }
+            sb.append("\nSelected chat provider: ").append(Prefs.provider(c, false).label)
+            sb.append("\nSelected screen-vision provider: ").append(Prefs.provider(c, true).label)
+            lastSuccess["chat"]?.let { sb.append("\nLast successful chat: ").append(it) }
+            lastSuccess["vision"]?.let { sb.append("\nLast successful screen-vision: ").append(it) }
             return sb.toString().trim()
         }
     }
