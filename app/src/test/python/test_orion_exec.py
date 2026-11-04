@@ -15,7 +15,7 @@ class OrionExecTests(unittest.TestCase):
         previous_trace = sys.gettrace()
         try:
             orion_exec.MAX_RUN_SECONDS = 0.001
-            result = orion_exec.run("for x in range(1000):\n    for y in range(1000):\n        value = x + y")
+            result = orion_exec.run("values = [sum(range(1000)) for _ in range(1000)]\nprint(sum(values))")
             self.assertIn("time limit", result)
             self.assertIs(sys.gettrace(), previous_trace)
         finally:
@@ -29,7 +29,7 @@ class OrionExecTests(unittest.TestCase):
         try:
             orion_exec.MAX_EXTENSION_SECONDS = 0.001
             result = json.loads(orion_exec.run_extension(
-                "for x in range(1000):\n    for y in range(1000):\n        value = x + y",
+                "values = [sum(range(1000)) for _ in range(1000)]\nprint(sum(values))",
                 "{}"
             ))
             self.assertFalse(result["ok"])
