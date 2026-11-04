@@ -28,7 +28,7 @@ internal object ShellExecutionRouting {
 
     /** Dependency downloads and project builds legitimately need longer than interactive commands. */
     fun commandTimeoutMs(command: String): Long {
-        val dependencyOrBuild = Regex("""(^|[;&|]\s*)(npm\s+(install|ci)|pip3?\s+install|(?:\./)?gradle\s+.*(build|test|assemble))\b""")
+        val dependencyOrBuild = Regex("""(^|[;&|]\s*)(npm\s+(install|ci)|pip3?\s+install|(?:\./)?gradlew?\s+.*(build|test|assemble))\b""")
             .containsMatchIn(command)
         return if (isPackageOperation(command) || dependencyOrBuild) 180_000L else 60_000L
     }
