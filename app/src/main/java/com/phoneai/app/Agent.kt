@@ -855,9 +855,38 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val from = maxOf(0, chatHist.length() - 6)
         for (i in from until chatHist.length()) msgs.put(chatHist.getJSONObject(i))
         msgs.put(msg("user", command))
-        // The service already switches the UI to THINKING before this worker starts.
-        // Avoid a delayed spoken filler: it interrupts the answer flow and makes Orion feel slower.
-        val raw = talkNim.chat(msgs, false, 220, 0.6).trim()
+        // Stream ordinary conversational replies into the live assistant bubble. Keep the
+        // cache fast path above, but never make a fresh request wait for the entire response.
+        // Suppress the internal ACTION routing sentinel so it is never flashed to the user.
+        val visiblePrefix = StringBuilder()
+        var visibleStarted = false
+        val raw = talkNim.chat(msgs, false, 220, 0.6, onDelta = { delta ->
+            if (!stopped && delta.isNotEmpty()) {
+                if (visibleStarted) {
+                    ui.stream(delta)
+                } else {
+                    visiblePrefix.append(delta)
+                    val candidate = visiblePrefix.toString()
+                    val normalized = candidate.trimStart()
+                    val actionPrefix = "ACTION"
+                    if (normalized.equals(actionPrefix, ignoreCase = true)) {
+                        // Wait for the next token: the model may be emitting the routing sentinel.
+                    } else if (normalized.startsWith("$actionPrefix ", ignoreCase = true) ||
+                        normalized.startsWith("$actionPrefix\\n", ignoreCase = true) ||
+                        normalized.equals("$actionPrefix.", ignoreCase = true)) {
+                        visiblePrefix.setLength(0)
+                    } else if (!actionPrefix.startsWith(normalized, ignoreCase = true)) {
+                        visibleStarted = true
+                        ui.stream(candidate)
+                        visiblePrefix.setLength(0)
+                    }
+                }
+            }
+        }).trim()
+        if (visiblePrefix.isNotEmpty() && !visibleStarted &&
+            !visiblePrefix.toString().trim().equals("ACTION", ignoreCase = true)) {
+            ui.stream(visiblePrefix.toString())
+        }
         if (raw.isEmpty() || raw.uppercase().startsWith("ACTION")) return null
         chatHist.put(msg("user", command))
         chatHist.put(msg("assistant", raw))
@@ -1079,7 +1108,9 @@ RESPONSE QUALITY AND FORMAT:
         liveHistory.put(msg("user", command))
         while (liveHistory.length() > 9) liveHistory.remove(1)
         val answer = try {
-            talkNim.chat(liveHistory, false, 180, 0.55).trim()
+            talkNim.chat(liveHistory, false, 180, 0.55, onDelta = { delta ->
+                if (!stopped && delta.isNotEmpty()) ui.stream(delta)
+            }).trim()
         } catch (e: Exception) {
             ""
         }
