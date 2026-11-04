@@ -347,7 +347,29 @@ private fun OrionComposeActivityCard(event: OrionActivityEvent) {
                 }, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold
             )
         }
-        if (event.kind == OrionActivityKind.TOOL && (event.title.contains("terminal", true) || event.summary.contains("TASK:OUTPUT", true))) {
+        val terminalEvidence = event.typedEvidence.filterIsInstance<OrionActivityEvidence.Terminal>().lastOrNull()
+        if (terminalEvidence != null) {
+            Text(
+                "$ " + terminalEvidence.commandLabel,
+                color = Color(0xFFB8B8B8), fontSize = 9.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                modifier = Modifier.padding(start = 13.dp, top = 4.dp)
+            )
+            if (terminalEvidence.outputTail.isNotBlank()) {
+                Text(
+                    terminalEvidence.outputTail.takeLast(400),
+                    color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 12.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    maxLines = if (expanded) 8 else 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(start = 13.dp, top = 2.dp)
+                        .clip(RoundedCornerShape(5.dp)).background(Color(0xFF080808)).padding(6.dp)
+                )
+            }
+            terminalEvidence.exitCode?.let { code ->
+                Text("exit $code", color = if (code == 0) Color(0xFFB8CDBD) else Color(0xFFE09B9B),
+                    fontSize = 8.sp, modifier = Modifier.padding(start = 13.dp, top = 2.dp))
+            }
+        } else if (event.kind == OrionActivityKind.TOOL && (event.title.contains("terminal", true) || event.summary.contains("TASK:OUTPUT", true))) {
             Text(
                 terminalOutput.lineSequence().lastOrNull().orEmpty().takeLast(180).ifBlank { "Starting process…" },
                 color = Color(0xFFB8CDBD), fontSize = 9.sp, lineHeight = 11.sp,

@@ -67,6 +67,18 @@ class OrionActivityTimelineTest {
         assertTrue(cards.single().evidence.any { it.contains("FAILED") && it.contains("workspace_read") })
     }
 
+    @Test fun untracedEventsFallBackToSessionStreamInsteadOfMessageCards() {
+        val sessionTask = "session-session-42"
+        val timeline = OrionActivityTimeline()
+        timeline.append(OrionActivityEvent("accepted", sessionTask, OrionActivityKind.THINKING,
+            OrionActivityStatus.ACTIVE, "Request accepted", "started", 1))
+        timeline.append(OrionActivityEvent("tool", sessionTask, OrionActivityKind.TOOL,
+            OrionActivityStatus.ACTIVE, "Python", "running", 2))
+        timeline.append(OrionActivityEvent("approval", sessionTask, OrionActivityKind.APPROVAL,
+            OrionActivityStatus.WAITING, "Approval", "approved", 3))
+        assertEquals(1, timeline.compactForChat().size)
+    }
+
     @Test fun chatProjectionKeepsSeparateTasksAsSeparateStreamCards() {
         val timeline = OrionActivityTimeline()
         timeline.append(OrionActivityEvent("a1", "task-a", OrionActivityKind.THINKING,
