@@ -1,9 +1,8 @@
 name: patch-objective-graph-autonomy
-# Disabled: replaced by patch-orion-routing-and-graph.yml
 on:
   workflow_dispatch:
 jobs:
   noop:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "disabled"
+      - run: echo disabled
