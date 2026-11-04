@@ -117,7 +117,7 @@ object AgentPolicy {
         "remember", "update_memory", "forget", "recall", "knowledge_search", "ask_agent", "undo_last", "undo_status",
         "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user",
         "goal_add", "goal_list", "goal_remove", "goal_toggle", "autonomy_toggle", "autonomy_status",
-        "profile_show", "profile_forget" -> "orion_core"
+        "profile_show", "profile_forget", "skill_install", "skill_export" -> "orion_core"
         else -> null
     }
 
