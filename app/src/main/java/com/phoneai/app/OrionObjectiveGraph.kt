@@ -129,8 +129,13 @@ internal object OrionObjectiveGraph {
      * so safely bind the call to that node. Multi-node graphs must supply an exact known ID;
      * guessing there could execute work against the wrong dependency.
      */
-    /** Planner bookkeeping must not be mistaken for execution of a graph objective. */
-    fun requiresObjectiveDispatch(tool: String): Boolean = tool !in setOf("task_add")
+    /**
+     * Task Centre bookkeeping is not execution of an objective capability.
+     * These tools manage user-visible task records; they must not inherit the active
+     * objective's dependency gate or create execution evidence for that objective.
+     */
+    fun requiresObjectiveDispatch(tool: String): Boolean =
+        tool !in setOf("task_add", "task_update", "task_list")
 
     fun resolveDispatchId(graph: Graph, requestedId: String?, tool: String = ""): String? {
         val candidate = requestedId?.trim()?.lowercase().orEmpty()
@@ -210,7 +215,7 @@ internal object OrionObjectiveGraph {
             if (node.evidence.isNotBlank()) append("; last_executor_evidence_id=${node.evidence.take(80)}")
             appendLine()
         }
-        appendLine("Only work on objectives whose dependencies are COMPLETE. Update status only from execution evidence. A tool call being attempted is not completion evidence. Preserve blocked and failed nodes; do not silently mark them complete.")
+        appendLine("Only execute objectives whose dependencies are COMPLETE. Task Centre tools task_add, task_update and task_list manage separate user task records; NEVER call task_update to mark an objective complete or to change this graph. Objective completion is recorded only with complete_objectives using the exact executor evidence_id already attached to that objective. A tool call being attempted is not completion evidence. Preserve blocked and failed nodes; do not silently mark them complete.")
     }
 
     fun save(context: Context, graph: Graph): Boolean = runCatching {
