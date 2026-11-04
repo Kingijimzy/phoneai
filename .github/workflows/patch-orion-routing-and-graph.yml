@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [orion/objective-graph-autonomy-fix]
+    paths:
+      - "app/src/main/java/com/phoneai/app/Tools.kt"
+      - ".github/workflows/patch-orion-routing-and-graph.yml"
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -10,68 +13,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: orion/objective-graph-autonomy-fix
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Patch Agent + Tools
-        shell: bash
+      - name: Native-first playMedia
         run: |
-          set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
           import re
-
-          agent = Path("app/src/main/java/com/phoneai/app/Agent.kt")
-          at = agent.read_text()
-          if "Local fallback objective graph installed" in at:
-              print("Agent already has fallback")
-          else:
-              # Minimal surgical replace of the hard-stop say+return pair
-              old = (
-                  'OrionTasksCapabilityExecutor.pauseRun(svc)\n'
-                  '                    ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")\n'
-                  '                    return'
-              )
-              new = (
-                  'val fallback = OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)\n'
-                  '                    if (fallback != null) {\n'
-                  '                        ui.note("[TASK:OBJECTIVE] Local fallback objective graph installed (" + fallback.nodes.size + " nodes); continuing execution.")\n'
-                  '                    } else {\n'
-                  '                        OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)\n'
-                  '                        ui.note("[TASK:OBJECTIVE] Single-objective fallback installed; continuing guarded execution.")\n'
-                  '                    }'
-              )
-              if old not in at:
-                  raise SystemExit("Agent hard-stop snippet not found")
-              # Also need to wrap the else continue branch: after this replace, graphRepairAttempts>2 no longer returns,
-              # but the following history.put still runs. Insert early structure fix by replacing a larger span.
-              agent.write_text(at.replace(old, new, 1))
-              at = agent.read_text()
-              # Prevent forced re-prompt after fallback: after our new block, skip the repair history.put when attempts>2
-              # Convert: if attempts>2 { fallback } history.put; continue
-              # into if attempts>2 { fallback } else { history.put; continue }
-              span = re.search(
-                  r"(if \(graphRepairAttempts > 2\) \{.*?\n                    \})\n(                history\.put\(msg\(\"user\", \"Your response must include a valid objective_graph.*?\)\)\n                continue)",
-                  at,
-                  flags=re.S,
-              )
-              if not span:
-                  print("WARNING: could not wrap else-continue; manual check recommended")
-              else:
-                  at = at[:span.start()] + span.group(1) + "\n                } else {\n" + span.group(2) + "\n                }" + at[span.end():]
-                  # We may have broken braces — use safer approach: only the hard-stop replace and remove the continue after fallback by changing continue to only in else
-                  agent.write_text(at)
-              print("Agent patched")
-
           tools = Path("app/src/main/java/com/phoneai/app/Tools.kt")
           tt = tools.read_text()
-          if "OPEN_APP_ONLY" in tt and "openOnly" in tt:
-              print("Tools already native-first")
-          else:
-              m = re.search(r"    fun playMedia\(query: String, app: String\?\): String \{.*?\n    \}\n", tt, flags=re.S)
-              if not m:
-                  raise SystemExit("playMedia function not found")
-              new_play = '''    fun playMedia(query: String, app: String?): String {
+          if "openOnly" in tt and "OPEN_APP_ONLY" in tt:
+              print("already patched")
+              raise SystemExit(0)
+          m = re.search(r"    fun playMedia\(query: String, app: String\?\): String \{.*?\n    \}\n", tt, flags=re.S)
+          if not m:
+              raise SystemExit("playMedia not found")
+          new_play = '''    fun playMedia(query: String, app: String?): String {
         val openOnly = query == FastIntents.OPEN_APP_ONLY || query.isBlank()
         val wanted = when (app) {
             "spotify" -> "com.spotify.music"
@@ -108,7 +63,7 @@ jobs:
                 val launchIntent = svc.packageManager.getLaunchIntentForPackage(wanted)
                 if (launchIntent != null) {
                     val r2 = launch(launchIntent, 300)
-                    if (r2 == "ok") return "opened " + labelOf(wanted) + " (play-from-search unavailable for \"" + query + "\")"
+                    if (r2 == "ok") return "opened " + labelOf(wanted) + " (play-from-search unavailable)"
                 }
             }
         }
@@ -121,14 +76,31 @@ jobs:
         return if (r == "ok") "opened YouTube results for $query" else r
     }
 '''
-              tools.write_text(tt[:m.start()] + new_play + tt[m.end():])
-              print("Tools.playMedia patched")
+          tools.write_text(tt[:m.start()] + new_play + tt[m.end():])
+          print("patched playMedia")
+          PY
+      - name: Agent hard-stop soft patch
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/com/phoneai/app/Agent.kt")
+          t = p.read_text()
+          if "Local fallback objective graph installed" in t:
+              print("agent already ok")
+              raise SystemExit(0)
+          old = 'ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")\n                    return'
+          new = 'ui.note("[TASK:OBJECTIVE] Model graph failed; installing local fallback and continuing.")\n                    OrionObjectiveGraph.ensureStructuredGraph(svc, inputCommand, sequential = true)\n                        ?: OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)'
+          if old not in t:
+              print("agent marker missing; skip")
+              raise SystemExit(0)
+          p.write_text(t.replace(old, new, 1))
+          print("agent hard-stop replaced")
           PY
       - name: Commit
         run: |
           git config user.name orion-bot
           git config user.email orion@users.noreply.github.com
-          git add -A
+          git add app/src/main/java/com/phoneai/app/Tools.kt app/src/main/java/com/phoneai/app/Agent.kt || true
           git diff --cached --quiet && echo no-change && exit 0
-          git commit -m "fix: graph fallback + native music app routing"
-          git push origin HEAD
+          git commit -m "fix: native music open + continue after graph plan failure"
+          git push

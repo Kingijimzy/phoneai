@@ -1,64 +1,9 @@
 name: patch-objective-graph-autonomy
+# Disabled: replaced by patch-orion-routing-and-graph.yml
 on:
   workflow_dispatch:
-  push:
-    branches: [orion/objective-graph-autonomy-fix]
 jobs:
-  patch:
+  noop:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: orion/objective-graph-autonomy-fix
-      - name: Soften multi-objective hard-stop in Agent.kt
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("app/src/main/java/com/phoneai/app/Agent.kt")
-          t = p.read_text()
-          old = '''            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
-                graphRepairAttempts++
-                if (graphRepairAttempts > 2) {
-                    OrionTasksCapabilityExecutor.pauseRun(svc)
-                    ui.say("I could not create and persist a valid multi-objective graph, so I stopped before executing any objective. No objective is marked complete.")
-                    return
-                }
-                history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for every sequential prerequisite. For a request that says 'in that order', every node after the first must depend on an earlier node. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
-                continue
-            }'''
-          new = '''            if (OrionCommandIntentPolicy.requiresStructuredTaskPlanning(inputCommand) && !graphHasRequiredStructure) {
-                graphRepairAttempts++
-                if (graphRepairAttempts > 2) {
-                    // Autonomy path: never hard-stop the whole task because the model failed JSON planning.
-                    val fallback = OrionObjectiveGraph.ensureStructuredGraph(
-                        svc, inputCommand, sequential = true
-                    )
-                    if (fallback != null) {
-                        ui.note("[TASK:OBJECTIVE] Local fallback objective graph installed (" + fallback.nodes.size + " nodes); continuing execution.")
-                    } else {
-                        OrionObjectiveGraph.ensureSingleMain(svc, inputCommand)
-                        ui.note("[TASK:OBJECTIVE] Single-objective fallback installed; continuing guarded execution.")
-                    }
-                } else {
-                    history.put(msg("user", "Your response must include a valid objective_graph with at least two distinct objective nodes and explicit dependsOn IDs for every sequential prerequisite. For a request that says 'in that order', every node after the first must depend on an earlier node. Persist the graph before proposing any tool call. Do not answer with prose alone and do not execute a tool yet."))
-                    continue
-                }
-            }'''
-          if old not in t:
-              raise SystemExit("target block not found in Agent.kt")
-          p.write_text(t.replace(old, new, 1))
-          print("Agent.kt patched")
-          PY
-      - name: Commit patch
-        shell: bash
-        run: |
-          git config user.name "orion-bot"
-          git config user.email "orion@users.noreply.github.com"
-          git add app/src/main/java/com/phoneai/app/Agent.kt
-          if git diff --cached --quiet; then echo "no change"; exit 0; fi
-          git commit -m "fix: fall back to local objective graph instead of hard-stop"
-          git push origin orion/objective-graph-autonomy-fix
+      - run: echo "disabled"
