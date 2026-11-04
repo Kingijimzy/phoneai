@@ -1,4 +1,7 @@
-"""Constrained in-process Python runner for Orion. No imports, attributes, file, or network APIs."""
+"""Constrained in-process Python runner for Orion. No imports, attributes, file, or network APIs.
+
+Keep MAX_SOURCE/MAX_OUTPUT aligned with ExecutionBroker.PYTHON in ExecutionBudget.kt.
+"""
 import ast
 import contextlib
 import io
