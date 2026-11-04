@@ -64,7 +64,7 @@ object ShellRunner {
     fun runBuiltin(c: Context, command: String, timeoutSec: Long = 20, onOutput: (String) -> Unit = {}): String {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        ExecutionBroker.sourceError(ExecutionBroker.SHELL, normalized)?.let { return it }
         // Defense in depth: callers must still obtain approval for ASK-class commands.
         if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
             return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
@@ -81,9 +81,10 @@ object ShellRunner {
         return try {
             val p = ProcessBuilder("/system/bin/sh", "-c", normalized).directory(currentDirectory(c)).redirectErrorStream(true).start()
             val out = StringBuffer()
-            val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(512); while (true) { val n = r.read(buf); if (n < 0) break; val chunk = String(buf, 0, n); synchronized(out) { if (out.length < 20000) out.append(chunk.take(20000 - out.length)) }; runCatching { onOutput(chunk) } } } } catch (_: Exception) { } }
+            val reader = Thread { try { p.inputStream.bufferedReader().use { r -> val buf = CharArray(512); while (true) { val n = r.read(buf); if (n < 0) break; val chunk = String(buf, 0, n); synchronized(out) { if (out.length < ExecutionBroker.SHELL.maxOutputChars) out.append(chunk.take(ExecutionBroker.SHELL.maxOutputChars - out.length)) }; runCatching { onOutput(chunk) } } } } catch (_: Exception) { } }
             reader.start()
-            if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
+            val limit = ExecutionBroker.timeoutSeconds(ExecutionBroker.SHELL, timeoutSec)
+            if (!p.waitFor(limit, TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${limit}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
             (if (p.exitValue() == 0) "" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }
@@ -97,12 +98,14 @@ object ShellRunner {
         }
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
-        if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
+        ExecutionBroker.sourceError(ExecutionBroker.TERMUX, normalized)?.let { return it }
         if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
             return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
         }
-        val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
-            .coerceIn(1L, 180L)
+        val effectiveTimeout = ExecutionBroker.timeoutSeconds(
+            ExecutionBroker.TERMUX,
+            maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
+        )
         val id = ids.incrementAndGet()
         val box = Pending(); pending[id] = box
         return try {
