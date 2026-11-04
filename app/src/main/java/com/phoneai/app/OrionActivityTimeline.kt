@@ -92,6 +92,10 @@ internal class OrionActivityTimeline(private val maxEvents: Int = 300) {
         }.sortedBy { it.timestampMs }
 
     companion object {
+        /** Chat keeps only the latest task card visible; the Tasks screen owns full history. */
+        fun latestChatCard(events: List<OrionActivityEvent>): OrionActivityEvent? =
+            events.maxWithOrNull(compareBy<OrionActivityEvent> { it.timestampMs }.thenBy { it.eventId })
+
         fun elapsedLabel(startedAtMs: Long, nowMs: Long): String {
             val seconds = ((nowMs - startedAtMs).coerceAtLeast(0L)) / 1000L
             return when {
