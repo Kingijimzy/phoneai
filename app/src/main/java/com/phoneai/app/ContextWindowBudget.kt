@@ -2,7 +2,14 @@ package com.phoneai.app
 
 /** Priority-aware context-window packing. Token estimates are conservative, not provider tokenization. */
 internal object ContextWindowBudget {
-    data class Packed(val text: String, val estimatedTokens: Int, val includedSections: Int, val omittedSections: Int)
+    data class Packed(
+        val text: String,
+        val estimatedTokens: Int,
+        val includedSections: Int,
+        val omittedSections: Int,
+        val truncatedSections: Int = 0,
+        val omittedSectionLabels: List<String> = emptyList()
+    )
     fun estimateTokens(text: String): Int = (text.length + 3) / 4
     fun priority(section: String): Int {
         val s = section.lowercase()
@@ -29,16 +36,23 @@ internal object ContextWindowBudget {
         val usable = sections.mapIndexedNotNull { index, raw -> raw.trim().takeIf { it.isNotEmpty() }?.let { Triple(index, it, priority(it)) } }
         if (usable.isEmpty()) return Packed("", 0, 0, 0)
         val selected = HashMap<Int, String>()
+        val truncated = linkedSetOf<String>()
+        val omitted = linkedSetOf<String>()
+        fun label(section: String): String = section.lineSequence().firstOrNull().orEmpty()
+            .replace(Regex("\\s+"), " ").take(72).ifBlank { "unnamed context section" }
         var remaining = budget
         val perSectionCap = maxOf(160, budget * 55 / 100)
         usable.sortedWith(compareByDescending<Triple<Int, String, Int>> { it.third }.thenBy { it.first }).forEach { (index, section, _) ->
-            if (remaining <= 0) return@forEach
+            if (remaining <= 0) { omitted += label(section); return@forEach }
             val allowedChars = minOf(remaining, perSectionCap) * 4
             val clipped = if (section.length > allowedChars) section.take(allowedChars) else section
+            if (clipped.length < section.length) truncated += label(section)
             val cost = estimateTokens(clipped) + if (selected.isEmpty()) 0 else 1
             if (cost > 0 && cost <= remaining) { selected[index] = clipped; remaining -= cost }
+            else omitted += label(section)
         }
         val text = usable.mapNotNull { selected[it.first] }.joinToString("\n\n")
-        return Packed(text, estimateTokens(text), selected.size, usable.size - selected.size)
+        return Packed(text, estimateTokens(text), selected.size, usable.size - selected.size,
+            truncated.size, omitted.toList())
     }
 }
