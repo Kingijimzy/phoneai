@@ -67,7 +67,9 @@ internal class OrionProjectWorkspace(context: Context) {
             paths.joinToString("\n") { it.removePrefix("$base/") }
     }
 
-    private fun template(name: String, language: String): Map<String, String> = when (language) {
+    private fun template(name: String, language: String): Map<String, String> {
+        val androidPackage = "com.example.app_" + name.lowercase().replace(Regex("[^a-z0-9_]"), "_")
+        return when (language) {
         "python" -> mapOf(
             "README.md" to "# $name\n\nPython project. Run with: python3 main.py\nTest with: python3 -m unittest discover -s tests -v\n",
             "main.py" to "def main():\n    print(\"Hello from $name\")\n\nif __name__ == \"__main__\":\n    main()\n",
@@ -96,5 +98,6 @@ internal class OrionProjectWorkspace(context: Context) {
             "app/src/main/AndroidManifest.xml" to "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"><application android:theme=\"@android:style/Theme.Material.Light.NoActionBar\" android:label=\"$name\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\"/><category android:name=\"android.intent.category.LAUNCHER\"/></intent-filter></activity></application></manifest>\n",
             "app/src/main/java/com/example/$name/MainActivity.kt" to "package com.example.$name\n\nimport android.app.Activity\nimport android.os.Bundle\nimport android.widget.TextView\n\nclass MainActivity : Activity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContentView(TextView(this).apply { text = \"Hello from $name\"; textSize = 24f })\n    }\n}\n"
         )
+        }
     }
 }
