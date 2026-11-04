@@ -1010,6 +1010,13 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
+        // A paused task keeps its checkpoint until the user explicitly clears it, so the
+        // next command cannot silently replace it (see the checkpoint guard further below).
+        if (Regex("(?i)^(discard|clear) (the )?(saved|paused) task$").matches(command)) {
+            val cleared = AgentCheckpointStore.clear(svc)
+            ui.say(if (cleared) "I cleared the saved task. You can start something new." else "I could not clear the saved task.")
+            return
+        }
         if (!Regex("(?i)^(continue|resume|keep going)\\b").containsMatchIn(command)) {
             try {
                 if (currentTask.isNotBlank() && ExperiencePolicy.isCorrection(command)) ExperienceStore.recordCorrection(svc, currentTask, command)
@@ -1253,9 +1260,18 @@ Rules:
             ui.say(acks[(System.currentTimeMillis() % acks.size).toInt()])
         }
         // Only agent/tool tasks reach this point. Save a checkpoint so process death or the step cap does not erase progress.
-        if (!resumeRequest && !AgentCheckpointStore.begin(svc, command)) {
-            ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
-            return
+        // Never silently replace an unfinished task: resuming or discarding it is the user's call.
+        if (!resumeRequest) {
+            val unfinished = AgentCheckpointStore.pending(svc)
+            if (unfinished != null) {
+                val original = unfinished.optString("command").take(160)
+                ui.say("I still have an unfinished task saved: \"" + original + "\". Say \"continue\" to resume it, or \"discard the saved task\" to clear it before starting something new.")
+                return
+            }
+            if (!AgentCheckpointStore.begin(svc, command)) {
+                ui.say("I could not save a recovery checkpoint, so I did not start the phone actions. Check available storage and try again.")
+                return
+            }
         }
         val requestBudget = AgentHooks.RequestBudget(minOf(MAX_STEPS, AgentPolicy.maxSteps(svc)))
         val taskStartedAt = System.currentTimeMillis()
