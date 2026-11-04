@@ -49,6 +49,8 @@ class OrionPythonWorkspaceRepairTest {
         assertEquals("{\"ok\":true}", workspace.read("orion_acceptance_test/report.json"))
         assertTrue(workspace.read("/workspace/missing.txt").startsWith("error:"))
         assertTrue(workspace.read("/data/local/tmp/escape.txt").startsWith("error:"))
+        assertTrue(workspace.write(".env", "secret=never").startsWith("error:"))
+        assertTrue(workspace.write("projects/demo/.env", "secret=never").startsWith("error:"))
     }
 
 
