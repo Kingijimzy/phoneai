@@ -48,61 +48,48 @@ internal object OrionCentralBrain {
     fun contextFor(context: Context, request: String): String {
         val app = context.applicationContext
         val sections = mutableListOf<String>()
+        val contextLoadDiagnostics = mutableListOf<String>()
+        fun <T> observed(label: String, fallback: T, block: () -> T): T {
+            return try {
+                val value = block()
+                val state = when (value) { null -> "empty"; is String -> if (value.isBlank()) "empty" else "loaded"; is Collection<*> -> if (value.isEmpty()) "empty" else "loaded"; else -> "loaded" }
+                contextLoadDiagnostics += "$label=$state"
+                value
+            } catch (failure: Exception) { contextLoadDiagnostics += "$label=failed:${failure.javaClass.simpleName}"; fallback }
+        }
+        fun <T> observedNullable(label: String, block: () -> T?): T? {
+            return try { val value = block(); contextLoadDiagnostics += "$label=${if (value == null) "empty" else "loaded"}"; value }
+            catch (failure: Exception) { contextLoadDiagnostics += "$label=failed:${failure.javaClass.simpleName}"; null }
+        }
+        fun addObservedSection(label: String, loader: () -> String?) { observedNullable(label, loader)?.takeIf { it.isNotBlank() }?.let { sections += it } }
 
-        val activeConversation = runCatching { ChatHistoryStore.activeSessionId(app) }.getOrNull().orEmpty()
+        val activeConversation = observed("active_session", "") { ChatHistoryStore.activeSessionId(app) }.orEmpty()
         if (activeConversation.isNotBlank()) {
-            runCatching { OrionMultimodalEvidenceStore.promptBlock(app, activeConversation) }
-                .getOrNull()
-                ?.takeIf { it.isNotBlank() }
-                ?.let { sections += it }
+            addObservedSection("multimodal_evidence") { OrionMultimodalEvidenceStore.promptBlock(app, activeConversation) }
         }
 
         // Sensor context is opt-in, coarse, foreground-sampled and short-lived. It is included
         // only while the matching grant remains active; raw sensor vectors never enter prompts.
-        runCatching { OrionSensorContextStore.summary(app) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
-        runCatching { OrionNotificationListener.contextSummary() }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
-        runCatching { OrionDeviceContextProvider.summary(app) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
-        runCatching { OrionLocationContextProvider.summary(app) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
-        runCatching { OrionAppUsageContextProvider.summary(app) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
-        runCatching { OrionRoutinePolicy.promptBlock(app, MemoryStore.all(app)) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it }
+        addObservedSection("sensor_context") { OrionSensorContextStore.summary(app) }
+        addObservedSection("notification_context") { OrionNotificationListener.contextSummary() }
+        addObservedSection("device_context") { OrionDeviceContextProvider.summary(app) }
+        addObservedSection("location_context") { OrionLocationContextProvider.summary(app) }
+        addObservedSection("app_usage_context") { OrionAppUsageContextProvider.summary(app) }
+        addObservedSection("routine_policy") { OrionRoutinePolicy.promptBlock(app, MemoryStore.all(app)) }
 
         // Preserve the existing capability-aware Soul Engine as the source of live state.
-        runCatching { OrionSoulEngine.contextFor(app, request) }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { sections += it.take(5_200) }
+        addObservedSection("soul_engine_context") { OrionSoulEngine.contextFor(app, request)?.take(5_200) }
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
-        val registered = runCatching { ToolRegistry.names().distinct().sorted() }
-            .getOrDefault(emptyList())
-        val enabledPacks = runCatching {
-            AgentPolicy.packs.filter { AgentPolicy.enabled(app, it.id) }.map { it.id }.sorted()
-        }.getOrDefault(emptyList())
-        val skills = runCatching { SkillRegistry.list(app) }.getOrDefault(emptyList())
+        val registered = observed("tool_registry", emptyList<String>()) { ToolRegistry.names().distinct().sorted() }
+        val enabledPacks = observed("enabled_packs", emptyList<String>()) { AgentPolicy.packs.filter { AgentPolicy.enabled(app, it.id) }.map { it.id }.sorted() }
+        val skills = observed("skill_registry", emptyList()) { SkillRegistry.list(app) }
         val enabledSkills = skills.filter { it.enabled }
-        val savedTasks = runCatching { TaskStore.all(app).take(12) }.getOrDefault(emptyList())
-        val taskCount = runCatching { TaskStore.all(app).size }.getOrNull()
-        val distributedTaskSummary = runCatching { OrionDistributedTaskStore(app).summary() }.getOrDefault("delegated_task_ledger=unavailable")
-        val extensionRows = runCatching { SelfExtendingExtensionStore(app).all() }.getOrDefault(emptyList())
+        val savedTasks = observed("task_store_preview", emptyList()) { TaskStore.all(app).take(12) }
+        val taskCount = observedNullable("task_store_count") { TaskStore.all(app).size }
+        val distributedTaskSummary = observed("distributed_task_ledger", "delegated_task_ledger=unavailable") { OrionDistributedTaskStore(app).summary() }
+        val extensionRows = observed("extension_store", emptyList()) { SelfExtendingExtensionStore(app).all() }
         val verifiedExtensions = extensionRows.count {
             it.enabled && it.verified &&
                 it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source)
@@ -156,12 +143,12 @@ internal object OrionCentralBrain {
         // Resolve short follow-ups against the persisted objective before Talk or Command plans.
         // This joins the original request, transcript evidence, objective graph, checkpoint,
         // decisions and learned failure corrections into one provider-neutral continuity frame.
-        val pendingTask = runCatching { AgentCheckpointStore.pending(app) }.getOrNull()
-        val savedGraph = runCatching { OrionObjectiveGraph.load(app) }.getOrNull()
-        val savedSoulGoal = runCatching { SoulEngineState.snapshot(app).goal }.getOrDefault("")
+        val pendingTask = observedNullable("pending_checkpoint") { AgentCheckpointStore.pending(app) }
+        val savedGraph = observedNullable("objective_graph") { OrionObjectiveGraph.load(app) }
+        val savedSoulGoal = observed("soul_goal", "") { SoulEngineState.snapshot(app).goal }
         val activeObjective = pendingTask?.optString("command")?.takeIf { it.isNotBlank() }
             ?: savedGraph?.objective?.takeIf { it.isNotBlank() }.orEmpty()
-        val recentTurns = runCatching { ChatHistoryStore.recent(app, 8) }.getOrDefault(emptyList())
+        val recentTurns = observed("recent_chat_history", emptyList()) { ChatHistoryStore.recent(app, 8) }
             .asReversed().map { hit ->
                 (if (hit.role == "ai" || hit.role == "assistant") "assistant" else "user") to hit.snippet
             }
@@ -230,7 +217,7 @@ internal object OrionCentralBrain {
         }
 
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
-        val learnedExperience = runCatching { ExperienceStore.promptBlock(app, contextQuery, 5) }.getOrDefault("")
+        val learnedExperience = observed("execution_lessons", "") { ExperienceStore.promptBlock(app, contextQuery, 5) }
         if (learnedExperience.isNotBlank()) {
             sections += "RELEVANT EXECUTION LESSONS (cause → correction → verification; hints only)\n" + learnedExperience +
                 "\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
@@ -292,6 +279,7 @@ internal object OrionCentralBrain {
         val packed = ContextWindowBudget.pack(sections, MAX_CONTEXT_CHARS / 4)
         val packingReceipt = buildString {
             appendLine("CENTRAL BRAIN CONTEXT LOAD RECEIPT")
+            appendLine("source_loads=" + contextLoadDiagnostics.joinToString("; ").take(1800))
             appendLine("sections_loaded=${packed.includedSections}; sections_omitted=${packed.omittedSections}; sections_truncated=${packed.truncatedSections}; estimated_tokens=${packed.estimatedTokens}; budget_tokens=${MAX_CONTEXT_CHARS / 4}.")
             if (packed.omittedSectionLabels.isNotEmpty()) {
                 appendLine("omitted_context_sections=" + packed.omittedSectionLabels.take(12).joinToString(" | "))
@@ -300,7 +288,7 @@ internal object OrionCentralBrain {
                 appendLine("Some context was clipped or omitted by the deterministic priority packer. Treat unavailable history and memory as unknown; do not infer that an absent section is empty.")
             }
         }
-        return packed.text + "\\n\\n" + packingReceipt
+        return packed.text + "\n\n" + packingReceipt
     }
 
     /**

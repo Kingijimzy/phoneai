@@ -3,7 +3,7 @@ package com.phoneai.app
 import org.junit.Assert.*
 import org.junit.Test
 
-class ContextWindowBudgetTest {
+class ContextWindowBudgetReceiptTest {
     @Test fun reportsSectionsClippedByPerSectionCap() {
         val packed = ContextWindowBudget.pack(listOf("ORION CENTRAL BRAIN\\n" + "x".repeat(2_000)), maxTokens = 100)
         assertEquals(1, packed.includedSections)
