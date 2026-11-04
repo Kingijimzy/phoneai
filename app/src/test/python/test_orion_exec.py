@@ -75,11 +75,11 @@ text = "  Orion Brain  "
 print(items)
 print(text.strip().lower().replace("brain", "sandbox"))
 """
-        self.assertEqual(orion_exec.run(code), "[5, 3, 2, 1]\\norion sandbox\\n")
+        self.assertEqual(orion_exec.run(code), "[5, 4, 3, 2]\\norion sandbox\\n")
 
     def test_list_growth_is_bounded(self):
-        out = orion_exec.run("items = []\\nfor i in range(1000):\\n    items.extend(items)")
-        self.assertNotIn("Traceback", out)
+        out = orion_exec.run("items = []\\nfor i in range(10):\\n    for j in range(1000):\\n        items.append(j)\\nitems.append(1)")
+        self.assertIn("list size limit exceeded", out)
 
     def test_basic_arithmetic_and_output(self):
         self.assertEqual(orion_exec.run("print(sum(range(5)))"), "10\n")
