@@ -1915,6 +1915,33 @@ Rules:
             "autonomy_status" -> "Background autonomy is ${if (Prefs.autonomyEnabled(svc)) "on" else "off"}. " + AutonomyGoalStore.describe(svc)
             "profile_show" -> UserProfileStore.promptBlock(svc)
             "profile_forget" -> UserProfileStore.forget(svc, a.optString("key"))
+            "skill_export" -> {
+                val id = a.optString("id")
+                val skill = SkillRegistry.list(svc).firstOrNull { it.id == id }
+                if (skill == null) "error: no skill '$id'" else SkillPackageCodec.export(skill)
+            }
+            "skill_install" -> {
+                val (candidate, message) = SkillPackageCodec.parse(a.optString("package"))
+                if (candidate == null) {
+                    "error: $message"
+                } else {
+                    val preview = "Skill ${candidate.id} v${candidate.version}\n${candidate.description}\n" +
+                        "Tools: ${candidate.allowedTools.sorted().joinToString(", ")}\n" +
+                        "Budget: ${candidate.maxCalls} calls / ${candidate.maxDurationMs / 1000}s"
+                    if (!ui.ask("Install this declarative skill? It can only call the listed registered tools, and consequential tools still ask.\n\n$preview")) {
+                        "error: user did not approve the skill installation."
+                    } else {
+                        val registered = SkillRegistry.register(svc, candidate)
+                        if (!registered.allowed) {
+                            "error: ${registered.reason}"
+                        } else {
+                            val enabled = SkillRegistry.setEnabled(svc, candidate.id, true)
+                            if (enabled.allowed) "Installed and enabled skill '${candidate.id}' v${candidate.version}."
+                            else "error: installed but could not enable: ${enabled.reason}"
+                        }
+                    }
+                }
+            }
             "capability_note" -> tools.capabilityNote(a.optString("goal"), a.optString("provider"))
             "morning_brief" -> tools.morningBrief()
             "create_agent" -> tools.createAgent(a.optString("id"), a.optString("name"), a.optString("tagline"), a.optString("persona"))
