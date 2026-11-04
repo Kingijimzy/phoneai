@@ -248,6 +248,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val actionTools = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "swipe_path", "scroll", "type", "key", "open_url", "open_deep_link", "browser_click", "browser_click_verify", "browser_navigate", "browser_back", "browser_scroll", "browser_tabs", "system_intent", "open_file")
         val shouldVerifyAction = tool in actionTools &&
             (tool != "browser_tabs" || !args.optString("action", "list").equals("list", ignoreCase = true))
+        val packageVerifiable = tool in setOf("open_app", "system_intent", "open_deep_link")
+        val beforePackage = if (packageVerifiable) svc.currentPackageName() else ""
         // Capture a real pre-action state where possible, so a later comparison can
         // verify the change instead of merely reporting that a dispatch was accepted.
         if (shouldVerifyAction && (lastScreenSnapshot.isBlank() ||
@@ -294,11 +296,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     )
                     lastScreenBeforeAction = before
                     lastScreenSnapshot = after
+                    val afterPackage = if (packageVerifiable) svc.currentPackageName() else ""
                     val changed = AgentHooks.screenChanged(before, after)
-                    if (changed) {
-                        verifiedResult += "\nLOCAL VERIFY PASS: visible state changed after this action. This is evidence of a UI change, not proof of the user's overall goal."
-                    } else {
-                        verifiedResult = "error: verification failed: no visible screen change was detected after '$tool'. The action is not confirmed; inspect the screen and choose a safe recovery step. Original result: " + result
+                    val packageChanged = packageVerifiable && beforePackage.isNotBlank() &&
+                        afterPackage.isNotBlank() && beforePackage != afterPackage
+                    when (ActionVerificationPolicy.outcome(changed, packageChanged)) {
+                        ActionVerificationPolicy.Outcome.PASS ->
+                            verifiedResult += "\n" + ActionVerificationPolicy.passNote()
+                        ActionVerificationPolicy.Outcome.UNVERIFIED ->
+                            verifiedResult += "\n" + ActionVerificationPolicy.unverifiedNote(tool)
                     }
                 } catch (_: Exception) {
                     verifiedResult = "error: verification unavailable: post-action screen comparison failed; outcome remains unverified. Original result: $result"
@@ -308,7 +314,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val verificationPassed = !shouldVerifyAction || verifiedResult.contains("LOCAL VERIFY PASS:")
         if (!OrionExecutionLoop.completionEvidence(verifiedResult, shouldVerifyAction, verificationPassed) &&
             !verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
-            verifiedResult = "error: execution result did not satisfy the required verification gate; outcome remains unverified. Original result: $verifiedResult"
+            // Unverified is not the same as failed: keep the honest UNVERIFIED marker so the
+            // task can continue and the user can confirm, instead of aborting the whole task.
+            verifiedResult += "\n" + ActionVerificationPolicy.gateNote()
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             // Failure is not a reason to blindly repeat or immediately abandon the task.
