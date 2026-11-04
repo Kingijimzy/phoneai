@@ -468,7 +468,7 @@ def _scope(extra=None):
 
 def _exec_with_deadline(code, scope, timeout_seconds):
     """Cooperative bytecode deadline; C-extension calls retain their own bounds."""
-    deadline = _time.monotonic() + max(0.05, min(float(timeout_seconds), 10.0))
+    deadline = _time.monotonic() + max(0.001, min(float(timeout_seconds), 10.0))
     previous_trace = _sys.gettrace()
 
     def deadline_trace(frame, event, arg):
