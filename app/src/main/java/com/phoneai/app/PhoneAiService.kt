@@ -2129,7 +2129,9 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     // ---------------------------------------------------------------- AgentUi
 
-    override fun say(text: String) {
+    override fun say(raw: String) {
+        // Never show the internal untrusted-data wrapper; keep only the assistant's own words.
+        val text = OrionEvidenceText.strip(raw).ifBlank { raw }
         appendTranscript("ai", text)
         main.post {
             hideThinkingIndicator()

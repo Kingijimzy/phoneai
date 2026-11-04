@@ -2100,9 +2100,15 @@ Rules:
                 "error: web fallback failed (" + e.javaClass.simpleName + ")"
             }
             val answer = if (web.startsWith("Web search results for")) {
-                summarizeSearch(command, web)
+                // Search results are often only links. Read the best pages before giving up.
+                val pages = OrionEvidenceText.links(web, 2).mapNotNull { url ->
+                    if (stopped) null else runCatching { research("fetch_url", JSONObject().put("url", url)) }.getOrNull()
+                        ?.let { OrionEvidenceText.unwrap(it) }?.takeIf { !it.startsWith("error:", true) && it.length > 80 }
+                        ?.let { "Page: $url\n" + it.take(2500) }
+                }
+                summarizeSearch(command, web + if (pages.isEmpty()) "" else "\n\n" + pages.joinToString("\n\n"))
             } else {
-                "I couldn't verify that score from the live scoreboard or web search just now. I won't guess the result.\n" + web
+                "I couldn't verify that score from the live scoreboard or web search just now, and I won't guess the result. Try asking again in a minute, or tell me the competition so I can search it directly."
             }
             logShortcut("live_sports_fallback", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
@@ -3059,8 +3065,12 @@ Rules:
     }
 
     /** Deterministic read shortcuts skip model planning, never the shared dispatch lifecycle. */
-    private fun research(tool: String, args: JSONObject): String =
-        executeWithRecoveryGuard(tool, args)
+    private fun research(tool: String, args: JSONObject): String {
+        val result = executeWithRecoveryGuard(tool, args)
+        // Deterministic shortcuts read, check and summarise web data themselves; the model-facing wrapper
+        // must not break their text checks or leak into the reply the user sees.
+        return if (tool in setOf("live_web_search", "web_search", "live_news", "live_sports", "weather")) OrionEvidenceText.unwrap(result) else result
+    }
 
     /**
      * Runs a deterministic, read-only shortcut through the same durable checkpoint and evidence
