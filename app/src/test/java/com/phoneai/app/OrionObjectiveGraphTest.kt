@@ -24,6 +24,14 @@ class OrionObjectiveGraphTest {
         assertNull(OrionObjectiveGraph.fromPlan("Task", listOf("First", "  "), sequential = false))
     }
 
+    @Test fun taskCentreBookkeepingDoesNotConsumeOrRequireObjectiveDispatch() {
+        assertFalse(OrionObjectiveGraph.requiresObjectiveDispatch("task_add"))
+        assertFalse(OrionObjectiveGraph.requiresObjectiveDispatch("task_update"))
+        assertFalse(OrionObjectiveGraph.requiresObjectiveDispatch("task_list"))
+        assertTrue(OrionObjectiveGraph.requiresObjectiveDispatch("workspace_read"))
+        assertTrue(OrionObjectiveGraph.requiresObjectiveDispatch("python_exec"))
+    }
+
     @Test fun parsesAndOrdersDependenciesBeforeDependents() {
         val result = OrionObjectiveGraph.parse(
             """{"objectives":[{"id":"deploy","title":"Deploy after validation","dependsOn":["test"]},{"id":"test","title":"Run tests"},{"id":"audit","title":"Audit source"}]}""",
