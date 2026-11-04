@@ -38,6 +38,49 @@ class OrionExecTests(unittest.TestCase):
         finally:
             orion_exec.MAX_EXTENSION_SECONDS = original
 
+
+    def test_function_definitions_and_returns_are_supported(self):
+        code = """def add_tax(price, rate):
+    return price + rate
+print(add_tax(100, 15))
+"""
+        self.assertEqual(orion_exec.run(code), "115\\n")
+
+    def test_while_loop_uses_a_hard_step_budget(self):
+        out = orion_exec.run("count = 0\\nwhile True:\\n    count += 1")
+        self.assertIn("20000-step loop budget", out)
+
+    def test_try_except_and_finally_are_supported(self):
+        code = """try:
+    value = 10 / 0
+except ZeroDivisionError:
+    value = 42
+finally:
+    print(f"result={value}")
+"""
+        self.assertEqual(orion_exec.run(code), "result=42\\n")
+
+    def test_f_strings_and_bounded_format_specs_are_supported(self):
+        self.assertEqual(orion_exec.run('name = "Orion"\\nscore = 7\\nprint(f"{name}: {score:03d}")'), "Orion: 007\\n")
+        self.assertIn("width or precision exceeds 1000", orion_exec.run('print(f"{1:1001d}")'))
+
+    def test_common_list_and_string_methods_are_supported(self):
+        code = """items = [3, 1]
+items.append(2)
+items.extend([5, 4])
+items.sort()
+items.reverse()
+items.pop()
+text = "  Orion Brain  "
+print(items)
+print(text.strip().lower().replace("brain", "sandbox"))
+"""
+        self.assertEqual(orion_exec.run(code), "[5, 3, 2, 1]\\norion sandbox\\n")
+
+    def test_list_growth_is_bounded(self):
+        out = orion_exec.run("items = []\\nfor i in range(1000):\\n    items.extend(items)")
+        self.assertNotIn("Traceback", out)
+
     def test_basic_arithmetic_and_output(self):
         self.assertEqual(orion_exec.run("print(sum(range(5)))"), "10\n")
 
