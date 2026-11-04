@@ -11,8 +11,9 @@ internal class OrionPythonWorkspace(context: Context) {
     private val root = File(filesDir, "orion-python/workspace")
     companion object {
         const val MAX_FILE_BYTES = 2 * 1024 * 1024
-        const val MAX_TOTAL_BYTES = 20L * 1024 * 1024
-        private const val MAX_ENTRIES = 2048
+        const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
+        private const val MAX_ENTRIES = 50_000
+        private val IGNORED_LIST_DIRECTORIES = setOf("node_modules", ".gradle", ".git", ".idea", "build", "dist", "target", "__pycache__", ".venv", "venv")
         private val NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]{0,179}$")
     }
     enum class RootStatus { MISSING, READY, UNSAFE }
@@ -91,7 +92,9 @@ internal class OrionPythonWorkspace(context: Context) {
 
     @Synchronized fun list(): String {
         ensureRoot()
-        return root.walkTopDown().filter { it != root && it.isFile && !it.isHidden }
+        return root.walkTopDown()
+            .onEnter { it == root || it.name !in IGNORED_LIST_DIRECTORIES }
+            .filter { it != root && it.isFile && !it.isHidden }
             .take(500).map { root.toPath().relativize(it.toPath()).toString() }
             .sorted().joinToString("\n").ifBlank { "(workspace empty)" }.take(12_000)
     }
@@ -110,7 +113,7 @@ internal class OrionPythonWorkspace(context: Context) {
         if (!insideRoot(parent) || hasSymlink(parent)) return "error: workspace path crossed a symlink boundary"
         val current = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         val previous = if (file.isFile) file.length() else 0L
-        if (current - previous + bytes.size > MAX_TOTAL_BYTES) return "error: workspace storage quota (20 MiB) exceeded"
+        if (current - previous + bytes.size > MAX_TOTAL_BYTES) return "error: workspace storage quota (256 MiB) exceeded"
         val temp = File(parent, ".orion-${file.name}.part")
         return try {
             FileOutputStream(temp).use { it.write(bytes); it.fd.sync() }
