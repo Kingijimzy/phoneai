@@ -138,6 +138,8 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.webkit:webkit:1.11.0")
+    // Durable, deferrable recovery signal for queued local work after process death.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     // Bundled on-device OCR; screen text stays on device until Orion explicitly chooses a tool.
     implementation("com.google.mlkit:text-recognition:16.0.1")
     // CPU TFLite runtime for the optional bundled UI detector; no network inference.
@@ -151,4 +153,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android local unit tests use a real org.json implementation; android.jar stubs throw from JSONObject.put().
     testImplementation("org.json:json:20240303")
+    // Robolectric supplies real Android SQLite and SharedPreferences for repository lifecycle tests.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.work:work-testing:2.9.1")
 }

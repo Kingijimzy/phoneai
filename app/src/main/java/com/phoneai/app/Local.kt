@@ -327,7 +327,6 @@ class Local(
                 val r = tools.recordStop()
                 if (failed(r)) "I couldn't stop the recording. $r" else if (r == "not recording") "I'm not recording right now." else "Recording saved in your Movies folder."
             } else {
-                if (!confirm("Start recording the screen?")) return "Cancelled; I did not start recording."
                 val r = tools.recordStart()
                 if (failed(r)) r.removePrefix("error: ") else "Recording your screen. Say stop recording when you're done."
             }
@@ -434,7 +433,6 @@ class Local(
             !Regex(" and | then ").containsMatchIn(t)
         ) {
             val target = click.groupValues[4]
-            if (!confirm("Tap \"$target\" on the screen?")) return "Cancelled; I did not tap anything."
             val r = tools.clickText(target)
             return if (failed(r)) "I can't see \"$target\" on the screen." else "Done."
         }

@@ -28,6 +28,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: GeminiLiveSession? = null
+    @Volatile private var liveConversationId: String? = null
     private var attachedService: PhoneAiService? = null
     @Volatile private var active = false
     @Volatile private var liveConnected = false
@@ -74,14 +75,14 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
         }
 
     private fun control(text: String, primary: Boolean = false, action: () -> Unit): TextView =
-        label(text, 13f, if (primary) Color.BLACK else 0xFFF3FFF9.toInt(), true).apply {
+        label(text, 13f, if (primary) Color.BLACK else Theme.TEXT, true).apply {
             minHeight = dp(48)
             setPadding(dp(18), dp(10), dp(18), dp(10))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(18).toFloat()
-                setColor(if (primary) 0xFF8CFFD0.toInt() else 0xFF171717.toInt())
-                setStroke(dp(1), if (primary) 0xFF8CFFD0.toInt() else 0xFF3C3C3C.toInt())
+                setColor(if (primary) Theme.SILVER else 0xFF171717.toInt())
+                setStroke(dp(1), if (primary) Theme.SILVER else 0xFF3C3C3C.toInt())
             }
             isClickable = true
             isFocusable = true
@@ -101,7 +102,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             setPadding(dp(22), dp(18), dp(22), dp(20))
             setBackgroundColor(Color.BLACK)
         }
-        root.addView(label("ORION  ·  GEMINI LIVE", 11f, 0xFF8CFFD0.toInt(), true),
+        root.addView(label("ORION  ·  GEMINI LIVE", 11f, Theme.SILVER, true),
             LinearLayout.LayoutParams(-1, dp(32)))
         statusView = label("READY · NOT STREAMING", 11f, 0xFFBDBDBD.toInt(), true)
         root.addView(statusView, LinearLayout.LayoutParams(-1, dp(28)))
@@ -116,7 +117,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
 
         transcriptView = label(
             "Gemini Live is an optional network voice mode. No microphone audio is streamed until you accept the quota warning.",
-            17f, 0xFFF4FFF9.toInt(), true
+            17f, Theme.TEXT, true
         ).apply {
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             maxLines = 5
@@ -143,7 +144,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             marginStart = dp(8)
         })
         root.addView(controls, LinearLayout.LayoutParams(-1, android.view.ViewGroup.LayoutParams.WRAP_CONTENT))
-        standardModeButton = label("Switch to standard Orion voice", 12f, 0xFF8CFFD0.toInt(), true).apply {
+        standardModeButton = label("Switch to standard Orion voice", 12f, Theme.SILVER, true).apply {
             setPadding(dp(10), dp(12), dp(10), dp(8))
             isClickable = true
             isFocusable = true
@@ -229,6 +230,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             finish()
             return
         }
+        liveConversationId = ChatHistoryStore.activeSessionId(this)
         active = true
         liveConnected = false
         microphoneEnabled = true
@@ -309,7 +311,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                     pendingWakeTranscript = true
                     transcripts.addLast("YOU: $trimmed")
                     while (transcripts.size > 6) transcripts.removeFirst()
-                    transcriptView.text = transcripts.joinToString("\n")
+                    transcriptView.text = transcripts.joinToString("\\n")
                     return@runOnUiThread
                 }
                 val command = SharedToolSurfacePolicy.commandAfterWake(text)
@@ -320,7 +322,7 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
                     lastHandoffCommand = command
                     transcripts.addLast("YOU: Orion, $command")
                     while (transcripts.size > 6) transcripts.removeFirst()
-                    transcriptView.text = transcripts.joinToString("\n")
+                    transcriptView.text = transcripts.joinToString("\\n")
                     val service = PhoneAiService.instance
                     if (service == null) {
                         statusView.text = "ORION ACCESSIBILITY SERVICE UNAVAILABLE"
@@ -338,7 +340,46 @@ internal class GeminiLiveActivity : Activity(), GeminiLiveSession.Listener, Phon
             val prefix = if (fromModel) "ORION: " else "YOU: "
             transcripts.addLast(prefix + text.trim())
             while (transcripts.size > 6) transcripts.removeFirst()
-            transcriptView.text = transcripts.joinToString("\n")
+            transcriptView.text = transcripts.joinToString("\\n")
+            persistLiveTurn(fromModel, text)
+        }
+    }
+
+    /** Persist final live transcripts as text in the shared SQLite conversation index. Raw audio is never stored. */
+    private fun persistLiveTurn(fromModel: Boolean, text: String) {
+        val clean = text.trim().take(4_000)
+        if (clean.isBlank() || MemoryGovernancePolicy.sensitivity(clean) == "sensitive") return
+        runCatching {
+            if (!fromModel) {
+                MemoryAutoIndexer.observe(this, clean)
+                    ?.takeIf { it.reviewStatus == "pending" && it.sourceRole == "user_observation" }
+                    ?.let { proposal ->
+                        OrionConversationRepository.get(this).recordEvent(
+                            this, null, "memory_proposal", "pending",
+                            "Suggested memory from Gemini Live for owner review: category=${proposal.category}"
+                        )
+                    }
+            }
+            // Live sessions stay attached to the chat that was active when the call began.
+            // A chat switch during the call must not redirect this transcript into another chat.
+            liveConversationId?.let { sessionId ->
+                ChatHistoryStore.appendTurnToSession(
+                    this, sessionId, if (fromModel) "ai" else "me", clean
+                )
+            }
+            if (OrionSensorConsent.read(this, OrionSensorScope.MICROPHONE).active()) {
+                OrionMultimodalEvidenceStore.record(
+                    this,
+                    ChatHistoryStore.activeSessionId(this),
+                    modality = OrionMultimodalEvidenceStore.Modality.AUDIO_TRANSCRIPT,
+                    source = "gemini_live_final_transcript",
+                    digest = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(clean.toByteArray(Charsets.UTF_8))
+                        .joinToString("") { "%02x".format(it) },
+                    summary = if (fromModel) "Assistant speech transcript is available in the shared conversation history; raw audio was not stored."
+                        else "User speech transcript is available in the shared conversation history; raw audio was not stored."
+                )
+            }
         }
     }
 

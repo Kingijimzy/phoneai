@@ -17,12 +17,16 @@ object UndoStore {
     private fun encode(m: Memory?): JSONObject = if (m == null) JSONObject().put("none", true) else JSONObject()
         .put("id", m.id).put("category", m.category).put("text", m.text)
         .put("created", m.created).put("updated", m.updated)
+        .put("sourceRole", m.sourceRole).put("confidence", m.confidence)
+        .put("sensitivity", m.sensitivity).put("reviewStatus", m.reviewStatus).put("evidence", m.evidence)
 
     private fun decode(o: JSONObject?): Memory? {
         if (o == null || o.optBoolean("none", false)) return null
         if (!o.has("id") || !o.has("text")) return null
         return Memory(o.optInt("id", -1), o.optString("category", "fact"),
-            o.optString("text", ""), o.optLong("created", 0L), o.optLong("updated", 0L))
+            o.optString("text", ""), o.optLong("created", 0L), o.optLong("updated", 0L),
+            false, o.optString("sourceRole", "legacy"), o.optDouble("confidence", 0.5),
+            o.optString("sensitivity", "general"), o.optString("reviewStatus", "pending"), o.optString("evidence", ""))
     }
 
     fun recordMemory(c: Context, operation: String, before: Memory?, after: Memory?) = synchronized(lock) {
@@ -70,7 +74,7 @@ object UndoStore {
             "memory_delete" -> {
                 val prior = before
                 if (prior != null && memories.none { it.id == prior.id })
-                    MemoryStore.restore(c, prior.id, prior.category, prior.text, prior.created, prior.updated) else false
+                    MemoryStore.restore(c, prior.id, prior.category, prior.text, prior.created, prior.updated, prior.sourceRole, prior.confidence, prior.sensitivity, prior.reviewStatus, prior.evidence) else false
             }
             else -> false
         }

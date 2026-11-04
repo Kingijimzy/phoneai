@@ -52,6 +52,10 @@ class OrionNotificationListener : NotificationListenerService() {
 
     private fun capture(sbn: StatusBarNotification) {
         try {
+            if (!OrionSensorConsent.read(this, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return
+            }
             val pkg = sbn.packageName.orEmpty()
             val app = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
@@ -83,6 +87,37 @@ class OrionNotificationListener : NotificationListenerService() {
             synchronized(lock) {
                 recent[sbn.key] = item
                 while (recent.size > 20) recent.remove(recent.keys.first())
+            }
+            // Notify the live Soul session without retaining notification contents in its durable queue.
+            // The listener has already excluded sensitive apps and financial/authentication content.
+            val safeEventLabel = "notification from ${app.take(60)}"
+            // Persist the event even when the accessibility service is not currently bound.
+            // This stores no notification body, sender, title, or message text.
+            runCatching {
+                SoulEngineState.recordWatcherStatus(applicationContext, "event_received", safeEventLabel)
+            }
+            val liveService = PhoneAiService.instance
+            if (liveService != null) {
+                liveService.onExternalPresenceEvent(
+                    eventKey = "notification:${pkg.take(80)}",
+                    safeDescription = safeEventLabel
+                )
+            } else {
+                // Keep the event durable when Orion's accessibility service is not bound.
+                // WorkManager may notify the user that recovery is pending, but must not start
+                // AccessibilityService or perform an unattended phone action.
+                runCatching {
+                    val runtime = OrionRuntime(applicationContext)
+                    runtime.start()
+                    runtime.enqueue(
+                        OrionRuntime.WorkType.PRESENCE_EVENT,
+                        "notification:${pkg.take(80)}:${sbn.postTime / 60_000L}",
+                        3,
+                        goal = "Record safe external event: $safeEventLabel",
+                        checkpoint = "source=notification_listener; content=not_retained"
+                    )
+                    runtime.stop()
+                }
             }
         } catch (_: Exception) {
             // Fail closed: notification content is never logged or forwarded on parsing errors.
@@ -167,6 +202,10 @@ class OrionNotificationListener : NotificationListenerService() {
             if (key.isBlank()) return "error: notification key is required"
             if (normalized !in setOf("reply", "dismiss")) return "error: action must be reply or dismiss"
             val service = instance ?: return "error: enable Orion Notification access first"
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return "error: Orion notification context is disabled; enable its grant in Sensor & context permissions."
+            }
             val allowed = synchronized(lock) { recent.containsKey(key) }
             if (!allowed) return "error: notification is unavailable or was filtered for safety"
             val sbn = try { service.activeNotifications?.firstOrNull { it.key == key } }
@@ -200,9 +239,40 @@ class OrionNotificationListener : NotificationListenerService() {
             }
         }
 
+        /** Re-evaluate app-level consent without changing Android's separate notification-listener grant. */
+        fun refreshConsent() {
+            val service = instance ?: return
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return
+            }
+            try { service.activeNotifications?.forEach { service.capture(it) } } catch (_: Exception) { }
+        }
+
+        /** Bounded safe notification context for the central brain; no notification keys are exposed. */
+        fun contextSummary(): String {
+            val service = instance ?: return ""
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return ""
+            }
+            val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis }.take(5) }
+            if (items.isEmpty()) return ""
+            return buildString {
+                appendLine("OWNER-GRANTED SAFE NOTIFICATION CONTEXT (in-memory only; sensitive apps/content filtered)")
+                items.forEach { item ->
+                    appendLine("- ${item.app}: ${item.title} — ${item.text}".take(260))
+                }
+                appendLine("These are recent notifications, not proof of user intent or task completion.")
+            }.take(1_300)
+        }
+
         fun readSafeNotifications(): String {
-            if (instance == null) {
-                return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry. Orion excludes banking, payment, password, card, CVV, OTP, and security-code notifications."
+            val service = instance
+                ?: return "Notification access is not enabled. Open Android Notification access settings and enable Orion, then retry."
+            if (!OrionSensorConsent.read(service, OrionSensorScope.NOTIFICATIONS).active()) {
+                synchronized(lock) { recent.clear() }
+                return "Orion notification context is disabled. Enable the Notification context grant in Settings → Sensor & context permissions."
             }
             val items = synchronized(lock) { recent.values.toList().sortedByDescending { it.whenMillis } }
             if (items.isEmpty()) {

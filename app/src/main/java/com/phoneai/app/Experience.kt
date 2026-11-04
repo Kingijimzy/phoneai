@@ -18,7 +18,9 @@ data class Experience(
     val tip: String,
     val count: Int,
     val lastAt: Long,
-    val steps: String = ""     // for "worked": validated tool sequence
+    val steps: String = "",    // for "worked": validated tool sequence
+    val correction: String = "",
+    val verification: String = ""
 )
 
 /** Pure ranking/merge rules so the learning loop is unit-testable without Android. */
@@ -27,11 +29,23 @@ internal object ExperiencePolicy {
     private const val DAY = 86_400_000L
 
     /** Only clean, successful task traces may reinforce reusable routines. */
-    fun hasCleanSuccessEvidence(successFlags: List<Boolean>, recordedFailures: Int): Boolean =
-        recordedFailures == 0 && successFlags.isNotEmpty() && successFlags.all { it }
+    fun hasCleanSuccessEvidence(successFlags: List<Boolean>, verifiedFlags: List<Boolean>, recordedFailures: Int): Boolean =
+        recordedFailures == 0 && successFlags.isNotEmpty() &&
+            successFlags.size == verifiedFlags.size &&
+            successFlags.all { it } && verifiedFlags.all { it }
 
-    fun gist(request: String): String =
-        MemoryRanking.tokens(request).take(8).sorted().joinToString(" ")
+    fun gist(request: String): String {
+        // Learn task shape, not user content: strip likely credentials and direct identifiers first.
+        val redacted = request
+            .replace(Regex("(?i)https?://\\S+|www\\.\\S+"), " ")
+            .replace(Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"), " ")
+            .replace(Regex("(?i)\\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passcode|secret|authorization|bearer)\\b[^,;\\n]{0,100}"), " ")
+            .replace(Regex("(?<!\\w)(?:\\+?\\d[\\d ()-]{7,}\\d)(?!\\w)"), " ")
+        val unsafe = setOf("password", "passcode", "secret", "token", "apikey", "authorization", "bearer", "pin", "otp")
+        return MemoryRanking.tokens(redacted)
+            .filter { it.lowercase() !in unsafe && it.length <= 24 && !it.all(Char::isDigit) }
+            .take(8).sorted().joinToString(" ")
+    }
 
     fun tipFor(tool: String, category: String): String = when (category) {
         "target_not_found" -> "$tool could not find its target: re-read the screen first, then use visible text instead of a guessed id."
@@ -48,7 +62,15 @@ internal object ExperiencePolicy {
     fun merge(list: List<Experience>, new: Experience): List<Experience> {
         val out = list.toMutableList()
         if (new.kind == "worked") {
-            out.removeAll { it.kind == "failure" && it.tool in new.steps.split(">") && MemoryRanking.similarity(it.task, new.task) >= 0.5 }
+            // A newer clean, independently verified routine supersedes both unresolved failures
+            // and older recovered-failure advice for the same task/tool family. Keep corrections
+            // and unrelated task lessons; they remain useful and are not evidence of tool failure.
+            val provenTools = new.steps.split(">").filter { it.isNotBlank() }.toSet()
+            out.removeAll {
+                it.kind in setOf("failure", "resolved_failure") &&
+                    it.tool in provenTools &&
+                    MemoryRanking.similarity(it.task, new.task) >= 0.5
+            }
         }
         val i = out.indexOfFirst {
             it.kind == new.kind && it.tool == new.tool && it.category == new.category &&
@@ -88,7 +110,8 @@ internal object ExperiencePolicy {
     fun block(items: List<Experience>, now: Long): String = items.joinToString("\n") { e ->
         if (e.kind == "correction") "- USER CORRECTION (${e.count}x, ${age(now, e.lastAt)}): ${e.tip}"
         else if (e.kind == "worked") "- WORKED (${e.count}x, ${age(now, e.lastAt)}): for a similar task this sequence succeeded: ${e.steps.replace(">", " → ")}. Re-verify before reusing."
-        else "- AVOID (${e.count}x, ${age(now, e.lastAt)}): ${e.tip}"
+        else if (e.kind == "resolved_failure") "- LEARNED RESOLUTION (${e.count}x, ${age(now, e.lastAt)}): cause=${e.category}; correction=${e.correction}; verification=${e.verification}. Re-check live conditions before reuse."
+        else "- AVOID (${e.count}x, ${age(now, e.lastAt)}): cause=${e.category}; ${e.tip}"
     }
 }
 
@@ -102,7 +125,8 @@ object ExperienceStore {
             val a = JSONArray(f.readText())
             (0 until a.length()).map { val o = a.getJSONObject(it)
                 Experience(o.optString("task"), o.optString("tool"), o.optString("kind"), o.optString("category"),
-                    o.optString("tip"), o.optInt("count", 1), o.optLong("lastAt"), o.optString("steps")) }
+                    o.optString("tip"), o.optInt("count", 1), o.optLong("lastAt"), o.optString("steps"),
+                    o.optString("correction"), o.optString("verification")) }
         }
     } catch (_: Exception) { emptyList() }
 
@@ -110,7 +134,8 @@ object ExperienceStore {
         try {
             val a = JSONArray()
             list.forEach { a.put(JSONObject().put("task", it.task).put("tool", it.tool).put("kind", it.kind)
-                .put("category", it.category).put("tip", it.tip).put("count", it.count).put("lastAt", it.lastAt).put("steps", it.steps)) }
+                .put("category", it.category).put("tip", it.tip).put("count", it.count).put("lastAt", it.lastAt)
+                .put("steps", it.steps).put("correction", it.correction).put("verification", it.verification)) }
             val tmp = File(c.filesDir, "orion_experience.json.tmp")
             tmp.writeText(a.toString())
             if (!tmp.renameTo(file(c))) { file(c).writeText(a.toString()); tmp.delete() }
@@ -122,6 +147,58 @@ object ExperienceStore {
         val task = ExperiencePolicy.gist(request).ifBlank { return@synchronized }
         save(c, ExperiencePolicy.merge(load(c), Experience(task, tool, "failure", cat,
             ExperiencePolicy.tipFor(tool, cat), 1, System.currentTimeMillis())))
+    }
+
+    /** Resolve a failed attempt only when later steps have explicit verification and the task
+     * completion marker is already durable. This records cause, changed approach and proof. */
+    fun resolveCompletedCheckpoint(c: Context, checkpoint: JSONObject): Int = synchronized(lock) {
+        if (checkpoint.optString("status") != "completed") return@synchronized 0
+        val task = ExperiencePolicy.gist(checkpoint.optString("command"))
+        if (task.isBlank()) return@synchronized 0
+        val steps = checkpoint.optJSONArray("steps") ?: JSONArray()
+        val list = load(c).toMutableList()
+        var resolved = 0
+        val now = System.currentTimeMillis()
+        fun verified(step: JSONObject): Boolean {
+            val result = step.optString("result")
+            return !result.startsWith("error", true) &&
+                (result.contains("LOCAL VERIFY PASS:", true) || result.contains("PASS: message sent", true) ||
+                    result.contains("PASS: email sent", true) || result.contains("PASS: deleted successfully", true) ||
+                    result.contains("PASS: completed successfully", true))
+        }
+        for (i in 0 until steps.length()) {
+            val failed = steps.optJSONObject(i) ?: continue
+            val failedTool = failed.optString("tool").trim()
+            val failedResult = failed.optString("result")
+            val priorFailure = list.indexOfLast {
+                it.kind == "failure" && it.tool == failedTool && MemoryRanking.similarity(it.task, task) >= 0.5
+            }
+            val cause = ActionLearningPolicy.classifyFailure(failedResult).ifBlank {
+                if (failedResult.startsWith("error", true) || failedResult.contains("[error;", true))
+                    list.getOrNull(priorFailure)?.category?.ifBlank { "other_failure" } ?: "other_failure"
+                else ""
+            }
+            if (failedTool.isBlank() || cause.isBlank()) continue
+            val corrected = (i + 1 until steps.length()).mapNotNull { index ->
+                val step = steps.optJSONObject(index) ?: return@mapNotNull null
+                step.optString("tool").takeIf { it.isNotBlank() && verified(step) }
+            }.distinct().take(6)
+            if (corrected.isEmpty()) continue
+            val correction = "After '$failedTool' failed, changed approach to the independently verified sequence: " + corrected.joinToString(" → ")
+            val verification = "Later step(s) returned explicit verification evidence and the task-level completion gate passed."
+            val existing = priorFailure
+            if (existing >= 0) {
+                val old = list[existing]
+                list[existing] = old.copy(kind = "resolved_failure", correction = correction,
+                    verification = verification, lastAt = now, count = old.count + 1)
+            } else {
+                list += Experience(task, failedTool, "resolved_failure", cause,
+                    ExperiencePolicy.tipFor(failedTool, cause), 1, now, "", correction, verification)
+            }
+            resolved++
+        }
+        if (resolved > 0) save(c, list.sortedByDescending { it.lastAt }.take(ExperiencePolicy.MAX))
+        resolved
     }
 
     /** Only call after the completion gate passed, so unvalidated routines never become "what works". */

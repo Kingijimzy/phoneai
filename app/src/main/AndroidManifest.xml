@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Optional explicit bridge to a user-installed Termux terminal; user must enable its external-command setting. -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Used only for an explicit on-device location request; Android runtime permission remains required. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
@@ -40,7 +44,9 @@
         android:extractNativeLibs="true"
         android:theme="@style/Theme.Orion">
 
+        <activity android:name=".SelfExtensionLabActivity" android:exported="false" />
         <activity android:name=".SoulEngineActivity" android:exported="false" />
+        <activity android:name=".SoulWatcherActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".KnowledgeGraphActivity" android:exported="false" />
         <activity android:name=".MemoryActivity" android:exported="false" />
         <activity android:name=".CapabilityBoardActivity" android:exported="false" />
@@ -50,6 +56,9 @@
         <activity android:name=".TeachModeActivity" android:exported="false" />
         <activity android:name=".TaskCenterActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".SensorContextActivity" android:exported="false" />
+        <activity android:name=".SettingsFeatureActivity" android:exported="false" />
+        <activity android:name=".OwnerControlCenterActivity" android:exported="false" android:excludeFromRecents="true" android:finishOnTaskLaunch="true" />
         <activity android:name=".AgentControlActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".WorkspaceShellActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".TermuxBridgeActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
@@ -86,6 +95,7 @@
         <activity android:name=".DeviceUtilitiesActivity" android:exported="false" />
         <activity android:name=".RecordRequestActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity android:name=".TradingActivity" android:exported="false" />
+        <activity android:name=".TradingDeskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".AgentsActivity" android:exported="false" />
         <activity android:name=".AgentChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
 
@@ -112,6 +122,12 @@
                 android:resource="@xml/orion_ime_method" />
         </service>
 
+        <service android:name=".OrionSocketForegroundService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <!-- WorkManager's foreground dispatcher runs long-lived delegated specialist requests. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
         <service android:name=".TelegramListenerService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".WatchService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".RecordService" android:exported="false" android:foregroundServiceType="mediaProjection" />

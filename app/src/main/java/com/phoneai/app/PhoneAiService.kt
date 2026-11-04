@@ -79,6 +79,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var runtimeRetryRunnable: Runnable? = null
     @Volatile private var runtimeRetryAtElapsed = 0L
     @Volatile private var lastCapabilityReport: OrionCapabilityAudit.Report? = null
+    @Volatile private var lastContinuousWatcherAt = 0L
     @Volatile private var approvedRoutineReplayName = ""
     @Volatile private var approvedRoutineReplayAt = 0L
 
@@ -108,17 +109,26 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     interface MainChatListener {
         fun onMessage(kind: String, text: String)
+        fun onAssistantDelta(text: String) {}
         fun onStatus(text: String, mode: OrbView.Mode)
         fun onAudioLevel(level: Float) {}
         fun onAudioAmplitude(amplitude: Float) {}
         fun onSpeechWord() {}
         fun onTranscriptRestored(messages: List<Pair<String, String>>) {}
+        fun onChatEvents(events: List<OrionConversationRepository.ChatEvent>) {}
         /** Orion decided the request needs (or no longer needs) the tool agent; the UI should follow. */
         fun onModeSwitch(commandMode: Boolean) {}
+        /** Open a safe HTTP(S) page in the chat-owned browser surface. */
+        fun onOpenBrowser(url: String) {}
     }
 
     fun notifyModeSwitch(commandMode: Boolean) {
         main.post { mainChatListener?.onModeSwitch(commandMode) }
+    }
+
+    override fun openBrowser(url: String) {
+        val safe = ChatBrowserUrlPolicy.normalize(url) ?: return
+        main.post { mainChatListener?.onOpenBrowser(safe) }
     }
 
     @Volatile
@@ -140,52 +150,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     @Volatile private var offlineWakeFailedForSession = false
 
     // ---------------------------------------------------------------- lifecycle
-
-    // Keep standing orders alive even when no new window/accessibility event arrives.
-    // StandingOrders owns each order's persisted interval; this trigger only wakes the queue.
-    private val soulWatchTick = object : Runnable {
-        override fun run() {
-            val runtime = orionRuntime
-            if (runtime != null &&
-                runtime.enqueue(OrionRuntime.WorkType.SOUL_WATCH, "soul-watch-periodic", 2)) {
-                scheduleRuntimeDrain()
-            }
-            runDueAutonomyGoal()
-            main.postDelayed(this, 5 * 60_000L)
-        }
-    }
-
-    private fun scheduleSoulWatchTick() {
-        main.removeCallbacks(soulWatchTick)
-        main.postDelayed(soulWatchTick, 60_000L)
-    }
-
-    /**
-     * Run at most one due scheduled goal. Never while a user task is running, and never
-     * unless background autonomy was explicitly enabled. The normal gate still applies to
-     * every action, so consequential steps ask (and fail closed if nobody answers).
-     */
-    private fun runDueAutonomyGoal() {
-        if (!Prefs.autonomyEnabled(this)) return
-        if (running || !::agent.isInitialized) return
-        val goal = AutonomyGoalStore.due(this, System.currentTimeMillis()).firstOrNull() ?: return
-        AutonomyGoalStore.markRan(this, goal.id, "started")
-        worker.execute {
-            running = true
-            try {
-                agent.run(goal.prompt)
-                AutonomyGoalStore.markRan(this, goal.id, "ran")
-                LifeLoop.notify(this, "Orion ran a scheduled goal", goal.prompt.take(160) + " — finished. Open Orion to see the result.")
-                main.post { mainChatListener?.onMessage("note", "Scheduled goal ${goal.id} finished.") }
-            } catch (e: Exception) {
-                AutonomyGoalStore.markRan(this, goal.id, "error: " + (e.message ?: "failed"))
-                LifeLoop.notify(this, "Orion goal failed", goal.prompt.take(160) + " — " + (e.message ?: "failed"))
-                main.post { mainChatListener?.onMessage("note", "Scheduled goal ${goal.id} failed: " + (e.message ?: "error")) }
-            } finally {
-                main.post { finishRun() }
-            }
-        }
-    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -224,7 +188,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         decisionScheduler = scheduler
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
-        scheduleSoulWatchTick()
+        OrionProactiveWork.ensureScheduled(this)
+        requestContinuousWatcherObservation("service_connected")
         showBubble()
         startWake()
     }
@@ -237,12 +202,66 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Resume the bounded local queue only when a fresh real window event arrives.
             if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
             decisionScheduler?.onWindowChanged(event.packageName?.toString())
+            requestContinuousWatcherObservation("window_changed")
             scheduleRuntimeDrain()
         }
     }
 
     override fun onInterrupt() {
         orionRuntime?.pause("accessibility_interrupted")
+    }
+
+    /** Called by optional system event sources; never starts the accessibility service. */
+    internal fun onExternalPresenceEvent(eventKey: String, safeDescription: String): Boolean {
+        val runtime = orionRuntime ?: return false
+        if (!AgentPolicy.enabled(this, "orion_core")) return false
+        val decision = decisionScheduler?.onExternalPresenceEvent(eventKey, safeDescription) ?: return false
+        if (decision.accepted) scheduleRuntimeDrain()
+        return decision.accepted
+    }
+
+    /** WorkManager may request a drain only while this already-enabled service is connected. */
+    internal fun requestRuntimeDrain(): Boolean {
+        val runtime = orionRuntime ?: return false
+        if (runtime.snapshot().state in setOf(
+                OrionRuntime.State.STOPPED,
+                OrionRuntime.State.PAUSED,
+                OrionRuntime.State.DEGRADED
+            )) return false
+        scheduleRuntimeDrain()
+        return true
+    }
+
+    /**
+     * Keep the Soul watcher attached to the live AccessibilityService event stream.
+     * Meaningful foreground-window transitions trigger a bounded local observation;
+     * a cooldown coalesces rapid app/window churn. The periodic WorkManager job remains
+     * a recovery/standing-order fallback, not the primary observer.
+     */
+    private fun requestContinuousWatcherObservation(reason: String) {
+        val now = SystemClock.elapsedRealtime()
+        synchronized(this) {
+            val elapsed = if (lastContinuousWatcherAt == 0L) Long.MAX_VALUE else now - lastContinuousWatcherAt
+            val shouldObserve = OrionContinuousWatcherPolicy.shouldObserve(
+                coreEnabled = AgentPolicy.enabled(this, "orion_core"),
+                proactiveEnabled = AgentPolicy.enabled(this, "proactive"),
+                serviceConnected = instance === this,
+                elapsedSinceLastObservationMs = elapsed
+            )
+            if (!shouldObserve) return
+            lastContinuousWatcherAt = now
+        }
+        worker.execute {
+            if (instance !== this ||
+                !AgentPolicy.enabled(this, "orion_core") ||
+                !AgentPolicy.enabled(this, "proactive")) return@execute
+            runCatching { SoulEngineWatcher.run(this) }.onFailure {
+                AgentPolicy.log(
+                    this, "soul_watcher", "continuous_observation", null,
+                    "event=$reason; failure=" + it.javaClass.simpleName
+                )
+            }
+        }
     }
 
     private fun scheduleRuntimeDrain() {
@@ -257,6 +276,17 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 repeat(4) {
                     val runtime = orionRuntime ?: return@repeat
                     val item = runtime.claimNext() ?: return@repeat
+                    val brainTracked = item.type in setOf(
+                        OrionRuntime.WorkType.SOUL_WATCH,
+                        OrionRuntime.WorkType.PRESENCE_EVENT,
+                        OrionRuntime.WorkType.LEARN_FROM_RESULT,
+                        OrionRuntime.WorkType.RESTORE_PENDING
+                    )
+                    if (brainTracked) recordChatEvent(
+                        "runtime", "started",
+                        "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                            "; checkpoint=" + item.checkpoint.take(100) + "; attempt=" + item.attempts
+                    )
                     try {
                         when (item.type) {
                             OrionRuntime.WorkType.RESTORE_PENDING -> {
@@ -296,10 +326,36 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                     throw IllegalArgumentException("invalid_task_outcome_event")
                                 }
                             }
+                            OrionRuntime.WorkType.PRESENCE_EVENT -> {
+                                // Event awareness is local and privacy-minimal: only the sanitized source label
+                                // is retained. Notification bodies, sender names and message text never enter Soul.
+                                val source = item.goal.substringAfter("Record safe external event: ", "system")
+                                    .take(100)
+                                if (!SoulEngineState.recordWatcherStatus(this, "event_received", source)) {
+                                    throw IllegalStateException("presence_event_state_write_failed")
+                                }
+                            }
                         }
-                        runtime.complete(item)
-                    } catch (_: Exception) {
-                        runtime.fail(item)
+                        val completed = runtime.complete(item)
+                        if (completed && brainTracked) recordChatEvent(
+                            "runtime", "completed",
+                            "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                                "; checkpoint=" + item.checkpoint.take(100)
+                        )
+                        if (completed && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                            OrionRuntimeNotifier.postResult(this, item, success = true)
+                        }
+                    } catch (error: Exception) {
+                        val retryQueued = runtime.fail(item, error.javaClass.simpleName + ": " + error.message.orEmpty())
+                        if (brainTracked) recordChatEvent(
+                            "runtime", if (retryQueued) "retry_scheduled" else "failed",
+                            "work=" + item.type.name.lowercase() + "; key=" + item.key.take(80) +
+                                "; attempt=" + (item.attempts + 1) + "; retry=" + retryQueued +
+                                "; error=" + error.javaClass.simpleName
+                        )
+                        if (!retryQueued && item.type == OrionRuntime.WorkType.SOUL_WATCH) {
+                            OrionRuntimeNotifier.postResult(this, item, success = false)
+                        }
                     }
                 }
             } finally {
@@ -345,7 +401,6 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        main.removeCallbacks(soulWatchTick)
         orionRuntime?.stop()
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
         runtimeRetryRunnable = null
@@ -691,6 +746,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             } else {
                 transcript.forEach { listener.onMessage(it.first, it.second) }
             }
+            listener.onChatEvents(activeChatEvents())
         }
     }
 
@@ -720,6 +776,86 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             mainChatListener?.onStatus("Conversation cleared", currentMode())
         }
         return true
+    }
+
+    /** Persist only bounded, secret-free activity metadata in the active chat session. */
+    fun recordChatEvent(
+        type: String,
+        status: String,
+        summary: String,
+        messageId: String? = null,
+        traceId: String? = null,
+        correlationId: String? = null,
+        evidence: OrionActivityEvidence? = null
+    ) {
+        try {
+            val repository = OrionConversationRepository.get(this)
+            repository.recordEvent(
+                this, messageId, type, status, summary,
+                traceId = traceId,
+                correlationId = correlationId,
+                evidence = evidence
+            )
+            // Persist first, then publish the canonical session event list to the open chat.
+            // This keeps tool/approval status visible immediately and restores it after reattach.
+            val events = repository.eventsForActive(this)
+            main.post { mainChatListener?.onChatEvents(events) }
+        } catch (_: Exception) {
+            /* Conversation storage must never crash phone control. */
+        }
+    }
+
+    fun activeChatEvents(): List<OrionConversationRepository.ChatEvent> =
+        try { OrionConversationRepository.get(this).eventsForActive(this) } catch (_: Exception) { emptyList() }
+
+    /** Recent durable events are read-only evidence supplied to the parent Agent on each turn. */
+    internal fun brainActivityBriefForBrain(): String = try {
+        val recent = OrionConversationRepository.get(this).eventsForActive(this).takeLast(4)
+        if (recent.isEmpty()) "no recorded chat activity events"
+        else recent.joinToString(" | ") { event ->
+            event.type + "/" + event.status + ": " + event.summary.take(150)
+        }.take(720)
+    } catch (_: Exception) { "chat activity ledger unavailable; do not infer background progress" }
+
+    private fun rewindTranscriptToPrompt(prompt: String): Boolean {
+        val rewound = TranscriptEditPolicy.rewind(transcript.toList(), prompt) ?: return false
+        transcript.clear()
+        transcript.addAll(rewound)
+        ChatHistoryStore.save(this, transcript.toList())
+        agent.reset()
+        agent.restoreConversationContext(transcript.toList())
+        mainChatListener?.onTranscriptRestored(transcript.toList())
+        return true
+    }
+
+    fun retryLastResponse(prompt: String) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop the current response before retrying.")
+                return@post
+            }
+            if (!rewindTranscriptToPrompt(prompt)) {
+                mainChatListener?.onMessage("ai", "I couldn't match that message to the saved conversation, so I did not retry it. Send it again manually.")
+                return@post
+            }
+            submit(prompt, conversationOnly = true, autoRoute = true)
+        }
+    }
+
+    fun editAndResend(original: String, edited: String) {
+        val replacement = edited.trim()
+        if (replacement.isEmpty()) return
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Stop the current response before editing this message.")
+                return@post
+            }
+            if (!rewindTranscriptToPrompt(original)) {
+                mainChatListener?.onMessage("ai", "I couldn't match that message to the saved conversation, so I did not replace it. Copy the text into a new message instead.")
+                return@post
+            }
+            submit(replacement, conversationOnly = true, autoRoute = true)
+        }
     }
 
     fun sendFromMainChat(
@@ -808,67 +944,65 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             ?: throw IllegalArgumentException("Android couldn't decode the selected image. Try a JPG or PNG copy.")
     }
 
-    /** Sends a user-selected image to the configured vision provider without treating its URI as model-readable text. */
-    fun analyzeImageFromMainChat(uri: Uri, question: String) {
+    /** Single-image compatibility entry point. */
+    fun analyzeImageFromMainChat(uri: Uri, question: String) = analyzeImagesFromMainChat(listOf(uri), question)
+
+    /** Analyse up to four selected images in one request so they can be compared together. */
+    fun analyzeImagesFromMainChat(uris: List<Uri>, question: String) {
+        val images = uris.distinct().take(4)
+        if (images.isEmpty()) return
         synchronized(imageAnalysisLock) {
             if (running || imageAnalysisRunning) {
-                main.post { mainChatListener?.onMessage("ai", "Orion is already working on another task. Wait for it to finish before analysing another image.") }
+                main.post { mainChatListener?.onMessage("ai", "Orion is already working on another task. Wait for it to finish before analysing these images.") }
                 return
             }
             imageAnalysisRunning = true
         }
         main.post {
             mainChatActive = mainChatListener != null
-            mainChatListener?.onStatus("Analysing your image", OrbView.Mode.THINKING)
+            mainChatListener?.onStatus("Analysing " + images.size + " image(s)", OrbView.Mode.THINKING)
         }
         Thread({
             try {
-                val bitmap = decodeVisionBitmap(uri)
-                val bytes = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
-                bitmap.recycle()
-                if (bytes.size() == 0) throw IllegalArgumentException("The image converted to an empty file. Try another image.")
-                if (bytes.size() > 5 * 1024 * 1024) throw IllegalArgumentException("This image is still too large after compression. Choose a smaller image or screenshot.")
-                val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
-                val content = JSONArray()
-                    .put(JSONObject().put("type", "text").put("text", question))
-                    .put(JSONObject().put("type", "image_url").put("image_url",
-                        JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
+                val content = JSONArray().put(JSONObject().put("type", "text").put("text", question))
+                var totalBytes = 0
+                images.forEachIndexed { index, uri ->
+                    val bitmap = decodeVisionBitmap(uri)
+                    val bytes = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, bytes)
+                    bitmap.recycle()
+                    if (bytes.size() == 0) throw IllegalArgumentException("Image " + (index + 1) + " converted to an empty file. Try JPG or PNG.")
+                    totalBytes += bytes.size()
+                    if (totalBytes > 8 * 1024 * 1024) throw IllegalArgumentException("The selected images exceed the combined 8 MB upload budget. Remove an image or choose smaller screenshots.")
+                    val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+                    content.put(JSONObject().put("type", "text").put("text", "Image " + (index + 1) + " of " + images.size))
+                    content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64," + encoded)))
+                }
+                val visualSystem = "You are Orion, a helpful visual assistant. Analyse all supplied images together when relevant. Describe only what is visible, distinguish observation from inference, and never claim details that cannot be seen." +
+                    "\n\n" + OrionCentralBrain.contextFor(this, question) +
+                    "\n\nIMAGE ANALYSIS BOUNDARY: use shared executive context for continuity only. Do not claim phone actions, file operations, external writes, or background tasks were performed from image analysis. If the user asks for an action, route it through the normal guarded Agent workflow."
                 val messages = JSONArray()
-                    .put(JSONObject().put("role", "system").put("content",
-                        "You are Orion, a helpful visual assistant. Describe only what is visible, distinguish observation from inference, and ask for clarification if the image is unclear. Never claim to identify details that cannot be seen."))
+                    .put(JSONObject().put("role", "system").put("content", visualSystem))
                     .put(JSONObject().put("role", "user").put("content", content))
-                val reply = Nim(this).chat(messages, true, 420, 0.2).trim()
+                val reply = Nim(this).chat(messages, true, 520, 0.2).trim()
                 main.post {
-                    mainChatListener?.onMessage("ai", if (reply.isBlank()) "I couldn't get a useful answer from that image. Please try again." else reply)
+                    mainChatListener?.onMessage("ai", if (reply.isBlank()) "I could not get a useful answer from those images. Please try again." else reply)
                     mainChatListener?.onStatus("Image analysis complete", OrbView.Mode.IDLE)
                 }
             } catch (e: Exception) {
                 val reason = (e.message ?: "unknown error").take(320)
                 val guidance = when {
-                    reason.contains("No AI key", true) || reason.contains("key saved", true) ->
-                        " Open Settings → AI providers and save a key for a vision-capable provider."
-                    reason.contains("vision model", true) || reason.contains("no vision", true) ||
-                        reason.contains("supports this request type", true) ->
-                        " The selected model may be text-only. In Settings → AI providers, choose a provider and model that explicitly supports image input."
-                    reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) ->
-                        " The provider may be out of free quota or credit. Orion only tries one saved backup after an HTTP 429; if that fails, wait for the limit to reset or review the selected provider."
-                    reason.contains("503", true) || reason.contains("temporarily busy", true) ||
-                        reason.contains("service unavailable", true) ->
-                        " This is usually a temporary provider outage, not an unreadable image. Orion does not rotate providers for this error. Check the selected provider/model or retry later."
-                    reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) ||
-                        reason.contains("unsupported", true) ->
-                        " The provider may have rejected this image format or model. Try a smaller JPG/PNG image and verify that the selected model supports vision."
-                    else ->
-                        " Check internet access and the vision provider/model in Settings → AI providers."
+                    reason.contains("No AI key", true) || reason.contains("key saved", true) -> " Open Settings → AI providers and save a key for a vision-capable provider."
+                    reason.contains("vision model", true) || reason.contains("no vision", true) || reason.contains("supports this request type", true) -> " The selected model may be text-only. Choose a provider/model that explicitly supports image input."
+                    reason.contains("429", true) || reason.contains("limit", true) || reason.contains("credit", true) -> " The provider may be out of free quota or credit. Review the selected provider or retry after the limit resets."
+                    reason.contains("503", true) || reason.contains("temporarily busy", true) || reason.contains("service unavailable", true) -> " This is usually a temporary provider outage. Check the selected provider/model or retry later."
+                    reason.contains("400", true) || reason.contains("422", true) || reason.contains("image", true) || reason.contains("unsupported", true) -> " The provider may have rejected the image format or model. Try smaller JPG/PNG images and verify vision support."
+                    else -> " Check internet access and the vision provider/model in Settings → AI providers."
                 }
                 main.post {
                     val visionProvider = Prefs.provider(this, true)
                     val visionModel = Prefs.model(this, visionProvider, true)
-                    mainChatListener?.onMessage(
-                        "ai",
-                        "Image analysis failed. Selected vision model: ${visionProvider.label} / $visionModel. Details: $reason.$guidance Check Settings → AI providers → Vision model; this error does not mean the image itself is unreadable."
-                    )
+                    mainChatListener?.onMessage("ai", "Image analysis failed. Selected vision model: " + visionProvider.label + " / " + visionModel + ". Details: " + reason + "." + guidance + " Check Settings → AI providers → Vision model.")
                     mainChatListener?.onStatus("Image analysis failed · see details", OrbView.Mode.IDLE)
                 }
             } finally {
@@ -930,6 +1064,26 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             transcript.clear()
             transcript.addAll(messages.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
             ChatHistoryStore.restoreActive(this, transcript)
+            agent.reset()
+            agent.restoreConversationContext(transcript.toList())
+            mainChatListener?.onTranscriptRestored(transcript.toList())
+            mainChatListener?.onStatus("Previous conversation restored", OrbView.Mode.IDLE)
+        }
+    }
+
+    fun restoreArchivedChat(sessionId: String) {
+        main.post {
+            if (running) {
+                mainChatListener?.onMessage("ai", "Let the current task finish or stop it before switching conversations.")
+                return@post
+            }
+            val restored = ChatHistoryStore.restoreArchivedById(this, sessionId)
+            if (restored == null) {
+                mainChatListener?.onMessage("ai", "That archived chat is no longer available. Refresh history and try again.")
+                return@post
+            }
+            transcript.clear()
+            transcript.addAll(restored.filter { it.first == "me" || it.first == "ai" }.takeLast(80))
             agent.reset()
             agent.restoreConversationContext(transcript.toList())
             mainChatListener?.onTranscriptRestored(transcript.toList())
@@ -1001,8 +1155,56 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     fun conversationContext(): List<Pair<String, String>> =
         transcript.filter { it.first == "me" || it.first == "ai" }.takeLast(12).toList()
 
+    internal fun onAgentTaskRunEnded(task: String) {
+        val savedTaskId = Regex("(?i)^Work on saved task #(\\d+):").find(task.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: return
+        runCatching {
+            val saved = TaskStore.all(this).firstOrNull { it.id == savedTaskId } ?: return@runCatching
+            if (saved.status !in setOf("running", "in_progress")) return@runCatching
+            val checkpoint = AgentCheckpointStore.pending(this)
+            val checkpointCommand = checkpoint?.optString("command").orEmpty()
+            if (checkpoint != null && !checkpointCommand.contains("saved task #" + savedTaskId, ignoreCase = true)) {
+                // A different task owns the single global checkpoint. Leave this task untouched.
+                return@runCatching
+            }
+            if (checkpoint != null) {
+                if (checkpoint.optString("status") == "running") AgentCheckpointStore.pause(this)
+                val inFlight = checkpoint.optJSONObject("inFlight")
+                val detail = checkpoint.optString("recoveryNotice").ifBlank {
+                    if (inFlight != null) "Execution paused with an action outcome that still needs inspection."
+                    else "Execution paused before the evidence-based completion gate passed."
+                }
+                TaskStore.update(this, savedTaskId, status = "paused", resultSummary = detail)
+            } else {
+                TaskStore.update(
+                    this,
+                    savedTaskId,
+                    status = "failed",
+                    resultSummary = "The agent run ended without passing its evidence-based completion gate or saving a resumable checkpoint. Review the chat transcript; success was not recorded."
+                )
+            }
+        }
+    }
+
     internal fun onAgentTaskFinished(task: String, success: Boolean) {
         decisionScheduler?.onTaskFinished(task, success)
+        // Saved Task Centre items opt into this bridge through the explicit task-id prefix
+        // added by TaskCenterActivity. Only Agent's evidence-based completion path calls
+        // this with success=true; never infer success from a generic assistant reply.
+        val savedTaskId = Regex("(?i)^Work on saved task #(\\d+):").find(task.trim())?.groupValues?.getOrNull(1)?.toIntOrNull()
+        if (savedTaskId != null && success) {
+            runCatching {
+                val saved = TaskStore.all(this).firstOrNull { it.id == savedTaskId }
+                if (saved != null && saved.status in setOf("running", "in_progress")) {
+                    TaskStore.update(
+                        this,
+                        savedTaskId,
+                        status = "completed",
+                        resultSummary = "Orion's task-level completion gate passed. Review the chat transcript and verification notes for the recorded evidence."
+                    )
+                }
+            }
+        }
         scheduleRuntimeDrain()
     }
 
@@ -1110,20 +1312,29 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(0xFF202020.toInt(), 0xFF111111.toInt(), 0xFF090909.toInt())).apply {
+            intArrayOf(0xF2202020.toInt(), 0xEF151515.toInt(), 0xEC090909.toInt())).apply {
             cornerRadius = dp(26).toFloat()
-            setStroke(dp(1), 0xFF414141.toInt())
+            setStroke(dp(1), 0x775F5F5F.toInt())
         }
-        root.setPadding(dp(12), dp(10), dp(12), dp(12))
+        root.setPadding(dp(12), dp(7), dp(12), dp(12))
         root.elevation = dp(18).toFloat()
+
+        val handle = View(this).apply {
+            background = rounded(0xFF777777.toInt(), dp(3).toFloat())
+            alpha = .55f
+        }
+        root.addView(handle, LinearLayout.LayoutParams(dp(34), dp(4)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(8)
+        })
 
         val head = LinearLayout(this)
         head.orientation = LinearLayout.HORIZONTAL
         head.gravity = Gravity.CENTER_VERTICAL
         head.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xFF292929.toInt(), 0xFF191919.toInt(), 0xFF141414.toInt())).apply {
+            intArrayOf(0xF2292929.toInt(), 0xEF191919.toInt(), 0xED141414.toInt())).apply {
             cornerRadius = dp(20).toFloat()
-            setStroke(dp(1), 0xFF3E3E3E.toInt())
+            setStroke(dp(1), 0x77585858.toInt())
         }
         head.setPadding(dp(8), dp(5), dp(6), dp(5))
         val orb = OrbView(this)
@@ -1203,8 +1414,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             clp.setMargins(0, 0, dp(6), 0)
             chips.addView(c, clp)
         }
+        chips.setPadding(0, 0, dp(8), 0)
         val chipScroll = HorizontalScrollView(this)
         chipScroll.isHorizontalScrollBarEnabled = false
+        chipScroll.isHorizontalFadingEdgeEnabled = true
+        chipScroll.setFadingEdgeLength(dp(14))
         chipScroll.addView(chips)
         val chipLp = LinearLayout.LayoutParams(MATCH, WRAP)
         chipLp.setMargins(0, dp(6), 0, dp(6))
@@ -1237,7 +1451,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
         row.addView(input, LinearLayout.LayoutParams(0, dp(46), 1f))
         lateinit var micBtn: TextView
-        micBtn = pill("Mic", Theme.PANEL2, Theme.CYAN) {
+        micBtn = pill("Mic", Theme.PANEL2, Theme.SILVER) {
             if (listening) {
                 voice.stopListening()
                 listening = false
@@ -1250,7 +1464,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 listenNow()
             }
         }
-        val micLp = LinearLayout.LayoutParams(dp(52), dp(46))
+        micBtn.setPadding(dp(7), dp(8), dp(7), dp(8))
+        micBtn.minWidth = dp(60)
+        micBtn.maxLines = 1
+        micBtn.isSingleLine = true
+        val micLp = LinearLayout.LayoutParams(dp(60), dp(46))
         micLp.setMargins(dp(8), 0, 0, 0)
         row.addView(micBtn, micLp)
         micBtnRef = micBtn
@@ -1272,8 +1490,12 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         row.addView(send, sendLp)
         root.addView(row)
 
+        // Keep the command surface compact enough to reveal the app underneath. Full chat
+        // remains a separate destination for long conversations, files and history.
+        val panelHeight = (size.second * 0.62f).toInt().coerceAtLeast(dp(360))
+            .coerceAtMost((size.second * 0.68f).toInt())
         val lp = WindowManager.LayoutParams(
-            size.first - dp(16), (size.second * 0.70f).toInt(), OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
+            size.first - dp(16), panelHeight, OVERLAY, NOT_MODAL, PixelFormat.TRANSLUCENT
         )
         lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         lp.y = dp(12)
@@ -1525,6 +1747,11 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private fun shouldAutoRouteToAgent(message: String): Boolean {
         val text = message.trim().lowercase(java.util.Locale.ROOT)
         if (text.isBlank()) return false
+        // Deterministic research routing takes precedence over a model's unsupported claim that it lacks tools.
+        if (OrionResearchRoutingPolicy.requiresToolAgent(text)) return true
+        // Explicit runtime checks and named public-repository/site requests must reach
+        // the guarded agent even when the chat is currently in Talk mode.
+        if (ConversationAutoRoutePolicy.requiresToolAgent(text)) return true
         // Routing is deliberately conservative: a request must read like an instruction
         // or a direct question, not a sentence merely discussing an action.
         val patterns = listOf(
@@ -1664,6 +1891,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                 agent.run(t)
             } catch (e: Exception) {
                 say("Error: ${e.message}")
+            } finally {
+                onAgentTaskRunEnded(agent.currentTaskCommand().ifBlank { t })
             }
             main.post { finishRun() }
         }
@@ -1929,7 +2158,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    override fun stream(text: String) {
+        if (text.isEmpty()) return
+        main.post { mainChatListener?.onAssistantDelta(text) }
+    }
+
     override fun note(text: String) {
+        // Specialist lifecycle messages are durable chat events, not transient UI-only notes.
+        // The event is committed to the active conversation before the open chat is notified.
+        val specialist = Regex("^\\[SPECIALIST:(ASSIGNED|RETURNED|FAILED)]\\s*\\n?([\\s\\S]*)$")
+            .find(text.trim())
+        if (specialist != null) {
+            val status = specialist.groupValues[1].lowercase()
+            val summary = specialist.groupValues[2].trim().take(1100)
+            recordChatEvent("specialist", status, summary)
+            return
+        }
         appendTranscript("note", text)
         main.post {
             mainChatListener?.onMessage("note", text)
@@ -1941,13 +2185,22 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         }
     }
 
+    /** Compact runtime truth for the central Agent; never implies Android can keep a process alive forever. */
+    internal fun runtimeBriefForBrain(): String {
+        val runtime = orionRuntime ?: return "runtime=not_connected; durable recovery is delegated to WorkManager when available"
+        val snapshot = runtime.snapshot()
+        val pending = runtime.pendingItems().take(5).joinToString("; ") {
+            it.type.name.lowercase() + ":" + it.key.take(48) + if (it.checkpoint.isNotBlank()) "@" + it.checkpoint.take(64) else ""
+        }.ifBlank { "none" }
+        return "runtime=" + snapshot.state.name.lowercase() + "; queued=" + snapshot.queued +
+            "; last_event=" + snapshot.lastEvent.take(64) + "; pending=[" + pending +
+            "]. Android/HyperOS may suspend or kill the process; persisted checkpoints and recovery wake-ups are best-effort, not guaranteed continuous execution."
+    }
+
     override fun phase(p: String) {
         phase = p
         refreshMode()
     }
-
-    /** A dialog that never gets an answer must not wedge the single agent worker forever. */
-    private val askTimeoutSeconds = 180L
 
     override fun ask(question: String): Boolean {
         val latch = CountDownLatch(1)
@@ -1959,10 +2212,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         if (Prefs.voice(this)) voice.speak(question)
-        if (!latch.await(askTimeoutSeconds, TimeUnit.SECONDS)) {
-            main.post { showStrip("That approval timed out, so Orion did not run the action.") }
-            return false
-        }
+        latch.await()
+        recordChatEvent("approval", if (answer.get()) "approved" else "denied", "Approval request reviewed by user")
         return answer.get()
     }
 
@@ -1976,10 +2227,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             }
         }
         if (Prefs.voice(this)) voice.speak(question)
-        if (!latch.await(askTimeoutSeconds, TimeUnit.SECONDS)) {
-            main.post { showStrip("That question timed out, so Orion continued without an answer.") }
-            return ""
-        }
+        latch.await()
         return answer.get()
     }
 
@@ -2044,17 +2292,38 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         val raw = url.trim()
         if (raw.isBlank()) return "error: URL is empty"
         val candidate = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
-        val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
+        val safe = ChatBrowserUrlPolicy.normalize(candidate)
+            ?: return "error: provide a valid public HTTP or HTTPS website URL"
+        val uri = try { Uri.parse(safe) } catch (_: Exception) { null }
         if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
             return "error: provide a valid http or https website URL"
         }
+
+        // Prefer the chat-owned browser surface whenever chat is attached. This keeps web-search
+        // and open-URL shortcuts in the conversation instead of unexpectedly switching activities.
+        if (mainChatListener != null) {
+            main.post {
+                val listener = mainChatListener
+                if (listener != null) {
+                    listener.onOpenBrowser(safe)
+                } else {
+                    try {
+                        startActivity(Intent(this, BrowserActivity::class.java)
+                            .putExtra(BrowserActivity.EXTRA_URL, safe)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Exception) { }
+                }
+            }
+            return "opened in the in-chat browser popup: $safe"
+        }
+
         val i = Intent(this, BrowserActivity::class.java)
-            .putExtra(BrowserActivity.EXTRA_URL, candidate)
+            .putExtra(BrowserActivity.EXTRA_URL, safe)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return try {
             startActivity(i)
             BrowserAutomation.awaitWebView(3000L)
-            "opened in Orion's in-app browser: $candidate"
+            "opened in Orion's in-app browser: $safe"
         } catch (e: Exception) {
             "error: could not open in-app browser (" + (e.message ?: "launch failed") + ")"
         }
@@ -2063,7 +2332,28 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     // ---------------------------------------------------------------- tools: reading the screen
 
     fun readScreen(): String {
-        val root = rootInActiveWindow ?: return "error: cannot read this screen (it may be protected)"
+        // Android can briefly return null during app/window transitions even when the service
+        // remains connected. Retry a few short times before reporting a genuine missing root.
+        var root = rootInActiveWindow
+        var rootAttempts = 0
+        while (root == null && rootAttempts < 3) {
+            try {
+                Thread.sleep(120L)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+            root = rootInActiveWindow
+            rootAttempts++
+        }
+        if (root == null) {
+            val serviceReady = runCatching { serviceInfo != null }.getOrDefault(false)
+            return if (serviceReady) {
+                "error: Android has not exposed an accessibility root for the current window after a short retry. The service is connected; the app may still be transitioning, a system surface may be active, or the window may not expose accessibility nodes. Wait for the target app to settle and retry once; do not infer that accessibility permission is missing."
+            } else {
+                "error: Orion accessibility service is not connected. Enable Orion in Android Accessibility settings, return to the target app, then retry screen reading."
+            }
+        }
         nodes.clear()
         ocrElements.clear()
         visualElements.clear()
@@ -2142,7 +2432,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 VisualElementDetector.Region(it.bounds, it.confidence, it.label)
                             } ?: VisualElementDetector.detect(bitmap, excluded + occupied)
                             val detectorMs = SystemClock.elapsedRealtime() - detectorStartedAt
-                            sb.append("(visual detector: ${if (detected != null) "YOLO TFLite" else "heuristic fallback"}, ${detectorMs} ms)\n")
+                            sb.append("(visual detector: ${if (detected != null) "YOLO TFLite" else "heuristic fallback"}, ${detectorMs} ms)\\n")
                             for (region in regions) {
                                 if (visualElements.size >= 10) break
                                 val scaled = Rect(
@@ -2152,7 +2442,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 if (scaled.width() <= 0 || scaled.height() <= 0) continue
                                 visualElements.add(VisualElementDetector.Region(scaled, region.confidence, region.label))
                                 val id = nodes.size + ocrElements.size + visualElements.lastIndex
-                                sb.append("[$id] visual target (${region.label}, ${(region.confidence * 100).toInt()}% confidence)\n")
+                                sb.append("[$id] visual target (${region.label}, ${(region.confidence * 100).toInt()}% confidence)\\n")
                             }
                             }
                         } finally {
@@ -2169,7 +2459,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         if (nodes.size + ocrElements.size + visualElements.size < 3) {
             sb.append("(very few readable elements: this may be a game or custom-drawn screen)\n")
         }
-        return sb.toString().take(2800)
+        val rendered = sb.toString().take(2800)
+        if (!sensitiveScreen && OrionSensorConsent.read(this, OrionSensorScope.SCREEN_CONTEXT).active()) {
+            runCatching {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(rendered.toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it) }
+                OrionMultimodalEvidenceStore.record(
+                    this,
+                    ChatHistoryStore.activeSessionId(this),
+                    modality = OrionMultimodalEvidenceStore.Modality.SCREEN,
+                    source = "accessibility_ocr_screen",
+                    digest = digest,
+                    summary = "Non-sensitive screen observation recorded; OCR and screenshot contents are transient and not stored in the evidence index."
+                )
+            }
+        }
+        return rendered
     }
 
     private fun walk(n: AccessibilityNodeInfo, sb: StringBuilder) {

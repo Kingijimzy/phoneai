@@ -30,8 +30,8 @@ class OrionRecoveryPlannerTest {
 
     @Test fun transientFailureAvoidsRapidRetry() {
         val guidance = OrionRecoveryPlanner.forFailure("browser_navigate", "error: request timeout")
-        assertEquals(OrionRecoveryPlanner.Strategy.ASK_USER_TO_RESOLVE, guidance.strategy)
-        assertTrue(guidance.reason.contains("rapid retries"))
+        assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
+        assertTrue(guidance.reason.contains("different registered source/provider"))
     }
 
     @Test fun staleTargetUsesFreshEvidenceAndDifferentArguments() {
@@ -39,4 +39,44 @@ class OrionRecoveryPlannerTest {
         assertEquals(OrionRecoveryPlanner.Strategy.CHOOSE_DIFFERENT_METHOD, guidance.strategy)
         assertTrue(guidance.reason.contains("stale arguments"))
     }
+    @Test fun alternativeSelectionUsesOnlyPermittedRegisteredDifferentTools() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "click",
+            result = "error: target not found",
+            registeredAndPermitted = setOf("click", "read_screen", "wait_for", "shell"),
+            alreadyAttempted = setOf("shell")
+        )
+        assertEquals(listOf("read_screen", "wait_for"), selected)
+        assertTrue(selected.none { it == "click" || it == "shell" })
+    }
+
+    @Test fun deniedOrCancelledActionsNeverGetAlternativeShortlist() {
+        listOf("error: user did not approve", "error: blocked by safety policy", "error: task was stopped")
+            .forEach { result ->
+                assertTrue(OrionRecoveryPlanner.selectAlternatives(
+                    "click", result, setOf("read_screen", "click")
+                ).isEmpty())
+            }
+    }
+
+    @Test fun uncertainOutcomePrefersReadOnlyInspectionAndRespectsLimit() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "browser_click",
+            result = "error: verification unavailable; outcome unverified",
+            registeredAndPermitted = setOf("read_screen", "verify_action", "wait_for", "click_text"),
+            limit = 2
+        )
+        assertEquals(listOf("read_screen", "verify_action"), selected)
+    }
+
+    @Test fun researchProviderFailureChoosesDifferentRegisteredResearchSources() {
+        val selected = OrionRecoveryPlanner.selectAlternatives(
+            failedTool = "live_web_search",
+            result = "error: provider request timed out",
+            registeredAndPermitted = setOf("live_web_search", "research_web", "fetch_url", "read_screen"),
+            alreadyAttempted = setOf("read_screen")
+        )
+        assertEquals(listOf("research_web", "fetch_url"), selected)
+    }
+
 }

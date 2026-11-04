@@ -55,15 +55,16 @@ internal object LinuxRuntimePolicy {
         installedVersion != null && installedVersion == m.version
 
     /** Fixed argv shape; model text is passed as one /bin/sh -c argument, never host-shell interpolation. */
-    fun prootArgs(prootPath: String, rootfsDir: String, command: String): List<String>? {
+    fun prootArgs(prootPath: String, rootfsDir: String, command: String, workspaceHostPath: String? = null): List<String>? {
         if (command.isBlank() || command.length > MAX_COMMAND || command.contains('\u0000')) return null
         if (!prootPath.startsWith("/") || prootPath.contains("..") ||
             !rootfsDir.startsWith("/") || rootfsDir.contains("..")) return null
-        return listOf(
-            prootPath, "-r", rootfsDir,
-            "-b", "/dev", "-b", "/proc",
-            "-w", "/root",
-            "/bin/sh", "-c", command
-        )
+        if (workspaceHostPath != null && (!workspaceHostPath.startsWith("/") || workspaceHostPath.contains("..") || workspaceHostPath.contains(':') || workspaceHostPath.contains('\u0000'))) return null
+        return buildList {
+            addAll(listOf(prootPath, "-r", rootfsDir, "-b", "/dev", "-b", "/proc"))
+            if (workspaceHostPath != null) addAll(listOf("-b", "$workspaceHostPath:/workspace"))
+            addAll(listOf("-w", "/root",
+            "/bin/sh", "-c", command))
+        }
     }
 }

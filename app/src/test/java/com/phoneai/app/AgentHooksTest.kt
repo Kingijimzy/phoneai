@@ -6,6 +6,11 @@ import org.junit.Test
 
 class AgentHooksTest {
  @Test fun blocksUnrequestedSend(){assertNotNull(AgentHooks.scopeBlockReason("Open WhatsApp and draft a message","click_text",JSONObject().put("text","Send")))}
+ @Test fun weatherToolCannotHijackUnrelatedEngineeringRequests() {
+  val audit = "ORION full execution reliability audit: test all capabilities and integration tests wherever possible."
+  assertNotNull(AgentHooks.scopeBlockReason(audit, "weather", JSONObject().put("location", "all capabilities and integration tests wherever possible")))
+  assertNull(AgentHooks.scopeBlockReason("What's the weather in Lagos, Nigeria today?", "weather", JSONObject().put("location", "Lagos, Nigeria")))
+ }
  @Test fun allowsExplicitSend(){assertNull(AgentHooks.scopeBlockReason("Send this message to Alex","click_text",JSONObject().put("text","Send")))}
  @Test fun negatedAndDraftOnlyRequestsNeverAuthorizeConsequentialActions(){
   listOf("Do not send this message to Alex","Don't send this message to Alex","Never send this message","Draft a message to Amma without sending","Prepare a reply but do not send it").forEach { request ->
@@ -19,6 +24,13 @@ class AgentHooksTest {
  }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
+ @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
+  val p=AgentHooks.ProofRecorder()
+  p.record("click_text","Action returned. LOCAL VERIFY PASS: visible state changed after this action.")
+  assertTrue(p.snapshot().single().success)
+  assertTrue(p.snapshot().single().verified)
+  assertTrue(AgentHooks.completionDecision("Open Settings",p.snapshot()).allowed)
+ }
  @Test fun clearingProofsPreventsPriorTaskSuccessFromAuthorizingNewTask() {
   val proofs=AgentHooks.ProofRecorder(); proofs.record("open_app","WhatsApp opened")
   assertTrue(AgentHooks.completionDecision("Open WhatsApp",proofs.snapshot()).allowed)
@@ -93,4 +105,62 @@ class AgentHooksTest {
   assertFalse(AgentHooks.screenChanged(before,sameContent)); assertTrue(AgentHooks.screenChanged(before,after))
   assertEquals(AgentHooks.screenFingerprint(before),AgentHooks.screenFingerprint(sameContent))
  }
+
+    @Test fun forgetLetsOnlyThatExactCallRunAgain() {
+        val g = AgentHooks.FailedCallGuard()
+        val a = org.json.JSONObject("{\"q\":\"x\"}"); val b = org.json.JSONObject("{\"q\":\"y\"}")
+        g.recordFailure("web_search", a); g.recordFailure("web_search", b)
+        g.forget("web_search", a)
+        assertFalse(g.isBlocked("web_search", a))
+        assertTrue(g.isBlocked("web_search", b))
+    }
+
+    @Test fun durableVerifiedEvidenceCanRestoreCompletionAfterProcessRestart() {
+        val event = OrionEvidenceLedger.Event("1", "task", "device", "click",
+            OrionEvidenceLedger.Outcome.VERIFIED, 1L, 2L, "hash", "visible state changed")
+        val decision = AgentHooks.completionDecision("Open the app", emptyList(), listOf(event))
+        assertTrue(decision.allowed)
+    }
+
+    @Test fun durableDispatchAcceptanceAloneCannotVerifyConsequentialGoal() {
+        val event = OrionEvidenceLedger.Event("2", "task", "shell", "shell",
+            OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED, 1L, 2L, "hash", "command returned")
+        val decision = AgentHooks.completionDecision("Send a message to Amma", emptyList(), listOf(event))
+        assertFalse(decision.allowed)
+    }
+
+    @Test fun durableMemoryRetrievalIsNotActionCompletionEvidence() {
+        val event = OrionEvidenceLedger.Event(
+            "memory-1", "task", "memory", "retrieve_before_act",
+            OrionEvidenceLedger.Outcome.CONTEXT_RETRIEVED, 1L, 2L, "objective-hash",
+            "Objective-scoped memory context retrieved; source=persistent_memory_context; chars=420."
+        )
+        assertFalse(
+            "Memory retrieval must not satisfy even a harmless action completion gate",
+            AgentHooks.completionDecision("Open Settings", emptyList(), listOf(event)).allowed
+        )
+        assertFalse(
+            "Memory retrieval must never satisfy a consequential completion gate",
+            AgentHooks.completionDecision("Send a message", emptyList(), listOf(event)).allowed
+        )
+        val verified = OrionEvidenceLedger.Event(
+            "action-1", "task", "device", "open_app",
+            OrionEvidenceLedger.Outcome.VERIFIED, 2L, 3L, "action-hash", "app visibly opened"
+        )
+        assertTrue(
+            "A separate verified action event remains valid alongside retrieval metadata",
+            AgentHooks.completionDecision("Open Settings", emptyList(), listOf(event, verified)).allowed
+        )
+    }
+
+    @Test fun durableFailureAndRecoveryEventsNeverCountAsSuccess() {
+        val events = listOf(
+            OrionEvidenceLedger.Event("3", "task", "mcp", "mcp_call",
+                OrionEvidenceLedger.Outcome.FAILED, 1L, 2L, "hash", "offline"),
+            OrionEvidenceLedger.Event("4", "task", "orchestrator", "mcp_call",
+                OrionEvidenceLedger.Outcome.RECOVERY, 2L, 3L, "", "stop and report")
+        )
+        val decision = AgentHooks.completionDecision("Read my connected data", emptyList(), events)
+        assertFalse(decision.allowed)
+    }
 }

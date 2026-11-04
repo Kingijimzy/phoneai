@@ -97,8 +97,11 @@ object TradeHistoryStore {
     private fun decode(c: Context): MutableList<ImportedTrade> {
         val f = file(c)
         if (!f.exists()) return mutableListOf()
+        return try { fromJson(JSONArray(f.readText())) } catch (_: Exception) { mutableListOf() }
+    }
+
+    private fun fromJson(arr: JSONArray): MutableList<ImportedTrade> {
         return try {
-            val arr = JSONArray(f.readText())
             MutableList(arr.length()) { i ->
                 val o = arr.getJSONObject(i)
                 ImportedTrade(
@@ -140,7 +143,22 @@ object TradeHistoryStore {
         }
     }
 
+    /** The whole journal as JSON, for backups. */
+    internal fun exportJson(c: Context): JSONArray = synchronized(lock) { JSONArray().also { a -> decode(c).forEach { a.put(encode(it)) } } }
+
+    /** Merges a backed-up journal, skipping trades already present. Returns how many were new. */
+    internal fun importJson(c: Context, arr: JSONArray): Int = addRecords(c, fromJson(arr).filter { it.fingerprint.isNotBlank() })
+
     fun all(c: Context): List<ImportedTrade> = synchronized(lock) { decode(c).sortedByDescending { it.importedAt } }
+
+    /** Adds already-normalised records (for example from a broker sync), skipping ones seen before. Returns how many were new. */
+    fun addRecords(c: Context, incoming: List<ImportedTrade>): Int = synchronized(lock) {
+        val records = decode(c)
+        val seen = records.map { it.fingerprint }.toHashSet()
+        var added = 0
+        for (r in incoming) if (seen.add(r.fingerprint)) { records.add(r); added++ }
+        if (added > 0 && !save(c, records)) 0 else added
+    }
 
     fun importCsv(c: Context, csv: String, sourceName: String): TradeImportResult = synchronized(lock) {
         if (csv.isBlank()) return@synchronized TradeImportResult(0, 0, 0, decode(c).size, "The selected file is empty.")

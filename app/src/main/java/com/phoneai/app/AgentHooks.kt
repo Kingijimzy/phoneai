@@ -11,7 +11,8 @@ internal object AgentHooks {
    val ok=!result.trimStart().startsWith("error",true)
    // Screen-change markers and OCR snippets are not proof that a consequential action completed.
    val summary=result.substringBefore("Current screen evidence").substringBefore("SCREEN EVIDENCE")
-   val verified=Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(summary)
+   val verified=summary.contains("LOCAL VERIFY PASS:",ignoreCase=true) ||
+    Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(summary)
    proofs.add(Proof(tool,ok,verified,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
   }
   @Synchronized fun snapshot():List<Proof> = proofs.toList()
@@ -42,6 +43,8 @@ internal object AgentHooks {
    signatures.add(signature(tool, args))
    while (signatures.size > maxEntries) signatures.remove(signatures.first())
   }
+  /** Lets a verified-safe retry (a transient read failure) run again; every other repeat stays blocked. */
+  @Synchronized fun forget(tool: String, args: JSONObject) { signatures.remove(signature(tool, args)) }
   @Synchronized fun clear() = signatures.clear()
   @Synchronized fun size(): Int = signatures.size
  }
@@ -101,6 +104,11 @@ internal object AgentHooks {
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
   val definition = ToolRegistry.find(tool) ?: return "Tool '$tool' is not registered; Orion will not execute an unknown action."
+  // A model-selected tool must match the user's actual intent. In particular, a weather
+  // lookup with an arbitrary phrase as its location must never hijack an engineering task.
+  if (tool == "weather" && !WeatherService.isWeatherRequest(request)) {
+   return "Weather lookup was blocked because the user's request is not a live weather request."
+  }
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"notification_action"->args.optString("action");else->""}
   val label=listOf(target,targetLabel).filter{it.isNotBlank()}.joinToString(" ")
   val writeAction = definition.access == ToolAccess.WRITE
@@ -115,17 +123,38 @@ internal object AgentHooks {
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
-  if(tool in setOf("forget","update_memory","undo_last","autonomy_toggle","profile_forget")) return true
+  if(tool in setOf("forget","update_memory","undo_last")) return true
   if(tool=="notification_action"&&args.optString("action").equals("reply",true)) return true
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"click"->targetLabel;else->""}
   if(risky.containsMatchIn(target)) return true
   return tool=="type"&&Regex("\\b(whatsapp|email|gmail|message|send|reply)\\b",RegexOption.IGNORE_CASE).containsMatchIn(targetLabel)
  }
- fun completionDecision(request:String,proofs:List<Proof>):GateDecision {
-  val success=proofs.filter{it.success}
-  if(success.isEmpty()) return GateDecision(false,"No successful tool result was recorded.")
+ fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
+  completionDecision(request, proofs, emptyList())
+
+ /** Durable adapter evidence supplements the in-memory run trace after a process restart. */
+ fun completionDecision(
+  request:String,
+  proofs:List<Proof>,
+  durable:List<OrionEvidenceLedger.Event>
+ ):GateDecision {
+  val merged = proofs.toMutableList()
+  durable.forEach { event ->
+   when(event.outcome) {
+    OrionEvidenceLedger.Outcome.VERIFIED ->
+     merged.add(Proof(event.tool, true, true, event.summary))
+    OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED ->
+     merged.add(Proof(event.tool, true, false, event.summary))
+    OrionEvidenceLedger.Outcome.FAILED, OrionEvidenceLedger.Outcome.DENIED, OrionEvidenceLedger.Outcome.RECOVERY ->
+     merged.add(Proof(event.tool, false, false, event.summary))
+    // Context retrieval is a preflight fact, never evidence that the requested action ran.
+    OrionEvidenceLedger.Outcome.CONTEXT_RETRIEVED -> Unit
+   }
+  }
+  val success=merged.filter{it.success}
+  if(success.isEmpty()) return GateDecision(false,"No successful tool result was recorded in the current run or durable evidence ledger.")
   if(risky.containsMatchIn(request)&&success.none{it.verified}) return GateDecision(false,"No post-action evidence confirms the consequential outcome.")
-  return GateDecision(true,"Action evidence recorded.")
+  return GateDecision(true,"Action evidence recorded in the current run and durable ledger.")
  }
  /** Failed screen reads reset the stability streak; an exception is never a matching sample. */
  fun awaitStableSnapshot(read:()->String,maxSamples:Int=5,stableSamples:Int=2,intervalMs:Long=120L):String {

@@ -251,7 +251,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             }
         }
         commandRow.addView(agentPrompt, LinearLayout.LayoutParams(0, -2, 1f))
-        agentRun = pill("Run ↗") { runBrowserAgent() }.apply {
+        agentRun = pill("Run") { runBrowserAgent() }.apply {
             background = rounded(Theme.PANEL2)
             contentDescription = "Ask Orion to perform the entered browser task"
         }
@@ -289,7 +289,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Theme.CYAN)
-                setStroke(dp(2), 0xFFB8F7FF.toInt())
+                setStroke(dp(2), Theme.LINE_STRONG)
             }
             elevation = dp(8).toFloat()
             contentDescription = "Orion browser tools"
@@ -338,9 +338,88 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         root.addView(webContainer, LinearLayout.LayoutParams(-1, 0, 1f))
 
         setContentView(root)
-        val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { "https://duckduckgo.com/" }
-        createTab(initial, true)
+        val browserPrefs = getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE)
+        val restoredUrls = savedInstanceState?.getStringArrayList("orion_browser_tab_urls")
+            ?: browserPrefs.getString("tab_urls", null)?.let { raw ->
+                runCatching {
+                    val array = org.json.JSONArray(raw)
+                    ArrayList<String>().apply { for (i in 0 until minOf(array.length(), 8)) add(array.optString(i)) }
+                }.getOrNull()
+            }
+        val restoredIndex = savedInstanceState?.getInt("orion_browser_active_tab")
+            ?: browserPrefs.getInt("active_tab", 0)
+        if (!restoredUrls.isNullOrEmpty()) {
+            restoredUrls.take(8).forEachIndexed { index, url -> createTab(url, index == restoredIndex.coerceIn(0, restoredUrls.lastIndex)) }
+        } else {
+            val initial = intent.getStringExtra(EXTRA_URL).orEmpty().ifBlank { "https://duckduckgo.com/" }
+            createTab(initial, true)
+        }
         updateControls()
+    }
+
+    /**
+     * Persist navigation continuity without persisting URL-carried credentials.
+     * OAuth codes, access tokens, signed query values and fragments must not be
+     * copied into app preferences or saved-instance state.
+     */
+    private fun restorableSessionUrl(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val uri = Uri.parse(raw)
+            if (uri.scheme != "https" || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) return null
+            val sensitiveKeys = setOf(
+                "token", "access_token", "refresh_token", "id_token", "code",
+                "authorization", "auth", "password", "passwd", "secret", "api_key",
+                "apikey", "client_secret", "signature", "sig", "session", "sessionid"
+            )
+            val builder = uri.buildUpon().fragment(null).clearQuery()
+            for (name in uri.queryParameterNames) {
+                if (name.lowercase() !in sensitiveKeys) {
+                    for (value in uri.getQueryParameters(name)) builder.appendQueryParameter(name, value)
+                }
+            }
+            builder.build().toString()
+        } catch (_: Exception) { null }
+    }
+
+    /**
+     * Keep the selected index aligned with the filtered URL list. Tabs that are
+     * blank, non-HTTPS, or credential-bearing are deliberately omitted; their
+     * removal must not shift the restored selection onto a different tab.
+     */
+    private fun restorableSessionSnapshot(): Pair<ArrayList<String>, Int> {
+        val urls = ArrayList<String>()
+        var selected = -1
+        browserTabs.forEachIndexed { index, tab ->
+            val safeUrl = restorableSessionUrl(tab.url) ?: return@forEachIndexed
+            if (urls.size >= 8) return@forEachIndexed
+            if (index == activeTabIndex) selected = urls.size
+            urls.add(safeUrl)
+        }
+        return urls to selected.coerceIn(0, maxOf(0, urls.lastIndex))
+    }
+
+    private fun persistBrowserSession() {
+        val (urls, selectedIndex) = restorableSessionSnapshot()
+        val prefs = getSharedPreferences("orion_browser_session_v1", MODE_PRIVATE)
+        if (urls.isEmpty()) {
+            // Clear stale state when every tab is transient or the activity closes.
+            prefs.edit().clear().apply()
+            return
+        }
+        prefs.edit()
+            .putString("tab_urls", org.json.JSONArray(urls).toString())
+            .putInt("active_tab", selectedIndex)
+            .putLong("updated_at", System.currentTimeMillis())
+            .apply()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val (urls, selectedIndex) = restorableSessionSnapshot()
+        outState.putStringArrayList("orion_browser_tab_urls", urls)
+        outState.putInt("orion_browser_active_tab", selectedIndex)
+        persistBrowserSession()
+        super.onSaveInstanceState(outState)
     }
 
 
@@ -359,14 +438,16 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             web.webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val uri = request?.url ?: return true
-                    return uri.scheme != "https" && uri.scheme != "http"
+                    return uri.scheme != "https"
                 }
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     if (view === web && !url.isNullOrBlank()) address.setText(url)
-                    if (view === web) title.text = "LOADING PAGE"
-                    progress.visibility = View.VISIBLE
-                    progress.progress = 5
-                    updateControls()
+                    if (view === web) {
+                        title.text = "LOADING PAGE"
+                        progress.visibility = View.VISIBLE
+                        progress.progress = 5
+                        updateControls()
+                    }
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     if (view === web) {
@@ -377,6 +458,27 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
                         updateControls()
                     }
                     renderTabs()
+                    persistBrowserSession()
+                }
+
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                    super.onReceivedError(view, request, error)
+                    if (view === web && request?.isForMainFrame == true) {
+                        progress.visibility = View.GONE
+                        title.text = "PAGE COULDN'T LOAD"
+                        agentResult.text = "The page could not load. Check your connection, address, or try Reload."
+                        updateControls()
+                    }
+                }
+
+                override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: android.webkit.WebResourceResponse?) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (view === web && request?.isForMainFrame == true) {
+                        progress.visibility = View.GONE
+                        title.text = "HTTP ERROR"
+                        agentResult.text = "The website returned an HTTP error. You can retry, go back, or check the address."
+                        updateControls()
+                    }
                 }
             }
             web.webChromeClient = object : WebChromeClient() {
@@ -415,8 +517,18 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             }
             web.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
                 try {
-                    val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                    val downloadUri = Uri.parse(url)
+                    if (downloadUri.scheme != "https" || downloadUri.host.isNullOrBlank() || !downloadUri.userInfo.isNullOrBlank()) {
+                        Toast.makeText(this, "Orion only downloads files from valid HTTPS links.", Toast.LENGTH_LONG).show()
+                        return@setDownloadListener
+                    }
+                    val guessed = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    // Never allow a server-provided filename to escape Downloads or contain controls.
+                    val safeName = guessed.map { ch ->
+                        if (ch == '/' || ch == '\\' || ch.code < 32) '_' else ch
+                    }.joinToString("").trim().take(120).ifBlank { "orion-download" }
+                    val fileName = safeName
+                    val request = DownloadManager.Request(downloadUri).apply {
                         setMimeType(mimeType)
                         setTitle(fileName)
                         setDescription("Downloading from Orion Browser")
@@ -448,15 +560,18 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (select || browserTabs.size == 1) selectTab(browserTabs.lastIndex)
         tab.loadUrl(validatedBrowserUrl(url))
         renderTabs()
+        persistBrowserSession()
     }
 
     private fun validatedBrowserUrl(input: String): String {
         val raw = input.trim()
         val candidate = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
             "https://duckduckgo.com/?q=" + URLEncoder.encode(raw, "UTF-8")
-        } else if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+        } else if (raw.startsWith("https://", true)) raw else if (raw.startsWith("http://", true)) {
+            return "https://duckduckgo.com/"
+        } else "https://$raw"
         val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
-        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
+        if (uri == null || uri.scheme != "https" || uri.host.isNullOrBlank() || !uri.userInfo.isNullOrBlank()) {
             return "https://duckduckgo.com/"
         }
         return candidate
@@ -471,6 +586,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         address.setText(web.url.orEmpty())
         renderTabs()
         updateControls()
+        persistBrowserSession()
     }
 
     private fun closeTab(index: Int) {
@@ -487,6 +603,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (index < activeTabIndex) activeTabIndex--
         else if (index == activeTabIndex) activeTabIndex = minOf(index, browserTabs.lastIndex)
         selectTab(activeTabIndex)
+        persistBrowserSession()
     }
 
     private fun renderTabs() {
@@ -542,20 +659,24 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
         if (raw.isBlank()) return
         val candidate = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
             "https://duckduckgo.com/?q=" + URLEncoder.encode(raw, "UTF-8")
-        } else if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) {
+        } else if (raw.startsWith("https://", true)) {
             raw
+        } else if (raw.startsWith("http://", true)) {
+            Toast.makeText(this, "Unencrypted HTTP pages are blocked in Orion Browser. Use HTTPS or the explicitly approved Python private-LAN bridge.", Toast.LENGTH_LONG).show()
+            return
         } else {
             "https://$raw"
         }
         val uri = try { Uri.parse(candidate) } catch (_: Exception) { null }
-        if (uri == null || uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
-            Toast.makeText(this, "Enter a valid website or search query.", Toast.LENGTH_SHORT).show()
+        if (uri == null || uri.scheme != "https" || uri.host.isNullOrBlank()) {
+            Toast.makeText(this, "Enter a valid HTTPS website or search query.", Toast.LENGTH_SHORT).show()
             return
         }
         address.setText(candidate)
         web.loadUrl(candidate)
         renderTabs()
         updateControls()
+        persistBrowserSession()
     }
 
     override fun onBackPressed() {
@@ -639,6 +760,7 @@ class BrowserActivity : Activity(), PhoneAiService.MainChatListener {
             tab.destroy()
         }
         browserTabs.clear()
+        persistBrowserSession()
         try { CookieManager.getInstance().flush() } catch (_: Exception) { }
         super.onDestroy()
     }
