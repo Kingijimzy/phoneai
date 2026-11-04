@@ -2500,9 +2500,15 @@ Rules:
             val tool = step.optString("tool")
             if (tool.isBlank() || tool == "done") {
                 // The model announced a step but called no tool: give it one chance to act before the turn ends.
-                if (!promiseNudged && ActionPromise.announcesUnfinishedStep(step.optString("say"), toolCalls)) {
+                val unfinishedObjectives = OrionObjectiveGraph.load(svc)?.let { graph ->
+                    graph.nodes.any { it.status != OrionObjectiveGraph.Status.COMPLETE }
+                } == true
+                if (!promiseNudged && (ActionPromise.announcesUnfinishedStep(step.optString("say"), toolCalls) || unfinishedObjectives)) {
                     promiseNudged = true
-                    history.put(msg("user", ActionPromise.NUDGE))
+                    val dispatchNudge = if (unfinishedObjectives) {
+                        "You have created a plan but have not executed all objectives. Do not stop with a planning summary. Inspect the persisted graph, choose the first READY objective whose dependencies are COMPLETE, and call its actual registered tool now. Include the exact objective_id on the tool call. Do not claim success or completion without a returned tool result. If the required capability is truly unavailable, report its exact registry/permission/approval blocker and continue with independent READY objectives."
+                    } else ActionPromise.NUDGE
+                    history.put(msg("user", dispatchNudge))
                     continue
                 }
                 val runEvidence = taskProofs.snapshot()
