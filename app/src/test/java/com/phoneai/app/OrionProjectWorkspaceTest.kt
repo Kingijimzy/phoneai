@@ -23,10 +23,10 @@ class OrionProjectWorkspaceTest {
         workspace = OrionPythonWorkspace(context)
         workspace.ensureRootForRepair()
         workspace.list()
-        workspace.delete("projects/demo/project.json")
-        workspace.delete("projects/webapp/project.json")
-        workspace.delete("projects/mobile_app/project.json")
-        workspace.delete("projects/android_demo/project.json")
+        listOf("demo", "webapp", "mobile_app", "android_demo").forEach { name ->
+            val prefix = "projects/$name/"
+            workspace.list().lineSequence().filter { it.startsWith(prefix) }.forEach { workspace.delete(it) }
+        }
     }
 
     @After fun tearDown() {
