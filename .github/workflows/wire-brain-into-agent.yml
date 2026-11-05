@@ -1,0 +1,92 @@
+name: wire-brain-into-agent
+on:
+  workflow_dispatch:
+  push:
+    branches: [orion/objective-graph-autonomy-fix]
+    paths:
+      - "app/src/main/java/com/phoneai/app/OrionAgentBrainBridge.kt"
+      - ".github/workflows/wire-brain-into-agent.yml"
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: orion/objective-graph-autonomy-fix
+          fetch-depth: 0
+      - name: Inject brain bridge into Agent.kt
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/com/phoneai/app/Agent.kt")
+          t = p.read_text()
+          if "OrionAgentBrainBridge.planTurn" in t:
+              print("already wired")
+          else:
+              needle = "        // Ground every run in live capability/graph context before acting.\n        if (!resumeRequest) {\n            val pre = OrionPreActionContext.assess(svc, command)\n            ui.note(\"[CONTEXT]\\n\" + pre.summary)\n        }"
+              repl = '''        // Single brain pipeline: context, references, memory, path choice (reset Rule 2).
+        if (!resumeRequest) {
+            val recent = ConversationContextPolicy.recent(
+                (0 until chatHist.length()).mapNotNull { i ->
+                    val o = chatHist.optJSONObject(i) ?: return@mapNotNull null
+                    o.optString("role") to o.optString("content")
+                }
+            )
+            val activeObj = runCatching { OrionObjectiveGraph.load(svc)?.objective.orEmpty() }.getOrDefault("")
+            val turn = OrionAgentBrainBridge.planTurn(svc, command, recent, activeObj)
+            ui.note("[CONTEXT]\n" + turn.frame.preAction.summary)
+            if (turn.blockTools) {
+                ui.note("[TASK:CLARIFY]\n" + (turn.clarification ?: "Need a clearer goal"))
+                ui.say(turn.clarification ?: "Which task should I continue?")
+                return
+            }
+            // Prefer direct path: skip forced multi-objective graph when brain says direct.
+            if (turn.frame.preferDirectAction) {
+                ui.note("[BRAIN]\nDirect-action path preferred; graph not mandatory.")
+            }
+        }'''
+              if needle not in t:
+                  # fallback: insert before FastIntents
+                  marker = "        // One-intent commands (play music, Google it in Chrome) skip the model entirely."
+                  if marker not in t:
+                      raise SystemExit("Agent markers not found")
+                  t = t.replace(marker, repl + "\n" + marker, 1)
+              else:
+                  t = t.replace(needle, repl, 1)
+              p.write_text(t)
+              print("wired planTurn")
+
+          t = p.read_text()
+          # After tool execution success path — inject verify near activityNote usage if possible
+          if "OrionAgentBrainBridge.afterTool" not in t:
+              marker = "private fun activityNote(tool: String, args: JSONObject, result: String): String {"
+              if marker in t:
+                  inject = '''private fun activityNote(tool: String, args: JSONObject, result: String): String {
+        // Intelligence reset: verify tool outcomes against the active user goal.
+        runCatching {
+            val goal = currentTask.ifBlank { commandNim.let { "" } }
+            val g = if (currentTask.isNotBlank()) currentTask else ""
+            if (g.isNotBlank()) {
+                val verdict = OrionAgentBrainBridge.afterTool(svc, g, tool, result)
+                if (!verdict.accept) {
+                    ui.note("[VERIFY:REJECT]\n" + tool + ": " + verdict.reason + (verdict.suggestAlternate?.let { " → try $it" } ?: ""))
+                }
+            }
+        }
+'''
+                  t = t.replace(marker, inject, 1)
+                  p.write_text(t)
+                  print("wired afterTool")
+              else:
+                  print("activityNote marker missing; skip afterTool")
+          PY
+      - name: Commit
+        run: |
+          git config user.name orion-bot
+          git config user.email orion@users.noreply.github.com
+          git add app/src/main/java/com/phoneai/app/Agent.kt
+          git diff --cached --quiet && echo no-change && exit 0
+          git commit -m "wire: Agent uses OrionAgentBrainBridge for plan + tool verify"
+          git push origin HEAD:orion/objective-graph-autonomy-fix

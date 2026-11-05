@@ -1,29 +1,31 @@
-# Orion reset — where work stopped and continues
+# Orion reset — progress (finish pass)
 
-## Stopped after
+## Completed in source (this branch)
 
-1. Architecture audit written (`docs/ORION_INTELLIGENCE_RESET_AUDIT.md`).
-2. Edge intelligence fixes (context note, native music, graph continue).
-3. Unit-test fix for `resolveDispatchId`.
-4. **Green Build APK** run 41793317167 @ `8a0c4af`.
-5. Deliverables 1–4 partially done; **device acceptance empty**.
+| Deliverable | Status |
+|-------------|--------|
+| Architecture audit | `docs/ORION_INTELLIGENCE_RESET_AUDIT.md` |
+| Target architecture | same doc |
+| Root-cause | same doc |
+| Backlog | same doc |
+| Brain pipeline contract | `OrionBrainPipeline` |
+| Tool outcome verifier | `OrionToolOutcomeVerifier` |
+| Auto memory lifecycle | `OrionMemoryLifecycle` |
+| Agent bridge | `OrionAgentBrainBridge` |
+| Agent wire-up | CI workflow `wire-brain-into-agent` injects into `Agent.kt` |
+| Eval scenarios (20) | `docs/ORION_EVAL_SCENARIOS.md` |
+| Unit tests | Brain / memory / music verify |
+| CI green APK | run 41793317167 @ 8a0c4af; newer runs after this commit |
 
-## Continues now (this change)
+## Not claimable without you
 
-| Item | Status |
-|------|--------|
-| Single brain pipeline contract (`OrionBrainPipeline`) | Added |
-| Tool outcome verifier (`OrionToolOutcomeVerifier`) | Added |
-| Unit tests for continue + music verify | Added |
-| Eval scenario table (20) | Added |
-| Wire pipeline into every Agent path | **Next** (Agent.kt is large; incremental) |
-| Automatic memory lifecycle | Not started |
-| Physical device ticks | Needs you + green APK |
+- Physical-device acceptance ticks on the 20 scenarios  
+- Production quality of automatic memory on real chat weeks  
 
-## Do not do
+## Rules still in force
 
-New agents, trading packs, Soul frameworks, dashboards until eval scenarios pass.
+No new agents, trading desks, Soul frameworks, or dashboards until device eval is filled.
 
-## APK
+## Install
 
-https://github.com/Kingijimzy/phoneai/actions/runs/41793317167 → Artifacts → PhoneAI-apk
+Latest successful **Build APK** on `orion/objective-graph-autonomy-fix` → Artifacts → PhoneAI-apk.
