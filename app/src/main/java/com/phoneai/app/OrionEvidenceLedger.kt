@@ -80,8 +80,6 @@ internal object OrionEvidenceLedger {
         .put("outcome", outcome(result, trustedVerification).name)
         .put("startedAt", startedAt)
         .put("finishedAt", System.currentTimeMillis())
-        .put("argsFingerprint", digest(args.toString()))
-        .put("redactedArgs", AgentPrivacyFilter.safeArguments(args))
         .put("summary", safeSummary(tool, result))
     )
 
@@ -106,7 +104,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.CONTEXT_RETRIEVED.name)
             .put("startedAt", now)
             .put("finishedAt", now)
-            .put("argsFingerprint", digest(objective))
             .put("summary", "Objective-scoped memory context retrieved; source=$source; chars=$retrievedChars.")
         )
     }
@@ -121,7 +118,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.DENIED.name)
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
-            .put("argsFingerprint", digest(args.toString()))
             .put("summary", "Dispatch denied before execution: " + category.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48))
         )
     /**
@@ -157,7 +153,6 @@ internal object OrionEvidenceLedger {
             })
             .put("startedAt", now)
             .put("finishedAt", now)
-            .put("argsFingerprint", planDigest.lowercase())
             .put("summary", result)
         )
     }
@@ -172,7 +167,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.RECOVERY.name)
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
-            .put("argsFingerprint", "")
             .put("summary", "Recovery selected: " + strategy.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48) + "; reason retained only in task context.")
         )
 
@@ -218,7 +212,7 @@ internal object OrionEvidenceLedger {
             val outcome = runCatching { Outcome.valueOf(row.optString("outcome")) }.getOrNull() ?: return@mapNotNull null
             Event(row.optString("id"), id, row.optString("backend"), row.optString("tool"),
                 outcome, row.optLong("startedAt"), row.optLong("finishedAt"),
-                row.optString("argsFingerprint"), row.optString("summary"), row.optString("redactedArgs"))
+                "", row.optString("summary"), "")
         }
     }
 
