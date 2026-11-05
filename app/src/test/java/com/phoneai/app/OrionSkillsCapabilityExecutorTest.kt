@@ -54,7 +54,7 @@ class OrionSkillsCapabilityExecutorTest {
         assertTrue(SkillRegistry.list(context).none { it.id == "unsafe_skill" })
     }
 
-    @Test fun enablingAWorkflowDoesNotBypassWriteToolApproval() {
+    @Test fun enablingAWorkflowDoesNotBypassConsequentialToolApproval() {
         clearRegistry()
         val result = OrionSkillsCapabilityExecutor.execute(
             "skill_create",
@@ -62,15 +62,17 @@ class OrionSkillsCapabilityExecutorTest {
                 .put("id", "workspace_helper")
                 .put("version", "1.0.0")
                 .put("description", "Read and update files in the project workspace.")
-                .put("allowed_tools", JSONArray().put("workspace_read").put("workspace_write")),
+                .put("allowed_tools", JSONArray().put("workspace_read").put("workspace_write").put("mcp_call")),
             context
         )
         assertTrue(result.startsWith("Created and auto-enabled"))
         val read = SkillRegistry.authorize(context, "workspace_helper", "workspace_read", 0, 0L, false)
-        val write = SkillRegistry.authorize(context, "workspace_helper", "workspace_write", 0, 0L, false)
+        val routineWrite = SkillRegistry.authorize(context, "workspace_helper", "workspace_write", 0, 0L, false)
+        val consequential = SkillRegistry.authorize(context, "workspace_helper", "mcp_call", 0, 0L, false)
         assertTrue(read.allowed)
-        assertFalse(write.allowed)
-        assertTrue(write.reason.contains("approval", ignoreCase = true))
+        assertTrue(routineWrite.allowed)
+        assertFalse(consequential.allowed)
+        assertTrue(consequential.reason.contains("approval", ignoreCase = true))
     }
 
     @Test fun skillCanBeDisabledAndReenabledWithoutChangingToolPermissions() {
