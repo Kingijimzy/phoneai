@@ -12,14 +12,14 @@ internal object ShellExecutionRouting {
     }
 
     /**
-     * Linux backend selection is not itself a reason to interrupt the user. The command policy
-     * decides: safe diagnostics run automatically, while unknown/mutating commands still require
-     * confirmation through ShellPolicy.
+     * Backend selection is not itself a reason to interrupt the user. Apply the same command
+     * risk policy to built-in, Alpine and Termux shells; only the command's actual risk matters.
      */
     fun requiresApproval(where: String?, command: String? = null): Boolean {
-        if (backend(where) != Backend.LINUX) return false
+        val selectedBackend = backend(where)
         val value = command?.trim().orEmpty()
-        return value.isBlank() || ShellPolicy.classify(value) != ShellRisk.SAFE
+        if (value.isBlank()) return selectedBackend == Backend.LINUX
+        return ShellPolicy.classify(value) != ShellRisk.SAFE
     }
 
     /** Recognize package database mutations even when chained after a shell separator. */
