@@ -44,10 +44,11 @@ class SkillAuthorizationPolicyTest {
         assertFalse(SkillRegistry.isSupportedTool("execute_python"))
     }
 
-    @Test fun allWriteToolsRequireApprovalWhenUsedBySkills() {
-        listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember")
+    @Test fun onlyConsequentialToolsForceSkillApproval() {
+        listOf("mcp_call", "telegram_send", "sms", "task_delete", "forget", "update_memory")
             .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
-        assertFalse(SkillRegistry.requiresApprovalForTool("web_search"))
+        listOf("open_app", "workspace_write", "task_add", "remember", "web_search", "notification_action")
+            .forEach { assertFalse("$it should use the central risk gate", SkillRegistry.requiresApprovalForTool(it)) }
     }
 
     @Test fun browserOperatorTemplateValidatesAgainstTheLiveToolRegistry() {
@@ -93,9 +94,27 @@ class SkillAuthorizationPolicyTest {
         assertFalse(check(tool = "task_delete").allowed)
     }
 
-    @Test fun skillLevelApprovalAppliesToOtherwiseOrdinaryTools() {
-        assertFalse(check(skill = skill(requiresApproval = true)).allowed)
-        assertTrue(check(skill = skill(requiresApproval = true), approved = true).allowed)
+    @Test fun skillApprovalFlagDoesNotAddABlanketPromptToRoutineSteps() {
+        assertTrue(check(skill = skill(requiresApproval = true)).allowed)
+        // The skill flag does not add another prompt, but the central risk gate
+        // must still require approval for consequential actions.
+        assertEquals(
+            "User approval is required before this action.",
+            check(skill = skill(requiresApproval = true), tool = "open_url").reason
+        )
+        assertTrue(check(
+            skill = skill(requiresApproval = true), tool = "open_url", approved = true
+        ).allowed)
+    }
+
+    @Test fun preflightChecksScopeAndBudgetWithoutCreatingASecondApprovalPrompt() {
+        val approvalRequired = skill(tools = setOf("time"), requiresApproval = true)
+        assertTrue(SkillAuthorizationPolicy.preflight(
+            approvalRequired, "time", 0, 0L, supported
+        ).allowed)
+        assertTrue(SkillAuthorizationPolicy.evaluate(
+            approvalRequired, "time", 0, 0L, false, supported, consequential
+        ).allowed)
     }
 
     @Test fun ordinaryAllowlistedToolPassesWithoutApproval() {

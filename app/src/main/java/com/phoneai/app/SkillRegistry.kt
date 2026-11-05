@@ -9,7 +9,7 @@ import org.json.JSONObject
  *
  * A skill is metadata and a constrained list of existing tool names, never executable code.
  * The registry does not download skills, grant Android permissions, or invoke tools itself.
- * The agent must call authorize() immediately before every tool call.
+ * The agent must call preflight() immediately before every tool call; the central Agent gate owns the single approval decision.
  */
 data class PhoneAiSkill(
     val id: String,
@@ -30,23 +30,24 @@ object SkillRegistry {
     private val builtInSkills = listOf(
         PhoneAiSkill("whatsapp_draft", "1.0.0", "Prepare a WhatsApp message draft for a user-confirmed recipient. Never send automatically.",
             setOf("lookup_app", "open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true),
+            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false, enabled = true),
         PhoneAiSkill("email_draft", "1.0.0", "Prepare an email draft using the installed mail app. Never send automatically.",
             setOf("open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true)
+            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false, enabled = true)
     )
 
     // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
     // One source of truth: skills may reference any real registered tool, never arbitrary code.
-    private val supportedTools = ToolRegistry.names()
+    private val skillManagementTools = setOf("skills_list", "skill_create", "skill_enable", "skill_disable")
+    private val supportedTools = ToolRegistry.names() - skillManagementTools
 
 
-    // Consequential tools always require approval, regardless of a skill's manifest setting.
-    // Every write-capable tool requires approval when invoked through a skill.
-    private val consequentialTools = ToolRegistry.all
-        .filter { it.access == ToolAccess.WRITE }
-        .map { it.name }
-        .toSet()
+    // Only genuinely consequential tool families are forced through approval by skill policy.
+    // Routine workspace/app writes still pass the central dispatcher and explicit owner overrides.
+    private val consequentialTools = setOf(
+        "telegram_send", "sms", "mcp_call",
+        "task_delete", "forget", "update_memory", "undo_last"
+    )
 
 
     private val idPattern = Regex("^[a-z0-9][a-z0-9._-]{1,47}$")
@@ -70,7 +71,7 @@ object SkillRegistry {
     }
 
     /**
-     * Register reviewed metadata. New skills are disabled by default.
+     * Register validated metadata. New skills are disabled by default; the agent may auto-enable them after registry validation.
      * Unknown tools, invalid IDs/versions, excessive budgets, and duplicate IDs are rejected.
      */
     /**
@@ -128,6 +129,21 @@ object SkillRegistry {
      */
     internal fun isSupportedTool(name: String): Boolean = name in supportedTools
     internal fun requiresApprovalForTool(name: String): Boolean = name in consequentialTools
+
+    /** Validate skill allowlist and budgets without prompting; Agent's central gate owns approval. */
+    fun preflight(
+        context: Context,
+        skillId: String,
+        toolName: String,
+        callsUsed: Int,
+        elapsedMs: Long
+    ): SkillDecision = SkillAuthorizationPolicy.preflight(
+        skill = list(context).firstOrNull { it.id == skillId },
+        toolName = toolName,
+        callsUsed = callsUsed,
+        elapsedMs = elapsedMs,
+        supportedTools = supportedTools
+    )
 
     fun authorize(
         context: Context,

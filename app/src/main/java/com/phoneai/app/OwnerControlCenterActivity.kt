@@ -112,6 +112,7 @@ class OwnerControlCenterActivity : Activity() {
         val ownerDials = OrionOwnerDialSettings.read(this)
         addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} read retries", 13f, Theme.TEXT, true, 5)
         addText("Extension auto-activation: ${if (ownerDials.autoActivateVerifiedExtensions) "ON · tested drafts only" else "OFF"} · Python: ${ownerDials.pythonProfile.name} · Recovery: ${ownerDials.recoveryMaxAttempts} retries / ${ownerDials.recoveryBackoffSeconds}s base · Watcher: ${if (Prefs.watchOn(this)) "REQUESTED" else "OFF"}", 12f, Theme.MUTED, false, 3)
+        addButton("JARVIS MODE · one tap: autopilot + verified extensions + scoped Python", true) { enableJarvisPreset() }
         addButton("Configure autonomy, limits and notifications", true) { showAutonomyControlCenter() }
         addButton("Extension activation dial") { showExtensionControls() }
         addButton("Python execution profile") { showPythonProfile() }
@@ -203,6 +204,36 @@ class OwnerControlCenterActivity : Activity() {
             .show()
     }
 
+    /** One tap applies the owner's routine-autonomy defaults immediately; no redundant setup dialog. */
+    private fun enableJarvisPreset() {
+        val cfg = OrionAutonomySettings.read(this)
+        OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT, maxToolSteps = 40, maxRetries = 4))
+        ToolPermissions.applyJarvisAutonomy(this)
+        // One explicit Jarvis opt-in enables all implemented packs for automatic discovery.
+        // Missing Android permissions, connector authentication and external app setup remain real prerequisites.
+        AgentPolicy.enableAllImplementedPacks(this)
+        OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
+            autoActivateVerifiedExtensions = true,
+            pythonProfile = OrionPythonProfile.DEVELOPER,
+            recoveryMaxAttempts = 4,
+            recoveryBackoffSeconds = 15
+        ))
+        AgentPolicy.setBudgets(this, steps = 100, calls = 100, minutes = 30)
+        AgentPolicy.log(
+            this,
+            "owner-autonomy",
+            "jarvis_preset",
+            true,
+            "owner enabled AUTOPILOT, verified-extension auto-activation and scoped Python DEVELOPER profile; consequential actions remain gated"
+        )
+        Toast.makeText(
+            this,
+            "JARVIS MODE enabled: routine tools, verified extensions and scoped Python run automatically. Consequential actions remain protected.",
+            Toast.LENGTH_LONG
+        ).show()
+        recreate()
+    }
+
     private fun showAutonomyControlCenter() {
         val current = OrionAutonomySettings.read(this)
         val modes = OrionMode.values()
@@ -275,12 +306,12 @@ class OwnerControlCenterActivity : Activity() {
     private fun showPythonProfile() {
         val current = OrionOwnerDialSettings.read(this)
         val options = arrayOf(
-            "GUARDED · 8,000 characters · explicit approval",
-            "DEVELOPER · 16,000 characters · explicit approval",
-            "FULL · 64,000 characters · raw network, subprocesses · explicit approval"
+            "GUARDED · 8,000 characters · scoped runtime",
+            "DEVELOPER · 16,000 characters · scoped phone API",
+            "FULL · 64,000 characters · raw network, subprocesses, native loading"
         )
         AlertDialog.Builder(this).setTitle("Python execution profile")
-            .setMessage("GUARDED and DEVELOPER keep the in-guest socket/subprocess block. FULL lifts it, so scripts can use the network, run commands and spawn processes inside Orion's Alpine guest (5-minute limit). Each run still needs your approval, and Python can call any Orion tool with phone.tool(name, args), which goes through the normal approval gates.")
+            .setMessage("GUARDED and DEVELOPER keep the in-guest socket/subprocess/native-load block; Python can use only the scoped phone.* facade, which checks Android permissions, exact network-host grants and consequential-action gates. In AUTOPILOT these bounded scripts run without a redundant per-run prompt. FULL lifts the in-guest block and can access raw sockets, subprocesses and native loading under the app UID, so it remains an explicit per-run approval path. Python can call registered Orion tools with phone.tool(name, args); those calls still pass through the normal dispatcher and risk gates.")
             .setSingleChoiceItems(options, when (current.pythonProfile) { OrionPythonProfile.GUARDED -> 0; OrionPythonProfile.DEVELOPER -> 1; OrionPythonProfile.FULL -> 2 }) { dialog, which ->
                 val profile = when (which) { 1 -> OrionPythonProfile.DEVELOPER; 2 -> OrionPythonProfile.FULL; else -> OrionPythonProfile.GUARDED }
                 OrionOwnerDialSettings.write(this, current.copy(pythonProfile = profile))
@@ -414,7 +445,7 @@ class OwnerControlCenterActivity : Activity() {
         val entries = listOf(
             "Tool permissions — configurable Allow / Ask / Deny per registered tool; always-available conversation tools remain reserved.",
             "Autonomy mode — configurable Talk / Assist / Autopilot / Builder; modes do not erase explicit safety gates.",
-            "Owner dials — exact-hash, sandbox-tested extension auto-promotion; guarded/developer Python code-size profiles with approval retained; configurable durable recovery retries and backoff.",
+            "Owner dials — exact-hash, sandbox-tested extension auto-promotion; scoped Python runs autonomously in AUTOPILOT while FULL raw socket/subprocess/native access remains explicit-approval only; configurable durable recovery retries and backoff.",
             "Tool registry — extensions run through the pre-registered extension tool contract; they cannot self-register arbitrary native tools or add capability mappings.",
             "Execution budgets — configurable within enforced app caps: 1–40 tool steps, 1–30 AI requests, 0–4 retries.",
             "Agent approval — configurable Plan / Ask / Allowlist / timed trusted session; trust expires and can be stopped.",

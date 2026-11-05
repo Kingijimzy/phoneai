@@ -22,7 +22,20 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
- @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
+ @Test fun coordinateGesturesRequireApprovalButTextTargetsUseRiskClassification(){
+  assertTrue(AgentHooks.requiresConfirmation("tap",JSONObject().put("allow_coordinates",true)))
+  assertTrue(AgentHooks.requiresConfirmation("swipe",JSONObject().put("allow_coordinates",true)))
+  assertFalse(AgentHooks.requiresConfirmation("scroll",JSONObject()))
+  assertFalse(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Open settings")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Delete account")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Install app")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Allow permission")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Share private data")))
+  assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Confirm checkout")))
+  assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Save changes")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Export contacts")))
+ }
+ @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()));assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Draft text"),"WhatsApp"));assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Send")))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
   val p=AgentHooks.ProofRecorder()

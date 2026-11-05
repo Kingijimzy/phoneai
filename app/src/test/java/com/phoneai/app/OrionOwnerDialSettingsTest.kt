@@ -15,10 +15,23 @@ import org.robolectric.annotation.Config
 class OrionOwnerDialSettingsTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
 
-    @Test fun extensionAutoActivationDefaultsOffAndMatchesTheModelDefault() {
+    @Test fun extensionAutoActivationDefaultsOnForOwnerRequestedAutopilot() {
         context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit().clear().commit()
-        assertFalse(OrionOwnerDials().autoActivateVerifiedExtensions)
+        assertTrue(OrionOwnerDials().autoActivateVerifiedExtensions)
+        assertTrue(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
+    }
+
+    @Test fun legacyManualExtensionActivationMigratesToAutoOnceButLaterOwnerChoicePersists() {
+        context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit()
+            .clear().putBoolean("auto_activate_verified_extensions", false).commit()
+        assertTrue(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
+        OrionOwnerDialSettings.write(context, OrionOwnerDials(autoActivateVerifiedExtensions = false))
         assertFalse(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
+    }
+
+    @Test fun firstRunUsesScopedDeveloperPythonRatherThanUnrestrictedFullProfile() {
+        context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit().clear().commit()
+        assertEquals(OrionPythonProfile.DEVELOPER, OrionOwnerDialSettings.read(context).pythonProfile)
     }
 
     @Test fun recoveryDialsAreClampedAndPersisted() {

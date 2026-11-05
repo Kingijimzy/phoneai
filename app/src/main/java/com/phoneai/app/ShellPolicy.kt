@@ -52,6 +52,8 @@ internal object ShellPolicy {
         if (cmd.isEmpty() || cmd.length > 2000) return ShellRisk.BLOCKED
         if (blocked.any { it.containsMatchIn(cmd) }) return ShellRisk.BLOCKED
         if (safeDiagnostics.any { it.matches(cmd) }) return ShellRisk.SAFE
+        // Owner-authorized unattended installs are limited to exact pinned official Alpine repos.
+        if (TrustedDependencyInstallPolicy.isSafeAlpineInstall(cmd)) return ShellRisk.SAFE
         if (approvalRequired.any { it.containsMatchIn(cmd) }) return ShellRisk.ASK
         BuiltinCommands.risk(cmd)?.let { return it }
         if (cmd.contains("`") || cmd.contains("$(") || cmd.contains("<(")) return ShellRisk.ASK

@@ -39,7 +39,7 @@ internal object OrionCapabilityAdapters {
             "verify_send", "click", "click_text", "wait_for", "tap", "long_press", "swipe",
             "swipe_path", "scroll", "type", "key", "look", "play", "record_screen"
         ),
-        Backend.SKILLS to setOf("skills_list"),
+        Backend.SKILLS to setOf("skills_list", "skill_create", "skill_enable", "skill_disable"),
         Backend.INTEGRATIONS to setOf("integration_status", "service_status", "connect_service",
             "github_account_read", "gmail_list_messages", "vault_list", "vault_request", "vault_get", "capability_note"),
         Backend.COMMUNICATION to setOf("telegram_status", "telegram_inbox", "telegram_send", "dial", "sms", "notification_action"),

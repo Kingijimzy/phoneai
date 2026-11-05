@@ -30,6 +30,42 @@ class OrionAutonomyPolicyTest {
         assertEquals(4, c.maxRetries)
     }
 
+    @Test fun autopilotRunsRoutinePythonWithoutPromptButKeepsConsequentialActionsGated() {
+        fun decision(dangerous: Boolean) = GatePolicy.decide(GatePolicy.Input(
+            pack = "workspace_shell",
+            packOn = true,
+            tool = "python_exec",
+            mode = AgentPolicy.Mode.TRUSTED,
+            toolMode = ToolMode.ASK,
+            autonomous = true,
+            dangerous = dangerous,
+            approvedThisAction = false,
+            trustedForPack = false,
+            allowlisted = false,
+            askedThisTask = false
+        )).verdict
+
+        assertEquals(GatePolicy.Verdict.ALLOW, decision(dangerous = false))
+        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, decision(dangerous = true))
+    }
+
+    @Test fun explicitAskOverrideStillPromptsUnderAutopilot() {
+        val result = GatePolicy.decide(GatePolicy.Input(
+            pack = "workspace_shell",
+            packOn = true,
+            tool = "python_exec",
+            mode = AgentPolicy.Mode.TRUSTED,
+            toolMode = ToolMode.ASK,
+            autonomous = false,
+            dangerous = false,
+            approvedThisAction = false,
+            trustedForPack = false,
+            allowlisted = false,
+            askedThisTask = false
+        ))
+        assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
+    }
+
     @Test fun zeroConfiguredRetriesNeverRetriesReadFailure() {
         assertEquals(
             RecoveryPolicy.Decision.REPLAN,

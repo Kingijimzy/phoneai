@@ -16,11 +16,13 @@ class ShellExecutionRoutingTest {
         assertEquals(ShellExecutionRouting.Backend.INVALID, ShellExecutionRouting.backend("docker"))
     }
 
-    @Test fun everyLinuxAliasRequiresApproval() {
-        assertTrue(ShellExecutionRouting.requiresApproval("linux"))
-        assertTrue(ShellExecutionRouting.requiresApproval("Alpine"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin"))
-        assertFalse(ShellExecutionRouting.requiresApproval("termux"))
+    @Test fun everyBackendUsesTheSameCommandRiskPolicy() {
+        // Missing commands are never silently treated as approved, regardless of backend.
+        listOf("linux", "Alpine", "builtin", "termux").forEach {
+            assertTrue("$it requires an explicit command", ShellExecutionRouting.requiresApproval(it))
+            assertFalse("$it permits safe diagnostics", ShellExecutionRouting.requiresApproval(it, "python3 --version"))
+            assertTrue("$it gates untrusted installs", ShellExecutionRouting.requiresApproval(it, "apk add python3"))
+        }
     }
 
     @Test fun packageManagerCommandsGetLongerButBoundedTimeout() {
@@ -37,9 +39,20 @@ class ShellExecutionRoutingTest {
 
     @Test fun packageMutationDetectionAvoidsCommandTextFalsePositives() {
         assertTrue(ShellExecutionRouting.isPackageOperation("apk add python3"))
+        assertTrue(ShellExecutionRouting.isPackageOperation("apk --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"))
         assertTrue(ShellExecutionRouting.isPackageOperation("apk update && apk upgrade"))
         assertTrue(ShellExecutionRouting.isPackageOperation("apk del python3"))
         assertFalse(ShellExecutionRouting.isPackageOperation("echo apk add python3"))
+    }
+
+    @Test fun trustedAlpineInstallsAreAutomaticAcrossShellBackends() {
+        val trustedInstall = "apk --no-cache --repositories-file /dev/null " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"
+        assertFalse(ShellExecutionRouting.requiresApproval("linux", trustedInstall))
+        assertFalse(ShellExecutionRouting.requiresApproval("builtin", trustedInstall))
+        assertTrue(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
+        assertTrue(ShellExecutionRouting.requiresApproval("termux", "apk upgrade"))
     }
 
     @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {

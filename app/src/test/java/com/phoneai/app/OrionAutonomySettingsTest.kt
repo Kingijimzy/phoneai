@@ -15,6 +15,13 @@ import org.robolectric.annotation.Config
 class OrionAutonomySettingsTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
 
+    @Test fun firstRunDefaultsToAutopilotAndAutonomousToolPolicy() {
+        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear().commit()
+        val defaults = OrionAutonomySettings.read(context)
+        assertEquals(OrionMode.AUTOPILOT, defaults.mode)
+        assertEquals("autonomous", ToolPermissions.level(context))
+    }
+
     @Test fun ownerNotificationDialsPersistIndependently() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear().commit()
         val defaults = OrionAutonomySettings.read(context)
@@ -37,7 +44,8 @@ class OrionAutonomySettingsTest {
     }
 
     @Test fun ownerExecutionLimitsPersistWithinTheirClampedRange() {
-        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear()
+            .putBoolean("orion_autopilot_default_migrated_v1", true).commit()
         OrionAutonomySettings.write(
             context,
             OrionAutonomyConfig(

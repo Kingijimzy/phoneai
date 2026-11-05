@@ -46,6 +46,19 @@ object AgentPolicy {
         log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
         if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
+
+    /** Explicit Jarvis opt-in exposes every implemented capability pack. This does not grant
+     * Android permissions, authenticate connectors, install optional apps, or bypass tool DENY. */
+    fun enableAllImplementedPacks(c: Context) {
+        packs.filter { it.implemented }.forEach { setEnabled(c, it.id, true) }
+    }
+
+    /** First-run Jarvis bootstrap enables only packs the owner has never explicitly configured. */
+    internal fun enableUnconfiguredImplementedPacks(c: Context) {
+        val preferences = p(c)
+        packs.filter { it.implemented && !preferences.contains("pack_${it.id}") }
+            .forEach { setEnabled(c, it.id, true) }
+    }
     fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
     fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {
         val until = System.currentTimeMillis() + minutes.coerceIn(1, 120) * 60_000L
@@ -68,7 +81,8 @@ object AgentPolicy {
     /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
-        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
+        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
+        forceApproval: Boolean = false
     ): GatePolicy.Result {
         val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
             OrionAutonomySettings.read(c).mode,
@@ -81,13 +95,15 @@ object AgentPolicy {
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
-        // Autopilot applies to routine actions even when a tool has an old ASK override.
-        // Explicit DENY still wins in GatePolicy, and consequential actions still need confirmation.
-        autonomous = ToolPermissions.level(c) == "autonomous",
+        // Explicit per-tool ASK/DENY overrides remain owner-controlled under Autopilot.
+        // Only inherited routine tool permissions are made automatic; consequential actions
+        // and unrestricted FULL Python still require the central confirmation gate.
+        autonomous = ToolPermissions.level(c) == "autonomous" && !ToolPermissions.hasOverride(c, toolId),
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
-        trustedForPack = isTrustedFor(c, pack),
+        // Unrestricted FULL Python is never covered by a timed trust session.
+        trustedForPack = isTrustedFor(c, pack) && !forceApproval &&
+            !(toolId == "python_exec" && OrionOwnerDialSettings.read(c).pythonProfile == OrionPythonProfile.FULL),
         allowlisted = allowed(c, pack, toolId),
         askedThisTask = askedThisTask
         ))
@@ -130,7 +146,7 @@ object AgentPolicy {
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
         "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
-        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
+        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "skill_create", "skill_enable", "skill_disable", "ask_user" -> "orion_core"
         else -> null
     }
 

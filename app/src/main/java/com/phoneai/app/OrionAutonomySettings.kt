@@ -7,7 +7,7 @@ import org.json.JSONObject
 internal enum class OrionMode { TALK, ASSIST, AUTOPILOT, BUILDER }
 
 internal data class OrionAutonomyConfig(
-    val mode: OrionMode = OrionMode.ASSIST,
+    val mode: OrionMode = OrionMode.AUTOPILOT,
     val maxToolSteps: Int = 30,
     val maxAiRequests: Int = 30,
     val maxRetries: Int = 2,
@@ -51,9 +51,23 @@ internal object OrionAutonomyPolicy {
 
 internal object OrionAutonomySettings {
     private const val FILE = "phoneai"
+    private const val AUTOPILOT_DEFAULT_MIGRATION = "orion_autopilot_default_migrated_v1"
+
     fun read(c: Context): OrionAutonomyConfig {
         val p = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        val mode = runCatching { OrionMode.valueOf(p.getString("orion_mode", "ASSIST") ?: "ASSIST") }.getOrDefault(OrionMode.ASSIST)
+        // The owner explicitly requested Autopilot as Orion's default. Migrate every legacy
+        // mode once on upgrade; later manual TALK/ASSIST/BUILDER choices remain untouched.
+        // applyLevel preserves explicit per-tool ASK/DENY overrides.
+        if (!p.getBoolean(AUTOPILOT_DEFAULT_MIGRATION, false)) {
+            p.edit()
+                .putString("orion_mode", OrionMode.AUTOPILOT.name)
+                .putBoolean(AUTOPILOT_DEFAULT_MIGRATION, true)
+                .apply()
+            ToolPermissions.applyLevel(c, "autonomous")
+        }
+        val mode = runCatching {
+            OrionMode.valueOf(p.getString("orion_mode", OrionMode.AUTOPILOT.name) ?: OrionMode.AUTOPILOT.name)
+        }.getOrDefault(OrionMode.AUTOPILOT)
         return OrionAutonomyPolicy.clamp(OrionAutonomyConfig(
             mode = mode,
             maxToolSteps = p.getInt("orion_max_tool_steps_v2", 30),
@@ -68,6 +82,7 @@ internal object OrionAutonomySettings {
         val v = OrionAutonomyPolicy.clamp(config)
         c.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
             .putString("orion_mode", v.mode.name)
+            .putBoolean(AUTOPILOT_DEFAULT_MIGRATION, true)
             .putInt("orion_max_tool_steps_v2", v.maxToolSteps)
             .putInt("orion_max_ai_requests_v2", v.maxAiRequests)
             .putInt("orion_max_retries", v.maxRetries)
@@ -77,3 +92,49 @@ internal object OrionAutonomySettings {
             .apply()
     }
 }
+
+/**
+ * Applies the owner's requested autonomous defaults once when Orion first starts its brain.
+ * Explicit per-tool DENY and pack-off choices are preserved; Android permissions and external
+ * connector authentication are never fabricated or bypassed.
+ */
+internal object OrionJarvisBootstrap {
+    private const val FILE = "orion_jarvis_bootstrap"
+    private const val APPLIED = "routine_autonomy_v1"
+
+    @Synchronized
+    fun ensureApplied(context: Context) {
+        val app = context.applicationContext
+        val preferences = app.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        if (preferences.getBoolean(APPLIED, false)) return
+
+        val current = OrionAutonomySettings.read(app)
+        OrionAutonomySettings.write(
+            app,
+            current.copy(mode = OrionMode.AUTOPILOT, maxToolSteps = 40, maxAiRequests = 30, maxRetries = 4)
+        )
+        ToolPermissions.applyJarvisAutonomy(app)
+        AgentPolicy.enableUnconfiguredImplementedPacks(app)
+        OrionOwnerDialSettings.write(
+            app,
+            OrionOwnerDialSettings.read(app).copy(
+                autoActivateVerifiedExtensions = true,
+                pythonProfile = OrionPythonProfile.DEVELOPER,
+                recoveryMaxAttempts = 4,
+                recoveryBackoffSeconds = 15
+            )
+        )
+        AgentPolicy.setBudgets(app, steps = 100, calls = 100, minutes = 30)
+        AgentPolicy.log(
+            app,
+            "owner-autonomy",
+            "jarvis_bootstrap",
+            true,
+            "applied one-time routine autonomy defaults; preserved explicit tool DENY and pack-off settings"
+        )
+        check(preferences.edit().putBoolean(APPLIED, true).commit()) {
+            "Could not persist Jarvis autonomy bootstrap marker"
+        }
+    }
+}
+

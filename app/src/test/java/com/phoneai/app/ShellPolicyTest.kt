@@ -10,6 +10,10 @@ class ShellPolicyTest {
         listOf("python3 --version", "node --version", "npm --version", "java -version", "javac -version", "gradle --version", "kotlinc -version", "which node", "which gradle")
             .forEach { command -> assertEquals(command, ShellRisk.SAFE, ShellPolicy.classify(command)) }
         assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk add nodejs npm"))
+        val trustedInstall = "apk --no-cache --repositories-file /dev/null " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify(trustedInstall))
         assertEquals(ShellRisk.ASK, ShellPolicy.classify("npm install express"))
     }
 
@@ -61,12 +65,13 @@ class ShellPolicyTest {
         assertTrue(contract.contains("termux_command is read-only diagnostics only"))
     }
 
-    @Test fun safeLinuxDiagnosticsDoNotTriggerAnApprovalPopup() {
-        assertFalse(ShellExecutionRouting.requiresApproval("linux", "python3 --version"))
-        assertFalse(ShellExecutionRouting.requiresApproval("alpine", "which python3"))
-        assertTrue(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
-        assertTrue(ShellExecutionRouting.requiresApproval("linux", "python3 run_script.py"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "apk add python3"))
+    @Test fun shellRiskIsConsistentAcrossBackends() {
+        listOf("linux", "alpine", "builtin", "termux").forEach { backend ->
+            assertFalse(ShellExecutionRouting.requiresApproval(backend, "python3 --version"))
+            assertFalse(ShellExecutionRouting.requiresApproval(backend, "which python3"))
+            assertTrue(ShellExecutionRouting.requiresApproval(backend, "apk add python3"))
+            assertTrue(ShellExecutionRouting.requiresApproval(backend, "python3 run_script.py"))
+        }
     }
 
     @Test fun shellToolsAreRegisteredWithCorrectAccess() {

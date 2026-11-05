@@ -142,8 +142,9 @@ internal class OrionPythonCapabilityExecutor(
     }
 
     companion object {
-        /** PRoot runs under the app UID; direct CPython is trusted code until OS-level isolation exists. */
-        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
+        /** FULL Python bypasses the scoped phone facade and therefore requires a per-run owner approval. */
+        fun requiresExplicitApproval(tool: String, profile: OrionPythonProfile): Boolean =
+            tool == "python_exec" && profile == OrionPythonProfile.FULL
 
         private val supportedTools = setOf(
             "python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",

@@ -17,14 +17,15 @@ internal object ShellExecutionRouting {
      * confirmation through ShellPolicy.
      */
     fun requiresApproval(where: String?, command: String? = null): Boolean {
-        if (backend(where) != Backend.LINUX) return false
+        if (backend(where) == Backend.INVALID) return true
         val value = command?.trim().orEmpty()
         return value.isBlank() || ShellPolicy.classify(value) != ShellRisk.SAFE
     }
 
-    /** Recognize package database mutations even when chained after a shell separator. */
+    /** Recognize both trusted canonical installs and other package database mutations. */
     fun isPackageOperation(command: String): Boolean =
-        Regex("""(^|[;&|]\s*)apk\s+(add|del|upgrade|update|fix)\b""").containsMatchIn(command)
+        TrustedDependencyInstallPolicy.isSafeAlpineInstall(command) ||
+            Regex("""(^|[;&|]\s*)apk\s+(add|del|upgrade|update|fix)\b""").containsMatchIn(command)
 
     /** Dependency downloads and project builds legitimately need longer than interactive commands. */
     fun commandTimeoutMs(command: String): Long {

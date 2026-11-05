@@ -68,7 +68,7 @@ class ToolPermissionsPersistenceTest {
             context, "phone_control", writeTool, dangerous = false,
             toolMode = ToolPermissions.mode(context, writeTool), askedThisTask = false
         )
-        assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
+        assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
     }
 
     @Test fun deterministicReadCannotRunInPlanMode() {
@@ -94,6 +94,24 @@ class ToolPermissionsPersistenceTest {
             toolMode = ToolPermissions.mode(context, "live_sports"), askedThisTask = false
         )
         assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
+    }
+
+    @Test fun jarvisPresetClearsAskOverridesButPreservesExplicitDeny() {
+        val secondWriteTool = ToolRegistry.all.first {
+            it.access == ToolAccess.WRITE &&
+                it.name !in ToolPermissionPolicy.alwaysAllowed &&
+                it.name != writeTool
+        }.name
+        ToolPermissions.applyLevel(context, "autonomous")
+        ToolPermissions.cycle(context, writeTool) // ALLOW -> ASK
+        ToolPermissions.cycle(context, secondWriteTool) // ALLOW -> ASK
+        ToolPermissions.cycle(context, secondWriteTool) // ASK -> DENY
+
+        ToolPermissions.applyJarvisAutonomy(context)
+
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, secondWriteTool))
+        assertEquals("autonomous", ToolPermissions.level(context))
     }
 
     @Test fun legacyCustomToolMapIsMigratedAsOverrides() {

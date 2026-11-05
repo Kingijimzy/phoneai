@@ -100,6 +100,7 @@ internal object AgentHooks {
   return "PASS: message sent to $target; exact message and status '$status' are visible."
  }
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
+  private val confirmationRisk=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|share|export|upload|authorize|subscribe|checkout|order|confirm|save changes|install|uninstall|grant|allow|revoke|reset|clear data)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
@@ -123,11 +124,16 @@ internal object AgentHooks {
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
+  // Coordinate gestures have no semantic target to classify; keep them approval-gated.
+  // Text-targeted clicks and ordinary scrolls can use the central risk classifier instead.
+  if(tool=="tap"&&args.optBoolean("allow_coordinates")) return true
+  if(tool=="swipe"&&args.optBoolean("allow_coordinates")) return true
   if(tool in setOf("forget","update_memory","undo_last")) return true
   if(tool=="notification_action"&&args.optString("action").equals("reply",true)) return true
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"click"->targetLabel;else->""}
-  if(risky.containsMatchIn(target)) return true
-  return tool=="type"&&Regex("\\b(whatsapp|email|gmail|message|send|reply)\\b",RegexOption.IGNORE_CASE).containsMatchIn(targetLabel)
+  if(confirmationRisk.containsMatchIn(target)) return true
+  // Draft typing is reversible and never sends by itself. Send/submit clicks are gated above.
+  return false
  }
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
   completionDecision(request, proofs, emptyList())

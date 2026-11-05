@@ -160,9 +160,9 @@ internal class OrionPythonPhoneApi(
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
-        if (!confirm("Python requests an accessibility tap on the visible text: \"$target\". Continue?"))
-            return error("owner declined or did not approve the UI action")
-        return Tools(service).clickText(target)
+        // Route through the same Agent dispatcher as chat/device tools. It applies the
+        // single risk decision, owner ASK/DENY overrides, consequential confirmation and evidence.
+        return tool("click_text", JSONObject().put("text", target))
     }
 
     fun ui_tap(x: Double, y: Double): String {
@@ -175,9 +175,10 @@ internal class OrionPythonPhoneApi(
         val metrics = context.resources.displayMetrics
         if (x > metrics.widthPixels || y > metrics.heightPixels) return error("tap coordinates are outside the current display")
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
-        if (!confirm("Python requests an accessibility tap at screen coordinates ${x.toInt()}, ${y.toInt()}. Continue?"))
-            return error("owner declined or did not approve the UI action")
-        return service.tap(x.toFloat(), y.toFloat())
+        return tool(
+            "tap",
+            JSONObject().put("x", x).put("y", y).put("allow_coordinates", true)
+        )
     }
 
     fun ui_swipe(x1: Double, y1: Double, x2: Double, y2: Double): String {
@@ -192,9 +193,11 @@ internal class OrionPythonPhoneApi(
             values.filterIndexed { index, _ -> index % 2 == 1 }.any { it > metrics.heightPixels })
             return error("swipe coordinates are outside the current display")
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
-        if (!confirm("Python requests an accessibility swipe from (${x1.toInt()}, ${y1.toInt()}) to (${x2.toInt()}, ${y2.toInt()}). Continue?"))
-            return error("owner declined or did not approve the UI action")
-        return service.swipe(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), 350L)
+        return tool(
+            "swipe",
+            JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2)
+                .put("ms", 350L).put("allow_coordinates", true)
+        )
     }
 
     private fun screenSafe(service: PhoneAiService): Boolean = screenSnapshotIfSafe(service) != null

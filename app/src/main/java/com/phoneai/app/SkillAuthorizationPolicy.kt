@@ -1,18 +1,16 @@
 package com.phoneai.app
 
 /**
- * Pure authorization decision logic shared by the runtime registry and JVM unit tests.
- * This checks permission only; it never executes a tool or grants approval.
+ * Pure skill authorization rules shared by runtime and JVM tests.
+ * Preflight checks scope/budgets only; the central Agent GatePolicy owns the single user prompt.
  */
 internal object SkillAuthorizationPolicy {
-    fun evaluate(
+    fun preflight(
         skill: PhoneAiSkill?,
         toolName: String,
         callsUsed: Int,
         elapsedMs: Long,
-        userApprovedThisRun: Boolean,
-        supportedTools: Set<String>,
-        consequentialTools: Set<String>
+        supportedTools: Set<String>
     ): SkillDecision {
         if (skill == null) return SkillDecision(false, "Skill is not registered.")
         if (!skill.enabled) return SkillDecision(false, "Skill is disabled.")
@@ -25,7 +23,24 @@ internal object SkillAuthorizationPolicy {
         if (elapsedMs < 0 || elapsedMs > skill.maxDurationMs) {
             return SkillDecision(false, "Skill time budget reached.")
         }
-        if ((skill.requiresApproval || toolName in consequentialTools) && !userApprovedThisRun) {
+        return SkillDecision(true, "Allowed by skill scope and run budget.")
+    }
+
+    fun evaluate(
+        skill: PhoneAiSkill?,
+        toolName: String,
+        callsUsed: Int,
+        elapsedMs: Long,
+        userApprovedThisRun: Boolean,
+        supportedTools: Set<String>,
+        consequentialTools: Set<String>
+    ): SkillDecision {
+        val preflight = preflight(skill, toolName, callsUsed, elapsedMs, supportedTools)
+        if (!preflight.allowed) return preflight
+        // Skills are declarative workflows: their scope/budget is checked here, while the
+        // central dispatcher classifies each real action. A manifest flag must not add a
+        // blanket prompt to every routine step in an otherwise autonomous workflow.
+        if (toolName in consequentialTools && !userApprovedThisRun) {
             return SkillDecision(false, "User approval is required before this action.")
         }
         return SkillDecision(true, "Allowed.")

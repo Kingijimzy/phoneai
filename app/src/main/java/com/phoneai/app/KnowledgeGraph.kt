@@ -119,6 +119,18 @@ object KnowledgeGraph {
         ) != null
     }
 
+    /**
+     * Learn only deterministic facts explicitly stated by the owner in their own chat turn.
+     * Questions and credential-bearing text are excluded by GraphPolicy.extract/SafetyGate.
+     * These owner-authored facts are stored with owner provenance and immediately indexed.
+     */
+    fun learnFromOwnerStatement(c: Context, text: String): Int {
+        if (text.isBlank()) return 0
+        return GraphPolicy.extract(text).count { (a, rel, b) ->
+            MemoryStore.addOwnerConfirmed(c, "fact", "$a $rel $b") != null
+        }
+    }
+
     /** Extract facts into a review queue; this method never writes trusted graph state. */
     fun learnFrom(c: Context, text: String): Int {
         val found = GraphPolicy.extract(text)

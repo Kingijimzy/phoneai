@@ -254,10 +254,11 @@ class OrionCapabilityAdaptersTest {
         )
     }
     
-    @Test fun directPythonRequiresOwnerApprovalBecauseProotSharesAppUid() {
-        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
-        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
-        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
+    @Test fun onlyFullPythonRequiresPerRunOwnerApprovalBecauseProotSharesAppUid() {
+        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec", OrionPythonProfile.FULL))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec", OrionPythonProfile.DEVELOPER))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run", OrionPythonProfile.FULL))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown", OrionPythonProfile.FULL))
     }
 
 }
