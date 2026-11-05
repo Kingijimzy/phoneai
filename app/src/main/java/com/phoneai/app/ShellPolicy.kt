@@ -17,7 +17,9 @@ internal object ShellPolicy {
         Regex("""(?is)\bof\s*=\s*[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)"""),
         Regex("""(?is)>{1,2}\s*[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)"""),
         Regex("""(?is)\b(?:mkfs(?:\.\w+)?|wipefs|blkdiscard)\b[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)"""),
-        Regex("""(?is)\b(?:cp|mv|tee|truncate)\b[^;&|]*\s/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)""")
+        Regex("""(?is)\b(?:cp|mv|tee|truncate)\b[^;&|]*\s/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)"""),
+        // Inline interpreters can write raw device nodes without shell redirection.
+        Regex("""(?is)\b(?:python(?:3)?|perl|ruby|node)\s+(?:-[ce]|-e)\s+[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)""")
     )
     private val forkBomb = listOf(
         Regex("""(?s):\s*\(\s*\)\s*\{[^}]*\}"""),
