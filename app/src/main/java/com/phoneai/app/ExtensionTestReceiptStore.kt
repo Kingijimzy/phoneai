@@ -18,7 +18,7 @@ internal class ExtensionTestReceiptStore(context: Context) {
     fun record(id: String, report: ExtensionTestReport): Boolean = synchronized(lock) {
         if (id.isBlank() || !report.passed || report.testedSourceSha256.isBlank()) return@synchronized false
         val current = runCatching { readAllLocked() }.getOrNull() ?: return@synchronized false
-        val rows = current.filterNot { it.optString("id") == id }.toMutableList()
+        val rows = current.filterNot { it.optString("id") == id && it.optString("hash") == report.testedSourceSha256 }.toMutableList()
         rows += JSONObject()
             .put("id", id)
             .put("hash", report.testedSourceSha256)
