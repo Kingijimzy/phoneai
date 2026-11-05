@@ -47,7 +47,7 @@ internal object OrionRepairLifecycle {
     ): Boolean {
         val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
             it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
-                it.argsFingerprint == planDigest
+                it.planDigest == planDigest
         }
         val chatHas = runCatching {
             OrionConversationRepository.get(context).hasEventForSession(
@@ -114,7 +114,7 @@ internal object OrionRepairLifecycle {
                 OrionConversationRepository.get(app).hasEventForSession(app, sessionId, eventId)
             }.getOrDefault(false)
         }
-        val priorPlanEvents = OrionEvidenceLedger.events(app, taskId).filter { it.argsFingerprint == digest }
+        val priorPlanEvents = OrionEvidenceLedger.events(app, taskId).filter { it.planDigest == digest }
         if (durableTerminalReceipt || priorPlanEvents.any { it.tool in terminalOrUncertain.map { stage -> "repair_" + stage.lowercase() } }) {
             return Receipt(Result.POLICY_BLOCKED, digest,
                 "This exact repair plan already reached an apply or uncertain state; it cannot be replayed.")

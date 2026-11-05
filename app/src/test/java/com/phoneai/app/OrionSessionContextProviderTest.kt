@@ -37,7 +37,9 @@ class OrionSessionContextProviderTest {
         val context: Context = RuntimeEnvironment.getApplication()
         OrionChronosAwareness.clear(context)
         OrionSensorConsent.grant(context, OrionSensorScope.APP_USAGE, 60 * 60 * 1000L)
-        OrionSensorConsent.grant(context, OrionSensorScope.CHRONOS_AWARENESS, 60 * 60 * 1000L)
+        OrionSensorConsent.grant(
+                context, OrionSensorScope.CHRONOS_AWARENESS, 60 * 60 * 1000L, foregroundOnly = false
+            )
         try {
             assertTrue(OrionChronosAwareness.onWindowChanged(context, "com.example.docs.editor"))
             val chat = OrionSessionContextProvider.forChat(context, "continue the task")

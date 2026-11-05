@@ -105,7 +105,7 @@ class OrionRepairLifecycleTest {
         assertEquals(1, sandboxCalls)
         assertEquals(1, applyCalls)
         val stages = OrionEvidenceLedger.events(context, "task-repair-test")
-            .filter { it.argsFingerprint == digest && it.backend == "repair_lifecycle" }
+            .filter { it.planDigest == digest && it.backend == "repair_lifecycle" }
             .map { it.tool }
         assertEquals(1, stages.count { it == "repair_proposed" })
         assertEquals(1, stages.count { it == "repair_sandbox_passed" })

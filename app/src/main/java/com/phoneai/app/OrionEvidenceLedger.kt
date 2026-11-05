@@ -31,7 +31,9 @@ internal object OrionEvidenceLedger {
         val finishedAt: Long,
         val argsFingerprint: String,
         val summary: String,
-        val redactedArgs: String = ""
+        val redactedArgs: String = "",
+        /** One-way repair-plan identity only; never contains action arguments. */
+        val planDigest: String = ""
     )
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
@@ -158,6 +160,7 @@ internal object OrionEvidenceLedger {
             .put("startedAt", now)
             .put("finishedAt", now)
             .put("summary", result)
+            .put("planDigest", planDigest.lowercase())
         )
     }
 
@@ -243,7 +246,7 @@ internal object OrionEvidenceLedger {
             val outcome = runCatching { Outcome.valueOf(row.optString("outcome")) }.getOrNull() ?: return@mapNotNull null
             Event(row.optString("id"), id, row.optString("backend"), row.optString("tool"),
                 outcome, row.optLong("startedAt"), row.optLong("finishedAt"),
-                "", row.optString("summary"), "")
+                "", row.optString("summary"), "", row.optString("planDigest"))
         }
     }
 
