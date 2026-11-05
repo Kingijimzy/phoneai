@@ -13,134 +13,13 @@ jobs:
         with:
           ref: orion/objective-graph-autonomy-fix
           fetch-depth: 0
-      - name: Wire OrionAgentBrainBridge into every command path
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-          p = Path("app/src/main/java/com/phoneai/app/Agent.kt")
-          t = p.read_text()
-          changed = False
-
-          # 1) Replace pre-action-only block with full brain planTurn (all command runs)
-          old_pre = '''        // Ground every run in live capability/graph context before acting.
-        if (!resumeRequest) {
-            val pre = OrionPreActionContext.assess(svc, command)
-            ui.note("[CONTEXT]\n" + pre.summary)
-        }'''
-          new_pre = '''        // CENTRAL BRAIN (all command paths): context, references, memory, path choice.
-        if (!resumeRequest) {
-            val recent = ConversationContextPolicy.recent(
-                (0 until chatHist.length()).mapNotNull { i ->
-                    val o = chatHist.optJSONObject(i) ?: return@mapNotNull null
-                    o.optString("role") to o.optString("content")
-                }
-            )
-            val activeObj = runCatching { OrionObjectiveGraph.load(svc)?.objective.orEmpty() }.getOrDefault("")
-            val turn = OrionAgentBrainBridge.planTurn(svc, command, recent, activeObj)
-            lastBrainSystemExtra = turn.systemExtra
-            ui.note("[CONTEXT]\n" + turn.frame.preAction.summary)
-            if (turn.blockTools) {
-                ui.note("[TASK:CLARIFY]\n" + (turn.clarification ?: "Need a clearer goal"))
-                ui.say(turn.clarification ?: "Which task should I continue?")
-                return
-            }
-            if (turn.frame.preferDirectAction) {
-                ui.note("[BRAIN]\nDirect-action path preferred; multi-objective graph is not mandatory.")
-            } else if (turn.frame.requiresMultiStep) {
-                ui.note("[BRAIN]\nMulti-step path; keep accurate task state and verify each step.")
-            }
-        }'''
-          if "OrionAgentBrainBridge.planTurn" not in t:
-              if old_pre in t:
-                  t = t.replace(old_pre, new_pre, 1)
-                  changed = True
-                  print("replaced pre-action with planTurn")
-              else:
-                  marker = "        // One-intent commands (play music, Google it in Chrome) skip the model entirely."
-                  if marker not in t:
-                      raise SystemExit("cannot find insertion point for planTurn")
-                  t = t.replace(marker, new_pre + "\n" + marker, 1)
-                  changed = True
-                  print("inserted planTurn before FastIntents")
-          else:
-              print("planTurn already present")
-
-          # 2) Field for brain system extra
-          if "lastBrainSystemExtra" not in t:
-              anchor = "    @Volatile private var currentTask = \"\""
-              if anchor not in t:
-                  raise SystemExit("currentTask field missing")
-              t = t.replace(
-                  anchor,
-                  anchor + "\n    @Volatile private var lastBrainSystemExtra: String = \"\"",
-                  1,
-              )
-              changed = True
-              print("added lastBrainSystemExtra field")
-
-          # 3) Inject brain system extra into model context when building command prompts
-          # Look for a common history/system append site near contextFor
-          if "lastBrainSystemExtra" in t and "BRAIN_PIPELINE_EXTRA" not in t:
-              # Append after central brain contextFor usages inside runInternal-style loops
-              needle = "OrionCentralBrain.contextFor(svc, command)"
-              if needle in t:
-                  t = t.replace(
-                      needle,
-                      "OrionCentralBrain.contextFor(svc, command) + (if (lastBrainSystemExtra.isNotBlank()) \"\\n\\n\" + lastBrainSystemExtra else \"\") /* BRAIN_PIPELINE_EXTRA */",
-                      1,
-                  )
-                  changed = True
-                  print("appended brain extra to first contextFor")
-
-          # 4) Tool outcome verification inside activityNote (every tool path that reports activity)
-          if "OrionAgentBrainBridge.afterTool" not in t:
-              old_an = "    private fun activityNote(tool: String, args: JSONObject, result: String): String {\n        val failed = result.trimStart().startsWith(\"error\", ignoreCase = true)"
-              new_an = '''    private fun activityNote(tool: String, args: JSONObject, result: String): String {
-        runCatching {
-            val goal = currentTask.ifBlank { "" }
-            if (goal.isNotBlank()) {
-                val verdict = OrionAgentBrainBridge.afterTool(svc, goal, tool, result)
-                if (!verdict.accept) {
-                    ui.note("[VERIFY:REJECT]\n" + tool + ": " + verdict.reason +
-                        (verdict.suggestAlternate?.let { " → try " + it } ?: ""))
-                }
-            }
-        }
-        val failed = result.trimStart().startsWith("error", ignoreCase = true)'''
-              if old_an not in t:
-                  raise SystemExit("activityNote signature not found")
-              t = t.replace(old_an, new_an, 1)
-              changed = True
-              print("wired afterTool into activityNote")
-          else:
-              print("afterTool already present")
-
-          # 5) When brain prefers direct action, do not force structured graph for ordinary commands
-          if "preferDirectOverridesStructured" not in t:
-              old_st = "val structuredTask = OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command) &&"
-              # Find a reasonable assignment - may vary; soft fail
-              if old_st in t:
-                  t = t.replace(
-                      old_st,
-                      "val structuredTask = /* preferDirectOverridesStructured */ OrionCommandIntentPolicy.requiresStructuredTaskPlanning(command) && lastBrainSystemExtra.let { !it.contains(\"Direct-action path preferred\") } &&",
-                      1,
-                  )
-                  changed = True
-                  print("softened structuredTask when direct preferred")
-              else:
-                  print("structuredTask assignment not matched; skip")
-
-          if not changed and "OrionAgentBrainBridge.planTurn" in t and "OrionAgentBrainBridge.afterTool" in t:
-              print("fully wired already")
-          p.write_text(t)
-          print("Agent.kt bytes", p.stat().st_size)
-          PY
-      - name: Commit wire
+      - name: Run wire script
+        run: python3 scripts/wire_brain_agent.py
+      - name: Commit
         run: |
           git config user.name orion-bot
           git config user.email orion@users.noreply.github.com
           git add app/src/main/java/com/phoneai/app/Agent.kt
-          if git diff --cached --quiet; then echo no-change; exit 0; fi
-          git commit -m "wire: central brain planTurn + tool verify on all Agent command paths"
+          git diff --cached --quiet && echo no-change && exit 0
+          git commit -m "wire: central brain on all Agent command paths"
           git push origin HEAD:orion/objective-graph-autonomy-fix
