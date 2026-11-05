@@ -229,7 +229,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Resume the bounded local queue only when a fresh real window event arrives.
             if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
             OrionChronosAwareness.onWindowChanged(this, event.packageName?.toString())
-            decisionScheduler?.onWindowChanged(event.packageName?.toString())
+            decisionScheduler?.onWindowChanged()
             requestContinuousWatcherObservation("window_changed")
             scheduleRuntimeDrain()
         }
