@@ -37,9 +37,20 @@ class ShellExecutionRoutingTest {
 
     @Test fun packageMutationDetectionAvoidsCommandTextFalsePositives() {
         assertTrue(ShellExecutionRouting.isPackageOperation("apk add python3"))
+        assertTrue(ShellExecutionRouting.isPackageOperation("apk --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"))
         assertTrue(ShellExecutionRouting.isPackageOperation("apk update && apk upgrade"))
         assertTrue(ShellExecutionRouting.isPackageOperation("apk del python3"))
         assertFalse(ShellExecutionRouting.isPackageOperation("echo apk add python3"))
+    }
+
+    @Test fun trustedAlpineInstallsAreAutomaticAcrossShellBackends() {
+        val trustedInstall = "apk --no-cache --repositories-file /dev/null " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"
+        assertFalse(ShellExecutionRouting.requiresApproval("linux", trustedInstall))
+        assertFalse(ShellExecutionRouting.requiresApproval("builtin", trustedInstall))
+        assertTrue(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
+        assertTrue(ShellExecutionRouting.requiresApproval("termux", "apk upgrade"))
     }
 
     @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {
