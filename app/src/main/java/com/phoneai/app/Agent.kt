@@ -648,6 +648,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             // Give the next planning turn a bounded, evidence-based recovery strategy.
             // This is advisory only: dispatch, capability and safety gates still run.
             val recovery = OrionRecoveryPlanner.forFailure(tool, verifiedResult)
+            if (!isNonLoggedAction(tool, args)) {
             runCatching {
                 OrionEvidenceLedger.recordRecovery(
                     svc, evidenceTaskId(), tool,
@@ -663,6 +664,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val attemptedTools = (0 until ranSteps.length()).mapNotNull { index ->
                 runCatching { ranSteps.getJSONObject(index).optString("tool").takeIf { it.isNotBlank() } }.getOrNull()
             }.toSet() + tool
+            }
             val alternatives = OrionRecoveryPlanner.selectAlternatives(
                 failedTool = tool,
                 result = verifiedResult,
@@ -675,8 +677,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 "\nREGISTERED ALTERNATIVES (re-check live state, scope and capability immediately before use): " + alternatives.joinToString(", ")
             }
             verifiedResult += "\n" + recovery.promptLine() + alternativeNote
-            failedCallGuard.recordFailure(tool, args)
-            try { OrionMemoryCapabilityExecutor.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
+            if (!isNonLoggedAction(tool, args)) {
+                failedCallGuard.recordFailure(tool, args)
+                try { OrionMemoryCapabilityExecutor.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
+            }
         }
         val loopRecord = toolLoopDetector.record(
             tool, loopParams(args), verifiedResult,
