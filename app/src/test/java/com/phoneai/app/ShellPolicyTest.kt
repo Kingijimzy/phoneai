@@ -23,6 +23,26 @@ class ShellPolicyTest {
         listOf("rm -rf ~/Downloads/old", "rm -rf /sdcard/Download/old", "dd if=file.img of=backup.img")
             .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
+
+    @Test fun quotedAndEscapedCatastrophicCommandsRemainBlocked() {
+        listOf(
+            "rm -rf '/system'",
+            "rm -rf \"/vendor\"",
+            "r\\m -rf /system",
+            "find '/' -type f -delete",
+            "dd if=image.img of='/dev/block/by-name/system'",
+            "cp image.img /dev/mmcblk0",
+            "truncate -s 0 /dev/block/by-name/vendor",
+            "echo x > '/dev/block/mmcblk0'",
+            ":(){ :|:& };:"
+        ).forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+    }
+
+    @Test fun readingBlockDeviceIsNotMistakenForAWrite() {
+        listOf("cat /dev/block/by-name/system", "dd if=/dev/mmcblk0 of=backup.img")
+            .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
+    }
+
     @Test fun emptyCommandIsNotADeviceDestructionBlock() { assertEquals(ShellRisk.SAFE, r("")) }
     @Test fun clipKeepsHeadAndTail() {
         val s = "a".repeat(5000) + "b".repeat(5000); val c = ShellPolicy.clip(s, 1000)
