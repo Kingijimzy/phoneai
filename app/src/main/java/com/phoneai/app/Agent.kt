@@ -195,6 +195,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return commandNim.chat(msgs, false, 450, 0.3).trim()
     }
     private val chatHist = JSONArray()
+    /** Set when the user asked for a subagent without naming a topic; the next turn supplies it. */
+    @Volatile private var pendingAgentTopic: String? = null
     private val liveHistory = JSONArray()
     // Must be initialized before init restores persisted conversation context.
     private val chatCache = HashMap<String, Pair<Long, String>>()
@@ -1798,6 +1800,35 @@ Rules:
     private fun runInternal(inputCommand: String, reuseCommandBudget: Boolean) =
         withInteractionTrace { runInternalBody(inputCommand, reuseCommandBudget) }
 
+    /** Create a declarative specialist from a user-stated topic and report the tool's own result. */
+    private fun createSpecialist(topic: String): String {
+        val clean = topic.trim().take(80)
+        if (clean.length < 3) return "error: tell me what the subagent should research."
+        return try {
+            tools.createAgent(
+                OrionExplicitActionPolicy.slug(clean),
+                OrionExplicitActionPolicy.displayName(clean),
+                OrionExplicitActionPolicy.tagline(clean),
+                OrionExplicitActionPolicy.persona(clean)
+            )
+        } catch (e: Exception) {
+            "error: could not create the subagent (" + (e.message ?: e.javaClass.simpleName) + ")"
+        }
+    }
+
+    /** The most recent real user message, used to resolve "create a subagent for that". */
+    private fun lastUserTopic(current: String): String? {
+        for (i in chatHist.length() - 1 downTo 0) {
+            val o = chatHist.optJSONObject(i) ?: continue
+            if (o.optString("role") != "user") continue
+            val text = o.optString("content").trim()
+            if (text.isBlank() || text.equals(current.trim(), ignoreCase = true)) continue
+            if (text.startsWith("RESULT:", ignoreCase = true) || text.length > 300) continue
+            return text
+        }
+        return null
+    }
+
     private fun runInternalBody(inputCommand: String, reuseCommandBudget: Boolean) {
         if (!reuseCommandBudget) commandNim.beginCommand()
         var command = inputCommand.trim()
@@ -1938,6 +1969,40 @@ Rules:
             if (!OrionTasksCapabilityExecutor.markRunning(svc)) {
                 ui.say("I found the saved task, but could not safely update its recovery checkpoint. I have not resumed actions. Check storage and try again.")
                 return
+            }
+        }
+        // Explicit "create a subagent ..." must create one deterministically. Relying on the
+        // model's ACTION sentinel previously produced a conversation reply, a web search, or
+        // an unrelated GitHub check on "continue".
+        if (!resumeRequest && !browserActionTask && activeSkillId == null) {
+            val createRequest = OrionExplicitActionPolicy.createAgentRequest(command)
+            val pending = pendingAgentTopic
+            if (createRequest != null) {
+                var topic = OrionExplicitActionPolicy.cleanTopic(createRequest.topic)
+                if (topic.isNotBlank() && OrionExplicitActionPolicy.isPronounTopic(topic)) {
+                    topic = OrionExplicitActionPolicy.cleanTopic(lastUserTopic(command).orEmpty())
+                }
+                if (topic.isBlank()) {
+                    pendingAgentTopic = ""
+                    ui.say("What should the subagent research or do?")
+                    return
+                }
+                pendingAgentTopic = null
+                ui.say(createSpecialist(topic))
+                return
+            }
+            if (pending != null) {
+                val topic = OrionExplicitActionPolicy.cleanTopic(command)
+                pendingAgentTopic = null
+                if (Regex("(?i)^(never mind|cancel|stop|no|forget it)\\b").containsMatchIn(topic)) {
+                    ui.say("Okay, I won't create that subagent.")
+                    return
+                }
+                val looksLikeQuestion = Regex("(?i)^(what|who|why|how|when|where|which|is|are|can|do|does|did)\\b").containsMatchIn(topic)
+                if (topic.isNotBlank() && !looksLikeQuestion) {
+                    ui.say(createSpecialist(topic))
+                    return
+                }
             }
         }
         val skillMatch = Regex("(?is)^run skill\\s+([a-z0-9._-]{2,48})\\s*:\\s*(.+)$").matchEntire(command.trim())
@@ -2102,22 +2167,10 @@ Rules:
                 ui.say(scores)
                 return
             }
-            // Scoreboard gaps are common for postponed games and feed outages. Try web sources
-            // before falling back to a model that might only guess from stale knowledge.
-            val web = try { research("live_web_search", JSONObject().put("query", command + " football score result")) } catch (e: Exception) {
-                "error: web fallback failed (" + e.javaClass.simpleName + ")"
-            }
-            val answer = if (web.startsWith("Web search results for")) {
-                // Search results are often only links. Read the best pages before giving up.
-                val pages = OrionEvidenceText.links(web, 2).mapNotNull { url ->
-                    if (stopped) null else runCatching { research("fetch_url", JSONObject().put("url", url)) }.getOrNull()
-                        ?.let { OrionEvidenceText.unwrap(it) }?.takeIf { !it.startsWith("error:", true) && it.length > 80 }
-                        ?.let { "Page: $url\n" + it.take(2500) }
-                }
-                summarizeSearch(command, web + if (pages.isEmpty()) "" else "\n\n" + pages.joinToString("\n\n"))
-            } else {
-                "I couldn't verify that score from the live scoreboard or web search just now, and I won't guess the result. Try asking again in a minute, or tell me the competition so I can search it directly."
-            }
+            // Never turn a missing scoreboard row into a confident answer. A web/model fallback
+            // previously invented scores and dates; the honest answer is that it is unverified.
+            val answer = "I couldn't verify that score from the live scoreboard just now, so I won't guess it. " +
+                "Tell me the competition or the date and I'll look it up, or try again in a minute."
             logShortcut("live_sports_fallback", answer)
             history.put(msg("assistant", JSONObject().put("say", answer).put("tool", "done").toString()))
             ui.say(answer)

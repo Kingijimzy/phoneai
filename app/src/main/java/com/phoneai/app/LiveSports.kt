@@ -68,7 +68,8 @@ object LiveSports {
             val an = away.optJSONObject("team")?.optString("displayName").orEmpty()
             val line = if (state == "pre") "$hn vs $an — kicks off $detail"
                 else "$hn ${home.optString("score", "0")} - ${away.optString("score", "0")} $an (${if (state == "in") "LIVE $detail" else detail})"
-            out.add("$line · $leagueName")
+            val date = e.optString("date").take(10)
+            out.add(if (date.isBlank()) "$line · $leagueName" else "$date · $line · $leagueName")
         }
         return out
     }
@@ -92,8 +93,10 @@ object LiveSports {
             cal.add(Calendar.DAY_OF_YEAR, 7)
             to = fmt.format(cal.time)
         } else {
+            // "Last match" can be up to two weeks back (international breaks, cups). A one-day
+            // window missed it, then the app fell through to a guess. Scan 14 days and sort.
             to = today
-            cal.add(Calendar.DAY_OF_YEAR, -1)
+            cal.add(Calendar.DAY_OF_YEAR, -14)
             from = fmt.format(cal.time)
         }
         val found = ArrayList<String>()
@@ -103,6 +106,10 @@ object LiveSports {
             if (team.isNotBlank() && found.size >= 3) break
         }
         if (found.isEmpty()) return null
-        return (if (team.isBlank()) "Scores (yesterday and today, ESPN):" else "Latest for \"$team\" (ESPN):") + "\n" + found.take(8).joinToString("\n")
+        // The ISO date prefix makes a plain descending sort the newest-first order.
+        found.sortDescending()
+        val heading = if (team.isBlank()) "Recent scores (last 14 days, ESPN):"
+            else "Latest matches for \"$team\" (last 14 days, ESPN):"
+        return heading + "\n" + found.take(8).joinToString("\n")
     }
 }
