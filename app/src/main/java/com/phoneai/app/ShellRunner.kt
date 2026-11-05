@@ -201,10 +201,10 @@ object ShellRunner {
         // Prefix a local receipt only when the backend exposed a zero exit code.
         // Place it before command output so printed text cannot forge the receipt.
         val verifiedResult = when {
-            result.startsWith("EXIT 0 · SUCCESS\\n") ->
-                result.replaceFirst("EXIT 0 · SUCCESS\\n", "EXIT 0 · SUCCESS\\nLOCAL VERIFY PASS: shell process exited with code 0.\\n")
-            result.startsWith("exit=0\\n") ->
-                result.replaceFirst("exit=0\\n", "exit=0\\nLOCAL VERIFY PASS: shell process exited with code 0.\\n")
+            result.startsWith("EXIT 0 · SUCCESS\n") ->
+                result.replaceFirst("EXIT 0 · SUCCESS\n", "EXIT 0 · SUCCESS\nLOCAL VERIFY PASS: shell process exited with code 0.\n")
+            result.startsWith("exit=0\n") ->
+                result.replaceFirst("exit=0\n", "exit=0\nLOCAL VERIFY PASS: shell process exited with code 0.\n")
             else -> result
         }
         AgentPolicy.log(c.applicationContext, "shell:$where", command, null, verifiedResult)
