@@ -81,6 +81,6 @@ class ExtensionVersionHistoryTest {
     @Test fun corruptHistoryFailsClosedWithoutInventingVersions() {
         context.filesDir.resolve("orion_extension_versions.json").writeText("{broken")
         assertNull(history.previous("format_helper", "active"))
-        assertTrue(history.all("format_helper").isEmpty())
+        assertTrue(runCatching { history.all("format_helper") }.isFailure)
     }
 }
