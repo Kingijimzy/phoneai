@@ -258,8 +258,7 @@ internal object OrionCodingPlanner {
     fun verify(
         context: Context,
         rawName: String,
-        runTests: Boolean,
-        confirm: (String) -> Boolean
+        runTests: Boolean
     ): String {
         val name = rawName.trim()
         val preflight = synchronized(lock) {
@@ -325,11 +324,6 @@ internal object OrionCodingPlanner {
         val language = preflight
         val command = testCommand(language)
             ?: return "error: no automatic test command is defined for '$language'."
-        val prompt = "Run the fixed $language project test command in Orion's Alpine PRoot runtime? This executes project code under Orion's Android app UID; PRoot is not a complete security boundary. Continue?"
-        if (!confirm(prompt)) {
-            setStatus(context, name, Status.FILES_READY, command, "Test execution cancelled by owner; no project code was executed.")
-            return "TEST EXECUTION CANCELLED: no project code was executed."
-        }
         val output = ShellRunner.run(
             context.applicationContext,
             "cd /workspace/projects/$name && $command",
