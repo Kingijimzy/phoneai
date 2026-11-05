@@ -68,7 +68,8 @@ object AgentPolicy {
     /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
-        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
+        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
+        forceApproval: Boolean = false
     ): GatePolicy.Result {
         val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
             OrionAutonomySettings.read(c).mode,
@@ -88,7 +89,7 @@ object AgentPolicy {
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
         // Unrestricted FULL Python is never covered by a timed trust session.
-        trustedForPack = isTrustedFor(c, pack) &&
+        trustedForPack = isTrustedFor(c, pack) && !forceApproval &&
             !(toolId == "python_exec" && OrionOwnerDialSettings.read(c).pythonProfile == OrionPythonProfile.FULL),
         allowlisted = allowed(c, pack, toolId),
         askedThisTask = askedThisTask
