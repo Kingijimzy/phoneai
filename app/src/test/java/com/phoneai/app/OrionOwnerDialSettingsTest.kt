@@ -21,6 +21,14 @@ class OrionOwnerDialSettingsTest {
         assertTrue(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
     }
 
+    @Test fun legacyManualExtensionActivationMigratesToAutoOnceButLaterOwnerChoicePersists() {
+        context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit()
+            .clear().putBoolean("auto_activate_verified_extensions", false).commit()
+        assertTrue(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
+        OrionOwnerDialSettings.write(context, OrionOwnerDials(autoActivateVerifiedExtensions = false))
+        assertFalse(OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions)
+    }
+
     @Test fun firstRunUsesScopedDeveloperPythonRatherThanUnrestrictedFullProfile() {
         context.getSharedPreferences("orion_owner_dials", Context.MODE_PRIVATE).edit().clear().commit()
         assertEquals(OrionPythonProfile.DEVELOPER, OrionOwnerDialSettings.read(context).pythonProfile)
