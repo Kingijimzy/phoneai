@@ -112,6 +112,7 @@ class OwnerControlCenterActivity : Activity() {
         val ownerDials = OrionOwnerDialSettings.read(this)
         addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} read retries", 13f, Theme.TEXT, true, 5)
         addText("Extension auto-activation: ${if (ownerDials.autoActivateVerifiedExtensions) "ON · tested drafts only" else "OFF"} · Python: ${ownerDials.pythonProfile.name} · Recovery: ${ownerDials.recoveryMaxAttempts} retries / ${ownerDials.recoveryBackoffSeconds}s base · Watcher: ${if (Prefs.watchOn(this)) "REQUESTED" else "OFF"}", 12f, Theme.MUTED, false, 3)
+        addButton("JARVIS MODE · one tap: autopilot + auto-activate tested extensions + Python FULL", true) { showJarvisPreset() }
         addButton("Configure autonomy, limits and notifications", true) { showAutonomyControlCenter() }
         addButton("Extension activation dial") { showExtensionControls() }
         addButton("Python execution profile") { showPythonProfile() }
@@ -200,6 +201,23 @@ class OwnerControlCenterActivity : Activity() {
                 }
             }
             .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
+    private fun showJarvisPreset() {
+        AlertDialog.Builder(this).setTitle("Jarvis mode")
+            .setMessage("Turns ON: AUTOPILOT mode, automatic activation of sandbox-tested extensions (exact source hash), and the Python FULL profile.\n\n" +
+                "Still asks you every time: trades and orders, sending messages, deleting data, spending money, per-run Python approval, Android permission prompts. Risk gate, kill switch and read-only trading defaults stay on.\n\nYou can undo each item from this screen.")
+            .setPositiveButton("TURN ON") { _, _ ->
+                val cfg = OrionAutonomySettings.read(this)
+                OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
+                ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
+                OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
+                    autoActivateVerifiedExtensions = true, pythonProfile = OrionPythonProfile.FULL))
+                AgentPolicy.log(this, "owner-autonomy", "jarvis_preset", true, "owner enabled AUTOPILOT, extension auto-activation and Python FULL")
+                recreate()
+            }
+            .setNegativeButton("CANCEL", null)
             .show()
     }
 

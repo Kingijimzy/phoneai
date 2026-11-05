@@ -41,3 +41,13 @@ class MemoryRankingTest {
         assertNotNull(MemoryRanking.tokens("The quick brown fox"))
     }
 }
+
+class MemoryRankingRelatedWordsTest {
+    private fun mem(text: String) = Memory(1, "fact", text, 1L, 1L)
+
+    @org.junit.Test fun relatedWordsAndConceptsScoreWithoutExactKeywords() {
+        org.junit.Assert.assertTrue(MemoryRanking.score(mem("Swing trades on Bybit"), "my trading plan") > 0)
+        org.junit.Assert.assertTrue(MemoryRanking.score(mem("Loves afrobeats songs"), "play some music") > 0)
+        org.junit.Assert.assertEquals(0, MemoryRanking.score(mem("Loves afrobeats songs"), "bybit stop loss"))
+    }
+}
