@@ -14,9 +14,18 @@ internal data class OrionOwnerDials(
 
 internal object OrionOwnerDialSettings {
     private const val FILE = "orion_owner_dials"
+    private const val AUTO_ACTIVATION_MIGRATION = "verified_extension_auto_activation_migrated_v1"
 
     fun read(context: Context): OrionOwnerDials {
         val p = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        // The owner requested automatic activation after exact-hash sandbox tests. Apply once
+        // to legacy installs; subsequent explicit owner changes are preserved.
+        if (!p.getBoolean(AUTO_ACTIVATION_MIGRATION, false)) {
+            p.edit()
+                .putBoolean("auto_activate_verified_extensions", true)
+                .putBoolean(AUTO_ACTIVATION_MIGRATION, true)
+                .apply()
+        }
         val profile = runCatching {
             OrionPythonProfile.valueOf(p.getString("python_profile", "DEVELOPER") ?: "DEVELOPER")
         }.getOrDefault(OrionPythonProfile.GUARDED)
@@ -31,6 +40,7 @@ internal object OrionOwnerDialSettings {
     fun write(context: Context, value: OrionOwnerDials) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
             .putBoolean("auto_activate_verified_extensions", value.autoActivateVerifiedExtensions)
+            .putBoolean(AUTO_ACTIVATION_MIGRATION, true)
             .putString("python_profile", value.pythonProfile.name)
             .putInt("recovery_max_attempts", value.recoveryMaxAttempts.coerceIn(0, 4))
             .putInt("recovery_backoff_seconds", value.recoveryBackoffSeconds.coerceIn(15, 300))
