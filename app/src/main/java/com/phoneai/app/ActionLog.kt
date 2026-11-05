@@ -2,6 +2,7 @@ package com.phoneai.app
 
 import android.content.Context
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Compatibility facade for older UI call sites.
@@ -28,5 +29,9 @@ object ActionLogStore {
     ) = Unit
     fun recentFailureHints(context: Context, limit: Int = 4): String = ""
     fun all(context: Context): List<OrionActionEvent> = emptyList()
-    fun clear(context: Context) = Unit
+    fun clear(context: Context) {
+        File(context.filesDir, "orion_action_log.json").delete()
+        context.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
+            .edit().remove("action_log").apply()
+    }
 }
