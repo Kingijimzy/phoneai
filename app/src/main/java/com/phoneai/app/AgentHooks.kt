@@ -123,6 +123,10 @@ internal object AgentHooks {
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
  fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
+  // Coordinate gestures have no semantic target to classify; keep them approval-gated.
+  // Text-targeted clicks and ordinary scrolls can use the central risk classifier instead.
+  if(tool=="tap"&&args.optBoolean("allow_coordinates")) return true
+  if(tool=="swipe"&&args.optBoolean("allow_coordinates")) return true
   if(tool in setOf("forget","update_memory","undo_last")) return true
   if(tool=="notification_action"&&args.optString("action").equals("reply",true)) return true
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"click"->targetLabel;else->""}
