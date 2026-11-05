@@ -21,14 +21,14 @@ internal object OrionAgentBrainBridge {
         recentTurns: List<Pair<String, String>>,
         activeObjective: String
     ): TurnPlan {
-        OrionMemoryLifecycle.observeUserPreference(context, userMessage)
+        OrionAutomaticMemoryLifecycle.observeUserPreference(context, userMessage)
         val frame = OrionBrainPipeline.prepare(
             context = context,
             userMessage = userMessage,
             recentTurns = recentTurns,
             activeObjective = activeObjective
         )
-        val memory = OrionMemoryLifecycle.promptBlock(context, userMessage)
+        val memory = OrionAutomaticMemoryLifecycle.promptBlock(context, userMessage)
         val systemExtra = buildString {
             appendLine(frame.contextHints)
             if (memory.isNotBlank()) appendLine(memory)
@@ -56,7 +56,7 @@ internal object OrionAgentBrainBridge {
     ): OrionToolOutcomeVerifier.Verdict {
         val verdict = OrionToolOutcomeVerifier.verify(userGoal, tool, result)
         if (verdict.accept) {
-            OrionMemoryLifecycle.observeToolSuccess(context, userGoal, tool, result)
+            OrionAutomaticMemoryLifecycle.observeToolSuccess(context, userGoal, tool, result)
         }
         return verdict
     }
