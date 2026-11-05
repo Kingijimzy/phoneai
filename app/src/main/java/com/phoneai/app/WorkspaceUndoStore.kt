@@ -64,17 +64,22 @@ internal class WorkspaceUndoStore(context: Context) {
                 val current = workspace.readForUndo(path)
                 val expected = entry.optString("after")
                 if (current != expected) false
-                else if (entry.optBoolean("beforeExists")) workspace.write(path, entry.optString("before")).startsWith("saved ")
-                else workspace.delete(path)
+                else if (entry.optBoolean("beforeExists")) {
+                    val before = entry.optString("before")
+                    workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                } else workspace.delete(path) && workspace.readForUndo(path) == null
             }
             "workspace_delete" -> {
+                val before = entry.optString("before")
                 workspace.readForUndo(path) == null &&
-                    workspace.write(path, entry.optString("before")).startsWith("saved ")
+                    workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
             }
             "workspace_move" -> {
                 val destination = entry.optString("destination")
-                workspace.readForUndo(path) == null && workspace.readForUndo(destination) == entry.optString("after") &&
-                    workspace.move(destination, path).startsWith("moved ")
+                val content = entry.optString("after")
+                workspace.readForUndo(path) == null && workspace.readForUndo(destination) == content &&
+                    workspace.move(destination, path).startsWith("moved ") &&
+                    workspace.readForUndo(path) == content && workspace.readForUndo(destination) == null
             }
             else -> false
         }
