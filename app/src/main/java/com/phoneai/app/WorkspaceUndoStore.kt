@@ -113,7 +113,8 @@ internal class WorkspaceUndoStore(context: Context) {
             file.finishWrite(stream)
             true
         } catch (_: Exception) {
-            if (stream != null) runCatching { file.failWrite(stream) }
+            val failedStream = stream
+            if (failedStream != null) runCatching { file.failWrite(failedStream) }
             false
         }
     }
