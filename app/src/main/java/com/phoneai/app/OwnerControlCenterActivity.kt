@@ -208,7 +208,7 @@ class OwnerControlCenterActivity : Activity() {
     private fun enableJarvisPreset() {
         val cfg = OrionAutonomySettings.read(this)
         OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
-        ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
+        ToolPermissions.applyJarvisAutonomy(this)
         OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
             autoActivateVerifiedExtensions = true,
             pythonProfile = OrionPythonProfile.DEVELOPER
