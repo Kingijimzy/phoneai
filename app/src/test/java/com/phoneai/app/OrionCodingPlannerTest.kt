@@ -32,7 +32,7 @@ class OrionCodingPlannerTest {
     }
 
     private fun createProject() {
-        assertTrue(OrionProjectWorkspace(context).create("demo", "python").startsWith("created "))
+        assertTrue(OrionProjectWorkspace(context).create("demo", "python").startsWith("PROJECT CREATED:"))
     }
 
     private fun plan(vararg rows: JSONObject): String {
