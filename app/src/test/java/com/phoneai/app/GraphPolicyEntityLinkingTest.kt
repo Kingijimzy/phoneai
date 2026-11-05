@@ -25,7 +25,7 @@ class GraphPolicyEntityLinkingTest {
         var facts = GraphPolicy.merge(emptyList(), "user", "is", "a forex trader", 1L)
         facts = GraphPolicy.merge(facts, "user", "is", "a software developer", 2L)
         assertEquals(1, facts.count { it.a == "user" && it.rel == "is" })
-        assertEquals("a software developer", facts.single().b)
+        assertEquals(GraphPolicy.norm("a software developer"), facts.single().b)
     }
 
     @Test fun repeatedNonExclusivePreferencesRemainSeparateFacts() {
