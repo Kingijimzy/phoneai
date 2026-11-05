@@ -88,9 +88,8 @@ object AgentPolicy {
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
-        // Autopilot applies to routine actions even when a tool has an old ASK override.
-        // Explicit DENY still wins in GatePolicy, and consequential actions still need confirmation.
+        // Legacy per-tool ASK values are normalized to ALLOW by ToolPermissionPolicy.modeOf.
+        // Only an explicit DENY, PLAN mode or disabled capability pack blocks dispatch.
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
