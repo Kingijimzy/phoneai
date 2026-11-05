@@ -268,28 +268,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
      * Every approval prompt goes through here so the chat gets a real event. The note carries no payload
      * (the question can contain message text or arguments); the dialog itself shows the details.
      */
-    /** The sole UI approval surface. GatePolicy decides whether this action may be approved. */
+    /** One confirmation surface, reserved exclusively for restart, shutdown and Wi-Fi toggles. */
     private fun requestGateApproval(question: String): Boolean {
-        val gate = GatePolicy.decide(GatePolicy.Input(
-            pack = "orion_core",
-            packOn = true,
-            tool = "owner_approval_request",
-            mode = AgentPolicy.mode(svc),
-            toolMode = ToolMode.ALLOW,
-            autonomous = false,
-            dangerous = true,
-            approvedThisAction = false,
-            trustedForPack = false,
-            allowlisted = false,
-            askedThisTask = true
-        ))
-        if (gate.verdict == GatePolicy.Verdict.DENY || gate.verdict == GatePolicy.Verdict.PLAN_ONLY) return false
-        if (gate.verdict == GatePolicy.Verdict.ALLOW) return true
+        if (!IrreversibleActionConfirmationPolicy.requiresConfirmation(question)) return true
         runCatching { OrionRuntimeNotifier.postApprovalRequired(svc) }
-        ui.note("[TASK:APPROVAL]\nWaiting for your approval")
-        val ok = ui.ask(question)
-        ui.note(if (ok) "[TASK:APPROVED]\nApproved by you" else "[TASK:DENIED]\nNot approved; the action was not run")
-        return ok
+        ui.note("[TASK:APPROVAL]\\nWaiting for confirmation of an irreversible computer setting")
+        val approved = ui.ask(question)
+        ui.note(if (approved) "[TASK:APPROVED]\\nConfirmed" else "[TASK:DENIED]\\nNot confirmed; action not run")
+        return approved
     }
 
     private val consequentialTools = setOf("telegram_send", "notification_action", "mcp_call", "sms")
