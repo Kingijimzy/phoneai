@@ -487,6 +487,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "mcp_call", "telegram_send", "sms", "notification_action",
             "browser_click", "browser_click_verify"
         )
+        val skillTargetSummary = when (tool) {
+            "click_text" -> args.optString("text")
+            "browser_click", "browser_click_verify" -> args.optString("target")
+            "mcp_call" -> args.optString("name")
+            "sms" -> args.optString("to")
+            "telegram_send" -> args.optString("chat_id").ifBlank { args.optString("to") }
+            "notification_action" -> args.optString("action")
+            else -> targetLabel
+        }.take(120)
         var policyApproved = false
         when (gate.verdict) {
             GatePolicy.Verdict.DENY, GatePolicy.Verdict.PLAN_ONLY -> {
@@ -508,7 +517,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                         "Run in $backend:\n${args.optString("command").take(300)}\n\nAllow this command for the task?"
                     }
                     fullPython -> "Run FULL Python with raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID? This is an unrestricted execution path."
-                    skillApprovalRequired -> "Allow skill '${activeSkillId}' to use '$tool' for this action?"
+                    skillApprovalRequired -> "Allow skill '${activeSkillId}' to use '$tool'${if (skillTargetSummary.isNotBlank()) " on '${skillTargetSummary}'" else ""}? This skill requires owner approval."
                     else -> "Allow Orion to use the tool '$tool' for this task?"
                 }
                 if (!confirm(askText)) {
@@ -539,7 +548,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                             "Run in $backend:\n${args.optString("command").take(300)}"
                         }
                         fullPython -> "Run FULL Python with raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID."
-                        skillApprovalRequired -> "Skill '${activeSkillId}' requests this tool action; skill writes and approval-required runs need owner confirmation."
+                        skillApprovalRequired -> "Skill '${activeSkillId}' requests '$tool'${if (skillTargetSummary.isNotBlank()) " on '${skillTargetSummary}'" else ""}; this skill requires owner approval."
                         consequential || toolIsWrite -> "This action may change device/app state or send/submit information."
                         else -> "This tool will access external or local data."
                     }
