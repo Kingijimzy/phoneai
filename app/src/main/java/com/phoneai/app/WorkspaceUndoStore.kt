@@ -43,7 +43,8 @@ internal class WorkspaceUndoStore(context: Context) {
     }
 
     fun latestTimestamp(): Long = synchronized(lock) {
-        readRows()?.lastOrNull()?.optLong("at", 0L) ?: 0L
+        val rows = readRows() ?: return@synchronized Long.MAX_VALUE
+        rows.lastOrNull()?.optLong("at", 0L) ?: 0L
     }
 
     fun status(): String = synchronized(lock) {
