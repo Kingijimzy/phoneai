@@ -28,6 +28,14 @@ class GraphPolicyEntityLinkingTest {
         assertEquals(GraphPolicy.norm("a software developer"), facts.single().b)
     }
 
+    @Test fun olderHistoricalValueCannotReplaceNewerCurrentValue() {
+        var facts = GraphPolicy.merge(emptyList(), "user", "lives in", "Lagos", 20L)
+        facts = GraphPolicy.merge(facts, "user", "lives in", "Abuja", 10L)
+        assertEquals(1, facts.count { it.a == "user" && it.rel == "lives in" })
+        assertEquals("lagos", facts.single().b)
+        assertEquals(20L, facts.single().lastAt)
+    }
+
     @Test fun repeatedNonExclusivePreferencesRemainSeparateFacts() {
         var facts = GraphPolicy.merge(emptyList(), "user", "likes", "football", 1L)
         facts = GraphPolicy.merge(facts, "user", "likes", "music", 2L)
