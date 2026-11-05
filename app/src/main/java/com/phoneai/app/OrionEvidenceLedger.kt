@@ -204,6 +204,33 @@ internal object OrionEvidenceLedger {
         }
     }
 
+    /** One-time migration: remove argument payloads/fingerprints written by older builds. */
+    fun purgeArgumentFields(context: Context): Boolean = synchronized(lock) {
+        val atomic = AtomicFile(file(context))
+        val root = try { atomic.openRead().bufferedReader().use { JSONObject(it.readText()) } }
+        catch (_: java.io.FileNotFoundException) { return@synchronized true }
+        catch (_: Exception) { return@synchronized false }
+        val events = root.optJSONArray("events") ?: return@synchronized true
+        var changed = false
+        for (i in 0 until events.length()) {
+            val event = events.optJSONObject(i) ?: continue
+            if (event.has("argsFingerprint")) { event.remove("argsFingerprint"); changed = true }
+            if (event.has("redactedArgs")) { event.remove("redactedArgs"); changed = true }
+        }
+        if (!changed) return@synchronized true
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomic.startWrite()
+            stream.write(root.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+            true
+        } catch (_: Exception) {
+            val failed = stream
+            if (failed != null) runCatching { atomic.failWrite(failed) }
+            false
+        }
+    }
+
     fun events(context: Context, taskId: String? = null): List<Event> = synchronized(lock) {
         val root = try { AtomicFile(file(context)).openRead().bufferedReader().use { JSONObject(it.readText()) } }
         catch (_: Exception) { return@synchronized emptyList() }
