@@ -144,6 +144,15 @@ internal object ConversationContextPolicy {
     }
 }
 
+/** Shared policy for the only owner confirmations retained by Orion. */
+internal object IrreversibleActionConfirmationPolicy {
+    private val action = Regex(
+        "(?i)\\\\b(?:restart|shutdown|toggle(?:\\\\s+(?:the\\\\s+)?)?wi-?fi|turn(?:ing)?\\\\s+wi-?fi\\\\s+(?:on|off))\\\\b"
+    )
+    fun requiresConfirmation(actionDescription: String): Boolean =
+        action.containsMatchIn(actionDescription)
+}
+
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
