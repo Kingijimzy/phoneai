@@ -200,6 +200,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val chatCache = HashMap<String, Pair<Long, String>>()
 
     init {
+        // First brain start applies the owner's requested autonomous defaults without a setup dialog.
+        // Explicit tool DENY/pack-off choices and OS/connector prerequisites remain respected.
+        runCatching { OrionJarvisBootstrap.ensureApplied(svc) }
         // Restore the same local transcript for every provider; provider choice must not own memory.
         restoreConversationContext(svc.conversationContext())
     }
