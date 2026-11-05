@@ -49,6 +49,12 @@ class MemoryDuplicateGovernanceTest {
         ))
     }
 
+    @Test fun promptRecallUsesLocalEmbeddingForParaphrasedQuestion() {
+        MemoryStore.addOwnerConfirmed(context, "fact", "User lives in Lagos Nigeria")
+        val prompt = MemoryStore.promptBlock(context, "Which city is my home?", 6)
+        assertTrue(prompt.contains("User lives in Lagos Nigeria"))
+    }
+
     @Test fun unreviewedSimilarObservationCannotReplaceApprovedFact() {
         val approved = MemoryStore.addOwnerConfirmed(
             context, "preference", "The owner prefers concise technical explanations"
