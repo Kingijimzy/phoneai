@@ -28,21 +28,6 @@ import java.io.File
 /** Last turns per agent, kept on the phone. */
 internal object AgentChatStore {
 
-    /** Structured truth cards for backend notes; never invent progress. */
-    private fun appendTruthOrText(container: android.widget.LinearLayout, kind: String, text: String) {
-        val card = OrionChatTruthUi.tryBuildCard(this, kind, text)
-        if (card != null) {
-            container.addView(card)
-            return
-        }
-        val tv = android.widget.TextView(this).apply {
-            this.text = text
-            setTextColor(Theme.TEXT)
-            textSize = 14.5f
-            setTextIsSelectable(true)
-        }
-        container.addView(tv)
-    }
 
     private fun file(c: Context, id: String) = File(c.filesDir, "orion_agent_chat_$id.json")
 
@@ -626,6 +611,16 @@ class AgentChatActivity : Activity() {
     }
 
     private fun addBubble(user: Boolean, text: String): TextView {
+        // Chat truth UI: structured backend notes become cards; never invent progress.
+        if (!user) {
+            val truth = OrionChatTruthUi.tryBuildCard(this, "note", text)
+            if (truth != null) {
+                messages.addView(truth, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+                Motion.enter(truth)
+                scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                return TextView(this).apply { visibility = android.view.View.GONE }
+            }
+        }
         val bubble = TextView(this).apply {
             this.text = if (user) text else Markdown.render(MarkdownTables.flatten(text)); textSize = 14.5f
             if (!user) movementMethod = LinkMovementMethod.getInstance()
