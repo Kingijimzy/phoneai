@@ -76,7 +76,7 @@ object ShellRunner {
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         // Defense in depth: callers must still obtain approval for ASK-class commands.
         if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
-            return "error: blocked by Orion shell safety policy (destructive, privileged, or sensitive-path command)"
+            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
         }
         if (normalized == "cd" || normalized.startsWith("cd ")) {
             return changeDirectory(c, normalized.removePrefix("cd").trim())
@@ -137,56 +137,70 @@ object ShellRunner {
         runStreaming(c, command, where) { }
 
     /** Executes a command while forwarding stdout/stderr chunks as they arrive. */
-    fun runStreaming(c: Context, command: String, where: String, onOutput: (String) -> Unit): String =
-        when (ShellExecutionRouting.backend(where)) {
-            ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command, onOutput = onOutput)
-            ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command).also { result -> if (result.isNotBlank()) onOutput(result + "\n") }
+    fun runStreaming(c: Context, command: String, where: String, onOutput: (String) -> Unit): String {
+        // Buffer complete lines so credentials split across process read chunks are redacted together.
+        val pending = StringBuilder()
+        val outputLock = Any()
+        val safeEmitter: (String) -> Unit = { chunk ->
+            val ready = mutableListOf<String>()
+            synchronized(outputLock) {
+                pending.append(chunk)
+                var newline = pending.indexOf("\n")
+                while (newline >= 0) {
+                    ready += pending.substring(0, newline + 1)
+                    pending.delete(0, newline + 1)
+                    newline = pending.indexOf("\n")
+                }
+            }
+            ready.forEach { onOutput(AgentPrivacyFilter.safeOutput(it)) }
+        }
+        val result = when (ShellExecutionRouting.backend(where)) {
+            ShellExecutionRouting.Backend.BUILTIN -> runBuiltin(c, command, onOutput = safeEmitter)
+            ShellExecutionRouting.Backend.TERMUX -> runTermux(c, command).also { value -> if (value.isNotBlank()) safeEmitter(value + "\n") }
             ShellExecutionRouting.Backend.LINUX -> {
                 val manifest = LinuxRuntimePolicy.productionManifest
-                // Keep install progress readable: stage changes are shown once, while a large
-                // download reports only 10% milestones instead of every 32 KB chunk.
                 var lastStage = ""
                 var lastProgressBucket = -1L
                 val runtime = LinuxRuntimeInstaller(c.applicationContext) { name, current, total ->
                     if (name == "Alpine runtime ready") {
-                        // Readiness is a stage, not a download progress event.
                         if (name != lastStage) {
-                            lastStage = name
-                            lastProgressBucket = -1L
-                            onOutput("[$name]\n")
+                            lastStage = name; lastProgressBucket = -1L
+                            safeEmitter("[$name]\n")
                         }
                     } else if (total <= 0L) {
                         if (name != lastStage) {
-                            lastStage = name
-                            lastProgressBucket = -1L
-                            onOutput("[$name…]\n")
+                            lastStage = name; lastProgressBucket = -1L
+                            safeEmitter("[$name…]\n")
                         }
                     } else {
                         val percent = (current * 100L / total).coerceIn(0L, 100L)
                         val bucket = percent / 10L
                         if (name != lastStage || bucket != lastProgressBucket) {
-                            lastStage = name
-                            lastProgressBucket = bucket
-                            onOutput("Preparing Alpine: downloading root filesystem $percent%\n")
+                            lastStage = name; lastProgressBucket = bucket
+                            safeEmitter("Preparing Alpine: downloading root filesystem $percent%\n")
                         }
                     }
                 }
                 if (!runtime.isReady(manifest)) {
-                    onOutput("Preparing built-in Alpine Linux runtime…\n")
+                    safeEmitter("Preparing built-in Alpine Linux runtime…\n")
                     val installed = runtime.install(manifest)
                     if (installed.isFailure) {
                         "error: Alpine runtime is not ready: ${installed.exceptionOrNull()?.message ?: "installation failed"}. No fallback to Android shell was attempted."
                     } else if (!runtime.isReady(manifest)) {
                         "error: Alpine installation finished but readiness checks failed. No fallback to Android shell was attempted."
                     } else {
-                        onOutput("Alpine ready. Running command…\n")
-                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput, workspaceHostPath = workspace(c).absolutePath)
+                        safeEmitter("Alpine ready. Running command…\n")
+                        runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
                     }
-                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), onOutput, workspaceHostPath = workspace(c).absolutePath)
+                } else runtime.execute(manifest, command, ShellExecutionRouting.commandTimeoutMs(command), safeEmitter, workspaceHostPath = workspace(c).absolutePath)
             }
             ShellExecutionRouting.Backend.INVALID -> "error: unknown shell backend. Use where=builtin, where=linux, or where=termux."
         }
-
+        val remainder = synchronized(outputLock) { pending.toString().also { pending.setLength(0) } }
+        if (remainder.isNotBlank()) onOutput(AgentPrivacyFilter.safeOutput(remainder))
+        AgentPolicy.log(c.applicationContext, "shell:$where", command, null, result)
+        return result
+    }
 
     fun writeFile(c: Context, rel: String, content: String): String {
         if (content.toByteArray(Charsets.UTF_8).size > 200_000) return "error: file too large (max 200 KB)"

@@ -11,6 +11,19 @@ class GatePolicyTest {
         trusted: Boolean = false, allowlisted: Boolean = true, asked: Boolean = true
     ) = GatePolicy.Input(pack, packOn, tool, mode, toolMode, autonomous, dangerous, approved, trusted, allowlisted, asked)
 
+    @Test fun ownerWorkspaceShellBypassesAskAndDangerousApprovalButHonorsExplicitDenyAndPlan() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(pack = "workspace_shell", tool = "shell",
+            mode = AgentPolicy.Mode.ASK, toolMode = ToolMode.ASK, dangerous = true, asked = false)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(pack = "workspace_shell", tool = "workspace_write",
+            mode = AgentPolicy.Mode.ASK, toolMode = ToolMode.ASK, dangerous = true, asked = false)).verdict)
+        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(pack = "workspace_shell", tool = "shell",
+            toolMode = ToolMode.DENY, dangerous = true)).verdict)
+        assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(pack = "workspace_shell", tool = "shell",
+            mode = AgentPolicy.Mode.PLAN, dangerous = true)).verdict)
+        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(pack = "workspace_shell", tool = "shell",
+            packOn = false, dangerous = true)).verdict)
+    }
+
     @Test fun offPackIsDeniedWhateverElseIsSet() {
         assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false, approved = true)).verdict)
     }

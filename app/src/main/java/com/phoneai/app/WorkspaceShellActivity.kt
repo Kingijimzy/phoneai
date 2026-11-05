@@ -1,7 +1,6 @@
 package com.phoneai.app
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -93,29 +92,15 @@ class WorkspaceShellActivity : Activity() {
             AgentPolicy.log(this, "workspace:$verb", "dispatch", false, "command not allowlisted")
             return
         }
-        val write = verb in setOf("write", "patch", "rm")
         if (workspace == null && verb !in setOf("help", "pwd")) { append("Select a workspace folder first."); return }
-        val decision = AgentPolicy.evaluate(this, "workspace_shell", "workspace_$verb", dangerous = write)
-        when (decision.decision) {
-            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
-                append("BLOCKED: ${decision.reason}"); AgentPolicy.log(this, "workspace:$verb", "dispatch", false, decision.reason); return
-            }
-            AgentPolicy.Decision.NEED_APPROVAL -> {
-                AlertDialog.Builder(this).setTitle("Approve workspace command?")
-                    .setMessage("Command: $verb\nArguments: ${arg.take(240)}\n${if (write) "This changes workspace files." else "This reads workspace files."}\nRun once?")
-                    .setNegativeButton("CANCEL") { _, _ -> AgentPolicy.log(this, "workspace:$verb", "dispatch", false, "user declined"); append("Cancelled.") }
-                    .setPositiveButton("APPROVE") { _, _ -> AgentPolicy.log(this, "workspace:$verb", "dispatch", true, "user approved workspace command"); execute(verb, arg) }.show()
-                return
-            }
-            AgentPolicy.Decision.ALLOW -> AgentPolicy.log(this, "workspace:$verb", "dispatch", null, decision.reason)
-        }
+        AgentPolicy.log(this, "workspace:$verb", "dispatch", null, "owner-entered workspace command; no approval prompt")
         execute(verb, arg)
     }
 
     private fun execute(verb: String, arg: String) {
         try {
             val result = when (verb) {
-                "help" -> "Allowed commands:\nhelp\npwd\nls\ncat filename\ngrep text|filename\nwrite filename|content\npatch filename|old text|new text\nrm filename (confirmation required)\n\nOnly files in the selected SAF root are addressable. No arbitrary shell commands."
+                "help" -> "Allowed commands:\nhelp\npwd\nls\ncat filename\ngrep text|filename\nwrite filename|content\npatch filename|old text|new text\nrm filename (moves to .orion-trash without a prompt)\n\nOnly files in the selected SAF root are addressable. No arbitrary shell commands."
                 "pwd" -> workspace?.let { "SAF workspace URI: $it (not an OS filesystem path)" } ?: "(no workspace selected)"
                 "ls" -> listFiles()
                 "cat" -> readFile(arg.trim())
@@ -131,17 +116,9 @@ class WorkspaceShellActivity : Activity() {
                 "rm" -> removeFile(arg.trim())
                 else -> "ERROR: command not implemented."
             }
-            val pendingConfirmation = verb == "rm" && result.startsWith("Deletion requires a second explicit confirmation")
             val failed = result.startsWith("ERROR:")
-            AgentPolicy.log(
-                this, "workspace:$verb", "result",
-                if (pendingConfirmation) null else !failed,
-                when {
-                    pendingConfirmation -> "awaiting second confirmation; deletion has not happened"
-                    failed -> "operation failed; details shown in terminal"
-                    else -> "completed; output shown in terminal"
-                }
-            )
+            AgentPolicy.log(this, "workspace:$verb", "result", !failed,
+                if (failed) "operation failed; details shown in terminal" else "completed; output shown in terminal")
             append(result)
         } catch (e: Exception) { AgentPolicy.log(this, "workspace:$verb", "result", false, "workspace operation failed"); append("ERROR: ${e.message ?: e.javaClass.simpleName}") }
     }
@@ -183,13 +160,20 @@ class WorkspaceShellActivity : Activity() {
     }
     private fun removeFile(name: String): String {
         val entry = findFile(name) ?: return "ERROR: file not found in workspace root."
-        AlertDialog.Builder(this).setTitle("Delete workspace file?").setMessage("Delete ${entry.name}? This cannot be undone.")
-            .setNegativeButton("CANCEL", null).setPositiveButton("DELETE") { _, _ ->
-                val deleted = DocumentsContract.deleteDocument(contentResolver, entry.uri)
-                AgentPolicy.log(this, "workspace:rm", "delete-result", deleted, if (deleted) "user confirmed file deletion" else "provider refused deletion")
-                append(if (deleted) "Deleted ${entry.name}." else "ERROR: deletion failed.")
-            }.show()
-        return "Deletion requires a second explicit confirmation."
+        val tree = rootUri()
+        val rootDocument = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val trash = entries().firstOrNull {
+            it.name == ".orion-trash" && it.mime == DocumentsContract.Document.MIME_TYPE_DIR
+        }?.uri ?: DocumentsContract.createDocument(
+            contentResolver, rootDocument, DocumentsContract.Document.MIME_TYPE_DIR, ".orion-trash"
+        ) ?: return "ERROR: recycle folder could not be created; original file was not deleted."
+        val moved = runCatching { DocumentsContract.moveDocument(contentResolver, entry.uri, tree, trash) }.getOrNull()
+            ?: return "ERROR: this storage provider cannot move files to the recycle folder; original file was not deleted."
+        val archived = runCatching {
+            DocumentsContract.renameDocument(contentResolver, moved, "${System.currentTimeMillis()}_${entry.name}")
+        }.getOrNull() ?: moved
+        return "Moved ${entry.name} to .orion-trash/${archived.lastPathSegment ?: entry.name}. The original was not permanently deleted."
     }
+
     private fun append(message: String) { output.append("\n\n> $message") }
 }

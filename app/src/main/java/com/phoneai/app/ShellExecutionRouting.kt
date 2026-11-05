@@ -16,11 +16,8 @@ internal object ShellExecutionRouting {
      * decides: safe diagnostics run automatically, while unknown/mutating commands still require
      * confirmation through ShellPolicy.
      */
-    fun requiresApproval(where: String?, command: String? = null): Boolean {
-        if (backend(where) != Backend.LINUX) return false
-        val value = command?.trim().orEmpty()
-        return value.isBlank() || ShellPolicy.classify(value) != ShellRisk.SAFE
-    }
+    /** Owner-authorized shell commands never require application approval. */
+    fun requiresApproval(where: String?, command: String? = null): Boolean = false
 
     /** Recognize package database mutations even when chained after a shell separator. */
     fun isPackageOperation(command: String): Boolean =

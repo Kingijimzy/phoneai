@@ -7,11 +7,15 @@ package com.phoneai.app
 internal object AgentPrivacyFilter {
     private const val MAX_COMMAND = 2000
 
-    fun safeCommand(command: String): String = command.trim()
+    private fun redact(text: String, limit: Int): String = text
         .replace(Regex("(?i)\\b(bearer\\s+)[a-z0-9._~+/-]+=*")) { it.groupValues[1] + "[redacted]" }
         .replace(Regex("(?i)\\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|passcode|pin|secret)\\s*[:=]\\s*[^\\s,;]+")) { it.groupValues[1] + "=[redacted]" }
         .replace(Regex("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", RegexOption.IGNORE_CASE), "[email redacted]")
         .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "[URL redacted]")
         .replace(Regex("(?<![A-Za-z0-9])\\+?\\d[\\d ()-]{6,}\\d(?![A-Za-z0-9])"), "[number redacted]")
-        .take(MAX_COMMAND)
+        .take(limit)
+
+    fun safeCommand(command: String): String = redact(command.trim(), MAX_COMMAND)
+    fun safeOutput(output: String): String = redact(output, 6000)
+
 }

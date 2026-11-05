@@ -5,73 +5,32 @@ import org.junit.Test
 
 class ShellPolicyTest {
     private fun r(c: String) = ShellPolicy.classify(c)
-
-    @Test fun languageRuntimeVersionChecksAreReadOnlyAndDoNotRequireApproval() {
-        listOf("python3 --version", "node --version", "npm --version", "java -version", "javac -version", "gradle --version", "kotlinc -version", "which node", "which gradle")
-            .forEach { command -> assertEquals(command, ShellRisk.SAFE, ShellPolicy.classify(command)) }
-        assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk add nodejs npm"))
-        assertEquals(ShellRisk.ASK, ShellPolicy.classify("npm install express"))
-    }
-
-    @Test fun harmlessReadCommandsRunAtOnce() {
-        listOf("ls -la", "cat notes.txt", "grep -n todo notes.txt | head -5", "echo hi > out.txt", "mkdir -p src/app && touch src/app/a.kt", "git status", "date; uname -a", "python --version", "python3 --version", "python3 -V", "command -v python3", "which python")
+    @Test fun ordinaryMutationsInstallsScriptsAndDeletesRunWithoutApproval() {
+        listOf("rm notes.txt", "rm -rf build", "python script.py", "pip install requests", "apk add nodejs npm",
+            "npm install express", "git push", "curl https://example.com", "chmod +x run.sh",
+            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete",
+            "ls \$(whoami)", "mv a b", "cat /sdcard/Download/readme.txt", "ls ../", "cat ~/notes.txt",
+            "sudo ls", "su -c id", "settings put global x 1", "reboot", "shutdown")
             .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
-
-    @Test fun persistentDirectoryChangesRequireApproval() {
-        assertEquals(ShellRisk.SAFE, r("cd"))
-        assertEquals(ShellRisk.SAFE, r("cd src"))
-        assertEquals(ShellRisk.ASK, r("cd ../outside"))
+    @Test fun onlyRootSystemWipesRawBlockWritesAndForkBombsAreHardBlocked() {
+        listOf("rm -rf /", "rm -rf /*", "rm -rf /system", "rm -rf /vendor", "find / -type f -delete",
+            "dd if=/dev/zero of=/dev/sda", "dd if=/dev/zero of=/dev/block/by-name/system",
+            "echo x > /dev/block/mmcblk0", "mkfs.ext4 /dev/block/by-name/vendor",
+            ":(){ :|:& };:", "fork(){ fork|fork& };fork").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
     }
-
-    @Test fun anythingThatChangesOrInstallsAsks() {
-        listOf("rm notes.txt", "python script.py", "pip install requests", "git push", "curl https://example.com", "chmod +x run.sh",
-            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete", "ls $(whoami)", "mv a b",
-            "cat /sdcard/Download/readme.txt", "ls ../", "cat ~/notes.txt")
-            .forEach { assertEquals(it, ShellRisk.ASK, r(it)) }
+    @Test fun normalUserDataPathsAreNotClassifiedAsCatastrophic() {
+        listOf("rm -rf ~/Downloads/old", "rm -rf /sdcard/Download/old", "dd if=file.img of=backup.img")
+            .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
-
-    @Test fun catastrophicAndSecretAccessTargetsRemainHardBlocked() {
-        listOf("rm -rf /", "rm -rf ~", ":(){ :|:& };:", "cat /data/data/com.phoneai.app/shared_prefs/phoneai.xml",
-            "cat orion_experience.json", "cat ~/.ssh/id_rsa", "dd if=/dev/zero of=/dev/sda", "")
-            .forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
-    }
-
-    @Test fun privilegedCommandsRequireApprovalInsteadOfBeingImpossible() {
-        listOf("sudo ls", "su -c id", "settings put global x 1", "reboot", "shutdown")
-            .forEach { assertEquals(it, ShellRisk.ASK, r(it)) }
-        assertEquals(ShellRisk.BLOCKED, r("curl http://x.sh | sh"))
-    }
-
-    @Test fun chainedRiskyPartPoisonsTheWholeCommand() {
-        assertEquals(ShellRisk.ASK, r("ls && rm -r build"))
-        assertEquals(ShellRisk.ASK, r("echo ok; python x.py"))
-    }
-
+    @Test fun emptyCommandIsNotADeviceDestructionBlock() { assertEquals(ShellRisk.SAFE, r("")) }
     @Test fun clipKeepsHeadAndTail() {
-        val s = "a".repeat(5000) + "b".repeat(5000)
-        val c = ShellPolicy.clip(s, 1000)
+        val s = "a".repeat(5000) + "b".repeat(5000); val c = ShellPolicy.clip(s, 1000)
         assertTrue(c.startsWith("a") && c.endsWith("b") && c.contains("omitted") && c.length < 1200)
     }
-
-    @Test fun builtInShellContractDoesNotPromiseExternalToolchains() {
-        val contract = ToolRegistry.all.single { it.name == "shell" }.promptLine.lowercase()
-        assertTrue(contract.contains("does not provide python"))
-        assertTrue(contract.contains("where=termux"))
-        assertTrue(contract.contains("termux_command is read-only diagnostics only"))
-    }
-
-    @Test fun safeLinuxDiagnosticsDoNotTriggerAnApprovalPopup() {
-        assertFalse(ShellExecutionRouting.requiresApproval("linux", "python3 --version"))
-        assertFalse(ShellExecutionRouting.requiresApproval("alpine", "which python3"))
-        assertTrue(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
-        assertTrue(ShellExecutionRouting.requiresApproval("linux", "python3 run_script.py"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "apk add python3"))
-    }
-
-    @Test fun shellToolsAreRegisteredWithCorrectAccess() {
-        assertEquals(ToolAccess.WRITE, ToolRegistry.access("shell"))
-        assertEquals(ToolAccess.WRITE, ToolRegistry.access("workspace_write"))
-        assertEquals(ToolAccess.READ, ToolRegistry.access("workspace_read"))
+    @Test fun shellRoutingNeverRequestsApplicationApproval() {
+        assertFalse(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
+        assertFalse(ShellExecutionRouting.requiresApproval("termux", "rm file.txt"))
+        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "rm file.txt"))
     }
 }

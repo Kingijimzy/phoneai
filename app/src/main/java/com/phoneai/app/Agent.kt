@@ -175,8 +175,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun activityNote(tool: String, args: JSONObject, result: String): String {
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         if (tool == "shell") {
-            val command = args.optString("command").take(240)
-            return "[SHELL:${if (failed) "FAILED" else "RESULT"}]\n$ $command\n${result.take(1600)}"
+            val command = AgentPrivacyFilter.safeCommand(args.optString("command")).take(240)
+            return "[SHELL:${if (failed) "FAILED" else "RESULT"}]\n$ $command\n${AgentPrivacyFilter.safeOutput(result).take(1600)}"
         }
         if (tool.startsWith("browser_") || tool == "open_url" || tool == "browser_handoff" || tool == "browser_upload") {
             val rawUrl = args.optString("url").ifBlank { args.optString("target") }
@@ -347,23 +347,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "capability_preflight_denied")
             return denied
         }
-        if (tool == "shell") {
-            val cmd = args.optString("command")
-            val where = when (ShellExecutionRouting.backend(args.optString("where"))) {
-                ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
-                ShellExecutionRouting.Backend.TERMUX -> "Termux"
-                ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
-                ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
-            }
-            when (ShellPolicy.classify(cmd)) {
-                ShellRisk.BLOCKED -> { recordDispatchBlocked(tool, args, "shell_policy_blocked"); return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user." }
-                ShellRisk.ASK -> if (!confirm("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
-                    val declined = "error: user did not approve running this command."
-                    recordDispatchBlocked(tool, args, "shell_approval_declined")
-                    taskProofs.record(tool, declined); return declined
-                }
-                ShellRisk.SAFE -> {}
-            }
+        if (tool == "shell" && ShellPolicy.classify(args.optString("command")) == ShellRisk.BLOCKED) {
+            val blocked = "error: Orion hard-blocked this catastrophic shell command (root/system wipe, raw block-device write, or fork bomb)."
+            recordDispatchBlocked(tool, args, "shell_catastrophic_hard_block")
+            taskProofs.record(tool, blocked)
+            return blocked
         }
         if (failedCallGuard.isBlocked(tool, args)) {
             recordDispatchBlocked(tool, args, "repeated_failed_call_blocked")
@@ -407,7 +395,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val shellRisk = if (tool == "shell") ShellPolicy.classify(args.optString("command")) else null
         if (shellRisk == ShellRisk.BLOCKED) {
-            val blocked = "error: Orion blocked this shell command because it is destructive, privileged, or targets sensitive paths."
+            val blocked = "error: Orion hard-blocked this catastrophic shell command (root/system wipe, raw block-device write, or fork bomb)."
             AgentPolicy.log(svc, tool, "dispatch", false, "blocked by ShellPolicy")
             try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
             recordDispatchBlocked(tool, args, "shell_policy_blocked")

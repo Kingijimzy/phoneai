@@ -11,7 +11,7 @@ object AgentPolicy {
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI", true),
+        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; only catastrophic device-destruction commands are hard-blocked", true),
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
@@ -150,12 +150,14 @@ object AgentPolicy {
     }
     /** Bounded audit trail. Callers must never pass raw secrets. */
     fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
-        val safe = Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+").replace(result) { match -> match.groupValues[1] + "=[redacted]" }.take(240)
+        val shellAudit = tool.startsWith("shell:")
+        val safe = AgentPrivacyFilter.safeOutput(result).take(if (shellAudit) 6000 else 240)
+        val safeAction = AgentPrivacyFilter.safeCommand(action).take(if (shellAudit) 2000 else 80)
         synchronized(this) {
             val old = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
             val next = JSONArray()
             for (i in maxOf(0, old.length() - 199) until old.length()) next.put(old.getJSONObject(i))
-            next.put(JSONObject().put("at", System.currentTimeMillis()).put("tool", tool.take(80)).put("action", action.take(80)).put("approved", approved).put("result", safe))
+            next.put(JSONObject().put("at", System.currentTimeMillis()).put("tool", tool.take(80)).put("action", safeAction).put("approved", approved).put("result", safe))
             p(c).edit().putString("action_log", next.toString()).apply()
         }
     }

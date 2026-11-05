@@ -37,6 +37,11 @@ internal object GatePolicy {
             return Result(Verdict.DENY, "Trading research is read-only; order execution is unavailable.")
         if (i.toolMode == ToolMode.DENY) return Result(Verdict.DENY, ToolPermissionPolicy.denyMessage(i.tool))
         if (i.mode == AgentPolicy.Mode.PLAN) return Result(Verdict.PLAN_ONLY, "Plan mode never executes tools.")
+        // Owner-authorized workspace shell/file/project actions bypass ASK and consequential prompts.
+        // Explicit DENY, a disabled pack, and Plan mode remain authoritative.
+        val ownerWorkspaceAction = i.pack == "workspace_shell" &&
+            (i.tool == "shell" || i.tool.startsWith("workspace_") || i.tool.startsWith("project_"))
+        if (ownerWorkspaceAction) return Result(Verdict.ALLOW, "Owner-authorized workspace execution; no per-action approval.")
         if (i.approvedThisAction) return Result(Verdict.ALLOW, "User approved this action.")
         if (i.toolMode == ToolMode.ASK && !i.autonomous && !i.askedThisTask)
             return Result(Verdict.ASK_TOOL, "The user set '${i.tool}' to ask each task.")
