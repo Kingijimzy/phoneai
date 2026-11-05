@@ -23,14 +23,44 @@ internal object MemoryRanking {
             .filter { it.second >= threshold }
             .maxByOrNull { it.second }?.first
 
+    private val concepts: List<Set<String>> = listOf(
+        setOf("trade", "trading", "trader", "bybit", "forex", "deriv", "crypto", "chart", "swing", "position"),
+        setOf("music", "song", "play", "playlist", "artist", "album", "spotify", "youtube"),
+        setOf("code", "coding", "program", "kotlin", "python", "script", "developer", "app", "build"),
+        setOf("work", "job", "career", "company", "business", "employer", "office"),
+        setOf("live", "home", "city", "lagos", "address", "location", "based"),
+        setOf("family", "wife", "husband", "mother", "father", "brother", "sister", "son", "daughter", "kid", "child"),
+        setOf("food", "eat", "meal", "dinner", "lunch", "breakfast", "restaurant", "cook"),
+        setOf("sleep", "wake", "morning", "night", "routine", "schedule", "alarm"),
+        setOf("money", "budget", "salary", "pay", "price", "cost", "balance")
+    )
+
+    /** Cheap suffix stripping so "trading", "trader" and "trades" meet. */
+    fun stem(word: String): String {
+        var w = word.lowercase()
+        for (suffix in listOf("ings", "ing", "ers", "er", "ed", "es", "s", "ly")) {
+            if (w.length - suffix.length >= 4 && w.endsWith(suffix)) { w = w.dropLast(suffix.length); break }
+        }
+        return w
+    }
+
+    private fun relatedTo(word: String, bodyWords: Set<String>): Boolean {
+        val stem = stem(word)
+        if (bodyWords.any { stem(it) == stem }) return true
+        val group = concepts.firstOrNull { g -> g.any { stem(it) == stem } } ?: return false
+        return bodyWords.any { b -> group.any { stem(it) == stem(b) } }
+    }
+
     fun score(memory: Memory, query: String): Int {
         val normalized = query.trim().lowercase()
         val words = tokens(query)
         if (words.isEmpty()) return 0
         val body = memory.text.lowercase()
         val matched = words.count { body.contains(it) || memory.category.contains(it) }
-        if (matched == 0) return 0
-        return matched * 10 + (if (body.contains(normalized)) 20 else 0) + (if (memory.category == normalized) 5 else 0)
+        val bodyWords = tokens(memory.text)
+        val related = words.count { !(body.contains(it) || memory.category.contains(it)) && relatedTo(it, bodyWords) }
+        if (matched == 0 && related == 0) return 0
+        return matched * 10 + related * 5 + (if (body.contains(normalized)) 20 else 0) + (if (memory.category == normalized) 5 else 0)
     }
 
     /**
