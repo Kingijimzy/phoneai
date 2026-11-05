@@ -46,6 +46,12 @@ object AgentPolicy {
         log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
         if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
+
+    /** Explicit Jarvis opt-in exposes every implemented capability pack. This does not grant
+     * Android permissions, authenticate connectors, install optional apps, or bypass tool DENY. */
+    fun enableAllImplementedPacks(c: Context) {
+        packs.filter { it.implemented }.forEach { setEnabled(c, it.id, true) }
+    }
     fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
     fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {
         val until = System.currentTimeMillis() + minutes.coerceIn(1, 120) * 60_000L
