@@ -186,7 +186,8 @@ internal object MemoryRanking {
 
     /**
      * Local hybrid retrieval, adapted from Ultron Cerebro: BM25 + word TF-IDF cosine +
-     * character-trigram TF-IDF cosine, fused with reciprocal-rank fusion. No network or model.
+     * character-trigram TF-IDF cosine + dense feature-hash embedding cosine, fused with RRF.
+     * All features are computed on-device; no network or external model is used.
      */
     fun <T> hybridRank(items: List<T>, textOf: (T) -> String, query: String, limit: Int = 10): List<T> {
         if (items.isEmpty() || limit <= 0) return emptyList()
