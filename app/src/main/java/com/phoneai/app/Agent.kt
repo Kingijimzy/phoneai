@@ -322,6 +322,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         while (left > 0 && !stopped) { val d = minOf(100L, left); try { Thread.sleep(d) } catch (_: InterruptedException) { return }; left -= d }
     }
 
+    private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean {
+        if (isNonLoggedAction(tool, args)) return true
+        return tool == "mcp_call" &&
+            McpConnector.scopeForTool(args.optString("name")) == "communication"
+    }
+
     private fun recordDispatchBlocked(tool: String, args: JSONObject, category: String) {
         if (tool in setOf("shell", "termux_command", "telegram_send", "sms",
                 "whatsapp_send", "signal_send", "discord_send")) return
@@ -3144,8 +3150,7 @@ Rules:
         // start and terminal receipt even when several tools run within the same trace.
         val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
         val correlationId = java.util.UUID.randomUUID().toString()
-        val nonLoggedAction = tool in setOf("shell", "termux_command", "telegram_send", "sms",
-            "whatsapp_send", "signal_send", "discord_send")
+        val nonLoggedAction = isNonLoggedAction(tool, a)
         if (!nonLoggedAction) svc.recordChatEvent(
             "tool", "started", "Tool: $tool",
             traceId = traceId,
@@ -3170,8 +3175,7 @@ Rules:
                     pythonExecutor = pythonExecutor
                 ) ?: "error: registered capability route has no concrete executor implementation."
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
-            val shouldRecord = route.tool !in setOf("shell", "termux_command", "telegram_send", "sms",
-                "whatsapp_send", "signal_send", "discord_send")
+            val shouldRecord = !isNonLoggedAction(route.tool, args)
             val saved = if (!shouldRecord) true else runCatching {
                 OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, JSONObject(), startedAt, backendResult)
             }.getOrDefault(false)
