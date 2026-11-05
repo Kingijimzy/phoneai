@@ -12,7 +12,7 @@ data class GraphFact(val a: String, val rel: String, val b: String, val count: I
 internal object GraphPolicy {
     const val MAX_FACTS = 400
     private val pronouns = setOf("it", "that", "this", "there", "he", "she", "they", "what", "who", "which", "here", "one", "you", "we", "those", "these", "something", "everything")
-    private val verbs = "likes?|loves?|plays for|plays in|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|lives in|belongs to|runs|builds|wants"
+    private val verbs = "likes?|loves?|plays for|plays in|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|live in|lives in|belongs to|runs|builds|wants"
 
     private val repeatableRelations = setOf(
         "like", "likes", "love", "loves", "play", "plays", "trade", "trades",
@@ -48,6 +48,18 @@ internal object GraphPolicy {
             }
         }
         return out.distinct().take(4)
+    }
+
+    /** True when two explicit facts assign different values to the same exclusive relation. */
+    fun hasSingleValuedConflict(existingText: String, proposedText: String): Boolean {
+        val existing = extract(existingText)
+        val proposed = extract(proposedText)
+        return existing.any { old ->
+            proposed.any { fresh ->
+                old.first == fresh.first && old.second == fresh.second &&
+                    old.third != fresh.third && old.second !in repeatableRelations
+            }
+        }
     }
 
     fun merge(list: List<GraphFact>, a: String, rel: String, b: String, now: Long): List<GraphFact> {
