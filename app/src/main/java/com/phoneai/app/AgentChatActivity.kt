@@ -27,6 +27,23 @@ import java.io.File
 
 /** Last turns per agent, kept on the phone. */
 internal object AgentChatStore {
+
+    /** Structured truth cards for backend notes; never invent progress. */
+    private fun appendTruthOrText(container: android.widget.LinearLayout, kind: String, text: String) {
+        val card = OrionChatTruthUi.tryBuildCard(this, kind, text)
+        if (card != null) {
+            container.addView(card)
+            return
+        }
+        val tv = android.widget.TextView(this).apply {
+            this.text = text
+            setTextColor(Theme.TEXT)
+            textSize = 14.5f
+            setTextIsSelectable(true)
+        }
+        container.addView(tv)
+    }
+
     private fun file(c: Context, id: String) = File(c.filesDir, "orion_agent_chat_$id.json")
 
     fun load(c: Context, id: String): MutableList<AgentRunner.Turn> = try {

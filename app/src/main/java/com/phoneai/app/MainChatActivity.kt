@@ -82,6 +82,23 @@ class MainChatActivity : ComponentActivity(), PhoneAiService.MainChatListener {
     private var streamingMessageId: Long? = null
     private val streamingBuffer = StringBuilder()
 
+
+    /** Structured truth cards for backend notes; never invent progress. */
+    private fun appendTruthOrText(container: android.widget.LinearLayout, kind: String, text: String) {
+        val card = OrionChatTruthUi.tryBuildCard(this, kind, text)
+        if (card != null) {
+            container.addView(card)
+            return
+        }
+        val tv = android.widget.TextView(this).apply {
+            this.text = text
+            setTextColor(Theme.TEXT)
+            textSize = 14.5f
+            setTextIsSelectable(true)
+        }
+        container.addView(tv)
+    }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun label(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
         text = s
