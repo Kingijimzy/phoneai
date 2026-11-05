@@ -94,8 +94,13 @@ internal object OrionRuntimeCapabilityExecutor {
                     if (result.startsWith("saved ")) {
                         val after = workspace.readForUndo(path)
                         if (after == null || !WorkspaceUndoStore(service).recordWrite(path, before, after)) {
-                            if (before == null) workspace.delete(path) else workspace.write(path, before)
-                            "error: workspace write was rolled back because its undo receipt could not be saved"
+                            val rolledBack = if (before == null) {
+                                workspace.delete(path) && workspace.readForUndo(path) == null
+                            } else {
+                                workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                            }
+                            if (rolledBack) "error: workspace write was rolled back because its undo receipt could not be saved"
+                            else "error: workspace write completed but its undo receipt failed and rollback could not be verified; inspect the file before retrying"
                         } else {
                             OrionCodingPlanner.noteFileWritten(service, path)
                             "wrote ${args.optString("content").length} chars to shared workspace/$path\\nLOCAL VERIFY PASS: workspace file read-back matches the written content."
@@ -110,8 +115,9 @@ internal object OrionRuntimeCapabilityExecutor {
                 if (before == null) "error: workspace file is missing, unreadable, or outside the safe workspace"
                 else if (!workspace.delete(path)) "error: workspace delete failed"
                 else if (!WorkspaceUndoStore(service).recordDelete(path, before)) {
-                    workspace.write(path, before)
-                    "error: workspace delete was reversed because its undo receipt could not be saved"
+                    val restored = workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                    if (restored) "error: workspace delete was reversed because its undo receipt could not be saved"
+                    else "error: workspace delete completed but receipt save and restoration both failed; inspect the workspace before retrying"
                 } else if (workspace.readForUndo(path) != null) "error: delete did not verify; the file is still present"
                 else "deleted shared workspace/$path (reversible)\\nLOCAL VERIFY PASS: deleted file is absent from the workspace."
             }
@@ -126,8 +132,10 @@ internal object OrionRuntimeCapabilityExecutor {
                     val moved = workspace.move(source, destination)
                     if (!moved.startsWith("moved ")) moved
                     else if (!WorkspaceUndoStore(service).recordMove(source, destination, content)) {
-                        workspace.move(destination, source)
-                        "error: workspace move was reversed because its undo receipt could not be saved"
+                        val reversed = workspace.move(destination, source).startsWith("moved ") &&
+                            workspace.readForUndo(source) == content && workspace.readForUndo(destination) == null
+                        if (reversed) "error: workspace move was reversed because its undo receipt could not be saved"
+                        else "error: workspace move completed but receipt save and rollback could not be verified; inspect both paths before retrying"
                     } else if (workspace.readForUndo(source) != null || workspace.readForUndo(destination) != content)
                         "error: move did not verify; inspect both paths before retrying"
                     else moved + " (reversible)\\nLOCAL VERIFY PASS: source is absent and destination matches the moved file."
