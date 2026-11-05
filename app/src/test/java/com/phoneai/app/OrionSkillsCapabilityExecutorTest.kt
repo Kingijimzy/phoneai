@@ -19,6 +19,17 @@ class OrionSkillsCapabilityExecutorTest {
         context.getSharedPreferences("phoneai_skill_registry_v1", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
+    @Test fun builtInDraftSkillsDoNotRequireApprovalForEveryTypingStep() {
+        clearRegistry()
+        val skills = OrionSkillsCapabilityExecutor.list(context).associateBy { it.id }
+        val whatsapp = requireNotNull(skills["whatsapp_draft"])
+        val email = requireNotNull(skills["email_draft"])
+        assertFalse(whatsapp.requiresApproval)
+        assertFalse(email.requiresApproval)
+        assertFalse("draft skill must not expose direct SMS sending", "sms" in whatsapp.allowedTools)
+        assertFalse("draft skill must not expose direct Telegram sending", "telegram_send" in email.allowedTools)
+    }
+
     @Test fun skillCreateValidatesAndAutoEnablesDeclarativeWorkflow() {
         clearRegistry()
         val result = OrionSkillsCapabilityExecutor.execute(
