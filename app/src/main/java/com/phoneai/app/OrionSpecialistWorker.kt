@@ -300,4 +300,15 @@ internal object OrionSpecialistScheduler {
             .enqueueUniqueWork("orion-specialist-$jobId", ExistingWorkPolicy.KEEP, request)
         true
     } catch (_: Exception) { false }
+
+    /** Durable cancellation is committed before WorkManager is asked to stop the process. */
+    fun cancel(context: Context, jobId: String, reason: String = "cancelled_by_owner"): Boolean {
+        if (jobId.isBlank()) return false
+        val store = OrionWorkerJobStore(context.applicationContext)
+        val cancelled = store.cancel(jobId, reason)
+        return try {
+            WorkManager.getInstance(context.applicationContext).cancelUniqueWork("orion-specialist-$jobId")
+            cancelled
+        } catch (_: Exception) { false }
+    }
 }
