@@ -3,8 +3,8 @@ package com.phoneai.app
 import android.content.Context
 
 /**
- * Thin bridge so Agent can call the single brain pipeline without competing planners.
- * Keeps Rule 2: one decision surface; tools remain capabilities.
+ * Single decision surface for Agent command turns (reset Rule 2).
+ * Capabilities stay in Tools; they do not decide policy.
  */
 internal object OrionAgentBrainBridge {
 
@@ -32,8 +32,10 @@ internal object OrionAgentBrainBridge {
         val systemExtra = buildString {
             appendLine(frame.contextHints)
             if (memory.isNotBlank()) appendLine(memory)
-            appendLine("TOOL VERIFY RULE: after every tool result, treat OrionToolOutcomeVerifier as binding. If accept=false, do not claim success; try alternate or explain.")
-            appendLine("EXECUTION RULE: prefer direct single actions. Use multi-step graphs only when the request clearly needs ordered dependent steps.")
+            appendLine("TOOL VERIFY RULE: after every tool result, OrionToolOutcomeVerifier is binding. If accept=false, do not claim success; try alternate or explain failure to the user.")
+            appendLine("RECOVERY RULE: on VERIFY reject or tool error, change approach once; if still failing, stop and ask the user.")
+            appendLine("EXECUTION RULE: prefer one direct action. Use multi-step graphs only when the request clearly needs ordered dependent steps.")
+            appendLine("TRUTH RULE: only report actions that have real tool receipts. Never invent progress for the chat UI.")
         }.trim()
         val clarification = if (frame.intent.needsClarification) {
             "Which task should I continue? Describe the outcome you want."

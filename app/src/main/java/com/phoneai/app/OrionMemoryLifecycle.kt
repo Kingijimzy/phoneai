@@ -6,10 +6,7 @@ import org.json.JSONObject
 
 /**
  * Automatic memory lifecycle (reset Rule 4):
- * Observe → Extract → Evaluate → Deduplicate → Store → Retrieve.
- *
- * Does not require the user to manually insert memory rows for routine facts.
- * Provenance, timestamps, and confidence are always recorded.
+ * Observe → Extract → Evaluate → Deduplicate → Store → Index → Retrieve → Update.
  */
 internal object OrionMemoryLifecycle {
     private const val PREFS = "orion_memory_lifecycle_v1"
@@ -25,42 +22,60 @@ internal object OrionMemoryLifecycle {
         val updatedAt: Long
     )
 
-    /** Observe a successful tool outcome and store a compact durable fact when useful. */
     fun observeToolSuccess(context: Context, userGoal: String, tool: String, result: String) {
         val goal = userGoal.trim()
         val res = result.trim()
         if (goal.isBlank() || res.isBlank()) return
-        if (res.startsWith("error", true)) return
+        if (res.startsWith("error", true) || res.startsWith("blocked", true)) return
+        if (tool.contains("memory", true)) return
 
         val candidate = when {
             tool == "play_media" || tool == "open_app" ->
-                "User asked to open/play media: ${goal.take(120)}. Outcome: ${res.take(120)}"
-            tool.contains("memory", true) -> return // already a memory write
+                "User media preference/action: ${goal.take(120)}. Outcome: ${res.take(120)}"
             res.length < 12 -> return
             else -> "Task note (${tool}): goal=${goal.take(80)}; result=${res.take(120)}"
         }
-        upsert(
-            context,
-            text = candidate,
-            category = "task_outcome",
-            confidence = 0.55,
-            provenance = "tool:$tool"
-        )
+        upsert(context, candidate, "task_outcome", 0.55, "tool:$tool")
     }
 
-    /** Observe an explicit user preference statement. */
     fun observeUserPreference(context: Context, utterance: String) {
         val t = utterance.trim()
         if (t.length < 8) return
-        val looksPref = Regex("(?i)\\b(i (prefer|like|want|use|always|never)|remember that|my name is)\\b").containsMatchIn(t)
+        // Corrections: "actually my name is X" / "forget that" / "don't remember"
+        if (Regex("(?i)\\b(forget that|forget it|delete that memory|don't remember that)\\b").containsMatchIn(t)) {
+            // Soft-delete most recent preference-like entry containing overlapping tokens
+            val tokens = Regex("[a-z0-9]{3,}").findAll(t.lowercase()).map { it.value }.toSet()
+            val entries = load(context)
+            val victim = entries.lastOrNull { e ->
+                e.category == "preference" && tokens.any { e.text.lowercase().contains(it) }
+            }
+            if (victim != null) delete(context, victim.id)
+            return
+        }
+        val looksPref = Regex(
+            "(?i)\\b(i (prefer|like|want|use|always|never)|remember that|my name is|call me)\\b"
+        ).containsMatchIn(t)
         if (!looksPref) return
-        upsert(
-            context,
-            text = t.take(240),
-            category = "preference",
-            confidence = 0.7,
-            provenance = "user_utterance"
-        )
+        upsert(context, t.take(240), "preference", 0.75, "user_utterance")
+    }
+
+    /** Explicit correction replaces an older fact with higher confidence. */
+    fun correct(context: Context, oldHint: String, newFact: String) {
+        val hint = oldHint.lowercase()
+        val entries = load(context).toMutableList()
+        val idx = entries.indexOfFirst { it.text.lowercase().contains(hint.take(40)) }
+        if (idx >= 0) {
+            val old = entries[idx]
+            entries[idx] = old.copy(
+                text = newFact.take(400),
+                confidence = maxOf(old.confidence, 0.85),
+                updatedAt = System.currentTimeMillis(),
+                provenance = old.provenance + "|correction"
+            )
+            save(context, entries.sortedByDescending { it.updatedAt }.take(200))
+        } else {
+            upsert(context, newFact.take(400), "preference", 0.85, "correction")
+        }
     }
 
     fun retrieveRelevant(context: Context, query: String, limit: Int = 6): List<Entry> {
@@ -83,7 +98,7 @@ internal object OrionMemoryLifecycle {
         val hits = retrieveRelevant(context, query)
         if (hits.isEmpty()) return ""
         return buildString {
-            appendLine("RELEVANT AUTOMATIC MEMORY (hints only; re-check live state):")
+            appendLine("RELEVANT AUTOMATIC MEMORY (hints only; re-check live state before acting):")
             hits.forEach { e ->
                 appendLine("- [${e.category} c=${"%.2f".format(e.confidence)} via ${e.provenance}] ${e.text}")
             }
@@ -118,9 +133,7 @@ internal object OrionMemoryLifecycle {
                 updatedAt = now
             )
         }
-        // Cap store size
-        val trimmed = existing.sortedByDescending { it.updatedAt }.take(200)
-        save(context, trimmed)
+        save(context, existing.sortedByDescending { it.updatedAt }.take(200))
     }
 
     private fun load(context: Context): List<Entry> = runCatching {
