@@ -74,7 +74,7 @@ jobs:
           install -m 0755 upstream/src/android/app/src/main/assets/proot-aarch64 app/src/main/jniLibs/arm64-v8a/libproot.so
           install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so app/src/main/jniLibs/arm64-v8a/libproot-loader.so
           install -m 0755 upstream/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
-          echo "91c3f3ce38482fba523c0dcbfa5eb883e8aae063236bff3d091da6a58f1c94c4  app/src/main/jniLibs/arm64-v8a/libproot.so" | sha256sum --check -
+          echo "22c0959bd03feedc20d98335681166992eace5fd4c369971975b4a116b351b50  app/src/main/jniLibs/arm64-v8a/libproot.so" | sha256sum --check -
           echo "44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04  app/src/main/jniLibs/arm64-v8a/libproot-loader.so" | sha256sum --check -
           echo "25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34  app/src/main/jniLibs/arm64-v8a/libproot-loader32.so" | sha256sum --check -
           file app/src/main/jniLibs/arm64-v8a/*
