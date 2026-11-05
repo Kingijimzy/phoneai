@@ -137,6 +137,20 @@ internal class SelfExtendingExtensionStore(context: Context) {
         persist(current.map { if (it.id == id) it.copy(enabled = true, verified = true) else it })
     }
 
+    /** Activate an archived source only with a passing receipt for that exact source hash. */
+    fun activateVersion(version: ExtensionVersionHistory.Version, report: ExtensionTestReport, approved: Boolean): Boolean = synchronized(lock) {
+        if (!SelfExtendingExtensionPolicy.mayPromote(
+                report.passed, version.sourceSha256, report.testedSourceSha256, approved
+            )) return@synchronized false
+        if (SelfExtendingExtensionPolicy.validateIdentity(version.id, version.displayName) != null ||
+            SelfExtendingExtensionPolicy.validateSource(version.runtime, version.source) != null ||
+            SelfExtendingExtensionPolicy.sha256(version.source) != version.sourceSha256) return@synchronized false
+        val current = try { all() } catch (_: Exception) { return@synchronized false }
+        val restored = version.extension(enabled = true)
+        if (current.none { it.id == version.id }) return@synchronized false
+        persist(current.map { if (it.id == version.id) restored else it })
+    }
+
     fun disable(id: String): Boolean = synchronized(lock) {
         val current = try { all() } catch (_: Exception) { return@synchronized false }
         if (current.none { it.id == id }) return@synchronized false
