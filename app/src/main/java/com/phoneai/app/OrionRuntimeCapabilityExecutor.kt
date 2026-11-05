@@ -61,13 +61,13 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
         )
-        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools, confirm)
+        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools)
         OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.execute(tool, args, service, tools, githubAccountRead)
         OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.execute(tool, args, service, tools, researchCancelled)
         OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm)
         OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.execute(tool, args, service, tools, stopped)
-        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
+        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, askUser)
         OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.execute(tool, args, tools, stopped)
         OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)

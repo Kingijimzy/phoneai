@@ -6,7 +6,7 @@ import org.json.JSONObject
  * Owns remote MCP connection, discovery and invocation.
  *
  * Every invocation rechecks local pairing and granted scope here and again in McpConnector.
- * Non-read scopes dispatch immediately; only restart, shutdown and Wi-Fi actions use the shared confirmation callback. Remote tool calls are never retried
+ * Non-read scopes dispatch immediately after local pairing and scope validation. Remote tool calls are never retried
  * after an ambiguous outcome; only the connector's handshake/catalogue methods may reconnect.
  */
 internal object OrionMcpCapabilityExecutor {
@@ -18,12 +18,11 @@ internal object OrionMcpCapabilityExecutor {
         tool: String,
         args: JSONObject,
         service: PhoneAiService,
-        tools: Tools,
-        confirm: (String) -> Boolean
+        tools: Tools
     ): String = when (tool) {
         "mcp_status" -> tools.mcpStatus()
         "mcp_list_tools" -> tools.mcpListTools()
-        "mcp_call" -> callTool(args, service, tools, confirm)
+        "mcp_call" -> callTool(args, service, tools)
         "mcp_list_resources" -> tools.mcpListResources(args.optString("cursor"))
         "mcp_read_resource" -> tools.mcpReadResource(args.optString("uri"))
         "mcp_list_prompts" -> tools.mcpListPrompts(args.optString("cursor"))
@@ -34,8 +33,7 @@ internal object OrionMcpCapabilityExecutor {
     private fun callTool(
         args: JSONObject,
         service: PhoneAiService,
-        tools: Tools,
-        confirm: (String) -> Boolean
+        tools: Tools
     ): String {
         val name = args.optString("name").trim()
         val remoteArguments = args.optJSONObject("arguments") ?: JSONObject()
@@ -52,13 +50,6 @@ internal object OrionMcpCapabilityExecutor {
         }
         if (scope == "read") return tools.mcpCall(name, remoteArguments)
 
-        val host = runCatching { java.net.URI(McpConnector.endpoint(service)).host ?: "unknown host" }
-            .getOrDefault("unknown host")
-        val approved = confirm(
-            "Remote MCP server: $host. Tool: $name. Scope: $scope. Arguments to send: " +
-                remoteArguments.toString().take(1200) + ". Approve this remote action?"
-        )
-        if (!approved) return "error: user cancelled MCP tool call"
         return tools.mcpCall(name, remoteArguments)
     }
 }
