@@ -115,14 +115,11 @@ class ToolRegistryTest {
         assertTrue(ToolRegistry.find("swipe")!!.promptLine.contains("allow_coordinates:true"))
     }
 
-    @Test fun termuxAiCommandsAreRestrictedToExactReadOnlyDiagnostics() {
-        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
-        assertTrue(TermuxCommandPolicy.isReadOnly("git status --short"))
-        assertTrue(TermuxCommandPolicy.isReadOnly("python --version"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ~"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("git status; touch marker"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("apt install python"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("rm -rf /"))
+    @Test fun termuxCommandToolUsesTheTermuxBridgeWithoutReadOnlyAllowlist() {
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
+        assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
+        assertEquals(OrionCapabilityAdapters.Backend.TERMUX, OrionCapabilityAdapters.route("termux_command")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TERMUX, "termux_command"))
     }
 
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
