@@ -277,19 +277,14 @@ internal object OrionCentralBrain {
             ?.takeIf { it.isNotBlank() }
             ?.let { sections += it }
 
-        val packed = ContextWindowBudget.pack(sections, MAX_CONTEXT_CHARS / 4)
-        val packingReceipt = buildString {
-            appendLine("CENTRAL BRAIN CONTEXT LOAD RECEIPT")
-            appendLine("source_loads=" + contextLoadDiagnostics.joinToString("; ").take(1800))
-            appendLine("sections_loaded=${packed.includedSections}; sections_omitted=${packed.omittedSections}; sections_truncated=${packed.truncatedSections}; estimated_tokens=${packed.estimatedTokens}; budget_tokens=${MAX_CONTEXT_CHARS / 4}.")
-            if (packed.omittedSectionLabels.isNotEmpty()) {
-                appendLine("omitted_context_sections=" + packed.omittedSectionLabels.take(12).joinToString(" | "))
-            }
-            if (packed.truncatedSections > 0 || packed.omittedSections > 0) {
-                appendLine("Some context was clipped or omitted by the deterministic priority packer. Treat unavailable history and memory as unknown; do not infer that an absent section is empty.")
-            }
-        }
-        return packed.text + "\n\n" + packingReceipt
+        val snapshot = OrionSessionSnapshot(
+            request = request,
+            sessionId = activeConversation,
+            capturedAtMillis = System.currentTimeMillis(),
+            sections = sections.toList(),
+            sourceLoadDiagnostics = contextLoadDiagnostics.toList()
+        )
+        return snapshot.render(MAX_CONTEXT_CHARS / 4)
     }
 
     /**
