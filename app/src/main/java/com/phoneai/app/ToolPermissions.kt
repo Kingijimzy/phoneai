@@ -81,6 +81,22 @@ object ToolPermissions {
         } else emptyMap()
     }
 
+    /**
+     * Explicit owner opt-in to Jarvis mode removes stale per-tool ASK prompts so routine
+     * capabilities execute autonomously. Explicit DENY choices are retained and remain absolute.
+     */
+    internal fun applyJarvisAutonomy(c: Context) {
+        val p = sp(c)
+        val preserved = overrides(c).filterValues { it == ToolMode.DENY || it == ToolMode.ALLOW }
+        val effective = ToolPermissionPolicy.applyPreset("autonomous", preserved)
+        p.edit()
+            .putString("tool_level", "autonomous")
+            .putString("tool_base_level", "autonomous")
+            .putString("tool_overrides", ToolPermissionPolicy.serializeOverrides(preserved))
+            .putString("tool_modes", ToolPermissionPolicy.serialize(effective))
+            .apply()
+    }
+
     internal fun applyLevel(c: Context, level: String) {
         val p = sp(c)
         val selected = level.takeIf { it in ToolPermissionPolicy.levels } ?: "balanced"
