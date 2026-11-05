@@ -15,6 +15,32 @@ internal object AgentPrivacyFilter {
         .replace(Regex("(?<![A-Za-z0-9])\\+?\\d[\\d ()-]{6,}\\d(?![A-Za-z0-9])"), "[number redacted]")
         .take(limit)
 
+    private val sensitiveField = Regex("(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|password|passcode|pin|secret|authorization|credential|private[_-]?key)")
+    private fun sanitizeJson(value: Any?, key: String = ""): Any? {
+        if (key.isNotBlank() && sensitiveField.containsMatchIn(key)) return "[redacted]"
+        return when (value) {
+            is JSONObject -> {
+                val safe = JSONObject()
+                val keys = value.keys()
+                while (keys.hasNext()) {
+                    val child = keys.next()
+                    safe.put(child, sanitizeJson(value.opt(child), child))
+                }
+                safe
+            }
+            is JSONArray -> JSONArray().also { out ->
+                for (index in 0 until value.length()) out.put(sanitizeJson(value.opt(index)))
+            }
+            is String -> safeOutput(value)
+            JSONObject.NULL -> JSONObject.NULL
+            else -> value
+        }
+    }
+
+    /** Structured arguments are retained for owner audit only after field-aware secret redaction. */
+    fun safeArguments(arguments: JSONObject): String =
+        runCatching { sanitizeJson(arguments).toString().take(2400) }.getOrDefault("{\"redacted\":true}")
+
     fun safeCommand(command: String): String = redact(command.trim(), MAX_COMMAND)
     fun safeOutput(output: String): String = redact(output, 6000)
 
