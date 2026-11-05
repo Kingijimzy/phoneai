@@ -202,7 +202,12 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     init {
         // First brain start applies the owner's requested autonomous defaults without a setup dialog.
         // Explicit tool DENY/pack-off choices and OS/connector prerequisites remain respected.
-        runCatching { OrionJarvisBootstrap.ensureApplied(svc) }
+        runCatching { OrionJarvisBootstrap.ensureApplied(svc) }.onFailure { failure ->
+            AgentPolicy.log(
+                svc, "owner-autonomy", "jarvis_bootstrap", null,
+                "automatic first-start setup failed: " + (failure.message ?: failure.javaClass.simpleName).take(180)
+            )
+        }
         // Restore the same local transcript for every provider; provider choice must not own memory.
         restoreConversationContext(svc.conversationContext())
     }
