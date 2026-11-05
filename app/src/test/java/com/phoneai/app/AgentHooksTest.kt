@@ -33,7 +33,7 @@ class AgentHooksTest {
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Share private data")))
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Export contacts")))
  }
- @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
+ @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()));assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Draft text"),"WhatsApp"));assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Send")))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
   val p=AgentHooks.ProofRecorder()
