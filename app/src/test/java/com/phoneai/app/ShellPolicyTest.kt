@@ -34,6 +34,7 @@ class ShellPolicyTest {
             "cp image.img /dev/mmcblk0",
             "truncate -s 0 /dev/block/by-name/vendor",
             "echo x > '/dev/block/mmcblk0'",
+            """python3 -c "open('/dev/block/mmcblk0','wb').write(b'x')" """,
             ":(){ :|:& };:"
         ).forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
     }
