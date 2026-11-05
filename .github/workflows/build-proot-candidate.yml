@@ -60,12 +60,12 @@ jobs:
       - name: Install Android SDK and pinned NDK r28
         uses: android-actions/setup-android@v3
         with:
-          packages: 'ndk;28.0.12433566'
+          packages: 'ndk;27.2.12479018'
 
       - name: Build pinned PRoot candidate
         shell: bash
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.12433566
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
         run: |
           set -euo pipefail
           bash upstream/deps/build_proot.sh clean
