@@ -483,6 +483,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             askedThisTask = tool in askApproved,
             forceApproval = skillApprovalRequired
         )
+        val actionSpecificConfirmationTools = setOf(
+            "mcp_call", "telegram_send", "sms", "notification_action",
+            "browser_click", "browser_click_verify"
+        )
         var policyApproved = false
         when (gate.verdict) {
             GatePolicy.Verdict.DENY, GatePolicy.Verdict.PLAN_ONLY -> {
@@ -519,10 +523,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             GatePolicy.Verdict.NEED_APPROVAL -> {
                 // These tools present a more specific confirmation at the action boundary.
                 // Showing both this generic dialog and the detailed dialog caused duplicate prompts.
-                val actionSpecificConfirmation = tool in setOf(
-                    "mcp_call", "telegram_send", "sms", "notification_action",
-                    "browser_click", "browser_click_verify"
-                )
+                val actionSpecificConfirmation = !skillApprovalRequired && tool in actionSpecificConfirmationTools
                 if (actionSpecificConfirmation) {
                     policyApproved = true
                     AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
@@ -3159,7 +3160,10 @@ Rules:
             val backendResult = if (preflight != null) preflight else runCatching {
                 OrionRuntimeCapabilityExecutor.execute(
                     route.backend, route.tool, args, svc, tools, { stopped },
-                    { question -> confirm(question) },
+                    { question ->
+                        if (skillApprovalRequired && policyApproved && tool in actionSpecificConfirmationTools) true
+                        else confirm(question)
+                    },
                     { url -> ui.openBrowser(url) },
                     { input -> validateAction(input) },
                     { input -> verifyAction(input) },
