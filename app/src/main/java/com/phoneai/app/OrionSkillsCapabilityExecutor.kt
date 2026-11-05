@@ -82,6 +82,15 @@ internal object OrionSkillsCapabilityExecutor {
     fun beginRun(context: Context, id: String, now: Long = System.currentTimeMillis()): Run? =
         findEnabled(context, id)?.let { Run(it.id, now) }
 
+    fun preflight(context: Context, run: Run, tool: String): SkillDecision =
+        SkillRegistry.preflight(
+            context = context,
+            skillId = run.skillId,
+            toolName = tool,
+            callsUsed = run.callsUsed,
+            elapsedMs = (System.currentTimeMillis() - run.startedAt).coerceAtLeast(0L)
+        )
+
     fun authorize(
         context: Context,
         run: Run,
