@@ -51,10 +51,37 @@ class Tools(
     // ---- screen helpers
 
     fun clickText(text: String): String {
-        val root = svc.rootInActiveWindow ?: return "error: cannot read this screen"
-        val found = root.findAccessibilityNodeInfosByText(text)
-        val n = found.firstOrNull { it.isVisibleToUser }
-            ?: return "error: no visible element with text \"$text\". Use read_screen."
+        val roots = buildList {
+            svc.rootInActiveWindow?.let { add(it) }
+            runCatching { svc.windows.orEmpty().mapNotNull { it.root } }.getOrDefault(emptyList()).forEach { add(it) }
+        }
+        if (roots.isEmpty()) return "error: cannot read this screen"
+        val query = text.trim().lowercase()
+        // The platform text search misses nodes that read_screen can see (labels in descriptions,
+        // custom views, other windows), so fall back to walking the whole tree ourselves.
+        val matches = ArrayList<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > 40 || matches.size > 40) return
+            val label = ((node.text?.toString() ?: "") + " " + (node.contentDescription?.toString() ?: "")).trim().lowercase()
+            if (query.isNotEmpty() && label.contains(query)) matches.add(node)
+            for (i in 0 until node.childCount) walk(node.getChild(i), depth + 1)
+        }
+        roots.forEach { walk(it, 0) }
+        val found = roots.flatMap { it.findAccessibilityNodeInfosByText(text) } + matches
+        val n = found.firstOrNull { it.isVisibleToUser && (it.text?.toString()?.trim()?.lowercase() == query) }
+            ?: found.firstOrNull { it.isVisibleToUser }
+            ?: found.firstOrNull()
+            ?: run {
+                val seen = ArrayList<String>()
+                fun labels(node: AccessibilityNodeInfo?, depth: Int) {
+                    if (node == null || depth > 40 || seen.size >= 25) return
+                    val t = (node.text?.toString() ?: node.contentDescription?.toString() ?: "").trim()
+                    if (t.isNotEmpty() && node.isVisibleToUser) seen.add(t.take(40))
+                    for (i in 0 until node.childCount) labels(node.getChild(i), depth + 1)
+                }
+                roots.firstOrNull()?.let { labels(it, 0) }
+                return "error: no element with text \"$text\". Visible labels: " + seen.distinct().joinToString(" | ") + ". Pick one of these or use read_screen."
+            }
         var cur: AccessibilityNodeInfo? = n
         var hops = 0
         while (cur != null && hops < 6) {
@@ -67,6 +94,7 @@ class Tools(
         }
         val r = Rect()
         n.getBoundsInScreen(r)
+        if (r.isEmpty) return "error: found \"$text\" but it has no on-screen position. Use read_screen and tap by coordinates."
         return svc.tap(r.centerX().toFloat(), r.centerY().toFloat())
     }
 
