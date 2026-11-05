@@ -281,10 +281,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
             tool, OrionOwnerDialSettings.read(svc).pythonProfile
         )
-        val skill = activeSkillId?.let { OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
-        val skillRequiresApproval = skill?.requiresApproval == true
+        // Skill manifests define scope and budgets, not a blanket approval layer. The live
+        // central gate classifies each actual tool/action; skill writes are not automatically
+        // escalated when the underlying operation is routine and already permitted.
         val skillWriteAction = activeSkillId != null && ToolRegistry.access(tool) == ToolAccess.WRITE
-        val consequential = tool in consequentialTools || fullPython || skillRequiresApproval || skillWriteAction ||
+        val consequential = tool in consequentialTools || fullPython || skillWriteAction ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
@@ -412,8 +413,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
-        val activeSkill = activeSkillId?.let { OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
-        val skillApprovalRequired = activeSkillId != null && activeSkill?.requiresApproval == true
         val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         val mcpScope = when {
             tool == "mcp_call" -> McpConnector.scopeForTool(args.optString("name"))
@@ -428,7 +427,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
             tool, OrionOwnerDialSettings.read(svc).pythonProfile
         )
-        val consequential = fullPython || skillApprovalRequired || AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
+        // Per-skill "requiresApproval" is legacy metadata, not a second risk classifier.
+        // Real tool risk, owner DENY/ASK settings, OS permissions and action-specific gates remain authoritative.
+        val consequential = fullPython || AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         // Retrieve current durable context immediately before any write/consequential dispatch.
