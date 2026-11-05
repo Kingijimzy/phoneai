@@ -622,8 +622,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             )
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
         else taskProofs.record(tool, verifiedResult)
-        if (tool !in setOf("shell", "termux_command", "telegram_send", "sms",
-                "whatsapp_send", "signal_send", "discord_send")) {
+        if (!isNonLoggedAction(tool, args)) {
             runCatching {
                 OrionEvidenceLedger.recordDispatch(
                     svc, evidenceTaskId(), "agent_verification", tool, JSONObject(),
