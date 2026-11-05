@@ -36,9 +36,16 @@ internal object MemoryRanking {
     fun findSuperseded(existing: List<Memory>, category: String, text: String, threshold: Double = 0.6): Memory? =
         existing
             .filter { !it.pinned && it.category == category && !it.text.equals(text, true) }
-            .map { it to similarity(it.text, text) }
-            .filter { it.second >= threshold }
-            .maxByOrNull { it.second }?.first
+            .map { memory ->
+                memory to similarity(memory.text, text)
+            }
+            .filter { (memory, score) ->
+                score >= threshold || GraphPolicy.hasSingleValuedConflict(memory.text, text)
+            }
+            .maxWithOrNull(
+                compareBy<Pair<Memory, Double>> { if (GraphPolicy.hasSingleValuedConflict(it.first.text, text)) 1 else 0 }
+                    .thenBy { it.second }
+            )?.first
 
     private val concepts: List<Set<String>> = listOf(
         setOf("trade", "trading", "trader", "bybit", "forex", "deriv", "crypto", "chart", "swing", "position", "currency", "currencies", "exchange", "fx", "market"),
