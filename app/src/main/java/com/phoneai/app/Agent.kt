@@ -842,8 +842,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Chat and command mode share the same live memory context: relevant memories,
         // approved knowledge-graph facts, decision history, learned corrections and document passages.
         // Rebuild it per turn so a memory saved during this conversation is available immediately.
-        // Learn only deterministic, non-sensitive facts stated directly by the owner before retrieval.
-        if (!query.isNullOrBlank()) OrionMemoryCapabilityExecutor.learnFromRequest(svc, query)
         val memoryContext = runCatching {
             OrionMemoryCapabilityExecutor.promptContext(svc, query).take(5_000)
         }.getOrElse { "Persistent memory context is temporarily unavailable; do not claim to remember unseen details." }
@@ -983,6 +981,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     private fun indexMemoryObservation(text: String, sourceLabel: String) {
+        // The user authored this exact turn. Save only deterministic, non-sensitive graph facts;
+        // questions and credentials are rejected by the graph extractor.
+        runCatching { KnowledgeGraph.learnFromOwnerStatement(svc, text) }
         runCatching {
             MemoryAutoIndexer.observe(svc, text)?.let { memory ->
                 val ownerConfirmed = memory.sourceRole == "owner" && memory.reviewStatus == "approved"
