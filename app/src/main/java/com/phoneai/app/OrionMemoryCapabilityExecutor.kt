@@ -127,8 +127,12 @@ internal object OrionMemoryCapabilityExecutor {
         "graph_query" -> tools.graphQuery(args.optString("entity"))
         "self_review" -> tools.selfReview()
         "undo_status" -> WorkspaceUndoStore(service).status() + " " + UndoStore.status(service)
-        "undo_last" -> if (stopped()) "error: task was stopped before undo." else
-            (WorkspaceUndoStore(service).undoLast() ?: UndoStore.undoLast(service))
+        "undo_last" -> if (stopped()) "error: task was stopped before undo." else {
+            val workspaceUndo = WorkspaceUndoStore(service)
+            if (workspaceUndo.latestTimestamp() > UndoStore.latestTimestamp(service))
+                workspaceUndo.undoLast() ?: UndoStore.undoLast(service)
+            else UndoStore.undoLast(service)
+        }
         else -> "error: memory executor does not implement '$tool'."
     }
 }
