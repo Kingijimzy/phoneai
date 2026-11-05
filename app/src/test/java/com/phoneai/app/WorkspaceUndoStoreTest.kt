@@ -75,6 +75,12 @@ class WorkspaceUndoStoreTest {
         assertEquals("destination", workspace.readForUndo("to.txt"))
     }
 
+    @Test fun corruptJournalIsNotMistakenForAnEmptyUndoHistory() {
+        File(context.filesDir, "orion_workspace_undo.json").writeText("not-json")
+        assertEquals(Long.MAX_VALUE, undo.latestTimestamp())
+        assertTrue(undo.undoLast().orEmpty().contains("history is unreadable"))
+    }
+
     @Test fun oversizedSnapshotsAreRejected() {
         val tooLarge = "x".repeat(OrionPythonWorkspace.MAX_FILE_BYTES + 1)
         assertFalse(undo.recordWrite("large.txt", null, tooLarge))
