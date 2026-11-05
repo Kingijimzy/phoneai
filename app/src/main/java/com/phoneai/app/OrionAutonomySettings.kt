@@ -7,7 +7,7 @@ import org.json.JSONObject
 internal enum class OrionMode { TALK, ASSIST, AUTOPILOT, BUILDER }
 
 internal data class OrionAutonomyConfig(
-    val mode: OrionMode = OrionMode.ASSIST,
+    val mode: OrionMode = OrionMode.AUTOPILOT,
     val maxToolSteps: Int = 30,
     val maxAiRequests: Int = 30,
     val maxRetries: Int = 2,
@@ -51,9 +51,26 @@ internal object OrionAutonomyPolicy {
 
 internal object OrionAutonomySettings {
     private const val FILE = "phoneai"
+    private const val AUTOPILOT_DEFAULT_MIGRATION = "orion_autopilot_default_migrated_v1"
+
     fun read(c: Context): OrionAutonomyConfig {
         val p = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        val mode = runCatching { OrionMode.valueOf(p.getString("orion_mode", "ASSIST") ?: "ASSIST") }.getOrDefault(OrionMode.ASSIST)
+        // The owner requested Autopilot as Orion's default. Migrate only legacy default/Assist
+        // installs once; preserve an explicit TALK or BUILDER choice and all per-tool overrides.
+        if (!p.getBoolean(AUTOPILOT_DEFAULT_MIGRATION, false)) {
+            val storedMode = p.getString("orion_mode", null)
+            val migrateToAutopilot = storedMode.isNullOrBlank() || storedMode == OrionMode.ASSIST.name ||
+                storedMode == OrionMode.AUTOPILOT.name
+            p.edit().putBoolean(AUTOPILOT_DEFAULT_MIGRATION, true)
+                .apply()
+            if (migrateToAutopilot) {
+                p.edit().putString("orion_mode", OrionMode.AUTOPILOT.name).apply()
+                ToolPermissions.applyLevel(c, "autonomous")
+            }
+        }
+        val mode = runCatching {
+            OrionMode.valueOf(p.getString("orion_mode", OrionMode.AUTOPILOT.name) ?: OrionMode.AUTOPILOT.name)
+        }.getOrDefault(OrionMode.AUTOPILOT)
         return OrionAutonomyPolicy.clamp(OrionAutonomyConfig(
             mode = mode,
             maxToolSteps = p.getInt("orion_max_tool_steps_v2", 30),
