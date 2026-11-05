@@ -174,21 +174,33 @@ class OrionWorkerJobStoreTest {
         assertTrue(store.all().isEmpty())
     }
 
-    @Test fun stagedProviderResultSurvivesRestartAndDoesNotReleaseActiveSlot() {
+    @Test fun stagedProviderResultSurvivesRestartAndOccupiesOneOfThreeActiveSlots() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Produce a bounded analysis")!!
-        val sibling = store.enqueue("parent-1", "Wait behind the active specialist")!!
+        val siblingOne = store.enqueue("parent-1", "First parallel specialist")!!
+        val siblingTwo = store.enqueue("parent-1", "Second parallel specialist")!!
+        val waiting = store.enqueue("parent-1", "Wait for an available slot")!!
         assertNotNull(store.claim(job.id) { true })
         assertTrue(store.stageResult(job.id, "Verified specialist result"))
-        assertNull(store.claim(sibling.id) { true })
+        assertNotNull(store.claim(siblingOne.id) { true })
+        assertNotNull(store.claim(siblingTwo.id) { true })
+        assertNull(store.claim(waiting.id) { true })
+
         OrionWorkerJobStore.simulateProcessRestartForTest(context)
-        val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        val restoredStore = OrionWorkerJobStore(context)
+        val restored = restoredStore.all().single { it.id == job.id }
         assertEquals(OrionWorkerJobStore.Status.RESULT_PENDING, restored.status)
         assertEquals("Verified specialist result", restored.result)
-        assertNull(OrionWorkerJobStore(context).claimNext { true })
-        assertTrue(OrionWorkerJobStore(context).complete(job.id, restored.result, closeParent = false))
+        // The staged result remains deliverable, while interrupted provider calls are not replayed.
+        assertNull(restoredStore.claim(job.id) { true })
+        assertTrue(restoredStore.complete(job.id, restored.result, closeParent = false))
         assertEquals(OrionWorkerJobStore.Status.COMPLETED,
-            OrionWorkerJobStore(context).all().single { it.id == job.id }.status)
+            restoredStore.all().single { it.id == job.id }.status)
+        assertNotNull(restoredStore.claim(waiting.id) { true })
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            restoredStore.all().single { it.id == siblingOne.id }.status)
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            restoredStore.all().single { it.id == siblingTwo.id }.status)
     }
 
     @Test fun stagedResultCanBeMovedToReviewWithoutBeingReplayed() {
