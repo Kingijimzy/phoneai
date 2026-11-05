@@ -354,7 +354,7 @@ object MemoryStore {
     }
 
     /** Text added to the AI's instructions: pinned and request-relevant memories first, then recent ones. */
-    fun promptBlock(c: Context, query: String? = null): String {
+    fun promptBlock(c: Context, query: String? = null, limit: Int = 6): String {
         // Filter before ranking: unreviewed pinned proposals must not crowd trusted memories out.
         val approved = all(c).filter {
             MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
@@ -364,7 +364,8 @@ object MemoryStore {
         val graphIds = if (query.isNullOrBlank()) emptySet() else
             runCatching { OrionKnowledgeGraph.relatedMemoryIds(c, query) }.getOrDefault(emptySet())
         val graphMatches = approved.filter { it.id in graphIds }
-        val items = (ranked + graphMatches).distinctBy { it.id }.take(15)
+        val boundedLimit = limit.coerceIn(1, 12)
+        val items = (ranked + graphMatches).distinctBy { it.id }.take(boundedLimit)
         if (items.isEmpty()) return "(no owner-approved, non-sensitive memories yet; proposals require review)"
         return items.joinToString("\n") {
             "[${it.id}] (${it.category}, source=${it.sourceRole}, confidence=${(it.confidence * 100).toInt()}%" +
