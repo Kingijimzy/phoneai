@@ -22,8 +22,8 @@ class OrionEvidenceLedgerTest {
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "shell", "shell", JSONObject().put("command", "pwd"), 20L, "/workspace"))
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "mcp", "mcp_call", JSONObject(), 30L, "error: offline"))
         val rows = OrionEvidenceLedger.events(context, task)
-        assertEquals(listOf(OrionEvidenceLedger.Outcome.VERIFIED, OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED,
-            OrionEvidenceLedger.Outcome.FAILED), rows.map { it.outcome })
+        assertEquals(listOf(OrionEvidenceLedger.Outcome.VERIFIED, OrionEvidenceLedger.Outcome.FAILED),
+            rows.map { it.outcome })
         assertTrue(OrionEvidenceLedger.hasVerifiedEvidence(context, task))
     }
 
@@ -58,15 +58,15 @@ class OrionEvidenceLedgerTest {
     }
 
 
-    @Test fun policyDenialsAreDurableButNeverCountAsExecutionOrVerification() {
-        val task = "ledger-denied-${System.nanoTime()}"
-        assertTrue(OrionEvidenceLedger.recordBlocked(context, task, "sms", "user_approval_denied",
+    @Test fun shellAndOutboundMessagesNeverCreateDurableActionReceipts() {
+        val task = "ledger-no-log-" + System.nanoTime()
+        assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "shell", "shell",
+            JSONObject().put("command", "echo private"), 1L, "private output"))
+        assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "messaging", "telegram_send",
+            JSONObject().put("text", "private message"), 2L, "sent"))
+        assertTrue(OrionEvidenceLedger.recordBlocked(context, task, "sms", "blocked",
             JSONObject().put("text", "private message")))
-        val event = OrionEvidenceLedger.events(context, task).single()
-        assertEquals(OrionEvidenceLedger.Outcome.DENIED, event.outcome)
-        assertFalse(OrionEvidenceLedger.hasVerifiedEvidence(context, task))
-        assertTrue(event.summary.contains("user_approval_denied"))
-        assertFalse(event.summary.contains("private message"))
+        assertTrue(OrionEvidenceLedger.events(context, task).isEmpty())
     }
 
     @Test fun memoryRetrievalEvidenceIsDurableButNeverCountsAsActionVerification() {
