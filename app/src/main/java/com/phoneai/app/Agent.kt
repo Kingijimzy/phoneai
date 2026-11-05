@@ -627,15 +627,17 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "cancelled_before_execution")
             return cancelled
         }
+        val suppressInternalConfirmation =
+            policyApproved && tool in actionSpecificConfirmationTools && !actionSpecificConfirmation
         val dispatchAction = {
             OrionExecutionLoop.dispatch(tool, stopped) {
                 if (tool in nativeUiActions) {
                     val validationArgs = JSONObject(args.toString()).put("tool", tool)
                     val validation = validateAction(validationArgs)
                     if (validation.startsWith("INVALID:")) "error: preflight blocked action. $validation"
-                    else exec(tool, args)
+                    else exec(tool, args, suppressInternalConfirmation)
                 } else {
-                    exec(tool, args)
+                    exec(tool, args, suppressInternalConfirmation)
                 }
             }
         }
@@ -3166,7 +3168,7 @@ Rules:
     }
 
     /** All capability families enter one adapter boundary before reaching their established backend. */
-    private fun exec(tool: String, a: JSONObject): String {
+    private fun exec(tool: String, a: JSONObject, suppressInternalConfirmation: Boolean = false): String {
         val startedAt = System.currentTimeMillis()
         // A trace groups the interaction; a correlation ID pairs this exact dispatch's
         // start and terminal receipt even when several tools run within the same trace.
@@ -3183,8 +3185,7 @@ Rules:
                 OrionRuntimeCapabilityExecutor.execute(
                     route.backend, route.tool, args, svc, tools, { stopped },
                     { question ->
-                        if (policyApproved && tool in actionSpecificConfirmationTools && !actionSpecificConfirmation) true
-                        else confirm(question)
+                        if (suppressInternalConfirmation) true else confirm(question)
                     },
                     { url -> ui.openBrowser(url) },
                     { input -> validateAction(input) },
