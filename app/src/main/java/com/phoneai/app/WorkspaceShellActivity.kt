@@ -119,6 +119,14 @@ class WorkspaceShellActivity : Activity() {
             val failed = result.startsWith("ERROR:")
             AgentPolicy.log(this, "workspace:$verb", "result", !failed,
                 if (failed) "operation failed; details shown in terminal" else "completed; output shown in terminal")
+            // Keep a redacted, bounded command/output receipt in the shared shell activity timeline.
+            AgentPolicy.log(
+                this,
+                "shell:workspace",
+                "$verb ${AgentPrivacyFilter.safeCommand(arg)}",
+                null,
+                AgentPrivacyFilter.safeOutput(result)
+            )
             append(result)
         } catch (e: Exception) { AgentPolicy.log(this, "workspace:$verb", "result", false, "workspace operation failed"); append("ERROR: ${e.message ?: e.javaClass.simpleName}") }
     }
