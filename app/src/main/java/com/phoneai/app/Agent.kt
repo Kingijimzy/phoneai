@@ -147,12 +147,28 @@ internal object ConversationContextPolicy {
 /** Shared policy for the only owner confirmations retained by Orion. */
 internal object IrreversibleActionConfirmationPolicy {
     private val action = Regex(
-        "(?i)\\b(?:restart|shutdown|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
+        "(?i)\\b(?:restart|reboot|shutdown|poweroff|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
     )
+
     fun requiresConfirmation(actionDescription: String): Boolean =
         action.containsMatchIn(actionDescription)
-}
 
+    fun computerSettingAction(tool: String, args: JSONObject): String? {
+        val targetTool = if (tool == "mcp_call") args.optString("name") else tool
+        if (!targetTool.equals("computer_settings", ignoreCase = true)) return null
+        val payload = args.optJSONObject("arguments") ?: args
+        val requested = payload.optString("action").ifBlank { payload.optString("setting") }
+            .ifBlank { payload.optString("operation") }
+            .lowercase().replace('-', '_').replace(' ', '_')
+        return when (requested) {
+            "restart", "reboot" -> "restart"
+            "shutdown", "poweroff", "power_off" -> "shutdown"
+            "wifi", "toggle_wifi", "wifi_toggle", "turn_wifi_on", "turn_wifi_off",
+            "enable_wifi", "disable_wifi", "wifi_on", "wifi_off" -> "toggle Wi-Fi"
+            else -> null
+        }
+    }
+}
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
@@ -514,6 +530,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> {
                 AgentPolicy.log(svc, tool, "dispatch", null, "allowed by selected approval policy")
+            }
+        }
+        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
+            if (!requestGateApproval("Confirm computer setting: $action?")) {
+                val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
+                recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
+                taskProofs.record(tool, denied)
+                return denied
             }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
