@@ -1097,7 +1097,7 @@ RESPONSE QUALITY AND FORMAT:
                 "No markdown, lists, emoji, robotic disclaimers, or repetitive greetings. Ask a single useful follow-up only when needed. " +
                 "Never pretend an action happened. User name: $name. " +
                 CharacterProfile.systemInstruction(Prefs.characterProfile(svc)) +
-                "\n\n" + OrionSessionContextProvider.forChat(svc, command) +
+                "\n\n" + OrionSessionContextProvider.forLiveVoice(svc, command) +
                 "\n\nLIVE VOICE BOUNDARY: this path is conversation-only. The executive context informs continuity and factual context but does not expose or authorize tools, phone actions, shell commands, external writes, or background execution. If the user requests an action, explain that the main chat can execute it; do not claim it was routed or performed." +
             liveHistory.put(msg("system", prompt))
             // Rehydrate recent typed/voice turns from the provider-neutral SQLite transcript.
