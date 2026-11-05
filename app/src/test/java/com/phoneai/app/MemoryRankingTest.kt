@@ -83,6 +83,29 @@ class MemoryRankingTest {
         assertEquals(listOf("abc", "def"), grams)
         assertTrue(MemoryRanking.characterTrigrams("a".repeat(1000)).size <= 60)
     }
+
+    @Test fun localDenseEmbeddingRecallsRelatedConceptsWithoutNetwork() {
+        assertTrue(MemoryRanking.embeddingSimilarity(
+            "Which city is my home?",
+            "User lives in Lagos Nigeria"
+        ) > 0.0)
+        assertTrue(MemoryRanking.embeddingSimilarity(
+            "my currency trading approach",
+            "I trade forex"
+        ) > 0.0)
+    }
+
+    @Test fun hybridRankUsesLocalEmbeddingForParaphrasedRecall() {
+        val documents = listOf(
+            "User lives in Lagos Nigeria",
+            "User likes football",
+            "Orion is an Android assistant"
+        )
+        assertEquals(
+            "User lives in Lagos Nigeria",
+            MemoryRanking.hybridRank(documents, { it }, "Which city is my home?", 1).single()
+        )
+    }
 }
 
 class MemoryRankingRelatedWordsTest {
