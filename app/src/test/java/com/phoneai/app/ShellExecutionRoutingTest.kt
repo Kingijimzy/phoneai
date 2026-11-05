@@ -42,6 +42,22 @@ class ShellExecutionRoutingTest {
         assertFalse(ShellExecutionRouting.isPackageOperation("echo apk add python3"))
     }
 
+
+    @Test fun trustedOfficialAlpineDependencyInstallsDoNotPrompt() {
+        val command = "apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community python3 git nodejs npm"
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify(command))
+        assertFalse(ShellExecutionRouting.requiresApproval("linux", command))
+    }
+
+    @Test fun untrustedOrDestructivePackageOperationsStillRequireApproval() {
+        val untrusted = "apk add --no-cache --repository https://example.com/alpine/v3.22/main python3"
+        assertEquals(ShellRisk.ASK, ShellPolicy.classify(untrusted))
+        assertTrue(ShellExecutionRouting.requiresApproval("linux", untrusted))
+        assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk upgrade"))
+        assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk del python3"))
+    }
+
     @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {
         assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
         assertTrue(TermuxCommandPolicy.isReadOnly("python3 --version"))
