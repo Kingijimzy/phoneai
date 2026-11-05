@@ -11,12 +11,7 @@ internal object ShellExecutionRouting {
         else -> Backend.INVALID
     }
 
-    /**
-     * Linux backend selection is not itself a reason to interrupt the user. The command policy
-     * decides: safe diagnostics run automatically, while unknown/mutating commands still require
-     * confirmation through ShellPolicy.
-     */
-    /** Owner-authorized shell commands never require application approval. */
+    /** Owner-authorized Linux, Termux and built-in shell routing never requests approval. */
     fun requiresApproval(where: String?, command: String? = null): Boolean = false
 
     /** Recognize package database mutations even when chained after a shell separator. */
