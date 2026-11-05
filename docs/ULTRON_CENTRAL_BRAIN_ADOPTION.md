@@ -2,80 +2,97 @@
 
 ## Source and ownership
 
-This migration is based on the owner's sibling repository, [Kingijimzy/Ultron](https://github.com/Kingijimzy/Ultron). Both repositories are owned by Kingijimzy. Ultron currently has no root LICENSE file, so this is an owner-authorized internal port, not a claim that the source is permissively licensed for third parties. Preserve source attribution in adapted modules and review third-party dependency licenses independently.
+This migration is based on the owner's sibling repository, [Kingijimzy/Ultron](https://github.com/Kingijimzy/Ultron). Both repositories are owned by Kingijimzy. Ultron has no root LICENSE file, so this is an owner-authorized internal port, not a claim that its source is permissively licensed for third parties. Preserve attribution in adapted modules and review third-party dependency licenses independently.
 
-Ultron is a Python desktop assistant. Orion is a native Android/Kotlin application. The migration ports runtime architecture and reusable logic, not desktop-only APIs or Python modules that cannot execute in Android. Python-native Ultron capabilities will be evaluated for Orion's managed Python/Alpine worker.
+Ultron is a Python desktop assistant. Orion is a native Android/Kotlin application with a managed Python runtime. Port architecture and reusable algorithms; adapt platform-specific behavior. Do not copy desktop APIs, paths, subprocess assumptions, background-thread models, or unsafe dynamic-import behavior into Android.
 
-## Non-negotiable runtime design
+## Conflict audit first
 
-One central runtime owns each user turn and objective. Chat, voice, notifications and background events are input surfaces into the same runtime. No surface gets a private planner or alternate tool dispatcher.
+See [ULTRON_ORION_CONFLICT_AUDIT.md](ULTRON_ORION_CONFLICT_AUDIT.md) for the source-level inventory and conflict decisions.
 
-Canonical flow:
-1. Perceive request, transcript, active objective, checkpoint and device observations.
-2. Resolve context from conversation, project state, memory graph and prior evidence.
-3. Decide whether to converse, clarify, research or act.
-4. Build or continue an explicit objective plan with dependencies and success conditions.
-5. Discover capabilities from one live registry and typed contracts.
-6. Apply owner-configured action policy at the dispatch boundary.
-7. Execute through the shared runtime and append evidence.
-8. Verify outcomes independently; a tool response is not proof of success.
-9. Replan from observed failure with bounded recovery; never repeat identical failed calls blindly.
-10. Persist checkpoint, memory observations, decision provenance and a user-readable receipt.
+The audit found that Orion already has implementations for most of Ultron's advertised systems. A second unused `OrionCentralRuntime.Engine` would have created another execution owner without fixing the live entry points, so that provisional kernel and its isolated tests were removed from this branch.
 
-## Ultron features to port
+Current ownership baseline:
+- Live interaction and command execution: `Agent` entry points.
+- Executive context: `OrionCentralBrain` and its existing `OrionSoulEngine` context provider.
+- Built-in capability contracts: `ToolRegistry`; live eligibility: `OrionCapabilityDiscovery` / `CapabilityRegistry`.
+- Last-mile execution: `OrionExecutionLoop` plus Agent's policy, recovery, evidence and verification boundary.
+- Memory and retrieval: `MemoryStore`, `MemoryRanking`, `KnowledgeStore`, and the existing SQLite `OrionKnowledgeGraph`.
+- Specialists and background work: `OrionSpecialistRuntime`, worker/job/lease stores, and `OrionRuntime`.
+- Self-extension: the existing restricted extension draft/test/promotion lifecycle.
 
-| Ultron subsystem | Orion implementation target | Porting rule |
+The goal is to make these existing owners coherent and remove duplicated prompt assembly, intent routing, progress ledgers and capability discovery—not to create replacement classes with the same names.
+
+## Ultron capabilities and Orion adaptation
+
+| Ultron subsystem | Existing Orion owner / target | Required adoption |
 |---|---|---|
-| Main runtime / unified prompt | OrionCentralRuntime and shared Agent entry points | Single runtime, provider-neutral |
-| Action loader / registry | Typed Kotlin capability registry | Dynamic discovery; no hardcoded page-specific dispatch |
-| Cerebro graph | Persistent entity/relation/fact store | Stable vector model, provenance, conflict resolution and migrations |
-| Chronos | Android event and environment observation adapters | Android permissions and battery-aware scheduling |
-| Prometheus | Skill synthesis lifecycle | Generate, inspect, isolated test, verify, approve/promote, version and rollback |
-| Dev Agent | Shared-workspace coding workflow | Plan files, edit, compile, test, repair and review diff |
-| Drone Swarm | Centrally supervised specialist workers | Shared objective/checkpoints; workers cannot own final state |
-| Web Autopilot / Browser | In-chat browser and research capabilities | Same context and evidence ledger |
-| Proactive actions | Android WorkManager/foreground-service adapters | Persisted jobs, cancellation and owner-configured cadence |
+| Main runtime / unified prompt | Agent + OrionCentralBrain | Consolidate shared lifecycle across chat, live voice, command, resume and specialist turns. One goal/checkpoint/evidence contract. |
+| Action loader / registry | ToolRegistry + OrionCapabilityDiscovery + CapabilityRegistry | Merge built-ins and verified enabled extensions through one live discovery adapter and one dispatch boundary. |
+| Cerebro graph | OrionKnowledgeGraph (SQLite) + MemoryStore | Extend existing SQLite schema with explicit entity/relation edges, provenance, confidence, expiry and versioned semantic vectors. Migrate approved legacy facts. |
+| Semantic retrieval | MemoryRanking + KnowledgeStore | Keep BM25 + TF-IDF; add normalized character-trigram similarity and deterministic hybrid ranking tests. |
+| Session continuity | ChatHistoryStore, OrionConversationRepository, AgentCheckpointStore, OrionTaskCheckpointStore | Retrieve relevant history before decisions; reconcile in-flight actions before resuming; preserve context across provider/mode changes. |
+| Dedicated coding planner | OrionPythonWorkspace, OrionPythonCapabilityExecutor, workspace patch/checkpoint and evidence components | Port Ultron Dev Agent's multi-file planning, dependency ordering, traceback mapping and bounded repair loop to the shared Orion workspace. |
+| Self-extension | SelfExtendingExtensionStore / Policy and extension tools | Preserve draft → static validation → isolated sandbox tests → source-hash-bound verification → approval/promotion → rollback. Never import generated code into the app process. |
+| Parallel agents | OrionSpecialistRuntime and worker/job/lease infrastructure | Port supervised mission patterns, not unbounded daemon threads. Every worker shares parent objective/checkpoints and returns evidence. |
+| Coding repair / reconnect | AgentCheckpointStore, OrionRepairLifecycle, OrionRecoveryPlanner | Resume durable sessions and verify in-flight mutations before retry; repair from actual diagnostics and test output. |
+| Ambient awareness / Chronos | Android sensor, notification, app/device/location context providers and WorkManager workers | Port time-aware summaries and proactive scheduling; do not claim desktop window/process telemetry or override Android thermal/battery policy. |
+| Web Autopilot | Orion Browser and research capabilities | Keep browser actions in the same turn context, capability registry and evidence ledger. |
+| Proactive actions | OrionProactiveWork, reminder/routine workers, OrionRuntime | Persist schedules, deduplicate, support cancellation and respect owner-configured cadence and Android background limits. |
 
-## Existing Orion baseline to consolidate
+## Architecture rules
 
-Agent.kt is 3,398 lines on the inspected main head and contains intent policies, context assembly, chat and live-chat paths, command execution, recovery, evidence, tool execution and verification. This concentration, together with separate orchestration and capability systems, creates maintainability and routing risk.
+1. Every user turn enters a shared interaction contract, regardless of whether it came from chat, live voice, command, notification or resume.
+2. Context is assembled once from transcript/history, active objective, approved memory, project workspace, device observations, capability state and prior evidence. Avoid injecting the same memory, tool inventory, worker ledger or app map multiple times.
+3. One capability registry describes available tools, schemas, prerequisites, platform, side effects and verification requirements.
+4. All actions pass through the existing policy and dispatch boundary. A model decision or successful tool invocation is not completion evidence.
+5. One objective/checkpoint ledger owns task progress. Specialists return results to the parent objective; they do not independently mark the parent complete.
+6. Memory retrieval occurs before planning and acting. Facts retain provenance, confidence, sensitivity, review status and temporal validity. Corrections and contradictions supersede old facts rather than silently accumulating.
+7. Extensions are not executable until isolated tests pass against the exact source hash and the configured owner policy permits promotion.
+8. Background work must be durable, bounded, cancellable, battery-aware and recoverable after process death.
+9. Platform permission, external authentication and consequential-action approval remain real requirements. Do not ask for duplicate consent where permission is already granted, and do not bypass an actual required approval.
 
-OrionTaskOrchestrator.kt is currently a small prompt/dependency helper, not the sole runtime. This migration must make the central runtime authoritative and progressively move behavior out of Agent.kt; do not add a second competing coordinator.
+## Known risks to fix
 
-Existing checkpoint, approval, owner settings, capability discovery, Python runtime, evidence ledger and Android-specific features are retained only where they integrate through the central runtime. Do not silently remove user controls or report unsupported platform actions as available.
+- `Agent.kt` remains a large interaction/execution class. Extract components only as each migration slice has parity tests; avoid a risky rewrite.
+- `chatSystem()` and `OrionCentralBrain.contextFor()` currently collect overlapping memory, application, capability and worker context. Consolidate to a typed, measured context snapshot.
+- Agent intent routing, task orchestration, objective graphs, checkpoints and specialist envelopes overlap. Clarify ownership and prevent divergent status.
+- Orion's SQLite graph currently indexes memory nodes to lexical term nodes; it is not yet a full Cerebro entity/relation graph with multi-hop semantic scoring.
+- Orion already has BM25 + TF-IDF retrieval; character trigrams are the specific retrieval feature to port.
+- Built-in tools and saved extensions are not yet a single discovery surface.
+- Ultron's Prometheus implementation uses heuristic source-pattern checks and dynamic Python imports; its Drone Swarm uses daemon threads and recurring loops; Chronos reads desktop OS/window/process telemetry and includes non-portable performance claims. These are design references, not safe drop-in Android implementations.
 
 ## Delivery sequence
 
-### Slice 1 — central runtime foundation
-- Define typed turn/context/objective/step/capability/evidence contracts.
-- Define one execution lifecycle with phase events, dependency ordering, dispatch policy, verification, bounded replanning and memory receipt.
-- Add deterministic tests proving verified completion, failed verification and dispatch blocking.
-- Wire all existing chat/voice/resume entry points into this runtime before migrating specialist systems.
+### Slice 1 — conflict removal and shared contracts
+- Keep current live Agent paths stable.
+- Remove the unused parallel runtime proposal.
+- Add contract tests proving chat, live voice, command, resume and specialist paths share the same context, objective, registry and dispatch contracts.
+- Consolidate duplicated prompt/context assembly and establish one typed context snapshot.
 
-### Slice 2 — capability registry and dispatch consolidation
-- Inventory current registries, tool dispatchers and shortcut paths.
-- Create one registry with schemas, prerequisites, side-effect classification, platform, health and verifier metadata.
-- Route every capability invocation through the same policy and evidence boundary.
-- Remove duplicate dispatch only after parity tests pass.
+### Slice 2 — capability discovery and dispatch
+- Audit all capability registries, tool lists, shortcuts and extension execution paths.
+- Merge built-in and verified extension capabilities into one discovery surface.
+- Ensure every dispatch reaches the same policy, cancellation, evidence and verification boundary.
+- Remove duplicate routing only after parity tests pass.
 
-### Slice 3 — context and Cerebro memory
-- One context resolver for recent conversation, older history, active objective, project files, user memory and knowledge graph.
-- Durable graph schema with stable embeddings and deterministic vocabulary/model versioning.
-- Automatic extraction, deduplication, confidence, provenance, temporal validity, correction and contradiction handling.
-- Retrieve before decisions and actions; test follow-ups and long conversations.
+### Slice 3 — Cerebro graph and retrieval
+- Extend the existing SQLite graph with versioned entity/relation/vector tables.
+- Migrate approved facts with provenance and trust metadata.
+- Port Ultron's TF-IDF/character-trigram semantic matching into the existing hybrid ranker.
+- Test fuzzy entity matching, multi-hop retrieval, contradictions, expiry and memory deletion.
 
-### Slice 4 — Ultron specialist capabilities
-- Android-aware Chronos observations.
-- Dev Agent multi-file plan/execute/test/repair on shared workspace.
-- Drone workers supervised by one objective owner.
-- Prometheus skill generation with isolation, tests, promotion and rollback.
-- Web Autopilot, reminders and proactive workflows using the same runtime.
+### Slice 4 — coding, specialists and ambient awareness
+- Complete multi-file coding plan → edit → compile → test → diagnose → bounded repair on Orion's shared workspace.
+- Complete supervised parallel workers with leases, checkpoints, cancellation, bounded retries and parent-owned completion.
+- Add Android-native Chronos awareness and proactive scheduling.
+- Complete browser and self-extension flows through the same registry and evidence model.
 
 ### Slice 5 — hard acceptance
-- Kotlin unit tests, Android build, Python runtime tests and exact-head CI.
-- End-to-end tests for follow-up context, memory, tool choice, browser, Python, GitHub, coding, recovery, interruption, background resume and Android capability outcomes.
-- Physical-device acceptance before calling the migration complete.
+- Exact-head Android build and unit/integration tests.
+- End-to-end tests for context continuity, memory, tool discovery, browser, Python, GitHub, multi-file coding, worker resume, cancellation and repair.
+- Physical Android acceptance before calling the migration complete.
 
 ## Definition of done
 
-A feature is not complete because its class exists, a tool was called, or a model says it worked. It is complete only when exact-head build passes, automated tests exercise real wiring, runtime evidence proves the outcome, and Android behavior is accepted on device. Keep migration on a dedicated branch and do not merge a red or unverified build.
+A feature is not complete because a class exists, a tool was called, or a model says it worked. It is complete only when exact-head build passes, automated tests exercise the real wiring, runtime evidence proves the outcome, and Android behavior is accepted on device. Keep the migration on a dedicated branch; do not merge a red or unverified build.
