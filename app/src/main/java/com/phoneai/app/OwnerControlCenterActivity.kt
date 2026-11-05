@@ -214,8 +214,11 @@ class OwnerControlCenterActivity : Activity() {
         AgentPolicy.enableAllImplementedPacks(this)
         OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
             autoActivateVerifiedExtensions = true,
-            pythonProfile = OrionPythonProfile.DEVELOPER
+            pythonProfile = OrionPythonProfile.DEVELOPER,
+            recoveryMaxAttempts = 4,
+            recoveryBackoffSeconds = 15
         ))
+        AgentPolicy.setBudgets(this, steps = 100, calls = 100, minutes = 30)
         AgentPolicy.log(
             this,
             "owner-autonomy",
