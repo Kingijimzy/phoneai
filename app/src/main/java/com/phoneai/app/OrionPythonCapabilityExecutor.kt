@@ -40,6 +40,7 @@ internal class OrionPythonCapabilityExecutor(
             "extension_history" -> extensionHistory(args)
             "extension_rollback" -> rollbackExtension(args, confirm)
             "extension_create" -> createDraft(args)
+            "extension_update" -> updateDraft(args)
             "extension_test" -> testDraft(args, stopped)
             "extension_enable" -> enable(args, confirm)
             "extension_run" -> runExtension(args, stopped)
@@ -76,6 +77,24 @@ internal class OrionPythonCapabilityExecutor(
         } else {
             "error: extension draft was not saved; check for duplicate IDs, invalid source, or unreadable storage"
         }
+    }
+
+    private fun updateDraft(args: JSONObject): String {
+        val id = args.optString("id").trim()
+        val name = args.optString("name").trim()
+        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val source = args.optString("source")
+        val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
+            ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
+        if (invalid != null) return "error: $invalid"
+        val extension = GeneratedExtension(
+            id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
+            args.optString("description").take(240), System.currentTimeMillis()
+        )
+        testReceipts.remove(id)
+        return if (extensionStore.saveRevision(extension)) {
+            "Saved new disabled revision for $id. Run extension_test before activation; the previous activated version remains archived."
+        } else "error: revision rejected; disable the active extension first, use a new source hash, and check registry integrity"
     }
 
     private fun testDraft(args: JSONObject, stopped: () -> Boolean): String {
@@ -179,7 +198,11 @@ internal class OrionPythonCapabilityExecutor(
 
     private fun disable(args: JSONObject): String {
         val id = args.optString("id").trim()
-        return if (extensionStore.disable(id)) "Extension $id disabled; source retained."
+        val active = runCatching { extensionStore.enabled(id) }.getOrNull()
+        if (active != null && !versionHistory.record(active)) {
+            return "error: active version could not be archived; extension remains enabled"
+        }
+        return if (extensionStore.disable(id)) "Extension $id disabled; source and activated version history retained."
         else "error: extension could not be disabled or registry is unavailable"
     }
 
@@ -188,7 +211,7 @@ internal class OrionPythonCapabilityExecutor(
         fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
 
         private val supportedTools = setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
+            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
             "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         )
         fun supports(tool: String): Boolean = tool in supportedTools
