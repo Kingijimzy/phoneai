@@ -3201,7 +3201,6 @@ Rules:
             val finalResult = if (!saved && !backendResult.trimStart().startsWith("error", true)) {
                 "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${backendResult.take(240)}"
             } else backendResult
-            taskProofs.record(route.tool, finalResult)
             finalResult
         } }.getOrElse { failure ->
             "error: capability adapter dispatch threw ${failure.javaClass.simpleName}; outcome requires inspection."
