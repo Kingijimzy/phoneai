@@ -60,14 +60,15 @@ internal object OrionPythonRuntime {
             // The acceptance workload requires full CPython and its standard library only.
             // py3-pip and build-base are unnecessary, large dependency trees on a phone.
             // apk verifies signed indexes/packages from the exact pinned official repositories.
+            val installCommand = """apk --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3 || { rc=${'$'}?; echo "CPYTHON_INSTALL_DIAGNOSTICS"; echo "--- filesystem ---"; df -h / /var/cache/apk 2>&1; echo "--- inodes ---"; df -i / 2>&1; echo "--- package state ---"; apk info -e python3 2>&1; echo "--- repositories ---"; cat /etc/apk/repositories 2>&1; exit ${'$'}rc; }"""
             val install = installer.execute(
-                manifest, "apk --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3 || { rc=\\$?; echo \\"CPYTHON_INSTALL_DIAGNOSTICS\\"; echo \\"--- filesystem ---\\"; df -h / /var/cache/apk 2>&1; echo \\"--- inodes ---\\"; df -i / 2>&1; echo \\"--- package state ---\\"; apk info -e python3 2>&1; echo \\"--- repositories ---\\"; cat /etc/apk/repositories 2>&1; exit \\$rc; }",
+                manifest, installCommand,
                 180_000L, onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
-            if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\\n${install.take(MAX_OUTPUT_CHARS)}"
+            if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\n${install.take(MAX_OUTPUT_CHARS)}"
             val verified = installer.execute(manifest, "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'", 12_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
             if (!verified.startsWith("exit=0") || !verified.contains("Python 3.")) {
-                return "error: apk reported success but CPython verification failed; execution was not started.\\n${verified.take(MAX_OUTPUT_CHARS)}"
+                return "error: apk reported success but CPython verification failed; execution was not started.\n${verified.take(MAX_OUTPUT_CHARS)}"
             }
         }
 
