@@ -100,7 +100,7 @@ internal object AgentHooks {
   return "PASS: message sent to $target; exact message and status '$status' are visible."
  }
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
-  private val confirmationRisk=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|subscribe|install|uninstall|grant|allow|revoke|reset|clear data)\\b",RegexOption.IGNORE_CASE)
+  private val confirmationRisk=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|share|export|upload|authorize|subscribe|install|uninstall|grant|allow|revoke|reset|clear data)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
  fun scopeBlockReason(request:String,tool:String,args:JSONObject,targetLabel:String=""):String? {
