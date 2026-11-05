@@ -56,10 +56,20 @@ internal object GraphPolicy {
         val out = list.toMutableList()
         // The same subject + relation with a new object replaces the old one for single-valued relations ("my favourite team is ...").
         val i = out.indexOfFirst { it.a == na && it.rel == nr && it.b == nb }
-        if (i >= 0) out[i] = out[i].copy(count = out[i].count + 1, lastAt = now)
-        else {
-            // Attributes of the user ("my favourite team is ...") have one current value; verbs like "likes" can repeat.
-            if (na == "user" && nr !in repeatableRelations) out.removeAll { it.a == na && it.rel == nr }
+        if (i >= 0) {
+            val existing = out[i]
+            out[i] = existing.copy(count = existing.count + 1, lastAt = maxOf(existing.lastAt, now))
+        } else {
+            // Non-repeatable subject/relation pairs have one current value. Keep the
+            // newest timestamp when replaying history, so an older archived fact can
+            // never roll the current graph value backwards.
+            if (nr !in repeatableRelations) {
+                val current = out.filter { it.a == na && it.rel == nr }.maxByOrNull { it.lastAt }
+                if (current != null && current.lastAt > now) {
+                    return out.sortedByDescending { it.lastAt }.take(MAX_FACTS)
+                }
+                out.removeAll { it.a == na && it.rel == nr }
+            }
             out.add(GraphFact(na, nr, nb, 1, now))
         }
         out.sortByDescending { it.lastAt }
