@@ -42,27 +42,26 @@ internal object OrionPythonRuntime {
 
         val installer = LinuxRuntimeInstaller(app)
         val manifest = LinuxRuntimePolicy.productionManifest
+        // First-run runtime setup is unattended because every downloaded rootfs byte is
+        // pinned by the release manifest, SHA-256 verified, smoke-tested in staging, and
+        // atomically activated with rollback. No arbitrary image or installer script is run.
         if (!installer.isReady(manifest)) {
-            if (!confirm("Install or repair Orion's pinned Alpine Linux runtime before running full CPython?")) {
-                return "Python script saved to workspace/$SCRIPT_NAME. Full CPython needs the Alpine runtime; installation was not approved."
-            }
+            if (stopped()) return "error: Python runtime installation cancelled before download."
             val installed = installer.install(manifest)
             if (installed.isFailure) return "error: Alpine runtime installation failed: ${(installed.exceptionOrNull()?.message ?: "unknown error").take(220)}"
         }
 
-        // Package installation is persistent in the app-private Alpine rootfs and requires
-        // separate approval because it downloads executable code from Alpine repositories.
+        // Install only CPython from the pinned official, signed Alpine repositories. The
+        // isolated repositories file prevents a modified guest repo list from influencing
+        // Autopilot. pip, compiler toolchains, alternate repositories and system upgrades
+        // are deliberately not part of this automatic bootstrap.
         val probe = installer.execute(manifest, "python3 --version", 8_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
         if (!probe.startsWith("exit=0") || !probe.contains("Python 3.")) {
-            if (!confirm("Install full CPython 3 and its standard library into Orion's persistent Alpine runtime? This downloads the Python runtime package from the configured Alpine repositories; pip and compiler toolchains are not required.")) {
-                return "Python script saved. CPython is not installed in Alpine; approve the CPython package installation from Orion's configured Alpine repository."
-            }
             // The acceptance workload requires full CPython and its standard library only.
-            // py3-pip and build-base are unnecessary, large dependency trees on a 4–8 GB phone
-            // and were the source of avoidable package-install failures. apk add refreshes indexes
-            // as needed; do not run a separate apk update that doubles downloads.
+            // py3-pip and build-base are unnecessary, large dependency trees on a phone.
+            // apk verifies signed indexes/packages from the exact pinned official repositories.
             val install = installer.execute(
-                manifest, "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
+                manifest, "apk --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3 || { rc=\\$?; echo \\"CPYTHON_INSTALL_DIAGNOSTICS\\"; echo \\"--- filesystem ---\\"; df -h / /var/cache/apk 2>&1; echo \\"--- inodes ---\\"; df -i / 2>&1; echo \\"--- package state ---\\"; apk info -e python3 2>&1; echo \\"--- repositories ---\\"; cat /etc/apk/repositories 2>&1; exit \\$rc; }",
                 180_000L, onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
             if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\\n${install.take(MAX_OUTPUT_CHARS)}"
