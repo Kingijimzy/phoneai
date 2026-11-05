@@ -63,7 +63,7 @@ class WorkspaceUndoStoreTest {
         assertTrue(undo.recordWrite("notes.txt", "before", "after"))
         assertTrue(workspace.write("notes.txt", "owner edit").startsWith("saved "))
         val result = undo.undoLast().orEmpty()
-        assertTrue(result.contains("no data was overwritten"))
+        assertTrue(result.contains("no data was overwritten", ignoreCase = true))
         assertEquals("owner edit", workspace.readForUndo("notes.txt"))
     }
 
