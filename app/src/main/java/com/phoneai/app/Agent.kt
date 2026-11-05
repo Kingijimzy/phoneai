@@ -767,7 +767,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 "mcp_endpoint" to if (McpConnector.configured(svc)) "configured" else "not-configured",
                 "mcp_pairing" to if (McpConnector.isPaired(svc)) "paired" else "not-paired"
             ),
-            deniedTools = denied
+            deniedTools = denied,
+            generatedExtensions = runCatching { SelfExtendingExtensionStore(svc).all() }.getOrDefault(emptyList())
         )
         val eligible = inventory.tools.filter { it.available }.joinToString(", ") { fact ->
             val mode = ToolPermissions.mode(svc, fact.name)
