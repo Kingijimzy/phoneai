@@ -69,6 +69,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val shotExec = Executors.newSingleThreadExecutor()
+    /**
+     * Soul observation is event-driven; without this tick an idle phone would never run a due
+     * autonomy goal. Only enqueues the bounded SOUL_WATCH item, and only in AUTOPILOT.
+     */
+    private val autonomyTick = object : Runnable {
+        override fun run() {
+            if (OrionAutonomySettings.read(this@PhoneAiService).mode == OrionMode.AUTOPILOT) {
+                val runtime = orionRuntime
+                if (runtime != null && runtime.enqueue(
+                        OrionRuntime.WorkType.SOUL_WATCH, "autonomy-tick", 2,
+                        goal = "Run due autonomy goals", checkpoint = "autonomy_tick"
+                    )) {
+                    scheduleRuntimeDrain()
+                }
+            }
+            main.postDelayed(this, 10 * 60_000L)
+        }
+    }
     private lateinit var wm: WindowManager
     private lateinit var agent: Agent
     private lateinit var voice: Voice
@@ -189,6 +207,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
         OrionProactiveWork.ensureScheduled(this)
+        main.removeCallbacks(autonomyTick)
+        main.postDelayed(autonomyTick, 5 * 60_000L)
         requestContinuousWatcherObservation("service_connected")
         showBubble()
         startWake()
@@ -404,6 +424,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onUnbind(intent: Intent?): Boolean {
         orionRuntime?.stop()
+        main.removeCallbacks(autonomyTick)
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
         runtimeRetryRunnable = null
         runtimeRetryAtElapsed = 0L
