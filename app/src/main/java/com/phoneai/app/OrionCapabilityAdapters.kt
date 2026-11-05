@@ -20,8 +20,8 @@ internal object OrionCapabilityAdapters {
     private val toolsByBackend: Map<Backend, Set<String>> = mapOf(
         Backend.SHELL to setOf("shell", "termux_command"),
         Backend.PYTHON to setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
-            "extension_enable", "extension_run", "extension_disable"
+            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+            "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         ),
         Backend.FILES to setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect", "project_plan", "project_verify"),
         Backend.BROWSER to setOf(

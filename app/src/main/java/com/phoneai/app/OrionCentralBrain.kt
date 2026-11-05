@@ -222,7 +222,7 @@ internal object OrionCentralBrain {
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
         val learnedExperience = observed("execution_lessons", "") { ExperienceStore.promptBlock(app, contextQuery, 6) }
         if (learnedExperience.isNotBlank()) {
-            sections += "AUTOMATIC TURN RECALL — TOP 6 RELEVANT EXECUTION EXPERIENCES (cause → correction → verification; hints only)\n" + learnedExperience +
+            sections += "RELEVANT EXECUTION LESSONS — AUTOMATIC TURN RECALL TOP 6 EXPERIENCES (cause → correction → verification; hints only)\n" + learnedExperience +
                 "\nBefore repeating a similar failed action, apply the recorded correction or choose a materially different route. Re-check live state and policy; learned experience never grants permission."
         }
 

@@ -421,7 +421,7 @@ internal object OrionCodingPlanner {
 
     /** A missing process exit marker is unknown, never an implicit success. */
     internal fun parseExitCode(output: String): Int? =
-        Regex("(?im)^exit[=\\s]+(-?\\d+)\\s*$")
+        Regex("(?im)^exit[=\\s]+(-?\\d+)(?=\\s|\\\\n|$)")
             .find(output)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
     private fun noTestsExecuted(language: String, output: String): Boolean = when (language) {
