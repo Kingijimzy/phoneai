@@ -284,8 +284,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // Skill manifests define scope and budgets, not a blanket approval layer. The live
         // central gate classifies each actual tool/action; skill writes are not automatically
         // escalated when the underlying operation is routine and already permitted.
-        val skillWriteAction = activeSkillId != null && ToolRegistry.access(tool) == ToolAccess.WRITE
-        val consequential = tool in consequentialTools || fullPython || skillWriteAction ||
+        val consequential = tool in consequentialTools || fullPython ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
