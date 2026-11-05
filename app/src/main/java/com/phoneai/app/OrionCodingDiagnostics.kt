@@ -31,7 +31,7 @@ internal object OrionCodingDiagnostics {
             add("python_traceback", match.groupValues[1], match.groupValues[2].toIntOrNull(), detail)
         }
         pytest.findAll(output).forEach { match ->
-            add("pytest", match.groupValues[1], match.groupValues[2].toIntOrNull(), match.value.substringAfterLast(":").trim())
+            add("pytest", match.groupValues[1], match.groupValues[2].toIntOrNull(), match.groupValues[3].trim())
         }
         gradle.findAll(output).forEach { match ->
             add("kotlin_compiler", match.groupValues[1], match.groupValues[2].toIntOrNull(), match.groupValues[5])
