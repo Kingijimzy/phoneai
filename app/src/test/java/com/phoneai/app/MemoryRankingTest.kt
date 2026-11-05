@@ -40,6 +40,30 @@ class MemoryRankingTest {
         assertTrue(MemoryRanking.score(mem(2, "project", "Bybit swing trading", 1), "bybit") > 0)
         assertNotNull(MemoryRanking.tokens("The quick brown fox"))
     }
+
+    @Test fun trigramSimilarityFindsSmallTyposWithoutMatchingUnrelatedWords() {
+        assertTrue(MemoryRanking.trigramSimilarity("trading", "tradng") >= 0.24)
+        assertEquals(0.0, MemoryRanking.trigramSimilarity("trading", "football"), 0.0001)
+        assertTrue(MemoryRanking.score(mem(5, "fact", "User follows trading setups"), "tradng") > 0)
+    }
+
+    @Test fun hybridRankUsesTrigramSignalForFuzzyRecall() {
+        val documents = listOf(
+            "Bybit trading plan and liquidity sweeps",
+            "Football fixtures and match results",
+            "Jollof rice cooking notes"
+        )
+        assertEquals(
+            "Bybit trading plan and liquidity sweeps",
+            MemoryRanking.hybridRank(documents, { it }, "bybit tradng", limit = 1).single()
+        )
+    }
+
+    @Test fun trigramFeaturesAreBoundedAndWordLocal() {
+        val grams = MemoryRanking.characterTrigrams("ABC DEF")
+        assertEquals(listOf("abc", "def"), grams)
+        assertTrue(MemoryRanking.characterTrigrams("a".repeat(1000)).size <= 60)
+    }
 }
 
 class MemoryRankingRelatedWordsTest {
