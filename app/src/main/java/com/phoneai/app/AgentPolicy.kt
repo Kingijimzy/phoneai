@@ -87,7 +87,9 @@ object AgentPolicy {
         autonomous = ToolPermissions.level(c) == "autonomous" && !ToolPermissions.hasOverride(c, toolId),
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
-        trustedForPack = isTrustedFor(c, pack),
+        // Unrestricted FULL Python is never covered by a timed trust session.
+        trustedForPack = isTrustedFor(c, pack) &&
+            !(toolId == "python_exec" && OrionOwnerDialSettings.read(c).pythonProfile == OrionPythonProfile.FULL),
         allowlisted = allowed(c, pack, toolId),
         askedThisTask = askedThisTask
         ))
