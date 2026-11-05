@@ -60,7 +60,7 @@ The goal is to make these existing owners coherent and remove duplicated prompt 
 - Orion's SQLite graph currently indexes memory nodes to lexical term nodes; it is not yet a full Cerebro entity/relation graph with multi-hop semantic scoring.
 - Orion already has BM25 + TF-IDF retrieval; character trigrams are the specific retrieval feature to port.
 - Built-in tools and saved extensions are not yet a single discovery surface.
-- Ultron's Prometheus implementation uses heuristic source-pattern checks and dynamic Python imports; its Drone Swarm uses daemon threads and recurring loops; Chronos reads desktop OS/window/process telemetry and includes non-portable performance claims. These are design references, not safe drop-in Android implementations.
+- Ultron's Prometheus implementation uses heuristic source-pattern checks and dynamic Python imports; its Drone Swarm uses daemon threads and recurring loops; Chronos reads desktop OS/window/process telemetry. Orion adapts Chronos to consent-gated coarse Android app categories and focus duration only; it does not claim desktop process telemetry or guaranteed always-on Android scheduling.
 
 ## Delivery sequence
 
@@ -85,7 +85,7 @@ The goal is to make these existing owners coherent and remove duplicated prompt 
 ### Slice 4 — coding, specialists and ambient awareness
 - Complete multi-file coding plan → edit → compile → test → diagnose → bounded repair on Orion's shared workspace.
 - Complete supervised parallel workers with leases, checkpoints, cancellation, bounded retries and parent-owned completion.
-- Add Android-native Chronos awareness and proactive scheduling.
+- Add Android-native Chronos awareness and proactive scheduling. Implemented on the adoption branch: consent-gated coarse foreground-category/focus context, durable event-driven Soul Watch, WorkManager recovery/standing-order fallback, and owner-gated scheduled goals.
 - Complete browser and self-extension flows through the same registry and evidence model.
 
 ### Slice 5 — hard acceptance
@@ -96,3 +96,15 @@ The goal is to make these existing owners coherent and remove duplicated prompt 
 ## Definition of done
 
 A feature is not complete because a class exists, a tool was called, or a model says it worked. It is complete only when exact-head build passes, automated tests exercise the real wiring, runtime evidence proves the outcome, and Android behavior is accepted on device. Keep the migration on a dedicated branch; do not merge a red or unverified build.
+
+
+## Tasks 9–10 — autonomous awareness and owner-controlled proactive behavior
+
+- Accessibility window transitions update Chronos only when both App Usage and Chronos consent are active; financial, wallet, exchange and credential apps are discarded. Only a coarse category and short-lived focus duration are retained.
+- Chronos context is loaded into the same Orion Central Brain snapshot used by chat and live voice, so a scheduled goal sees the same privacy-filtered context as an interactive request.
+- The durable runtime queue receives a constant window-event key, never the raw foreground package identifier.
+- The live AccessibilityService performs cooldown-bounded Soul observations. WorkManager supplies an inexact 15–120 minute recovery/standing-order fallback; Android and HyperOS may defer it and it cannot resurrect a disabled AccessibilityService.
+- Scheduled goals are owner-authored, limited to five, 30 minutes–one week, and run at most one per Soul Watch tick. A run requires AUTOPILOT + Orion Core + Proactive, a connected service and initialized agent, and no active user task.
+- Goal claims are written atomically before dispatch, preventing duplicate ticks from immediately replaying a claimed goal. Result labels distinguish claim, agent submission and dispatch failure.
+- Automated regression coverage: Chronos consent/sensitivity/expiry; constant non-identifying queue key; autonomy owner-switch matrix; durable goal persistence/claim, interval, pause and capacity.
+- Remaining acceptance: exact-head Android CI and physical device checks for AccessibilityService continuity, WorkManager delivery after process death/reboot, owner switch enforcement, and a real scheduled goal completing through the normal agent path. HyperOS battery policy can delay or stop background work; no guarantee of uninterrupted execution is claimed.
