@@ -44,7 +44,8 @@ class OrionAutonomySettingsTest {
     }
 
     @Test fun ownerExecutionLimitsPersistWithinTheirClampedRange() {
-        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear()
+            .putBoolean("orion_autopilot_default_migrated_v1", true).commit()
         OrionAutonomySettings.write(
             context,
             OrionAutonomyConfig(
