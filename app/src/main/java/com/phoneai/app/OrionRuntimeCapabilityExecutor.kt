@@ -28,7 +28,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -98,7 +98,7 @@ internal object OrionRuntimeCapabilityExecutor {
                             "error: workspace write was rolled back because its undo receipt could not be saved"
                         } else {
                             OrionCodingPlanner.noteFileWritten(service, path)
-                            "wrote ${args.optString("content").length} chars to shared workspace/$path"
+                            "wrote ${args.optString("content").length} chars to shared workspace/$path\\nLOCAL VERIFY PASS: workspace file read-back matches the written content."
                         }
                     } else result
                 }
@@ -112,7 +112,8 @@ internal object OrionRuntimeCapabilityExecutor {
                 else if (!WorkspaceUndoStore(service).recordDelete(path, before)) {
                     workspace.write(path, before)
                     "error: workspace delete was reversed because its undo receipt could not be saved"
-                } else "deleted shared workspace/$path (reversible)"
+                } else if (workspace.readForUndo(path) != null) "error: delete did not verify; the file is still present"
+                else "deleted shared workspace/$path (reversible)\\nLOCAL VERIFY PASS: deleted file is absent from the workspace."
             }
             "workspace_move" -> {
                 val source = args.optString("source")
@@ -127,7 +128,9 @@ internal object OrionRuntimeCapabilityExecutor {
                     else if (!WorkspaceUndoStore(service).recordMove(source, destination, content)) {
                         workspace.move(destination, source)
                         "error: workspace move was reversed because its undo receipt could not be saved"
-                    } else moved + " (reversible)"
+                    } else if (workspace.readForUndo(source) != null || workspace.readForUndo(destination) != content)
+                        "error: move did not verify; inspect both paths before retrying"
+                    else moved + " (reversible)\\nLOCAL VERIFY PASS: source is absent and destination matches the moved file."
                 }
             }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
