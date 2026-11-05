@@ -15,15 +15,14 @@ internal object TrustedDependencyInstallPolicy {
             return false
         }
         val words = command.trim().split(Regex("\\s+"))
-        if (words.size < 6 || words[0] != "apk" || words[1] != "add") return false
+        if (words.size < 6 || words[0] != "apk") return false
 
-        var index = 2
+        var index = 1
         var noCache = false
         var isolatedRepositoryFile = false
         val repositories = mutableSetOf<String>()
-        val packages = mutableListOf<String>()
-        while (index < words.size) {
-            when (val token = words[index]) {
+        while (index < words.size && words[index] != "add") {
+            when (words[index]) {
                 "--no-cache" -> {
                     if (noCache) return false
                     noCache = true
@@ -40,13 +39,14 @@ internal object TrustedDependencyInstallPolicy {
                     repositories += repository
                     index += 2
                 }
-                else -> {
-                    if (token.startsWith("-") || !packageToken.matches(token)) return false
-                    packages += token
-                    index++
-                }
+                else -> return false
             }
         }
-        return noCache && isolatedRepositoryFile && MAIN in repositories && COMMUNITY in repositories && packages.isNotEmpty()
+        if (index >= words.size || words[index] != "add") return false
+        index++
+        val packages = words.drop(index)
+        if (packages.isEmpty() || packages.size > 24) return false
+        if (packages.any { it.startsWith("-") || !packageToken.matches(it) }) return false
+        return noCache && isolatedRepositoryFile && MAIN in repositories && COMMUNITY in repositories
     }
 }
