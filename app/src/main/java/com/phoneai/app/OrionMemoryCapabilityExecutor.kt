@@ -39,10 +39,8 @@ internal object OrionMemoryCapabilityExecutor {
         runCatching { KnowledgeGraph.learnFrom(service, request) }
     }
 
-    /** Assemble the memory/knowledge context in one place; every passage remains untrusted data. */
+    /** Assemble non-episodic learning and graph context. Episodic recall is injected once by OrionCentralBrain. */
     fun promptContext(service: PhoneAiService, request: String?): String = buildString {
-        append("\n\nLong-term memory (id, category, text):\n")
-            .append(MemoryStore.promptBlock(service, request).take(if (request.isNullOrBlank()) 1400 else 900))
         AgentLessons.promptBlock(service, "orion", 8).takeIf { it.isNotBlank() }?.let {
             append("\n\nThings you have learned about how this user likes to work (their own words):\n").append(it)
         }
