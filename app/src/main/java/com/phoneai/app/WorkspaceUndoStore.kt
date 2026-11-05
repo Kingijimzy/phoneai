@@ -42,6 +42,10 @@ internal class WorkspaceUndoStore(context: Context) {
             .put("at", System.currentTimeMillis()))
     }
 
+    fun latestTimestamp(): Long = synchronized(lock) {
+        readRows()?.lastOrNull()?.optLong("at", 0L) ?: 0L
+    }
+
     fun status(): String = synchronized(lock) {
         val rows = readRows() ?: return@synchronized "Workspace undo history is unreadable; no action was changed."
         val last = rows.lastOrNull() ?: return@synchronized "No reversible workspace file change is recorded."
