@@ -497,8 +497,7 @@ class AgentChatActivity : Activity() {
             top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
             fillPills(TradingDesk.statusParts(this))
             root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(14), 0, dp(14), dp(8)) })
-            Motion.enter(card)
-            applyLook(Prefs.companionChar(this).coerceIn(0, LOOKS - 1))
+            Motion.enter(card)            applyLook(Prefs.companionChar(this).coerceIn(0, LOOKS - 1))
         }
 
         scroll = ScrollView(this)
@@ -609,6 +608,16 @@ class AgentChatActivity : Activity() {
     }
 
     private fun addBubble(user: Boolean, text: String): TextView {
+        // Chat truth UI: structured backend notes become cards; never invent progress.
+        if (!user) {
+            val truth = OrionChatTruthUi.tryBuildCard(this, "note", text)
+            if (truth != null) {
+                messages.addView(truth, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+                Motion.enter(truth)
+                scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                return TextView(this).apply { visibility = android.view.View.GONE }
+            }
+        }
         val bubble = TextView(this).apply {
             this.text = if (user) text else Markdown.render(MarkdownTables.flatten(text)); textSize = 14.5f
             if (!user) movementMethod = LinkMovementMethod.getInstance()

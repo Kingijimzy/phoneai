@@ -1,0 +1,26 @@
+name: fix-agent-chat-truth
+on:
+  workflow_dispatch:
+  push:
+    branches: [orion/objective-graph-autonomy-fix]
+    paths:
+      - "scripts/fix_agent_chat_truth.py"
+      - ".github/workflows/fix-agent-chat-truth.yml"
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: orion/objective-graph-autonomy-fix
+      - run: python3 scripts/fix_agent_chat_truth.py
+      - name: Commit
+        run: |
+          git config user.name orion-bot
+          git config user.email orion@users.noreply.github.com
+          git add app/src/main/java/com/phoneai/app/AgentChatActivity.kt
+          git diff --cached --quiet && echo no-change && exit 0
+          git commit -m "fix: AgentChat truth UI compile + structured cards"
+          git push origin HEAD:orion/objective-graph-autonomy-fix

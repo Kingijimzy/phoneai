@@ -1,0 +1,25 @@
+name: wire-brain-into-agent
+on:
+  workflow_dispatch:
+  push:
+    branches: [orion/objective-graph-autonomy-fix]
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: orion/objective-graph-autonomy-fix
+          fetch-depth: 0
+      - name: Run wire script
+        run: python3 scripts/wire_brain_agent.py
+      - name: Commit
+        run: |
+          git config user.name orion-bot
+          git config user.email orion@users.noreply.github.com
+          git add app/src/main/java/com/phoneai/app/Agent.kt
+          git diff --cached --quiet && echo no-change && exit 0
+          git commit -m "wire: central brain on all Agent command paths"
+          git push origin HEAD:orion/objective-graph-autonomy-fix
