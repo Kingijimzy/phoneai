@@ -12,7 +12,7 @@ data class GraphFact(val a: String, val rel: String, val b: String, val count: I
 internal object GraphPolicy {
     const val MAX_FACTS = 400
     private val pronouns = setOf("it", "that", "this", "there", "he", "she", "they", "what", "who", "which", "here", "one", "you", "we", "those", "these", "something", "everything")
-    private val verbs = "likes?|loves?|plays for|plays in|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|lives in|plays for|belongs to|runs|builds|wants"
+    private val verbs = "likes?|loves?|plays for|plays in|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|lives in|belongs to|runs|builds|wants"
 
     private val repeatableRelations = setOf(
         "like", "likes", "love", "loves", "play", "plays", "trade", "trades",
