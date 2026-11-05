@@ -76,7 +76,7 @@ object AutonomyGoalStore {
             f.finishWrite(stream)
             true
         } catch (_: Exception) {
-            if (stream != null) runCatching { f.failWrite(stream) }
+            stream?.let { output -> runCatching { f.failWrite(output) } }
             false
         }
     }
