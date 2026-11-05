@@ -58,6 +58,17 @@ class ShellExecutionRoutingTest {
         assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk del python3"))
     }
 
+
+    @Test fun shellRiskUsesOnePolicyAcrossBackends() {
+        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "pwd"))
+        assertTrue(ShellExecutionRouting.requiresApproval("builtin", "apk del python3"))
+        assertTrue(ShellExecutionRouting.requiresApproval("termux", "apk upgrade"))
+        val trustedInstall = "apk add --no-cache --repositories-file /dev/null " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community python3"
+        assertFalse(ShellExecutionRouting.requiresApproval("linux", trustedInstall))
+    }
+
     @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {
         assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
         assertTrue(TermuxCommandPolicy.isReadOnly("python3 --version"))
