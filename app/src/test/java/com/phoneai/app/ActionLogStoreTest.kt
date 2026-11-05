@@ -21,29 +21,23 @@ class ActionLogStoreTest {
         ActionLogStore.clear(context)
     }
 
-    @Test fun recordsToolRedactedArgumentsResultAndVerificationStatus() {
+    @Test fun actionArgumentsResultsAndVerificationAreNeverPersisted() {
         val args = org.json.JSONObject()
             .put("api_key", "sk-live-secret")
-            .put("password", "never-log-this")
+            .put("password", "never-store-this")
             .put("target", "workspace/report.txt")
         ActionLogStore.record(
             context, "workspace_write", args,
             "Workspace file read-back verified.",
             OrionTaskOutcome.Status.COMPLETE
         )
-        val event = ActionLogStore.all(context).first()
-        assertEquals("workspace_write", event.tool)
-        assertTrue(event.arguments.contains("workspace/report.txt"))
-        assertTrue(event.arguments.contains("[redacted]"))
-        assertFalse(event.arguments.contains("sk-live-secret"))
-        assertFalse(event.arguments.contains("never-log-this"))
-        assertTrue(event.result.contains("Workspace file read-back verified"))
-        assertEquals("COMPLETE", event.verificationStatus)
+        assertTrue(ActionLogStore.all(context).isEmpty())
+        assertFalse(File(context.filesDir, "orion_action_log.json").exists())
     }
 
-    @Test fun legacyActionRecordIsNeverMarkedVerified() {
+    @Test fun legacyShellActionRecordIsNotStored() {
         ActionLogStore.record(context, "shell", "command returned")
-        val event = ActionLogStore.all(context).first()
-        assertEquals("BLOCKED_OR_UNVERIFIED", event.verificationStatus)
+        assertTrue(ActionLogStore.all(context).isEmpty())
+        assertFalse(File(context.filesDir, "orion_action_log.json").exists())
     }
 }
