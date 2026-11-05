@@ -10,6 +10,11 @@ class PythonToolBridgePolicyTest {
         assertNotNull(PythonToolBridgePolicy.check("Open App", 0))
         assertNotNull(PythonToolBridgePolicy.check("", 0))
     }
+    @Test fun phoneUiConvenienceActionsUseTheCentralToolDispatcher() {
+        listOf("click_text", "tap", "swipe", "scroll").forEach { tool ->
+            assertNull("$tool should route through the registered dispatcher", PythonToolBridgePolicy.check(tool, 0))
+        }
+    }
     @Test fun capsCallsPerRun() {
         assertNull(PythonToolBridgePolicy.check("read_screen", PythonToolBridgePolicy.MAX_CALLS_PER_RUN - 1))
         assertNotNull(PythonToolBridgePolicy.check("read_screen", PythonToolBridgePolicy.MAX_CALLS_PER_RUN))
