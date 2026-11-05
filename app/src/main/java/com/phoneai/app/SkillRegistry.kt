@@ -45,7 +45,7 @@ object SkillRegistry {
     // Only genuinely consequential tool families are forced through approval by skill policy.
     // Routine workspace/app writes still pass the central dispatcher and explicit owner overrides.
     private val consequentialTools = setOf(
-        "telegram_send", "sms", "notification_action", "mcp_call",
+        "telegram_send", "sms", "mcp_call",
         "task_delete", "forget", "update_memory", "undo_last"
     )
 
