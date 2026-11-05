@@ -3159,7 +3159,9 @@ Rules:
         // start and terminal receipt even when several tools run within the same trace.
         val traceId = interactionTraceId.get().orEmpty().ifBlank { java.util.UUID.randomUUID().toString().replace("-", "") }
         val correlationId = java.util.UUID.randomUUID().toString()
-        svc.recordChatEvent(
+        val nonLoggedAction = tool in setOf("shell", "termux_command", "telegram_send", "sms",
+            "whatsapp_send", "signal_send", "discord_send")
+        if (!nonLoggedAction) svc.recordChatEvent(
             "tool", "started", "Tool: $tool",
             traceId = traceId,
             correlationId = correlationId
@@ -3183,11 +3185,10 @@ Rules:
                     pythonExecutor = pythonExecutor
                 ) ?: "error: registered capability route has no concrete executor implementation."
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
-            val saved = runCatching {
-                if (route.tool !in setOf("shell", "termux_command", "telegram_send", "sms",
-                        "whatsapp_send", "signal_send", "discord_send")) {
-                    OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, JSONObject(), startedAt, backendResult)
-                }
+            val shouldRecord = route.tool !in setOf("shell", "termux_command", "telegram_send", "sms",
+                "whatsapp_send", "signal_send", "discord_send")
+            val saved = if (!shouldRecord) true else runCatching {
+                OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, JSONObject(), startedAt, backendResult)
             }.getOrDefault(false)
             val finalResult = if (!saved && !backendResult.trimStart().startsWith("error", true)) {
                 "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${backendResult.take(240)}"
@@ -3201,6 +3202,7 @@ Rules:
         // without persisting arguments, screen contents, credentials or raw tool output.
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         val failureCategory = if (failed) ActionLearningPolicy.classifyFailure(result).ifBlank { "execution_error" } else ""
+        if (!nonLoggedAction) {
         svc.recordChatEvent(
             "tool_result",
             if (failed) "error" else "success",
@@ -3209,6 +3211,7 @@ Rules:
             traceId = traceId,
             correlationId = correlationId
         )
+        }
         return result
     }
 
