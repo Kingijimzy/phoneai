@@ -94,9 +94,9 @@ class SkillAuthorizationPolicyTest {
         assertFalse(check(tool = "task_delete").allowed)
     }
 
-    @Test fun skillLevelApprovalAppliesToOtherwiseOrdinaryTools() {
-        assertFalse(check(skill = skill(requiresApproval = true)).allowed)
-        assertTrue(check(skill = skill(requiresApproval = true), approved = true).allowed)
+    @Test fun skillApprovalFlagDoesNotAddASecondPromptToRoutineSteps() {
+        assertTrue(check(skill = skill(requiresApproval = true)).allowed)
+        assertTrue(check(skill = skill(requiresApproval = true), tool = "open_url").allowed)
     }
 
     @Test fun preflightChecksScopeAndBudgetWithoutCreatingASecondApprovalPrompt() {
@@ -104,7 +104,7 @@ class SkillAuthorizationPolicyTest {
         assertTrue(SkillAuthorizationPolicy.preflight(
             approvalRequired, "time", 0, 0L, supported
         ).allowed)
-        assertFalse(SkillAuthorizationPolicy.evaluate(
+        assertTrue(SkillAuthorizationPolicy.evaluate(
             approvalRequired, "time", 0, 0L, false, supported, consequential
         ).allowed)
     }
