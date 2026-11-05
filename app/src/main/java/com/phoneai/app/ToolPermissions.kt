@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 internal enum class ToolMode { ALLOW, ASK, DENY }
 
-/** Pure allow / ask / deny rules, so autonomy levels are unit-testable. */
+/** Default-ALLOW tool permissions with optional explicit DENY; legacy ASK values resolve to ALLOW. */
 internal object ToolPermissionPolicy {
     /** Tools Orion always needs to talk to the user; they can never be denied. */
     val alwaysAllowed = setOf("ask_user", "wait", "time")
