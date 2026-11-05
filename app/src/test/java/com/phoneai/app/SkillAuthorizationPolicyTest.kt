@@ -99,6 +99,16 @@ class SkillAuthorizationPolicyTest {
         assertTrue(check(skill = skill(requiresApproval = true), approved = true).allowed)
     }
 
+    @Test fun preflightChecksScopeAndBudgetWithoutCreatingASecondApprovalPrompt() {
+        val approvalRequired = skill(tools = setOf("time"), requiresApproval = true)
+        assertTrue(SkillAuthorizationPolicy.preflight(
+            approvalRequired, "time", 0, 0L, supported
+        ).allowed)
+        assertFalse(SkillAuthorizationPolicy.evaluate(
+            approvalRequired, "time", 0, 0L, false, supported, consequential
+        ).allowed)
+    }
+
     @Test fun ordinaryAllowlistedToolPassesWithoutApproval() {
         assertTrue(check().allowed)
     }
