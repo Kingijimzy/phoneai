@@ -167,7 +167,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val ranSteps = JSONArray()
     private val local = Local(
         svc, tools, { t, args -> executeWithRecoveryGuard(t, args) }, { ranSteps }, { stopped }, { n -> ui.note(n) },
-        { q -> confirm(q) }, { ins, data -> aiOneShot(ins, data) }
+        { q -> requestGateApproval(q) }, { ins, data -> aiOneShot(ins, data) }
     )
     private val history = JSONArray()
 
@@ -268,7 +268,23 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
      * Every approval prompt goes through here so the chat gets a real event. The note carries no payload
      * (the question can contain message text or arguments); the dialog itself shows the details.
      */
-    private fun confirm(question: String): Boolean {
+    /** The sole UI approval surface. GatePolicy decides whether this action may be approved. */
+    private fun requestGateApproval(question: String): Boolean {
+        val gate = GatePolicy.decide(GatePolicy.Input(
+            pack = "orion_core",
+            packOn = AgentPolicy.enabled(svc, "orion_core"),
+            tool = "owner_approval_request",
+            mode = AgentPolicy.mode(svc),
+            toolMode = ToolMode.ALLOW,
+            autonomous = false,
+            dangerous = true,
+            approvedThisAction = false,
+            trustedForPack = false,
+            allowlisted = false,
+            askedThisTask = true
+        ))
+        if (gate.verdict == GatePolicy.Verdict.DENY || gate.verdict == GatePolicy.Verdict.PLAN_ONLY) return false
+        if (gate.verdict == GatePolicy.Verdict.ALLOW) return true
         runCatching { OrionRuntimeNotifier.postApprovalRequired(svc) }
         ui.note("[TASK:APPROVAL]\nWaiting for your approval")
         val ok = ui.ask(question)
@@ -345,12 +361,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             AgentPolicy.log(svc, tool, "dispatch", false, "preflight: " + denied.take(120))
             recordDispatchBlocked(tool, args, "capability_preflight_denied")
             return denied
-        }
-        if (tool == "shell" && ShellPolicy.classify(args.optString("command")) == ShellRisk.BLOCKED) {
-            val blocked = "error: Orion hard-blocked this catastrophic shell command (root/system wipe, raw block-device write, or fork bomb)."
-            recordDispatchBlocked(tool, args, "shell_catastrophic_hard_block")
-            taskProofs.record(tool, blocked)
-            return blocked
         }
         if (failedCallGuard.isBlocked(tool, args)) {
             recordDispatchBlocked(tool, args, "repeated_failed_call_blocked")
@@ -463,7 +473,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             svc, pack, tool,
             dangerous = consequential,
             toolMode = effectiveToolMode,
-            askedThisTask = tool in askApproved
+            askedThisTask = tool in askApproved,
+            hardBlockReason = GatePolicy.hardBlockReason(tool, args)
         )
         var policyApproved = false
         when (gate.verdict) {
@@ -475,7 +486,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return blocked
             }
             GatePolicy.Verdict.ASK_TOOL -> {
-                if (!confirm("Allow Orion to use the tool '$tool' for this task?")) {
+                if (!requestGateApproval("Allow Orion to use the tool '$tool' for this task?")) {
                     val declined = "error: user did not approve using '$tool'."
                     recordDispatchBlocked(tool, args, "tool_approval_declined")
                     taskProofs.record(tool, declined)
@@ -495,7 +506,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
                 } else {
                     val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
-                    val approved = confirm("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
+                    val approved = requestGateApproval("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
                     AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
                     if (!approved) {
                         val denied = "error: user did not approve this tool action."
@@ -508,20 +519,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> {
                 AgentPolicy.log(svc, tool, "dispatch", null, "allowed by selected approval policy")
-            }
-        }
-        if (!policyApproved && AgentHooks.requiresConfirmation(tool, args, targetLabel)) {
-            val description = when (tool) {
-                "forget" -> "Forget saved memory #" + args.optInt("id", -1)
-                "update_memory" -> "Change saved memory #" + args.optInt("id", -1)
-                "undo_last" -> "Undo the most recent action"
-                else -> "Proceed with the action " + (if (targetLabel.isBlank()) tool else targetLabel) + ". This may change or submit information."
-            }
-            if (!confirm(description + "?")) {
-                val denied = "error: user did not approve the consequential action."
-                recordDispatchBlocked(tool, args, "consequential_approval_declined")
-                taskProofs.record(tool, denied)
-                return denied
             }
         }
         val nativeUiActions = setOf("open_app", "click", "click_text", "tap", "long_press", "swipe", "scroll", "type", "key", "open_url", "open_deep_link")
@@ -1547,7 +1544,7 @@ Rules:
                 return true
             }
             val alreadyApproved = svc.consumeRoutineReplayApproval(name)
-            if (!alreadyApproved && !confirm("Replay '$name' (${steps.length()} recorded gestures)? It can tap buttons or submit data in the target app. I will verify screen fingerprints and stop if the screen differs.")) {
+            if (!alreadyApproved && !requestGateApproval("Replay '$name' (${steps.length()} recorded gestures)? It can tap buttons or submit data in the target app. I will verify screen fingerprints and stop if the screen differs.")) {
                 ui.say("Routine replay cancelled. No gestures were performed.")
                 return true
             }
@@ -1940,7 +1937,7 @@ Rules:
                 return
             }
             if (OrionTasksCapabilityExecutor.needsRecoveryConfirmation(svc)) {
-                val confirmed = confirm(
+                val confirmed = requestGateApproval(
                     "The app stopped while an action was in progress, so it may already have happened. Please inspect the phone screen or relevant app state first. Have you checked what happened? Select yes only after checking; otherwise choose no and I will leave the task paused."
                 )
                 if (!confirmed) {
@@ -3185,7 +3182,7 @@ Rules:
             val backendResult = if (preflight != null) preflight else runCatching {
                 OrionRuntimeCapabilityExecutor.execute(
                     route.backend, route.tool, args, svc, tools, { stopped },
-                    { question -> confirm(question) },
+                    { question -> requestGateApproval(question) },
                     { url -> ui.openBrowser(url) },
                     { input -> validateAction(input) },
                     { input -> verifyAction(input) },
@@ -3257,7 +3254,7 @@ Rules:
             val run = OrionSkillsCapabilityExecutor.Run(skillId, activeSkillStartedAt, activeSkillCalls)
             var decision = OrionSkillsCapabilityExecutor.authorize(svc, run, tool, false)
             if (!decision.allowed && decision.reason.contains("approval", ignoreCase = true)) {
-                if (!confirm("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
+                if (!requestGateApproval("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
                     recordDispatchBlocked(tool, a, "skill_approval_declined")
                     return "error: user denied skill action"
                 }
