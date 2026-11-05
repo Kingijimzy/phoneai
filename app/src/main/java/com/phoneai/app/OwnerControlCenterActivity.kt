@@ -206,8 +206,8 @@ class OwnerControlCenterActivity : Activity() {
 
     private fun showJarvisPreset() {
         AlertDialog.Builder(this).setTitle("Jarvis mode")
-            .setMessage("Turns ON: AUTOPILOT mode, automatic activation of sandbox-tested extensions (exact source hash), and the Python FULL profile.\n\n" +
-                "Still asks you every time: trades and orders, sending messages, deleting data, spending money, per-run Python approval, Android permission prompts. Risk gate, kill switch and read-only trading defaults stay on.\n\nYou can undo each item from this screen.")
+            .setMessage("Turns ON: AUTOPILOT mode, automatic activation of sandbox-tested extensions (exact source hash), and Python DEVELOPER mode with the scoped phone API. Orion can automatically install its checksum-pinned Alpine runtime and signed CPython package.\n\n" +
+                "Still asks before trades/orders, sending messages, deleting user data, spending money, sharing private data, and unrestricted FULL Python execution. Android permission prompts remain owner-controlled. Risk gate, kill switch and read-only trading defaults stay on.\n\nYou can undo each item from this screen.")
             .setPositiveButton("TURN ON") { _, _ ->
                 val cfg = OrionAutonomySettings.read(this)
                 OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
