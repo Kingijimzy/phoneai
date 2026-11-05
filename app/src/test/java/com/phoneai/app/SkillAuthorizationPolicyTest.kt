@@ -45,9 +45,9 @@ class SkillAuthorizationPolicyTest {
     }
 
     @Test fun onlyConsequentialToolsForceSkillApproval() {
-        listOf("mcp_call", "telegram_send", "sms", "notification_action", "task_delete", "forget", "update_memory")
+        listOf("mcp_call", "telegram_send", "sms", "task_delete", "forget", "update_memory")
             .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
-        listOf("open_app", "workspace_write", "task_add", "remember", "web_search")
+        listOf("open_app", "workspace_write", "task_add", "remember", "web_search", "notification_action")
             .forEach { assertFalse("$it should use the central risk gate", SkillRegistry.requiresApprovalForTool(it)) }
     }
 
