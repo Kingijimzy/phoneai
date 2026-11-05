@@ -11,7 +11,7 @@ internal object OrionCodingDiagnostics {
 
     private val pythonTrace = Regex("""(?m)^\s*File "([^"]+)", line (\d+)(?:, in [^\n]+)?\s*$""")
     private val pytest = Regex("""(?m)^([^\n:]+\.py):(\d+):\s*(.*)$""")
-    private val gradle = Regex("""(?m)^e:\s*([^:\n]+):(\d+):(\d+):\s*(error|warning):\s*(.+)$""", RegexOption.IGNORE_CASE)
+    private val gradle = Regex("""(?m)^e:\s*(?:file://)?([^:\n]+):(\d+):(\d+):\s*(error|warning):\s*(.+)$""", RegexOption.IGNORE_CASE)
     private val node = Regex("""(?m)^([^\n:]+\.(?:js|mjs|cjs)):(\d+)\s*$""")
 
     fun parse(output: String, limit: Int = 12): List<Finding> {
