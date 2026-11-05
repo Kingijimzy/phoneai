@@ -14,8 +14,8 @@ internal object OrionMemoryCapabilityExecutor {
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
-    fun memoryPromptBlock(service: PhoneAiService, request: String?, maxChars: Int): String =
-        MemoryStore.promptBlock(service, request).take(maxChars)
+    fun memoryPromptBlock(service: PhoneAiService, request: String?, maxChars: Int, limit: Int = 6): String =
+        MemoryStore.promptBlock(service, request, limit).take(maxChars)
 
     fun recordFailure(service: PhoneAiService, request: String, tool: String, result: String) =
         ExperienceStore.recordFailure(service, request, tool, result)
