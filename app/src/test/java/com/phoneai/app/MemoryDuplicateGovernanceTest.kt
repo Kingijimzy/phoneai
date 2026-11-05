@@ -1,6 +1,5 @@
 package com.phoneai.app
 
-import androidx.test.core.app.ApplicationProvider
 import android.content.Context
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -10,11 +9,12 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class MemoryDuplicateGovernanceTest {
     private val context: Context
-        get() = ApplicationProvider.getApplicationContext()
+        get() = RuntimeEnvironment.getApplication()
 
     @Before fun clearBefore() {
         MemoryStore.clear(context)
