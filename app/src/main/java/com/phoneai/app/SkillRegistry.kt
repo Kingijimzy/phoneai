@@ -38,7 +38,8 @@ object SkillRegistry {
 
     // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
     // One source of truth: skills may reference any real registered tool, never arbitrary code.
-    private val supportedTools = ToolRegistry.names()
+    private val skillManagementTools = setOf("skills_list", "skill_create", "skill_enable", "skill_disable")
+    private val supportedTools = ToolRegistry.names() - skillManagementTools
 
 
     // Consequential tools always require approval, regardless of a skill's manifest setting.
