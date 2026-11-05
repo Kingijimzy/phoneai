@@ -10,7 +10,7 @@ import android.database.sqlite.SQLiteOpenHelper
  * It complements lexical/hybrid retrieval and never uploads private memories.
  */
 internal object OrionKnowledgeGraph {
-    private class GraphDb(context: Context) : SQLiteOpenHelper(context, "orion_knowledge_graph.db", null, 1) {
+    private class GraphDb(context: Context) : SQLiteOpenHelper(context, "orion_knowledge_graph.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE nodes (id TEXT PRIMARY KEY, kind TEXT NOT NULL, label TEXT NOT NULL, normalized TEXT NOT NULL UNIQUE)")
             db.execSQL("CREATE TABLE edges (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL, target_id TEXT NOT NULL, relation TEXT NOT NULL, memory_id INTEGER NOT NULL, confidence REAL NOT NULL, provenance TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL DEFAULT 0, UNIQUE(source_id,target_id,relation,memory_id))")
@@ -18,7 +18,7 @@ internal object OrionKnowledgeGraph {
             db.execSQL("CREATE INDEX idx_graph_edge_source ON edges(source_id)")
             db.execSQL("CREATE INDEX idx_graph_edge_memory ON edges(memory_id)")
         }
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {\n            if (oldVersion < 2) db.execSQL("CREATE INDEX IF NOT EXISTS idx_graph_edge_source ON edges(source_id)")\n        }
     }
 
     private fun normalize(value: String): String =
