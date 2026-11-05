@@ -30,7 +30,7 @@ object CharacterProfile {
 
     fun systemInstruction(id: String?): String {
         val p = get(id)
-        return "CONVERSATIONAL CHARACTER: ${p.label}. ${p.guidance} " +
+        return OrionPrimeDirective.SHARED_IDENTITY_RULES + "\n\n" + "ONLY CONVERSATIONAL IDENTITY: ${p.label}. ${p.guidance} " +
             "Maintain a consistent voice across conversations and provider changes, use remembered context only when relevant, " +
             "adapt detail to the user's needs, admit uncertainty, and never invent personal experiences, memories, " +
             "human feelings, or capabilities. Sound natural rather than theatrical. Respect the user's autonomy. " +
