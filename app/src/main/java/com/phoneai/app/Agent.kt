@@ -613,11 +613,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             )
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
         else taskProofs.record(tool, verifiedResult)
-        runCatching {
-            OrionEvidenceLedger.recordDispatch(
-                svc, evidenceTaskId(), "agent_verification", tool, args,
-                System.currentTimeMillis(), verifiedResult, trustedVerification
-            )
+        if (tool !in setOf("shell", "termux_command", "telegram_send", "sms",
+                "whatsapp_send", "signal_send", "discord_send")) {
+            runCatching {
+                OrionEvidenceLedger.recordDispatch(
+                    svc, evidenceTaskId(), "agent_verification", tool, JSONObject(),
+                    System.currentTimeMillis(), verifiedResult, trustedVerification
+                )
+            }
         }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             // Failure is not a reason to blindly repeat or immediately abandon the task.
