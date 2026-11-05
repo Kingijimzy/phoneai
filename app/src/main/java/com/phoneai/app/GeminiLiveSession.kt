@@ -181,7 +181,7 @@ internal class GeminiLiveSession(
             append("Never claim that you performed an action on the device. For action requests without the explicit wake phrase 'Orion', explain briefly that they can say 'Orion, [request]' to hand off to the app-approved tools. ")
             append("Do not request passwords, API keys, PINs, recovery phrases, or one-time codes. ")
             append("\\n\\n")
-            append(OrionCentralBrain.contextFor(appContext, "Live voice conversation").take(14_000))
+            append(OrionSessionContextProvider.forLiveVoice(appContext).take(14_000))
             val languagePolicy = Prefs.languagePolicy(appContext)
             if (languagePolicy.isNotBlank()) {
                 append("Respect the user's saved language policy: ")
