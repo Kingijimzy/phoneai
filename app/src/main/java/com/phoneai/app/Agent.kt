@@ -147,7 +147,7 @@ internal object ConversationContextPolicy {
 /** Shared policy for the only owner confirmations retained by Orion. */
 internal object IrreversibleActionConfirmationPolicy {
     private val action = Regex(
-        "(?i)\\\\b(?:restart|shutdown|toggle(?:\\\\s+(?:the\\\\s+)?)?wi-?fi|turn(?:ing)?\\\\s+wi-?fi\\\\s+(?:on|off))\\\\b"
+        "(?i)\\b(?:restart|shutdown|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
     )
     fun requiresConfirmation(actionDescription: String): Boolean =
         action.containsMatchIn(actionDescription)
