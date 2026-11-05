@@ -17,7 +17,7 @@ internal class ExtensionTestReceiptStore(context: Context) {
 
     fun record(id: String, report: ExtensionTestReport): Boolean = synchronized(lock) {
         if (id.isBlank() || !report.passed || report.testedSourceSha256.isBlank()) return@synchronized false
-        val current = readAllLocked()
+        val current = runCatching { readAllLocked() }.getOrNull() ?: return@synchronized false
         val rows = current.filterNot { it.optString("id") == id }.toMutableList()
         rows += JSONObject()
             .put("id", id)
@@ -30,7 +30,7 @@ internal class ExtensionTestReceiptStore(context: Context) {
 
     fun get(id: String, currentSourceHash: String): ExtensionTestReport? = synchronized(lock) {
         if (id.isBlank() || currentSourceHash.isBlank()) return@synchronized null
-        val row = readAllLocked().firstOrNull {
+        val row = runCatching { readAllLocked() }.getOrNull()?.firstOrNull {
             it.optString("id") == id && it.optString("hash") == currentSourceHash
         } ?: return@synchronized null
         ExtensionTestReport(
@@ -42,8 +42,9 @@ internal class ExtensionTestReceiptStore(context: Context) {
     }
 
     fun remove(id: String): Boolean = synchronized(lock) {
-        val rows = readAllLocked().filterNot { it.optString("id") == id }
-        persistLocked(rows)
+        val rows = runCatching { readAllLocked() }.getOrNull() ?: return@synchronized false
+        val retained = rows.filterNot { it.optString("id") == id }
+        persistLocked(retained)
     }
 
     private fun readAllLocked(): List<JSONObject> {
