@@ -402,12 +402,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             recordDispatchBlocked(tool, args, "tool_pack_mapping_denied")
             return blocked
         }
-        val shellRisk = if (tool == "shell") ShellPolicy.classify(args.optString("command")) else null
-        if (shellRisk == ShellRisk.BLOCKED) {
-            val blocked = "error: Orion hard-blocked this catastrophic shell command (root/system wipe, raw block-device write, or fork bomb)."
-            AgentPolicy.log(svc, tool, "dispatch", false, "blocked by ShellPolicy")
-            try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-            recordDispatchBlocked(tool, args, "shell_policy_blocked")
+        val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
+        if (shellCommand.isNotBlank() && ShellPolicy.isIrreversible(shellCommand)) {
+            val blocked = "error: this command matches Ultron's irreversible Windows command guard."
+            recordDispatchBlocked(tool, args, "ultron_irreversible_windows_command")
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
