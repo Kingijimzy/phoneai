@@ -31,6 +31,8 @@ class AgentHooksTest {
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Install app")))
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Allow permission")))
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Share private data")))
+  assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Confirm checkout")))
+  assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Save changes")))
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Export contacts")))
  }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()));assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Draft text"),"WhatsApp"));assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Send")))}
