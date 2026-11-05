@@ -20,7 +20,7 @@ class OrionEvidenceLedgerTest {
         val row = JSONObject()
             .put("id", "legacy")
             .put("argsFingerprint", "old-fingerprint")
-            .put("redactedArgs", "{\\"password\\":\\"[redacted]\\"}")
+            .put("redactedArgs", """{"password":"[redacted]"}""")
         ledger.writeText(JSONObject().put("version", 1).put("events", org.json.JSONArray().put(row)).toString())
         assertTrue(OrionEvidenceLedger.purgeArgumentFields(context))
         val saved = JSONObject(ledger.readText()).getJSONArray("events").getJSONObject(0)

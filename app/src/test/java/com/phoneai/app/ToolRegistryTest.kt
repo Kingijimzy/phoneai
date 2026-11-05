@@ -118,8 +118,8 @@ class ToolRegistryTest {
     @Test fun termuxCommandToolUsesTheTermuxBridgeWithoutReadOnlyAllowlist() {
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
         assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
-        assertEquals(OrionCapabilityAdapters.Backend.TERMUX, OrionCapabilityAdapters.route("termux_command")?.backend)
-        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TERMUX, "termux_command"))
+        assertEquals(OrionCapabilityAdapters.Backend.SHELL, OrionCapabilityAdapters.route("termux_command")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.SHELL, "termux_command"))
     }
 
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
