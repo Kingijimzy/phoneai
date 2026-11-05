@@ -147,7 +147,7 @@ internal object ConversationContextPolicy {
 /** Shared policy for the only owner confirmations retained by Orion. */
 internal object IrreversibleActionConfirmationPolicy {
     private val action = Regex(
-        "(?i)\\b(?:restart|reboot|shutdown|poweroff|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
+        "(?i)\\b(?:restart|reboot|shutdown|poweroff|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off)|computer_settings.{0,120}wi-?fi)\\b"
     )
 
     fun requiresConfirmation(actionDescription: String): Boolean =
@@ -503,7 +503,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
+        if (tool != "mcp_call") IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
             if (!requestGateApproval("Confirm computer setting: $action?")) {
                 val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
                 recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
