@@ -28,7 +28,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -84,11 +84,27 @@ internal object OrionRuntimeCapabilityExecutor {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
             "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
-            "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
+            "workspace_write" -> {
+                val path = args.optString("path")
+                val gate = OrionCodingPlanner.writeGate(service, path)
+                if (gate != null) gate else {
+                    val result = ShellRunner.writeFile(service, path, args.optString("content"))
+                    if (result.startsWith("wrote ")) OrionCodingPlanner.noteFileWritten(service, path)
+                    result
+                }
+            }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
             "project_create" -> OrionProjectWorkspace(service).create(args.optString("name"), args.optString("language", "python"))
             "project_list" -> OrionProjectWorkspace(service).list()
             "project_inspect" -> OrionProjectWorkspace(service).inspect(args.optString("name"))
+            "project_plan" -> OrionCodingPlanner.create(
+                service, args.optString("name"), args.optString("language"), args.optString("objective"),
+                args.optString("entry_point"), args.optJSONArray("files")
+            )
+            "project_verify" -> OrionCodingPlanner.verify(
+                service, args.optString("name"), args.optBoolean("run_tests", false),
+                confirm = { message -> confirm(message) }
+            )
             else -> null
         }
         else -> null
