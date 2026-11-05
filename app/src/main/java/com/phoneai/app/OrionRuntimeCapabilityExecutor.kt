@@ -69,11 +69,11 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.execute(tool, args, service, tools, stopped)
         OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
         OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.execute(tool, args, tools, stopped)
-        OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.execute(tool, args, service, confirm)
+        OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.execute(tool, args, service, stopped)
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.execute(tool, args, service)
-        OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
+        OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(service, args.optString("command"), stopped)
@@ -150,8 +150,7 @@ internal object OrionRuntimeCapabilityExecutor {
                 args.optString("entry_point"), args.optJSONArray("files")
             )
             "project_verify" -> OrionCodingPlanner.verify(
-                service, args.optString("name"), args.optBoolean("run_tests", false),
-                confirm = { message -> confirm(message) }
+                service, args.optString("name"), args.optBoolean("run_tests", false)
             )
             else -> null
         }
@@ -162,7 +161,6 @@ internal object OrionRuntimeCapabilityExecutor {
         tool: String,
         args: JSONObject,
         service: PhoneAiService,
-        confirm: (String) -> Boolean,
         openBrowser: (String) -> Unit
     ): String? = when (tool) {
         "open_url" -> service.openUrl(args.optString("url"))
@@ -172,15 +170,7 @@ internal object OrionRuntimeCapabilityExecutor {
         "browser_verify" -> BrowserAutomation.verifyPage(args.optString("expected_text"), args.optString("previous_url")).take(1200)
         "browser_click_verify", "browser_click" -> {
             val target = args.optString("target").trim()
-            val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
-                .containsMatchIn(target)
-            val approved = !risky || confirm(
-                if (tool == "browser_click_verify")
-                    "Orion is about to click '$target' and inspect the resulting page. This may submit or change data. Continue?"
-                else "Orion is about to click '$target' on the current webpage. This may submit or change data. Continue?"
-            )
-            if (!approved) "error: user cancelled browser click"
-            else if (tool == "browser_click_verify") BrowserAutomation.clickAndVerify(target, args.optString("expected_text")).take(1800)
+            if (tool == "browser_click_verify") BrowserAutomation.clickAndVerify(target, args.optString("expected_text")).take(1800)
             else BrowserAutomation.click(target)
         }
         "browser_type" -> BrowserAutomation.type(args.optString("target"), args.optString("text"))
