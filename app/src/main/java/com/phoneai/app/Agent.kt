@@ -272,7 +272,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun requestGateApproval(question: String): Boolean {
         val gate = GatePolicy.decide(GatePolicy.Input(
             pack = "orion_core",
-            packOn = AgentPolicy.enabled(svc, "orion_core"),
+            packOn = true,
             tool = "owner_approval_request",
             mode = AgentPolicy.mode(svc),
             toolMode = ToolMode.ALLOW,
