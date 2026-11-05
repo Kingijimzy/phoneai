@@ -173,6 +173,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Structured, bounded events are rendered as in-chat activity cards; never pretend a tool succeeded. */
     private fun activityNote(tool: String, args: JSONObject, result: String): String {
+        runCatching {
+            val goal = currentTask.ifBlank { "" }
+            if (goal.isNotBlank()) {
+                val verdict = OrionAgentBrainBridge.afterTool(svc, goal, tool, result)
+                if (!verdict.accept) {
+                    ui.note("[VERIFY:REJECT]\n" + tool + ": " + verdict.reason +
+                        (verdict.suggestAlternate?.let { " → try " + it } ?: ""))
+                }
+            }
+        }
         val failed = result.trimStart().startsWith("error", ignoreCase = true)
         if (tool == "shell") {
             val command = args.optString("command").take(240)
@@ -970,7 +980,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             runInternal(contextualResearchCommand, reuseCommandBudget = false)
             return
         }
-        val soulContext = OrionCentralBrain.contextFor(svc, command)
+        val soulContext = OrionCentralBrain.contextFor(svc, command) + (if (lastBrainSystemExtra.isNotBlank()) "
+
+" + lastBrainSystemExtra else "") /* BRAIN_PIPELINE_EXTRA */
         val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), reply with exactly ACTION so the built-in direct-data/search route can run and then answer using verified results and source links when available. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, reply with exactly ACTION and nothing else. Never claim an action or lookup succeeded without evidence."
@@ -1930,6 +1942,33 @@ Rules:
         if (!resumeRequest) {
             val pre = OrionPreActionContext.assess(svc, command)
             ui.note("[CONTEXT]\n" + pre.summary)
+        }
+        // CENTRAL BRAIN (all command paths): context, references, memory, path choice.
+        if (!resumeRequest) {
+            val recent = ConversationContextPolicy.recent(
+                (0 until chatHist.length()).mapNotNull { i ->
+                    val o = chatHist.optJSONObject(i) ?: return@mapNotNull null
+                    o.optString("role") to o.optString("content")
+                }
+            )
+            val activeObj = runCatching { OrionObjectiveGraph.load(svc)?.objective.orEmpty() }.getOrDefault("")
+            val turn = OrionAgentBrainBridge.planTurn(svc, command, recent, activeObj)
+            lastBrainSystemExtra = turn.systemExtra
+            ui.note("[CONTEXT]
+" + turn.frame.preAction.summary)
+            if (turn.blockTools) {
+                ui.note("[TASK:CLARIFY]
+" + (turn.clarification ?: "Need a clearer goal"))
+                ui.say(turn.clarification ?: "Which task should I continue?")
+                return
+            }
+            if (turn.frame.preferDirectAction) {
+                ui.note("[BRAIN]
+Direct-action path preferred; multi-objective graph is not mandatory.")
+            } else if (turn.frame.requiresMultiStep) {
+                ui.note("[BRAIN]
+Multi-step path; keep accurate task state and verify each step.")
+            }
         }
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
         if (!resumeRequest && !browserActionTask && !structuredTask) {
