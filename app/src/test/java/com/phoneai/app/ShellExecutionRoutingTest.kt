@@ -16,11 +16,12 @@ class ShellExecutionRoutingTest {
         assertEquals(ShellExecutionRouting.Backend.INVALID, ShellExecutionRouting.backend("docker"))
     }
 
-    @Test fun everyLinuxAliasRequiresApproval() {
-        assertTrue(ShellExecutionRouting.requiresApproval("linux"))
-        assertTrue(ShellExecutionRouting.requiresApproval("Alpine"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin"))
-        assertFalse(ShellExecutionRouting.requiresApproval("termux"))
+    @Test fun linuxAliasesRouteDirectlyWithoutAnApprovalTier() {
+        assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("linux"))
+        assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("Alpine"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("apk add python3"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("python3 script.py"))
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("rm -rf /system"))
     }
 
     @Test fun packageManagerCommandsGetLongerButBoundedTimeout() {
