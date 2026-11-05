@@ -5,7 +5,7 @@ package com.phoneai.app
  * ASK/ALLOWLIST and generic consequential-action approvals are intentionally not agent gates.
  */
 internal object GatePolicy {
-    enum class Verdict { ALLOW, DENY, PLAN_ONLY, ASK_TOOL, NEED_APPROVAL }
+    enum class Verdict { ALLOW, DENY, PLAN_ONLY }
     data class Input(
         val pack: String, val packOn: Boolean, val tool: String,
         val mode: AgentPolicy.Mode, val toolMode: ToolMode, val autonomous: Boolean,
