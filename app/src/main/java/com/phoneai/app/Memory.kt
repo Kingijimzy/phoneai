@@ -136,7 +136,11 @@ object MemoryStore {
             }
             return@synchronized copyOf(dup)
         }
-        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
+        // Unreviewed agent observations cannot replace an owner-approved fact.
+        // Only an explicit owner write may consolidate over trusted memory.
+        val consolidationCandidates = if (sourceRole == "owner") list else
+            list.filter { it.reviewStatus != "approved" && it.reviewStatus != "superseded" }
+        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(consolidationCandidates, cat(category), t) else null
         if (replaced != null) {
             val old = copyOf(replaced)
             replaced.text = t
