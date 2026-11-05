@@ -280,7 +280,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
         val consequential = tool in consequentialTools ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
-            (tool == "shell" && ShellPolicy.classify(args.optString("command")) == ShellRisk.ASK)
+            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
     }
 
