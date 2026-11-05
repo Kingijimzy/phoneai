@@ -32,12 +32,8 @@ internal class OrionPythonCapabilityExecutor(
         return when (tool) {
             "python_exec" -> {
                 val code = args.optString("code")
-                val profile = OrionOwnerDialSettings.read(context).pythonProfile
                 if (stopped()) "error: task was stopped before Python execution."
-                else if (requiresExplicitApproval(tool, profile) &&
-                    !confirm("FULL Python can use raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID. Approve this unrestricted Python run?")) {
-                    "error: unrestricted FULL Python execution was not approved; no script was run."
-                } else tools.pythonExec(code, confirm, stopped)
+                else tools.pythonExec(code, confirm, stopped)
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
