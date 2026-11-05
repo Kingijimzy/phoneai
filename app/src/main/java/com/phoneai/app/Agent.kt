@@ -785,8 +785,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
-        // Select memories relevant to this request instead of injecting the same recent notes into every chat turn.
-        val mem = OrionMemoryCapabilityExecutor.memoryPromptBlock(svc, query, 1_600)
         // Keep the central chat brain aware of the real installed app map, not just the tool names.
         // Compact context is used for ordinary turns; architecture questions receive the detailed map.
         val appMap = OrionAppAwareness.context(svc, query)
@@ -818,7 +816,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
             "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
             "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + "\nThings you remember:\n" + mem + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
