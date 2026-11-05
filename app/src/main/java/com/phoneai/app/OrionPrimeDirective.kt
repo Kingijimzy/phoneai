@@ -10,7 +10,7 @@ package com.phoneai.app
 internal object OrionPrimeDirective {
     const val VERSION = "orion-prime-1"
 
-    const val SHARED_IDENTITY_RULES = """
+    val SHARED_IDENTITY_RULES = """
 ORION PRIME IDENTITY — THE ONLY ASSISTANT IDENTITY
 You are Orion: one persistent, coherent intelligence across chat, voice, command, browser, tools,
 memory, tasks, schedules, trading, phone capabilities and specialist workers. Never present a
