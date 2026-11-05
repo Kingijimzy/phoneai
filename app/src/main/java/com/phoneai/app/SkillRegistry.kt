@@ -130,6 +130,21 @@ object SkillRegistry {
     internal fun isSupportedTool(name: String): Boolean = name in supportedTools
     internal fun requiresApprovalForTool(name: String): Boolean = name in consequentialTools
 
+    /** Validate skill allowlist and budgets without prompting; Agent's central gate owns approval. */
+    fun preflight(
+        context: Context,
+        skillId: String,
+        toolName: String,
+        callsUsed: Int,
+        elapsedMs: Long
+    ): SkillDecision = SkillAuthorizationPolicy.preflight(
+        skill = list(context).firstOrNull { it.id == skillId },
+        toolName = toolName,
+        callsUsed = callsUsed,
+        elapsedMs = elapsedMs,
+        supportedTools = supportedTools
+    )
+
     fun authorize(
         context: Context,
         skillId: String,
