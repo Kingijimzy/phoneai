@@ -702,7 +702,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             else "tool returned; details remain in the task transcript")
         // Persist a privacy-minimal event for the user's action history. ActionLogStore
         // stores only the tool name and success/error outcome, never arguments or payloads.
-        try { ActionLogStore.record(svc, tool, verifiedResult) } catch (_: Exception) { }
+        try { ActionLogStore.record(svc, tool, args, verifiedResult, OrionTaskOutcome.actionStatus(trustedVerification, verifiedResult.trimStart().startsWith("error", ignoreCase = true))) } catch (_: Exception) { }
         return OrionSecurityPolicy.modelFacingResult(tool, verifiedResult)
     }
 
