@@ -135,7 +135,7 @@ internal object MemoryRanking {
     }
 
     private fun featureIndex(feature: String): Int = (feature.hashCode() and Int.MAX_VALUE) % EMBEDDING_DIMENSIONS
-    private fun featureSign(feature: String): Float = if ((feature.hashCode() ushr 1) and 1 == 0) 1f else -1f
+    private fun featureSign(feature: String): Float = if (feature.hashCode().ushr(1).rem(2) == 0) 1f else -1f
 
     private fun embedding(text: String): FloatArray = synchronized(embeddingCache) {
         embeddingCache[text]?.let { return@synchronized it.copyOf() }
