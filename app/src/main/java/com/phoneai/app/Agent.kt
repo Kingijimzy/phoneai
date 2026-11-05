@@ -230,6 +230,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     init {
         // Remove legacy action-history persistence; this agent does not keep action/decision logs.
         ActionLogStore.clear(svc)
+        OrionEvidenceLedger.purgeArgumentFields(svc)
         // Restore the same local transcript for every provider; provider choice must not own memory.
         restoreConversationContext(svc.conversationContext())
     }
