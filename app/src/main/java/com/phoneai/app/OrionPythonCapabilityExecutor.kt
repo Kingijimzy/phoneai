@@ -91,7 +91,6 @@ internal class OrionPythonCapabilityExecutor(
             id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
             args.optString("description").take(240), System.currentTimeMillis()
         )
-        testReceipts.remove(id)
         return if (extensionStore.saveRevision(extension)) {
             "Saved new disabled revision for $id. Run extension_test before activation; the previous activated version remains archived."
         } else "error: revision rejected; disable the active extension first, use a new source hash, and check registry integrity"
@@ -110,7 +109,7 @@ internal class OrionPythonCapabilityExecutor(
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
         if (!report.passed) {
-            testReceipts.remove(id)
+            testReceipts.remove(id, extension.sourceSha256)
             return "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
         }
 
