@@ -48,4 +48,20 @@ class MemoryDuplicateGovernanceTest {
             "The owner prefers concise technical explanations"
         ))
     }
+
+    @Test fun unreviewedSimilarObservationCannotReplaceApprovedFact() {
+        val approved = MemoryStore.addOwnerConfirmed(
+            context, "preference", "The owner prefers concise technical explanations"
+        )!!
+        val proposal = MemoryStore.add(
+            context, "preference", "The owner prefers detailed technical explanations"
+        )!!
+
+        val rows = MemoryStore.all(context)
+        val trusted = rows.first { it.id == approved.id }
+        assertEquals("approved", trusted.reviewStatus)
+        assertEquals("The owner prefers concise technical explanations", trusted.text)
+        assertTrue(proposal.id != approved.id)
+        assertEquals("pending", rows.first { it.id == proposal.id }.reviewStatus)
+    }
 }
