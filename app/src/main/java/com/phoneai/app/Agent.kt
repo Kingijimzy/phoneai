@@ -481,7 +481,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             dangerous = consequential,
             toolMode = effectiveToolMode,
             askedThisTask = tool in askApproved,
-            forceApproval = skillApprovalRequired
+            // A timed trust session may cover routine work, never consequential actions.
+            forceApproval = consequential
         )
         val actionSpecificConfirmationTools = setOf(
             "mcp_call", "telegram_send", "sms", "notification_action",
