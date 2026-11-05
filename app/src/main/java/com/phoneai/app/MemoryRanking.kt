@@ -54,9 +54,21 @@ internal object MemoryRanking {
 
     /** Cheap suffix stripping so "trading", "trader" and "trades" meet. */
     fun stem(word: String): String {
-        var w = word.lowercase()
-        for (suffix in listOf("ings", "ing", "ers", "er", "ed", "es", "s", "ly")) {
-            if (w.length - suffix.length >= 4 && w.endsWith(suffix)) { w = w.dropLast(suffix.length); break }
+        val w = word.lowercase()
+        if (w.length > 5 && w.endsWith("ies")) return w.dropLast(3) + "y"
+        if (w.length > 4 && (w.endsWith("ves") || w.endsWith("des") || w.endsWith("ses") || w.endsWith("kes"))) {
+            return w.dropLast(1)
+        }
+        if (w.length > 5 && w.endsWith("ing")) {
+            val root = w.dropLast(3)
+            return if (root.endsWith("d") || root.endsWith("v") || root.endsWith("s")) root + "e" else root
+        }
+        if (w.length > 5 && w.endsWith("er")) {
+            val root = w.dropLast(2)
+            return if (root.endsWith("d") || root.endsWith("v") || root.endsWith("s")) root + "e" else root
+        }
+        for (suffix in listOf("ers", "ed", "ches", "shes", "xes", "zes", "es", "s", "ly")) {
+            if (w.length - suffix.length >= 4 && w.endsWith(suffix)) return w.dropLast(suffix.length)
         }
         return w
     }
@@ -98,6 +110,14 @@ internal object MemoryRanking {
         val chosen = LinkedHashMap<Int, Memory>()
         memories.filter { it.pinned }.sortedByDescending { it.updated }.forEach { chosen[it.id] = it }
         if (!query.isNullOrBlank()) {
+            // Dense local embeddings participate in the actual prompt-recall path,
+            // not only the Memory screen's explicit search operation.
+            hybridRank(
+                memories.filter { !it.pinned },
+                { it.text + " " + it.category },
+                query,
+                relevantLimit
+            ).forEach { if (chosen.size < limit) chosen.putIfAbsent(it.id, it) }
             memories.filter { !it.pinned }
                 .map { it to score(it, query) }
                 .filter { it.second > 0 }
