@@ -94,9 +94,17 @@ class SkillAuthorizationPolicyTest {
         assertFalse(check(tool = "task_delete").allowed)
     }
 
-    @Test fun skillApprovalFlagDoesNotAddASecondPromptToRoutineSteps() {
+    @Test fun skillApprovalFlagDoesNotAddABlanketPromptToRoutineSteps() {
         assertTrue(check(skill = skill(requiresApproval = true)).allowed)
-        assertTrue(check(skill = skill(requiresApproval = true), tool = "open_url").allowed)
+        // The skill flag does not add another prompt, but the central risk gate
+        // must still require approval for consequential actions.
+        assertEquals(
+            "User approval is required before this action.",
+            check(skill = skill(requiresApproval = true), tool = "open_url").reason
+        )
+        assertTrue(check(
+            skill = skill(requiresApproval = true), tool = "open_url", approved = true
+        ).allowed)
     }
 
     @Test fun preflightChecksScopeAndBudgetWithoutCreatingASecondApprovalPrompt() {
