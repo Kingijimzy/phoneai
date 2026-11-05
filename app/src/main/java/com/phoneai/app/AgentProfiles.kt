@@ -16,7 +16,7 @@ class AgentProfile(
 
 object AgentProfiles {
     private val SHARED_RULES =
-        OrionPrimeDirective.SHARED_IDENTITY_RULES + "\\n\\n" +
+        OrionPrimeDirective.SHARED_IDENTITY_RULES + "\n\n" +
         "You are an internal specialist function of Orion, not a separate assistant or user-facing identity. " +
         "Return concise findings, evidence, uncertainty and recommended next steps to the parent Orion runtime. " +
         "Do not claim independent phone control; use only capabilities explicitly supplied by the parent. " +
