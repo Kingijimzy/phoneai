@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import android.content.Context
+
 import org.json.JSONObject
 
 /**
@@ -14,8 +16,8 @@ internal object OrionMemoryCapabilityExecutor {
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
-    fun memoryPromptBlock(service: PhoneAiService, request: String?, maxChars: Int, limit: Int = 6): String =
-        MemoryStore.promptBlock(service, request, limit).take(maxChars)
+    fun memoryPromptBlock(context: Context, request: String?, maxChars: Int, limit: Int = 6): String =
+        MemoryStore.promptBlock(context, request, limit).take(maxChars)
 
     fun recordFailure(service: PhoneAiService, request: String, tool: String, result: String) =
         ExperienceStore.recordFailure(service, request, tool, result)
