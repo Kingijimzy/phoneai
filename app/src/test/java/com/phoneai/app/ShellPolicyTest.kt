@@ -66,7 +66,7 @@ class ShellPolicyTest {
         assertFalse(ShellExecutionRouting.requiresApproval("alpine", "which python3"))
         assertTrue(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
         assertTrue(ShellExecutionRouting.requiresApproval("linux", "python3 run_script.py"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "apk add python3"))
+        assertTrue(ShellExecutionRouting.requiresApproval("builtin", "apk add python3"))
     }
 
     @Test fun shellToolsAreRegisteredWithCorrectAccess() {

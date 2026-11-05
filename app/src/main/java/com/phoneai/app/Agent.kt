@@ -349,19 +349,11 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         if (tool == "shell") {
             val cmd = args.optString("command")
-            val where = when (ShellExecutionRouting.backend(args.optString("where"))) {
-                ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
-                ShellExecutionRouting.Backend.TERMUX -> "Termux"
-                ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
-                ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
-            }
             when (ShellPolicy.classify(cmd)) {
                 ShellRisk.BLOCKED -> { recordDispatchBlocked(tool, args, "shell_policy_blocked"); return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user." }
-                ShellRisk.ASK -> if (!confirm("Run in $where:\n${cmd.take(300)}\n\nAllow?")) {
-                    val declined = "error: user did not approve running this command."
-                    recordDispatchBlocked(tool, args, "shell_approval_declined")
-                    taskProofs.record(tool, declined); return declined
-                }
+                // ASK is carried to the single GatePolicy decision below. That gate will show
+                // the exact command and backend, avoiding a second shell-specific popup.
+                ShellRisk.ASK -> {}
                 ShellRisk.SAFE -> {}
             }
         }
@@ -489,7 +481,16 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return blocked
             }
             GatePolicy.Verdict.ASK_TOOL -> {
-                if (!confirm("Allow Orion to use the tool '$tool' for this task?")) {
+                val askText = if (tool == "shell") {
+                    val backend = when (ShellExecutionRouting.backend(args.optString("where"))) {
+                        ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
+                        ShellExecutionRouting.Backend.TERMUX -> "Termux"
+                        ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
+                        ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+                    }
+                    "Run in $backend:\n${args.optString("command").take(300)}\n\nAllow this command for the task?"
+                } else "Allow Orion to use the tool '$tool' for this task?"
+                if (!confirm(askText)) {
                     val declined = "error: user did not approve using '$tool'."
                     recordDispatchBlocked(tool, args, "tool_approval_declined")
                     taskProofs.record(tool, declined)
@@ -508,7 +509,15 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     policyApproved = true
                     AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
                 } else {
-                    val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
+                    val action = if (tool == "shell") {
+                        val backend = when (ShellExecutionRouting.backend(args.optString("where"))) {
+                            ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
+                            ShellExecutionRouting.Backend.TERMUX -> "Termux"
+                            ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
+                            ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+                        }
+                        "Run in $backend:\n${args.optString("command").take(300)}"
+                    } else if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
                     val approved = confirm("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
                     AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
                     if (!approved) {

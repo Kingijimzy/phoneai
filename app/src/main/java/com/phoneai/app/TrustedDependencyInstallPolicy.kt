@@ -1,0 +1,52 @@
+package com.phoneai.app
+
+/**
+ * Allows unattended dependency installation only from Orion's pinned official Alpine 3.22
+ * repositories. apk verifies repository signatures; arbitrary repositories, untrusted packages,
+ * upgrades/removals, shell expansion and apk override flags remain approval-gated.
+ */
+internal object TrustedDependencyInstallPolicy {
+    private const val MAIN = "https://dl-cdn.alpinelinux.org/alpine/v3.22/main"
+    private const val COMMUNITY = "https://dl-cdn.alpinelinux.org/alpine/v3.22/community"
+    private val packageToken = Regex("^[A-Za-z0-9][A-Za-z0-9+_.-]{0,63}(?:=[A-Za-z0-9+_.-]{1,64})?$")
+
+    fun isSafeAlpineInstall(command: String): Boolean {
+        if (command.length !in 1..1200 || command.any { it == ';' || it == '|' || it == '&' || it == '$' || it == '`' || it == '\n' || it == '\r' }) {
+            return false
+        }
+        val words = command.trim().split(Regex("\\s+"))
+        if (words.size < 6 || words[0] != "apk") return false
+
+        var index = 1
+        var noCache = false
+        var isolatedRepositoryFile = false
+        val repositories = mutableSetOf<String>()
+        while (index < words.size && words[index] != "add") {
+            when (words[index]) {
+                "--no-cache" -> {
+                    if (noCache) return false
+                    noCache = true
+                    index++
+                }
+                "--repositories-file" -> {
+                    if (isolatedRepositoryFile || words.getOrNull(index + 1) != "/dev/null") return false
+                    isolatedRepositoryFile = true
+                    index += 2
+                }
+                "--repository" -> {
+                    val repository = words.getOrNull(index + 1) ?: return false
+                    if (repository !in setOf(MAIN, COMMUNITY)) return false
+                    repositories += repository
+                    index += 2
+                }
+                else -> return false
+            }
+        }
+        if (index >= words.size || words[index] != "add") return false
+        index++
+        val packages = words.drop(index)
+        if (packages.isEmpty() || packages.size > 24) return false
+        if (packages.any { it.startsWith("-") || !packageToken.matches(it) }) return false
+        return noCache && isolatedRepositoryFile && MAIN in repositories && COMMUNITY in repositories
+    }
+}
