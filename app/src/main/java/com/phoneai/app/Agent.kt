@@ -211,6 +211,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val chatCache = HashMap<String, Pair<Long, String>>()
 
     init {
+        // Remove legacy action-history persistence; this agent does not keep action/decision logs.
+        ActionLogStore.clear(svc)
         // Restore the same local transcript for every provider; provider choice must not own memory.
         restoreConversationContext(svc.conversationContext())
     }
