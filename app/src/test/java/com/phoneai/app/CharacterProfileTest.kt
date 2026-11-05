@@ -14,6 +14,7 @@ class CharacterProfileTest {
     }
 
     @Test fun everyConversationReceivesTheSamePrimeIdentityAndAuthorityInvariants() {
+        assertEquals("orion-prime-1", OrionPrimeDirective.VERSION)
         val instruction = CharacterProfile.systemInstruction("orion")
         assertTrue(instruction.contains(OrionPrimeDirective.SHARED_IDENTITY_RULES))
         assertTrue(instruction.contains(CharacterProfile.BEHAVIOUR_INVARIANTS))
