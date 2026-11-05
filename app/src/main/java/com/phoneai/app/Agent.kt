@@ -281,8 +281,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     /** Risk used by recovery. Mirrors the dispatcher's consequential classification so recovery never loosens it. */
     private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
         val consequential = tool in consequentialTools ||
-            AgentHooks.requiresConfirmation(tool, args, "") ||
-            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
+            AgentHooks.requiresConfirmation(tool, args, "")
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
     }
 
@@ -414,8 +413,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "read" in McpConnector.scopes(svc) &&
             ToolPermissions.mode(svc, tool) != ToolMode.DENY
         val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
-            (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
-            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
+            (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted))
         // Retrieve current durable context immediately before any write/consequential dispatch.
         // The receipt is created inside this Agent instance, never accepted from model arguments.
         val retrievalRequired = OrionRetrieveBeforeActPolicy.requiresRetrieval(
