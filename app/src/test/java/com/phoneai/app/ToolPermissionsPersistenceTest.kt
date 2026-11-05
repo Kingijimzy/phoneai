@@ -96,6 +96,24 @@ class ToolPermissionsPersistenceTest {
         assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
     }
 
+    @Test fun jarvisPresetClearsAskOverridesButPreservesExplicitDeny() {
+        val secondWriteTool = ToolRegistry.all.first {
+            it.access == ToolAccess.WRITE &&
+                it.name !in ToolPermissionPolicy.alwaysAllowed &&
+                it.name != writeTool
+        }.name
+        ToolPermissions.applyLevel(context, "autonomous")
+        ToolPermissions.cycle(context, writeTool) // ALLOW -> ASK
+        ToolPermissions.cycle(context, secondWriteTool) // ALLOW -> ASK
+        ToolPermissions.cycle(context, secondWriteTool) // ASK -> DENY
+
+        ToolPermissions.applyJarvisAutonomy(context)
+
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, secondWriteTool))
+        assertEquals("autonomous", ToolPermissions.level(context))
+    }
+
     @Test fun legacyCustomToolMapIsMigratedAsOverrides() {
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
             .putString("tool_level", "custom")
