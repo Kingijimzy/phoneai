@@ -126,8 +126,9 @@ internal object OrionMemoryCapabilityExecutor {
         "graph_link" -> tools.graphLink(args.optString("a"), args.optString("relation"), args.optString("b"))
         "graph_query" -> tools.graphQuery(args.optString("entity"))
         "self_review" -> tools.selfReview()
-        "undo_status" -> UndoStore.status(service)
-        "undo_last" -> if (stopped()) "error: task was stopped before undo." else UndoStore.undoLast(service)
+        "undo_status" -> WorkspaceUndoStore(service).status() + " " + UndoStore.status(service)
+        "undo_last" -> if (stopped()) "error: task was stopped before undo." else
+            (WorkspaceUndoStore(service).undoLast() ?: UndoStore.undoLast(service))
         else -> "error: memory executor does not implement '$tool'."
     }
 }
