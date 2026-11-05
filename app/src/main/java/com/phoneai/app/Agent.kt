@@ -487,6 +487,14 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "mcp_call", "telegram_send", "sms", "notification_action",
             "browser_click", "browser_click_verify"
         )
+        // These executors always show a detailed approval for their consequential writes.
+        // Browser clicks are target-classified by the central gate; the executor prompt is
+        // only a fallback if its own classifier catches something the central one did not.
+        val actionSpecificConfirmation = when (tool) {
+            "mcp_call" -> !mcpReadScopeGranted
+            "telegram_send", "sms", "notification_action" -> true
+            else -> false
+        }
         val skillTargetSummary = when (tool) {
             "click_text" -> args.optString("text")
             "browser_click", "browser_click_verify" -> args.optString("target")
@@ -520,19 +528,22 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     skillApprovalRequired -> "Allow skill '${activeSkillId}' to use '$tool'${if (skillTargetSummary.isNotBlank()) " on '${skillTargetSummary}'" else ""}? This skill requires owner approval."
                     else -> "Allow Orion to use the tool '$tool' for this task?"
                 }
-                if (!confirm(askText)) {
+                if (actionSpecificConfirmation) {
+                    AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
+                } else if (!confirm(askText)) {
                     val declined = "error: user did not approve using '$tool'."
                     recordDispatchBlocked(tool, args, "tool_approval_declined")
                     taskProofs.record(tool, declined)
                     return declined
                 }
                 askApproved.add(tool)
-                if (fullPython || skillApprovalRequired) policyApproved = true
+                // ASK_TOOL approval is for this invocation. Consequential future calls still
+                // reach NEED_APPROVAL; action-specific tools confirm at their own boundary.
+                policyApproved = true
             }
             GatePolicy.Verdict.NEED_APPROVAL -> {
-                // These tools present a more specific confirmation at the action boundary.
-                // Showing both this generic dialog and the detailed dialog caused duplicate prompts.
-                val actionSpecificConfirmation = !skillApprovalRequired && tool in actionSpecificConfirmationTools
+                // Showing both this generic dialog and a detailed action-boundary dialog
+                // caused duplicate prompts. Let the action-specific executor own those writes.
                 if (actionSpecificConfirmation) {
                     policyApproved = true
                     AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
@@ -3170,7 +3181,7 @@ Rules:
                 OrionRuntimeCapabilityExecutor.execute(
                     route.backend, route.tool, args, svc, tools, { stopped },
                     { question ->
-                        if (skillApprovalRequired && policyApproved && tool in actionSpecificConfirmationTools) true
+                        if (policyApproved && tool in actionSpecificConfirmationTools && !actionSpecificConfirmation) true
                         else confirm(question)
                     },
                     { url -> ui.openBrowser(url) },
