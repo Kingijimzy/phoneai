@@ -15,6 +15,19 @@ import java.io.File
 class OrionEvidenceLedgerTest {
     private val context: Context get() = RuntimeEnvironment.getApplication()
 
+    @Test fun startupMigrationPurgesPreviouslyStoredArgumentFields() {
+        val ledger = File(context.filesDir, "orion_evidence_ledger.json")
+        val row = JSONObject()
+            .put("id", "legacy")
+            .put("argsFingerprint", "old-fingerprint")
+            .put("redactedArgs", "{\\"password\\":\\"[redacted]\\"}")
+        ledger.writeText(JSONObject().put("version", 1).put("events", org.json.JSONArray().put(row)).toString())
+        assertTrue(OrionEvidenceLedger.purgeArgumentFields(context))
+        val saved = JSONObject(ledger.readText()).getJSONArray("events").getJSONObject(0)
+        assertFalse(saved.has("argsFingerprint"))
+        assertFalse(saved.has("redactedArgs"))
+    }
+
     @Test fun recordsDispatchWithDistinctVerifiedUnverifiedAndFailedOutcomes() {
         val task = "ledger-outcomes-${System.nanoTime()}"
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "device", "click", JSONObject().put("id", 3), 10L,
