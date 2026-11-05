@@ -11,9 +11,16 @@ internal object AgentHooks {
    val ok=!result.trimStart().startsWith("error",true)
    // Screen-change markers and OCR snippets are not proof that a consequential action completed.
    val summary=result.substringBefore("Current screen evidence").substringBefore("SCREEN EVIDENCE")
-   val verified=summary.contains("LOCAL VERIFY PASS:",ignoreCase=true) ||
-    Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b",RegexOption.IGNORE_CASE).containsMatchIn(summary)
-   proofs.add(Proof(tool,ok,verified,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
+   proofs.add(Proof(tool,ok,false,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
+  }
+  /** Only the agent's local verifier may create a verified proof; tool output is untrusted data. */
+  @Synchronized fun recordVerified(tool:String,result:String){
+   val ok=!result.trimStart().startsWith("error",true)
+   if(!ok || !result.contains("LOCAL VERIFY PASS:",ignoreCase=true) &&
+      !(tool in setOf("verify_action","verify_send") && result.trimStart().startsWith("PASS:",true))) {
+    record(tool,result); return
+   }
+   proofs.add(Proof(tool,true,true,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
   }
   @Synchronized fun snapshot():List<Proof> = proofs.toList()
  }
@@ -99,6 +106,9 @@ internal object AgentHooks {
   val status=Regex("(?i)\\b(sent|delivered|read)\\b").find(statusLine)?.value.orEmpty()
   return "PASS: message sent to $target; exact message and status '$status' are visible."
  }
+ private val requiresVerifiedGoal=Regex(
+  "(?i)^\\\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\\\s+)*(open|launch|tap|click|press|swipe|scroll|type|send|call|text|message|reply|email|delete|remove|install|uninstall|download|share|post|publish|buy|order|book|turn on|turn off|switch|move|rename|copy|write|save|undo|reverse|run|execute)\\\\b"
+ )
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
  private val messagingIntent=Regex("\\b(message|reply|text|email)\\b",RegexOption.IGNORE_CASE)
@@ -153,7 +163,7 @@ internal object AgentHooks {
   }
   val success=merged.filter{it.success}
   if(success.isEmpty()) return GateDecision(false,"No successful tool result was recorded in the current run or durable evidence ledger.")
-  if(risky.containsMatchIn(request)&&success.none{it.verified}) return GateDecision(false,"No post-action evidence confirms the consequential outcome.")
+  if((risky.containsMatchIn(request)||requiresVerifiedGoal.containsMatchIn(request))&&success.none{it.verified}) return GateDecision(false,"No trusted post-action evidence confirms the requested outcome.")
   return GateDecision(true,"Action evidence recorded in the current run and durable ledger.")
  }
  /** Failed screen reads reset the stability streak; an exception is never a matching sample. */
