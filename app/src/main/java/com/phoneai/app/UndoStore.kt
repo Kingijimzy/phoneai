@@ -38,7 +38,8 @@ object UndoStore {
     }
 
     fun latestTimestamp(c: Context): Long = synchronized(lock) {
-        load(c).optJSONObject(load(c).length() - 1)?.optLong("at", 0L) ?: 0L
+        val entries = load(c)
+        if (entries.length() == 0) 0L else entries.optJSONObject(entries.length() - 1)?.optLong("at", 0L) ?: 0L
     }
 
     fun status(c: Context): String = synchronized(lock) {
