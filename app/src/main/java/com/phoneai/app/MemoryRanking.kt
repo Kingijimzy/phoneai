@@ -76,7 +76,14 @@ internal object MemoryRanking {
         val matched = words.count { body.contains(it) || memory.category.contains(it) }
         val bodyWords = tokens(memory.text)
         val related = words.count { !(body.contains(it) || memory.category.contains(it)) && relatedTo(it, bodyWords) }
-        val fuzzy = if (matched == 0 && related == 0) trigramSimilarity(query, memory.text) else 0.0
+        // Compare query tokens to individual memory tokens. Whole-sentence trigram Jaccard
+        // dilutes a one-word typo across every unrelated word in the memory sentence.
+        val fuzzy = if (matched == 0 && related == 0) {
+            val bodyTokens = tokens(memory.text)
+            words.maxOfOrNull { queryToken ->
+                bodyTokens.maxOfOrNull { bodyToken -> trigramSimilarity(queryToken, bodyToken) } ?: 0.0
+            } ?: 0.0
+        } else 0.0
         if (matched == 0 && related == 0 && fuzzy < 0.24) return 0
         val fuzzyBonus = if (fuzzy >= 0.24) (fuzzy * 20).toInt().coerceAtLeast(1) else 0
         return matched * 10 + related * 5 + fuzzyBonus +
