@@ -1851,6 +1851,19 @@ Rules:
             currentTask = OrionTasksCapabilityExecutor.pendingCheckpoint(svc)
                 ?.optString("command")?.takeIf { it.isNotBlank() } ?: currentTask
         }
+        // A bare "Continue" with no paused task must not silently re-run an unrelated old
+        // objective (the owner saw it check GitHub instead of the task they meant).
+        val bareResume = Regex("(?i)^(?:please\\s+)?(?:continue|resume|keep going)[.! ]*$").matches(command.trim())
+        if (bareResume &&
+            OrionTasksCapabilityExecutor.pendingCheckpoint(svc) == null &&
+            !OrionTasksCapabilityExecutor.hasArchivedPending(svc)) {
+            val last = currentTask.trim()
+            ui.say(
+                if (last.isBlank()) "There's no paused task to resume. Tell me what you'd like me to do."
+                else "There's no paused task to resume. The last task was: \"" + last.take(160) + "\". Should I continue that?"
+            )
+            return
+        }
         val contextualObjective = contextualObjectiveForRequest(command)
         var intentResolution = OrionContextualIntentInterpreter.resolve(command, recentConversationTurns(), contextualObjective)
         val correctedObjective = intentResolution.resolvedObjective
