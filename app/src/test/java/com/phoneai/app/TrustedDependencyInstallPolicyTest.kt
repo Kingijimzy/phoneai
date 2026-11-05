@@ -15,9 +15,9 @@ class TrustedDependencyInstallPolicyTest {
 
     @Test fun rejectsUnknownRepositoriesAndUntrustedOverrides() {
         assertFalse(TrustedDependencyInstallPolicy.isSafeAlpineInstall(
-            "apk add --no-cache --repository https://example.com/alpine/v3.22/main --repository https://example.com/community python3"
+            "apk add --no-cache --repositories-file /dev/null --repository https://example.com/alpine/v3.22/main --repository https://example.com/alpine/v3.22/community python3"
         ))
-        assertFalse(TrustedDependencyInstallPolicy.isSafeAlpineInstall("apk add --no-cache --allow-untrusted python3"))
+        assertFalse(TrustedDependencyInstallPolicy.isSafeAlpineInstall("apk add --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community --allow-untrusted python3"))
         assertFalse(TrustedDependencyInstallPolicy.isSafeAlpineInstall("apk add --no-cache $repos --keys-dir /tmp/keys python3"))
     }
 
