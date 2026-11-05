@@ -41,7 +41,7 @@ internal object MemoryRanking {
             .maxByOrNull { it.second }?.first
 
     private val concepts: List<Set<String>> = listOf(
-        setOf("trade", "trading", "trader", "bybit", "forex", "deriv", "crypto", "chart", "swing", "position"),
+        setOf("trade", "trading", "trader", "bybit", "forex", "deriv", "crypto", "chart", "swing", "position", "currency", "currencies", "exchange", "fx", "market"),
         setOf("music", "song", "play", "playlist", "artist", "album", "spotify", "youtube"),
         setOf("code", "coding", "program", "kotlin", "python", "script", "developer", "app", "build"),
         setOf("work", "job", "career", "company", "business", "employer", "office"),
@@ -124,6 +124,47 @@ internal object MemoryRanking {
     )
 
     /**
+     * Deterministic on-device feature embedding. This is not a downloaded neural model:
+     * word, phrase, character and domain-concept features are projected into a bounded
+     * dense vector with signed feature hashing. It gives semantic-family recall without
+     * network access, model files, or sending private memory to a provider.
+     */
+    private const val EMBEDDING_DIMENSIONS = 384
+    private val embeddingCache = object : LinkedHashMap<String, FloatArray>(512, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?): Boolean = size > 512
+    }
+
+    private fun featureIndex(feature: String): Int = (feature.hashCode() and Int.MAX_VALUE) % EMBEDDING_DIMENSIONS
+    private fun featureSign(feature: String): Float = if ((feature.hashCode() ushr 1) and 1 == 0) 1f else -1f
+
+    private fun embedding(text: String): FloatArray = synchronized(embeddingCache) {
+        embeddingCache[text]?.let { return@synchronized it.copyOf() }
+        val vector = FloatArray(EMBEDDING_DIMENSIONS)
+        fun add(feature: String, weight: Float) {
+            val index = featureIndex(feature)
+            vector[index] += featureSign(feature) * weight
+        }
+        val words = tokens(text).map(::stem).filter { it.isNotBlank() }
+        words.forEach { add("w:$it", 1.0f) }
+        words.zipWithNext().forEach { (a, b) -> add("p:$a:$b", 0.7f) }
+        characterTrigrams(text).distinct().forEach { add("c:$it", 0.18f) }
+        concepts.forEachIndexed { index, group ->
+            if (words.any { word -> group.any { stem(it) == word } }) add("concept:$index", 1.35f)
+        }
+        val norm = kotlin.math.sqrt(vector.sumOf { (it * it).toDouble() }).toFloat()
+        if (norm > 0f) for (i in vector.indices) vector[i] /= norm
+        embeddingCache[text] = vector.copyOf()
+        vector
+    }
+
+    /** Cosine similarity between private, deterministic, device-local dense feature vectors. */
+    fun embeddingSimilarity(a: String, b: String): Double {
+        val x = embedding(a)
+        val y = embedding(b)
+        return x.indices.sumOf { (x[it] * y[it]).toDouble() }.coerceIn(-1.0, 1.0)
+    }
+
+    /**
      * Local hybrid retrieval, adapted from Ultron Cerebro: BM25 + word TF-IDF cosine +
      * character-trigram TF-IDF cosine, fused with reciprocal-rank fusion. No network or model.
      */
@@ -173,13 +214,15 @@ internal object MemoryRanking {
                 .withIndex().associate { it.value.index to it.index + 1 }
         val rankA = ranks(bm25)
         val rankB = ranks(cosine)
+        val denseEmbeddings = items.map { embeddingSimilarity(query, textOf(it)) }
         val rankC = ranks(trigramCosine)
+        val rankD = ranks(denseEmbeddings)
         return items.indices
-            .filter { it in rankA || it in rankB || it in rankC }
+            .filter { it in rankA || it in rankB || it in rankC || it in rankD }
             .map { i ->
                 i to (1.0 / (60 + (rankA[i] ?: 1000)) +
                     1.0 / (60 + (rankB[i] ?: 1000)) +
-                    1.0 / (60 + (rankC[i] ?: 1000)))
+                    1.0 / (60 + (rankC[i] ?: 1000)) +\n                    1.0 / (60 + (rankD[i] ?: 1000)))
             }
             .sortedByDescending { it.second }
             .take(limit)
