@@ -301,6 +301,26 @@ internal object OrionSpecialistScheduler {
         true
     } catch (_: Exception) { false }
 
+    /** Cancel every queued/running child for one parent, including its scheduled WorkManager work. */
+    fun cancelParent(context: Context, parentTaskId: String, reason: String): Int {
+        if (parentTaskId.isBlank()) return 0
+        val app = context.applicationContext
+        val store = OrionWorkerJobStore(app)
+        val active = store.all().filter {
+            it.parentTaskId == parentTaskId && it.status in setOf(
+                OrionWorkerJobStore.Status.QUEUED,
+                OrionWorkerJobStore.Status.RUNNING,
+                OrionWorkerJobStore.Status.RESULT_PENDING,
+                OrionWorkerJobStore.Status.PAUSED
+            )
+        }
+        val changed = store.cancelParent(parentTaskId, reason)
+        active.forEach { job ->
+            runCatching { WorkManager.getInstance(app).cancelUniqueWork("orion-specialist-${job.id}") }
+        }
+        return changed
+    }
+
     /** Durable cancellation is committed before WorkManager is asked to stop the process. */
     fun cancel(context: Context, jobId: String, reason: String = "cancelled_by_owner"): Boolean {
         if (jobId.isBlank()) return false
