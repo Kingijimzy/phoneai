@@ -89,15 +89,13 @@ class OrionPythonWorkspaceRepairTest {
 
     @Test fun centralBrainAppliesOnlyTheRegisteredReversibleWorkspaceRepairWithoutExtraPrompt() {
         assertEquals(OrionPythonWorkspace.RootStatus.MISSING, OrionPythonWorkspace(context).rootStatus())
-        var prompts = 0
         val result = OrionDiagnosticsCapabilityExecutor.execute(
             "repair_apply",
             JSONObject().put("repair_id", "ensure_python_workspace_root"),
             context
-        ) { prompts++; true }
+        )
 
         assertTrue(result.orEmpty().contains("Repair verified:"))
-        assertEquals(0, prompts)
         assertEquals(OrionPythonWorkspace.RootStatus.READY, OrionPythonWorkspace(context).rootStatus())
         val taskId = "repair-python-workspace-${sessionId.take(32)}"
         assertTrue(OrionEvidenceLedger.events(context, taskId).any {
