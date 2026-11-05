@@ -487,50 +487,13 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             askedThisTask = tool in askApproved,
             hardBlockReason = GatePolicy.hardBlockReason(tool, args)
         )
-        var policyApproved = false
         when (gate.verdict) {
             GatePolicy.Verdict.DENY, GatePolicy.Verdict.PLAN_ONLY -> {
                 val blocked = "error: " + gate.reason
-                AgentPolicy.log(svc, tool, "dispatch", false, gate.reason)
-                try { ActionLogStore.record(svc, tool, blocked) } catch (_: Exception) { }
-                recordDispatchBlocked(tool, args, "approval_policy_denied")
+                recordDispatchBlocked(tool, args, "capability_policy_denied")
                 return blocked
             }
-            GatePolicy.Verdict.ASK_TOOL -> {
-                if (!requestGateApproval("Allow Orion to use the tool '$tool' for this task?")) {
-                    val declined = "error: user did not approve using '$tool'."
-                    recordDispatchBlocked(tool, args, "tool_approval_declined")
-                    taskProofs.record(tool, declined)
-                    return declined
-                }
-                askApproved.add(tool)
-            }
-            GatePolicy.Verdict.NEED_APPROVAL -> {
-                // These tools present a more specific confirmation at the action boundary.
-                // Showing both this generic dialog and the detailed dialog caused duplicate prompts.
-                val actionSpecificConfirmation = tool in setOf(
-                    "mcp_call", "telegram_send", "sms", "notification_action",
-                    "browser_click", "browser_click_verify"
-                )
-                if (actionSpecificConfirmation) {
-                    policyApproved = true
-                    AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
-                } else {
-                    val action = if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
-                    val approved = requestGateApproval("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
-                    AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
-                    if (!approved) {
-                        val denied = "error: user did not approve this tool action."
-                        recordDispatchBlocked(tool, args, "action_approval_declined")
-                        taskProofs.record(tool, denied)
-                        return denied
-                    }
-                    policyApproved = true
-                }
-            }
-            GatePolicy.Verdict.ALLOW -> {
-                AgentPolicy.log(svc, tool, "dispatch", null, "allowed by selected approval policy")
-            }
+            GatePolicy.Verdict.ALLOW -> Unit
         }
         IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
             if (!requestGateApproval("Confirm computer setting: $action?")) {
