@@ -2,7 +2,6 @@ package com.phoneai.app
 
 import android.content.Context
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Owns direct Python execution and the generated-extension lifecycle.
@@ -18,7 +17,7 @@ internal class OrionPythonCapabilityExecutor(
         OrionPythonRuntime.runExtension(context, source, inputJson)
     }
 ) {
-    private val testReports = ConcurrentHashMap<String, ExtensionTestReport>()
+    private val testReceipts = ExtensionTestReceiptStore(context)
 
     fun execute(
         tool: String,
@@ -89,11 +88,13 @@ internal class OrionPythonCapabilityExecutor(
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
         if (!report.passed) {
-            testReports.remove(id)
+            testReceipts.remove(id)
             return "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
         }
 
-        testReports[id] = report
+        if (!testReceipts.record(id, report)) {
+            return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
+        }
         val ownerAutoActivation = OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions
         val autoActivated = ownerAutoActivation && extensionStore.promote(id, report, userApproved = true)
         AgentPolicy.log(
@@ -103,7 +104,7 @@ internal class OrionPythonCapabilityExecutor(
             else "owner auto-activation is off; awaiting explicit extension_enable approval"
         )
         return if (autoActivated) {
-            testReports.remove(id)
+            testReceipts.remove(id)
             "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
@@ -114,8 +115,10 @@ internal class OrionPythonCapabilityExecutor(
 
     private fun enable(args: JSONObject, confirm: (String) -> Boolean): String {
         val id = args.optString("id").trim()
-        val report = testReports[id]
-            ?: return "error: no successful runtime sandbox test exists for this extension in the current agent session; static preflight cannot enable generated code"
+        val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
+            ?: return "error: extension draft not found or registry unreadable"
+        val report = testReceipts.get(id, extension.sourceSha256)
+            ?: return "error: no successful runtime sandbox test receipt matches the current source; run extension_test again"
         if (!confirm("Enable generated extension $id after its verified sandbox test?")) return "Extension enable cancelled."
         return if (extensionStore.promote(id, report, userApproved = true)) "Extension $id is enabled."
         else "error: extension promotion failed; test report/source hash may be stale or storage may be unavailable"
