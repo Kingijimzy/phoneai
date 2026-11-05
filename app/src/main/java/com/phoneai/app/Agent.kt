@@ -516,7 +516,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                             ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
                             ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
                         }
-                        "Run in $backend:\\n${args.optString("command").take(300)}"
+                        "Run in $backend:\n${args.optString("command").take(300)}"
                     } else if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
                     val approved = confirm("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
                     AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
