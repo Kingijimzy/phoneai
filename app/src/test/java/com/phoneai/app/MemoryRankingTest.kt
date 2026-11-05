@@ -44,7 +44,7 @@ class MemoryRankingTest {
     @Test fun trigramSimilarityFindsSmallTyposWithoutMatchingUnrelatedWords() {
         assertTrue(MemoryRanking.trigramSimilarity("trading", "tradng") >= 0.24)
         assertEquals(0.0, MemoryRanking.trigramSimilarity("trading", "football"), 0.0001)
-        assertTrue(MemoryRanking.score(mem(5, "fact", "User follows trading setups"), "tradng") > 0)
+        assertTrue(MemoryRanking.score(mem(5, "fact", "User follows trading setups", 1L), "tradng") > 0)
     }
 
     @Test fun hybridRankUsesTrigramSignalForFuzzyRecall() {
