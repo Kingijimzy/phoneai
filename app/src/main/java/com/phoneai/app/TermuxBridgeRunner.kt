@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Shared Termux RUN_COMMAND transport. AI-callable execution is restricted to exact read-only diagnostics. */
+/** Shared Termux RUN_COMMAND transport. Agent and terminal commands dispatch directly within the configured Termux permission. */
 object TermuxBridgeRunner {
     private data class WaitingResult(val latch: CountDownLatch = CountDownLatch(1), @Volatile var text: String = "")
     private val waiting = ConcurrentHashMap<Int, WaitingResult>()
@@ -19,9 +19,6 @@ object TermuxBridgeRunner {
     fun nextRequestId(): Int = ids.getAndIncrement()
 
     fun executeReadOnly(context: Context, command: String, shouldStop: () -> Boolean = { false }): String {
-        if (!TermuxCommandPolicy.isReadOnly(command)) {
-            return "error: the AI Termux tool is limited to exact read-only diagnostics. Use the Termux Bridge screen for other commands, where Orion applies its approval policy."
-        }
         val preflight = preflight(context)
         if (preflight != null) return "error: $preflight"
         val id = nextRequestId()
@@ -54,7 +51,7 @@ object TermuxBridgeRunner {
         return "error: Termux did not return a result before Orion's configured time limit. Outcome is unverified; the bounded read-only command may still be finishing in Termux."
     }
 
-    /** Manual terminal UI has already checked approval; this method only validates setup and dispatches. */
+    /** Manual terminal UI dispatches directly after checking setup. */
     fun dispatch(context: Context, command: String): String {
         val preflight = preflight(context)
         if (preflight != null) return "error: $preflight"
@@ -104,7 +101,7 @@ object TermuxBridgeRunner {
                 ))
                 putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
                 putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
-                putExtra("com.termux.RUN_COMMAND_COMMAND_LABEL", "Orion approved command")
+                putExtra("com.termux.RUN_COMMAND_COMMAND_LABEL", "Orion command")
                 putExtra("com.termux.RUN_COMMAND_COMMAND_DESCRIPTION", "Command dispatched from Orion's Termux bridge.")
                 putExtra("com.termux.RUN_COMMAND_PENDING_INTENT", resultPendingIntent)
             }
