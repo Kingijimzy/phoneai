@@ -12,7 +12,18 @@ class ToolRegistryTest {
         assertTrue(OrionPythonCapabilityExecutor.supports("workspace_list"))
     }
 
-@Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
+    @Test fun workspaceFileMutationsAreRegisteredRoutedAndReversible() {
+        listOf("workspace_write", "workspace_delete", "workspace_move").forEach { name ->
+            assertEquals(ToolAccess.WRITE, ToolRegistry.access(name))
+            assertEquals("workspace_shell", AgentPolicy.packForTool(name))
+            assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route(name)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, name))
+        }
+        assertTrue(ToolRegistry.find("workspace_delete")!!.promptLine.contains("journaled for conflict-safe undo"))
+        assertTrue(ToolRegistry.find("workspace_move")!!.promptLine.contains("without overwriting"))
+    }
+
+    @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
         assertTrue(ToolRegistry.all.any { it.name == "device_location" })
         assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
     }
