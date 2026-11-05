@@ -110,7 +110,7 @@ object AgentPolicy {
         "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
         "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
-        "shell", "workspace_list", "workspace_write", "workspace_read", "python_exec", "project_create", "project_list", "project_inspect" -> "workspace_shell"
+        "shell", "workspace_list", "workspace_write", "workspace_read", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get",
         "goal_add", "goal_list", "goal_remove", "goal_toggle" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"

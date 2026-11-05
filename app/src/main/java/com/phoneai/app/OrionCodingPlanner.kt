@@ -319,7 +319,8 @@ internal object OrionCodingPlanner {
             if (!persist(context, root)) return@synchronized "error: verification state could not be persisted; tests were not started."
             plan.optString("language")
         }
-        if (preflight.startsWith("error:") || preflight.startsWith("INCOMPLETE:") || preflight.startsWith("FILES_READY:")) return preflight
+        if (preflight.startsWith("error:") || preflight.startsWith("INCOMPLETE:") ||
+            preflight.startsWith("FILES_READY:") || preflight.startsWith("TESTS_NOT_PLANNED:")) return preflight
         val language = preflight
         val command = testCommand(language)
             ?: return "error: no automatic test command is defined for '$language'."
