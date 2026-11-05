@@ -80,7 +80,7 @@ object McpConnector {
         val safe = selected + "read"
         return if (c.getSharedPreferences(PREFS, 0).edit()
             .putString("allowed_scopes", safe.sorted().joinToString(",")).commit()) {
-            "MCP scopes saved. Read-only access remains enabled; every remote call still requires in-app approval."
+            "MCP scopes saved. Remote calls run immediately within the scopes enabled here."
         } else "Could not save MCP scopes."
     }
     fun scopeForTool(name: String): String {
@@ -139,7 +139,7 @@ object McpConnector {
         return "MCP endpoint configured for " + host + ". Bearer token: " + auth +
             ". Local endpoint approval: " + pairing +
             ". Enabled scopes: " + scopes(c).sorted().joinToString(", ") +
-            ". Paired read-scope tools can run without repeat prompts; write, communication, system, and other-scope calls require action confirmation. Unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
+            ". Paired tools run immediately within their enabled scopes; no per-call approval prompt is used. Unclassified tools require the 'other' scope. Transport is HTTP(S); WebRTC is not configured."
     }
 
     @Volatile private var sessionId: String? = null
@@ -196,7 +196,7 @@ object McpConnector {
     /**
      * Supplies discovered remote tool contracts to the chat planner without probing the server on
      * every turn. A fresh catalogue is reused for ten minutes; stale cache is clearly labelled if
-     * refresh fails. Execution still rechecks the live advertised catalogue and approval/scope gates.
+     * refresh fails. Execution still rechecks the live advertised catalogue and scope gates.
      */
     fun catalogueForPrompt(c: Context): String {
         if (!configured(c)) return ""
@@ -217,7 +217,7 @@ object McpConnector {
         return "Remote MCP tool discovery failed: $refreshed"
     }
 
-    /** Executes only a currently advertised tool after endpoint pairing and scope validation; caller confirms non-read actions. */
+    /** Executes only a currently advertised tool after endpoint pairing and scope validation; caller enforces only the shared restart/shutdown/Wi-Fi confirmation policy. */
     fun callTool(c: Context, name: String, arguments: JSONObject): String {
         if (!configured(c)) return "error: no MCP server configured."
         if (!isPaired(c)) return "error: MCP endpoint has not been locally approved. Open Orion Settings > MCP permissions and complete PIN confirmation first."

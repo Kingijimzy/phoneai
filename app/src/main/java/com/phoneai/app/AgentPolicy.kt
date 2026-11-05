@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 /** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
 object AgentPolicy {
-    enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow"), ASK("Ask (legacy)"), ALLOWLIST("Allowlist (legacy)"), TRUSTED("Trusted session (legacy)") }
+    enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
     enum class Decision { ALLOW, PLAN_ONLY, NEED_APPROVAL, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
@@ -25,7 +25,7 @@ object AgentPolicy {
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    /** PLAN is the only global execution stop. Legacy ASK/ALLOWLIST/TRUSTED values are read as ALLOW. */
+    /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
     fun mode(c: Context): Mode {
         val saved = p(c).getString("mode", null)
         return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
@@ -88,9 +88,8 @@ object AgentPolicy {
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
-        // Autopilot applies to routine actions even when a tool has an old ASK override.
-        // Explicit DENY still wins in GatePolicy, and consequential actions still need confirmation.
+        // Legacy per-tool ASK values are normalized to ALLOW by ToolPermissionPolicy.modeOf.
+        // Only an explicit DENY, PLAN mode or disabled capability pack blocks dispatch.
         autonomous = ToolPermissions.level(c) == "autonomous",
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
@@ -108,7 +107,6 @@ object AgentPolicy {
             GatePolicy.Verdict.ALLOW -> Decision.ALLOW
             GatePolicy.Verdict.DENY -> Decision.DENY
             GatePolicy.Verdict.PLAN_ONLY -> Decision.PLAN_ONLY
-            GatePolicy.Verdict.ASK_TOOL, GatePolicy.Verdict.NEED_APPROVAL -> Decision.NEED_APPROVAL
         }
         return RuleResult(decision, r.reason)
     }
@@ -138,7 +136,7 @@ object AgentPolicy {
         "browser_upload", "browser_handoff", "browser_wait", "browser_close", "settings", "dial", "alarm", "timer",
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
-        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
+        "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
         "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
         else -> null
     }
@@ -156,27 +154,8 @@ object AgentPolicy {
         tools.filter { it.matches(Regex("[a-zA-Z0-9_.:-]{1,80}")) }.distinct().take(100).forEach { a.put(it) }
         p(c).edit().putString("allowlist_$pack", a.toString()).apply()
     }
-    /** Bounded audit trail. Callers must never pass raw secrets. */
-    fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
-        val shellAudit = tool.startsWith("shell:")
-        val safe = AgentPrivacyFilter.safeOutput(result).take(if (shellAudit) 6000 else 240)
-        val safeAction = AgentPrivacyFilter.safeCommand(action).take(if (shellAudit) 2000 else 80)
-        synchronized(this) {
-            val old = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
-            val next = JSONArray()
-            for (i in maxOf(0, old.length() - 199) until old.length()) next.put(old.getJSONObject(i))
-            next.put(JSONObject().put("at", System.currentTimeMillis()).put("tool", tool.take(80)).put("action", safeAction).put("approved", approved).put("result", safe))
-            p(c).edit().putString("action_log", next.toString()).apply()
-        }
-    }
-    fun recentLogs(c: Context, limit: Int = 30): List<String> {
-        val a = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
-        return (maxOf(0, a.length() - limit) until a.length()).mapNotNull { i ->
-            runCatching {
-                val o = a.getJSONObject(i)
-                val approved = if (o.isNull("approved")) "approval unknown" else if (o.optBoolean("approved")) "approved" else "not approved"
-                "${java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(o.optLong("at")))} · ${o.optString("tool")} / ${o.optString("action")} · $approved · ${o.optString("result")}"
-            }.getOrNull()
-        }
-    }
+    /** Compatibility no-op: action and decision logging are disabled. */
+    fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) = Unit
+    fun recentLogs(c: Context, limit: Int = 30): List<String> = emptyList()
+
 }

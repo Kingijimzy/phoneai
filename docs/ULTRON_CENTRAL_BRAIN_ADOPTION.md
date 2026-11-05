@@ -50,7 +50,7 @@ The goal is to make these existing owners coherent and remove duplicated prompt 
 6. Memory retrieval occurs before planning and acting. Facts retain provenance, confidence, sensitivity, review status and temporal validity. Corrections and contradictions supersede old facts rather than silently accumulating.
 7. Extensions are not executable until isolated tests pass against the exact source hash and the configured owner policy permits promotion.
 8. Background work must be durable, bounded, cancellable, battery-aware and recoverable after process death.
-9. Platform permission, external authentication and consequential-action approval remain real requirements. Do not ask for duplicate consent where permission is already granted, and do not bypass an actual required approval.
+9. Platform permissions and external authentication remain requirements. The only in-app action confirmations are restart, shutdown and Wi-Fi toggles; all other authorized actions execute immediately without per-call approval.
 
 ## Known risks to fix
 

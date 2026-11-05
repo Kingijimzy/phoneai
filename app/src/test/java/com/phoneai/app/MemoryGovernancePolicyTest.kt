@@ -57,8 +57,9 @@ class OrionSelfHealingPolicyTest {
         )
         assertTrue(OrionSelfHealingPolicy.mayAutoApply(proposal))
         assertFalse(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(testPassed = false)))
-        assertFalse(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(requiredOwnerApproval = true)))
-        assertFalse(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(risk = OrionRepairRisk.SECURITY_SENSITIVE)))
+        // Generic owner-approval flags and risk labels must not reintroduce an extra confirmation gate.
+        assertTrue(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(requiredOwnerApproval = true)))
+        assertTrue(OrionSelfHealingPolicy.mayAutoApply(proposal.copy(risk = OrionRepairRisk.SECURITY_SENSITIVE)))
     }
 
     @Test fun failedTestsCannotAdvanceRepairToApplied() {

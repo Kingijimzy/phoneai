@@ -39,11 +39,11 @@ internal class OrionPythonCapabilityExecutor(
             "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
             "extension_history" -> extensionHistory(args)
-            "extension_rollback" -> rollbackExtension(args, confirm)
+            "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
             "extension_update" -> updateDraft(args)
             "extension_test" -> testDraft(args, stopped)
-            "extension_enable" -> enable(args, confirm)
+            "extension_enable" -> enable(args)
             "extension_run" -> runExtension(args, stopped)
             "extension_disable" -> disable(args)
             else -> null
@@ -134,13 +134,12 @@ internal class OrionPythonCapabilityExecutor(
         }
     }
 
-    private fun enable(args: JSONObject, confirm: (String) -> Boolean): String {
+    private fun enable(args: JSONObject): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
             ?: return "error: extension draft not found or registry unreadable"
         val report = testReceipts.get(id, extension.sourceSha256)
             ?: return "error: no successful runtime sandbox test receipt matches the current source; run extension_test again"
-        if (!confirm("Enable generated extension $id after its verified sandbox test?")) return "Extension enable cancelled."
         return if (activateVerifiedVersion(extension, report, approved = true)) "Extension $id is enabled and its verified version is archived."
         else "error: extension promotion failed; verification or version history could not be committed"
     }
@@ -163,7 +162,7 @@ internal class OrionPythonCapabilityExecutor(
         }
     }
 
-    private fun rollbackExtension(args: JSONObject, confirm: (String) -> Boolean): String {
+    private fun rollbackExtension(args: JSONObject): String {
         val id = args.optString("id").trim()
         val active = try { extensionStore.enabled(id) } catch (_: Exception) { null }
             ?: return "error: extension is not currently enabled"
@@ -171,9 +170,6 @@ internal class OrionPythonCapabilityExecutor(
             ?: return "error: no previous activated version is archived"
         val receipt = testReceipts.get(id, previous.sourceSha256)
             ?: return "error: previous version has no passing sandbox receipt for its exact source; rollback refused"
-        if (!confirm("Roll back extension $id to verified version ${previous.version} (${previous.sourceSha256.take(12)})?")) {
-            return "Extension rollback cancelled."
-        }
         if (!versionHistory.record(active.copy(enabled = true, verified = true))) {
             return "error: could not preserve the current version before rollback"
         }

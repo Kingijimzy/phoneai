@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 internal enum class ToolMode { ALLOW, ASK, DENY }
 
-/** Pure allow / ask / deny rules, so autonomy levels are unit-testable. */
+/** Default-ALLOW tool permissions with optional explicit DENY; legacy ASK values resolve to ALLOW. */
 internal object ToolPermissionPolicy {
     /** Tools Orion always needs to talk to the user; they can never be denied. */
     val alwaysAllowed = setOf("ask_user", "wait", "time")
@@ -13,21 +13,24 @@ internal object ToolPermissionPolicy {
     val levels = listOf("careful", "balanced", "autonomous", "read_only")
 
     fun levelLabel(level: String) = when (level) {
-        "careful" -> "Careful: ask before every action that changes something"
-        "autonomous" -> "Autonomous: act without asking (safety confirmations still apply)"
+        "careful" -> "Careful: default ALLOW; use explicit DENY for tools you want disabled"
+        "autonomous" -> "Autonomous: act without asking; only restart, shutdown and Wi-Fi toggles require confirmation"
         "read_only" -> "Read-only: look and answer, never change anything"
         else -> "Balanced: default behaviour"
     }
 
     /** Builds the per-tool map for a preset level from the real registry access classes. */
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = when (level) {
-        "careful" -> tools.filter { it.access == ToolAccess.WRITE && it.name !in alwaysAllowed }.associate { it.name to ToolMode.ASK }
+        "careful" -> emptyMap()
         "read_only" -> tools.filter { it.access == ToolAccess.WRITE && it.name !in alwaysAllowed }.associate { it.name to ToolMode.DENY }
         else -> emptyMap()
     }
 
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode =
-        if (tool in alwaysAllowed) ToolMode.ALLOW else map[tool] ?: ToolMode.ALLOW
+        if (tool in alwaysAllowed) ToolMode.ALLOW else when (map[tool]) {
+            ToolMode.DENY -> ToolMode.DENY
+            else -> ToolMode.ALLOW
+        }
 
     /** Apply user overrides after the selected preset; explicit ALLOW is a real override too. */
     fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> {
@@ -38,7 +41,7 @@ internal object ToolPermissionPolicy {
     fun serializeOverrides(map: Map<String, ToolMode>): String =
         JSONObject().also { o -> map.forEach { (k, v) -> if (k !in alwaysAllowed) o.put(k, v.name) } }.toString()
 
-    fun next(m: ToolMode): ToolMode = when (m) { ToolMode.ALLOW -> ToolMode.ASK; ToolMode.ASK -> ToolMode.DENY; ToolMode.DENY -> ToolMode.ALLOW }
+    fun next(m: ToolMode): ToolMode = if (m == ToolMode.DENY) ToolMode.ALLOW else ToolMode.DENY
 
     fun serialize(map: Map<String, ToolMode>): String =
         JSONObject().also { o -> map.filterValues { it != ToolMode.ALLOW }.forEach { (k, v) -> o.put(k, v.name) } }.toString()

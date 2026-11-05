@@ -31,7 +31,9 @@ internal object OrionEvidenceLedger {
         val finishedAt: Long,
         val argsFingerprint: String,
         val summary: String,
-        val redactedArgs: String = ""
+        val redactedArgs: String = "",
+        /** One-way repair-plan identity only; never contains action arguments. */
+        val planDigest: String = ""
     )
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
@@ -62,6 +64,10 @@ internal object OrionEvidenceLedger {
         else -> Outcome.EXECUTED_UNVERIFIED
     }
 
+    private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean =
+        tool in setOf("shell", "termux_command", "telegram_send", "sms", "whatsapp_send", "signal_send", "discord_send") ||
+            (tool == "mcp_call" && McpConnector.scopeForTool(args.optString("name")) == "communication")
+
     /** One durable event per dispatch, with no raw arguments or private tool output persisted. */
     fun recordDispatch(
         context: Context,
@@ -72,7 +78,7 @@ internal object OrionEvidenceLedger {
         startedAt: Long,
         result: String,
         trustedVerification: Boolean = false
-    ): Boolean = append(context, JSONObject()
+    ): Boolean = if (isNonLoggedAction(tool, args)) true else append(context, JSONObject()
         .put("id", digest("$startedAt|$tool|$taskId|$result").take(24))
         .put("taskId", safeTaskId(taskId))
         .put("backend", backend.take(32))
@@ -80,8 +86,6 @@ internal object OrionEvidenceLedger {
         .put("outcome", outcome(result, trustedVerification).name)
         .put("startedAt", startedAt)
         .put("finishedAt", System.currentTimeMillis())
-        .put("argsFingerprint", digest(args.toString()))
-        .put("redactedArgs", AgentPrivacyFilter.safeArguments(args))
         .put("summary", safeSummary(tool, result))
     )
 
@@ -106,14 +110,13 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.CONTEXT_RETRIEVED.name)
             .put("startedAt", now)
             .put("finishedAt", now)
-            .put("argsFingerprint", digest(objective))
             .put("summary", "Objective-scoped memory context retrieved; source=$source; chars=$retrievedChars.")
         )
     }
 
     /** Records policy/capability denials that happen before the backend is entered. */
     fun recordBlocked(context: Context, taskId: String, tool: String, category: String, args: JSONObject = JSONObject()): Boolean =
-        append(context, JSONObject()
+        if (isNonLoggedAction(tool, args)) true else append(context, JSONObject()
             .put("id", digest(System.currentTimeMillis().toString() + "|denied|" + tool + "|" + safeTaskId(taskId)).take(24))
             .put("taskId", safeTaskId(taskId))
             .put("backend", "policy")
@@ -121,7 +124,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.DENIED.name)
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
-            .put("argsFingerprint", digest(args.toString()))
             .put("summary", "Dispatch denied before execution: " + category.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48))
         )
     /**
@@ -157,8 +159,8 @@ internal object OrionEvidenceLedger {
             })
             .put("startedAt", now)
             .put("finishedAt", now)
-            .put("argsFingerprint", planDigest.lowercase())
             .put("summary", result)
+            .put("planDigest", planDigest.lowercase())
         )
     }
 
@@ -172,7 +174,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.RECOVERY.name)
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
-            .put("argsFingerprint", "")
             .put("summary", "Recovery selected: " + strategy.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48) + "; reason retained only in task context.")
         )
 
@@ -206,6 +207,33 @@ internal object OrionEvidenceLedger {
         }
     }
 
+    /** One-time migration: remove argument payloads/fingerprints written by older builds. */
+    fun purgeArgumentFields(context: Context): Boolean = synchronized(lock) {
+        val atomic = AtomicFile(file(context))
+        val root = try { atomic.openRead().bufferedReader().use { JSONObject(it.readText()) } }
+        catch (_: java.io.FileNotFoundException) { return@synchronized true }
+        catch (_: Exception) { return@synchronized false }
+        val events = root.optJSONArray("events") ?: return@synchronized true
+        var changed = false
+        for (i in 0 until events.length()) {
+            val event = events.optJSONObject(i) ?: continue
+            if (event.has("argsFingerprint")) { event.remove("argsFingerprint"); changed = true }
+            if (event.has("redactedArgs")) { event.remove("redactedArgs"); changed = true }
+        }
+        if (!changed) return@synchronized true
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomic.startWrite()
+            stream.write(root.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+            true
+        } catch (_: Exception) {
+            val failed = stream
+            if (failed != null) runCatching { atomic.failWrite(failed) }
+            false
+        }
+    }
+
     fun events(context: Context, taskId: String? = null): List<Event> = synchronized(lock) {
         val root = try { AtomicFile(file(context)).openRead().bufferedReader().use { JSONObject(it.readText()) } }
         catch (_: Exception) { return@synchronized emptyList() }
@@ -218,7 +246,7 @@ internal object OrionEvidenceLedger {
             val outcome = runCatching { Outcome.valueOf(row.optString("outcome")) }.getOrNull() ?: return@mapNotNull null
             Event(row.optString("id"), id, row.optString("backend"), row.optString("tool"),
                 outcome, row.optLong("startedAt"), row.optLong("finishedAt"),
-                row.optString("argsFingerprint"), row.optString("summary"), row.optString("redactedArgs"))
+                "", row.optString("summary"), "", row.optString("planDigest"))
         }
     }
 

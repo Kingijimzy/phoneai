@@ -79,37 +79,18 @@ class OrionRepairLifecycleTest {
             .any { it.tool == "repair_verified" && it.outcome == OrionEvidenceLedger.Outcome.VERIFIED })
     }
 
-    @Test fun ownerApprovalResumeReusesSandboxReceiptAfterProcessLikeReentry() {
+    @Test fun repairRunsImmediatelyAfterSandboxWithoutAnOwnerApprovalStage() {
         val plan = proposal(OrionRepairRisk.DATA_AFFECTING, approval = true)
-        val digest = OrionRepairLifecycle.expectedPlanDigest(
-            sessionId, "task-repair-test", finding(), plan
-        )
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
         var sandboxCalls = 0
         var applyCalls = 0
-        val waiting = execute(
-            proposal = plan,
-            sandbox = { sandboxCalls++; true },
-            apply = { applyCalls++; "should-wait" }
-        )
-        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, waiting.result)
-        assertEquals(1, sandboxCalls)
-        assertEquals(0, applyCalls)
-
-        val resumed = execute(
-            proposal = plan,
-            ownerApprovalDigest = digest,
-            sandbox = { sandboxCalls++; true },
-            apply = { applyCalls++; "approved-receipt" }
-        )
-        assertEquals(OrionRepairLifecycle.Result.VERIFIED, resumed.result)
-        assertEquals(1, sandboxCalls)
-        assertEquals(1, applyCalls)
-        val stages = OrionEvidenceLedger.events(context, "task-repair-test")
-            .filter { it.argsFingerprint == digest && it.backend == "repair_lifecycle" }
-            .map { it.tool }
+        val result = execute(proposal = plan, sandbox = { sandboxCalls++; true }, apply = { applyCalls++; "repair-receipt" })
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
+        assertEquals(1, sandboxCalls); assertEquals(1, applyCalls)
+        val stages = OrionEvidenceLedger.events(context, "task-repair-test").filter { it.planDigest == digest && it.backend == "repair_lifecycle" }.map { it.tool }
         assertEquals(1, stages.count { it == "repair_proposed" })
         assertEquals(1, stages.count { it == "repair_sandbox_passed" })
-        assertEquals(1, stages.count { it == "repair_owner_approved" })
+        assertEquals(0, stages.count { it == "repair_owner_approved" })
         assertEquals(1, stages.count { it == "repair_verified" })
     }
 
@@ -125,64 +106,43 @@ class OrionRepairLifecycleTest {
         assertEquals(1, applied)
     }
 
-    @Test fun securitySensitiveSandboxRepairStillRequiresOwnerApproval() {
-        val securityProposal = proposal(OrionRepairRisk.SECURITY_SENSITIVE, approval = false)
+    @Test fun testedSecuritySensitiveRepairDoesNotRequestASecondApproval() {
+        val plan = proposal(OrionRepairRisk.SECURITY_SENSITIVE, approval = true)
         var applied = false
-        val result = execute(
-            proposal = securityProposal,
-            apply = { applied = true; "receipt" },
-            executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX
-        )
-        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
+        val result = execute(proposal = plan, apply = { applied = true; "receipt" }, executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX)
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
+        assertTrue(applied)
+    }
+
+    @Test fun suspiciousRepairIsBlockedRatherThanPromptingForApproval() {
+        val plan = proposal().copy(suspicious = true)
+        var applied = false
+        val result = execute(proposal = plan, apply = { applied = true; "receipt" }, executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX)
+        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, result.result)
         assertFalse(applied)
     }
 
-    @Test fun suspiciousSandboxProposalRequiresOwnerApproval() {
-        val suspiciousProposal = proposal().copy(suspicious = true)
+    @Test fun testedRollbackBackedExternalRepairRunsWithoutApproval() {
+        val plan = proposal(OrionRepairRisk.EXTERNAL_SIDE_EFFECT, approval = true)
         var applied = false
-        val result = execute(
-            proposal = suspiciousProposal,
-            apply = { applied = true; "receipt" },
-            executionBoundary = OrionRepairExecutionBoundary.ISOLATED_SANDBOX
-        )
-        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
-        assertFalse(applied)
+        val result = execute(proposal = plan, apply = { applied = true; "receipt" }, executionBoundary = OrionRepairExecutionBoundary.EXTERNAL)
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
+        assertTrue(applied)
     }
 
-    @Test fun externalBoundaryNeverAutoAppliesWithoutOwnerApproval() {
-        val externalProposal = proposal(OrionRepairRisk.REVERSIBLE, approval = false)
-        var applied = false
-        val result = execute(
-            proposal = externalProposal,
-            apply = { applied = true; "receipt" },
-            executionBoundary = OrionRepairExecutionBoundary.EXTERNAL
-        )
-        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
-        assertFalse(applied)
-    }
-
-    @Test fun consequentialRepairWaitsForOwnerAndNeverCallsApplyEarly() {
+    @Test fun consequentialRepairRunsAfterSandboxAndRollbackChecks() {
         var applied = 0
-        val result = execute(
-            proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
-            ownerApprovalDigest = null,
-            apply = { applied++; "receipt" }
-        )
-        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
-        assertEquals(0, applied)
-        assertTrue(OrionEvidenceLedger.events(context, "task-repair-test")
-            .any { it.tool == "repair_awaiting_owner" })
+        val result = execute(proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true), ownerApprovalDigest = null, apply = { applied++; "receipt" })
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
+        assertEquals(1, applied)
+        assertFalse(OrionEvidenceLedger.events(context, "task-repair-test").any { it.tool == "repair_awaiting_owner" })
     }
 
-    @Test fun approvalForAnotherDigestCannotAuthorizeThisPlan() {
+    @Test fun legacyApprovalDigestDoesNotCreateAnExtraApprovalGate() {
         var applied = false
-        val result = execute(
-            proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true),
-            ownerApprovalDigest = "b".repeat(64),
-            apply = { applied = true; "receipt" }
-        )
-        assertEquals(OrionRepairLifecycle.Result.AWAITING_OWNER, result.result)
-        assertFalse(applied)
+        val result = execute(proposal = proposal(OrionRepairRisk.DATA_AFFECTING, true), ownerApprovalDigest = "b".repeat(64), apply = { applied = true; "receipt" })
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, result.result)
+        assertTrue(applied)
     }
 
     @Test fun failedSandboxPreventsApplication() {
@@ -315,51 +275,29 @@ class OrionRepairLifecycleTest {
         assertEquals(0, callbacks)
     }
 
-    @Test fun centralBrainRequestsOwnerOnlyAfterSandboxForDangerousRepairAndResumesWithoutRetesting() {
+    @Test fun centralBrainRunsTestedRepairWithoutRequestingAnotherApproval() {
         val plan = proposal(OrionRepairRisk.SECURITY_SENSITIVE, approval = true)
         val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
-        var sandboxCalls = 0
-        var approvalCalls = 0
-        var applyCalls = 0
+        var sandboxCalls = 0; var applyCalls = 0
         val receipt = OrionCentralBrain.executeRepairProposal(
             context, sessionId, "task-repair-test", finding(), plan, digest,
-            { prompt ->
-                approvalCalls++
-                assertTrue(prompt.contains("SECURITY_SENSITIVE"))
-                assertTrue(prompt.contains("safely tested"))
-                assertEquals(1, sandboxCalls)
-                true
-            },
-            { sandboxCalls++; true },
-            { applyCalls++; "approved-repair-receipt" },
-            { true }, { true }, { true }
+            { sandboxCalls++; true }, { applyCalls++; "repair-receipt" }, { true }, { true }, { true }
         )
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, receipt.result)
-        assertEquals(1, sandboxCalls)
-        assertEquals(1, approvalCalls)
-        assertEquals(1, applyCalls)
+        assertEquals(1, sandboxCalls); assertEquals(1, applyCalls)
     }
 
-    @Test fun centralBrainPersistsOwnerRejectionAndNeverApplies() {
+    @Test fun centralBrainDoesNotCreateASeparateOwnerApprovalGateForRepairs() {
         val plan = proposal(OrionRepairRisk.EXTERNAL_SIDE_EFFECT, approval = true)
-        val digest = OrionRepairLifecycle.expectedPlanDigest(
-            sessionId, "task-repair-test", finding(), plan, OrionRepairExecutionBoundary.EXTERNAL
-        )
-        var applyCalls = 0
-        val rejected = OrionCentralBrain.executeRepairProposal(
+        val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan, OrionRepairExecutionBoundary.EXTERNAL)
+        var applied = 0
+        val receipt = OrionCentralBrain.executeRepairProposal(
             context, sessionId, "task-repair-test", finding(), plan, digest,
-            { false }, { true }, { applyCalls++; "must-not-run" }, { true }, { true }, { true },
+            { true }, { applied++; "repair-receipt" }, { true }, { true }, { true },
             OrionRepairExecutionBoundary.EXTERNAL
         )
-        assertEquals(OrionRepairLifecycle.Result.OWNER_REJECTED, rejected.result)
-        assertEquals(0, applyCalls)
-        val replay = OrionRepairLifecycle.execute(
-            context, sessionId, "task-repair-test", finding(), plan, digest, digest,
-            { true }, { applyCalls++; "replay" }, { true }, { true }, { true },
-            OrionRepairExecutionBoundary.EXTERNAL
-        )
-        assertEquals(OrionRepairLifecycle.Result.POLICY_BLOCKED, replay.result)
-        assertEquals(0, applyCalls)
+        assertEquals(OrionRepairLifecycle.Result.VERIFIED, receipt.result)
+        assertEquals(1, applied)
     }
 
     @Test fun centralBrainRepairContextIncludesPersistedStagesWithoutApprovalDigest() {
@@ -369,7 +307,7 @@ class OrionRepairLifecycleTest {
             "Sandbox passed; explicit owner approval is required before application."
         ))
         val block = OrionRepairLifecycle.promptBlock(context)
-        assertTrue(block.contains("PERSISTED REPAIR / OWNER-APPROVAL LIFECYCLE"))
+        assertTrue(block.contains("PERSISTED REPAIR LIFECYCLE"))
         assertTrue(block.contains("AWAITING_OWNER"))
         assertFalse(block.contains(digest))
         assertFalse(block.contains("task-repair-test"))
@@ -379,10 +317,8 @@ class OrionRepairLifecycleTest {
         val plan = proposal()
         val digest = OrionRepairLifecycle.expectedPlanDigest(sessionId, "task-repair-test", finding(), plan)
         var applied = 0
-        var approvalPrompts = 0
         val receipt = OrionCentralBrain.executeRepairProposal(
             context, sessionId, "task-repair-test", finding(), plan, digest,
-            { approvalPrompts++; true },
             { true }, { applied++; "central-brain-receipt" }, { true }, { true }, { true }
         )
         assertEquals(OrionRepairLifecycle.Result.VERIFIED, receipt.result)

@@ -47,7 +47,7 @@ class AgentControlActivity : Activity() {
 
         section("APPROVAL MODE")
         modeStatus = addText("", 14f, Theme.TEXT, true, 5)
-        addText("Plan = suggest only. Ask = approve every action (default). Allowlist = run only listed tools. Trusted session = timed, logged trust for selected enabled packs.", 12f, Theme.MUTED, false, 4)
+        addText("Plan = suggest actions without executing. Allow = execute immediately, except restart, shutdown and Wi-Fi toggles which ask once. Capability packs and Android permissions still apply.", 12f, Theme.MUTED, false, 4)
         addButton("Choose approval mode") { chooseMode() }
         addButton("Start trusted session (15–120 min)") { startTrusted() }
         addButton("STOP / LOCK TRUST NOW", true) {
@@ -219,7 +219,7 @@ class AgentControlActivity : Activity() {
     private fun chooseMode() {
         val modes = AgentPolicy.Mode.values()
         AlertDialog.Builder(this).setTitle("Approval mode")
-            .setItems(modes.map { "${it.label}${if (it == AgentPolicy.Mode.ASK) " · default" else ""}" }.toTypedArray()) { _, which ->
+            .setItems(modes.map { it.label }.toTypedArray()) { _, which ->
                 AgentPolicy.setMode(this, modes[which])
                 AgentPolicy.log(this, "policy", "mode-change", true, "mode set to ${modes[which].name}")
                 refresh()
@@ -240,7 +240,6 @@ class AgentControlActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("Session duration")
                     .setItems(arrayOf("15 minutes", "30 minutes", "60 minutes", "120 minutes")) { _, idx ->
                         AgentPolicy.startTrustedSession(this, minutes[idx], enabled.filterIndexed { i, _ -> selected[i] }.map { it.id }.toSet())
-                        AgentPolicy.setMode(this, AgentPolicy.Mode.TRUSTED)
                         refresh()
                     }.show()
             }.setNegativeButton("CANCEL", null).show()
@@ -553,7 +552,7 @@ class AgentControlActivity : Activity() {
     }
 
     private fun refresh() {
-        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Ask\nTrusted until: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
+        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Allow\nTrusted pack session: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
         packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
         val installed = termuxInstalled()

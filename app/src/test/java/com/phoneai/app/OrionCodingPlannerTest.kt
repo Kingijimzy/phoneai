@@ -59,13 +59,8 @@ class OrionCodingPlannerTest {
         assertTrue(plan(file("main.py")).startsWith("CODING PLAN SAVED"))
         assertTrue(workspace.write("projects/demo/main.py", "print(42)").startsWith("saved "))
         assertTrue(OrionCodingPlanner.noteFileWritten(context, "projects/demo/main.py"))
-        var approvalRequested = false
-        val result = OrionCodingPlanner.verify(context, "demo", runTests = true) {
-            approvalRequested = true
-            true
-        }
+        val result = OrionCodingPlanner.verify(context, "demo", runTests = true)
         assertTrue(result.startsWith("TESTS_NOT_PLANNED:"))
-        assertFalse(approvalRequested)
     }
 
     @Test fun missingExitStatusIsUnknownRatherThanSuccess() {

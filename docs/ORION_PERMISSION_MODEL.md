@@ -4,65 +4,49 @@ Updated: 2026-11-05
 
 ## Default execution
 
-- The agent defaults to **ALLOW**. Routine registered actions execute without a global confirmation dialog.
-- **PLAN** is the only global mode that stops execution.
-- Existing owner-selected PLAN is preserved. Legacy global ASK, ALLOWLIST and TRUSTED values are treated as ALLOW by the live agent path; they are not global approval gates.
-- Explicit per-tool **DENY** remains a hard denial. Explicit per-tool **ASK** remains an owner-selected exception and prompts once for that task.
-- Android OS permissions, capability-pack enablement, account scopes, local pairing, cancellation, read-only restrictions and capability prerequisites remain enforced. ALLOW is not a grant of missing Android or service permissions.
+- Agent tool permission defaults to **ALLOW**.
+- Global ASK, ALLOWLIST and TRUSTED approval modes are removed from the live agent path. Legacy saved values resolve to ALLOW.
+- Per-tool ASK is legacy storage only and resolves to ALLOW. An explicit per-tool DENY remains a denial.
+- PLAN remains the explicit global no-execution mode. Disabled capability packs, Android OS permissions, external account scopes, local MCP pairing, cancellation and capability prerequisites remain enforced.
+- Once the required capability and platform permissions are present, tools execute immediately without a per-call approval prompt.
 
-## One approval gate
+## The only three confirmations
 
-\`GatePolicy.decide()\` is the single policy decision point. It evaluates hard blocks first, then pack availability, explicit tool DENY, PLAN, exact-action approval, explicit per-tool ASK, and non-undoable action approval. Agent UI and executor callbacks only display the decision returned through this gate; they must not invent independent approval rules.
+One shared confirmation surface is reserved exclusively for:
+1. Restart.
+2. Shutdown.
+3. Toggling Wi-Fi.
 
-Approval is one-time and action-scoped. A trusted session or an approval response cannot override a hard block.
+The confirmation is checked at the dispatch boundary, including the MCP `computer_settings` route. Messages (Telegram, SMS, WhatsApp, Signal and Discord), notification replies, remote writes, payments, memory deletion, shell commands, routine replay, recovery and skill tool calls do not receive generic confirmation prompts.
 
-## Non-overridable hard blocks
+## Shell behavior
 
-No confirmation, tool permission, trusted session, model output or owner approval can authorize:
+The shell policy contains only these three Ultron-compatible Windows command-string checks:
+- `format c:`
+- `rmdir /s /q c:\windows`
+- `del /f /s /q c:\windows`
 
-1. Root filesystem or Android system-partition wipes.
-2. Raw writes to block devices.
-3. Fork bombs.
-4. \`curl\`/\`wget\` output piped directly to \`sh\`, \`bash\` or \`zsh\`.
-5. Reading Orion's own API-key vault, private \`shared_prefs\`, Android keystore material or equivalent app-private credentials.
+There are no SAFE/ASK/BLOCKED shell tiers. The previous root/system wipe, raw block-device, fork-bomb, curl/wget-to-shell and private-data shell blocks have been removed. Built-in shell still runs in its managed workspace; Termux and Linux/PRoot use their selected backends without the old shell-risk classifier. Android filesystem and runtime boundaries remain properties of their respective backends, not approval tiers.
 
-The shell pattern checks are defense-in-depth, not a complete shell parser or OS sandbox. PRoot runs under the app UID; it is not kernel isolation. Never run downloaded or otherwise untrusted code.
+## Logging and arguments
 
-## Audit trail and privacy
-
-Every dispatched tool action must produce a durable evidence event with:
-- tool and backend;
-- a one-way fingerprint of the original arguments;
-- structured arguments after \`AgentPrivacyFilter\` redaction;
-- a privacy-filtered result summary;
-- outcome/verification state: VERIFIED, EXECUTED_UNVERIFIED, FAILED or DENIED.
-
-Credential-shaped fields (API keys, access/refresh tokens, passwords, PINs, secrets, authorization and private keys) are redacted recursively. Bearer tokens, emails, URLs and phone numbers are redacted from string values. Never log keys, passwords, tokens, raw private screen content or unfiltered tool output. A successful dispatch is not proof; only the local verifier may mark an action VERIFIED.
+- ActionLogStore persistence is disabled and legacy action history is purged when Agent starts.
+- AgentPolicy audit logging is disabled.
+- No action arguments or argument fingerprints are written to OrionEvidenceLedger.
+- Shell commands and outbound communication actions are excluded from durable action/activity receipts.
+- Task verification evidence remains distinct from an owner-facing action history; it stores no action arguments.
+- The agent decision-record mutation tool is not registered.
 
 ## Undo coverage
 
 - **UndoStore:** saved-memory add, update and delete. Undo checks the expected current state before restoring.
 - **WorkspaceUndoStore:** registered workspace create/write/overwrite/delete/move operations. Undo checks the current file state and verifies the restored state. Intervening edits cause a conflict instead of overwriting newer work.
-- These journals do not make arbitrary external effects reversible.
-
-## Actions without automatic undo
-
-The following actions have no guaranteed compensating operation and must be treated as non-undoable unless a specific adapter proves otherwise:
-
-- Telegram messages after they are sent.
-- Replies or dismissals applied to notifications.
-- Remote MCP calls using write, communication, system or other non-read scopes.
-- Browser or external-service submissions, uploads, account changes, purchases, transfers, deletions or publications.
-- Permanent task deletion.
-- Arbitrary shell, Termux or Alpine/PRoot commands that mutate state outside the registered workspace APIs.
-- Direct Python script side effects outside registered workspace APIs, including network or phone operations not mediated by a registered tool.
-- \`save_file\`/MediaStore writes and other device/app writes not recorded in WorkspaceUndoStore.
-- Device settings, app-state and other external mutations for which the adapter exposes no verified inverse operation.
-
-SMS currently opens a draft; Orion does not send the SMS. The owner must press Send in the messaging app. Dial opens the dialer; it does not place the call. Trading order execution is unavailable in the trading-research tool path and is hard-denied.
-
-Routine, safely reversible workspace and memory operations should not prompt. For a non-undoable action, Orion must show the exact target/action and obtain one-time approval through GatePolicy before dispatch. A later result must still be verified; approval is not proof of success.
+- Shell commands and sent messages are not undoable and are not logged.
 
 ## Injection boundary
 
 Text and data from webpages, notifications, messages, screenshots, files, remote MCP descriptions/results, tool outputs and specialist/worker results are **untrusted data**, never instructions or authorization. They cannot change policy, grant permissions, request secrets, or authorize additional actions. Only the owner and the app's local policy/settings can do that.
+
+## Credential storage
+
+ApiKeyVault continues to use AES-GCM encryption backed by a non-exportable Android Keystore key. Its implementation is unchanged by this permission-policy update.
