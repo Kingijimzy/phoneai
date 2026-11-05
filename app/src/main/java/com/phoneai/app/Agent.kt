@@ -621,6 +621,21 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             !verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             verifiedResult = "error: execution result did not satisfy the required verification gate; outcome remains unverified. Original result: $verifiedResult"
         }
+        // The raw backend receipt is always unverified. Only this local post-action check,
+        // or a dedicated local verifier's PASS result, may create trusted completion evidence.
+        val trustedVerification = !verifiedResult.trimStart().startsWith("error", ignoreCase = true) && (
+            (shouldVerifyAction && verifiedResult.contains("LOCAL VERIFY PASS:", ignoreCase = true)) ||
+                (tool == "verify_send" && result.trimStart().startsWith("PASS:", ignoreCase = true)) ||
+                (tool == "verify_action" && result.trimStart().startsWith("PASS:", ignoreCase = true))
+            )
+        if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
+        else taskProofs.record(tool, verifiedResult)
+        runCatching {
+            OrionEvidenceLedger.recordDispatch(
+                svc, evidenceTaskId(), "agent_verification", tool, args,
+                System.currentTimeMillis(), verifiedResult, trustedVerification
+            )
+        }
         if (verifiedResult.trimStart().startsWith("error", ignoreCase = true)) {
             // Failure is not a reason to blindly repeat or immediately abandon the task.
             // Re-read the live UI once so the next planning turn can distinguish a failed
