@@ -207,8 +207,11 @@ class OwnerControlCenterActivity : Activity() {
     /** One tap applies the owner's routine-autonomy defaults immediately; no redundant setup dialog. */
     private fun enableJarvisPreset() {
         val cfg = OrionAutonomySettings.read(this)
-        OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
+        OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT, maxToolSteps = 40, maxRetries = 4))
         ToolPermissions.applyJarvisAutonomy(this)
+        // One explicit Jarvis opt-in enables all implemented packs for automatic discovery.
+        // Missing Android permissions, connector authentication and external app setup remain real prerequisites.
+        AgentPolicy.enableAllImplementedPacks(this)
         OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
             autoActivateVerifiedExtensions = true,
             pythonProfile = OrionPythonProfile.DEVELOPER
