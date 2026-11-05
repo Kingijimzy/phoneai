@@ -14,54 +14,49 @@ package com.phoneai.app
  */
 internal object GatePolicy {
     enum class Verdict { ALLOW, DENY, PLAN_ONLY, ASK_TOOL, NEED_APPROVAL }
-
     data class Input(
-        val pack: String,
-        val packOn: Boolean,
-        val tool: String,
-        val mode: AgentPolicy.Mode,
-        val toolMode: ToolMode,
-        val autonomous: Boolean,
-        val dangerous: Boolean,
-        val approvedThisAction: Boolean,
-        val trustedForPack: Boolean,
-        val allowlisted: Boolean,
-        val askedThisTask: Boolean
+        val pack: String, val packOn: Boolean, val tool: String,
+        val mode: AgentPolicy.Mode, val toolMode: ToolMode, val autonomous: Boolean,
+        val dangerous: Boolean, val approvedThisAction: Boolean,
+        val trustedForPack: Boolean, val allowlisted: Boolean, val askedThisTask: Boolean,
+        val hardBlockReason: String? = null
     )
-
     data class Result(val verdict: Verdict, val reason: String)
 
+    /** Non-overridable hard blocks. No saved grant or approval response can change these results. */
+    fun hardBlockReason(tool: String, args: org.json.JSONObject): String? {
+        val raw = args.toString()
+        val command = when (tool) {
+            "shell", "termux_command" -> args.optString("command")
+            else -> ""
+        }
+        if (command.isNotBlank() && ShellPolicy.classify(command) == ShellRisk.BLOCKED)
+            return "Hard block: root/system wipe, raw block-device write, or fork bomb."
+        val forms = listOf(raw, raw.replace("\"", "").replace("'", "").replace("\\", ""))
+        if (forms.any { Regex("""(?is)\b(?:curl|wget)\b[^;&|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b""").containsMatchIn(it) })
+            return "Hard block: piping remote internet content directly into a shell is forbidden."
+        if (tool == "vault_get" || forms.any {
+                Regex("""(?i)(?:ApiKeyVault|api[_-]?key[_-]?vault|shared_prefs|AndroidKeyStore|/keystore/|/data/(?:user/0|data)/com\.phoneai\.app/(?:shared_prefs|files/.+vault))""").containsMatchIn(it)
+            })
+            return "Hard block: Orion's own keys, private preferences, and keystore material are not readable by agent tools."
+        if (tool in setOf("python_exec", "shell", "termux_command") &&
+            Regex("""(?is)(?:/dev/block/|/dev/(?:mmcblk\d+|sd[a-z]|nvme\d+n\d+|dm-\d+)).{0,160}(?:write|wb|truncate|dd)|(?:write|wb|truncate|dd).{0,160}/dev/(?:block/|mmcblk\d+|sd[a-z]|nvme\d+n\d+|dm-\d+)""").containsMatchIn(raw))
+            return "Hard block: writing raw block devices is forbidden."
+        return null
+    }
+
+    /** Only decision point: hard block → pack → DENY → PLAN → exact approval → explicit tool ASK → non-undoable approval → ALLOW. */
     fun decide(i: Input): Result {
+        i.hardBlockReason?.let { return Result(Verdict.DENY, it) }
         if (!i.packOn) return Result(Verdict.DENY, AgentPolicy.packOffMessage(i.pack))
         if (i.pack == "trading_research" && i.tool.contains("order", true))
             return Result(Verdict.DENY, "Trading research is read-only; order execution is unavailable.")
         if (i.toolMode == ToolMode.DENY) return Result(Verdict.DENY, ToolPermissionPolicy.denyMessage(i.tool))
         if (i.mode == AgentPolicy.Mode.PLAN) return Result(Verdict.PLAN_ONLY, "Plan mode never executes tools.")
-        // Owner-authorized workspace shell/file/project actions bypass ASK and consequential prompts.
-        // Explicit DENY, a disabled pack, and Plan mode remain authoritative.
-        val ownerWorkspaceAction = i.pack == "workspace_shell" &&
-            (i.tool == "shell" || i.tool.startsWith("workspace_") || i.tool.startsWith("project_"))
-        if (ownerWorkspaceAction) return Result(Verdict.ALLOW, "Owner-authorized workspace execution; no per-action approval.")
-        if (i.approvedThisAction) return Result(Verdict.ALLOW, "User approved this action.")
-        if (i.toolMode == ToolMode.ASK && !i.autonomous && !i.askedThisTask)
-            return Result(Verdict.ASK_TOOL, "The user set '${i.tool}' to ask each task.")
-        if (i.dangerous && !i.trustedForPack) return Result(Verdict.NEED_APPROVAL, "Consequential action needs clear confirmation.")
-        // The per-tool setting is the user's explicit authorization. Once a tool is ALLOW,
-        // do not make the user approve it again through the unrelated global ASK/ALLOWLIST
-        // mode. A tool set to ASK asks once per task; consequential actions still require
-        // the dedicated confirmation above unless covered by a trusted session.
-        if (i.toolMode == ToolMode.ALLOW) return Result(Verdict.ALLOW, "Tool is enabled in Tool permissions.")
-        if (i.toolMode == ToolMode.ASK && i.askedThisTask) return Result(Verdict.ALLOW, "Tool was approved for this task.")
-        // Autonomous mode only relaxes routine tool prompts; it never bypasses consequential-action gates.
-        if (i.autonomous && !i.dangerous) return Result(Verdict.ALLOW, "Autonomous mode: routine task step allowed.")
-        return when (i.mode) {
-            AgentPolicy.Mode.PLAN -> Result(Verdict.PLAN_ONLY, "Plan mode never executes tools.")
-            AgentPolicy.Mode.ASK -> Result(Verdict.NEED_APPROVAL, "Ask mode requires approval before each action.")
-            AgentPolicy.Mode.ALLOWLIST ->
-                if (i.allowlisted) Result(Verdict.ALLOW, "Tool is allowlisted.") else Result(Verdict.NEED_APPROVAL, "Tool is not allowlisted.")
-            AgentPolicy.Mode.TRUSTED ->
-                if (i.trustedForPack) Result(Verdict.ALLOW, "Timed trust covers this enabled pack.")
-                else Result(Verdict.NEED_APPROVAL, "This pack is not covered by the timed trust session.")
-        }
+        if (i.approvedThisAction) return Result(Verdict.ALLOW, "Owner approved this exact action.")
+        if (i.toolMode == ToolMode.ASK && !i.askedThisTask && !i.autonomous)
+            return Result(Verdict.ASK_TOOL, "An explicit per-tool ASK setting requires approval.")
+        if (i.dangerous) return Result(Verdict.NEED_APPROVAL, "This action is not safely reversible and needs one-time owner approval.")
+        return Result(Verdict.ALLOW, if (i.autonomous) "Autonomous execution: routine action allowed." else "Default ALLOW: routine action allowed.")
     }
 }
