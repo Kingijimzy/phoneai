@@ -251,7 +251,8 @@ internal object OrionCodingPlanner {
             "Dependency order: " + (plan.optJSONArray("order")?.let { a -> (0 until a.length()).joinToString(" → ") { a.optString(it) } } ?: "unavailable") +
             "\nPending files: " + missing.joinToString().ifBlank { "none" } +
             "\nLast test command: ${plan.optString("test_command").ifBlank { "not run" }}\n" +
-            "Last test output: ${plan.optString("test_output").take(800).ifBlank { "not run" }}"
+            "Last test output: ${plan.optString("test_output").take(800).ifBlank { "not run" }}" +
+            "\nStructured diagnostics: ${plan.optString("diagnostics").take(1_200).ifBlank { "not available" }}"
     }
 
     fun verify(
@@ -363,6 +364,7 @@ internal object OrionCodingPlanner {
         val plan = root.optJSONObject(name) ?: return@synchronized "error: no coding plan exists for '$name'."
         val safeOutput = AgentPrivacyFilter.safeCommand(output).take(MAX_OUTPUT_CHARS)
         val passed = exitCode == 0 && !Regex("(?m)^FAILED\\b|^FAIL:").containsMatchIn(safeOutput)
+        val diagnostics = OrionCodingDiagnostics.render(OrionCodingDiagnostics.parse(safeOutput))
         val next = when {
             passed -> Status.COMPLETED
             plan.optInt("repair_attempts") >= MAX_REPAIR_ATTEMPTS -> Status.FAILED
@@ -372,11 +374,12 @@ internal object OrionCodingPlanner {
             .put("repair_active", false)
             .put("test_command", command.take(240))
             .put("test_output", safeOutput)
+            .put("diagnostics", diagnostics.take(1_200))
             .put("updated_at", System.currentTimeMillis())
         if (!persist(context, root)) return@synchronized "error: test result was observed but its durable receipt could not be saved."
         when (next) {
             Status.COMPLETED -> "VERIFIED: project '$name' passed its test command. Test output:\n$safeOutput"
-            Status.REPAIR_REQUIRED -> "REPAIR_REQUIRED: project '$name' tests failed (exit $exitCode). Repair attempt budget: ${plan.optInt("repair_attempts")}/$MAX_REPAIR_ATTEMPTS. Inspect the failure, change the relevant planned files, then run project_verify again. Do not repeat the same unchanged test."
+            Status.REPAIR_REQUIRED -> "REPAIR_REQUIRED: project '$name' tests failed (exit $exitCode). Repair attempt budget: ${plan.optInt("repair_attempts")}/$MAX_REPAIR_ATTEMPTS.\nACTIONABLE DIAGNOSTICS:\n$diagnostics\nRead the exact failing files, make a minimal targeted edit, then rerun project_verify. The planner verifies changed file hashes and will not rerun unchanged failing code."
             else -> "FAILED: project '$name' exhausted its $MAX_REPAIR_ATTEMPTS repair attempts. Test output:\n$safeOutput"
         }
     }
