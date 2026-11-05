@@ -5,6 +5,7 @@ import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.FileOutputStream
 
 /** A user-authored goal Orion may run by itself while the owner has AUTOPILOT and Proactive enabled. */
@@ -41,23 +42,31 @@ internal object AutonomyGoalPolicy {
 object AutonomyGoalStore {
     private const val FILE = "orion_autonomy_goals.json"
     private val lock = Any()
+    private data class LoadResult(val goals: List<AutonomyGoal>, val valid: Boolean)
     private fun atomic(c: Context) = AtomicFile(File(c.filesDir, FILE))
 
-    fun all(c: Context): List<AutonomyGoal> = synchronized(lock) {
-        try {
-            val f = atomic(c)
-            val json = f.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val a = JSONArray(json)
-            (0 until a.length()).map { i ->
-                val o = a.getJSONObject(i)
-                AutonomyGoal(
-                    o.optString("id", "g$i"), o.optString("prompt"),
-                    o.optInt("every", 120), o.optLong("last", 0L),
-                    o.optString("result"), o.optBoolean("enabled", true)
-                )
-            }.filter { it.prompt.isNotBlank() }
-        } catch (_: Exception) { emptyList() }
+    private fun load(c: Context): LoadResult = try {
+        val f = atomic(c)
+        val json = try {
+            f.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } catch (_: FileNotFoundException) {
+            return LoadResult(emptyList(), true)
+        }
+        val a = JSONArray(json)
+        LoadResult((0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            AutonomyGoal(
+                o.optString("id", "g$i"), o.optString("prompt"),
+                o.optInt("every", 120), o.optLong("last", 0L),
+                o.optString("result"), o.optBoolean("enabled", true)
+            )
+        }.filter { it.prompt.isNotBlank() }, true)
+    } catch (_: Exception) {
+        // Never replace a corrupt schedule with an apparently empty one.
+        LoadResult(emptyList(), false)
     }
+
+    fun all(c: Context): List<AutonomyGoal> = synchronized(lock) { load(c).goals }
 
     private fun save(c: Context, list: List<AutonomyGoal>): Boolean {
         val f = atomic(c)
@@ -84,7 +93,9 @@ object AutonomyGoalStore {
     fun add(c: Context, prompt: String, minutes: Int): String = synchronized(lock) {
         val clean = prompt.trim()
         AutonomyGoalPolicy.validate(clean, minutes)?.let { return@synchronized "error: $it" }
-        val list = all(c)
+        val loaded = load(c)
+        if (!loaded.valid) return@synchronized "error: scheduled goal storage is unreadable; existing data was preserved"
+        val list = loaded.goals
         if (list.size >= AutonomyGoalPolicy.MAX_GOALS) {
             return@synchronized "error: at most ${AutonomyGoalPolicy.MAX_GOALS} scheduled goals"
         }
@@ -96,14 +107,18 @@ object AutonomyGoalStore {
     }
 
     fun remove(c: Context, id: String): String = synchronized(lock) {
-        val list = all(c)
+        val loaded = load(c)
+        if (!loaded.valid) return@synchronized "error: scheduled goal storage is unreadable; existing data was preserved"
+        val list = loaded.goals
         if (list.none { it.id == id }) return@synchronized "error: no scheduled goal '$id'"
         if (!save(c, list.filterNot { it.id == id })) "error: scheduled goal could not be removed; storage is unavailable"
         else "Removed scheduled goal '$id'."
     }
 
     fun setEnabled(c: Context, id: String, enabled: Boolean): String = synchronized(lock) {
-        val list = all(c)
+        val loaded = load(c)
+        if (!loaded.valid) return@synchronized "error: scheduled goal storage is unreadable; existing data was preserved"
+        val list = loaded.goals
         if (list.none { it.id == id }) return@synchronized "error: no scheduled goal '$id'"
         if (!save(c, list.map { if (it.id == id) it.copy(enabled = enabled) else it })) {
             "error: scheduled goal could not be updated; storage is unavailable"
@@ -114,7 +129,9 @@ object AutonomyGoalStore {
 
     /** Atomically claim one due goal before execution; duplicate ticks cannot launch it twice. */
     fun claimNextDue(c: Context, now: Long): AutonomyGoal? = synchronized(lock) {
-        val list = all(c)
+        val loaded = load(c)
+        if (!loaded.valid) return@synchronized null
+        val list = loaded.goals
         val due = list.firstOrNull { AutonomyGoalPolicy.due(it, now) } ?: return@synchronized null
         val claimed = due.copy(lastRunAt = now, lastResult = "started")
         if (!save(c, list.map { if (it.id == due.id) claimed else it })) null else claimed
@@ -122,9 +139,9 @@ object AutonomyGoalStore {
 
     /** Store the outcome without moving the due-time window forward again. */
     fun recordResult(c: Context, id: String, result: String): Boolean = synchronized(lock) {
-        val list = all(c)
-        if (list.none { it.id == id }) return@synchronized false
-        save(c, list.map { if (it.id == id) it.copy(lastResult = result.take(300)) else it })
+        val loaded = load(c)
+        if (!loaded.valid || loaded.goals.none { it.id == id }) return@synchronized false
+        save(c, loaded.goals.map { if (it.id == id) it.copy(lastResult = result.take(300)) else it })
     }
 
     fun describe(c: Context): String {
