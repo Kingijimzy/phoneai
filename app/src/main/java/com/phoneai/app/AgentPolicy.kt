@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 /** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
 object AgentPolicy {
-    enum class Mode(val label: String) { PLAN("Plan"), ASK("Ask"), ALLOWLIST("Allowlist"), TRUSTED("Trusted session") }
+    enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow"), ASK("Ask (legacy)"), ALLOWLIST("Allowlist (legacy)"), TRUSTED("Trusted session (legacy)") }
     enum class Decision { ALLOW, PLAN_ONLY, NEED_APPROVAL, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
