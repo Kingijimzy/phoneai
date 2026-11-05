@@ -222,7 +222,8 @@ internal object MemoryRanking {
             .map { i ->
                 i to (1.0 / (60 + (rankA[i] ?: 1000)) +
                     1.0 / (60 + (rankB[i] ?: 1000)) +
-                    1.0 / (60 + (rankC[i] ?: 1000)) +\n                    1.0 / (60 + (rankD[i] ?: 1000)))
+                    1.0 / (60 + (rankC[i] ?: 1000)) +
+                    1.0 / (60 + (rankD[i] ?: 1000)))
             }
             .sortedByDescending { it.second }
             .take(limit)
