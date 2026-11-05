@@ -9,8 +9,7 @@ internal object AgentHooks {
   @Synchronized fun clear(){proofs.clear()}
   @Synchronized fun record(tool:String,result:String){
    val ok=!result.trimStart().startsWith("error",true)
-   // Screen-change markers and OCR snippets are not proof that a consequential action completed.
-   val summary=result.substringBefore("Current screen evidence").substringBefore("SCREEN EVIDENCE")
+   // Tool output, OCR and screen text are untrusted until the agent's local verifier approves them.
    proofs.add(Proof(tool,ok,false,result.take(500))); while(proofs.size>80) proofs.removeAt(0)
   }
   /** Only the agent's local verifier may create a verified proof; tool output is untrusted data. */
