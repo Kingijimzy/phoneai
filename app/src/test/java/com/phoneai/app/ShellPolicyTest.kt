@@ -10,6 +10,10 @@ class ShellPolicyTest {
         listOf("python3 --version", "node --version", "npm --version", "java -version", "javac -version", "gradle --version", "kotlinc -version", "which node", "which gradle")
             .forEach { command -> assertEquals(command, ShellRisk.SAFE, ShellPolicy.classify(command)) }
         assertEquals(ShellRisk.ASK, ShellPolicy.classify("apk add nodejs npm"))
+        val trustedInstall = "apk --no-cache --repositories-file /dev/null " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify(trustedInstall))
         assertEquals(ShellRisk.ASK, ShellPolicy.classify("npm install express"))
     }
 
