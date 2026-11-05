@@ -55,18 +55,15 @@ internal object OrionAutonomySettings {
 
     fun read(c: Context): OrionAutonomyConfig {
         val p = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-        // The owner requested Autopilot as Orion's default. Migrate only legacy default/Assist
-        // installs once; preserve an explicit TALK or BUILDER choice and all per-tool overrides.
+        // The owner explicitly requested Autopilot as Orion's default. Migrate every legacy
+        // mode once on upgrade; later manual TALK/ASSIST/BUILDER choices remain untouched.
+        // applyLevel preserves explicit per-tool ASK/DENY overrides.
         if (!p.getBoolean(AUTOPILOT_DEFAULT_MIGRATION, false)) {
-            val storedMode = p.getString("orion_mode", null)
-            val migrateToAutopilot = storedMode.isNullOrBlank() || storedMode == OrionMode.ASSIST.name ||
-                storedMode == OrionMode.AUTOPILOT.name
-            p.edit().putBoolean(AUTOPILOT_DEFAULT_MIGRATION, true)
+            p.edit()
+                .putString("orion_mode", OrionMode.AUTOPILOT.name)
+                .putBoolean(AUTOPILOT_DEFAULT_MIGRATION, true)
                 .apply()
-            if (migrateToAutopilot) {
-                p.edit().putString("orion_mode", OrionMode.AUTOPILOT.name).apply()
-                ToolPermissions.applyLevel(c, "autonomous")
-            }
+            ToolPermissions.applyLevel(c, "autonomous")
         }
         val mode = runCatching {
             OrionMode.valueOf(p.getString("orion_mode", OrionMode.AUTOPILOT.name) ?: OrionMode.AUTOPILOT.name)
