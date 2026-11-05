@@ -24,6 +24,19 @@ class MemoryRankingTest {
         assertNull(MemoryRanking.findSuperseded(listOf(unrelated), "preference", "User prefers light theme in the app"))
     }
 
+    @Test fun explicitSingleValueConflictSupersedesEvenWithLowWordOverlap() {
+        val old = mem(1, "fact", "I live in Lagos Nigeria", 1)
+        assertEquals(
+            old,
+            MemoryRanking.findSuperseded(listOf(old), "fact", "I live in Abuja")
+        )
+    }
+
+    @Test fun differentRepeatableGraphFactsAreNotTreatedAsConflicts() {
+        val old = mem(1, "fact", "I like football", 1)
+        assertNull(MemoryRanking.findSuperseded(listOf(old), "fact", "I like music"))
+    }
+
     @Test fun selectKeepsPinnedAndRelevantBeforeRecent() {
         val list = listOf(
             mem(1, "fact", "Birthday is in March", 1, pinned = true),
