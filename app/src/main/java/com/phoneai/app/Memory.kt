@@ -117,6 +117,11 @@ object MemoryStore {
         val safeSensitivity = MemoryGovernancePolicy.sensitivity(t, sensitivity)
         val dup = list.firstOrNull { it.text.equals(t, true) }
         if (dup != null) {
+            // Re-observing an already owner-approved fact must never demote it to a pending
+            // agent proposal. Only an explicit owner-originated write may refresh its provenance.
+            if (dup.reviewStatus == "approved" && sourceRole != "owner") {
+                return@synchronized copyOf(dup)
+            }
             val old = copyOf(dup)
             dup.updated = now
             dup.sourceRole = sourceRole
@@ -177,8 +182,7 @@ object MemoryStore {
         target.sourceRole = source.sourceRole
         target.confidence = source.confidence
         target.sensitivity = source.sensitivity
-        target.reviewStatus = source.reviewStatus
-        target.evidence = source.evidence
+        target.reviewStatus = source.reviewStatus        target.evidence = source.evidence
     }
 
     fun setReviewStatus(c: Context, id: Int, status: String): Boolean = synchronized(lock) {
