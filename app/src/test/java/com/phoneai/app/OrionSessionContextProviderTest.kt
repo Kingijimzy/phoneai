@@ -32,4 +32,24 @@ class OrionSessionContextProviderTest {
         val voiceSession = Regex("session_id=([^;]+)").find(voice)?.groupValues?.get(1)
         assertEquals(chatSession, voiceSession)
     }
+
+    @Test fun consentedChronosContextFlowsIntoBothChatAndLiveVoiceSnapshots() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        OrionChronosAwareness.clear(context)
+        OrionSensorConsent.grant(context, OrionSensorScope.APP_USAGE, 60 * 60 * 1000L)
+        OrionSensorConsent.grant(context, OrionSensorScope.CHRONOS_AWARENESS, 60 * 60 * 1000L)
+        try {
+            assertTrue(OrionChronosAwareness.onWindowChanged(context, "com.example.docs.editor"))
+            val chat = OrionSessionContextProvider.forChat(context, "continue the task")
+            val voice = OrionSessionContextProvider.forLiveVoice(context)
+            assertTrue(chat.contains("category=productivity"))
+            assertTrue(voice.contains("category=productivity"))
+            assertFalse(chat.contains("com.example.docs.editor"))
+            assertFalse(voice.contains("com.example.docs.editor"))
+        } finally {
+            OrionChronosAwareness.clear(context)
+            OrionSensorConsent.revoke(context, OrionSensorScope.APP_USAGE)
+            OrionSensorConsent.revoke(context, OrionSensorScope.CHRONOS_AWARENESS)
+        }
+    }
 }
