@@ -11,7 +11,7 @@ import org.json.JSONObject
  */
 internal class OrionPythonCapabilityExecutor(
     private val context: Context,
-    private val tools: Tools,
+    private val tools: Tools?,
     private val extensionStore: SelfExtendingExtensionStore = SelfExtendingExtensionStore(context),
     private val extensionSandbox: ExtensionSandbox = RestrictedPythonSandbox { source, inputJson ->
         OrionPythonRuntime.runExtension(context, source, inputJson)
@@ -33,7 +33,8 @@ internal class OrionPythonCapabilityExecutor(
             "python_exec" -> {
                 val code = args.optString("code")
                 if (stopped()) "error: task was stopped before Python execution."
-                else tools.pythonExec(code, confirm, stopped)
+                else tools?.pythonExec(code, confirm, stopped)
+                    ?: "error: Python tool bridge is unavailable in this execution context."
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
