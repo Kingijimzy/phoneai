@@ -278,7 +278,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Risk used by recovery. Mirrors the dispatcher's consequential classification so recovery never loosens it. */
     private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
-        val consequential = tool in consequentialTools ||
+        val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
+            tool, OrionOwnerDialSettings.read(svc).pythonProfile
+        )
+        val consequential = tool in consequentialTools || fullPython ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
@@ -417,7 +420,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             McpConnector.isPaired(svc) &&
             "read" in McpConnector.scopes(svc) &&
             ToolPermissions.mode(svc, tool) != ToolMode.DENY
-        val consequential = AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
+        val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
+            tool, OrionOwnerDialSettings.read(svc).pythonProfile
+        )
+        val consequential = fullPython || AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         // Retrieve current durable context immediately before any write/consequential dispatch.
@@ -481,15 +487,19 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return blocked
             }
             GatePolicy.Verdict.ASK_TOOL -> {
-                val askText = if (tool == "shell") {
-                    val backend = when (ShellExecutionRouting.backend(args.optString("where"))) {
-                        ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
-                        ShellExecutionRouting.Backend.TERMUX -> "Termux"
-                        ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
-                        ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+                val askText = when {
+                    tool == "shell" -> {
+                        val backend = when (ShellExecutionRouting.backend(args.optString("where"))) {
+                            ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
+                            ShellExecutionRouting.Backend.TERMUX -> "Termux"
+                            ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
+                            ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+                        }
+                        "Run in $backend:\n${args.optString("command").take(300)}\n\nAllow this command for the task?"
                     }
-                    "Run in $backend:\n${args.optString("command").take(300)}\n\nAllow this command for the task?"
-                } else "Allow Orion to use the tool '$tool' for this task?"
+                    fullPython -> "Run FULL Python with raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID? This is an unrestricted execution path."
+                    else -> "Allow Orion to use the tool '$tool' for this task?"
+                }
                 if (!confirm(askText)) {
                     val declined = "error: user did not approve using '$tool'."
                     recordDispatchBlocked(tool, args, "tool_approval_declined")
@@ -497,6 +507,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     return declined
                 }
                 askApproved.add(tool)
+                if (fullPython) policyApproved = true
             }
             GatePolicy.Verdict.NEED_APPROVAL -> {
                 // These tools present a more specific confirmation at the action boundary.
@@ -509,15 +520,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     policyApproved = true
                     AgentPolicy.log(svc, tool, "dispatch", null, "generic prompt skipped; action-specific confirmation is authoritative")
                 } else {
-                    val action = if (tool == "shell") {
-                        val backend = when (ShellExecutionRouting.backend(args.optString("where"))) {
-                            ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
-                            ShellExecutionRouting.Backend.TERMUX -> "Termux"
-                            ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
-                            ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+                    val action = when {
+                        tool == "shell" -> {
+                            val backend = when (ShellExecutionRouting.backend(args.optString("where"))) {
+                                ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
+                                ShellExecutionRouting.Backend.TERMUX -> "Termux"
+                                ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
+                                ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
+                            }
+                            "Run in $backend:\n${args.optString("command").take(300)}"
                         }
-                        "Run in $backend:\n${args.optString("command").take(300)}"
-                    } else if (consequential || toolIsWrite) "This action may change device/app state or send/submit information." else "This tool will access external or local data."
+                        fullPython -> "Run FULL Python with raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID."
+                        consequential || toolIsWrite -> "This action may change device/app state or send/submit information."
+                        else -> "This tool will access external or local data."
+                    }
                     val approved = confirm("Approve Orion tool action?\n\nTool: $tool\nCapability: ${AgentPolicy.packs.firstOrNull { it.id == pack }?.title ?: pack}\n$action\n\nRun this action once?")
                     AgentPolicy.log(svc, tool, "dispatch", approved, if (approved) "user approved this action" else "user declined; not dispatched")
                     if (!approved) {
