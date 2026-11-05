@@ -62,7 +62,7 @@ internal object OrionRepairLifecycle {
         planDigest: String, summary: String, verified: Boolean = false, failed: Boolean = false): Boolean {
         val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
             it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
-                it.argsFingerprint == planDigest
+                it.planDigest == planDigest
         }
         val eventId = stageEventId(taskId, planDigest, stage)
         val repository = OrionConversationRepository.get(context)
