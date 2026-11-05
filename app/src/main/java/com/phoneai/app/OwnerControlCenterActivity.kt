@@ -112,7 +112,7 @@ class OwnerControlCenterActivity : Activity() {
         val ownerDials = OrionOwnerDialSettings.read(this)
         addText("Mode: ${config.mode.name} · ${config.maxToolSteps} tool steps · ${config.maxAiRequests} AI requests · ${config.maxRetries} read retries", 13f, Theme.TEXT, true, 5)
         addText("Extension auto-activation: ${if (ownerDials.autoActivateVerifiedExtensions) "ON · tested drafts only" else "OFF"} · Python: ${ownerDials.pythonProfile.name} · Recovery: ${ownerDials.recoveryMaxAttempts} retries / ${ownerDials.recoveryBackoffSeconds}s base · Watcher: ${if (Prefs.watchOn(this)) "REQUESTED" else "OFF"}", 12f, Theme.MUTED, false, 3)
-        addButton("JARVIS MODE · one tap: autopilot + tested skills + scoped Python", true) { showJarvisPreset() }
+        addButton("JARVIS MODE · one tap: autopilot + verified extensions + scoped Python", true) { enableJarvisPreset() }
         addButton("Configure autonomy, limits and notifications", true) { showAutonomyControlCenter() }
         addButton("Extension activation dial") { showExtensionControls() }
         addButton("Python execution profile") { showPythonProfile() }
@@ -204,21 +204,28 @@ class OwnerControlCenterActivity : Activity() {
             .show()
     }
 
-    private fun showJarvisPreset() {
-        AlertDialog.Builder(this).setTitle("Jarvis mode")
-            .setMessage("Turns ON: AUTOPILOT mode, automatic activation of sandbox-tested extensions (exact source hash), and Python DEVELOPER mode with the scoped phone API. Orion can automatically install its checksum-pinned Alpine runtime and signed CPython package.\n\n" +
-                "Still asks before trades/orders, sending messages, deleting user data, spending money, sharing private data, and unrestricted FULL Python execution. Android permission prompts remain owner-controlled. Risk gate, kill switch and read-only trading defaults stay on.\n\nYou can undo each item from this screen.")
-            .setPositiveButton("TURN ON") { _, _ ->
-                val cfg = OrionAutonomySettings.read(this)
-                OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
-                ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
-                OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
-                    autoActivateVerifiedExtensions = true, pythonProfile = OrionPythonProfile.DEVELOPER))
-                AgentPolicy.log(this, "owner-autonomy", "jarvis_preset", true, "owner enabled AUTOPILOT, extension auto-activation and Python FULL")
-                recreate()
-            }
-            .setNegativeButton("CANCEL", null)
-            .show()
+    /** One tap applies the owner's routine-autonomy defaults immediately; no redundant setup dialog. */
+    private fun enableJarvisPreset() {
+        val cfg = OrionAutonomySettings.read(this)
+        OrionAutonomySettings.write(this, cfg.copy(mode = OrionMode.AUTOPILOT))
+        ToolPermissions.applyLevel(this, OrionAutonomyPolicy.preset(OrionMode.AUTOPILOT))
+        OrionOwnerDialSettings.write(this, OrionOwnerDialSettings.read(this).copy(
+            autoActivateVerifiedExtensions = true,
+            pythonProfile = OrionPythonProfile.DEVELOPER
+        ))
+        AgentPolicy.log(
+            this,
+            "owner-autonomy",
+            "jarvis_preset",
+            true,
+            "owner enabled AUTOPILOT, verified-extension auto-activation and scoped Python DEVELOPER profile; consequential actions remain gated"
+        )
+        Toast.makeText(
+            this,
+            "JARVIS MODE enabled: routine tools, verified extensions and scoped Python run automatically. Consequential actions remain protected.",
+            Toast.LENGTH_LONG
+        ).show()
+        recreate()
     }
 
     private fun showAutonomyControlCenter() {
