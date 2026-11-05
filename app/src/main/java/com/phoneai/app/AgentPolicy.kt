@@ -108,7 +108,6 @@ object AgentPolicy {
             GatePolicy.Verdict.ALLOW -> Decision.ALLOW
             GatePolicy.Verdict.DENY -> Decision.DENY
             GatePolicy.Verdict.PLAN_ONLY -> Decision.PLAN_ONLY
-            GatePolicy.Verdict.ASK_TOOL, GatePolicy.Verdict.NEED_APPROVAL -> Decision.NEED_APPROVAL
         }
         return RuleResult(decision, r.reason)
     }
