@@ -55,11 +55,9 @@ internal object OrionEvidenceLedger {
             .take(MAX_TEXT)
     }
 
-    private fun outcome(result: String): Outcome = when {
+    private fun outcome(result: String, trustedVerification: Boolean): Outcome = when {
         result.trimStart().startsWith("error", true) -> Outcome.FAILED
-        result.contains("LOCAL VERIFY PASS:", true) -> Outcome.VERIFIED
-        result.contains("PASS:", true) && !result.contains("UNVERIFIED:", true) && !result.contains("FAIL:", true) -> Outcome.VERIFIED
-        Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b", RegexOption.IGNORE_CASE).containsMatchIn(result) -> Outcome.VERIFIED
+        trustedVerification -> Outcome.VERIFIED
         else -> Outcome.EXECUTED_UNVERIFIED
     }
 
@@ -71,13 +69,14 @@ internal object OrionEvidenceLedger {
         tool: String,
         args: JSONObject,
         startedAt: Long,
-        result: String
+        result: String,
+        trustedVerification: Boolean = false
     ): Boolean = append(context, JSONObject()
         .put("id", digest("$startedAt|$tool|$taskId|$result").take(24))
         .put("taskId", safeTaskId(taskId))
         .put("backend", backend.take(32))
         .put("tool", tool.take(80))
-        .put("outcome", outcome(result).name)
+        .put("outcome", outcome(result, trustedVerification).name)
         .put("startedAt", startedAt)
         .put("finishedAt", System.currentTimeMillis())
         .put("argsFingerprint", digest(args.toString()))
