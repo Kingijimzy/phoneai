@@ -20,7 +20,7 @@ data class OrionActionEvent(
 
 object ActionLogStore {
     fun record(context: Context, tool: String, result: String) = Unit
-    fun record(
+    internal fun record(
         context: Context,
         tool: String,
         args: JSONObject,

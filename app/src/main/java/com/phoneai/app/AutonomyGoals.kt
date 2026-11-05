@@ -45,7 +45,8 @@ object AutonomyGoalStore {
     private data class LoadResult(val goals: List<AutonomyGoal>, val valid: Boolean)
     private fun atomic(c: Context) = AtomicFile(File(c.filesDir, FILE))
 
-    private fun load(c: Context): LoadResult = try {
+    private fun load(c: Context): LoadResult {
+        return try {
         val f = atomic(c)
         val json = try {
             f.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -64,6 +65,7 @@ object AutonomyGoalStore {
     } catch (_: Exception) {
         // Never replace a corrupt schedule with an apparently empty one.
         LoadResult(emptyList(), false)
+        }
     }
 
     fun all(c: Context): List<AutonomyGoal> = synchronized(lock) { load(c).goals }

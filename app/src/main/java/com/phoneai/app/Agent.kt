@@ -657,6 +657,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     recovery.reason
                 )
             }
+            }
             val permittedAlternatives = ToolRegistry.all.asSequence()
                 .filter { it.name != tool }
                 .filter { ToolGate.preflightDenial(svc, it.name) == null }
@@ -665,7 +666,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             val attemptedTools = (0 until ranSteps.length()).mapNotNull { index ->
                 runCatching { ranSteps.getJSONObject(index).optString("tool").takeIf { it.isNotBlank() } }.getOrNull()
             }.toSet() + tool
-            }
             val alternatives = OrionRecoveryPlanner.selectAlternatives(
                 failedTool = tool,
                 result = verifiedResult,
@@ -1901,7 +1901,7 @@ Rules:
                 currentTask = command
                 runCatching { SoulEngineState.setGoal(svc, command) }
             }
-            askApproved.clear(); runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
+            runStartedAt = System.currentTimeMillis(); runTools = 0; runFailed = 0
         }
         val resumeRequest = contextualFollowUp && OrionTasksCapabilityExecutor.pendingCheckpoint(svc) != null
         if (!resumeRequest && !contextualFollowUp) {
