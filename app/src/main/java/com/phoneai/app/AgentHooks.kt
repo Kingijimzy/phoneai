@@ -107,7 +107,7 @@ internal object AgentHooks {
   return "PASS: message sent to $target; exact message and status '$status' are visible."
  }
  private val requiresVerifiedGoal=Regex(
-  "(?i)^\\\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\\\s+)*(open|launch|tap|click|press|swipe|scroll|type|send|call|text|message|reply|email|delete|remove|install|uninstall|download|share|post|publish|buy|order|book|turn on|turn off|switch|move|rename|copy|write|save|undo|reverse|run|execute)\\\\b"
+  "(?i)^\\s*(?:(?:please|can you|could you|would you|will you|i want you to|i need you to)\\s+)*(open|launch|tap|click|press|swipe|scroll|type|send|call|text|message|reply|email|delete|remove|install|uninstall|download|share|post|publish|buy|order|book|turn on|turn off|switch|move|rename|copy|write|save|undo|reverse|run|execute)\\b"
  )
  private val risky=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call)\\b",RegexOption.IGNORE_CASE)
  private val explicit=Regex("\\b(send|submit|post|publish|delete|remove|pay|purchase|buy|transfer|withdraw|trade|place order|call|forget|erase|update memory|edit saved memory)\\b",RegexOption.IGNORE_CASE)
