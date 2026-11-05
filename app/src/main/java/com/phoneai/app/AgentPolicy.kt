@@ -25,8 +25,14 @@ object AgentPolicy {
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
-    fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
+    /** PLAN is the only global execution stop. Legacy ASK/ALLOWLIST/TRUSTED values are read as ALLOW. */
+    fun mode(c: Context): Mode {
+        val saved = p(c).getString("mode", null)
+        return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
+    }
+    fun setMode(c: Context, v: Mode) {
+        p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
+    }
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
      * This only makes their tools available: Android OS permissions and consequential-action confirmations
@@ -68,7 +74,8 @@ object AgentPolicy {
     /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
-        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
+        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
+        hardBlockReason: String? = null
     ): GatePolicy.Result {
         val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
             OrionAutonomySettings.read(c).mode,
@@ -89,7 +96,8 @@ object AgentPolicy {
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
         allowlisted = allowed(c, pack, toolId),
-        askedThisTask = askedThisTask
+        askedThisTask = askedThisTask,
+        hardBlockReason = hardBlockReason
         ))
     }
 
