@@ -81,9 +81,9 @@ object AgentPolicy {
         tool = toolId,
         mode = mode(c),
         toolMode = effectiveToolMode,
-        // An explicit per-tool ASK must remain ASK even under the global Autopilot preset.
-        // Autopilot applies to routine actions even when a tool has an old ASK override.
-        // Explicit DENY still wins in GatePolicy, and consequential actions still need confirmation.
+        // Explicit per-tool ASK/DENY overrides remain owner-controlled under Autopilot.
+        // Only inherited routine tool permissions are made automatic; consequential actions
+        // and unrestricted FULL Python still require the central confirmation gate.
         autonomous = ToolPermissions.level(c) == "autonomous" && !ToolPermissions.hasOverride(c, toolId),
         dangerous = dangerous,
         approvedThisAction = approvedThisAction,
