@@ -281,7 +281,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
             tool, OrionOwnerDialSettings.read(svc).pythonProfile
         )
-        val consequential = tool in consequentialTools || fullPython ||
+        val skill = activeSkillId?.let { OrionPythonCapabilityExecutor /* keep this path dependency-free */; OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
+        val skillRequiresApproval = skill?.requiresApproval == true
+        val skillWriteAction = activeSkillId != null && ToolRegistry.access(tool) == ToolAccess.WRITE
+        val consequential = tool in consequentialTools || fullPython || skillRequiresApproval || skillWriteAction ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
@@ -409,6 +412,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
+        val activeSkill = activeSkillId?.let { OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
+        val skillApprovalRequired = activeSkillId != null &&
+            (activeSkill?.requiresApproval == true || toolIsWrite)
         val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         val mcpScope = when {
             tool == "mcp_call" -> McpConnector.scopeForTool(args.optString("name"))
@@ -423,7 +429,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
             tool, OrionOwnerDialSettings.read(svc).pythonProfile
         )
-        val consequential = fullPython || AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
+        val consequential = fullPython || skillApprovalRequired || AgentHooks.requiresConfirmation(tool, args, targetLabel) ||
             (tool in consequentialTools && !(tool == "mcp_call" && mcpReadScopeGranted)) ||
             (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
         // Retrieve current durable context immediately before any write/consequential dispatch.
@@ -475,7 +481,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             svc, pack, tool,
             dangerous = consequential,
             toolMode = effectiveToolMode,
-            askedThisTask = tool in askApproved
+            askedThisTask = tool in askApproved,
+            forceApproval = skillApprovalRequired
         )
         var policyApproved = false
         when (gate.verdict) {
@@ -498,6 +505,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                         "Run in $backend:\n${args.optString("command").take(300)}\n\nAllow this command for the task?"
                     }
                     fullPython -> "Run FULL Python with raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID? This is an unrestricted execution path."
+                    skillApprovalRequired -> "Allow skill '${activeSkillId}' to use '$tool' for this action?"
                     else -> "Allow Orion to use the tool '$tool' for this task?"
                 }
                 if (!confirm(askText)) {
@@ -507,7 +515,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                     return declined
                 }
                 askApproved.add(tool)
-                if (fullPython) policyApproved = true
+                if (fullPython || skillApprovalRequired) policyApproved = true
             }
             GatePolicy.Verdict.NEED_APPROVAL -> {
                 // These tools present a more specific confirmation at the action boundary.
@@ -531,6 +539,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                             "Run in $backend:\n${args.optString("command").take(300)}"
                         }
                         fullPython -> "Run FULL Python with raw sockets, subprocesses and native loading inside the PRoot guest under Orion's Android app UID."
+                        skillApprovalRequired -> "Skill '${activeSkillId}' requests this tool action; skill writes and approval-required runs need owner confirmation."
                         consequential || toolIsWrite -> "This action may change device/app state or send/submit information."
                         else -> "This tool will access external or local data."
                     }
@@ -3222,14 +3231,9 @@ Rules:
         val skillId = activeSkillId
         if (skillId != null) {
             val run = OrionSkillsCapabilityExecutor.Run(skillId, activeSkillStartedAt, activeSkillCalls)
-            var decision = OrionSkillsCapabilityExecutor.authorize(svc, run, tool, false)
-            if (!decision.allowed && decision.reason.contains("approval", ignoreCase = true)) {
-                if (!confirm("The skill \"" + skillId + "\" wants to use \"" + tool + "\". Allow this action?")) {
-                    recordDispatchBlocked(tool, a, "skill_approval_declined")
-                    return "error: user denied skill action"
-                }
-                decision = OrionSkillsCapabilityExecutor.authorize(svc, run, tool, true)
-            }
+            // Validate skill scope and budgets here, but do not show a separate prompt.
+            // The central GatePolicy below owns the single approval for this skill action.
+            val decision = OrionSkillsCapabilityExecutor.authorize(svc, run, tool, userApprovedThisCall = true)
             if (!decision.allowed) { recordDispatchBlocked(tool, a, "skill_authorization_denied"); return "error: skill blocked: " + decision.reason }
             activeSkillCalls++
         }
