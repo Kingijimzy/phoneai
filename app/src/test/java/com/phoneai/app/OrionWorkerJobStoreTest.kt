@@ -9,6 +9,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -44,6 +47,31 @@ class OrionWorkerJobStoreTest {
         assertNotNull(second.claimNext { true })
         assertNull(first.claimNext { true })
         assertEquals(3, first.all().count { it.status == OrionWorkerJobStore.Status.RUNNING })
+    }
+
+    @Test fun simultaneousClaimsAcrossWorkerInstancesNeverExceedThreeActiveSlots() {
+        val seed = OrionWorkerJobStore(context)
+        repeat(8) { seed.enqueue("parent-1", "Concurrent specialist $it", idempotencyKey = "parallel-$it") }
+        val pool = Executors.newFixedThreadPool(8)
+        val gate = CountDownLatch(1)
+        val done = CountDownLatch(8)
+        val claimed = java.util.Collections.synchronizedList(mutableListOf<String>())
+        repeat(8) { index ->
+            pool.execute {
+                try {
+                    gate.await(3, TimeUnit.SECONDS)
+                    val job = OrionWorkerJobStore(context).claimNext { true }
+                    if (job != null) claimed += job.id
+                } finally { done.countDown() }
+            }
+        }
+        gate.countDown()
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+        pool.shutdownNow()
+        assertEquals(3, claimed.distinct().size)
+        assertEquals(3, OrionWorkerJobStore(context).all().count {
+            it.status == OrionWorkerJobStore.Status.RUNNING
+        })
     }
 
     @Test fun brainSummaryReportsSavedJobStateWithoutClaimingQueuedWorkRan() {
