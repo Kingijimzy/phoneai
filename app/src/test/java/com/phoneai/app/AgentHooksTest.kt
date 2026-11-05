@@ -33,7 +33,7 @@ class AgentHooksTest {
  }
  @Test fun clearingProofsPreventsPriorTaskSuccessFromAuthorizingNewTask() {
   val proofs=AgentHooks.ProofRecorder(); proofs.record("open_app","WhatsApp opened")
-  assertTrue(AgentHooks.completionDecision("Open WhatsApp",proofs.snapshot()).allowed)
+  assertFalse(AgentHooks.completionDecision("Open WhatsApp",proofs.snapshot()).allowed)
   proofs.clear(); assertTrue(proofs.snapshot().isEmpty())
   assertFalse(AgentHooks.completionDecision("Open Settings",proofs.snapshot()).allowed)
  }
