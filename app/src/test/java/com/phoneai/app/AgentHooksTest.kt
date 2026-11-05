@@ -22,6 +22,13 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
+ @Test fun coordinateGesturesRequireApprovalButTextTargetsUseRiskClassification(){
+  assertTrue(AgentHooks.requiresConfirmation("tap",JSONObject().put("allow_coordinates",true)))
+  assertTrue(AgentHooks.requiresConfirmation("swipe",JSONObject().put("allow_coordinates",true)))
+  assertFalse(AgentHooks.requiresConfirmation("scroll",JSONObject()))
+  assertFalse(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Open settings")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Delete account")))
+ }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
