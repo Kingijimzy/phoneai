@@ -28,6 +28,8 @@ class AgentHooksTest {
   assertFalse(AgentHooks.requiresConfirmation("scroll",JSONObject()))
   assertFalse(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Open settings")))
   assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Delete account")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Install app")))
+  assertTrue(AgentHooks.requiresConfirmation("click_text",JSONObject().put("text","Allow permission")))
  }
  @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
  @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
