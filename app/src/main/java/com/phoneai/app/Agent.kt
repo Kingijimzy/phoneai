@@ -274,7 +274,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         return ok
     }
 
-    private val consequentialTools = setOf("telegram_send", "notification_action", "mcp_call", "sms")
+    private val consequentialTools = setOf("telegram_send", "mcp_call", "sms")
 
     /** Risk used by recovery. Mirrors the dispatcher's consequential classification so recovery never loosens it. */
     private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
@@ -493,7 +493,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         // only a fallback if its own classifier catches something the central one did not.
         val actionSpecificConfirmation = when (tool) {
             "mcp_call" -> !mcpReadScopeGranted
-            "telegram_send", "sms", "notification_action" -> true
+            "telegram_send", "sms" -> true
+            "notification_action" -> args.optString("action").equals("reply", true)
             else -> false
         }
         val skillTargetSummary = when (tool) {
