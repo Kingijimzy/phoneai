@@ -15,6 +15,11 @@ class OrionCodingDiagnosticsTest {
         assertTrue(result.any { it.category == "kotlin_compiler" && it.file == "app/src/main/Foo.kt" && it.line == 27 })
     }
 
+    @Test fun extractsKotlinCompilerFileUriLocation() {
+        val result = OrionCodingDiagnostics.parse("e: file:///workspace/app/src/Foo.kt:44:3: error: type mismatch")
+        assertTrue(result.any { it.category == "kotlin_compiler" && it.file!!.endsWith("Foo.kt") && it.line == 44 })
+    }
+
     @Test fun extractsPytestFailureAndBoundsOutput() {
         val result = OrionCodingDiagnostics.parse("tests/test_math.py:18: AssertionError in test_total")
         assertTrue(result.any { it.category == "pytest" && it.line == 18 })
