@@ -64,4 +64,15 @@ class AutonomyGoalStoreTest {
         assertTrue(AutonomyGoalStore.remove(context, "g3").startsWith("Removed"))
         assertEquals(4, AutonomyGoalStore.all(context).size)
     }
+
+    @Test fun corruptScheduleIsNotMistakenForEmptyAndIsNotOverwritten() {
+        val original = "{not valid json"
+        context.openFileOutput("orion_autonomy_goals.json", Context.MODE_PRIVATE).use {
+            it.write(original.toByteArray(Charsets.UTF_8))
+        }
+        val result = AutonomyGoalStore.add(context, "Summarise my unread email", 60)
+        assertTrue(result.startsWith("error: scheduled goal storage is unreadable"))
+        val preserved = context.openFileInput("orion_autonomy_goals.json").bufferedReader().use { it.readText() }
+        assertEquals(original, preserved)
+    }
 }
