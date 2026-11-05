@@ -217,7 +217,7 @@ internal object OrionCentralBrain {
             }
         }
 
-        addObservedSection("approved_memory") { OrionMemoryCapabilityExecutor.memoryPromptBlock(app, contextQuery, 1_600) }
+        addObservedSection("approved_memory") { OrionMemoryCapabilityExecutor.memoryPromptBlock(service, contextQuery, 1_600) }
 
         // Retrieve task-specific failure lessons before a similar tool/action is planned.
         val learnedExperience = observed("execution_lessons", "") { ExperienceStore.promptBlock(app, contextQuery, 5) }
