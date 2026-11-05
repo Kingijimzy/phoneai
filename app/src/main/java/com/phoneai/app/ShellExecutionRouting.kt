@@ -24,7 +24,8 @@ internal object ShellExecutionRouting {
 
     /** Recognize package database mutations even when chained after a shell separator. */
     fun isPackageOperation(command: String): Boolean =
-        Regex("""(^|[;&|]\s*)apk\s+(add|del|upgrade|update|fix)\b""").containsMatchIn(command)
+        Regex("""(^|[;&|]\s*)apk\s+(?:(?:--no-cache|--repositories-file\s+\S+|--repository\s+\S+)\s+)*(add|del|upgrade|update|fix)\b""")
+            .containsMatchIn(command)
 
     /** Dependency downloads and project builds legitimately need longer than interactive commands. */
     fun commandTimeoutMs(command: String): Long {
