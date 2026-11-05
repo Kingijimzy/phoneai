@@ -69,8 +69,8 @@ class TerminalActivity : Activity() {
 
     private fun runInput() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
-        if (ShellPolicy.classify(cmd) == ShellRisk.BLOCKED) {
-            append("$ $cmd\nBlocked: this command is on Orion's catastrophic hard-block list (root/system wipe, raw block-device write, or fork bomb).\n")
+        if (ShellPolicy.isIrreversible(cmd)) {
+            append("$ $cmd\nBlocked: this matches one of Ultron's three irreversible Windows command strings.\n")
             return
         }
         executeCommand(cmd)
