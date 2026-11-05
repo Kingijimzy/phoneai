@@ -50,7 +50,7 @@ internal object OrionCodingDiagnostics {
 
     fun render(findings: List<Finding>): String = if (findings.isEmpty()) {
         "No structured file/line diagnostic could be extracted; inspect the raw test output before editing."
-    } else findings.joinToString("\\n") { finding ->
+    } else findings.joinToString("\n") { finding ->
         "- [${finding.category}] ${finding.file ?: "file_unknown"}${finding.line?.let { ":$it" }.orEmpty()}: ${finding.message}"
     }
 }
