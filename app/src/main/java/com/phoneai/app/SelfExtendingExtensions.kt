@@ -36,15 +36,10 @@ internal object SelfExtendingExtensionPolicy {
     fun validateSource(runtime: String, source: String): String? {
         if (source.isBlank()) return "Generated source is empty."
         if (source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 32 KiB limit."
-        if (runtime !in setOf("python", "javascript")) return "Only Python and JavaScript extension sources are supported."
+        if (runtime != "python") return "Only Python extensions are executable in this build; JavaScript activation is disabled until an isolated JavaScript sandbox exists."
         OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."
-        }
-        // JS extensions must run in a sandbox without host globals. This catches common
-        // host escape attempts early, but the actual runtime still has to enforce isolation.
-        if (runtime == "javascript" && Regex("\\b(process|require|globalThis|Deno|Bun)\\b|\\b(eval|Function)\\s*\\(").containsMatchIn(source)) {
-            return "Source references a restricted JavaScript host/evaluation feature."
         }
         return null
     }
