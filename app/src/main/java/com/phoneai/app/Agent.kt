@@ -413,8 +413,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
         val activeSkill = activeSkillId?.let { OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
-        val skillApprovalRequired = activeSkillId != null &&
-            (activeSkill?.requiresApproval == true || toolIsWrite)
+        val skillApprovalRequired = activeSkillId != null && activeSkill?.requiresApproval == true
         val mcpReadOperation = tool in setOf("mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt")
         val mcpScope = when {
             tool == "mcp_call" -> McpConnector.scopeForTool(args.optString("name"))
@@ -3233,7 +3232,7 @@ Rules:
             val run = OrionSkillsCapabilityExecutor.Run(skillId, activeSkillStartedAt, activeSkillCalls)
             // Validate skill scope and budgets here, but do not show a separate prompt.
             // The central GatePolicy below owns the single approval for this skill action.
-            val decision = OrionSkillsCapabilityExecutor.authorize(svc, run, tool, userApprovedThisCall = true)
+            val decision = OrionSkillsCapabilityExecutor.preflight(svc, run, tool)
             if (!decision.allowed) { recordDispatchBlocked(tool, a, "skill_authorization_denied"); return "error: skill blocked: " + decision.reason }
             activeSkillCalls++
         }
