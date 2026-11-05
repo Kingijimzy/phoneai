@@ -1,0 +1,27 @@
+name: wire-chat-truth
+on:
+  workflow_dispatch:
+  push:
+    branches: [orion/objective-graph-autonomy-fix]
+    paths:
+      - "app/src/main/java/com/phoneai/app/OrionChatTruthUi.kt"
+      - "scripts/wire_chat_truth_ui.py"
+      - ".github/workflows/wire-chat-truth.yml"
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: orion/objective-graph-autonomy-fix
+      - run: python3 scripts/wire_chat_truth_ui.py
+      - name: Commit
+        run: |
+          git config user.name orion-bot
+          git config user.email orion@users.noreply.github.com
+          git add -A
+          git diff --cached --quiet && echo no-change && exit 0
+          git commit -m "wire: chat truth card helper into chat activities"
+          git push origin HEAD:orion/objective-graph-autonomy-fix
