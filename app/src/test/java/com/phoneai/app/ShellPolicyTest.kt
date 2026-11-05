@@ -28,9 +28,11 @@ class ShellPolicyTest {
         val s = "a".repeat(5000) + "b".repeat(5000); val c = ShellPolicy.clip(s, 1000)
         assertTrue(c.startsWith("a") && c.endsWith("b") && c.contains("omitted") && c.length < 1200)
     }
-    @Test fun shellRoutingNeverRequestsApplicationApproval() {
-        assertFalse(ShellExecutionRouting.requiresApproval("linux", "apk add python3"))
-        assertFalse(ShellExecutionRouting.requiresApproval("termux", "rm file.txt"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin", "rm file.txt"))
+    @Test fun linuxRoutingUsesTheSameHardBlockPolicyWithoutApprovalTier() {
+        assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("linux"))
+        assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("alpine"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("apk add python3"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("python3 run_script.py"))
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("rm -rf /system"))
     }
 }
