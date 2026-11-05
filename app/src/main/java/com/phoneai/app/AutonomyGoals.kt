@@ -46,7 +46,6 @@ object AutonomyGoalStore {
     fun all(c: Context): List<AutonomyGoal> = synchronized(lock) {
         try {
             val f = atomic(c)
-            if (!f.baseFile.exists()) return@synchronized emptyList()
             val json = f.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
             val a = JSONArray(json)
             (0 until a.length()).map { i ->
