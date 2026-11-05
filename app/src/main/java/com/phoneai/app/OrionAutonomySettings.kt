@@ -82,6 +82,7 @@ internal object OrionAutonomySettings {
         val v = OrionAutonomyPolicy.clamp(config)
         c.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
             .putString("orion_mode", v.mode.name)
+            .putBoolean(AUTOPILOT_DEFAULT_MIGRATION, true)
             .putInt("orion_max_tool_steps_v2", v.maxToolSteps)
             .putInt("orion_max_ai_requests_v2", v.maxAiRequests)
             .putInt("orion_max_retries", v.maxRetries)
