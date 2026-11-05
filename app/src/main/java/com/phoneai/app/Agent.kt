@@ -3182,7 +3182,10 @@ Rules:
                 ) ?: "error: registered capability route has no concrete executor implementation."
             }.getOrElse { "error: backend execution threw ${it.javaClass.simpleName}; outcome requires inspection." }
             val saved = runCatching {
-                OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, args, startedAt, backendResult)
+                if (route.tool !in setOf("shell", "termux_command", "telegram_send", "sms",
+                        "whatsapp_send", "signal_send", "discord_send")) {
+                    OrionEvidenceLedger.recordDispatch(svc, evidenceTaskId(), route.backend.name.lowercase(), route.tool, JSONObject(), startedAt, backendResult)
+                }
             }.getOrDefault(false)
             val finalResult = if (!saved && !backendResult.trimStart().startsWith("error", true)) {
                 "error: action returned but its evidence could not be durably recorded; outcome requires inspection before retry. Original result: ${backendResult.take(240)}"
