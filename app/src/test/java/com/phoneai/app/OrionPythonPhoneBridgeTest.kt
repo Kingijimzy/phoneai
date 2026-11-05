@@ -20,7 +20,7 @@ class OrionPythonPhoneBridgeTest {
     @Test fun theLaunchCommandFitsTheRuntimePolicyLimit() {
         // Regression: a 4,000-character cap rejected every python_exec run ("Linux command rejected by runtime policy").
         listOf(false, true).forEach { full ->
-            val command = "ulimit -c 0; ulimit -t 280; ulimit -f 65536; ulimit -n 256; ulimit -u 128; cd /workspace && exec python3 -I -c '" + OrionPythonPhoneBridge.bootstrapCommand(full) + "'"
+            val command = "ulimit -c 0; ulimit -t 280; ulimit -f 65536; ulimit -n 256; ulimit -u 128; cd /workspace && exec python3 -I -c '" + ("import base64;exec(base64.urlsafe_b64decode(\"" + java.util.Base64.getUrlEncoder().encodeToString(OrionPythonPhoneBridge.bootstrapSource(full).toByteArray(Charsets.UTF_8)) + "\"))") + "'"
             assertTrue("command is " + command.length, command.length <= LinuxRuntimePolicy.MAX_COMMAND)
             assertTrue(LinuxRuntimePolicy.prootArgs("/bin/proot", "/rootfs", command, "/ws") != null)
         }
