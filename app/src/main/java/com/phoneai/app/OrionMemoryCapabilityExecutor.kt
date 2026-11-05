@@ -36,9 +36,8 @@ internal object OrionMemoryCapabilityExecutor {
     fun learnFromRequest(service: PhoneAiService, request: String) {
         if (request.isBlank()) return
         runCatching { AgentLessons.learnFrom(service, "orion", request) }
-        // The request is directly owner-authored. Store only deterministic, non-sensitive
-        // declarative facts as owner-approved graph data; ambiguous observations remain proposals.
-        runCatching { KnowledgeGraph.learnFromOwnerStatement(service, request) }
+        // Owner-authored chat facts are indexed at the conversation boundary. This helper is
+        // also used for derived task context, so it must not auto-approve inferred graph facts.
     }
 
     /** Assemble the memory/knowledge context in one place; every passage remains untrusted data. */
