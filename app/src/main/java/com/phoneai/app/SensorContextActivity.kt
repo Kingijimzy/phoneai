@@ -71,11 +71,11 @@ class SensorContextActivity : Activity() {
             }
             val toggle = Switch(this).apply {
                 isChecked = OrionSensorConsent.read(this@SensorContextActivity, scope).active()
-                setOnCheckedChangeListener { _, checked ->
+                setOnCheckedChangeListener { button, checked ->
                     if (checked) {
                         if (scope == OrionSensorScope.CHRONOS_AWARENESS &&
                             !OrionSensorConsent.read(this@SensorContextActivity, OrionSensorScope.APP_USAGE).active()) {
-                            toggle.isChecked = false
+                            button.isChecked = false
                             Toast.makeText(this@SensorContextActivity, "Enable App usage context first.", Toast.LENGTH_SHORT).show()
                             return@setOnCheckedChangeListener
                         }
