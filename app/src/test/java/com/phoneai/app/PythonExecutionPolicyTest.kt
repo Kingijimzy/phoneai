@@ -13,6 +13,13 @@ class PythonExecutionPolicyTest {
         assertNotNull(PythonExecutionPolicy.rejection("x".repeat(17_000), PythonExecutionPolicy.DEVELOPER_MAX_CODE_CHARS))
     }
 
+    @Test fun onlyUnrestrictedFullPythonRequiresPerRunApproval() {
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec", OrionPythonProfile.GUARDED))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec", OrionPythonProfile.DEVELOPER))
+        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec", OrionPythonProfile.FULL))
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run", OrionPythonProfile.FULL))
+    }
+
     @Test fun fullProfileAllowsLargerScripts() {
         assertNull(PythonExecutionPolicy.rejection("x".repeat(60_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
         assertNotNull(PythonExecutionPolicy.rejection("x".repeat(65_000), PythonExecutionPolicy.FULL_MAX_CODE_CHARS))
