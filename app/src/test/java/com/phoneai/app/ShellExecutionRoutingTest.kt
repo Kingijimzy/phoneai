@@ -46,7 +46,7 @@ class ShellExecutionRoutingTest {
 
     @Test fun trustedOfficialAlpineDependencyInstallsDoNotPrompt() {
         val command = "apk --no-cache --repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
-            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community python3 git nodejs npm"
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3 git nodejs npm"
         assertEquals(ShellRisk.SAFE, ShellPolicy.classify(command))
         assertFalse(ShellExecutionRouting.requiresApproval("linux", command))
     }
@@ -64,7 +64,7 @@ class ShellExecutionRoutingTest {
         assertFalse(ShellExecutionRouting.requiresApproval("builtin", "pwd"))
         assertTrue(ShellExecutionRouting.requiresApproval("builtin", "apk del python3"))
         assertTrue(ShellExecutionRouting.requiresApproval("termux", "apk upgrade"))
-        val trustedInstall = "apk add --no-cache --repositories-file /dev/null " +
+        val trustedInstall = "apk --no-cache --repositories-file /dev/null " +
             "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
             "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community python3"
         assertFalse(ShellExecutionRouting.requiresApproval("linux", trustedInstall))
