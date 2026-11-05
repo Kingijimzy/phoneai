@@ -14,7 +14,12 @@ internal object GraphPolicy {
     private val pronouns = setOf("it", "that", "this", "there", "he", "she", "they", "what", "who", "which", "here", "one", "you", "we", "those", "these", "something", "everything")
     private val verbs = "likes?|loves?|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|lives in|plays for|belongs to|runs|builds|wants"
 
-    private val verbRel = Regex("^($verbs|is|are)$")
+    private val repeatableRelations = setOf(
+        "like", "likes", "love", "loves", "play", "plays", "trade", "trades",
+        "prefer", "prefers", "hate", "hates", "watch", "watches", "follow", "follows",
+        "support", "supports", "own", "owns", "study", "studies", "run", "runs",
+        "build", "builds", "want", "wants", "use", "uses"
+    )
 
     fun norm(s: String): String = s.lowercase().replace(Regex("[^a-z0-9 .+&'-]"), " ").replace(Regex("\\s+"), " ").trim()
         .removePrefix("the ").removePrefix("a ").removePrefix("an ").trim()
@@ -54,7 +59,7 @@ internal object GraphPolicy {
         if (i >= 0) out[i] = out[i].copy(count = out[i].count + 1, lastAt = now)
         else {
             // Attributes of the user ("my favourite team is ...") have one current value; verbs like "likes" can repeat.
-            if (na == "user" && !verbRel.matches(nr)) out.removeAll { it.a == na && it.rel == nr }
+            if (na == "user" && nr !in repeatableRelations) out.removeAll { it.a == na && it.rel == nr }
             out.add(GraphFact(na, nr, nb, 1, now))
         }
         out.sortByDescending { it.lastAt }
