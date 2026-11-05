@@ -1,11 +1,13 @@
 package com.phoneai.app
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 
-/** A user-authored goal Orion may run by itself while the owner has AUTOPILOT enabled. */
+/** A user-authored goal Orion may run by itself while the owner has AUTOPILOT and Proactive enabled. */
 data class AutonomyGoal(
     val id: String,
     val prompt: String,
@@ -29,46 +31,54 @@ internal object AutonomyGoalPolicy {
     }
 
     fun due(goal: AutonomyGoal, now: Long): Boolean =
-        goal.enabled && (goal.lastRunAt <= 0L || now - goal.lastRunAt >= goal.everyMinutes * 60_000L)
+        goal.enabled && now >= goal.lastRunAt &&
+            (goal.lastRunAt <= 0L || now - goal.lastRunAt >= goal.everyMinutes * 60_000L)
 
     fun describe(goal: AutonomyGoal): String =
-        "${goal.id} [${if (goal.enabled) "ON" else "OFF"}] every ${goal.everyMinutes} min: ${goal.prompt.take(160)}"
+        "${goal.id} [${if (goal.enabled) "ON" else "OFF"}] every ${goal.everyMinutes} min: ${goal.prompt.take(160)}; last=${goal.lastResult.take(100).ifBlank { "never" }}"
 }
 
 object AutonomyGoalStore {
     private const val FILE = "orion_autonomy_goals.json"
     private val lock = Any()
-    private fun file(c: Context) = File(c.filesDir, FILE)
+    private fun atomic(c: Context) = AtomicFile(File(c.filesDir, FILE))
 
     fun all(c: Context): List<AutonomyGoal> = synchronized(lock) {
         try {
-            val f = file(c)
-            if (!f.exists()) return@synchronized emptyList()
-            val a = JSONArray(f.readText())
+            val f = atomic(c)
+            if (!f.baseFile.exists()) return@synchronized emptyList()
+            val json = f.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val a = JSONArray(json)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
                 AutonomyGoal(
-                    o.optString("id", "g$i"),
-                    o.optString("prompt"),
-                    o.optInt("every", 120),
-                    o.optLong("last", 0L),
-                    o.optString("result"),
-                    o.optBoolean("enabled", true)
+                    o.optString("id", "g$i"), o.optString("prompt"),
+                    o.optInt("every", 120), o.optLong("last", 0L),
+                    o.optString("result"), o.optBoolean("enabled", true)
                 )
             }.filter { it.prompt.isNotBlank() }
         } catch (_: Exception) { emptyList() }
     }
 
-    private fun save(c: Context, list: List<AutonomyGoal>) {
-        try {
+    private fun save(c: Context, list: List<AutonomyGoal>): Boolean {
+        val f = atomic(c)
+        var stream: FileOutputStream? = null
+        return try {
             val a = JSONArray()
             list.forEach { g ->
                 a.put(JSONObject()
                     .put("id", g.id).put("prompt", g.prompt).put("every", g.everyMinutes)
-                    .put("last", g.lastRunAt).put("result", g.lastResult).put("enabled", g.enabled))
+                    .put("last", g.lastRunAt).put("result", g.lastResult.take(300))
+                    .put("enabled", g.enabled))
             }
-            file(c).writeText(a.toString())
-        } catch (_: Exception) { }
+            stream = f.startWrite()
+            stream.write(a.toString().toByteArray(Charsets.UTF_8))
+            f.finishWrite(stream)
+            true
+        } catch (_: Exception) {
+            if (stream != null) runCatching { f.failWrite(stream) }
+            false
+        }
     }
 
     fun add(c: Context, prompt: String, minutes: Int): String = synchronized(lock) {
@@ -79,31 +89,42 @@ object AutonomyGoalStore {
             return@synchronized "error: at most ${AutonomyGoalPolicy.MAX_GOALS} scheduled goals"
         }
         val nextId = "g" + ((list.mapNotNull { it.id.removePrefix("g").toIntOrNull() }.maxOrNull() ?: 0) + 1)
-        save(c, list + AutonomyGoal(nextId, clean, minutes, 0L, "", true))
-        "Scheduled $nextId: I'll run \"$clean\" about every $minutes minutes while AUTOPILOT is on, and skip it while you are mid-task."
+        if (!save(c, list + AutonomyGoal(nextId, clean, minutes, 0L, "", true))) {
+            return@synchronized "error: scheduled goal could not be saved; storage is unavailable"
+        }
+        "Scheduled $nextId: I'll run it about every $minutes minutes only while Orion Core, Proactive and AUTOPILOT are enabled, and skip it while you are mid-task."
     }
 
     fun remove(c: Context, id: String): String = synchronized(lock) {
         val list = all(c)
         if (list.none { it.id == id }) return@synchronized "error: no scheduled goal '$id'"
-        save(c, list.filterNot { it.id == id })
-        "Removed scheduled goal '$id'."
+        if (!save(c, list.filterNot { it.id == id })) "error: scheduled goal could not be removed; storage is unavailable"
+        else "Removed scheduled goal '$id'."
     }
 
     fun setEnabled(c: Context, id: String, enabled: Boolean): String = synchronized(lock) {
         val list = all(c)
         if (list.none { it.id == id }) return@synchronized "error: no scheduled goal '$id'"
-        save(c, list.map { if (it.id == id) it.copy(enabled = enabled) else it })
-        "${if (enabled) "Enabled" else "Paused"} scheduled goal '$id'."
+        if (!save(c, list.map { if (it.id == id) it.copy(enabled = enabled) else it })) {
+            "error: scheduled goal could not be updated; storage is unavailable"
+        } else "${if (enabled) "Enabled" else "Paused"} scheduled goal '$id'."
     }
 
     fun due(c: Context, now: Long): List<AutonomyGoal> = all(c).filter { AutonomyGoalPolicy.due(it, now) }
 
-    /** Claim a goal before running it so a second tick cannot start the same work. */
-    fun markRan(c: Context, id: String, result: String) = synchronized(lock) {
-        save(c, all(c).map { g ->
-            if (g.id == id) g.copy(lastRunAt = System.currentTimeMillis(), lastResult = result.take(300)) else g
-        })
+    /** Atomically claim one due goal before execution; duplicate ticks cannot launch it twice. */
+    fun claimNextDue(c: Context, now: Long): AutonomyGoal? = synchronized(lock) {
+        val list = all(c)
+        val due = list.firstOrNull { AutonomyGoalPolicy.due(it, now) } ?: return@synchronized null
+        val claimed = due.copy(lastRunAt = now, lastResult = "started")
+        if (!save(c, list.map { if (it.id == due.id) claimed else it })) null else claimed
+    }
+
+    /** Store the outcome without moving the due-time window forward again. */
+    fun recordResult(c: Context, id: String, result: String): Boolean = synchronized(lock) {
+        val list = all(c)
+        if (list.none { it.id == id }) return@synchronized false
+        save(c, list.map { if (it.id == id) it.copy(lastResult = result.take(300)) else it })
     }
 
     fun describe(c: Context): String {
