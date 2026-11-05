@@ -132,7 +132,7 @@ object AgentPolicy {
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
         "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "record_decision", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
-        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
+        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "skill_create", "skill_enable", "skill_disable", "ask_user" -> "orion_core"
         else -> null
     }
 
