@@ -280,7 +280,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private fun recoveryRisk(tool: String, args: JSONObject): RecoveryPolicy.Risk {
         val consequential = tool in consequentialTools ||
             AgentHooks.requiresConfirmation(tool, args, "") ||
-            (tool == "shell" && ShellExecutionRouting.requiresApproval(args.optString("where"), args.optString("command")))
+            (tool == "shell" && ShellPolicy.classify(args.optString("command")) == ShellRisk.ASK)
         return RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
     }
 
@@ -347,12 +347,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         if (tool == "shell") {
             val cmd = args.optString("command")
-            val where = when (ShellExecutionRouting.backend(args.optString("where"))) {
-                ShellExecutionRouting.Backend.LINUX -> "Orion Alpine Linux"
-                ShellExecutionRouting.Backend.TERMUX -> "Termux"
-                ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
-                ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
-            }
             when (ShellPolicy.classify(cmd)) {
                 ShellRisk.BLOCKED -> { recordDispatchBlocked(tool, args, "shell_policy_blocked"); return "error: Orion refuses this command (destructive, privileged, or reads Orion's private data). Use a safer alternative or tell the user." }
                 // ASK is carried to the single GatePolicy decision below. That gate will show
