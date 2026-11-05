@@ -33,7 +33,7 @@ object SkillRegistry {
             maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false, enabled = true),
         PhoneAiSkill("email_draft", "1.0.0", "Prepare an email draft using the installed mail app. Never send automatically.",
             setOf("open_app", "open_deep_link", "list_app_deeplinks", "read_screen", "wait_for", "click_text", "type", "ask_user"),
-            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = true, enabled = true)
+            maxCalls = 8, maxDurationMs = 45_000L, requiresApproval = false, enabled = true)
     )
 
     // These are existing, bounded tools only. A skill cannot define a new tool or execute code.
