@@ -30,7 +30,8 @@ internal object OrionEvidenceLedger {
         val startedAt: Long,
         val finishedAt: Long,
         val argsFingerprint: String,
-        val summary: String
+        val summary: String,
+        val redactedArgs: String = ""
     )
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
@@ -80,6 +81,7 @@ internal object OrionEvidenceLedger {
         .put("startedAt", startedAt)
         .put("finishedAt", System.currentTimeMillis())
         .put("argsFingerprint", digest(args.toString()))
+        .put("redactedArgs", AgentPrivacyFilter.safeArguments(args))
         .put("summary", safeSummary(tool, result))
     )
 
@@ -216,7 +218,7 @@ internal object OrionEvidenceLedger {
             val outcome = runCatching { Outcome.valueOf(row.optString("outcome")) }.getOrNull() ?: return@mapNotNull null
             Event(row.optString("id"), id, row.optString("backend"), row.optString("tool"),
                 outcome, row.optLong("startedAt"), row.optLong("finishedAt"),
-                row.optString("argsFingerprint"), row.optString("summary"))
+                row.optString("argsFingerprint"), row.optString("summary"), row.optString("redactedArgs"))
         }
     }
 
