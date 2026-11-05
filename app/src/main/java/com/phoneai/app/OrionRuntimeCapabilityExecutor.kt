@@ -88,9 +88,46 @@ internal object OrionRuntimeCapabilityExecutor {
                 val path = args.optString("path")
                 val gate = OrionCodingPlanner.writeGate(service, path)
                 if (gate != null) gate else {
-                    val result = ShellRunner.writeFile(service, path, args.optString("content"))
-                    if (result.startsWith("wrote ")) OrionCodingPlanner.noteFileWritten(service, path)
-                    result
+                    val workspace = OrionPythonWorkspace(service)
+                    val before = workspace.readForUndo(path)
+                    val result = workspace.write(path, args.optString("content"))
+                    if (result.startsWith("saved ")) {
+                        val after = workspace.readForUndo(path)
+                        if (after == null || !WorkspaceUndoStore(service).recordWrite(path, before, after)) {
+                            if (before == null) workspace.delete(path) else workspace.write(path, before)
+                            "error: workspace write was rolled back because its undo receipt could not be saved"
+                        } else {
+                            OrionCodingPlanner.noteFileWritten(service, path)
+                            "wrote ${args.optString("content").length} chars to shared workspace/$path"
+                        }
+                    } else result
+                }
+            }
+            "workspace_delete" -> {
+                val path = args.optString("path")
+                val workspace = OrionPythonWorkspace(service)
+                val before = workspace.readForUndo(path)
+                    ?: return "error: workspace file is missing, unreadable, or outside the safe workspace"
+                if (!workspace.delete(path)) "error: workspace delete failed"
+                else if (!WorkspaceUndoStore(service).recordDelete(path, before)) {
+                    workspace.write(path, before)
+                    "error: workspace delete was reversed because its undo receipt could not be saved"
+                } else "deleted shared workspace/$path (reversible)"
+            }
+            "workspace_move" -> {
+                val source = args.optString("source")
+                val destination = args.optString("destination")
+                val workspace = OrionPythonWorkspace(service)
+                val content = workspace.readForUndo(source)
+                    ?: return "error: workspace source is missing, unreadable, or outside the safe workspace"
+                if (workspace.readForUndo(destination) != null) "error: destination already exists; refusing to overwrite it"
+                else {
+                    val moved = workspace.move(source, destination)
+                    if (!moved.startsWith("moved ")) moved
+                    else if (!WorkspaceUndoStore(service).recordMove(source, destination, content)) {
+                        workspace.move(destination, source)
+                        "error: workspace move was reversed because its undo receipt could not be saved"
+                    } else moved + " (reversible)"
                 }
             }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
