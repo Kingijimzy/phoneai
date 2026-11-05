@@ -263,4 +263,52 @@ class OrionCapabilityDiscoveryTest {
         assertTrue(snapshot.tools.single().available)
     }
 
+
+    private fun generated(id: String, enabled: Boolean, verified: Boolean, source: String = "def run(value):\\n    return value") =
+        GeneratedExtension(
+            id = id,
+            displayName = id.replace('_', ' '),
+            runtime = "python",
+            source = source,
+            sourceSha256 = SelfExtendingExtensionPolicy.sha256(source),
+            description = "test extension $id",
+            createdAtMillis = 1L,
+            enabled = enabled,
+            verified = verified
+        )
+
+    @Test fun onlyVerifiedEnabledHashMatchingExtensionsAreAdvertisedAsCallable() {
+        val good = generated("format_helper", enabled = true, verified = true)
+        val draft = generated("draft_helper", enabled = false, verified = false)
+        val testedButDisabled = generated("tested_helper", enabled = false, verified = true)
+        val tampered = generated("tampered_helper", enabled = true, verified = true).copy(
+            sourceSha256 = SelfExtendingExtensionPolicy.sha256("different source")
+        )
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("extension_run", ToolAccess.WRITE)),
+            setOf(AgentPolicy.packForTool("extension_run")!!),
+            termuxReady = true,
+            generatedExtensions = listOf(good, draft, testedButDisabled, tampered)
+        )
+        assertEquals(listOf("format_helper"), snapshot.extensions.filter { it.usable }.map { it.id })
+        val prompt = snapshot.promptLines().joinToString("\\n")
+        assertTrue(prompt.contains("format_helper (format helper)"))
+        assertTrue(prompt.contains("invoke only through extension_run"))
+        assertTrue(prompt.contains("draft_helper=draft-or-unverified"))
+        assertTrue(prompt.contains("tested_helper=tested-disabled"))
+        assertTrue(prompt.contains("tampered_helper=blocked-source-hash-mismatch"))
+        assertFalse(prompt.contains("tampered_helper (tampered helper)"))
+    }
+
+    @Test fun duplicateGeneratedExtensionIdsAreCollapsedBeforeDiscovery() {
+        val extension = generated("format_helper", enabled = true, verified = true)
+        val snapshot = OrionCapabilityDiscovery.discover(
+            listOf(tool("extension_run", ToolAccess.WRITE)),
+            setOf(AgentPolicy.packForTool("extension_run")!!),
+            termuxReady = true,
+            generatedExtensions = listOf(extension, extension.copy(displayName = "duplicate"))
+        )
+        assertEquals(1, snapshot.extensions.size)
+    }
+
 }
