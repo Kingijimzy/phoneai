@@ -95,7 +95,7 @@ object ShellRunner {
             if (!p.waitFor(timeoutSec.coerceIn(1, 30), TimeUnit.SECONDS)) { p.destroyForcibly(); reader.join(500); return ShellPolicy.clip(out.toString()) + "\n[timed out after ${timeoutSec}s and was stopped]" }
             reader.join(1000)
             val text = ShellPolicy.clip(out.toString().trimEnd())
-            (if (p.exitValue() == 0) "" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }
+            (if (p.exitValue() == 0) "EXIT 0 · SUCCESS\n" else "exit ${p.exitValue()}\n") + text.ifBlank { "(no output)" }
         } catch (e: Exception) { "error: could not run the command (" + (e.message ?: e.javaClass.simpleName).take(120) + ")" }
     }
 
@@ -198,8 +198,17 @@ object ShellRunner {
         }
         val remainder = synchronized(outputLock) { pending.toString().also { pending.setLength(0) } }
         if (remainder.isNotBlank()) onOutput(AgentPrivacyFilter.safeOutput(remainder))
-        AgentPolicy.log(c.applicationContext, "shell:$where", command, null, result)
-        return result
+        // Prefix a local receipt only when the backend exposed a zero exit code.
+        // Place it before command output so printed text cannot forge the receipt.
+        val verifiedResult = when {
+            result.startsWith("EXIT 0 · SUCCESS\\n") ->
+                result.replaceFirst("EXIT 0 · SUCCESS\\n", "EXIT 0 · SUCCESS\\nLOCAL VERIFY PASS: shell process exited with code 0.\\n")
+            result.startsWith("exit=0\\n") ->
+                result.replaceFirst("exit=0\\n", "exit=0\\nLOCAL VERIFY PASS: shell process exited with code 0.\\n")
+            else -> result
+        }
+        AgentPolicy.log(c.applicationContext, "shell:$where", command, null, verifiedResult)
+        return verifiedResult
     }
 
     fun writeFile(c: Context, rel: String, content: String): String {
