@@ -2599,7 +2599,7 @@ Rules:
                     managedTask = managedTask.block() ?: managedTask
                     moveTaskPhase(TaskLifecycle.Phase.BLOCKED, "Completion verification did not pass: ${completion.reason}")
                     OrionTasksCapabilityExecutor.pauseRun(svc)
-                    if (runEvidence.isEmpty() && !runFailed) return // reply-only turn (question/offer): nothing was attempted, so nothing failed.
+                    if (runEvidence.isEmpty() && runFailed == 0) return // reply-only turn (question/offer): nothing was attempted, so nothing failed.
                     ui.say("I stopped before marking this task complete: " + completion.reason + " " + outcome.message + " I saved the task progress; please verify the current screen or state before continuing.")
                     return
                 }
