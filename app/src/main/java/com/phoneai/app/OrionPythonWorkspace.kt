@@ -151,14 +151,12 @@ internal class OrionPythonWorkspace(context: Context) {
         if (!parent.exists() && !parent.mkdirs()) return "error: could not create destination directory"
         if (!insideRoot(parent) || hasSymlink(parent)) return "error: destination crossed a symlink boundary"
         return try {
-            try {
-                java.nio.file.Files.move(from.toPath(), to.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE)
-            } catch (_: Exception) {
-                if (!from.renameTo(to)) error("move failed")
-            }
+            // No REPLACE_EXISTING and no renameTo fallback: a destination race must fail,
+            // never overwrite a file that appeared after the preflight check.
+            java.nio.file.Files.move(from.toPath(), to.toPath())
             "moved $source -> $destination"
         } catch (e: Exception) {
-            "error: workspace move failed (${e.javaClass.simpleName})"
+            "error: workspace move failed (${e.javaClass.simpleName}); destination was not overwritten"
         }
     }
 
