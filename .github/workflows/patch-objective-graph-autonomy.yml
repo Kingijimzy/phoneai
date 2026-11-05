@@ -1,8 +1,0 @@
-name: patch-objective-graph-autonomy
-on:
-  workflow_dispatch:
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo disabled

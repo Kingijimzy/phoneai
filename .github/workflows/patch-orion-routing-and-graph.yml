@@ -1,8 +1,0 @@
-name: patch-orion-routing-and-graph
-on:
-  workflow_dispatch:
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo disabled-use-direct-commits
