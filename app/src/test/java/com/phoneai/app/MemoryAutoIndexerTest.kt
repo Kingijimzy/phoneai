@@ -3,7 +3,7 @@ package com.phoneai.app
 import org.junit.Assert.*
 import org.junit.Test
 
-class MemoryAutoIndexerTest {
+class MemoryAutoIndexerRelationshipsTest {
     @Test fun extractsIdentityPreferencesAndRoutines() {
         assertEquals("fact", MemoryAutoIndexer.extract("my name is Kingi")?.category)
         assertEquals("preference", MemoryAutoIndexer.extract("I prefer dark mode")?.category)
