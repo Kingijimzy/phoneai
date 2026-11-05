@@ -320,7 +320,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean {
-        if (isNonLoggedAction(tool, args)) return true
+        if (tool in setOf(
+                "shell", "termux_command", "telegram_send", "sms",
+                "whatsapp_send", "signal_send", "discord_send", "notification_action"
+            )) return true
         return tool == "mcp_call" &&
             McpConnector.scopeForTool(args.optString("name")) == "communication"
     }
@@ -501,7 +504,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             GatePolicy.Verdict.ALLOW -> Unit
         }
         if (tool != "mcp_call") IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
-            if (!requestGateApproval("Confirm computer setting: $action?")) {
+            if (!requestGateApproval("Confirm computer_settings action: $action?")) {
                 val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
                 recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
                 taskProofs.record(tool, denied)
