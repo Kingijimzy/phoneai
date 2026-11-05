@@ -40,6 +40,19 @@ class ExtensionTestReceiptStoreTest {
         assertNull(store.get("format_helper", hash))
     }
 
+    @Test fun multipleVerifiedSourceHashesRemainAvailableForRollback() {
+        val store = ExtensionTestReceiptStore(context)
+        val oldHash = SelfExtendingExtensionPolicy.sha256("old source")
+        val newHash = SelfExtendingExtensionPolicy.sha256("new source")
+        assertTrue(store.record("format_helper", ExtensionTestReport(true, oldHash, "old passed")))
+        assertTrue(store.record("format_helper", ExtensionTestReport(true, newHash, "new passed")))
+        assertNotNull(store.get("format_helper", oldHash))
+        assertNotNull(store.get("format_helper", newHash))
+        assertTrue(store.remove("format_helper", newHash))
+        assertNotNull(store.get("format_helper", oldHash))
+        assertNull(store.get("format_helper", newHash))
+    }
+
     @Test fun receiptCanBeRevoked() {
         val store = ExtensionTestReceiptStore(context)
         val hash = SelfExtendingExtensionPolicy.sha256("source")
