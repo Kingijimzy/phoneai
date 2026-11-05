@@ -15,7 +15,7 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Orion Terminal: built-in Android shell, managed Alpine Linux, and an Ask AI helper that proposes but never runs a command. */
+/** Orion Terminal: built-in Android shell, managed Alpine Linux, and an Ask AI helper. */
 class TerminalActivity : Activity() {
     private lateinit var out: TextView
     private lateinit var scroll: ScrollView
@@ -69,22 +69,11 @@ class TerminalActivity : Activity() {
 
     private fun runInput() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
-        when (if (backend == Backend.LINUX) ShellRisk.ASK else ShellPolicy.classify(cmd)) {
-            ShellRisk.BLOCKED -> {
-                append("$ $cmd\nBlocked: this command is on Orion's never-run list (destructive, privileged, or touches Orion's private data).\n")
-                return
-            }
-            ShellRisk.ASK -> {
-                AlertDialog.Builder(this)
-                    .setTitle("Confirm shell command")
-                    .setMessage("This command is outside Orion's automatic safe allowlist. Review it carefully before running:\n\n$cmd\n\nRun this command once?")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Run once") { _, _ -> executeCommand(cmd) }
-                    .show()
-                return
-            }
-            ShellRisk.SAFE -> executeCommand(cmd)
+        if (ShellPolicy.classify(cmd) == ShellRisk.BLOCKED) {
+            append("$ $cmd\nBlocked: this command is on Orion's catastrophic hard-block list (root/system wipe, raw block-device write, or fork bomb).\n")
+            return
         }
+        executeCommand(cmd)
     }
 
     private fun executeCommand(cmd: String) {
