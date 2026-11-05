@@ -146,6 +146,7 @@ internal object ConversationContextPolicy {
 
 /** The brain: asks the AI what to do, runs the tool it picks, repeats. */
 class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
+    @Volatile private var lastBrainSystemExtra: String = ""
     /** Talk uses the ordinary selected chat provider; command planning may use a separate override. */
     private val sharedRequestBudget = CommandRequestBudget(maxRequests = 15, maxRequestsProvider = { OrionAutonomySettings.read(svc).maxAiRequests })
     private val talkNim = Nim(svc, sharedBudget = sharedRequestBudget).also { n -> n.onStatus = { s -> ui.status(s) } }
@@ -497,8 +498,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return blocked
             }
             GatePolicy.Verdict.ASK_TOOL -> {
-                if (!confirm("Allow Orion to use the tool '$tool' for this task?")) {
-                    val declined = "error: user did not approve using '$tool'."
+                if (!confirm("Allow Orion to use the tool '$tool' for this task?")) {                    val declined = "error: user did not approve using '$tool'."
                     recordDispatchBlocked(tool, args, "tool_approval_declined")
                     taskProofs.record(tool, declined)
                     return declined
@@ -980,9 +980,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             runInternal(contextualResearchCommand, reuseCommandBudget = false)
             return
         }
-        val soulContext = OrionCentralBrain.contextFor(svc, command) + (if (lastBrainSystemExtra.isNotBlank()) "
-
-" + lastBrainSystemExtra else "") /* BRAIN_PIPELINE_EXTRA */
+        val soulContext = OrionCentralBrain.contextFor(svc, command) + (if (lastBrainSystemExtra.isNotBlank()) "\n\n" + lastBrainSystemExtra else "") /* BRAIN_PIPELINE_EXTRA */
         val safeSystem = (chatSystem(command) + "\n\n" + soulContext + "\n\n" + intentResolution.contextBlock).replace(
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Never bypass approval for consequential actions.",
             "TALK MODE: You are Orion and manage capabilities automatically; never tell the user to switch modes or use Command Mode. Answer ordinary questions, explanations, greetings, and brainstorming directly. For current information (live sports scores, fixtures, standings, weather, news, prices, recent events, or explicit web lookups), reply with exactly ACTION so the built-in direct-data/search route can run and then answer using verified results and source links when available. If a name is ambiguous, use recent context and the most likely interpretation; in a football-score context, interpret \"United\" as Manchester United unless context suggests another team, and ask one short clarification only if the ambiguity materially changes the answer. If lookup fails, say current information could not be verified; never guess. For phone actions, or explicit memory/task save/recall requests, reply with exactly ACTION and nothing else. Never claim an action or lookup succeeded without evidence."
@@ -997,8 +995,7 @@ RESPONSE QUALITY AND FORMAT:
 - Missing information: say what is confirmed, what is unknown, and the exact reason; do not fill gaps by guessing. Keep the answer concise but complete.
 """.trimIndent()
         val finalSystem = safeSystem + "\n\n" + responseQualityPolicy
-        val messages = JSONArray().put(msg("system", finalSystem))
-        val from = maxOf(0, chatHist.length() - 8)
+        val messages = JSONArray().put(msg("system", finalSystem))        val from = maxOf(0, chatHist.length() - 8)
         for (i in from until chatHist.length()) messages.put(chatHist.getJSONObject(i))
         messages.put(msg("user", command))
         val runawayStream = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -1497,8 +1494,7 @@ Rules:
             cursor = existing
             if (cursor == null || !MacroStore.norm(cursor.routine).equals(MacroStore.norm(name), true)) {
                 ui.say("There is no interrupted replay checkpoint for '$name'. Say 'run routine $name' to start it from the beginning.")
-                return true
-            }
+                return true            }
             if (cursor.totalSteps != steps.length() || cursor.nextStep !in 0..steps.length()) {
                 ui.say("The saved routine changed after its checkpoint. I stopped rather than replay a mismatched sequence; start it again after checking the target app.")
                 return true
@@ -1954,20 +1950,16 @@ Rules:
             val activeObj = runCatching { OrionObjectiveGraph.load(svc)?.objective.orEmpty() }.getOrDefault("")
             val turn = OrionAgentBrainBridge.planTurn(svc, command, recent, activeObj)
             lastBrainSystemExtra = turn.systemExtra
-            ui.note("[CONTEXT]
-" + turn.frame.preAction.summary)
+            ui.note("[CONTEXT]\n" + turn.frame.preAction.summary)
             if (turn.blockTools) {
-                ui.note("[TASK:CLARIFY]
-" + (turn.clarification ?: "Need a clearer goal"))
+                ui.note("[TASK:CLARIFY]\n" + (turn.clarification ?: "Need a clearer goal"))
                 ui.say(turn.clarification ?: "Which task should I continue?")
                 return
             }
             if (turn.frame.preferDirectAction) {
-                ui.note("[BRAIN]
-Direct-action path preferred; multi-objective graph is not mandatory.")
+                ui.note("[BRAIN]\nDirect-action path preferred; multi-objective graph is not mandatory.")
             } else if (turn.frame.requiresMultiStep) {
-                ui.note("[BRAIN]
-Multi-step path; keep accurate task state and verify each step.")
+                ui.note("[BRAIN]\nMulti-step path; keep accurate task state and verify each step.")
             }
         }
         // One-intent commands (play music, Google it in Chrome) skip the model entirely.
@@ -1997,8 +1989,7 @@ Multi-step path; keep accurate task state and verify each step.")
                     return
                 }
             }
-        }
-        // This deterministic acceptance path performs the whole requested outcome:
+        }        // This deterministic acceptance path performs the whole requested outcome:
         // save a usable calculator to Downloads, then run non-interactive arithmetic tests.
         if (!resumeRequest && !browserActionTask && !structuredTask &&
             OrionCommandIntentPolicy.isCalculatorExecutionRequest(command)) {
@@ -2597,8 +2588,7 @@ Multi-step path; keep accurate task state and verify each step.")
                 try {
                     val secs = ((System.currentTimeMillis() - runStartedAt) / 1000).coerceAtLeast(0)
                     ui.note("▸ Cost: ${commandNim.requestsUsed()} AI call(s) · $runTools tool(s)" + (if (runFailed > 0) " ($runFailed failed)" else "") + " · ${secs}s")
-                    if (runTools >= 2 && cleanLearningEvidence && OrionMemoryCapabilityExecutor.routineReady(svc, currentTask)) ui.note("💡 I've stored another clean example of this successful tool sequence. That is learning guidance, not an executable no-AI routine. To create a replayable gesture routine, record the exact flow in Teach Mode and save it there.")
-                } catch (_: Exception) { }
+                    if (runTools >= 2 && cleanLearningEvidence && OrionMemoryCapabilityExecutor.routineReady(svc, currentTask)) ui.note("💡 I've stored another clean example of this successful tool sequence. That is learning guidance, not an executable no-AI routine. To create a replayable gesture routine, record the exact flow in Teach Mode and save it there.")                } catch (_: Exception) { }
                 if (!OrionTasksCapabilityExecutor.completeRun(svc)) {
                     ui.say("I reached the end of the task, but could not save the completion marker. Please check the final state before resuming.")
                     return
@@ -3197,8 +3187,7 @@ Multi-step path; keep accurate task state and verify each step.")
             if (!reserveVisionStep()) {
                 return "vision paused: Orion allows at most $MAX_VISION_STEPS_PER_MINUTE vision steps per minute to protect API quota. Review the screen and continue after the limit window resets."
             }
-            // Prefer a compact local screen map and numbered targets before sending any screenshot.
-            val screenMap = svc.readScreen()
+            // Prefer a compact local screen map and numbered targets before sending any screenshot.            val screenMap = svc.readScreen()
             if (SafetyGate.isSensitiveActionScreen(screenMap, svc.currentPackageName())) {
                 return "vision stopped safely: the visible screen appears to involve money, account security, credentials, or an irreversible action. Please handle it manually."
             }
