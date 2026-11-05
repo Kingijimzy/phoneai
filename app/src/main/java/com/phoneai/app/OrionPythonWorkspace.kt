@@ -133,6 +133,35 @@ internal class OrionPythonWorkspace(context: Context) {
             "error: workspace write failed (${e.javaClass.simpleName})"
         }
     }
+    /** Snapshot helper for the conflict-safe undo journal; null means absent or unreadable. */
+    @Synchronized fun readForUndo(path: String): String? {
+        val file = resolve(path, false) ?: return null
+        if (!file.exists()) return null
+        if (!file.isFile || file.length() > MAX_FILE_BYTES || java.nio.file.Files.isSymbolicLink(file.toPath())) return null
+        return runCatching { FileInputStream(file).use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
+    }
+
+    /** Move a regular workspace file without replacing an existing destination. */
+    @Synchronized fun move(source: String, destination: String): String {
+        val from = resolve(source, true) ?: return "error: invalid or missing source workspace file"
+        val to = resolve(destination, false) ?: return "error: invalid destination workspace path"
+        if (!from.isFile || java.nio.file.Files.isSymbolicLink(from.toPath())) return "error: source is not a regular workspace file"
+        if (to.exists()) return "error: destination already exists; refusing to overwrite it"
+        val parent = to.parentFile ?: return "error: invalid destination workspace path"
+        if (!parent.exists() && !parent.mkdirs()) return "error: could not create destination directory"
+        if (!insideRoot(parent) || hasSymlink(parent)) return "error: destination crossed a symlink boundary"
+        return try {
+            try {
+                java.nio.file.Files.move(from.toPath(), to.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: Exception) {
+                if (!from.renameTo(to)) error("move failed")
+            }
+            "moved $source -> $destination"
+        } catch (e: Exception) {
+            "error: workspace move failed (${e.javaClass.simpleName})"
+        }
+    }
+
     @Synchronized fun delete(path: String): Boolean {
         val file = resolve(path, true) ?: return false
         if (!file.isFile || java.nio.file.Files.isSymbolicLink(file.toPath())) return false
