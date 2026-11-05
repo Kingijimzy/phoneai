@@ -66,6 +66,9 @@ class OrionEvidenceLedgerTest {
             JSONObject().put("text", "private message"), 2L, "sent"))
         assertTrue(OrionEvidenceLedger.recordBlocked(context, task, "sms", "blocked",
             JSONObject().put("text", "private message")))
+        assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "mcp", "mcp_call",
+            JSONObject().put("name", "whatsapp_send").put("arguments", JSONObject().put("text", "private")),
+            3L, "sent"))
         assertTrue(OrionEvidenceLedger.events(context, task).isEmpty())
     }
 
