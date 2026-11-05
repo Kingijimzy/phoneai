@@ -146,12 +146,13 @@ internal object ConversationContextPolicy {
 
 /** Shared policy for the only owner confirmations retained by Orion. */
 internal object IrreversibleActionConfirmationPolicy {
+    private val computerSettings = Regex("(?i)\\bcomputer(?:_|\\s+)settings?\\b")
     private val action = Regex(
-        "(?i)\\b(?:restart|reboot|shutdown|poweroff|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off)|computer_settings.{0,120}wi-?fi)\\b"
+        "(?i)\\b(?:restart|reboot|shutdown|poweroff|wifi|toggle(?:\\s+(?:the\\s+)?)?wi-?fi|turn(?:ing)?\\s+wi-?fi\\s+(?:on|off))\\b"
     )
 
     fun requiresConfirmation(actionDescription: String): Boolean =
-        action.containsMatchIn(actionDescription)
+        computerSettings.containsMatchIn(actionDescription) && action.containsMatchIn(actionDescription)
 
     fun computerSettingAction(tool: String, args: JSONObject): String? {
         val targetTool = if (tool == "mcp_call") args.optString("name") else tool
