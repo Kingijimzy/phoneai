@@ -38,7 +38,7 @@ class OrionPythonCapabilityExecutorTest {
             "orion_extension_versions.json"
         ).forEach { File(context.filesDir, it).delete() }
         executedSource = ""
-        executor = OrionPythonCapabilityExecutor(context, Tools(context), extensionSandbox = sandbox)
+        executor = OrionPythonCapabilityExecutor(context, null, extensionSandbox = sandbox)
     }
 
     private fun source(version: Int) = "def run(value):\n    return $version"
