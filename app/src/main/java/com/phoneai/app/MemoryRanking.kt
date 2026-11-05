@@ -45,7 +45,7 @@ internal object MemoryRanking {
         setOf("music", "song", "play", "playlist", "artist", "album", "spotify", "youtube"),
         setOf("code", "coding", "program", "kotlin", "python", "script", "developer", "app", "build"),
         setOf("work", "job", "career", "company", "business", "employer", "office"),
-        setOf("live", "home", "city", "lagos", "address", "location", "based"),
+        setOf("live", "lives", "living", "reside", "resides", "home", "house", "apartment", "city", "lagos", "address", "location", "based"),
         setOf("family", "wife", "husband", "mother", "father", "brother", "sister", "son", "daughter", "kid", "child"),
         setOf("food", "eat", "meal", "dinner", "lunch", "breakfast", "restaurant", "cook"),
         setOf("sleep", "wake", "morning", "night", "routine", "schedule", "alarm"),
