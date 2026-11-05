@@ -182,7 +182,8 @@ object MemoryStore {
         target.sourceRole = source.sourceRole
         target.confidence = source.confidence
         target.sensitivity = source.sensitivity
-        target.reviewStatus = source.reviewStatus        target.evidence = source.evidence
+        target.reviewStatus = source.reviewStatus
+        target.evidence = source.evidence
     }
 
     fun setReviewStatus(c: Context, id: Int, status: String): Boolean = synchronized(lock) {
