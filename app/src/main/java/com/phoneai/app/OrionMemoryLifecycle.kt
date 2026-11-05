@@ -8,7 +8,7 @@ import org.json.JSONObject
  * Automatic memory lifecycle (reset Rule 4):
  * Observe → Extract → Evaluate → Deduplicate → Store → Index → Retrieve → Update.
  */
-internal object OrionMemoryLifecycle {
+internal object OrionAutomaticMemoryLifecycle {
     private const val PREFS = "orion_memory_lifecycle_v1"
     private const val KEY = "entries"
 
