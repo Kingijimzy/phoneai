@@ -70,9 +70,10 @@ object AutonomyGoalStore {
                     .put("last", g.lastRunAt).put("result", g.lastResult.take(300))
                     .put("enabled", g.enabled))
             }
-            stream = f.startWrite()
-            stream.write(a.toString().toByteArray(Charsets.UTF_8))
-            f.finishWrite(stream)
+            val output = f.startWrite()
+            stream = output
+            output.write(a.toString().toByteArray(Charsets.UTF_8))
+            f.finishWrite(output)
             true
         } catch (_: Exception) {
             stream?.let { output -> runCatching { f.failWrite(output) } }
