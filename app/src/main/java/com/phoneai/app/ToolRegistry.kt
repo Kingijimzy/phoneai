@@ -174,6 +174,9 @@ internal object ToolRegistry {
         tool("task_update", ToolAccess.WRITE, "task_update {id, title?, details?, status?, priority?, dueAt?, clearDueAt?}: update an existing task; status queued, running, paused, completed, failed, or cancelled"),
         tool("task_delete", ToolAccess.WRITE, "task_delete {id}: permanently delete a task; always ask the user for confirmation first"),
         tool("skills_list", ToolAccess.READ, "skills_list {}: list registered skill IDs, enabled state, purpose, allowed tools, and approval requirement"),
+        tool("skill_create", ToolAccess.WRITE, "skill_create {id, version, description, allowed_tools:[tool names], max_calls?, max_duration_ms?, requires_approval?}: create a declarative reusable workflow over existing registered tools; it is auto-enabled only after registry validation; it cannot add native capabilities or execute code"),
+        tool("skill_enable", ToolAccess.WRITE, "skill_enable {id}: enable a validated declarative skill; this grants no new tool permissions and every write action remains gated"),
+        tool("skill_disable", ToolAccess.WRITE, "skill_disable {id}: disable a declarative skill without deleting it"),
         tool("ask_user", ToolAccess.WRITE, "ask_user {question, options, access}: show 2–4 tap options; use READ for inspection-only choices and WRITE for changes; required before irreversible actions")
     )
 
@@ -206,7 +209,7 @@ internal object ToolRegistry {
      */
     private val alwaysDetailed = setOf(
         "task_list", "task_add", "task_update", "ask_user", "remember", "recall",
-        "service_status", "skills_list", "extension_list", "capability_note"
+        "service_status", "skills_list", "skill_create", "skill_enable", "skill_disable", "extension_list", "capability_note"
     )
 
     private val requestFamilies: List<Pair<Regex, Set<String>>> = listOf(
@@ -245,7 +248,7 @@ internal object ToolRegistry {
         Regex("(?i)\\b(code|coding|program|python|script|calculator|file|folder|save|download|build|compile|test|apk|linux|termux|shell|extension|skill)\\b") to setOf(
             "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run",
             "extension_disable", "find_files", "open_file", "save_file", "termux_command", "shell",
-            "python_exec", "workspace_list", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect", "skills_list"
+            "python_exec", "workspace_list", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect", "skills_list", "skill_create", "skill_enable", "skill_disable"
         ),
         Regex("(?i)\\b(message|send|telegram|sms|email|gmail|call|contact|notification|publish|post|social|communication)\\b") to setOf(
             "resolve_contact", "telegram_status", "telegram_inbox", "telegram_send", "dial", "sms",
