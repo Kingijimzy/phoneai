@@ -3319,7 +3319,7 @@ Rules:
                 if (stopped) return "stopped at step $i"
                 val stepText = parseJson(rawText)
                 val actionText = stepText.optString("action", "done").lowercase()
-                ui.note("[TASK:THINK]\\nNext action: $actionText\\n${stepText.optString("summary").take(160)}")
+                ui.note("[TASK:THINK]\nNext action: $actionText\\n${stepText.optString("summary").take(160)}")
                 when (actionText) {
                     "click" -> {
                         val id = stepText.optInt("id", -1)
@@ -3351,7 +3351,7 @@ Rules:
             if (stopped) return "stopped at step $i"
             val step = parseJson(raw)
             val act = step.optString("action", "done").lowercase()
-            ui.note("[TASK:THINK]\\nNext action: $act\\n${step.optString("summary").take(160)}")
+            ui.note("[TASK:THINK]\nNext action: $act\\n${step.optString("summary").take(160)}")
             fun px(key: String, max: Int): Float? {
                 val v = step.optDouble(key, Double.NaN)
                 if (v.isNaN() || v.isInfinite()) return null
