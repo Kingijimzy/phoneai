@@ -58,6 +58,7 @@ class ExtensionVersionHistoryTest {
         assertTrue(registry.saveRevision(second))
         val secondReport = ExtensionTestReport(true, second.sourceSha256, "passed")
         assertTrue(receipts.record(second.id, secondReport))
+        assertNotNull(receipts.get("format_helper", firstHash))
         assertTrue(registry.promote(second.id, secondReport, userApproved = true))
         assertTrue(history.record(second.copy(enabled = true, verified = true)))
 
