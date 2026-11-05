@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TrustedDependencyInstallPolicyTest {
-    private val repos = "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
+    private val repos = "--repositories-file /dev/null --repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
         "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community"
 
     @Test fun permitsOnlyPinnedSignedOfficialRepositoryInstalls() {
