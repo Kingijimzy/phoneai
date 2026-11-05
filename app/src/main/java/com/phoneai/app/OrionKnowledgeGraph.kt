@@ -18,7 +18,9 @@ internal object OrionKnowledgeGraph {
             db.execSQL("CREATE INDEX idx_graph_edge_source ON edges(source_id)")
             db.execSQL("CREATE INDEX idx_graph_edge_memory ON edges(memory_id)")
         }
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {\n            if (oldVersion < 2) db.execSQL("CREATE INDEX IF NOT EXISTS idx_graph_edge_source ON edges(source_id)")\n        }
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) db.execSQL("CREATE INDEX IF NOT EXISTS idx_graph_edge_source ON edges(source_id)")
+        }
     }
 
     private fun normalize(value: String): String =
