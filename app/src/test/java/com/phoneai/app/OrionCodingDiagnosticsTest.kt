@@ -16,7 +16,7 @@ class OrionCodingDiagnosticsTest {
     }
 
     @Test fun extractsPytestFailureAndBoundsOutput() {
-        val result = OrionCodingDiagnostics.parse("FAILED tests/test_math.py:18: test_total - AssertionError")
+        val result = OrionCodingDiagnostics.parse("tests/test_math.py:18: AssertionError in test_total")
         assertTrue(result.any { it.category == "pytest" && it.line == 18 })
         assertTrue(OrionCodingDiagnostics.render(result).contains("tests/test_math.py:18"))
     }
