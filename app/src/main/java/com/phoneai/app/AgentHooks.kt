@@ -131,12 +131,9 @@ internal object AgentHooks {
   val explicitSendIntent = !explicitlyWithheld && (explicit.containsMatchIn(request) || (target.equals("Send", true) && messagingIntent.containsMatchIn(request)))
   return if((riskyTarget||riskyTool)&&!explicitSendIntent) "Request does not explicitly authorize this consequential action${if(label.isBlank())"" else " ('$label')" }." else null
  }
- fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean {
-  if(tool=="notification_action"&&args.optString("action").equals("reply",true)) return true
-  val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"click"->targetLabel;else->""}
-  if(risky.containsMatchIn(target)) return true
-  return tool=="type"&&Regex("\\b(whatsapp|email|gmail|message|send|reply)\\b",RegexOption.IGNORE_CASE).containsMatchIn(targetLabel)
- }
+ /** Confirmation is reserved for the three irreversible computer settings only. */
+ fun requiresConfirmation(tool:String,args:JSONObject,targetLabel:String=""):Boolean =
+  IrreversibleActionConfirmationPolicy.computerSettingAction(tool,args) != null
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
   completionDecision(request, proofs, emptyList())
 
