@@ -42,12 +42,12 @@ object SkillRegistry {
     private val supportedTools = ToolRegistry.names() - skillManagementTools
 
 
-    // Consequential tools always require approval, regardless of a skill's manifest setting.
-    // Every write-capable tool requires approval when invoked through a skill.
-    private val consequentialTools = ToolRegistry.all
-        .filter { it.access == ToolAccess.WRITE }
-        .map { it.name }
-        .toSet()
+    // Only genuinely consequential tool families are forced through approval by skill policy.
+    // Routine workspace/app writes still pass the central dispatcher and explicit owner overrides.
+    private val consequentialTools = setOf(
+        "telegram_send", "sms", "notification_action", "mcp_call",
+        "task_delete", "forget", "update_memory", "undo_last"
+    )
 
 
     private val idPattern = Regex("^[a-z0-9][a-z0-9._-]{1,47}$")
