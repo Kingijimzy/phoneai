@@ -334,11 +334,13 @@ internal object OrionCodingPlanner {
             "cd /workspace/projects/$name && $command",
             "linux"
         )
-        val exitCode = Regex("(?m)^exit[=\\s]+(\\d+)").find(output)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
-        val missingRuntime = exitCode == 127
-        if (output.startsWith("error:", ignoreCase = true) || missingRuntime || output.contains("timed out", ignoreCase = true)) {
+        val exitCode = parseExitCode(output)
+        if (output.startsWith("error:", ignoreCase = true) ||
+            exitCode == null ||
+            exitCode == 127 ||
+            output.contains("timed out", ignoreCase = true)) {
             setStatus(context, name, Status.BLOCKED, command, output)
-            return "TEST RUN BLOCKED: the test command did not complete successfully in Orion Alpine (missing runtime or timeout). $output"
+            return "TEST RUN BLOCKED: Orion could not establish a trustworthy process exit status (runtime missing, timeout, cancellation, or incomplete output). No test pass is claimed. $output"
         }
         if (exitCode == 0 && noTestsExecuted(language, output)) {
             setStatus(context, name, Status.BLOCKED, command, output)
@@ -413,6 +415,11 @@ internal object OrionCodingPlanner {
             else -> false
         }
     }
+
+    /** A missing process exit marker is unknown, never an implicit success. */
+    internal fun parseExitCode(output: String): Int? =
+        Regex("(?im)^exit[=\\s]+(-?\\d+)\\s*$")
+            .find(output)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
     private fun noTestsExecuted(language: String, output: String): Boolean = when (language) {
         "python" -> Regex("(?m)^Ran 0 tests?").containsMatchIn(output)
