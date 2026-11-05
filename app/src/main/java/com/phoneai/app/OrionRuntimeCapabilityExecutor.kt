@@ -103,7 +103,7 @@ internal object OrionRuntimeCapabilityExecutor {
                             else "error: workspace write completed but its undo receipt failed and rollback could not be verified; inspect the file before retrying"
                         } else {
                             OrionCodingPlanner.noteFileWritten(service, path)
-                            "wrote ${args.optString("content").length} chars to shared workspace/$path\\nLOCAL VERIFY PASS: workspace file read-back matches the written content."
+                            "wrote ${args.optString("content").length} chars to shared workspace/$path\nLOCAL VERIFY PASS: workspace file read-back matches the written content."
                         }
                     } else result
                 }
@@ -119,7 +119,7 @@ internal object OrionRuntimeCapabilityExecutor {
                     if (restored) "error: workspace delete was reversed because its undo receipt could not be saved"
                     else "error: workspace delete completed but receipt save and restoration both failed; inspect the workspace before retrying"
                 } else if (workspace.readForUndo(path) != null) "error: delete did not verify; the file is still present"
-                else "deleted shared workspace/$path (reversible)\\nLOCAL VERIFY PASS: deleted file is absent from the workspace."
+                else "deleted shared workspace/$path (reversible)\nLOCAL VERIFY PASS: deleted file is absent from the workspace."
             }
             "workspace_move" -> {
                 val source = args.optString("source")
@@ -138,7 +138,7 @@ internal object OrionRuntimeCapabilityExecutor {
                         else "error: workspace move completed but receipt save and rollback could not be verified; inspect both paths before retrying"
                     } else if (workspace.readForUndo(source) != null || workspace.readForUndo(destination) != content)
                         "error: move did not verify; inspect both paths before retrying"
-                    else moved + " (reversible)\\nLOCAL VERIFY PASS: source is absent and destination matches the moved file."
+                    else moved + " (reversible)\nLOCAL VERIFY PASS: source is absent and destination matches the moved file."
                 }
             }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
