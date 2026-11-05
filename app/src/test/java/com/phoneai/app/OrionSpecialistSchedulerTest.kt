@@ -42,6 +42,21 @@ class OrionSpecialistSchedulerTest {
         }
     }
 
+    @Test fun stoppingParentCancelsEveryScheduledChildWorkRequest() {
+        assertTrue(AgentCheckpointStore.begin(context, "Parent objective"))
+        val parentId = AgentCheckpointStore.evidenceTaskId(context)!!
+        val store = OrionWorkerJobStore(context)
+        val jobs = (1..2).map { store.enqueue(parentId, "child $it", idempotencyKey = "child-$it")!! }
+        jobs.forEach { assertTrue(OrionSpecialistScheduler.enqueue(context, it.id)) }
+        assertTrue(AgentCheckpointStore.stop(context, "owner stopped parent"))
+        assertTrue(store.all().filter { it.parentTaskId == parentId }.all { it.status == OrionWorkerJobStore.Status.CANCELLED })
+        jobs.forEach { job ->
+            val info = WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWork("orion-specialist-${job.id}").get(3, TimeUnit.SECONDS)
+            assertEquals(WorkInfo.State.CANCELLED, info.single().state)
+        }
+    }
+
     @Test fun cancellationStopsUniqueWorkAndCommitsLedgerFirst() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "cancel me", idempotencyKey = "cancel-me")!!
