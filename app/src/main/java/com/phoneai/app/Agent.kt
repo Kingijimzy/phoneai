@@ -281,7 +281,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val fullPython = OrionPythonCapabilityExecutor.requiresExplicitApproval(
             tool, OrionOwnerDialSettings.read(svc).pythonProfile
         )
-        val skill = activeSkillId?.let { OrionPythonCapabilityExecutor /* keep this path dependency-free */; OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
+        val skill = activeSkillId?.let { OrionSkillsCapabilityExecutor.findEnabled(svc, it) }
         val skillRequiresApproval = skill?.requiresApproval == true
         val skillWriteAction = activeSkillId != null && ToolRegistry.access(tool) == ToolAccess.WRITE
         val consequential = tool in consequentialTools || fullPython || skillRequiresApproval || skillWriteAction ||
