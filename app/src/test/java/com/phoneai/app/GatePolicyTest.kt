@@ -39,10 +39,13 @@ class GatePolicyTest {
     }
 
     @Test fun onlyThreeIrreversibleComputerActionsMatchConfirmationPolicy() {
-        listOf("restart computer", "shutdown", "toggle Wi-Fi", "turn WiFi off", "turning wi-fi on")
+        listOf("computer_settings restart", "computer_settings shutdown",
+            "computer_settings toggle Wi-Fi", "computer_settings turn WiFi off",
+            "Remote MCP Tool: computer_settings; arguments: {action:wifi}")
             .forEach { assertTrue(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
-        listOf("send telegram message", "reply to notification", "write remote file",
-            "delete memory", "make payment", "run shell command", "open Wi-Fi settings")
+        listOf("restart app", "shutdown service", "toggle Wi-Fi settings screen",
+            "send telegram message", "reply to notification", "write remote file",
+            "delete memory", "make payment", "run shell command")
             .forEach { assertFalse(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
     }
 
