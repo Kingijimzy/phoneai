@@ -6,7 +6,7 @@ import org.json.JSONObject
  * Owns remote MCP connection, discovery and invocation.
  *
  * Every invocation rechecks local pairing and granted scope here and again in McpConnector.
- * Non-read scopes require an action-specific confirmation. Remote tool calls are never retried
+ * Non-read scopes dispatch immediately; only restart, shutdown and Wi-Fi actions use the shared confirmation callback. Remote tool calls are never retried
  * after an ambiguous outcome; only the connector's handshake/catalogue methods may reconnect.
  */
 internal object OrionMcpCapabilityExecutor {
