@@ -1,31 +1,31 @@
-# Orion reset — progress (finish pass)
+# Orion reset — central brain finish
 
-## Completed in source (this branch)
+## Central brain on all paths
 
-| Deliverable | Status |
-|-------------|--------|
-| Architecture audit | `docs/ORION_INTELLIGENCE_RESET_AUDIT.md` |
-| Target architecture | same doc |
-| Root-cause | same doc |
-| Backlog | same doc |
-| Brain pipeline contract | `OrionBrainPipeline` |
-| Tool outcome verifier | `OrionToolOutcomeVerifier` |
-| Auto memory lifecycle | `OrionMemoryLifecycle` |
-| Agent bridge | `OrionAgentBrainBridge` |
-| Agent wire-up | CI workflow `wire-brain-into-agent` injects into `Agent.kt` |
-| Eval scenarios (20) | `docs/ORION_EVAL_SCENARIOS.md` |
-| Unit tests | Brain / memory / music verify |
-| CI green APK | run 41793317167 @ 8a0c4af; newer runs after this commit |
+| Path | Wiring |
+|------|--------|
+| Command / `runInternal` | `OrionAgentBrainBridge.planTurn` before FastIntents & model |
+| Ambiguous "continue" | `blockTools` → clarify, no tool dispatch |
+| Direct vs multi-step | Brain notes + structuredTask soft-override when direct preferred |
+| Model context | `lastBrainSystemExtra` appended to CentralBrain context |
+| Every tool activity note | `OrionAgentBrainBridge.afterTool` verify + auto memory on accept |
+| Fast intents (music/search) | Still after brain gate (clarify can block) |
 
-## Not claimable without you
+## Modules
 
-- Physical-device acceptance ticks on the 20 scenarios  
-- Production quality of automatic memory on real chat weeks  
+- `OrionBrainPipeline`
+- `OrionAgentBrainBridge`
+- `OrionToolOutcomeVerifier`
+- `OrionMemoryLifecycle`
+- `OrionPreActionContext`
+- `OrionContextualIntentInterpreter` (references)
 
-## Rules still in force
+## Prove
 
-No new agents, trading desks, Soul frameworks, or dashboards until device eval is filled.
+1. Wait for **wire-brain-into-agent** + **Build APK** green on this branch.  
+2. Install APK → run eval scenarios 2, 4, 7, 9, 15.  
+3. Device ticks remain required for Rule 10.
 
-## Install
+## Not claimed
 
-Latest successful **Build APK** on `orion/objective-graph-autonomy-fix` → Artifacts → PhoneAI-apk.
+Full removal of every historical planner class (still present as helpers). Authority is the brain bridge on the live command path.
