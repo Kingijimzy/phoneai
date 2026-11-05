@@ -19,6 +19,7 @@ internal object TrustedDependencyInstallPolicy {
 
         var index = 2
         var noCache = false
+        var isolatedRepositoryFile = false
         val repositories = mutableSetOf<String>()
         val packages = mutableListOf<String>()
         while (index < words.size) {
@@ -27,6 +28,11 @@ internal object TrustedDependencyInstallPolicy {
                     if (noCache) return false
                     noCache = true
                     index++
+                }
+                "--repositories-file" -> {
+                    if (isolatedRepositoryFile || words.getOrNull(index + 1) != "/dev/null") return false
+                    isolatedRepositoryFile = true
+                    index += 2
                 }
                 "--repository" -> {
                     val repository = words.getOrNull(index + 1) ?: return false
@@ -41,6 +47,6 @@ internal object TrustedDependencyInstallPolicy {
                 }
             }
         }
-        return noCache && MAIN in repositories && COMMUNITY in repositories && packages.isNotEmpty()
+        return noCache && isolatedRepositoryFile && MAIN in repositories && COMMUNITY in repositories && packages.isNotEmpty()
     }
 }
