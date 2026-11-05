@@ -51,4 +51,13 @@ class MemoryGraphLifecycleTest {
         assertTrue(MemoryStore.setReviewStatus(context, saved.id, "rejected"))
         assertFalse(OrionKnowledgeGraph.relatedMemoryIds(context, "durable shared").contains(saved.id))
     }
+
+    @Test fun explicitEntityRelationshipsAreIndexedAndSearchable() {
+        val forex = MemoryStore.addOwnerConfirmed(context, "fact", "I trade forex")!!
+        val football = MemoryStore.addOwnerConfirmed(context, "fact", "I like football")!!
+
+        val forexMatches = OrionKnowledgeGraph.relatedMemoryIds(context, "forex")
+        assertTrue(forexMatches.contains(forex.id))
+        assertFalse(forexMatches.contains(football.id))
+    }
 }
