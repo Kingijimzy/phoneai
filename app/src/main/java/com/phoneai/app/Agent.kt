@@ -628,8 +628,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 (tool == "verify_send" && result.trimStart().startsWith("PASS:", ignoreCase = true)) ||
                 (tool == "verify_action" && result.trimStart().startsWith("PASS:", ignoreCase = true)) ||
                 (tool == "shell" && (
-                    result.startsWith("EXIT 0 · SUCCESS\\nLOCAL VERIFY PASS: shell process exited with code 0.") ||
-                        result.startsWith("exit=0\\nLOCAL VERIFY PASS: shell process exited with code 0.")
+                    result.startsWith("EXIT 0 · SUCCESS\nLOCAL VERIFY PASS: shell process exited with code 0.") ||
+                        result.startsWith("exit=0\nLOCAL VERIFY PASS: shell process exited with code 0.")
                     ))
             )
         if (trustedVerification) taskProofs.recordVerified(tool, verifiedResult)
