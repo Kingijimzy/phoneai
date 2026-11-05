@@ -44,10 +44,11 @@ class SkillAuthorizationPolicyTest {
         assertFalse(SkillRegistry.isSupportedTool("execute_python"))
     }
 
-    @Test fun allWriteToolsRequireApprovalWhenUsedBySkills() {
-        listOf("open_app", "browser_click", "browser_type", "mcp_call", "telegram_send", "task_add", "remember")
+    @Test fun onlyConsequentialToolsForceSkillApproval() {
+        listOf("mcp_call", "telegram_send", "sms", "notification_action", "task_delete", "forget", "update_memory")
             .forEach { assertTrue("$it must require approval", SkillRegistry.requiresApprovalForTool(it)) }
-        assertFalse(SkillRegistry.requiresApprovalForTool("web_search"))
+        listOf("open_app", "workspace_write", "task_add", "remember", "web_search")
+            .forEach { assertFalse("$it should use the central risk gate", SkillRegistry.requiresApprovalForTool(it)) }
     }
 
     @Test fun browserOperatorTemplateValidatesAgainstTheLiveToolRegistry() {
