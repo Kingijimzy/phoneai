@@ -21,7 +21,7 @@ internal object ShellPolicy {
         // Inline interpreters can write raw device nodes without shell redirection.
         Regex("""(?is)\b(?:python(?:3)?|perl|ruby|node)\s+(?:-[ce]|-e)\s+[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)""")
     )
-    private val remotePipeToShell = Regex("""(?is)\\b(?:curl|wget)\\b[^;&|]*\\|\\s*(?:sudo\\s+)?(?:sh|bash|zsh)\\b""")
+    private val remotePipeToShell = Regex("""(?is)\b(?:curl|wget)\b[^;&|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b""")
     private val forkBomb = listOf(
         Regex("""(?s):\s*\(\s*\)\s*\{[^}]*\}"""),
         Regex("""(?s)\b(?:fork|bomb)\s*\(\s*\)\s*\{[^}]*\}""")
