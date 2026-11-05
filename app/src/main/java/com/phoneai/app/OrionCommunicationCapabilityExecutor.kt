@@ -30,9 +30,6 @@ internal object OrionCommunicationCapabilityExecutor {
             when {
                 message.isBlank() -> "error: Telegram message cannot be blank."
                 stopped() -> "error: task was stopped before Telegram send; no message was sent."
-                !confirm("Send this Telegram message to the saved target? Message: " + message.take(500)) ->
-                    "error: user cancelled Telegram send"
-                stopped() -> "error: task was stopped after approval; no Telegram message was sent."
                 else -> tools.telegramSend(message)
             }
         }
@@ -47,9 +44,6 @@ internal object OrionCommunicationCapabilityExecutor {
                 number.isBlank() -> "error: a recipient phone number is required."
                 message.isBlank() -> "error: SMS draft text cannot be blank."
                 stopped() -> "error: task was stopped before opening the SMS draft."
-                !confirm("Open an SMS draft to $number with this exact text? Orion will not send it; you must press Send yourself. Message: " + message.take(500)) ->
-                    "error: user cancelled SMS draft"
-                stopped() -> "error: task was stopped after approval; no SMS draft was opened."
                 else -> tools.sms(number, message.take(4000))
             }
         }
@@ -62,10 +56,6 @@ internal object OrionCommunicationCapabilityExecutor {
                 key.isBlank() -> "error: a current notification key is required"
                 action == "reply" && reply.isBlank() -> "error: reply text cannot be blank"
                 stopped() -> "error: task was stopped before notification action; no action was dispatched"
-                action == "reply" && !confirm("Reply to the selected notification with this exact text? " + reply.take(500)) ->
-                    "error: user cancelled notification action"
-                action == "dismiss" && !confirm("Dismiss the selected safe notification? This removes it from the notification shade.") ->
-                    "error: user cancelled notification action"
                 stopped() -> "error: task was stopped before notification action; no action was dispatched"
                 else -> OrionNotificationListener.notificationAction(key, action, reply.take(4000))
             }
