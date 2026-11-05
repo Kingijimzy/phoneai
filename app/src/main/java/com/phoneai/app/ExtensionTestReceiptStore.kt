@@ -41,9 +41,9 @@ internal class ExtensionTestReceiptStore(context: Context) {
         )
     }
 
-    fun remove(id: String): Boolean = synchronized(lock) {
+    fun remove(id: String, sourceHash: String? = null): Boolean = synchronized(lock) {
         val rows = runCatching { readAllLocked() }.getOrNull() ?: return@synchronized false
-        val retained = rows.filterNot { it.optString("id") == id }
+        val retained = rows.filterNot { it.optString("id") == id && (sourceHash == null || it.optString("hash") == sourceHash) }
         persistLocked(retained)
     }
 
