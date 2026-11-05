@@ -66,7 +66,7 @@ class ShellExecutionRoutingTest {
         assertTrue(ShellExecutionRouting.requiresApproval("termux", "apk upgrade"))
         val trustedInstall = "apk --no-cache --repositories-file /dev/null " +
             "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/main " +
-            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community python3"
+            "--repository https://dl-cdn.alpinelinux.org/alpine/v3.22/community add python3"
         assertFalse(ShellExecutionRouting.requiresApproval("linux", trustedInstall))
     }
 
