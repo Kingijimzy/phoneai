@@ -126,6 +126,19 @@ internal class SelfExtendingExtensionStore(context: Context) {
         persist(current + extension.copy(enabled = false, verified = false))
     }
 
+    /** Replace a disabled extension with a new disabled draft; active code is never overwritten. */
+    fun saveRevision(extension: GeneratedExtension): Boolean = synchronized(lock) {
+        if (SelfExtendingExtensionPolicy.validateIdentity(extension.id, extension.displayName) != null ||
+            SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source) != null ||
+            OrionSecurityPolicy.findEmbeddedSecret(extension.description) != null ||
+            SelfExtendingExtensionPolicy.sha256(extension.source) != extension.sourceSha256) return@synchronized false
+        val current = try { all() } catch (_: Exception) { return@synchronized false }
+        val previous = current.firstOrNull { it.id == extension.id } ?: return@synchronized false
+        if (previous.enabled) return@synchronized false
+        if (previous.sourceSha256 == extension.sourceSha256) return@synchronized false
+        persist(current.map { if (it.id == extension.id) extension.copy(enabled = false, verified = false) else it })
+    }
+
     /** Promote only after sandbox tests passed for the exact source and the user approves it. */
     fun promote(id: String, report: ExtensionTestReport, userApproved: Boolean): Boolean = synchronized(lock) {
         val current = try { all() } catch (_: Exception) { return@synchronized false }
