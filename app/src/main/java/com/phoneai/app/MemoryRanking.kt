@@ -15,6 +15,23 @@ internal object MemoryRanking {
         return x.intersect(y).size.toDouble() / x.union(y).size.toDouble()
     }
 
+    /** Ultron Cerebro's bounded character 3-gram feature, normalized for punctuation and whitespace. */
+    internal fun characterTrigrams(text: String): List<String> =
+        text.lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+            .split(Regex("\\s+"))
+            .flatMap { word -> if (word.length < 3) emptyList() else (0..word.length - 3).map { word.substring(it, it + 3) } }
+            .take(60)
+
+    /** Fuzzy sub-word overlap in [0,1], useful for typos and partial entity names. */
+    fun trigramSimilarity(a: String, b: String): Double {
+        val x = characterTrigrams(a).toSet()
+        val y = characterTrigrams(b).toSet()
+        if (x.isEmpty() || y.isEmpty()) return 0.0
+        return x.intersect(y).size.toDouble() / x.union(y).size.toDouble()
+    }
+
     /** Existing memory a new statement should replace: same category and nearly the same subject. */
     fun findSuperseded(existing: List<Memory>, category: String, text: String, threshold: Double = 0.6): Memory? =
         existing
@@ -59,8 +76,11 @@ internal object MemoryRanking {
         val matched = words.count { body.contains(it) || memory.category.contains(it) }
         val bodyWords = tokens(memory.text)
         val related = words.count { !(body.contains(it) || memory.category.contains(it)) && relatedTo(it, bodyWords) }
-        if (matched == 0 && related == 0) return 0
-        return matched * 10 + related * 5 + (if (body.contains(normalized)) 20 else 0) + (if (memory.category == normalized) 5 else 0)
+        val fuzzy = if (matched == 0 && related == 0) trigramSimilarity(query, memory.text) else 0.0
+        if (matched == 0 && related == 0 && fuzzy < 0.24) return 0
+        val fuzzyBonus = if (fuzzy >= 0.24) (fuzzy * 20).toInt().coerceAtLeast(1) else 0
+        return matched * 10 + related * 5 + fuzzyBonus +
+            (if (body.contains(normalized)) 20 else 0) + (if (memory.category == normalized) 5 else 0)
     }
 
     /**
@@ -97,13 +117,12 @@ internal object MemoryRanking {
     )
 
     /**
-     * Local hybrid retrieval, in the spirit of vector + keyword search with reciprocal rank fusion:
-     * TF-IDF cosine similarity (semantic-ish, order of rarity) fused with BM25 keyword ranking.
-     * No network, no embeddings model; works on short notes and document chunks.
+     * Local hybrid retrieval, adapted from Ultron Cerebro: BM25 + word TF-IDF cosine +
+     * character-trigram TF-IDF cosine, fused with reciprocal-rank fusion. No network or model.
      */
     fun <T> hybridRank(items: List<T>, textOf: (T) -> String, query: String, limit: Int = 10): List<T> {
+        if (items.isEmpty() || limit <= 0) return emptyList()
         val queryTokens = tokens(query).toList()
-        if (queryTokens.isEmpty() || items.isEmpty()) return emptyList()
         val docs = items.map { tokenList(textOf(it)) }
         val n = docs.size.toDouble()
         val avgLen = docs.map { it.size }.average().coerceAtLeast(1.0)
@@ -124,14 +143,37 @@ internal object MemoryRanking {
             val dNorm = Math.sqrt(tf.entries.sumOf { (t, c) -> (c * idf(t)).let { it * it } }).coerceAtLeast(1e-9)
             queryTokens.sumOf { t -> (qVec[t] ?: 0.0) * (tf[t] ?: 0) * idf(t) } / (qNorm * dNorm)
         }
+
+        val queryGrams = characterTrigrams(query).groupingBy { it }.eachCount()
+        val gramDocs = items.map { characterTrigrams(textOf(it)) }
+        val gramDf = HashMap<String, Int>()
+        gramDocs.forEach { grams -> grams.toSet().forEach { gramDf[it] = (gramDf[it] ?: 0) + 1 } }
+        fun gramIdf(gram: String) = Math.log(1.0 + (n - (gramDf[gram] ?: 0) + .5) / ((gramDf[gram] ?: 0) + .5))
+        val gramQueryWeights = queryGrams.mapValues { (gram, count) -> count * gramIdf(gram) }
+        val gramQueryNorm = Math.sqrt(gramQueryWeights.values.sumOf { it * it }).coerceAtLeast(1e-9)
+        val trigramCosine = gramDocs.map { grams ->
+            val tf = grams.groupingBy { it }.eachCount()
+            val docNorm = Math.sqrt(tf.entries.sumOf { (gram, count) ->
+                val weight = count * gramIdf(gram); weight * weight
+            }).coerceAtLeast(1e-9)
+            gramQueryWeights.entries.sumOf { (gram, weight) ->
+                weight * (tf[gram] ?: 0) * gramIdf(gram)
+            } / (gramQueryNorm * docNorm)
+        }
+
         fun ranks(scores: List<Double>): Map<Int, Int> =
             scores.withIndex().filter { it.value > 0.0 }.sortedByDescending { it.value }
                 .withIndex().associate { it.value.index to it.index + 1 }
         val rankA = ranks(bm25)
         val rankB = ranks(cosine)
+        val rankC = ranks(trigramCosine)
         return items.indices
-            .filter { it in rankA || it in rankB }
-            .map { i -> i to (1.0 / (60 + (rankA[i] ?: 1000)) + 1.0 / (60 + (rankB[i] ?: 1000))) }
+            .filter { it in rankA || it in rankB || it in rankC }
+            .map { i ->
+                i to (1.0 / (60 + (rankA[i] ?: 1000)) +
+                    1.0 / (60 + (rankB[i] ?: 1000)) +
+                    1.0 / (60 + (rankC[i] ?: 1000)))
+            }
             .sortedByDescending { it.second }
             .take(limit)
             .map { items[it.first] }
