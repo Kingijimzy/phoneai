@@ -16,11 +16,13 @@ class ShellExecutionRoutingTest {
         assertEquals(ShellExecutionRouting.Backend.INVALID, ShellExecutionRouting.backend("docker"))
     }
 
-    @Test fun everyLinuxAliasRequiresApproval() {
-        assertTrue(ShellExecutionRouting.requiresApproval("linux"))
-        assertTrue(ShellExecutionRouting.requiresApproval("Alpine"))
-        assertFalse(ShellExecutionRouting.requiresApproval("builtin"))
-        assertFalse(ShellExecutionRouting.requiresApproval("termux"))
+    @Test fun everyBackendUsesTheSameCommandRiskPolicy() {
+        // Missing commands are never silently treated as approved, regardless of backend.
+        listOf("linux", "Alpine", "builtin", "termux").forEach {
+            assertTrue("$it requires an explicit command", ShellExecutionRouting.requiresApproval(it))
+            assertFalse("$it permits safe diagnostics", ShellExecutionRouting.requiresApproval(it, "python3 --version"))
+            assertTrue("$it gates untrusted installs", ShellExecutionRouting.requiresApproval(it, "apk add python3"))
+        }
     }
 
     @Test fun packageManagerCommandsGetLongerButBoundedTimeout() {
