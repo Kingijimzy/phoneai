@@ -13,7 +13,7 @@ import java.util.Locale
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
         "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
-        "morning_brief", "standing_order"
+        "morning_brief", "standing_order", "goal_add", "goal_list", "goal_remove", "goal_toggle"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -99,6 +99,10 @@ internal object OrionTasksCapabilityExecutor {
                 )
             }
         }
+        "goal_add" -> AutonomyGoalStore.add(service, args.optString("prompt"), args.optInt("every_minutes", 120))
+        "goal_list" -> "Scheduled goals (autonomy ${if (OrionAutonomySettings.read(service).mode == OrionMode.AUTOPILOT) "AUTOPILOT" else "inactive"}):\n" + AutonomyGoalStore.describe(service)
+        "goal_remove" -> AutonomyGoalStore.remove(service, args.optString("id"))
+        "goal_toggle" -> AutonomyGoalStore.setEnabled(service, args.optString("id"), args.optBoolean("enabled", true))
         "task_list" -> {
             val tasks = TaskStore.all(service).take(30)
             val taskLines = if (tasks.isEmpty()) "No saved tasks yet."

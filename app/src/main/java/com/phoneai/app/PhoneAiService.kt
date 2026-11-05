@@ -69,6 +69,24 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val shotExec = Executors.newSingleThreadExecutor()
+    /**
+     * Soul observation is event-driven; without this tick an idle phone would never run a due
+     * autonomy goal. Only enqueues the bounded SOUL_WATCH item, and only in AUTOPILOT.
+     */
+    private val autonomyTick = object : Runnable {
+        override fun run() {
+            if (OrionAutonomySettings.read(this@PhoneAiService).mode == OrionMode.AUTOPILOT) {
+                val runtime = orionRuntime
+                if (runtime != null && runtime.enqueue(
+                        OrionRuntime.WorkType.SOUL_WATCH, "autonomy-tick", 2,
+                        goal = "Run due autonomy goals", checkpoint = "autonomy_tick"
+                    )) {
+                    scheduleRuntimeDrain()
+                }
+            }
+            main.postDelayed(this, 10 * 60_000L)
+        }
+    }
     private lateinit var wm: WindowManager
     private lateinit var agent: Agent
     private lateinit var voice: Voice
@@ -189,6 +207,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
         scheduler.onServiceReady()
         scheduleRuntimeDrain()
         OrionProactiveWork.ensureScheduled(this)
+        main.removeCallbacks(autonomyTick)
+        main.postDelayed(autonomyTick, 5 * 60_000L)
         requestContinuousWatcherObservation("service_connected")
         showBubble()
         startWake()
@@ -318,6 +338,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
                                 // Opt-in, read-only watcher: standing orders plus connected-service checks; no AI call.
                                 // Connector failures back off via the runtime; standing orders always run.
                                 SoulWatch.run(this)
+                                // In AUTOPILOT the owner has explicitly allowed Orion to start due goals.
+                                runDueAutonomyGoal()
                             }
                             OrionRuntime.WorkType.LEARN_FROM_RESULT -> {
                                 // Agent has already persisted detailed success/failure evidence to ExperienceStore.
@@ -402,6 +424,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
 
     override fun onUnbind(intent: Intent?): Boolean {
         orionRuntime?.stop()
+        main.removeCallbacks(autonomyTick)
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
         runtimeRetryRunnable = null
         runtimeRetryAtElapsed = 0L
@@ -1894,6 +1917,26 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             } finally {
                 onAgentTaskRunEnded(agent.currentTaskCommand().ifBlank { t })
             }
+            main.post { finishRun() }
+        }
+    }
+
+    /**
+     * Run at most one due autonomy goal, only in AUTOPILOT and never while a user task runs.
+     * The goal goes through the normal agent loop, so every gate and approval still applies.
+     */
+    private fun runDueAutonomyGoal() {
+        if (OrionAutonomySettings.read(this).mode != OrionMode.AUTOPILOT) return
+        if (running || !::agent.isInitialized) return
+        val goal = AutonomyGoalStore.due(this, System.currentTimeMillis()).firstOrNull() ?: return
+        AutonomyGoalStore.markRan(this, goal.id, "started")
+        running = true
+        try {
+            agent.run(goal.prompt)
+            AutonomyGoalStore.markRan(this, goal.id, "ran")
+        } catch (e: Exception) {
+            AutonomyGoalStore.markRan(this, goal.id, "error: " + (e.message ?: "failed"))
+        } finally {
             main.post { finishRun() }
         }
     }
