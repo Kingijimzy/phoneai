@@ -323,7 +323,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
 
     private fun recordDispatchBlocked(tool: String, args: JSONObject, category: String) {
-        runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category, args) }
+        if (tool in setOf("shell", "termux_command", "telegram_send", "sms",
+                "whatsapp_send", "signal_send", "discord_send")) return
+        runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
         val loopCheck = toolLoopDetector.check(tool, loopParams(args))
