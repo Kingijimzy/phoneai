@@ -107,8 +107,8 @@ internal object OrionRuntimeCapabilityExecutor {
                 val path = args.optString("path")
                 val workspace = OrionPythonWorkspace(service)
                 val before = workspace.readForUndo(path)
-                    ?: return "error: workspace file is missing, unreadable, or outside the safe workspace"
-                if (!workspace.delete(path)) "error: workspace delete failed"
+                if (before == null) "error: workspace file is missing, unreadable, or outside the safe workspace"
+                else if (!workspace.delete(path)) "error: workspace delete failed"
                 else if (!WorkspaceUndoStore(service).recordDelete(path, before)) {
                     workspace.write(path, before)
                     "error: workspace delete was reversed because its undo receipt could not be saved"
@@ -119,8 +119,8 @@ internal object OrionRuntimeCapabilityExecutor {
                 val destination = args.optString("destination")
                 val workspace = OrionPythonWorkspace(service)
                 val content = workspace.readForUndo(source)
-                    ?: return "error: workspace source is missing, unreadable, or outside the safe workspace"
-                if (workspace.readForUndo(destination) != null) "error: destination already exists; refusing to overwrite it"
+                if (content == null) "error: workspace source is missing, unreadable, or outside the safe workspace"
+                else if (workspace.readForUndo(destination) != null) "error: destination already exists; refusing to overwrite it"
                 else {
                     val moved = workspace.move(source, destination)
                     if (!moved.startsWith("moved ")) moved
