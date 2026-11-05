@@ -35,6 +35,25 @@ class MemoryRankingTest {
         assertEquals(listOf(1, 2, 4), picked)
     }
 
+    @Test fun automaticTurnRecallSelectsAtMostSixAndFindsParaphrasedCityQuestions() {
+        val memories = listOf(
+            mem(1, "fact", "User lives in Lagos Nigeria", 10),
+            mem(2, "fact", "User likes football", 9),
+            mem(3, "project", "Orion is an Android assistant", 8),
+            mem(4, "preference", "User prefers concise answers", 7),
+            mem(5, "routine", "Reviews forex charts before London session", 6),
+            mem(6, "fact", "Uses Kotlin for Android development", 5),
+            mem(7, "fact", "Enjoys jollof rice", 4),
+            mem(8, "fact", "Listens to afrobeats", 3)
+        )
+        val query = "Which city is my home?"
+        assertTrue("paraphrased location query should match the stored city fact",
+            MemoryRanking.score(memories.first(), query) > 0)
+        val recalled = MemoryRanking.select(memories, query, limit = 6, relevantLimit = 6)
+        assertTrue(recalled.any { it.id == 1 })
+        assertEquals(6, recalled.size)
+    }
+
     @Test fun scoreIsZeroWithoutOverlap() {
         assertEquals(0, MemoryRanking.score(mem(1, "fact", "Likes football", 1), "bybit"))
         assertTrue(MemoryRanking.score(mem(2, "project", "Bybit swing trading", 1), "bybit") > 0)
