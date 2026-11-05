@@ -221,6 +221,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Android may interrupt and later resume an accessibility service without recreating it.
             // Resume the bounded local queue only when a fresh real window event arrives.
             if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
+            OrionChronosAwareness.onWindowChanged(this, event.packageName?.toString())
             decisionScheduler?.onWindowChanged(event.packageName?.toString())
             requestContinuousWatcherObservation("window_changed")
             scheduleRuntimeDrain()
@@ -423,6 +424,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        OrionChronosAwareness.clear(this)
         orionRuntime?.stop()
         main.removeCallbacks(autonomyTick)
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }

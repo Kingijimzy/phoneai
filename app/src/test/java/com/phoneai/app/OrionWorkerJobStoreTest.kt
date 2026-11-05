@@ -35,14 +35,15 @@ class OrionWorkerJobStoreTest {
         assertEquals(2, second.all().size)
     }
 
-    @Test fun separateInstancesCannotClaimMoreThanOneActiveJob() {
+    @Test fun separateInstancesCanClaimAtMostThreeParallelJobs() {
         val first = OrionWorkerJobStore(context)
         val second = OrionWorkerJobStore(context)
-        first.enqueue("parent-1", "First specialist", idempotencyKey = "first")
-        first.enqueue("parent-1", "Second specialist", idempotencyKey = "second")
+        repeat(4) { first.enqueue("parent-1", "Specialist $it", idempotencyKey = "job-$it") }
+        assertNotNull(second.claimNext { true })
+        assertNotNull(first.claimNext { true })
         assertNotNull(second.claimNext { true })
         assertNull(first.claimNext { true })
-        assertEquals(1, first.all().count { it.status == OrionWorkerJobStore.Status.RUNNING })
+        assertEquals(3, first.all().count { it.status == OrionWorkerJobStore.Status.RUNNING })
     }
 
     @Test fun brainSummaryReportsSavedJobStateWithoutClaimingQueuedWorkRan() {
@@ -74,15 +75,17 @@ class OrionWorkerJobStoreTest {
         assertEquals(1, OrionWorkerJobStore(context).all().size)
     }
 
-    @Test fun claimRequiresExactLiveParentAndOnlyOneJobRunsAtATime() {
+    @Test fun claimRequiresExactLiveParentAndAllowsBoundedParallelJobs() {
         val store = OrionWorkerJobStore(context)
         store.enqueue("parent-1", "Research first", idempotencyKey = "one")
         store.enqueue("parent-1", "Research second", idempotencyKey = "two")
-        val claimed = store.claimNext { it == "parent-1" }!!
-        assertEquals(OrionWorkerJobStore.Status.RUNNING, claimed.status)
-        assertNull(store.claimNext { true })
-        assertTrue(store.complete(claimed.id, "Verified findings"))
-        assertNotNull(store.claimNext { it == "parent-1" })
+        val first = store.claimNext { it == "parent-1" }!!
+        val second = store.claimNext { it == "parent-1" }!!
+        assertEquals(OrionWorkerJobStore.Status.RUNNING, first.status)
+        assertEquals(OrionWorkerJobStore.Status.RUNNING, second.status)
+        assertNull(store.claimNext { false })
+        assertTrue(store.complete(first.id, "Verified findings"))
+        assertTrue(store.complete(second.id, "Verified findings"))
     }
 
     @Test fun missingOrPausedParentCancelsQueuedJobFailClosed() {

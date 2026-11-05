@@ -20,6 +20,7 @@ class SensorContextActivity : Activity() {
     private lateinit var status: TextView
     private var sampler: OrionSensorContextSampler? = null
     private var motionStatus: TextView? = null
+    private val scopeSwitches = mutableMapOf<OrionSensorScope, Switch>()
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -35,7 +36,7 @@ class SensorContextActivity : Activity() {
             textSize = 19f; setTextColor(0xfff1f3f5.toInt())
         })
         root.addView(TextView(this).apply {
-            text = "Each switch is a separate Orion consent grant, not an Android permission. Android may still ask for its own permission or special access. Grants default to foreground-only. Nothing is collected by this screen unless you enable the relevant scope."
+            text = "Each switch is a separate Orion consent grant, not an Android permission. Android may still ask for its own permission or special access. Most grants default to foreground-only; Chronos requires a separate explicit background grant. Nothing is collected unless you enable the relevant scope."
             textSize = 13f; setTextColor(0xffaab2bd.toInt()); setPadding(0, dp(10), 0, dp(16))
         })
         root.addView(TextView(this).apply {
@@ -52,6 +53,7 @@ class SensorContextActivity : Activity() {
             OrionSensorScope.MICROPHONE to "Microphone context",
             OrionSensorScope.NOTIFICATIONS to "Notification context",
             OrionSensorScope.APP_USAGE to "App usage context",
+            OrionSensorScope.CHRONOS_AWARENESS to "Chronos background app-category awareness",
             OrionSensorScope.ROUTINE_REMINDERS to "Routine reminders",
             OrionSensorScope.CONTACTS to "Contacts",
             OrionSensorScope.NETWORK to "Python network access"
@@ -71,10 +73,26 @@ class SensorContextActivity : Activity() {
                 isChecked = OrionSensorConsent.read(this@SensorContextActivity, scope).active()
                 setOnCheckedChangeListener { _, checked ->
                     if (checked) {
-                        OrionSensorConsent.grant(this@SensorContextActivity, scope, 30L * 24 * 60 * 60 * 1000, true)
+                        if (scope == OrionSensorScope.CHRONOS_AWARENESS &&
+                            !OrionSensorConsent.read(this@SensorContextActivity, OrionSensorScope.APP_USAGE).active()) {
+                            toggle.isChecked = false
+                            Toast.makeText(this@SensorContextActivity, "Enable App usage context first.", Toast.LENGTH_SHORT).show()
+                            return@setOnCheckedChangeListener
+                        }
+                        OrionSensorConsent.grant(
+                            this@SensorContextActivity, scope, 30L * 24 * 60 * 60 * 1000,
+                            foregroundOnly = scope != OrionSensorScope.CHRONOS_AWARENESS
+                        )
                         if (scope == OrionSensorScope.MOTION) startMotionSampler()
                     } else {
                         OrionSensorConsent.revoke(this@SensorContextActivity, scope)
+                        if (scope == OrionSensorScope.CHRONOS_AWARENESS || scope == OrionSensorScope.APP_USAGE) {
+                            OrionChronosAwareness.clear(this@SensorContextActivity)
+                        }
+                        if (scope == OrionSensorScope.APP_USAGE) {
+                            OrionSensorConsent.revoke(this@SensorContextActivity, OrionSensorScope.CHRONOS_AWARENESS)
+                            scopeSwitches[OrionSensorScope.CHRONOS_AWARENESS]?.isChecked = false
+                        }
                         if (scope == OrionSensorScope.MOTION) {
                             stopMotionSampler()
                             OrionSensorContextStore.clear(this@SensorContextActivity)
@@ -89,6 +107,7 @@ class SensorContextActivity : Activity() {
                     refreshStatus()
                 }
             }
+            scopeSwitches[scope] = toggle
             row.addView(text); row.addView(toggle)
             root.addView(row)
             root.addView(TextView(this).apply {
@@ -139,6 +158,7 @@ class SensorContextActivity : Activity() {
                     .setNegativeButton("CANCEL", null)
                     .setPositiveButton("REVOKE") { _, _ ->
                         OrionSensorScope.values().forEach { OrionSensorConsent.revoke(this@SensorContextActivity, it) }
+                        OrionChronosAwareness.clear(this@SensorContextActivity)
                         MemoryStore.all(this@SensorContextActivity).forEach {
                             OrionRoutineReminderWorker.cancel(this@SensorContextActivity, it.id)
                         }
@@ -163,6 +183,7 @@ class SensorContextActivity : Activity() {
         OrionSensorScope.MICROPHONE -> "Voice sessions only after you explicitly start them; no background listening."
         OrionSensorScope.NOTIFICATIONS -> "Safe summaries are kept in memory only when this grant and Android Notification access are both enabled."
         OrionSensorScope.APP_USAGE -> "On-demand recent app-use summary, only with Android Usage Access; sensitive apps are excluded."
+        OrionSensorScope.CHRONOS_AWARENESS -> "Separate background grant. Uses Accessibility window-change events to keep only a coarse app category and focus duration locally for up to two hours. No package name, screen text, notifications or sensitive-app context is retained. Requires App usage context and an enabled Orion Accessibility service."
         OrionSensorScope.ROUTINE_REMINDERS -> "Allows only one-time reminders you explicitly schedule for approved routines."
         OrionSensorScope.CONTACTS -> "Allows bounded local contact searches after both this grant and Android Contacts permission are enabled."
         OrionSensorScope.NETWORK -> "Allows HTTPS/HTTP and persistent WSS/WS connections only to exact hosts you explicitly add below. RFC1918 private LAN hosts (10/8, 172.16/12, 192.168/16) are allowed after exact-host approval; HTTP and ws:// require the local plain-HTTP switch. POST and WebSocket sends ask each time unless you grant writes for that host."
@@ -223,6 +244,11 @@ class SensorContextActivity : Activity() {
     }
 
     private fun refreshStatus() {
+        if (!OrionSensorConsent.read(this, OrionSensorScope.APP_USAGE).active()) {
+            OrionSensorConsent.revoke(this, OrionSensorScope.CHRONOS_AWARENESS)
+            OrionChronosAwareness.clear(this)
+            scopeSwitches[OrionSensorScope.CHRONOS_AWARENESS]?.isChecked = false
+        }
         val active = OrionSensorConsent.activeScopes(this).map { it.name.lowercase().replace('_', ' ') }
         status.text = if (active.isEmpty()) "No active Orion context grants." else "Granted scopes (not all have active collectors): " + active.joinToString(", ")
     }

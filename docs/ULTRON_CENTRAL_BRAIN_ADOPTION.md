@@ -2,7 +2,7 @@
 
 ## Source and ownership
 
-This migration is based on the owner's sibling repository, [Kingijimzy/Ultron](https://github.com/Kingijimzy/Ultron). Both repositories are owned by Kingijimzy. Ultron has no root LICENSE file, so this is an owner-authorized internal port, not a claim that its source is permissively licensed for third parties. Preserve attribution in adapted modules and review third-party dependency licenses independently.
+This migration studies [Kingijimzy/Ultron](https://github.com/Kingijimzy/Ultron), which GitHub identifies as a fork of [AbuZar-Ansarii/Ultron](https://github.com/AbuZar-Ansarii/Ultron). Neither the fork nor upstream exposes GitHub-recognised licence metadata or a root LICENSE file; the README's MIT badge alone is not a licence grant. Orion independently implements architecture patterns and equivalent capabilities. Do not copy substantial upstream implementation code unless the upstream owner confirms permission or a valid licence is supplied. Preserve attribution and review dependency licences independently.
 
 Ultron is a Python desktop assistant. Orion is a native Android/Kotlin application with a managed Python runtime. Port architecture and reusable algorithms; adapt platform-specific behavior. Do not copy desktop APIs, paths, subprocess assumptions, background-thread models, or unsafe dynamic-import behavior into Android.
 
