@@ -263,7 +263,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     }
     private fun ownerRecoveryBackoffSeconds(): Int =
         OrionOwnerDialSettings.read(svc).recoveryBackoffSeconds.coerceIn(15, 300)
-    private val askApproved = HashSet<String>()
     @Volatile private var runStartedAt = 0L
     @Volatile private var runTools = 0
     @Volatile private var runFailed = 0
@@ -274,7 +273,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastActionScope: String = ""
     @Volatile private var lastActionScopeAt: Long = 0L
 
-    /** Local command shortcuts may not bypass the selected approval mode or enabled capability packs. */
+    /** Local command shortcuts must still respect capability-pack availability. */
     private fun requiresToolPolicy(command: String): Boolean =
         TaskScopePolicy.modeFor(command) != TaskMode.CHAT ||
             OrionCommandIntentPolicy.requiresPythonExecution(command) ||
@@ -292,10 +291,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     @Volatile private var lastScreenSnapshot: String = ""
     @Volatile private var lastScreenBeforeAction: String = ""
 
-    /**
-     * Every approval prompt goes through here so the chat gets a real event. The note carries no payload
-     * (the question can contain message text or arguments); the dialog itself shows the details.
-     */
     /** One confirmation surface, reserved exclusively for restart, shutdown and Wi-Fi toggles. */
     private fun requestGateApproval(question: String): Boolean {
         if (!IrreversibleActionConfirmationPolicy.requiresConfirmation(question)) return true
@@ -411,7 +406,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
 
-        // Global approval/pack policy runs at the real dispatch boundary for every built-in tool.
+        // Capability-pack and owner permission policy runs at the real dispatch boundary for every built-in tool.
         // Unknown tools fail closed; the model cannot select a capability pack for itself.
         val pack = AgentPolicy.packForTool(tool)
         if (pack == null) {
@@ -493,7 +488,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             svc, pack, tool,
             dangerous = consequential,
             toolMode = effectiveToolMode,
-            askedThisTask = tool in askApproved,
+            askedThisTask = true,
             hardBlockReason = GatePolicy.hardBlockReason(tool, args)
         )
         when (gate.verdict) {
