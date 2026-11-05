@@ -132,7 +132,8 @@ internal object AgentHooks {
   if(tool=="notification_action"&&args.optString("action").equals("reply",true)) return true
   val target=when(tool){"click_text"->args.optString("text");"browser_click","browser_click_verify"->args.optString("target");"click"->targetLabel;else->""}
   if(confirmationRisk.containsMatchIn(target)) return true
-  return tool=="type"&&Regex("\\b(whatsapp|email|gmail|message|send|reply)\\b",RegexOption.IGNORE_CASE).containsMatchIn(targetLabel)
+  // Draft typing is reversible and never sends by itself. Send/submit clicks are gated above.
+  return false
  }
  fun completionDecision(request:String,proofs:List<Proof>):GateDecision =
   completionDecision(request, proofs, emptyList())
