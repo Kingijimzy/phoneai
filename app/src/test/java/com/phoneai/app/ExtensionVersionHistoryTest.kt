@@ -55,7 +55,7 @@ class ExtensionVersionHistoryTest {
         val firstHash = registry.enabled("format_helper")!!.sourceSha256
         assertTrue(registry.disable("format_helper"))
         val second = draft("RESULT = INPUT + 1")
-        assertTrue(registry.saveDraft(second))
+        assertTrue(registry.saveRevision(second))
         val secondReport = ExtensionTestReport(true, second.sourceSha256, "passed")
         assertTrue(receipts.record(second.id, secondReport))
         assertTrue(registry.promote(second.id, secondReport, userApproved = true))
