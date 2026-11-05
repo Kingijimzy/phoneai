@@ -488,7 +488,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                         ShellExecutionRouting.Backend.BUILTIN -> "built-in Android shell"
                         ShellExecutionRouting.Backend.INVALID -> "unknown shell backend"
                     }
-                    "Run in $backend:\\n${args.optString("command").take(300)}\\n\\nAllow this command for the task?"
+                    "Run in $backend:\n${args.optString("command").take(300)}\n\nAllow this command for the task?"
                 } else "Allow Orion to use the tool '$tool' for this task?"
                 if (!confirm(askText)) {
                     val declined = "error: user did not approve using '$tool'."
