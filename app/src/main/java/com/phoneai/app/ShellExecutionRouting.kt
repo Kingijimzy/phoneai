@@ -11,9 +11,6 @@ internal object ShellExecutionRouting {
         else -> Backend.INVALID
     }
 
-    /** Owner-authorized Linux, Termux and built-in shell routing never requests approval. */
-    fun requiresApproval(where: String?, command: String? = null): Boolean = false
-
     /** Recognize package database mutations even when chained after a shell separator. */
     fun isPackageOperation(command: String): Boolean =
         Regex("""(^|[;&|]\s*)apk\s+(add|del|upgrade|update|fix)\b""").containsMatchIn(command)
