@@ -20,6 +20,14 @@ class OrionPlatformSelfKnowledgeTest {
         assertTrue(block.contains("at least one meaningful input/expected-output test case"))
         assertTrue(block.contains("Only when auto-activation is OFF"))
     }
+    @Test fun nativeCapabilityGapsAreNotMisrepresentedAsDeclarativeSkills() {
+        val block = OrionPlatformSelfKnowledge.promptBlock()
+        assertTrue(block.contains("skill_create"))
+        assertTrue(block.contains("registry validation auto-enables it"))
+        assertTrue(block.contains("native Android/API/network/system adapter"))
+        assertTrue(block.contains("call capability_note"))
+    }
+
     @Test fun identityStatementsAreRememberedAsOwnerConfirmed() {
         val c = MemoryAutoIndexer.extract("My name is Kingi and I live in Lagos")
         assertEquals("fact", c?.category)
