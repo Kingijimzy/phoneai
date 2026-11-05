@@ -3,8 +3,8 @@ package com.phoneai.app
 import org.json.JSONObject
 
 /**
- * Owns messaging and call-intent operations. Outbound actions retain an immediate, exact-action
- * approval gate; SMS only opens a draft and dialing only opens the dialer.
+ * Owns messaging and call-intent operations. Outbound messages and notification replies run
+ * without confirmation; SMS opens the system draft composer and dialing opens the dialer.
  */
 internal object OrionCommunicationCapabilityExecutor {
     private val supportedTools = setOf(
@@ -55,7 +55,6 @@ internal object OrionCommunicationCapabilityExecutor {
                 action !in setOf("reply", "dismiss") -> "error: action must be reply or dismiss"
                 key.isBlank() -> "error: a current notification key is required"
                 action == "reply" && reply.isBlank() -> "error: reply text cannot be blank"
-                stopped() -> "error: task was stopped before notification action; no action was dispatched"
                 stopped() -> "error: task was stopped before notification action; no action was dispatched"
                 else -> OrionNotificationListener.notificationAction(key, action, reply.take(4000))
             }
