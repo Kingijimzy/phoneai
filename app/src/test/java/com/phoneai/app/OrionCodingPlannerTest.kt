@@ -68,6 +68,17 @@ class OrionCodingPlannerTest {
         assertFalse(approvalRequested)
     }
 
+    @Test fun missingExitStatusIsUnknownRatherThanSuccess() {
+        assertTrue(OrionCodingPlanner.parseExitCode("all tests passed") == null)
+        assertTrue(OrionCodingPlanner.parseExitCode("error: process timed out") == null)
+    }
+
+    @Test fun explicitLinuxExitStatusIsParsedExactly() {
+        assertTrue(OrionCodingPlanner.parseExitCode("exit=0\\n2 tests passed") == 0)
+        assertTrue(OrionCodingPlanner.parseExitCode("exit=7\\nassertion failed") == 7)
+        assertTrue(OrionCodingPlanner.parseExitCode("exit=-1\\nprocess interrupted") == -1)
+    }
+
     @Test fun unreadablePlanStoreFailsClosedForPlannedWrites() {
         File(context.filesDir, "orion_coding_plans.json").writeText("{ broken")
         val result = OrionCodingPlanner.writeGate(context, "projects/demo/main.py")
