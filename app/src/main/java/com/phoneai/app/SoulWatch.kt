@@ -107,6 +107,10 @@ internal object SoulEngineWatcher {
             )
         }
 
+        // Start with the local work already completed; Chronos may refine this action label below.
+        var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
+        if (subagents.findings.isNotEmpty()) action += "+subagents"
+
         // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
         // It never dispatches an action and is gated by both owner switches and ambient-context consent.
         val chronosSuggestion = runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull()
@@ -124,8 +128,6 @@ internal object SoulEngineWatcher {
 
         // External reads/notifications only happen for explicitly configured standing orders
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
-        var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
-        if (subagents.findings.isNotEmpty()) action += "+subagents"
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
             if (StandingOrders.storageError() == null && schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
                 val dispatched = runCatching { LifeLoop.tickOne(c) }.getOrDefault(0)
