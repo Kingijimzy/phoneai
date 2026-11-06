@@ -26,7 +26,7 @@ internal object ShellPolicy {
     private val keyStorage = listOf(
         Regex("(?i)shared_prefs"),
         Regex("(?i)/data/(data|user/\\d+)/com\\.phoneai\\.app"),
-        Regex("(?i)/data/misc/(keystore|keychain)|\\bkeystore2?\\b|android_?keystore"),
+        Regex("(?i)/data/misc/(keystore|keychain)|android_?keystore"),
         Regex("(?i)orion_api_credentials|apikeyvault")
     )
 
