@@ -8,18 +8,10 @@ import org.junit.Test
 
 /**
  * Automated coverage for the intelligence reset eval scenarios (Rule 10).
+ * Scenarios needing OrionToolOutcomeVerifier / OrionChatTruthUi are omitted: those classes are not on this line.
  * Device ticks still required for full acceptance; these prove pure logic.
  */
 class OrionIntelligenceEvalTest {
-
-    @Test fun scenario2_openMusicRejectsWeb() {
-        val v = OrionToolOutcomeVerifier.verify("open music app", "play_media", "opened YouTube results for music")
-        assertFalse(v.accept)
-    }
-
-    @Test fun scenario2_openMusicAcceptsNative() {
-        assertTrue(OrionToolOutcomeVerifier.verify("open music app", "play_media", "opened Spotify app").accept)
-    }
 
     @Test fun scenario4_continueWithHistory() {
         val r = OrionContextualIntentInterpreter.resolve(
@@ -47,30 +39,6 @@ class OrionIntelligenceEvalTest {
             r.kind == OrionContextualIntentInterpreter.Kind.CORRECT_PREVIOUS ||
                 r.kind == OrionContextualIntentInterpreter.Kind.CONTINUE_OBJECTIVE
         )
-    }
-
-    @Test fun scenario10_emptyToolRejected() {
-        assertFalse(OrionToolOutcomeVerifier.verify("do work", "shell", "").accept)
-    }
-
-    @Test fun scenario10_errorToolRejected() {
-        assertFalse(OrionToolOutcomeVerifier.verify("do work", "shell", "error: not found").accept)
-    }
-
-    @Test fun truthUi_contextCard() {
-        val p = OrionChatTruthUi.parseNote("[CONTEXT]\npacks=2")
-        assertNotNull(p)
-        assertEquals(OrionChatTruthUi.EventKind.CONTEXT, p!!.kind)
-    }
-
-    @Test fun truthUi_verifyCard() {
-        val p = OrionChatTruthUi.parseNote("[VERIFY:REJECT]\nbad result")
-        assertNotNull(p)
-        assertTrue(p!!.isFailure)
-    }
-
-    @Test fun truthUi_plainNotCard() {
-        assertEquals(null, OrionChatTruthUi.parseNote("Hello there"))
     }
 
     @Test fun planNote_requiresTwoSteps() {
