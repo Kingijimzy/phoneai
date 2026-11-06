@@ -28,6 +28,18 @@ object ActionLogStore {
         "browser_extract", "browser_find", "web_search", "live_web_search", "live_news"
     )
 
+    private fun safeArguments(args: JSONObject): String {
+        val safe = JSONObject(AgentPrivacyFilter.safeArguments(args))
+        // Keep useful file-target metadata in the receipt while still applying the same
+        // credential/contact/URL redaction used for every other argument string.
+        listOf("target", "path", "file_path", "filename").forEach { key ->
+            if (args.has(key) && !safe.has(key)) {
+                safe.put(key, AgentPrivacyFilter.safeCommand(args.optString(key)))
+            }
+        }
+        return safe.toString().take(2400)
+    }
+
     private fun safeResult(tool: String, result: String): String {
         if (tool in privateTools) {
             val state = if (result.trimStart().startsWith("error", true)) "failed" else "returned"
@@ -101,7 +113,7 @@ object ActionLogStore {
         val items = load(c)
         items.add(OrionActionEvent(
             System.currentTimeMillis(), tool.take(48), outcome, category,
-            AgentPrivacyFilter.safeArguments(args),
+            safeArguments(args),
             safeResult(tool, result),
             verificationStatus.name
         ))
