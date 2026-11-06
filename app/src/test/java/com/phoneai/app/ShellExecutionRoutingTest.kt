@@ -16,12 +16,12 @@ class ShellExecutionRoutingTest {
         assertEquals(ShellExecutionRouting.Backend.INVALID, ShellExecutionRouting.backend("docker"))
     }
 
-    @Test fun shellBackendRoutingHasNoApprovalTier() {
+    @Test fun linuxAliasesRouteDirectlyWithoutAnApprovalTier() {
         assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("linux"))
         assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("Alpine"))
-        assertFalse(ShellPolicy.isIrreversible("apk add python3"))
-        assertFalse(ShellPolicy.isIrreversible("python3 script.py"))
-        assertTrue(ShellPolicy.isIrreversible("format c:"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("apk add python3"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("python3 script.py"))
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("rm -rf /system"))
     }
 
     @Test fun packageManagerCommandsGetLongerButBoundedTimeout() {
@@ -41,5 +41,13 @@ class ShellExecutionRoutingTest {
         assertTrue(ShellExecutionRouting.isPackageOperation("apk update && apk upgrade"))
         assertTrue(ShellExecutionRouting.isPackageOperation("apk del python3"))
         assertFalse(ShellExecutionRouting.isPackageOperation("echo apk add python3"))
+    }
+
+    @Test fun aiTermuxBridgeAcceptsOnlyExactReadOnlyDiagnostics() {
+        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
+        assertTrue(TermuxCommandPolicy.isReadOnly("python3 --version"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ."))
+        assertFalse(TermuxCommandPolicy.isReadOnly("git status && git clean -fd"))
+        assertFalse(TermuxCommandPolicy.isReadOnly("apk add python3"))
     }
 }
