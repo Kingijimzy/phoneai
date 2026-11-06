@@ -80,6 +80,8 @@ internal object OrionCentralBrain {
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         addObservedSection("soul_engine_context") { OrionSoulEngine.contextFor(app, request)?.take(5_200) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app).take(500) }
+        addObservedSection("specialist_delegation_ledger") { OrionAgentDelegation.promptSummary(app, 4) }
+        addObservedSection("background_specialist_job_ledger") { OrionWorkerJobStore(app).promptSummary(4) }
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
