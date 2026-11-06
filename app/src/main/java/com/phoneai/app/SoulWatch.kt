@@ -107,6 +107,21 @@ internal object SoulEngineWatcher {
             )
         }
 
+        // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
+        // It never dispatches an action and is gated by both owner switches and ambient-context consent.
+        val chronosSuggestion = runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull()
+        if (!chronosSuggestion.isNullOrBlank()) {
+            val category = OrionChronosAwareness.summary(c).substringAfter("category=").substringBefore(";")
+            val proposed = runCatching {
+                SoulEngineState.proposeWatchIssue(
+                    c, "chronos",
+                    "Chronos: optional break after extended $category focus",
+                    chronosSuggestion
+                )
+            }.getOrDefault(false)
+            if (proposed && OrionChronosAwareness.markSuggestionShown(c)) action = "chronos_review_suggestion"
+        }
+
         // External reads/notifications only happen for explicitly configured standing orders
         // and only while the Proactive pack remains enabled. Process one order per watcher tick.
         var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
