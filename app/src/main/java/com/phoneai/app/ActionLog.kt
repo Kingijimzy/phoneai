@@ -33,7 +33,7 @@ object ActionLogStore {
         // Keep useful file-target metadata in the receipt while still applying the same
         // credential/contact/URL redaction used for every other argument string.
         listOf("target", "path", "file_path", "filename").forEach { key ->
-            if (args.has(key) && !safe.has(key)) {
+            if (args.has(key)) {
                 safe.put(key, AgentPrivacyFilter.safeCommand(args.optString(key)))
             }
         }
