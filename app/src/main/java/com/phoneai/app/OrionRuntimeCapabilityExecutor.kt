@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * Concrete local-runtime and file capability executor.
  * This owns the execution implementation for these backend families; Agent remains responsible
- * for task planning, policy gates, approvals and evidence; Tasks owns durable checkpoint/recovery operations.
+ * for task planning, capability gates, the three-action confirmation policy and evidence; Tasks owns durable checkpoint/recovery operations.
  */
 internal object OrionRuntimeCapabilityExecutor {
     /**
