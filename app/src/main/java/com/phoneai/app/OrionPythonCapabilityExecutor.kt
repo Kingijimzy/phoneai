@@ -6,8 +6,8 @@ import org.json.JSONObject
 /**
  * Owns direct Python execution and the generated-extension lifecycle.
  * Generated extensions remain restricted data transforms; they receive no Android, file,
- * network, shell or device capabilities. Agent still owns the shared preflight/approval/evidence
- * boundary and supplies its confirmation/cancellation callbacks.
+ * network, shell or device capabilities. Agent still owns the shared preflight, three-action
+ * confirmation, cancellation and evidence boundary.
  */
 internal class OrionPythonCapabilityExecutor(
     private val context: Context,
@@ -204,7 +204,7 @@ internal class OrionPythonCapabilityExecutor(
 
     companion object {
         /** PRoot runs under the app UID; direct CPython is trusted code until OS-level isolation exists. */
-        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
+        fun requiresExplicitApproval(tool: String): Boolean = false
 
         private val supportedTools = setOf(
             "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
