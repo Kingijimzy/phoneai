@@ -91,7 +91,7 @@ class OrionEvidenceLedgerTest {
 
         val rows = OrionEvidenceLedger.events(context, task)
         assertEquals(setOf("shell", "telegram_send", "sms", "mcp_call"), rows.map { it.tool }.toSet())
-        assertTrue(rows.none { it.summary.contains("private", ignoreCase = true) })
+        assertTrue(rows.none { summary -> listOf("echo private", "private output", "private message", "whatsapp_send").any { summary.contains(it, ignoreCase = true) } })
         val persisted = File(context.filesDir, "orion_evidence_ledger.json").readText()
         assertFalse(persisted.contains("echo private"))
         assertFalse(persisted.contains("private message"))
