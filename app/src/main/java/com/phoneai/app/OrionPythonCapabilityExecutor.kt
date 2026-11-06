@@ -123,14 +123,14 @@ internal class OrionPythonCapabilityExecutor(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
             else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
-            else "owner auto-activation is off; awaiting explicit extension_enable approval"
+            else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
         return if (autoActivated) {
             "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
                 if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
-                else "Next: extension_enable (requires explicit approval)."
+                else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }
     }
 
