@@ -74,7 +74,7 @@ internal object OrionPythonRuntime {
             else -> return "error: Python workspace failed its integrity check; refusing execution."
         }
 
-        val phoneApi = OrionPythonPhoneApi(app, confirm, readOnly = ToolPermissions.level(app) == "read_only", toolInvoker = toolInvoker)
+        val phoneApi = OrionPythonPhoneApi(app, readOnly = ToolPermissions.level(app) == "read_only", toolInvoker = toolInvoker)
         val bridge = try { OrionPythonPhoneBridge(phoneApi) }
         catch (failure: Exception) {
             return "error: could not start the private Python-to-Android bridge (${failure.javaClass.simpleName})."
