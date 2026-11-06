@@ -29,14 +29,28 @@ object ActionLogStore {
     )
 
     private fun safeArguments(args: JSONObject): String {
-        val safe = JSONObject(AgentPrivacyFilter.safeArguments(args))
-        // Keep useful file-target metadata in the receipt while still applying the same
-        // credential/contact/URL redaction used for every other argument string.
-        listOf("target", "path", "file_path", "filename").forEach { key ->
-            if (args.has(key)) {
-                safe.put(key, AgentPrivacyFilter.safeCommand(args.optString(key)))
+        // Extract file-target keys before privacy filtering so they are never redacted.
+        val targetKeys = listOf("target", "path", "file_path", "filename")
+        val preserved = mutableMapOf<String, String>()
+        val argsCopy = JSONObject()
+        args.keys().forEachRemaining { key ->
+            if (key in targetKeys) {
+                preserved[key] = args.optString(key)
+            } else {
+                try {
+                    argsCopy.put(key, args.get(key))
+                } catch (_: Exception) { }
             }
         }
+
+        // Sanitize the remaining arguments (without target keys).
+        val safe = JSONObject(AgentPrivacyFilter.safeArguments(argsCopy))
+
+        // Restore preserved target keys with minimal redaction (URL/credential only).
+        preserved.forEach { (key, value) ->
+            safe.put(key, AgentPrivacyFilter.safeCommand(value))
+        }
+
         return safe.toString().take(2400)
     }
 
