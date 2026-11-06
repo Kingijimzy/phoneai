@@ -42,7 +42,7 @@ class AgentControlActivity : Activity() {
         setContentView(scroll)
         addText("ORION / AGENT CONTROL", 10f, Theme.MUTED, true, 0)
         addText("Approval & capabilities", 26f, Theme.TEXT, true, 4)
-        addText("Core phone and messaging tools are available by default. Optional services may need setup or permission; consequential actions still require confirmation. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
+        addText("Core phone and messaging tools are available by default. Optional services may need setup or Android permission. Only restart, shutdown and Wi-Fi toggles require confirmation; all other authorized actions run immediately. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to settings") { finish() }
 
         section("APPROVAL MODE")
@@ -94,7 +94,6 @@ class AgentControlActivity : Activity() {
         section("BUDGETS & MODEL SPLIT")
         addText("Current per-task limits: ${AgentPolicy.maxSteps(this)} steps · ${AgentPolicy.maxCalls(this)} calls · ${AgentPolicy.maxMinutes(this)} minutes.", 12f, Theme.MUTED, false, 4)
         addButton("Set task budgets") { chooseBudgets() }
-        addButton("Configure tool allowlist") { configureAllowlist() }
         addButton("Propose a new skill") { proposeSkill() }
         addButton("Review / revoke skills") { reviewSkills() }
         addButton("Manage custom agents") { manageCustomAgents() }
@@ -260,31 +259,6 @@ class AgentControlActivity : Activity() {
             }.show()
     }
 
-    private fun configureAllowlist() {
-        val available = AgentPolicy.packs.filter { it.implemented && AgentPolicy.enabled(this, it.id) }
-        if (available.isEmpty()) {
-            Toast.makeText(this, "Enable a supported capability pack first.", Toast.LENGTH_LONG).show()
-            return
-        }
-        AlertDialog.Builder(this).setTitle("Choose pack for allowlist")
-            .setItems(available.map { it.title }.toTypedArray()) { _, index ->
-                val pack = available[index]
-                val input = android.widget.EditText(this).apply {
-                    hint = "Exact tool IDs separated by commas"
-                    setText(AgentPolicy.allowlist(this@AgentControlActivity, pack.id).joinToString(", "))
-                    setSingleLine(false)
-                }
-                AlertDialog.Builder(this).setTitle("Allowlisted tools · ${pack.title}")
-                    .setMessage("Use exact registered tool IDs. Unknown tools are denied. In Allowlist mode, only these tools may run automatically; consequential actions still need approval unless a trusted session covers the pack.")
-                    .setView(input).setNegativeButton("CANCEL", null)
-                    .setPositiveButton("SAVE") { _, _ ->
-                        AgentPolicy.setAllowlist(this, pack.id, input.text.toString().split(",").map { it.trim() })
-                        AgentPolicy.log(this, "allowlist", "update", true, "allowlist updated for pack ${pack.id}")
-                        Toast.makeText(this, "Allowlist saved.", Toast.LENGTH_SHORT).show()
-                    }.show()
-            }.show()
-    }
-
     private fun proposeSkill() {
         if (!AgentPolicy.enabled(this, "self_evolution")) {
             AlertDialog.Builder(this).setTitle("Self-evolution is disabled")
@@ -391,12 +365,6 @@ class AgentControlActivity : Activity() {
                 testReport.text = "BLOCKED · ${policy.reason}"
                 AgentPolicy.log(this, "self_test", "run", false, policy.reason)
                 return
-            }
-            AgentPolicy.Decision.NEED_APPROVAL -> {
-                AlertDialog.Builder(this).setTitle("Approve self-test?")
-                    .setMessage("This test makes one selected-provider probe if a key is saved, plus public weather, news and sports lookups. It does not perform phone actions or trading orders. Provider probe may consume API quota.")
-                    .setNegativeButton("CANCEL") { _, _ -> AgentPolicy.log(this, "self_test", "run", false, "user cancelled diagnostic") }
-                    .setPositiveButton("RUN TESTS") { _, _ -> executeSelfTest() }.show()
             }
             AgentPolicy.Decision.ALLOW -> executeSelfTest()
         }
