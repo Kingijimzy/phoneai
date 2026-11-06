@@ -254,8 +254,13 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(applicationContext) }
         val tasks = OrionDistributedTaskStore(applicationContext)
         val record = tasks.get(taskId) ?: return Result.failure()
-        if (record.status == "completed") return Result.success()
-        if (record.status !in setOf("queued", "retry_wait")) return Result.success()
+        when (record.status) {
+            "completed", "cancelled" -> return Result.success()
+            "failed", "needs_review", "cancel_requested" -> return Result.failure()
+            "running" -> return Result.retry()
+            "queued", "retry_wait" -> Unit
+            else -> return Result.failure()
+        }
         try {
             setForegroundAsync(foregroundInfo(taskId)).get(8, TimeUnit.SECONDS)
         } catch (_: Exception) {
