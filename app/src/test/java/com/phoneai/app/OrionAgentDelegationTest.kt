@@ -300,4 +300,15 @@ class OrionAgentDelegationTest {
             context, manifest.id, "research", manifest.objective, "chronos", "Build an unrelated app"
         ))
     }
+
+    @Test fun sharedSpecialistLedgerCarriesRootObjectiveLineage() {
+        val record = org.json.JSONObject()
+            .put("agentId", "research")
+            .put("status", "running")
+            .put("objective", "Research the Chronos event flow")
+            .put("rootObjective", "Finish the Orion Ultron adoption")
+        val summary = OrionAgentDelegation.formatPromptSummary(listOf(record))
+        assertTrue(summary.contains("Research the Chronos event flow"))
+        assertTrue(summary.contains("root objective: Finish the Orion Ultron adoption"))
+    }
 }
