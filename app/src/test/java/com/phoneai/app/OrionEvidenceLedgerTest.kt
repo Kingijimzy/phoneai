@@ -35,8 +35,14 @@ class OrionEvidenceLedgerTest {
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "shell", "shell", JSONObject().put("command", "pwd"), 20L, "/workspace"))
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "mcp", "mcp_call", JSONObject(), 30L, "error: offline"))
         val rows = OrionEvidenceLedger.events(context, task)
-        assertEquals(listOf(OrionEvidenceLedger.Outcome.VERIFIED, OrionEvidenceLedger.Outcome.FAILED),
-            rows.map { it.outcome })
+        assertEquals(
+            listOf(
+                OrionEvidenceLedger.Outcome.VERIFIED,
+                OrionEvidenceLedger.Outcome.EXECUTED_UNVERIFIED,
+                OrionEvidenceLedger.Outcome.FAILED
+            ),
+            rows.map { it.outcome }
+        )
         assertTrue(OrionEvidenceLedger.hasVerifiedEvidence(context, task))
     }
 
