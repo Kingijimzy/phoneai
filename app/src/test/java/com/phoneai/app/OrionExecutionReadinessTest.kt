@@ -49,6 +49,16 @@ class OrionExecutionReadinessTest {
         assertFalse(plan.requiresOwnerInput)
     }
 
+    @Test fun readinessPromptLimitsConfirmationToTheThreeIrreversibleSettings() {
+        val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
+        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell"))
+        val prompt = plan.promptLines().joinToString("\\n")
+        assertFalse(plan.requiresOwnerInput)
+        assertTrue(prompt.contains("Only restart, shutdown and Wi-Fi toggles require confirmation"))
+        assertFalse(prompt.contains("requires_approval"))
+        assertFalse(prompt.contains("user approvals still apply"))
+    }
+
     @Test fun unavailableShellNeverPromisesExecution() {
         val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
         val plan = OrionExecutionReadiness.plan(goal, snapshot("live_web_search"))
