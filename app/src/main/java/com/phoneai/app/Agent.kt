@@ -417,7 +417,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
         if (shellCommand.isNotBlank() && ShellPolicy.classify(shellCommand) == ShellRisk.BLOCKED) {
             val blocked = "error: Orion blocked a destructive Android/Linux shell command before dispatch."
-            recordDispatchBlocked(tool, args, "ultron_irreversible_windows_command")
+            recordDispatchBlocked(tool, args, "android_linux_shell_hard_block")
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
