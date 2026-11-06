@@ -28,7 +28,9 @@ internal data class OrionTaskEnvelope(
     val spanId: String,
     val cancellationToken: String,
     val resultSchemaVersion: Int,
-    val policyVersion: String
+    val policyVersion: String,
+    /** Root user objective inherited unchanged by every descendant specialist task. */
+    val rootObjective: String = objective
 ) {
     enum class Kind { USER_GOAL, DELEGATED_STEP, RESEARCH, CODE, TRADING_ANALYSIS, DIAGNOSTICS, VERIFICATION }
 
@@ -38,6 +40,7 @@ internal data class OrionTaskEnvelope(
         if (parentTaskId != null && !isSafeId(parentTaskId)) add("invalid_parent_task_id")
         if (!isSafeId(rootTaskId)) add("invalid_root_task_id")
         if (objective.isBlank() || objective.length > MAX_OBJECTIVE) add("invalid_objective")
+        if (rootObjective.isBlank() || rootObjective.length > MAX_OBJECTIVE) add("invalid_root_objective")
         if (requestedCapabilities.size > MAX_CAPABILITIES ||
             requestedCapabilities.any { !isSafeLabel(it, MAX_LABEL) }) add("invalid_capabilities")
         if (inputEvidenceRefs.size > MAX_EVIDENCE ||
@@ -72,6 +75,7 @@ internal data class OrionTaskEnvelope(
         .put("cancellationToken", cancellationToken)
         .put("resultSchemaVersion", resultSchemaVersion)
         .put("policyVersion", policyVersion)
+        .put("rootObjective", rootObjective)
 
     companion object {
         const val CURRENT_SCHEMA_VERSION = 1
@@ -85,6 +89,13 @@ internal data class OrionTaskEnvelope(
         private val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
         private val LABEL = Regex("^[A-Za-z0-9][A-Za-z0-9._:/ _-]{0,99}$")
         private val HEX = Regex("^[a-fA-F0-9]+$")
+        private val SECRET_ASSIGNMENT = Regex("(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|password|passcode|pin|secret|authorization|credential|private[_-]?key)\\s*[:=]\\s*[^\\s,;]+")
+        private val BEARER_SECRET = Regex("(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*")
+
+        private fun sanitizeObjective(value: String): String = value
+            .replace(BEARER_SECRET, "Bearer [redacted]")
+            .replace(SECRET_ASSIGNMENT) { "${it.groupValues[1]}=[redacted]" }
+            .replace(Regex("\\s+"), " ").trim().take(MAX_OBJECTIVE)
 
         private fun isSafeId(value: String) = ID.matches(value)
         private fun isSafeLabel(value: String, max: Int) = value.length <= max && LABEL.matches(value)
@@ -100,18 +111,21 @@ internal data class OrionTaskEnvelope(
             rootTaskId: String? = null,
             deadlineAt: Long? = null,
             policyVersion: String = "1",
-            now: Long = System.currentTimeMillis()
+            now: Long = System.currentTimeMillis(),
+            rootObjective: String? = null
         ): OrionTaskEnvelope {
             val id = UUID.randomUUID().toString()
             val trace = UUID.randomUUID().toString().replace("-", "")
             val span = UUID.randomUUID().toString().replace("-", "").take(16)
+            val safeObjective = sanitizeObjective(objective)
+            val safeRootObjective = sanitizeObjective(rootObjective ?: safeObjective)
             return OrionTaskEnvelope(
                 CURRENT_SCHEMA_VERSION, id, parentTaskId, rootTaskId ?: parentTaskId ?: id,
-                objective.trim().take(MAX_OBJECTIVE), kind,
+                safeObjective, kind,
                 capabilities.distinct().take(MAX_CAPABILITIES),
                 evidenceRefs.distinct().take(MAX_EVIDENCE), ownerScope, now, deadlineAt, 0,
                 UUID.randomUUID().toString(), trace, span, UUID.randomUUID().toString(),
-                1, policyVersion
+                1, policyVersion, safeRootObjective
             )
         }
 
@@ -133,7 +147,7 @@ internal data class OrionTaskEnvelope(
                 json.optInt("attempt", -1), json.optString("idempotencyKey"),
                 json.optString("traceId"), json.optString("spanId"),
                 json.optString("cancellationToken"), json.optInt("resultSchemaVersion", -1),
-                json.optString("policyVersion")
+                json.optString("policyVersion"), json.optString("rootObjective", json.optString("objective"))
             )
         }
     }
