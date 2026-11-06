@@ -353,7 +353,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 return "error: dispatch blocked by the request-time task orchestrator: $reason"
             }
         }
-        // Cancellation is terminal for this dispatch attempt, including paths that would otherwise prompt for approval.
+        // Cancellation is terminal for this dispatch attempt, including paths that would otherwise require one of the three irreversible-setting confirmations.
         if (stopped) {
             val cancelled = "error: task was stopped before capability checks; no action was dispatched."
             taskProofs.record(tool, cancelled)
@@ -526,7 +526,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 lastScreenSnapshot = if (tool == "browser_navigate") "ORION_BROWSER_CLOSED_BEFORE_NAVIGATION" else ""
             }
         }
-        // Stop may be tapped while the approval dialog is open. Recheck immediately
+        // Stop may be tapped while an irreversible-setting confirmation dialog is open. Recheck immediately
         // before execution so an approved-but-now-cancelled action cannot start afterward.
         AgentDispatchPolicy.cancellationBlockReason(tool, stopped)?.let { reason ->
             val cancelled = "error: " + reason
@@ -1380,7 +1380,7 @@ Rules:
             }
             // Join goal framing, live registry/pack discovery, integration state, and
             // readiness into the actual planner context for this request. These are hints only;
-            // the real dispatch boundary still enforces permissions, approvals, and verification.
+            // the real dispatch boundary still enforces Android permissions, capability scopes, three-action confirmation and verification.
             val coordinatedPrompt = if (request.isNullOrBlank()) prompt else {
                 val registered = ToolRegistry.all
                 val names = registered.map { it.name }.toSet()
@@ -2881,7 +2881,7 @@ Rules:
     }
 
     /**
-     * Public, read-only lookups do not need a per-request approval dialog. They still respect capability, scope and validation policy; external writes execute immediately after their saved grants are validated. They still respect
+     * Public, read-only lookups do not need a per-request approval dialog. External writes execute immediately after their saved grants are validated. All routes still respect
      * an explicitly DENYed tool and a disabled capability pack. Mutating/consequential tools
      * continue through the normal capability, scope, validation and three-action confirmation policy.
      */
