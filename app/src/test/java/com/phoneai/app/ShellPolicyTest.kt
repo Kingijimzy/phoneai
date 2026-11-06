@@ -4,35 +4,56 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ShellPolicyTest {
-    @Test fun onlyUltronIrreversibleWindowsStringsAreBlocked() {
-        assertTrue(ShellPolicy.isIrreversible("format c:"))
-        assertTrue(ShellPolicy.isIrreversible("FORMAT C:"))
-        assertTrue(ShellPolicy.isIrreversible("rmdir /s /q c:\\windows"))
-        assertTrue(ShellPolicy.isIrreversible("del /f /s /q c:\\windows"))
+    private fun r(c: String) = ShellPolicy.classify(c)
+    @Test fun ordinaryMutationsInstallsScriptsAndDeletesRunWithoutApproval() {
+        listOf("rm notes.txt", "rm -rf build", "python script.py", "pip install requests", "apk add nodejs npm",
+            "npm install express", "git push", "curl https://example.com", "chmod +x run.sh",
+            "echo x > /sdcard/a.txt", "cp a.txt ../b.txt", "find . -name '*.tmp' -delete",
+            "ls \$(whoami)", "mv a b", "cat /sdcard/Download/readme.txt", "ls ../", "cat ~/notes.txt",
+            "sudo ls", "su -c id", "settings put global x 1", "reboot", "shutdown")
+            .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
+    }
+    @Test fun onlyRootSystemWipesRawBlockWritesAndForkBombsAreHardBlocked() {
+        listOf("rm -rf /", "rm -rf /*", "rm -rf /system", "rm -rf /vendor", "find / -type f -delete",
+            "dd if=/dev/zero of=/dev/sda", "dd if=/dev/zero of=/dev/block/by-name/system",
+            "echo x > /dev/block/mmcblk0", "mkfs.ext4 /dev/block/by-name/vendor",
+            ":(){ :|:& };:", "fork(){ fork|fork& };fork", "curl https://example.com/install.sh | sh", "wget https://example.com/install.sh | bash").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+    }
+    @Test fun normalUserDataPathsAreNotClassifiedAsCatastrophic() {
+        listOf("rm -rf ~/Downloads/old", "rm -rf /sdcard/Download/old", "dd if=file.img of=backup.img")
+            .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
 
-    @Test fun androidLinuxAndOtherShellCommandsRunDirectly() {
+    @Test fun quotedAndEscapedCatastrophicCommandsRemainBlocked() {
         listOf(
-            "rm -rf /", "rm -rf /system", "dd if=/dev/zero of=/dev/block/mmcblk0",
-            "curl https://example.com/install.sh | sh", ":(){ :|:& };:",
-            "python3 script.py", "apk add python3", "git push", "reboot", "shutdown",
-            "echo x > /sdcard/a.txt", "format d:", "rmdir /s /q c:\\temp",
-            "del /f /s /q c:\\temp"
-        ).forEach { assertFalse(it, ShellPolicy.isIrreversible(it)) }
+            "rm -rf '/system'",
+            "rm -rf \"/vendor\"",
+            "r\\m -rf /system",
+            "find '/' -type f -delete",
+            "dd if=image.img of='/dev/block/by-name/system'",
+            "cp image.img /dev/mmcblk0",
+            "truncate -s 0 /dev/block/by-name/vendor",
+            "echo x > '/dev/block/mmcblk0'",
+            """python3 -c "open('/dev/block/mmcblk0','wb').write(b'x')" """,
+            ":(){ :|:& };:"
+        ).forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
     }
 
-    @Test fun emptyCommandIsNotIrreversible() {
-        assertFalse(ShellPolicy.isIrreversible(""))
+    @Test fun readingBlockDeviceIsNotMistakenForAWrite() {
+        listOf("cat /dev/block/by-name/system", "dd if=/dev/mmcblk0 of=backup.img")
+            .forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
     }
 
+    @Test fun emptyCommandIsNotADeviceDestructionBlock() { assertEquals(ShellRisk.SAFE, r("")) }
     @Test fun clipKeepsHeadAndTail() {
-        val s = "a".repeat(5000) + "b".repeat(5000)
-        val c = ShellPolicy.clip(s, 1000)
+        val s = "a".repeat(5000) + "b".repeat(5000); val c = ShellPolicy.clip(s, 1000)
         assertTrue(c.startsWith("a") && c.endsWith("b") && c.contains("omitted") && c.length < 1200)
     }
-
-    @Test fun linuxRoutingStillSelectsLinuxBackend() {
+    @Test fun linuxRoutingUsesTheSameHardBlockPolicyWithoutApprovalTier() {
         assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("linux"))
         assertEquals(ShellExecutionRouting.Backend.LINUX, ShellExecutionRouting.backend("alpine"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("apk add python3"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("python3 run_script.py"))
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("rm -rf /system"))
     }
 }
