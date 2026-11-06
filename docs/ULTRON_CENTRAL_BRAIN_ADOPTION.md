@@ -48,7 +48,7 @@ The goal is to make these existing owners coherent and remove duplicated prompt 
 4. All actions pass through the existing policy and dispatch boundary. A model decision or successful tool invocation is not completion evidence.
 5. One objective/checkpoint ledger owns task progress. Specialists return results to the parent objective; they do not independently mark the parent complete.
 6. Memory retrieval occurs before planning and acting. Facts retain provenance, confidence, sensitivity, review status and temporal validity. Corrections and contradictions supersede old facts rather than silently accumulating.
-7. Extensions are not executable until isolated tests pass against the exact source hash and the configured owner policy permits promotion.
+7. Extensions are not executable until isolated tests pass against the exact source hash and the configured owner activation policy permits promotion; do not add a per-extension confirmation prompt.
 8. Background work must be durable, bounded, cancellable, battery-aware and recoverable after process death.
 9. Platform permissions and external authentication remain requirements. The only in-app action confirmations are restart, shutdown and Wi-Fi toggles; all other authorized actions execute immediately without per-call approval.
 
@@ -108,3 +108,21 @@ A feature is not complete because a class exists, a tool was called, or a model 
 - Goal claims are written atomically before dispatch, preventing duplicate ticks from immediately replaying a claimed goal. Result labels distinguish claim, agent submission and dispatch failure.
 - Automated regression coverage: Chronos consent/sensitivity/expiry; constant non-identifying queue key; autonomy owner-switch matrix; durable goal persistence/claim, interval, pause and capacity.
 - Remaining acceptance: exact-head Android CI and physical device checks for AccessibilityService continuity, WorkManager delivery after process death/reboot, owner switch enforcement, and a real scheduled goal completing through the normal agent path. HyperOS battery policy can delay or stop background work; no guarantee of uninterrupted execution is claimed.
+
+
+## Orion Prime — canonical entity identity
+
+Orion is the only assistant identity exposed to the owner. Ultron's entity-oriented philosophy is the design reference: a persistent intelligence that maintains context, perceives relevant environment, anticipates useful next steps, coordinates capabilities, learns from outcomes and improves its own bounded skills.
+
+- The canonical doctrine lives in `OrionPrimeDirective` and is injected into the shared `OrionCentralBrain` context.
+- The same doctrine is included in specialist execution prompts. Trading, research, coding, planning, writing and custom specialists are internal cognitive roles, not separate assistants or identities.
+- `CharacterProfile` exposes Orion as the only selectable conversational identity. Legacy profile IDs resolve to Orion so stored preferences do not create a second persona.
+- Providers and models are replaceable reasoning engines. They do not own identity, memory, task continuity, permissions or execution.
+- Orion's personality is composed, strategic, observant, personally continuous and restrained. It must not imitate claims of sentience, omnipotence or desktop capabilities it does not possess.
+- The prime directive is not a replacement runtime. The existing Agent, Central Brain, ToolRegistry, dispatch boundary, memory stores and durable worker runtime remain the sole execution owners.
+
+### Entity-level operating contract
+
+`observe → recall → reason → plan → dispatch → verify → learn → continue`
+
+Every cycle uses current owner settings and live capability state. Proactivity is opt-in and evidence-based. Memory and learned experience inform decisions but never grant permission. Specialists return evidence to Orion; only the parent runtime owns the user's objective and final completion claim.
