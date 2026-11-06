@@ -254,8 +254,8 @@ class OrionCapabilityAdaptersTest {
         )
     }
     
-    @Test fun directPythonRequiresOwnerApprovalBecauseProotSharesAppUid() {
-        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+    @Test fun directPythonUsesTheSharedExecutionPolicyWithoutExtraPerToolApproval() {
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
     }
