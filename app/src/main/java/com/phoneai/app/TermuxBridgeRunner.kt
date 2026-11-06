@@ -19,6 +19,9 @@ object TermuxBridgeRunner {
     fun nextRequestId(): Int = ids.getAndIncrement()
 
     fun executeReadOnly(context: Context, command: String, shouldStop: () -> Boolean = { false }): String {
+        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
+            return "error: Orion blocked a destructive Android/Linux shell command before Termux dispatch."
+        }
         val preflight = preflight(context)
         if (preflight != null) return "error: $preflight"
         val id = nextRequestId()
@@ -53,6 +56,9 @@ object TermuxBridgeRunner {
 
     /** Manual terminal UI dispatches directly after checking setup. */
     fun dispatch(context: Context, command: String): String {
+        if (ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
+            return "error: Orion blocked a destructive Android/Linux shell command before Termux dispatch."
+        }
         val preflight = preflight(context)
         if (preflight != null) return "error: $preflight"
         val id = nextRequestId()
