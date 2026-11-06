@@ -1451,6 +1451,7 @@ Rules:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        OrionProactiveSpacing.noteOwnerActivity(svc)
         runInternal(inputCommand, reuseCommandBudget = false)
     }
 

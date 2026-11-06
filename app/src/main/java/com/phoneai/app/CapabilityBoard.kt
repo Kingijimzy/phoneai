@@ -124,6 +124,7 @@ internal object SoulWatch {
     }
 
     private fun post(c: Context, id: Int, title: String, text: String) {
+        if (!OrionProactiveSpacing.tryClaim(c)) return
         try {
             val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             if (android.os.Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("orion_soul", "Orion soul alerts", android.app.NotificationManager.IMPORTANCE_DEFAULT))
