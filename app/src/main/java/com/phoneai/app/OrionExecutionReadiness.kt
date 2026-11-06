@@ -19,7 +19,7 @@ internal object OrionExecutionReadiness {
     ) {
         fun promptLines(): List<String> = listOf(
             "EXECUTION READINESS: next_step=${nextStep.name.lowercase().replace('_', '-')}; " +
-                "recommended_tool=${recommendedTool ?: "none"}; requires_approval=$requiresOwnerInput.",
+                "recommended_tool=${recommendedTool ?: "none"}; requires_owner_input=$requiresOwnerInput.",
             "Readiness reason: $reason",
             "Required verification: $verificationRequirement",
             "Execution constraint: this is a recommendation, not proof that any action ran. Only restart, shutdown and Wi-Fi toggles require confirmation; all other authorized actions execute immediately after capability and scope checks."
