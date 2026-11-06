@@ -27,13 +27,17 @@ internal object OrionCentralBrain {
             kind = kind,
             capabilities = requestedCapabilities
         )
-        val store = OrionDistributedTaskStore(app)
-        if (!store.enqueue(task)) return OrionCoordinatedResult.Failed(task.taskId, "task_enqueue_rejected")
-        return OrionSpecialistRuntime.dispatch(app, task.taskId)
+        return OrionUnifiedExecutionCoordinator.enqueueDroneTask(app, task)
     }
 
-    fun dispatchDelegatedTask(context: Context, taskId: String): OrionCoordinatedResult =
-        OrionSpecialistRuntime.dispatch(context.applicationContext, taskId)
+    fun dispatchDelegatedTask(context: Context, taskId: String): OrionCoordinatedResult {
+        val app = context.applicationContext
+        return if (OrionUnifiedExecutionCoordinator.scheduleDroneTask(app, taskId)) {
+            OrionCoordinatedResult.Deferred(taskId, "queued_for_android_workmanager")
+        } else {
+            OrionCoordinatedResult.Failed(taskId, "drone_task_not_schedulable")
+        }
+    }
 
     /** Remote LangGraph execution is opt-in and requires an HTTPS endpoint plus live token provider. */
     fun dispatchRemoteTask(
