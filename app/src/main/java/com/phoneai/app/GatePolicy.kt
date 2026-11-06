@@ -15,8 +15,14 @@ internal object GatePolicy {
     )
     data class Result(val verdict: Verdict, val reason: String)
 
-    /** No private-data, remote-pipe, root, block-device, or fork-bomb shell policy. */
-    fun hardBlockReason(tool: String, args: org.json.JSONObject): String? = null
+    /** Android/Linux shell safety is enforced centrally and again by each backend adapter. */
+    fun hardBlockReason(tool: String, args: org.json.JSONObject): String? {
+        if (tool != "shell" && tool != "termux_command") return null
+        val command = args.optString("command")
+        return if (command.isNotBlank() && ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
+            "Orion blocked a destructive Android/Linux shell command before dispatch."
+        } else null
+    }
 
     fun decide(i: Input): Result {
         if (!i.packOn) return Result(Verdict.DENY, AgentPolicy.packOffMessage(i.pack))
