@@ -105,7 +105,7 @@ internal object OrionUnifiedExecutionCoordinator {
 
         val distributed = OrionDistributedTaskStore(app)
         val activeDrone = distributed.all().filter {
-            it.envelope.parentTaskId == parentTaskId || it.envelope.rootTaskId == parentTaskId
+            (it.envelope.parentTaskId == parentTaskId || it.envelope.rootTaskId == parentTaskId) && it.status !in setOf("completed", "failed", "cancelled")
         }
         activeDrone.forEach { record ->
             runCatching { distributed.cancel(record.envelope.taskId, reason) }
