@@ -157,3 +157,17 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.work:work-testing:2.9.1")
 }
+
+android {
+    testOptions {
+        unitTests {
+            all {
+                testLogging {
+                    events("failed", "passed", "skipped")
+                    exceptionFormat("full")
+                    showStandardStreams(true)
+                }
+            }
+        }
+    }
+}
