@@ -42,11 +42,13 @@ class OrionAgentDelegationTest {
             AgentProfiles.find("research")!!,
             "checkpoint-42",
             "Research Android agent scheduling",
-            parentObjectiveId = "research"
+            parentObjectiveId = "research",
+            rootObjective = "Finish the Orion central brain adoption"
         )
         assertEquals("checkpoint-42", manifest.parentTaskId)
         assertEquals("research", manifest.parentObjectiveId)
         assertTrue(manifest.promptBlock().contains("Parent objective node ID: research"))
+        assertTrue(manifest.promptBlock().contains("Root Orion objective: Finish the Orion central brain adoption"))
     }
 
     @Test fun invalidParentObjectiveIdIsNotPersistedAsAnAssociation() {
@@ -74,6 +76,7 @@ class OrionAgentDelegationTest {
         assertEquals(original.parentObjectiveId, restored.parentObjectiveId)
         assertEquals(original.agentId, restored.agentId)
         assertEquals(original.objective, restored.objective)
+        assertEquals(original.rootObjective, restored.rootObjective)
         assertEquals(original.access, restored.access)
         assertEquals(original.allowedTools, restored.allowedTools)
         assertEquals(original.memoryScope, restored.memoryScope)
@@ -278,4 +281,23 @@ class OrionAgentDelegationTest {
         assertEquals("completed", OrionAgentDelegation.latest(context, 1).single().optString("status"))
     }
 
+
+    @Test fun idempotencyMatchRejectsAChangedRootObjective() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        OrionAgentDelegation.clearForTest(context)
+        val manifest = OrionAgentDelegation.create(
+            AgentProfiles.find("research")!!,
+            "parent-root-objective",
+            "Research Chronos event routing",
+            parentObjectiveId = "chronos",
+            rootObjective = "Finish Ultron adoption in Orion"
+        )
+        assertTrue(OrionAgentDelegation.begin(context, manifest))
+        assertTrue(OrionAgentDelegation.matches(
+            context, manifest.id, "research", manifest.objective, "chronos", "Finish Ultron adoption in Orion"
+        ))
+        assertFalse(OrionAgentDelegation.matches(
+            context, manifest.id, "research", manifest.objective, "chronos", "Build an unrelated app"
+        ))
+    }
 }
