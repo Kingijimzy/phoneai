@@ -67,4 +67,16 @@ class OrionTaskEnvelopeTest {
         assertEquals(root.objective, OrionTaskEnvelope.fromJson(grandchild.toJson()).rootObjective)
         assertTrue(grandchild.validate(now).isEmpty())
     }
+
+    @Test fun taskEnvelopeRedactsSecretsFromBothRootAndChildObjectives() {
+        val task = OrionTaskEnvelope.create(
+            "Research Android docs api_key=child-secret",
+            rootObjective = "Complete setup with access_token=root-secret",
+            now = 1_800_000_000_000L
+        )
+        val json = task.toJson().toString()
+        assertFalse(json.contains("child-secret"))
+        assertFalse(json.contains("root-secret"))
+        assertTrue(json.contains("[redacted]"))
+    }
 }
