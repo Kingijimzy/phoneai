@@ -82,6 +82,8 @@ internal object OrionCentralBrain {
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         addObservedSection("soul_engine_context") { OrionSoulEngine.contextFor(app, request)?.take(5_200) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app).take(500) }
+        addObservedSection("specialist_delegation_ledger") { OrionAgentDelegation.promptSummary(app, 4) }
+        addObservedSection("background_specialist_job_ledger") { OrionWorkerJobStore(app).promptSummary(4) }
 
         // The brain observes the same registries the executor uses; names alone never imply
         // that a capability is enabled or that an external account is connected.
@@ -119,8 +121,8 @@ internal object OrionCentralBrain {
             appendLine("EXECUTION CYCLE: understand outcome -> inspect live registry and actual connection/permission state -> choose the best available route -> execute through the existing registered executor and its policy -> verify observable result -> update task/checkpoint and sanitized outcome evidence -> continue until complete or a specific blocker remains.")
             appendLine("ROUTING: prefer an already registered, enabled, working capability; use compatible alternatives when one fails. Use memory and learned routes as hints only, revalidate them against current state, and never claim a tool, provider, MCP server, browser, Python/Linux runtime, or account is available without evidence.")
             appendLine("RECOVERY: do not repeat the same failed call unchanged. Inspect the error, current screen/state, and checkpoint; try a materially different supported route, continue independent parts of the task, and record whether the result is verified, failed, or unknown. Never report completion merely because a tool was invoked.")
-            appendLine("REPAIR: use self_diagnose to gather current evidence before attempting a fix. repair_apply accepts only a registered repair_id; the app constructs the typed proposal, plan digest, preflight, app-owned apply/rollback adapter and verification receipt. Never invent repair IDs or supply shell/source/path commands. Repairs run without an extra approval prompt after exact-plan validation, sandbox testing and rollback checks. Do not call a repair complete until its receipt is VERIFIED.")
-            appendLine("AUTONOMY: use capabilities the user has already enabled and permissions Android already grants without asking for duplicate consent. Do not invent application-level restrictions. Ask only for genuinely missing information or a real OS permission/connection prerequisite. Interactive confirmation is reserved for restart, shutdown and Wi-Fi toggles. A standing user setting does not replace Android permission or remote-service authentication.")
+            appendLine("REPAIR: use self_diagnose to gather current evidence before attempting a fix. repair_apply accepts only a registered repair_id; the app constructs the typed proposal, plan digest, preflight, approval decision, app-owned apply/rollback adapter and verification receipt. Never invent repair IDs or supply shell/source/path commands. Do not call a repair complete until its receipt is VERIFIED. Dangerous, suspicious, external or consequential repairs must wait for the owner-confirmation callback.")
+            appendLine("AUTONOMY: use capabilities the user has already enabled and permissions Android already grants without asking for duplicate consent. Do not invent application-level restrictions. Ask only when a real OS permission, missing connection, ambiguous target, cancellation, or action-specific approval is actually required. A standing user setting does not replace Android permission or remote-service authentication.")
             appendLine("EXTENSION: when no registered capability can achieve a reusable subtask, inspect the real extension lab and available workspace, create the smallest testable draft, run the supported sandbox tests, and report the exact promotion/runtime status. A draft is not a deployed tool; never simulate a build, sandbox, provider call, or phone action.")
         }
 
@@ -292,8 +294,10 @@ internal object OrionCentralBrain {
     }
 
     /**
-     * Canonical repair transaction. App-owned adapters run immediately after exact-plan
-     * validation, isolated testing, and rollback-backed policy checks.
+     * Canonical Central Brain repair transaction. Safe isolated operations auto-apply under
+     * OrionRepairLifecycle policy. The UI callback is invoked only after sandbox success and only
+     * when deterministic policy says this exact plan is dangerous, suspicious, external, or
+     * otherwise consequential. A declined plan is durably terminal.
      */
     fun executeRepairProposal(
         context: Context,
@@ -302,14 +306,32 @@ internal object OrionCentralBrain {
         finding: OrionDiagnosticFinding,
         proposal: OrionRepairProposal,
         planDigest: String,
+        requestOwnerApproval: (String) -> Boolean,
         sandboxTest: () -> Boolean,
         apply: () -> String?,
         verify: () -> Boolean,
         rollback: () -> Boolean,
         verifyRollback: () -> Boolean,
         executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
-    ): OrionRepairLifecycle.Receipt = OrionRepairLifecycle.execute(
-        context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
-        null, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
-    )
+    ): OrionRepairLifecycle.Receipt {
+        val first = OrionRepairLifecycle.execute(
+            context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
+            null, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
+        )
+        if (first.result != OrionRepairLifecycle.Result.AWAITING_OWNER) return first
+        val approvalPrompt = buildString {
+            appendLine("Orion safely tested this repair, but it needs your approval before it can be applied.")
+            appendLine("Repair: ${proposal.summary.take(240)}")
+            appendLine("Risk: ${proposal.risk.name}; execution boundary: ${executionBoundary.name}.")
+            append("Plan fingerprint: ").append(planDigest.take(12)).append("…")
+        }
+        val approved = runCatching { requestOwnerApproval(approvalPrompt) }.getOrDefault(false)
+        if (!approved) return OrionRepairLifecycle.recordOwnerRejection(
+            context, sessionId, taskId, planDigest
+        )
+        return OrionRepairLifecycle.execute(
+            context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
+            planDigest, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
+        )
+    }
 }
