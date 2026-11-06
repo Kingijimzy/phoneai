@@ -228,8 +228,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
     private val chatCache = HashMap<String, Pair<Long, String>>()
 
     init {
-        // Remove legacy action-history persistence; this agent does not keep action/decision logs.
-        ActionLogStore.clear(svc)
+        // Keep the privacy-filtered owner history and remove only legacy raw argument fields.
         OrionEvidenceLedger.purgeArgumentFields(svc)
         // Restore the same local transcript for every provider; provider choice must not own memory.
         restoreConversationContext(svc.conversationContext())
@@ -319,18 +318,10 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         while (left > 0 && !stopped) { val d = minOf(100L, left); try { Thread.sleep(d) } catch (_: InterruptedException) { return }; left -= d }
     }
 
-    private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean {
-        if (tool in setOf(
-                "shell", "termux_command", "telegram_send", "sms",
-                "whatsapp_send", "signal_send", "discord_send", "notification_action"
-            )) return true
-        return tool == "mcp_call" &&
-            McpConnector.scopeForTool(args.optString("name")) == "communication"
-    }
+    /** Evidence records retain only sanitized tool/outcome metadata, never private arguments or payloads. */
+    private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean = false
 
     private fun recordDispatchBlocked(tool: String, args: JSONObject, category: String) {
-        if (tool in setOf("shell", "termux_command", "telegram_send", "sms",
-                "whatsapp_send", "signal_send", "discord_send")) return
         runCatching { OrionEvidenceLedger.recordBlocked(svc, evidenceTaskId(), tool, category) }
     }
     private fun executeWithRecoveryGuard(tool: String, args: JSONObject): String {
@@ -424,8 +415,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             return blocked
         }
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
-        if (shellCommand.isNotBlank() && ShellPolicy.isIrreversible(shellCommand)) {
-            val blocked = "error: this command matches Ultron's irreversible Windows command guard."
+        if (shellCommand.isNotBlank() && ShellPolicy.classify(shellCommand) == ShellRisk.BLOCKED) {
+            val blocked = "error: Orion blocked a destructive Android/Linux shell command before dispatch."
             recordDispatchBlocked(tool, args, "ultron_irreversible_windows_command")
             return blocked
         }
@@ -503,7 +494,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             }
             GatePolicy.Verdict.ALLOW -> Unit
         }
-        if (tool != "mcp_call") IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
+        IrreversibleActionConfirmationPolicy.computerSettingAction(tool, args)?.let { action ->
             if (!requestGateApproval("Confirm computer_settings action: $action?")) {
                 val denied = "error: the irreversible computer setting was not confirmed; no action was dispatched."
                 recordDispatchBlocked(tool, args, "irreversible_computer_setting_not_confirmed")
