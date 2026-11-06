@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
 object AgentPolicy {
     enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
-    enum class Decision { ALLOW, PLAN_ONLY, NEED_APPROVAL, DENY }
+    enum class Decision { ALLOW, PLAN_ONLY, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
@@ -16,8 +16,8 @@ object AgentPolicy {
         Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
         Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
-        Pack("messaging", "Messaging", "Telegram, SMS and email; confirmation before sending", true),
-        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real orders remain separately gated and confirmed", true),
+        Pack("messaging", "Messaging", "Telegram, SMS and email; authorized sends execute without duplicate approval", true),
+        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real order execution remains disabled", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
         Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
@@ -35,8 +35,8 @@ object AgentPolicy {
     }
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
-     * This only makes their tools available: Android OS permissions and consequential-action confirmations
-     * still apply. Optional bridges and remote/proactive services remain opt-in until configured.
+     * This only makes their tools available: Android OS permissions, explicit capability scope and validation
+     * still apply. Only restart, shutdown and Wi-Fi toggles require an action confirmation. Optional bridges remain opt-in.
      */
     internal val defaultOnPacks = setOf(
         "orion_core", "connected_services", "workspace_shell", "self_test",
@@ -154,8 +154,32 @@ object AgentPolicy {
         tools.filter { it.matches(Regex("[a-zA-Z0-9_.:-]{1,80}")) }.distinct().take(100).forEach { a.put(it) }
         p(c).edit().putString("allowlist_$pack", a.toString()).apply()
     }
-    /** Compatibility no-op: action and decision logging are disabled. */
-    fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) = Unit
-    fun recentLogs(c: Context, limit: Int = 30): List<String> = emptyList()
+    /** Store privacy-filtered settings and policy events; never persist secrets or raw command payloads. */
+    fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
+        val safe = AgentPrivacyFilter.safeOutput(result).take(240)
+        val safeAction = AgentPrivacyFilter.safeCommand(action).take(80)
+        synchronized(this) {
+            val old = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
+            val next = JSONArray()
+            for (i in maxOf(0, old.length() - 199) until old.length()) {
+                val row = runCatching { old.getJSONObject(i) }.getOrNull() ?: continue
+                next.put(row)
+            }
+            next.put(JSONObject().put("at", System.currentTimeMillis()).put("tool", tool.take(80))
+                .put("action", safeAction).put("approved", approved).put("result", safe))
+            p(c).edit().putString("action_log", next.toString()).apply()
+        }
+    }
+
+    fun recentLogs(c: Context, limit: Int = 30): List<String> {
+        val rows = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
+        return (maxOf(0, rows.length() - limit.coerceIn(1, 100)) until rows.length()).mapNotNull { i ->
+            runCatching {
+                val row = rows.getJSONObject(i)
+                val state = if (row.isNull("approved")) "status unknown" else if (row.optBoolean("approved")) "accepted" else "not accepted"
+                "${java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(row.optLong("at")))} · ${row.optString("tool")} / ${row.optString("action")} · $state · ${row.optString("result")}"
+            }.getOrNull()
+        }
+    }
 
 }
