@@ -71,12 +71,15 @@ class MemoryGraphLifecycleTest {
     }
 
     @Test fun graphRecallNeverBypassesOwnerApprovalOrSensitivityFilters() {
-        val approved = MemoryStore.addOwnerConfirmed(context, "fact", "My team is Arsenal")!!
-        val proposal = MemoryStore.add(context, "fact", "Arsenal plays in Premier League")!!
-        assertTrue(MemoryStore.setReviewStatus(context, proposal.id, "rejected"))
+        val rejected = MemoryStore.addOwnerConfirmed(context, "fact", "My team is Arsenal")!!
+        assertTrue(MemoryStore.setReviewStatus(context, rejected.id, "rejected"))
+        val approved = MemoryStore.addOwnerConfirmed(context, "fact", "Arsenal plays in Premier League")!!
 
         val prompt = MemoryStore.promptBlock(context, "Premier League", limit = 6)
-        assertTrue(OrionKnowledgeGraph.relatedMemoryIds(context, "Premier League").contains(approved.id))
-        assertFalse(prompt.contains(proposal.text))
+        val graphIds = OrionKnowledgeGraph.relatedMemoryIds(context, "Premier League")
+        assertTrue(graphIds.contains(approved.id))
+        assertFalse(graphIds.contains(rejected.id))
+        assertTrue(prompt.contains(approved.text))
+        assertFalse(prompt.contains(rejected.text))
     }
 }
