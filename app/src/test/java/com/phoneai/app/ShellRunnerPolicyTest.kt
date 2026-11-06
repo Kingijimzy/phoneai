@@ -1,17 +1,30 @@
 package com.phoneai.app
 
-import org.junit.Assert.*
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ShellRunnerPolicyTest {
-    @Test fun onlyUltronWindowsIrreversibleStringsAreRejected() {
-        assertTrue(ShellPolicy.isIrreversible("format c:"))
-        assertTrue(ShellPolicy.isIrreversible("rmdir /s /q c:\\windows"))
-        assertTrue(ShellPolicy.isIrreversible("del /f /s /q c:\\windows"))
+    @Test fun catastrophicCommandsAreBlockedBeforeEveryBackendIsSelected() {
+        val context = RuntimeEnvironment.getApplication()
+        listOf("builtin", "termux", "linux").forEach { backend ->
+            val result = ShellRunner.runStreaming(context, "rm -rf '/system'", backend) { }
+            assertTrue("$backend must apply the hard block before dispatch", result.startsWith("error: blocked by Orion shell hard blocks"))
+        }
     }
 
-    @Test fun ordinaryAndroidAndLinuxCommandsAreNotRejectedByShellPolicy() {
-        listOf("ls", "apk add python3", "python3 script.py", "reboot", "shutdown")
-            .forEach { assertFalse(it, ShellPolicy.isIrreversible(it)) }
+    @Test fun inlineRawDeviceWritesAreBlockedBeforeLinuxProutDispatch() {
+        val context = RuntimeEnvironment.getApplication()
+        val result = ShellRunner.runStreaming(
+            context,
+            """python3 -c "open('/dev/block/mmcblk0','wb').write(b'x')" """,
+            "linux"
+        ) { }
+        assertTrue(result.startsWith("error: blocked by Orion shell hard blocks"))
     }
 }
