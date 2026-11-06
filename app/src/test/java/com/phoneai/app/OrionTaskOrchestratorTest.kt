@@ -51,7 +51,7 @@ class OrionTaskOrchestratorTest {
         )
         assertEquals(OrionExecutionReadiness.NextStep.OPEN_CONNECTION_SETUP, context.readiness.nextStep)
         assertTrue(context.promptLines().any { it.contains("state=AVAILABLE_NOT_CONNECTED") })
-        assertTrue(context.readiness.requiresApproval)
+        assertTrue(context.readiness.requiresOwnerInput)
     }
 
     @Test fun grantedCapabilityContractIsIncludedInTheActualPlannerContext() {
