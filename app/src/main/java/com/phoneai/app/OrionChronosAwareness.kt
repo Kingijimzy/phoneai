@@ -15,8 +15,8 @@ internal object OrionChronosAwareness {
     private const val KEY_FOCUS_STARTED = "focus_started_at"
     private const val KEY_LAST_EVENT = "last_event_at"
     private const val TTL_MS = 2L * 60L * 60L * 1000L
-
-    @Volatile private var lastPackageInProcess: String = ""
+    private const val KEY_LAST_SUGGESTION = "last_suggestion_at"
+    private const val SUGGESTION_COOLDOWN_MS = 24L * 60L * 60L * 1000L
 
     @Synchronized fun onWindowChanged(
         context: Context,
@@ -34,7 +34,6 @@ internal object OrionChronosAwareness {
         val packageName = rawPackageName.orEmpty().trim().lowercase().take(180)
         if (packageName.isBlank() || isSensitive(packageName)) {
             clear(app)
-            lastPackageInProcess = packageName
             return false
         }
 
@@ -42,13 +41,13 @@ internal object OrionChronosAwareness {
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val previousCategory = prefs.getString(KEY_CATEGORY, "").orEmpty()
         val previousStarted = prefs.getLong(KEY_FOCUS_STARTED, 0L)
-        val sameWindow = packageName == lastPackageInProcess
         val sameCategory = previousCategory == category
-        val startedAt = if (sameWindow && sameCategory && previousStarted in 1L..now) {
+        // Track duration at category granularity only. Raw package identifiers are not retained,
+        // even transiently; switching between apps in the same coarse category keeps the session.
+        val startedAt = if (sameCategory && previousStarted in 1L..now) {
             previousStarted
         } else now
 
-        lastPackageInProcess = packageName
         return prefs.edit()
             .putString(KEY_CATEGORY, category)
             .putLong(KEY_FOCUS_STARTED, startedAt)
@@ -77,9 +76,40 @@ internal object OrionChronosAwareness {
         return "OWNER-GRANTED CHRONOS CONTEXT: current app category=$category; focus duration about $minutes minutes. Coarse category only; no app identifier or screen content retained."
     }
 
+
+    /**
+     * A single low-pressure, review-only nudge from coarse focus duration.
+     * Requires both owner switches and both ambient-context grants; it never triggers an action.
+     */
+    @Synchronized fun proactiveSuggestion(context: Context, now: Long = System.currentTimeMillis()): String? {
+        val app = context.applicationContext
+        if (!AgentPolicy.enabled(app, "orion_core") || !AgentPolicy.enabled(app, "proactive")) return null
+        val summary = summary(app, now)
+        if (summary.isBlank()) return null
+        val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val last = prefs.getLong(KEY_LAST_SUGGESTION, 0L)
+        if (last > now || (last > 0L && now - last < SUGGESTION_COOLDOWN_MS)) return null
+        val category = prefs.getString(KEY_CATEGORY, "").orEmpty()
+        val started = prefs.getLong(KEY_FOCUS_STARTED, 0L)
+        if (started <= 0L || started > now) return null
+        val minutes = ((now - started).coerceAtLeast(0L) / 60_000L).coerceAtMost(120L)
+        val threshold = when (category) {
+            "social", "media", "gaming", "browsing" -> 60L
+            "productivity" -> 90L
+            "communication" -> 75L
+            "shopping" -> 40L
+            else -> return null
+        }
+        if (minutes < threshold) return null
+        return "Chronos observed about $minutes minutes in the broad $category app category. Would a short break or a switch to your current priority be useful? This is only a suggestion; no app, setting, or task was changed."
+    }
+
+    @Synchronized fun markSuggestionShown(context: Context, now: Long = System.currentTimeMillis()): Boolean =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_LAST_SUGGESTION, now).commit()
+
     @Synchronized fun clear(context: Context) {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
-        lastPackageInProcess = ""
     }
 
     private fun isSensitive(packageName: String): Boolean =
