@@ -117,6 +117,11 @@ object MemoryStore {
         val safeSensitivity = MemoryGovernancePolicy.sensitivity(t, sensitivity)
         val dup = list.firstOrNull { it.text.equals(t, true) }
         if (dup != null) {
+            // Re-observing an already owner-approved fact must never demote it to a pending
+            // agent proposal. Only an explicit owner-originated write may refresh its provenance.
+            if (dup.reviewStatus == "approved" && sourceRole != "owner") {
+                return@synchronized copyOf(dup)
+            }
             val old = copyOf(dup)
             dup.updated = now
             dup.sourceRole = sourceRole
@@ -131,7 +136,11 @@ object MemoryStore {
             }
             return@synchronized copyOf(dup)
         }
-        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
+        // Unreviewed agent observations cannot replace an owner-approved fact.
+        // Only an explicit owner write may consolidate over trusted memory.
+        val consolidationCandidates = if (sourceRole == "owner") list else
+            list.filter { it.reviewStatus != "approved" && it.reviewStatus != "superseded" }
+        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(consolidationCandidates, cat(category), t) else null
         if (replaced != null) {
             val old = copyOf(replaced)
             replaced.text = t
@@ -354,17 +363,37 @@ object MemoryStore {
     }
 
     /** Text added to the AI's instructions: pinned and request-relevant memories first, then recent ones. */
-    fun promptBlock(c: Context, query: String? = null): String {
+    fun promptBlock(c: Context, query: String? = null, limit: Int = 6): String {
         // Filter before ranking: unreviewed pinned proposals must not crowd trusted memories out.
         val approved = all(c).filter {
             MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
                 OrionMemoryLifecycle.isActive(c, it.id)
         }
-        val ranked = MemoryRanking.select(approved, query)
+        val boundedLimit = limit.coerceIn(1, 12)
+        val pinned = approved.filter { it.pinned }.sortedByDescending { it.updated }
+        val lexical = if (query.isNullOrBlank()) emptyList() else
+            MemoryRanking.hybridRank(
+                approved.filterNot { it.pinned },
+                { it.text + " " + it.category },
+                query,
+                limit = (boundedLimit * 3).coerceAtMost(30)
+            )
+        val lexicalIds = lexical.mapTo(hashSetOf()) { it.id }
         val graphIds = if (query.isNullOrBlank()) emptySet() else
-            runCatching { OrionKnowledgeGraph.relatedMemoryIds(c, query) }.getOrDefault(emptySet())
-        val graphMatches = approved.filter { it.id in graphIds }
-        val items = (ranked + graphMatches).distinctBy { it.id }.take(15)
+            runCatching { OrionKnowledgeGraph.relatedMemoryIds(c, query, limit = 24) }.getOrDefault(emptySet())
+        val graphMatches = approved.filter { it.id in graphIds && !it.pinned }
+        // Promote graph-only neighbors before ordinary lexical results. Previously graph
+        // matches were appended after a 25-item recency-filled list and were almost always
+        // truncated by the final prompt limit, so two-hop Cerebro recall rarely reached the model.
+        val graphOnly = graphMatches.filterNot { it.id in lexicalIds }
+            .sortedWith(compareByDescending<Memory> { it.confidence }.thenByDescending { it.updated })
+        val availableSlots = (boundedLimit - pinned.size).coerceAtLeast(0)
+        val graphQuota = if (graphOnly.isEmpty() || availableSlots == 0) 0
+            else maxOf(1, availableSlots / 3)
+        val recent = approved.sortedByDescending { it.updated }
+        val items = (pinned + graphOnly.take(graphQuota) + lexical + graphMatches + recent)
+            .distinctBy { it.id }
+            .take(boundedLimit)
         if (items.isEmpty()) return "(no owner-approved, non-sensitive memories yet; proposals require review)"
         return items.joinToString("\n") {
             "[${it.id}] (${it.category}, source=${it.sourceRole}, confidence=${(it.confidence * 100).toInt()}%" +

@@ -213,8 +213,8 @@ class OrionCapabilityAdaptersTest {
         val python = OrionCapabilityAdapters.routes()
             .filter { it.backend == OrionCapabilityAdapters.Backend.PYTHON }
         assertEquals(
-            setOf("python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
-                "extension_enable", "extension_run", "extension_disable"),
+            setOf("python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+                "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"),
             python.map { it.tool }.toSet()
         )
         python.forEach {

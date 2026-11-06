@@ -9,6 +9,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -35,14 +38,40 @@ class OrionWorkerJobStoreTest {
         assertEquals(2, second.all().size)
     }
 
-    @Test fun separateInstancesCannotClaimMoreThanOneActiveJob() {
+    @Test fun separateInstancesCanClaimAtMostThreeParallelJobs() {
         val first = OrionWorkerJobStore(context)
         val second = OrionWorkerJobStore(context)
-        first.enqueue("parent-1", "First specialist", idempotencyKey = "first")
-        first.enqueue("parent-1", "Second specialist", idempotencyKey = "second")
+        repeat(4) { first.enqueue("parent-1", "Specialist $it", idempotencyKey = "job-$it") }
+        assertNotNull(second.claimNext { true })
+        assertNotNull(first.claimNext { true })
         assertNotNull(second.claimNext { true })
         assertNull(first.claimNext { true })
-        assertEquals(1, first.all().count { it.status == OrionWorkerJobStore.Status.RUNNING })
+        assertEquals(3, first.all().count { it.status == OrionWorkerJobStore.Status.RUNNING })
+    }
+
+    @Test fun simultaneousClaimsAcrossWorkerInstancesNeverExceedThreeActiveSlots() {
+        val seed = OrionWorkerJobStore(context)
+        repeat(8) { seed.enqueue("parent-1", "Concurrent specialist $it", idempotencyKey = "parallel-$it") }
+        val pool = Executors.newFixedThreadPool(8)
+        val gate = CountDownLatch(1)
+        val done = CountDownLatch(8)
+        val claimed = java.util.Collections.synchronizedList(mutableListOf<String>())
+        repeat(8) { index ->
+            pool.execute {
+                try {
+                    gate.await(3, TimeUnit.SECONDS)
+                    val job = OrionWorkerJobStore(context).claimNext { true }
+                    if (job != null) claimed += job.id
+                } finally { done.countDown() }
+            }
+        }
+        gate.countDown()
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+        pool.shutdownNow()
+        assertEquals(3, claimed.distinct().size)
+        assertEquals(3, OrionWorkerJobStore(context).all().count {
+            it.status == OrionWorkerJobStore.Status.RUNNING
+        })
     }
 
     @Test fun brainSummaryReportsSavedJobStateWithoutClaimingQueuedWorkRan() {
@@ -74,15 +103,17 @@ class OrionWorkerJobStoreTest {
         assertEquals(1, OrionWorkerJobStore(context).all().size)
     }
 
-    @Test fun claimRequiresExactLiveParentAndOnlyOneJobRunsAtATime() {
+    @Test fun claimRequiresExactLiveParentAndAllowsBoundedParallelJobs() {
         val store = OrionWorkerJobStore(context)
         store.enqueue("parent-1", "Research first", idempotencyKey = "one")
         store.enqueue("parent-1", "Research second", idempotencyKey = "two")
-        val claimed = store.claimNext { it == "parent-1" }!!
-        assertEquals(OrionWorkerJobStore.Status.RUNNING, claimed.status)
-        assertNull(store.claimNext { true })
-        assertTrue(store.complete(claimed.id, "Verified findings"))
-        assertNotNull(store.claimNext { it == "parent-1" })
+        val first = store.claimNext { it == "parent-1" }!!
+        val second = store.claimNext { it == "parent-1" }!!
+        assertEquals(OrionWorkerJobStore.Status.RUNNING, first.status)
+        assertEquals(OrionWorkerJobStore.Status.RUNNING, second.status)
+        assertNull(store.claimNext { false })
+        assertTrue(store.complete(first.id, "Verified findings"))
+        assertTrue(store.complete(second.id, "Verified findings"))
     }
 
     @Test fun missingOrPausedParentCancelsQueuedJobFailClosed() {
@@ -171,21 +202,33 @@ class OrionWorkerJobStoreTest {
         assertTrue(store.all().isEmpty())
     }
 
-    @Test fun stagedProviderResultSurvivesRestartAndDoesNotReleaseActiveSlot() {
+    @Test fun stagedProviderResultSurvivesRestartAndOccupiesOneOfThreeActiveSlots() {
         val store = OrionWorkerJobStore(context)
         val job = store.enqueue("parent-1", "Produce a bounded analysis")!!
-        val sibling = store.enqueue("parent-1", "Wait behind the active specialist")!!
+        val siblingOne = store.enqueue("parent-1", "First parallel specialist")!!
+        val siblingTwo = store.enqueue("parent-1", "Second parallel specialist")!!
+        val waiting = store.enqueue("parent-1", "Wait for an available slot")!!
         assertNotNull(store.claim(job.id) { true })
         assertTrue(store.stageResult(job.id, "Verified specialist result"))
-        assertNull(store.claim(sibling.id) { true })
+        assertNotNull(store.claim(siblingOne.id) { true })
+        assertNotNull(store.claim(siblingTwo.id) { true })
+        assertNull(store.claim(waiting.id) { true })
+
         OrionWorkerJobStore.simulateProcessRestartForTest(context)
-        val restored = OrionWorkerJobStore(context).all().single { it.id == job.id }
+        val restoredStore = OrionWorkerJobStore(context)
+        val restored = restoredStore.all().single { it.id == job.id }
         assertEquals(OrionWorkerJobStore.Status.RESULT_PENDING, restored.status)
         assertEquals("Verified specialist result", restored.result)
-        assertNull(OrionWorkerJobStore(context).claimNext { true })
-        assertTrue(OrionWorkerJobStore(context).complete(job.id, restored.result, closeParent = false))
+        // The staged result remains deliverable, while interrupted provider calls are not replayed.
+        assertNull(restoredStore.claim(job.id) { true })
+        assertTrue(restoredStore.complete(job.id, restored.result, closeParent = false))
         assertEquals(OrionWorkerJobStore.Status.COMPLETED,
-            OrionWorkerJobStore(context).all().single { it.id == job.id }.status)
+            restoredStore.all().single { it.id == job.id }.status)
+        assertNotNull(restoredStore.claim(waiting.id) { true })
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            restoredStore.all().single { it.id == siblingOne.id }.status)
+        assertEquals(OrionWorkerJobStore.Status.NEEDS_REVIEW,
+            restoredStore.all().single { it.id == siblingTwo.id }.status)
     }
 
     @Test fun stagedResultCanBeMovedToReviewWithoutBeingReplayed() {

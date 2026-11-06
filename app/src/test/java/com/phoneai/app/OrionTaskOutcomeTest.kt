@@ -34,9 +34,9 @@ class OrionTaskOutcomeTest {
 
     @Test fun verifiedCountIsExplicit() {
         val report = OrionTaskOutcome.reconcile(true, listOf(
-            proof("open_app", true),
+            proof("open_app", true, verified = true),
             proof("send", true, verified = true)
         ), 0)
-        assertEquals(1, report.verifiedSteps)
+        assertEquals(2, report.verifiedSteps)
     }
 }

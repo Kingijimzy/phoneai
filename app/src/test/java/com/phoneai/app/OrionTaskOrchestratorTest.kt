@@ -95,4 +95,18 @@ class OrionTaskOrchestratorTest {
         // Clarification remains a planner instruction; it is not a fake missing-permission error.
         assertTrue(ambiguous.promptLines().any { it.contains("ask one focused clarification") })
     }
+
+    @Test fun explicitToolDenyIsIncludedInTheUnifiedCentralDiscoverySnapshot() {
+        val context = OrionTaskOrchestrator.build(
+            "run a command in Linux terminal",
+            listOf(tool("shell", ToolAccess.WRITE)),
+            packs,
+            termuxReady = false,
+            deniedTools = setOf("shell")
+        )
+        val fact = context.capabilities.tools.single()
+        assertEquals(CapabilityRegistry.State.DISABLED, fact.state)
+        assertTrue(fact.reason.contains("explicitly set"))
+        assertTrue(OrionTaskOrchestrator.dispatchBlockReason(context, "shell")!!.contains("explicitly set"))
+    }
 }

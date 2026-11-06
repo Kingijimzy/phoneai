@@ -6,12 +6,12 @@ import org.json.JSONObject
 
 /** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
 object AgentPolicy {
-    enum class Mode(val label: String) { PLAN("Plan"), ASK("Ask"), ALLOWLIST("Allowlist"), TRUSTED("Trusted session") }
+    enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow"), ASK("Ask (legacy)"), ALLOWLIST("Allowlist (legacy)"), TRUSTED("Trusted session (legacy)") }
     enum class Decision { ALLOW, PLAN_ONLY, NEED_APPROVAL, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "SAF workspace files, read/write/patch, allowlisted commands and terminal UI", true),
+        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; only catastrophic device-destruction commands are hard-blocked", true),
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
         Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
         Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
@@ -25,8 +25,14 @@ object AgentPolicy {
         Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; approval before enable", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    fun mode(c: Context): Mode = runCatching { Mode.valueOf(p(c).getString("mode", "ASK") ?: "ASK") }.getOrDefault(Mode.ASK)
-    fun setMode(c: Context, v: Mode) { p(c).edit().putString("mode", v.name).apply() }
+    /** PLAN is the only global execution stop. Legacy ASK/ALLOWLIST/TRUSTED values are read as ALLOW. */
+    fun mode(c: Context): Mode {
+        val saved = p(c).getString("mode", null)
+        return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
+    }
+    fun setMode(c: Context, v: Mode) {
+        p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
+    }
     /**
      * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
      * This only makes their tools available: Android OS permissions and consequential-action confirmations
@@ -68,7 +74,8 @@ object AgentPolicy {
     /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
-        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false
+        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
+        hardBlockReason: String? = null
     ): GatePolicy.Result {
         val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
             OrionAutonomySettings.read(c).mode,
@@ -89,7 +96,8 @@ object AgentPolicy {
         approvedThisAction = approvedThisAction,
         trustedForPack = isTrustedFor(c, pack),
         allowlisted = allowed(c, pack, toolId),
-        askedThisTask = askedThisTask
+        askedThisTask = askedThisTask,
+        hardBlockReason = hardBlockReason
         ))
     }
 
@@ -107,10 +115,10 @@ object AgentPolicy {
 
     /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
-        "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run", "extension_disable" -> "orion_core"
+        "extension_list", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback" -> "orion_core"
         "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
-        "shell", "workspace_list", "workspace_write", "workspace_read", "python_exec", "project_create", "project_list", "project_inspect" -> "workspace_shell"
+        "shell", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get",
         "goal_add", "goal_list", "goal_remove", "goal_toggle" -> "orion_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
@@ -150,12 +158,14 @@ object AgentPolicy {
     }
     /** Bounded audit trail. Callers must never pass raw secrets. */
     fun log(c: Context, tool: String, action: String, approved: Boolean?, result: String) {
-        val safe = Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+").replace(result) { match -> match.groupValues[1] + "=[redacted]" }.take(240)
+        val shellAudit = tool.startsWith("shell:")
+        val safe = AgentPrivacyFilter.safeOutput(result).take(if (shellAudit) 6000 else 240)
+        val safeAction = AgentPrivacyFilter.safeCommand(action).take(if (shellAudit) 2000 else 80)
         synchronized(this) {
             val old = runCatching { JSONArray(p(c).getString("action_log", "[]") ?: "[]") }.getOrElse { JSONArray() }
             val next = JSONArray()
             for (i in maxOf(0, old.length() - 199) until old.length()) next.put(old.getJSONObject(i))
-            next.put(JSONObject().put("at", System.currentTimeMillis()).put("tool", tool.take(80)).put("action", action.take(80)).put("approved", approved).put("result", safe))
+            next.put(JSONObject().put("at", System.currentTimeMillis()).put("tool", tool.take(80)).put("action", safeAction).put("approved", approved).put("result", safe))
             p(c).edit().putString("action_log", next.toString()).apply()
         }
     }

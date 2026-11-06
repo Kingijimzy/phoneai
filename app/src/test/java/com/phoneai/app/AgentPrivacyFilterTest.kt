@@ -42,4 +42,29 @@ class AgentPrivacyFilterTest {
         val safe = AgentPrivacyFilter.safeCommand("Order A12345678B should stay searchable")
         assertTrue(safe.contains("A12345678B"))
     }
+    @Test
+    fun safeArgumentsRedactsSecretFieldsRecursively() {
+        val args = org.json.JSONObject()
+            .put("recipient", "Amma")
+            .put("api_key", "sk-secret-value")
+            .put("nested", org.json.JSONObject().put("password", "hunter2").put("message", "hello"))
+        val safe = AgentPrivacyFilter.safeArguments(args)
+        assertTrue(safe.contains("Amma"))
+        assertTrue(safe.contains("[redacted]"))
+        assertFalse(safe.contains("sk-secret-value"))
+        assertFalse(safe.contains("hunter2"))
+    }
+
+    @Test
+    fun safeArgumentsRedactsBearerTokensAndContactDetails() {
+        val safe = AgentPrivacyFilter.safeArguments(
+            org.json.JSONObject().put("authorization", "Bearer abc.def.ghi")
+                .put("email", "person@example.com")
+                .put("phone", "+2348012345678")
+        )
+        assertFalse(safe.contains("abc.def.ghi"))
+        assertFalse(safe.contains("person@example.com"))
+        assertFalse(safe.contains("+2348012345678"))
+    }
+
 }

@@ -12,9 +12,14 @@ data class GraphFact(val a: String, val rel: String, val b: String, val count: I
 internal object GraphPolicy {
     const val MAX_FACTS = 400
     private val pronouns = setOf("it", "that", "this", "there", "he", "she", "they", "what", "who", "which", "here", "one", "you", "we", "those", "these", "something", "everything")
-    private val verbs = "likes?|loves?|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|lives in|plays for|belongs to|runs|builds|wants"
+    private val verbs = "likes?|loves?|plays for|plays in|plays?|trades?|uses?|prefers?|hates?|watch(?:es)?|follows?|supports?|owns?|studies|works at|works on|live in|lives in|belongs to|runs|builds|wants"
 
-    private val verbRel = Regex("^($verbs|is|are)$")
+    private val repeatableRelations = setOf(
+        "like", "likes", "love", "loves", "play", "plays", "trade", "trades",
+        "prefer", "prefers", "hate", "hates", "watch", "watches", "follow", "follows",
+        "support", "supports", "own", "owns", "study", "studies", "run", "runs",
+        "build", "builds", "want", "wants", "use", "uses"
+    )
 
     fun norm(s: String): String = s.lowercase().replace(Regex("[^a-z0-9 .+&'-]"), " ").replace(Regex("\\s+"), " ").trim()
         .removePrefix("the ").removePrefix("a ").removePrefix("an ").trim()
@@ -45,16 +50,38 @@ internal object GraphPolicy {
         return out.distinct().take(4)
     }
 
+    /** True when two explicit facts assign different values to the same exclusive relation. */
+    fun hasSingleValuedConflict(existingText: String, proposedText: String): Boolean {
+        val existing = extract(existingText)
+        val proposed = extract(proposedText)
+        return existing.any { old ->
+            proposed.any { fresh ->
+                old.first == fresh.first && old.second == fresh.second &&
+                    old.third != fresh.third && old.second !in repeatableRelations
+            }
+        }
+    }
+
     fun merge(list: List<GraphFact>, a: String, rel: String, b: String, now: Long): List<GraphFact> {
         val na = norm(a); val nb = norm(b); val nr = rel.trim().lowercase().take(30)
         if (na.isEmpty() || nb.isEmpty() || nr.isEmpty() || na == nb) return list
         val out = list.toMutableList()
         // The same subject + relation with a new object replaces the old one for single-valued relations ("my favourite team is ...").
         val i = out.indexOfFirst { it.a == na && it.rel == nr && it.b == nb }
-        if (i >= 0) out[i] = out[i].copy(count = out[i].count + 1, lastAt = now)
-        else {
-            // Attributes of the user ("my favourite team is ...") have one current value; verbs like "likes" can repeat.
-            if (na == "user" && !verbRel.matches(nr)) out.removeAll { it.a == na && it.rel == nr }
+        if (i >= 0) {
+            val existing = out[i]
+            out[i] = existing.copy(count = existing.count + 1, lastAt = maxOf(existing.lastAt, now))
+        } else {
+            // Non-repeatable subject/relation pairs have one current value. Keep the
+            // newest timestamp when replaying history, so an older archived fact can
+            // never roll the current graph value backwards.
+            if (nr !in repeatableRelations) {
+                val current = out.filter { it.a == na && it.rel == nr }.maxByOrNull { it.lastAt }
+                if (current != null && current.lastAt > now) {
+                    return out.sortedByDescending { it.lastAt }.take(MAX_FACTS)
+                }
+                out.removeAll { it.a == na && it.rel == nr }
+            }
             out.add(GraphFact(na, nr, nb, 1, now))
         }
         out.sortByDescending { it.lastAt }

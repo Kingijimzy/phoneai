@@ -5,13 +5,36 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Minimal privacy-preserving action history: tool names and outcome only, never arguments or screen text. */
-data class OrionActionEvent(val at: Long, val tool: String, val outcome: String, val failureCategory: String = "")
+/** Privacy-filtered owner action history with a durable verification receipt. */
+data class OrionActionEvent(
+    val at: Long,
+    val tool: String,
+    val outcome: String,
+    val failureCategory: String = "",
+    val arguments: String = "",
+    val result: String = "",
+    val verificationStatus: String = "BLOCKED_OR_UNVERIFIED"
+)
 
 object ActionLogStore {
     private val lock = Any()
     private var cache: MutableList<OrionActionEvent>? = null
     private fun file(c: Context) = File(c.filesDir, "orion_action_log.json")
+    private val privateTools = setOf(
+        "read_screen", "research_web", "fetch_url", "mcp_call", "telegram_inbox",
+        "telegram_send", "sms", "type", "copy", "remember", "update_memory", "recall",
+        "look", "play", "python_exec", "shell", "termux_command", "open_file",
+        "find_files", "workspace_read", "workspace_write", "browser_snapshot",
+        "browser_extract", "browser_find", "web_search", "live_web_search", "live_news"
+    )
+
+    private fun safeResult(tool: String, result: String): String {
+        if (tool in privateTools) {
+            val state = if (result.trimStart().startsWith("error", true)) "failed" else "returned"
+            return "Private result omitted; $state; chars=${result.length}"
+        }
+        return AgentPrivacyFilter.safeOutput(result).take(2400)
+    }
 
     private fun load(c: Context): MutableList<OrionActionEvent> {
         cache?.let { return it }
@@ -26,7 +49,10 @@ object ActionLogStore {
                         o.optLong("at", 0L),
                         o.optString("tool", "unknown").take(48),
                         o.optString("outcome", "result returned").take(32),
-                        o.optString("failureCategory", "").take(40)
+                        o.optString("failureCategory", "").take(40),
+                        o.optString("arguments", "").take(2400),
+                        o.optString("result", "").take(2400),
+                        o.optString("verificationStatus", "BLOCKED_OR_UNVERIFIED").take(40)
                     ))
                 }
             }
@@ -39,7 +65,8 @@ object ActionLogStore {
         val arr = JSONArray()
         load(c).forEach { e ->
             arr.put(JSONObject().put("at", e.at).put("tool", e.tool).put("outcome", e.outcome)
-                .put("failureCategory", e.failureCategory))
+                .put("failureCategory", e.failureCategory).put("arguments", e.arguments)
+                .put("result", e.result).put("verificationStatus", e.verificationStatus))
         }
         try {
             val target = file(c)
@@ -52,11 +79,32 @@ object ActionLogStore {
         } catch (_: Exception) { }
     }
 
-    fun record(c: Context, tool: String, result: String) = synchronized(lock) {
-        val outcome = if (result.trimStart().startsWith("error:", true)) "error returned" else "result returned"
-        val category = if (outcome == "error returned") ActionLearningPolicy.classifyFailure(result) else ""
+    /** Compatibility path for policy denials and legacy callers with no structured args. */
+    fun record(c: Context, tool: String, result: String) =
+        record(c, tool, JSONObject(), result,
+            OrionTaskOutcome.actionStatus(
+                verified = false,
+                failed = result.trimStart().startsWith("error:", true)
+            ))
+
+    /** One action receipt: redacted args, privacy-filtered result and task-outcome verification status. */
+    internal fun record(
+        c: Context,
+        tool: String,
+        args: JSONObject,
+        result: String,
+        verificationStatus: OrionTaskOutcome.Status
+    ) = synchronized(lock) {
+        val failed = result.trimStart().startsWith("error:", true)
+        val outcome = if (failed) "error returned" else "result returned"
+        val category = if (failed) ActionLearningPolicy.classifyFailure(result) else ""
         val items = load(c)
-        items.add(OrionActionEvent(System.currentTimeMillis(), tool.take(48), outcome, category))
+        items.add(OrionActionEvent(
+            System.currentTimeMillis(), tool.take(48), outcome, category,
+            AgentPrivacyFilter.safeArguments(args),
+            safeResult(tool, result),
+            verificationStatus.name
+        ))
         while (items.size > 200) items.removeAt(0)
         save(c)
     }
@@ -67,8 +115,6 @@ object ActionLogStore {
      * These are warnings to inspect/re-plan, not proof a tool is permanently broken.
      */
     fun recentFailureHints(c: Context, limit: Int = 4): String = synchronized(lock) {
-        // The latest outcome for a tool supersedes older outcomes: a later success must
-        // clear an old failure hint instead of teaching Orion that the tool is still broken.
         val failures = ActionLearningPolicy.recentFailures(
             load(c).map { ActionLearningRecord(it.tool, it.outcome, it.failureCategory) },
             limit

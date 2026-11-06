@@ -28,7 +28,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
@@ -84,11 +84,75 @@ internal object OrionRuntimeCapabilityExecutor {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
             "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
-            "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
+            "workspace_write" -> {
+                val path = args.optString("path")
+                val gate = OrionCodingPlanner.writeGate(service, path)
+                if (gate != null) gate else {
+                    val workspace = OrionPythonWorkspace(service)
+                    val before = workspace.readForUndo(path)
+                    val result = workspace.write(path, args.optString("content"))
+                    if (result.startsWith("saved ")) {
+                        val after = workspace.readForUndo(path)
+                        if (after == null || !WorkspaceUndoStore(service).recordWrite(path, before, after)) {
+                            val rolledBack = if (before == null) {
+                                workspace.delete(path) && workspace.readForUndo(path) == null
+                            } else {
+                                workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                            }
+                            if (rolledBack) "error: workspace write was rolled back because its undo receipt could not be saved"
+                            else "error: workspace write completed but its undo receipt failed and rollback could not be verified; inspect the file before retrying"
+                        } else {
+                            OrionCodingPlanner.noteFileWritten(service, path)
+                            "wrote ${args.optString("content").length} chars to shared workspace/$path\nLOCAL VERIFY PASS: workspace file read-back matches the written content."
+                        }
+                    } else result
+                }
+            }
+            "workspace_delete" -> {
+                val path = args.optString("path")
+                val workspace = OrionPythonWorkspace(service)
+                val before = workspace.readForUndo(path)
+                if (before == null) "error: workspace file is missing, unreadable, or outside the safe workspace"
+                else if (!workspace.delete(path)) "error: workspace delete failed"
+                else if (!WorkspaceUndoStore(service).recordDelete(path, before)) {
+                    val restored = workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                    if (restored) "error: workspace delete was reversed because its undo receipt could not be saved"
+                    else "error: workspace delete completed but receipt save and restoration both failed; inspect the workspace before retrying"
+                } else if (workspace.readForUndo(path) != null) "error: delete did not verify; the file is still present"
+                else "deleted shared workspace/$path (reversible)\nLOCAL VERIFY PASS: deleted file is absent from the workspace."
+            }
+            "workspace_move" -> {
+                val source = args.optString("source")
+                val destination = args.optString("destination")
+                val workspace = OrionPythonWorkspace(service)
+                val content = workspace.readForUndo(source)
+                if (content == null) "error: workspace source is missing, unreadable, or outside the safe workspace"
+                else if (workspace.readForUndo(destination) != null) "error: destination already exists; refusing to overwrite it"
+                else {
+                    val moved = workspace.move(source, destination)
+                    if (!moved.startsWith("moved ")) moved
+                    else if (!WorkspaceUndoStore(service).recordMove(source, destination, content)) {
+                        val reversed = workspace.move(destination, source).startsWith("moved ") &&
+                            workspace.readForUndo(source) == content && workspace.readForUndo(destination) == null
+                        if (reversed) "error: workspace move was reversed because its undo receipt could not be saved"
+                        else "error: workspace move completed but receipt save and rollback could not be verified; inspect both paths before retrying"
+                    } else if (workspace.readForUndo(source) != null || workspace.readForUndo(destination) != content)
+                        "error: move did not verify; inspect both paths before retrying"
+                    else moved + " (reversible)\nLOCAL VERIFY PASS: source is absent and destination matches the moved file."
+                }
+            }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
             "project_create" -> OrionProjectWorkspace(service).create(args.optString("name"), args.optString("language", "python"))
             "project_list" -> OrionProjectWorkspace(service).list()
             "project_inspect" -> OrionProjectWorkspace(service).inspect(args.optString("name"))
+            "project_plan" -> OrionCodingPlanner.create(
+                service, args.optString("name"), args.optString("language"), args.optString("objective"),
+                args.optString("entry_point"), args.optJSONArray("files")
+            )
+            "project_verify" -> OrionCodingPlanner.verify(
+                service, args.optString("name"), args.optBoolean("run_tests", false),
+                confirm = { message -> confirm(message) }
+            )
             else -> null
         }
         else -> null
