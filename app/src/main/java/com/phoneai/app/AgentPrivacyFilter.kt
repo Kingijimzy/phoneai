@@ -41,8 +41,25 @@ internal object AgentPrivacyFilter {
     }
 
     /** Structured arguments are retained for owner audit only after field-aware secret redaction. */
-    fun safeArguments(arguments: JSONObject): String =
-        runCatching { sanitizeJson(arguments).toString().take(2400) }.getOrDefault("{\"redacted\":true}")
+    fun safeArguments(arguments: JSONObject): String = runCatching {
+        val safe = JSONObject()
+        val keys = arguments.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = arguments.opt(key)
+            safe.put(
+                key,
+                if (sensitiveField.containsMatchIn(key)) "[redacted]"
+                else when (value) {
+                    is String -> redact(value, 2400)
+                    is JSONObject -> sanitizeJson(value, key)
+                    is JSONArray -> sanitizeJson(value, key)
+                    else -> value
+                }
+            )
+        }
+        safe.toString().take(2400)
+    }.getOrDefault("{\"redacted\":true}")
 
     fun safeCommand(command: String): String = redact(command.trim(), MAX_COMMAND)
     fun safeOutput(output: String): String = redact(output, 6000)
