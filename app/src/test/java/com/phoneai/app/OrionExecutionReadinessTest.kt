@@ -39,7 +39,14 @@ class OrionExecutionReadinessTest {
         val plan = OrionExecutionReadiness.plan(goal, snapshot("connect_service"), integration)
         assertEquals(OrionExecutionReadiness.NextStep.OPEN_CONNECTION_SETUP, plan.nextStep)
         assertEquals("connect_service", plan.recommendedTool)
-        assertTrue(plan.requiresApproval)
+        assertTrue(plan.requiresOwnerInput)
+    }
+
+    @Test fun supportedWriteCapabilityDoesNotCreateAnApprovalRequirement() {
+        val goal = OrionGoalUnderstanding.understand("run a command in Orion terminal")
+        val plan = OrionExecutionReadiness.plan(goal, snapshot("shell"))
+        assertEquals(OrionExecutionReadiness.NextStep.EXECUTE_SUPPORTED_TOOL, plan.nextStep)
+        assertFalse(plan.requiresOwnerInput)
     }
 
     @Test fun unavailableShellNeverPromisesExecution() {
