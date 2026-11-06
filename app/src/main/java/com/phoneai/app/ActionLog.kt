@@ -88,7 +88,7 @@ object ActionLogStore {
             ))
 
     /** One action receipt: redacted args, privacy-filtered result and task-outcome verification status. */
-    fun record(
+    internal fun record(
         c: Context,
         tool: String,
         args: JSONObject,
