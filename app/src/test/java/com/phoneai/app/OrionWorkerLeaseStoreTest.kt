@@ -20,6 +20,8 @@ class OrionWorkerLeaseStoreTest {
         context = RuntimeEnvironment.getApplication()
         context.getFileStreamPath("orion_worker_leases.json").delete()
         context.getFileStreamPath("orion_worker_leases.json.bak").delete()
+        context.getFileStreamPath("orion_distributed_tasks.json").delete()
+        context.getFileStreamPath("orion_distributed_tasks.json.bak").delete()
         store = OrionWorkerLeaseStore(context) { now }
     }
 
