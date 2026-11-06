@@ -140,10 +140,11 @@ object MemoryStore {
         // Only an explicit owner write may consolidate over trusted memory.
         val consolidationCandidates = if (sourceRole == "owner") list else
             list.filter { it.reviewStatus != "approved" && it.reviewStatus != "superseded" }
-        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(consolidationCandidates, cat(category), t) else null
+        val slotConflict = if (replaceSimilar) OrionMemoryConsolidation.conflicting(consolidationCandidates, t, reviewStatus) else null
+        val replaced = slotConflict ?: if (replaceSimilar) MemoryRanking.findSuperseded(consolidationCandidates, cat(category), t) else null
         if (replaced != null) {
             val old = copyOf(replaced)
-            replaced.text = t
+            replaced.text = if (slotConflict != null) OrionMemoryConsolidation.withHistory(old.text, t, now) else t
             replaced.updated = now
             replaced.sourceRole = sourceRole
             replaced.confidence = MemoryGovernancePolicy.normalizeConfidence(confidence)
