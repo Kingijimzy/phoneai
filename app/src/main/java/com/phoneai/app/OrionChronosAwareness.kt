@@ -16,8 +16,6 @@ internal object OrionChronosAwareness {
     private const val KEY_LAST_EVENT = "last_event_at"
     private const val TTL_MS = 2L * 60L * 60L * 1000L
 
-    @Volatile private var lastPackageInProcess: String = ""
-
     @Synchronized fun onWindowChanged(
         context: Context,
         rawPackageName: String?,
@@ -34,7 +32,6 @@ internal object OrionChronosAwareness {
         val packageName = rawPackageName.orEmpty().trim().lowercase().take(180)
         if (packageName.isBlank() || isSensitive(packageName)) {
             clear(app)
-            lastPackageInProcess = packageName
             return false
         }
 
@@ -42,13 +39,13 @@ internal object OrionChronosAwareness {
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val previousCategory = prefs.getString(KEY_CATEGORY, "").orEmpty()
         val previousStarted = prefs.getLong(KEY_FOCUS_STARTED, 0L)
-        val sameWindow = packageName == lastPackageInProcess
         val sameCategory = previousCategory == category
-        val startedAt = if (sameWindow && sameCategory && previousStarted in 1L..now) {
+        // Track duration at category granularity only. Raw package identifiers are not retained,
+        // even transiently; switching between apps in the same coarse category keeps the session.
+        val startedAt = if (sameCategory && previousStarted in 1L..now) {
             previousStarted
         } else now
 
-        lastPackageInProcess = packageName
         return prefs.edit()
             .putString(KEY_CATEGORY, category)
             .putLong(KEY_FOCUS_STARTED, startedAt)
@@ -79,7 +76,6 @@ internal object OrionChronosAwareness {
 
     @Synchronized fun clear(context: Context) {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
-        lastPackageInProcess = ""
     }
 
     private fun isSensitive(packageName: String): Boolean =
