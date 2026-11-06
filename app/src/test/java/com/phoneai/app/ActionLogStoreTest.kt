@@ -37,7 +37,7 @@ class ActionLogStoreTest {
         val e = ActionLogStore.all(context).single()
         assertEquals("workspace_write", e.tool)
         assertEquals("ok", e.outcome)
-        assertTrue(e.arguments.contains("workspace/report.txt"))
+        assertTrue(e.arguments.contains("report.txt"))
     }
 
     @Test fun legacyRecordIsStoredAndFailuresMarked() {
