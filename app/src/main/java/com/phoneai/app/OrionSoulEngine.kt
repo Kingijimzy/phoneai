@@ -30,6 +30,11 @@ internal object OrionSoulEngine {
             )
         } catch (_: Exception) { null }
 
+        val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
+        val deniedTools = runCatching {
+            ToolPermissions.map(context).filterValues { it == ToolMode.DENY }.keys
+        }.getOrDefault(emptySet())
+
         // One deterministic request-time coordinator owns goal classification, live
         // capability discovery, integration state and readiness. Agent still owns dispatch,
         // approval, cancellation and verification; this layer never grants permission.
@@ -39,7 +44,9 @@ internal object OrionSoulEngine {
             enabledPacks = enabledPacks,
             termuxReady = termuxReady,
             permissionStates = platformInventory.permissionStates,
-            integration = planner
+            integration = planner,
+            deniedTools = deniedTools,
+            generatedExtensions = generatedExtensions
         )
         val capabilitySnapshot = taskContext.capabilities
         val session = runCatching { SoulEngineState.snapshot(context) }.getOrNull()
@@ -54,7 +61,6 @@ internal object OrionSoulEngine {
         lines += platformInventory.lines
         lines += "LIVE INVENTORY CONTRACT: refreshed for every user message before planning. For each requested action inspect the relevant tool, pack, skill, provider, Android permission and worker state. If a required item is OFF, explain exactly what is off and why it is needed, then ask the owner to enable or grant it and wait. If UNKNOWN, never assume ON. After a setting changes, rediscover before dispatch."
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
-        val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
         lines += "SELF-EXTENDING TOOL STATUS: " + generatedExtensions.size + " saved extension(s); " + generatedExtensions.count { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) } + " enabled, verified, source-hash-matching extension(s)."
         lines += "When a goal exposes a missing reusable capability, inspect extension_list and registered tool contracts, generate a minimal draft with extension_create, and test only through a real sandbox. Never call static preflight a sandbox test, execute generated source through shell or the normal app-process Python runtime, or claim a draft is active. Enable only after runtime test evidence matches the exact source hash and the user approves. Record observable results and revise failed drafts instead of repeating the same failed source."
         lines += "SOUL ENGINE CONTINUITY: keep the user goal, current step, discovered capability gap, test evidence, and recovery state connected across tool calls. Distinguish facts from assumptions; continue other useful parts of a goal while an extension remains a draft."
