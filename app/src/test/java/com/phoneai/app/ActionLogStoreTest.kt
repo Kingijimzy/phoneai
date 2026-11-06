@@ -37,7 +37,7 @@ class ActionLogStoreTest {
         assertTrue(event.arguments.contains("[redacted]"))
         assertFalse(event.arguments.contains("sk-live-secret"))
         assertFalse(event.arguments.contains("never-log-this"))
-        assertTrue(event.result.contains("Workspace file read-back verified"))
+        assertTrue(event.result.contains("Private result omitted; returned"))
         assertEquals("COMPLETE", event.verificationStatus)
     }
 
