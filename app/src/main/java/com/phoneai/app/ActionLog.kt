@@ -38,9 +38,7 @@ object ActionLogStore {
             if (key in targetKeys) {
                 preserved[key] = args.optString(key)
             } else {
-                try {
-                    argsCopy.put(key, args.get(key))
-                } catch (_: Exception) { }
+                argsCopy.put(key, args.get(key))
             }
         }
         System.out.println("DEBUG_ARGS_COPY=" + argsCopy.toString())
