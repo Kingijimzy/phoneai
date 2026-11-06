@@ -60,4 +60,23 @@ class MemoryGraphLifecycleTest {
         assertTrue(forexMatches.contains(forex.id))
         assertFalse(forexMatches.contains(football.id))
     }
+
+    @Test fun twoHopGraphNeighborsReachThePromptAlongsideLexicalMatches() {
+        val ownerFact = MemoryStore.addOwnerConfirmed(context, "fact", "My team is Arsenal")!!
+        val leagueFact = MemoryStore.addOwnerConfirmed(context, "fact", "Arsenal plays in Premier League")!!
+
+        val prompt = MemoryStore.promptBlock(context, "Premier League", limit = 2)
+        assertTrue("Two-hop owner/entity fact must reach prompt recall", prompt.contains(ownerFact.text))
+        assertTrue("Direct lexical fact must remain in prompt recall", prompt.contains(leagueFact.text))
+    }
+
+    @Test fun graphRecallNeverBypassesOwnerApprovalOrSensitivityFilters() {
+        val approved = MemoryStore.addOwnerConfirmed(context, "fact", "My team is Arsenal")!!
+        val proposal = MemoryStore.add(context, "fact", "Arsenal plays in Premier League")!!
+        assertTrue(MemoryStore.setReviewStatus(context, proposal.id, "rejected"))
+
+        val prompt = MemoryStore.promptBlock(context, "Premier League", limit = 6)
+        assertTrue(OrionKnowledgeGraph.relatedMemoryIds(context, "Premier League").contains(approved.id))
+        assertFalse(prompt.contains(proposal.text))
+    }
 }
