@@ -18,7 +18,7 @@ internal object GatePolicy {
     /** Android/Linux shell safety is enforced centrally and again by each backend adapter. */
     fun hardBlockReason(tool: String, args: org.json.JSONObject): String? {
         if (tool != "shell" && tool != "termux_command") return null
-        val command = args.optString("command")
+        val command = args.optString("command").ifBlank { args.optString("cmd") }.ifBlank { args.optString("script") }
         return if (command.isNotBlank() && ShellPolicy.classify(command) == ShellRisk.BLOCKED) {
             "Orion blocked a destructive Android/Linux shell command before dispatch."
         } else null
