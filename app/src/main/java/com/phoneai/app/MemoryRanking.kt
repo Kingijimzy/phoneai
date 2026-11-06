@@ -62,8 +62,8 @@ internal object MemoryRanking {
 
     /** Index of the concept group a word belongs to (after stemming), or null. Used by the local embedding. */
     internal fun conceptIndex(word: String): Int? {
-        val stem = stem(word)
-        return concepts.indexOfFirst { g -> g.any { stem(it) == stem } }.takeIf { it >= 0 }
+        val normalized = stem(word)
+        return concepts.indexOfFirst { group -> group.any { stem(it) == normalized } }.takeIf { it >= 0 }
     }
 
     /** Cheap suffix stripping so "trading", "trader" and "trades" meet. */
