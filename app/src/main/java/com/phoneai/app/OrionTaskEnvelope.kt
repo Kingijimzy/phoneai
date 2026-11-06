@@ -28,7 +28,9 @@ internal data class OrionTaskEnvelope(
     val spanId: String,
     val cancellationToken: String,
     val resultSchemaVersion: Int,
-    val policyVersion: String
+    val policyVersion: String,
+    /** Root user objective inherited unchanged by every descendant specialist task. */
+    val rootObjective: String = objective
 ) {
     enum class Kind { USER_GOAL, DELEGATED_STEP, RESEARCH, CODE, TRADING_ANALYSIS, DIAGNOSTICS, VERIFICATION }
 
@@ -38,6 +40,7 @@ internal data class OrionTaskEnvelope(
         if (parentTaskId != null && !isSafeId(parentTaskId)) add("invalid_parent_task_id")
         if (!isSafeId(rootTaskId)) add("invalid_root_task_id")
         if (objective.isBlank() || objective.length > MAX_OBJECTIVE) add("invalid_objective")
+        if (rootObjective.isBlank() || rootObjective.length > MAX_OBJECTIVE) add("invalid_root_objective")
         if (requestedCapabilities.size > MAX_CAPABILITIES ||
             requestedCapabilities.any { !isSafeLabel(it, MAX_LABEL) }) add("invalid_capabilities")
         if (inputEvidenceRefs.size > MAX_EVIDENCE ||
@@ -72,6 +75,7 @@ internal data class OrionTaskEnvelope(
         .put("cancellationToken", cancellationToken)
         .put("resultSchemaVersion", resultSchemaVersion)
         .put("policyVersion", policyVersion)
+        .put("rootObjective", rootObjective)
 
     companion object {
         const val CURRENT_SCHEMA_VERSION = 1
@@ -100,7 +104,8 @@ internal data class OrionTaskEnvelope(
             rootTaskId: String? = null,
             deadlineAt: Long? = null,
             policyVersion: String = "1",
-            now: Long = System.currentTimeMillis()
+            now: Long = System.currentTimeMillis(),
+            rootObjective: String? = null
         ): OrionTaskEnvelope {
             val id = UUID.randomUUID().toString()
             val trace = UUID.randomUUID().toString().replace("-", "")
@@ -111,7 +116,7 @@ internal data class OrionTaskEnvelope(
                 capabilities.distinct().take(MAX_CAPABILITIES),
                 evidenceRefs.distinct().take(MAX_EVIDENCE), ownerScope, now, deadlineAt, 0,
                 UUID.randomUUID().toString(), trace, span, UUID.randomUUID().toString(),
-                1, policyVersion
+                1, policyVersion, (rootObjective ?: objective).trim().take(MAX_OBJECTIVE)
             )
         }
 
@@ -133,7 +138,7 @@ internal data class OrionTaskEnvelope(
                 json.optInt("attempt", -1), json.optString("idempotencyKey"),
                 json.optString("traceId"), json.optString("spanId"),
                 json.optString("cancellationToken"), json.optInt("resultSchemaVersion", -1),
-                json.optString("policyVersion")
+                json.optString("policyVersion"), json.optString("rootObjective", json.optString("objective"))
             )
         }
     }
