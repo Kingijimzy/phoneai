@@ -12,16 +12,17 @@ import java.util.Locale
 internal object OrionMemoryConsolidation {
     data class Slot(val key: String, val value: String)
 
-    private const val VALUE = "([A-Za-z][A-Za-z0-9 .'&-]{1,40}?)(?=\\s*(?:[.,;!(]|\\s(?:and|but|because|since|with)\\b|$))"
+    private const val PROPER = "([A-Z][A-Za-z.'-]*(?:\\s[A-Z][A-Za-z.'-]*){0,2})"
+    private const val JOB = "((?!and\\b|but\\b)[A-Za-z-]+(?:\\s(?!and\\b|but\\b|at\\b|for\\b)[A-Za-z-]+){0,2})"
     private val relatives = "sister|brother|mother|mom|mum|father|dad|wife|husband|son|daughter|girlfriend|boyfriend|friend|boss|cousin|uncle|aunt"
     private val rules: List<Pair<Regex, (MatchResult) -> Slot?>> = listOf(
-        Regex("\\b(?:i live in|i'm living in|i am living in|i moved to|i'm based in|i am based in|my city is|my hometown is|my home town is)\\s+$VALUE", RegexOption.IGNORE_CASE) to
+        Regex("(?i:\\b(?:i live in|i'm living in|i am living in|i moved to|i'm based in|i am based in|my city is|my hometown is|my home town is)\\s+)$PROPER") to
             { m -> Slot("city", m.groupValues[1]) },
-        Regex("\\b(?:i work as(?: an?)?|my job is(?: an?)?|my job title is)\\s+$VALUE", RegexOption.IGNORE_CASE) to
+        Regex("(?i:\\b(?:i work as(?: an?)?|my job is(?: an?)?|my job title is)\\s+)$JOB") to
             { m -> Slot("job", m.groupValues[1]) },
-        Regex("\\b(?:i work at|i work for|my employer is|my company is)\\s+$VALUE", RegexOption.IGNORE_CASE) to
+        Regex("(?i:\\b(?:i work at|i work for|my employer is|my company is)\\s+)$PROPER") to
             { m -> Slot("employer", m.groupValues[1]) },
-        Regex("\\bmy ($relatives)(?:'s name)? (?:is )?(?:called |named |is )?$VALUE", RegexOption.IGNORE_CASE) to
+        Regex("(?i:\\bmy ($relatives)(?:'s name)?\\s+(?:is\\s+)?(?:called\\s+|named\\s+|is\\s+)?)$PROPER") to
             { m -> Slot("relative:" + m.groupValues[1].lowercase(), m.groupValues[2]) }
     )
 
