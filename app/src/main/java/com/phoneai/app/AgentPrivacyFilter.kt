@@ -1,5 +1,8 @@
 package com.phoneai.app
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 /**
  * Conservative redaction for task recovery metadata. This is deliberately a pure helper
  * so the privacy boundary can be tested without Android framework dependencies.
