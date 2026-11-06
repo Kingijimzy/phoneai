@@ -310,7 +310,6 @@ internal object OrionCentralBrain {
         finding: OrionDiagnosticFinding,
         proposal: OrionRepairProposal,
         planDigest: String,
-        requestOwnerApproval: (String) -> Boolean,
         sandboxTest: () -> Boolean,
         apply: () -> String?,
         verify: () -> Boolean,
@@ -318,21 +317,8 @@ internal object OrionCentralBrain {
         verifyRollback: () -> Boolean,
         executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): OrionRepairLifecycle.Receipt {
-        val first = OrionRepairLifecycle.execute(
-            context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
-            null, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
-        )
-        if (first.result != OrionRepairLifecycle.Result.AWAITING_OWNER) return first
-        val approvalPrompt = buildString {
-            appendLine("Orion safely tested this repair, but it needs your approval before it can be applied.")
-            appendLine("Repair: ${proposal.summary.take(240)}")
-            appendLine("Risk: ${proposal.risk.name}; execution boundary: ${executionBoundary.name}.")
-            append("Plan fingerprint: ").append(planDigest.take(12)).append("…")
-        }
-        val approved = runCatching { requestOwnerApproval(approvalPrompt) }.getOrDefault(false)
-        if (!approved) return OrionRepairLifecycle.recordOwnerRejection(
-            context, sessionId, taskId, planDigest
-        )
+        // The explicit repair_apply tool invocation is the owner's authorization for this exact
+        // digest. Sandbox test, boundary checks, apply verification and rollback remain mandatory.
         return OrionRepairLifecycle.execute(
             context.applicationContext, sessionId, taskId, finding, proposal, planDigest,
             planDigest, sandboxTest, apply, verify, rollback, verifyRollback, executionBoundary
