@@ -75,8 +75,8 @@ object ShellRunner {
         if (normalized.isEmpty()) return "error: command is required"
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         // Defense in depth: every backend applies the same catastrophic hard-block policy.
-        if (ShellPolicy.isIrreversible(normalized)) {
-            return "error: blocked by Ultron's three irreversible Windows command checks"
+        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
+            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
         }
         if (normalized == "cd" || normalized.startsWith("cd ")) {
             return changeDirectory(c, normalized.removePrefix("cd").trim())
@@ -107,8 +107,8 @@ object ShellRunner {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
-        if (ShellPolicy.isIrreversible(normalized)) {
-            return "error: blocked by Ultron's three irreversible Windows command checks"
+        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
+            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
         }
         val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
             .coerceIn(1L, 180L)
@@ -143,8 +143,8 @@ object ShellRunner {
         val normalized = command.trim()
         if (normalized.isEmpty()) return "error: command is required"
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
-        if (ShellPolicy.isIrreversible(normalized)) {
-            return "error: blocked by Ultron's three irreversible Windows command checks"
+        if (ShellPolicy.classify(normalized) == ShellRisk.BLOCKED) {
+            return "error: blocked by Orion shell hard blocks (root/system wipe, raw block-device write, or fork bomb)"
         }
         // Buffer complete lines so credentials split across process read chunks are redacted together.
         val pending = StringBuilder()
