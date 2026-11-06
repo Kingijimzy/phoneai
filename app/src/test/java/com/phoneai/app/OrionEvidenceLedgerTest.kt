@@ -77,7 +77,7 @@ class OrionEvidenceLedgerTest {
     }
 
 
-    @Test fun shellAndOutboundMessagesNeverCreateDurableActionReceipts() {
+    @Test fun shellAndOutboundReceiptsRetainOnlySafeDispatchMetadata() {
         val task = "ledger-no-log-" + System.nanoTime()
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "shell", "shell",
             JSONObject().put("command", "echo private"), 1L, "private output"))
@@ -88,7 +88,14 @@ class OrionEvidenceLedgerTest {
         assertTrue(OrionEvidenceLedger.recordDispatch(context, task, "mcp", "mcp_call",
             JSONObject().put("name", "whatsapp_send").put("arguments", JSONObject().put("text", "private")),
             3L, "sent"))
-        assertTrue(OrionEvidenceLedger.events(context, task).isEmpty())
+
+        val rows = OrionEvidenceLedger.events(context, task)
+        assertEquals(setOf("shell", "telegram_send", "sms", "mcp_call"), rows.map { it.tool }.toSet())
+        assertTrue(rows.none { it.summary.contains("private", ignoreCase = true) })
+        val persisted = File(context.filesDir, "orion_evidence_ledger.json").readText()
+        assertFalse(persisted.contains("echo private"))
+        assertFalse(persisted.contains("private message"))
+        assertFalse(persisted.contains("whatsapp_send"))
     }
 
     @Test fun memoryRetrievalEvidenceIsDurableButNeverCountsAsActionVerification() {
