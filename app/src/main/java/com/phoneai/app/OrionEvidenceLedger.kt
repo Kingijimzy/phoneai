@@ -64,10 +64,6 @@ internal object OrionEvidenceLedger {
         else -> Outcome.EXECUTED_UNVERIFIED
     }
 
-    private fun isNonLoggedAction(tool: String, args: JSONObject): Boolean =
-        tool in setOf("shell", "termux_command", "telegram_send", "sms", "whatsapp_send", "signal_send", "discord_send") ||
-            (tool == "mcp_call" && McpConnector.scopeForTool(args.optString("name")) == "communication")
-
     /** One durable event per dispatch, with no raw arguments or private tool output persisted. */
     fun recordDispatch(
         context: Context,
@@ -78,7 +74,7 @@ internal object OrionEvidenceLedger {
         startedAt: Long,
         result: String,
         trustedVerification: Boolean = false
-    ): Boolean = if (isNonLoggedAction(tool, args)) true else append(context, JSONObject()
+    ): Boolean = append(context, JSONObject()
         .put("id", digest("$startedAt|$tool|$taskId|$result").take(24))
         .put("taskId", safeTaskId(taskId))
         .put("backend", backend.take(32))
@@ -116,7 +112,7 @@ internal object OrionEvidenceLedger {
 
     /** Records policy/capability denials that happen before the backend is entered. */
     fun recordBlocked(context: Context, taskId: String, tool: String, category: String, args: JSONObject = JSONObject()): Boolean =
-        if (isNonLoggedAction(tool, args)) true else append(context, JSONObject()
+        append(context, JSONObject()
             .put("id", digest(System.currentTimeMillis().toString() + "|denied|" + tool + "|" + safeTaskId(taskId)).take(24))
             .put("taskId", safeTaskId(taskId))
             .put("backend", "policy")
