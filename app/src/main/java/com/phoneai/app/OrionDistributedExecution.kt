@@ -109,7 +109,7 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
 
     fun summary(): String = synchronized(lock) {
         val records = all()
-        "delegated_tasks=${records.size}; queued=${records.count { it.status == "queued" }}; running=${records.count { it.status == "running" }}; recovery_required=${records.count { it.status == "cancel_requested" }}; failed=${records.count { it.status == "failed" }}"
+        "delegated_tasks=${records.size}; queued=${records.count { it.status == "queued" }}; running=${records.count { it.status == "running" }}; recovery_required=${records.count { it.status == "cancel_requested" || it.status == "needs_review" }}; failed=${records.count { it.status == "failed" }}"
     }
 
     private fun transition(id: String, from: Set<String>, to: String): Boolean = synchronized(lock) {
