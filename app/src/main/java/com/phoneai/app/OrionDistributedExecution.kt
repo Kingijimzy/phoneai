@@ -85,7 +85,18 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         rows.keys().asSequence().mapNotNull { record(rows.optJSONObject(it)) }.sortedBy { it.updatedAt }.toList()
     }
 
-    /** Requeues only expired/known-safe work; running work is never blindly replayed. */
+    /** Mark an interrupted task for safe retry or explicit review after its lease is no longer active. */
+    fun recoverInterrupted(taskId: String, retryable: Boolean, reason: String): Boolean = synchronized(lock) {
+        val root = read()
+        val rows = root.optJSONObject("tasks") ?: return@synchronized false
+        val row = rows.optJSONObject(taskId) ?: return@synchronized false
+        if (row.optString("status") != "running") return@synchronized false
+        row.put("status", if (retryable) "retry_wait" else "needs_review")
+            .put("lastError", reason.take(240)).put("updatedAt", clock())
+        rows.put(taskId, row); root.put("tasks", rows); write(root)
+    }
+
+    /** Reconciles cancellation requests; running work is handled by the fenced coordinator. */
     fun recoverQueued(): List<String> = synchronized(lock) {
         val rows = read().optJSONObject("tasks") ?: return@synchronized emptyList()
         rows.keys().asSequence().mapNotNull { id ->
@@ -223,6 +234,7 @@ internal class OrionExecutionCoordinator(
     fun dispatch(taskId: String, worker: OrionTaskWorker): OrionCoordinatedResult {
         val record = tasks.get(taskId) ?: return OrionCoordinatedResult.Failed(taskId, "task_not_found")
         val task = record.envelope
+        if (record.status == "needs_review") return OrionCoordinatedResult.NeedsOwner(taskId, "interrupted_task_requires_owner_review")
         if (record.status !in setOf("queued", "retry_wait")) return OrionCoordinatedResult.Deferred(taskId, "task_not_queued")
         if (task.validate().isNotEmpty()) return OrionCoordinatedResult.Failed(taskId, "invalid_envelope")
         if (task.kind !in worker.supportedKinds || !worker.supportedCapabilities.containsAll(task.requestedCapabilities))
@@ -305,15 +317,44 @@ internal class OrionExecutionCoordinator(
         }
     }
 
-    /** Repairs the crash window after lease completion but before task-ledger completion. */
+    /**
+     * Repairs the lease/task commit window. Expired or missing leases are never replayed blindly:
+     * read-only specialist kinds may retry; coding and ambiguous checkpointed work require review.
+     */
     fun reconcile(): Int {
         var repaired = 0
+        val now = System.currentTimeMillis()
         tasks.all().filter { it.status == "running" || it.status == "retry_wait" }.forEach { record ->
-            val result = leases.completedResult(record.envelope.taskId, record.envelope.idempotencyKey)
-            if (result != null && tasks.complete(record.envelope.taskId, result)) repaired++
+            val id = record.envelope.taskId
+            val result = leases.completedResult(id, record.envelope.idempotencyKey)
+            if (result != null && tasks.complete(id, result)) {
+                repaired++
+            } else if (record.status == "running" && now - record.updatedAt >= STALE_TASK_MS) {
+                when (leases.state(id)) {
+                    OrionWorkerLeaseStore.LeaseState.ACTIVE,
+                    OrionWorkerLeaseStore.LeaseState.COMPLETED -> Unit
+                    OrionWorkerLeaseStore.LeaseState.EXPIRED,
+                    OrionWorkerLeaseStore.LeaseState.MISSING -> {
+                        val checkpointNeedsOwner = runCatching { OrionTaskCheckpointStore(context).needsOwner(id) }.getOrDefault(true)
+                        val readOnlyRetry = record.envelope.kind in setOf(
+                            OrionTaskEnvelope.Kind.RESEARCH,
+                            OrionTaskEnvelope.Kind.DIAGNOSTICS,
+                            OrionTaskEnvelope.Kind.TRADING_ANALYSIS,
+                            OrionTaskEnvelope.Kind.VERIFICATION
+                        )
+                        val retryable = readOnlyRetry && !checkpointNeedsOwner
+                        if (tasks.recoverInterrupted(
+                                id, retryable,
+                                if (retryable) "expired_worker_lease_read_only_retry" else "worker_interrupted_outcome_requires_owner_review"
+                            )) repaired++
+                    }
+                }
+            }
         }
         return repaired
     }
+
+    companion object { private const val STALE_TASK_MS = 90_000L }
 }
 
 /** Remote LangGraph lifecycle with same-origin HTTPS polling/cancellation and bounded reconnects. */
