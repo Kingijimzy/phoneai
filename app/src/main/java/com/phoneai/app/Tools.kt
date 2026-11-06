@@ -1111,7 +1111,7 @@ class Tools(
         val rootObjective = AgentCheckpointStore.pending(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: task
         val parentCancelled = { AgentCheckpointStore.cancellationRequested(svc, parentTaskId) }
         if (parentCancelled()) return "error: parent task was paused or stopped; no specialist was started."
-        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
+        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId, rootObjective)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
             val answer = AgentRunner.runDelegated(
