@@ -69,4 +69,34 @@ class OrionWorkerLeaseStoreTest {
         val second = store.acquire(task, "worker-b", 5_000)!!
         assertTrue(second.fencingToken > first.fencingToken)
     }
+    @Test fun leaseStateDistinguishesMissingActiveExpiredAndCompleted() {
+        val task = task()
+        assertEquals(OrionWorkerLeaseStore.LeaseState.MISSING, store.state(task.taskId))
+        val lease = store.acquire(task, "worker-a", 2_000)!!
+        assertEquals(OrionWorkerLeaseStore.LeaseState.ACTIVE, store.state(task.taskId))
+        now += 2_001
+        assertEquals(OrionWorkerLeaseStore.LeaseState.EXPIRED, store.state(task.taskId))
+        val renewed = store.acquire(task, "worker-b", 5_000)!!
+        assertTrue(store.complete(renewed, "evidence:recovered"))
+        assertEquals(OrionWorkerLeaseStore.LeaseState.COMPLETED, store.state(task.taskId))
+    }
+
+    @Test fun reconcileRetriesOnlyStaleReadOnlyTasksAndMarksCodeWorkForReview() {
+        now = System.currentTimeMillis() - 120_000L
+        val tasks = OrionDistributedTaskStore(context) { now }
+        val leases = OrionWorkerLeaseStore(context) { now }
+        val research = OrionTaskEnvelope.create("Research a public topic", OrionTaskEnvelope.Kind.RESEARCH, now = now)
+        val code = OrionTaskEnvelope.create("Prepare a workspace patch", OrionTaskEnvelope.Kind.CODE, now = now)
+        assertTrue(tasks.enqueue(research))
+        assertTrue(tasks.enqueue(code))
+        assertTrue(tasks.claim(research.taskId))
+        assertTrue(tasks.claim(code.taskId))
+
+        val repaired = OrionExecutionCoordinator(tasks, leases, context).reconcile()
+
+        assertEquals(2, repaired)
+        assertEquals("retry_wait", tasks.get(research.taskId)?.status)
+        assertEquals("needs_review", tasks.get(code.taskId)?.status)
+    }
+
 }
