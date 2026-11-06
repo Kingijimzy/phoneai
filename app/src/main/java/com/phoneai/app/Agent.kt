@@ -425,8 +425,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
         if (shellCommand.isNotBlank() && ShellPolicy.isIrreversible(shellCommand)) {
-            val blocked = "error: this command matches Ultron's irreversible Windows command guard."
-            recordDispatchBlocked(tool, args, "ultron_irreversible_windows_command")
+            val blocked = ShellPolicy.blockMessage(shellCommand)
+            recordDispatchBlocked(tool, args, "shell_hard_block")
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
