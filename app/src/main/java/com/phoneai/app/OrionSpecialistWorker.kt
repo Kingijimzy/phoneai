@@ -251,6 +251,7 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
     }
 
     private fun runDroneTask(taskId: String): Result {
+        runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(applicationContext) }
         val tasks = OrionDistributedTaskStore(applicationContext)
         val record = tasks.get(taskId) ?: return Result.failure()
         if (record.status == "completed") return Result.success()
