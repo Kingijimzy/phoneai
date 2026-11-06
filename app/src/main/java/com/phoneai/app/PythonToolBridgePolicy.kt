@@ -1,6 +1,6 @@
 package com.phoneai.app
 
-/** Pure rules for Python calling Orion's registered tools through phone.tool(name, args). Every call still goes through the normal gate and approvals. */
+/** Pure rules for Python calling Orion's registered tools through phone.tool(name, args). Every call still goes through the normal capability, scope, validation and evidence gates; only restart, shutdown and Wi-Fi toggles require confirmation. */
 internal object PythonToolBridgePolicy {
     const val MAX_CALLS_PER_RUN = 40
     private val NAME = Regex("[a-z][a-z0-9_]{1,63}")
