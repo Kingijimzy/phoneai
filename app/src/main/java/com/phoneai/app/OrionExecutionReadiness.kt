@@ -57,7 +57,7 @@ internal object OrionExecutionReadiness {
                 OrionIntegrationPlanner.NextStep.ASK_TO_CONNECT -> {
                     val tool = choose("connect_service")
                     return if (tool != null) Plan(NextStep.OPEN_CONNECTION_SETUP,
-                        "The provider is not connected but the secure connection setup tool is available.", tool,
+                        integration.explanation + " The secure connection setup tool is available.", tool,
                         "Return from setup and re-check actual connection state and granted scopes.", true)
                     else Plan(NextStep.ENABLE_OR_INSTALL_CAPABILITY,
                         "Connection setup is required but no registered setup tool is currently available.", choose("capability_note"),
