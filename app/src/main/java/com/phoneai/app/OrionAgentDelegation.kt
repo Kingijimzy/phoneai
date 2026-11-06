@@ -270,6 +270,8 @@ internal object OrionAgentDelegation {
                 append("\n- ").append(record.optString("agentId", "unknown agent"))
                     .append(" [").append(record.optString("status", "unknown")).append("] ")
                     .append(record.optString("objective", "objective unavailable").take(180))
+                val rootObjective = record.optString("rootObjective").take(160)
+                if (rootObjective.isNotBlank()) append(" [root objective: ").append(rootObjective).append("]")
                 val summary = record.optString("summary").take(260)
                 if (summary.isNotBlank()) append(" — ").append(summary)
                 val parentObjective = record.optString("parentObjectiveId")
