@@ -131,10 +131,11 @@ object MemoryStore {
             }
             return@synchronized copyOf(dup)
         }
-        val replaced = if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
+        val slotConflict = if (replaceSimilar) OrionMemoryConsolidation.conflicting(list, t, reviewStatus) else null
+        val replaced = slotConflict ?: if (replaceSimilar) MemoryRanking.findSuperseded(list, cat(category), t) else null
         if (replaced != null) {
             val old = copyOf(replaced)
-            replaced.text = t
+            replaced.text = if (slotConflict != null) OrionMemoryConsolidation.withHistory(old.text, t, now) else t
             replaced.updated = now
             replaced.sourceRole = sourceRole
             replaced.confidence = MemoryGovernancePolicy.normalizeConfidence(confidence)
