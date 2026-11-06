@@ -81,7 +81,6 @@ internal object OrionEvidenceLedger {
         .put("startedAt", startedAt)
         .put("finishedAt", System.currentTimeMillis())
         .put("argsFingerprint", digest(args.toString()))
-        .put("redactedArgs", AgentPrivacyFilter.safeArguments(args))
         .put("summary", safeSummary(tool, result))
     )
 
