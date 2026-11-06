@@ -76,4 +76,29 @@ class OrionChronosAwarenessTest {
         assertTrue(OrionChronosAwareness.onWindowChanged(context, "com.chrome.browser", now))
         assertTrue(OrionChronosAwareness.summary(context, now + 2 * 60 * 60 * 1000L + 1).isBlank())
     }
+
+    @Test fun categoryFocusAggregatesAcrossAppsWithoutRetainingPackageIdentity() {
+        grantChronos()
+        val start = System.currentTimeMillis()
+        assertTrue(OrionChronosAwareness.onWindowChanged(context, "com.whatsapp", start))
+        assertTrue(OrionChronosAwareness.onWindowChanged(context, "org.telegram.messenger", start + 10 * 60_000L))
+        val summary = OrionChronosAwareness.summary(context, start + 15 * 60_000L)
+        assertTrue(summary.contains("focus duration about 15 minutes"))
+        assertFalse(summary.contains("whatsapp"))
+        assertFalse(summary.contains("telegram"))
+    }
+
+    @Test fun proactiveSuggestionRequiresOwnerSwitchesAndLongCoarseFocus() {
+        grantChronos()
+        val now = System.currentTimeMillis()
+        assertTrue(OrionChronosAwareness.onWindowChanged(context, "com.spotify.music", now))
+        assertTrue(OrionChronosAwareness.proactiveSuggestion(context, now + 30 * 60_000L) == null)
+        AgentPolicy.setEnabled(context, "orion_core", true)
+        AgentPolicy.setEnabled(context, "proactive", true)
+        val suggestion = OrionChronosAwareness.proactiveSuggestion(context, now + 65 * 60_000L)
+        assertTrue(suggestion?.contains("broad media app category") == true)
+        assertTrue(suggestion?.contains("no app, setting, or task was changed") == true)
+        assertTrue(OrionChronosAwareness.markSuggestionShown(context, now + 65 * 60_000L))
+        assertTrue(OrionChronosAwareness.proactiveSuggestion(context, now + 70 * 60_000L) == null)
+    }
 }
