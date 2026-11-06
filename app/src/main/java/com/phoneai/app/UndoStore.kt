@@ -37,6 +37,11 @@ object UndoStore {
         save(c, entries)
     }
 
+    fun latestTimestamp(c: Context): Long = synchronized(lock) {
+        val entries = load(c)
+        if (entries.length() == 0) 0L else entries.optJSONObject(entries.length() - 1)?.optLong("at", 0L) ?: 0L
+    }
+
     fun status(c: Context): String = synchronized(lock) {
         val entries = load(c)
         if (entries.length() == 0) "Nothing reversible has been recorded yet."

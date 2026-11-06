@@ -20,6 +20,13 @@ internal object OrionTaskOutcome {
         val message: String
     )
 
+    /** Maps one action's local verification receipt into the shared task-outcome vocabulary. */
+    fun actionStatus(verified: Boolean, failed: Boolean): Status = when {
+        failed -> Status.FAILED
+        verified -> Status.COMPLETE
+        else -> Status.BLOCKED_OR_UNVERIFIED
+    }
+
     fun reconcile(
         completionAllowed: Boolean,
         proofs: List<AgentHooks.Proof>,

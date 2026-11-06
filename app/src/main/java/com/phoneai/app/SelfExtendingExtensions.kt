@@ -16,7 +16,7 @@ import java.security.MessageDigest
  * not a security boundary.
  */
 internal object SelfExtendingExtensionPolicy {
-    const val MAX_SOURCE_BYTES = 32 * 1024
+    const val MAX_SOURCE_BYTES = 8_000
     const val MAX_OUTPUT_CHARS = 8 * 1024
     const val MAX_TESTS = 12
     private val idPattern = Regex("^[a-z][a-z0-9_]{2,47}$")
@@ -35,16 +35,11 @@ internal object SelfExtendingExtensionPolicy {
 
     fun validateSource(runtime: String, source: String): String? {
         if (source.isBlank()) return "Generated source is empty."
-        if (source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 32 KiB limit."
-        if (runtime !in setOf("python", "javascript")) return "Only Python and JavaScript extension sources are supported."
+        if (source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 8,000-byte runtime limit."
+        if (runtime != "python") return "Only Python extensions are executable in this build; JavaScript activation is disabled until an isolated JavaScript sandbox exists."
         OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."
-        }
-        // JS extensions must run in a sandbox without host globals. This catches common
-        // host escape attempts early, but the actual runtime still has to enforce isolation.
-        if (runtime == "javascript" && Regex("\\b(process|require|globalThis|Deno|Bun)\\b|\\b(eval|Function)\\s*\\(").containsMatchIn(source)) {
-            return "Source references a restricted JavaScript host/evaluation feature."
         }
         return null
     }
@@ -126,6 +121,19 @@ internal class SelfExtendingExtensionStore(context: Context) {
         persist(current + extension.copy(enabled = false, verified = false))
     }
 
+    /** Replace a disabled extension with a new disabled draft; active code is never overwritten. */
+    fun saveRevision(extension: GeneratedExtension): Boolean = synchronized(lock) {
+        if (SelfExtendingExtensionPolicy.validateIdentity(extension.id, extension.displayName) != null ||
+            SelfExtendingExtensionPolicy.validateSource(extension.runtime, extension.source) != null ||
+            OrionSecurityPolicy.findEmbeddedSecret(extension.description) != null ||
+            SelfExtendingExtensionPolicy.sha256(extension.source) != extension.sourceSha256) return@synchronized false
+        val current = try { all() } catch (_: Exception) { return@synchronized false }
+        val previous = current.firstOrNull { it.id == extension.id } ?: return@synchronized false
+        if (previous.enabled) return@synchronized false
+        if (previous.sourceSha256 == extension.sourceSha256) return@synchronized false
+        persist(current.map { if (it.id == extension.id) extension.copy(enabled = false, verified = false) else it })
+    }
+
     /** Promote only after sandbox tests passed for the exact source and the user approves it. */
     fun promote(id: String, report: ExtensionTestReport, userApproved: Boolean): Boolean = synchronized(lock) {
         val current = try { all() } catch (_: Exception) { return@synchronized false }
@@ -135,6 +143,20 @@ internal class SelfExtendingExtensionStore(context: Context) {
         )
         if (!allowed) return@synchronized false
         persist(current.map { if (it.id == id) it.copy(enabled = true, verified = true) else it })
+    }
+
+    /** Activate an archived source only with a passing receipt for that exact source hash. */
+    fun activateVersion(version: ExtensionVersionHistory.Version, report: ExtensionTestReport, approved: Boolean): Boolean = synchronized(lock) {
+        if (!SelfExtendingExtensionPolicy.mayPromote(
+                report.passed, version.sourceSha256, report.testedSourceSha256, approved
+            )) return@synchronized false
+        if (SelfExtendingExtensionPolicy.validateIdentity(version.id, version.displayName) != null ||
+            SelfExtendingExtensionPolicy.validateSource(version.runtime, version.source) != null ||
+            SelfExtendingExtensionPolicy.sha256(version.source) != version.sourceSha256) return@synchronized false
+        val current = try { all() } catch (_: Exception) { return@synchronized false }
+        val restored = version.extension(enabled = true)
+        if (current.none { it.id == version.id }) return@synchronized false
+        persist(current.map { if (it.id == version.id) restored else it })
     }
 
     fun disable(id: String): Boolean = synchronized(lock) {

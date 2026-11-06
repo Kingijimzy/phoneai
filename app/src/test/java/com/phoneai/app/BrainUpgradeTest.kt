@@ -51,17 +51,16 @@ class ToolPermissionPolicyTest {
         assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.modeOf(m, "ask_user"))
     }
 
-    @Test fun carefulAsksBalancedAllows() {
-        assertEquals(ToolMode.ASK, ToolPermissionPolicy.modeOf(ToolPermissionPolicy.preset("careful"), "open_app"))
+    @Test fun carefulAndBalancedDefaultToAllowUnlessExplicitlyDenied() {
+        assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.modeOf(ToolPermissionPolicy.preset("careful"), "open_app"))
         assertTrue(ToolPermissionPolicy.preset("balanced").isEmpty())
         assertTrue(ToolPermissionPolicy.preset("autonomous").isEmpty())
     }
 
-    @Test fun serializationRoundTripsAndCyclesThroughAllModes() {
-        val m = mapOf("type" to ToolMode.DENY, "click" to ToolMode.ASK)
-        assertEquals(m, ToolPermissionPolicy.parse(ToolPermissionPolicy.serialize(m)))
-        assertEquals(ToolMode.ASK, ToolPermissionPolicy.next(ToolMode.ALLOW))
-        assertEquals(ToolMode.DENY, ToolPermissionPolicy.next(ToolMode.ASK))
+    @Test fun serializationRoundTripsAndCyclesBetweenAllowAndDeny() {
+        val m = mapOf("type" to ToolMode.DENY, "click" to ToolMode.ALLOW)
+        assertEquals(mapOf("type" to ToolMode.DENY), ToolPermissionPolicy.parse(ToolPermissionPolicy.serialize(m)))
+        assertEquals(ToolMode.DENY, ToolPermissionPolicy.next(ToolMode.ALLOW))
         assertEquals(ToolMode.ALLOW, ToolPermissionPolicy.next(ToolMode.DENY))
         assertTrue(ToolPermissionPolicy.parse("not json").isEmpty())
     }

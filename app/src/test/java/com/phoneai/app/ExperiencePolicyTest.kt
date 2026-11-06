@@ -28,6 +28,15 @@ class ExperiencePolicyTest {
         assertEquals(1, r.size); assertEquals("click", r[0].tool)
     }
 
+    @Test fun automaticTurnRecallBoundsRelevantExperiencesToSix() {
+        val lessons = (1..9).map { index ->
+            fail("send whatsapp message to contact $index", "tool_$index", "target_not_found", now - index * 1_000L)
+        }
+        val recalled = ExperiencePolicy.rank(lessons, "send whatsapp message to contact", now, 6)
+        assertEquals(6, recalled.size)
+        assertTrue(recalled.all { it.kind == "failure" })
+    }
+
     @Test fun staleLessonsRankBelowFresh() {
         val old = fail("send whatsapp message John", "a", "other_failure", now - 400L * 86_400_000L)
         val fresh = fail("send whatsapp message John", "b", "other_failure", now)

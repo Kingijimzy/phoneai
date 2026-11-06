@@ -16,6 +16,19 @@ internal data class OrionAutonomyConfig(
     val notifyOnApproval: Boolean = true
 )
 
+internal object OrionAutonomyRunPolicy {
+    /** Scheduled goals require every owner-controlled switch and an idle live agent session. */
+    fun canRun(
+        mode: OrionMode,
+        coreEnabled: Boolean,
+        proactiveEnabled: Boolean,
+        serviceConnected: Boolean,
+        agentReady: Boolean,
+        userTaskRunning: Boolean
+    ): Boolean = mode == OrionMode.AUTOPILOT && coreEnabled && proactiveEnabled &&
+        serviceConnected && agentReady && !userTaskRunning
+}
+
 internal object OrionAutonomyPolicy {
     const val MIN_STEPS = 1
     const val MAX_STEPS = 40
@@ -44,7 +57,7 @@ internal object OrionAutonomyPolicy {
     fun description(mode: OrionMode): String = when (mode) {
         OrionMode.TALK -> "Conversation and read-only tools; all registered write tools are hard-blocked."
         OrionMode.ASSIST -> "Help plan and act with the current per-tool policy."
-        OrionMode.AUTOPILOT -> "Execute permitted multi-step goals; existing confirmation and safety gates still apply."
+        OrionMode.AUTOPILOT -> "Run owner-scheduled goals only while Orion Core and Proactive are enabled; Android permissions and action-specific confirmations still apply."
         OrionMode.BUILDER -> "Create and test disabled drafts; activation follows the current approval policy."
     }
 }

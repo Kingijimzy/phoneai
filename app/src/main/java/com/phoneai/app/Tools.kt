@@ -1040,6 +1040,7 @@ class Tools(
         val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
             ?: return "error: start a durable Orion objective before queuing background specialist work."
         val checkpoint = AgentCheckpointStore.pending(svc)
+        val rootObjective = checkpoint?.optString("command")?.takeIf { it.isNotBlank() } ?: task
         if (checkpoint?.optString("status").orEmpty() !in setOf("running", "waiting_for_children") ||
             AgentCheckpointStore.cancellationRequested(svc, parentTaskId)) {
             return "error: the exact parent objective is not active; no background work was queued."
@@ -1050,7 +1051,7 @@ class Tools(
         val key = idempotencyKey.trim().take(100).ifBlank { java.util.UUID.nameUUIDFromBytes("$parentTaskId|${parentObjectiveId.trim()}|${agent.id}|${AgentPrivacyFilter.safeCommand(task).trim().lowercase()}".toByteArray()).toString() }
         val previous = store.all().firstOrNull { it.parentTaskId == parentTaskId && it.idempotencyKey == key }
         if (previous != null) {
-            if (previous.manifestId?.let { OrionAgentDelegation.matches(svc, it, agent.id, task, parentObjectiveId) } != true) {
+            if (previous.manifestId?.let { OrionAgentDelegation.matches(svc, it, agent.id, task, parentObjectiveId, rootObjective) } != true) {
                 return "error: this idempotency key already belongs to a different specialist or task; use a new key for a distinct job."
             }
             if (previous.status == OrionWorkerJobStore.Status.QUEUED && !OrionSpecialistScheduler.enqueue(svc, previous.id)) {
@@ -1058,7 +1059,7 @@ class Tools(
             }
             return "SPECIALIST JOB ${previous.id} [${previous.status.name.lowercase()}]: duplicate request matched the existing durable job; no second job was created."
         }
-        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
+        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId, rootObjective)
         val permittedTools = when (manifest.access) {
             OrionAgentDelegation.Access.ANALYSIS_ONLY, OrionAgentDelegation.Access.TASK_PLANNING -> emptySet()
             OrionAgentDelegation.Access.READ_ONLY_RESEARCH -> setOf("live_web_search", "live_news", "bybit_public_ticker")
@@ -1084,7 +1085,7 @@ class Tools(
         }
         if (job.manifestId != manifest.id) {
             OrionAgentDelegation.finish(svc, manifest, "cancelled: idempotency key already belongs to an existing job", cancelled = true)
-            if (job.manifestId?.let { OrionAgentDelegation.matches(svc, it, agent.id, task) } != true) {
+            if (job.manifestId?.let { OrionAgentDelegation.matches(svc, it, agent.id, task, parentObjectiveId, rootObjective) } != true) {
                 return "error: concurrent idempotency-key collision belongs to a different specialist or task; no second job was created."
             }
             if (job.status == OrionWorkerJobStore.Status.QUEUED) OrionSpecialistScheduler.enqueue(svc, job.id)
@@ -1107,9 +1108,10 @@ class Tools(
             ?: return "error: unknown agent \"$agentName\". Available: " + AgentProfiles.everyone(svc).joinToString(", ") { it.id }
         if (task.isBlank()) return "error: task is required"
         val parentTaskId = AgentCheckpointStore.evidenceTaskId(svc)
+        val rootObjective = AgentCheckpointStore.pending(svc)?.optString("command")?.takeIf { it.isNotBlank() } ?: task
         val parentCancelled = { AgentCheckpointStore.cancellationRequested(svc, parentTaskId) }
         if (parentCancelled()) return "error: parent task was paused or stopped; no specialist was started."
-        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId)
+        val manifest = OrionAgentDelegation.create(agent, parentTaskId, task, parentObjectiveId, rootObjective)
         if (!OrionAgentDelegation.begin(svc, manifest)) return "error: could not persist the specialist delegation record; no agent was started"
         return try {
             val answer = AgentRunner.runDelegated(

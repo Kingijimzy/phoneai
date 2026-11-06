@@ -23,14 +23,16 @@ internal object OrionAgentDelegation {
         val allowedTools: Set<String>,
         val memoryScope: String,
         val maxModelCalls: Int = 1,
-        val maxCapabilityCalls: Int = 1
+        val maxCapabilityCalls: Int = 1,
+        val rootObjective: String = objective
     ) {
         fun promptBlock(): String = buildString {
             append("SPECIALIST DELEGATION ENVELOPE:")
             append("\nDelegation ID: ").append(id)
             append("\nParent checkpoint ID: ").append(parentTaskId ?: "not attached")
             append("\nParent objective node ID: ").append(parentObjectiveId ?: "not attached")
-            append("\nYour assigned objective: ").append(objective)
+            append("\nRoot Orion objective: ").append(rootObjective)
+            append("\nYour assigned specialist objective: ").append(objective)
             append("\nAccess scope: ").append(access.name)
             append("\nAllowed data capabilities: ").append(allowedTools.sorted().joinToString().ifBlank { "none" })
             append("\nMemory scope: ").append(memoryScope)
@@ -83,7 +85,7 @@ internal object OrionAgentDelegation {
     private const val KEY = "runs"
     private const val MAX_RUNS = 40
 
-    fun create(agent: AgentProfile, parentTaskId: String?, objective: String, parentObjectiveId: String? = null): Manifest {
+    fun create(agent: AgentProfile, parentTaskId: String?, objective: String, parentObjectiveId: String? = null, rootObjective: String? = null): Manifest {
         val id = UUID.randomUUID().toString()
         val access = when (agent.id) {
             "research" -> Access.READ_ONLY_RESEARCH
@@ -113,7 +115,9 @@ internal object OrionAgentDelegation {
                 "planner" -> "active task summaries; read-only"
                 else -> "agent-specific lessons and relevant saved facts; read-only"
             },
-            maxModelCalls = if (agent.id == "coach") 2 else 1
+            maxModelCalls = if (agent.id == "coach") 2 else 1,
+            rootObjective = AgentPrivacyFilter.safeCommand(rootObjective ?: objective)
+                .replace(Regex("\\s+"), " ").trim().take(700).ifBlank { safeObjective }
         )
     }
 
@@ -126,6 +130,7 @@ internal object OrionAgentDelegation {
             .put("parentObjectiveId", manifest.parentObjectiveId)
             .put("agentId", manifest.agentId)
             .put("objective", manifest.objective)
+            .put("rootObjective", manifest.rootObjective)
             .put("access", manifest.access.name)
             .put("allowedTools", JSONArray(manifest.allowedTools.sorted()))
             .put("memoryScope", manifest.memoryScope)
@@ -160,7 +165,7 @@ internal object OrionAgentDelegation {
         prefs.edit().putString(KEY, runs.toString()).commit()
     }
 
-    fun matches(context: Context, manifestId: String, agentId: String, objective: String, parentObjectiveId: String? = null): Boolean = synchronized(this) {
+    fun matches(context: Context, manifestId: String, agentId: String, objective: String, parentObjectiveId: String? = null, rootObjective: String? = null): Boolean = synchronized(this) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val runs = try { JSONArray(prefs.getString(KEY, "[]") ?: "[]") } catch (_: Exception) { return@synchronized false }
         val record = (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }
@@ -168,7 +173,9 @@ internal object OrionAgentDelegation {
         val safeObjective = AgentPrivacyFilter.safeCommand(objective)
             .replace(Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+"), "[redacted]")
             .replace(Regex("\\s+"), " ").trim().take(700)
+        val safeRootObjective = rootObjective?.let { AgentPrivacyFilter.safeCommand(it).replace(Regex("\\s+"), " ").trim().take(700) }
         record.optString("agentId") == agentId && record.optString("objective") == safeObjective &&
+            (safeRootObjective == null || record.optString("rootObjective", safeObjective) == safeRootObjective) &&
             record.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" } == parentObjectiveId?.trim()?.takeIf { Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it) }
     }
 
@@ -217,7 +224,10 @@ internal object OrionAgentDelegation {
             toolsArray.optString(index).takeIf { it.matches(Regex("^[a-z][a-z0-9_]{0,63}$")) }
         }.toSet()
         if (tools.size != toolsArray.length()) return@synchronized null
-        val canonical = create(profile, parentTaskId, objective, parentObjectiveId)
+        val rootObjective = AgentPrivacyFilter.safeCommand(record.optString("rootObjective", objective))
+            .replace(Regex("\\s+"), " ").trim().take(700)
+        if (rootObjective.isBlank()) return@synchronized null
+        val canonical = create(profile, parentTaskId, objective, parentObjectiveId, rootObjective)
         // Persisted preferences are not authorization: reject widened access or tool grants.
         if (access != canonical.access || !canonical.allowedTools.containsAll(tools)) return@synchronized null
         val memoryScope = AgentPrivacyFilter.safeCommand(record.optString("memoryScope")).take(180)
@@ -236,7 +246,8 @@ internal object OrionAgentDelegation {
             allowedTools = tools,
             memoryScope = memoryScope,
             maxModelCalls = modelCalls,
-            maxCapabilityCalls = capabilityCalls
+            maxCapabilityCalls = capabilityCalls,
+            rootObjective = rootObjective
         )
     }
 
@@ -259,6 +270,8 @@ internal object OrionAgentDelegation {
                 append("\n- ").append(record.optString("agentId", "unknown agent"))
                     .append(" [").append(record.optString("status", "unknown")).append("] ")
                     .append(record.optString("objective", "objective unavailable").take(180))
+                val rootObjective = record.optString("rootObjective").take(160)
+                if (rootObjective.isNotBlank()) append(" [root objective: ").append(rootObjective).append("]")
                 val summary = record.optString("summary").take(260)
                 if (summary.isNotBlank()) append(" — ").append(summary)
                 val parentObjective = record.optString("parentObjectiveId")

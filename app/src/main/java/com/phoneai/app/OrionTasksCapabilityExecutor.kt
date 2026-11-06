@@ -58,7 +58,6 @@ internal object OrionTasksCapabilityExecutor {
         service: PhoneAiService,
         tools: Tools,
         stopped: () -> Boolean,
-        confirm: (String) -> Boolean,
         askUser: (String, List<String>, String) -> String
     ): String = when (tool) {
         "ask_agent" -> if (stopped()) "error: task was stopped before specialist delegation."
@@ -189,8 +188,6 @@ internal object OrionTasksCapabilityExecutor {
             val id = args.optInt("id", -1)
             when {
                 stopped() -> "error: task was stopped before deletion."
-                !confirm("Delete task #$id permanently?") -> "Task deletion cancelled."
-                stopped() -> "error: task was stopped after approval; task was not deleted."
                 TaskStore.delete(service, id) -> "Deleted task #$id."
                 else -> "error: task #$id was not deleted; it may not exist or device storage may be unavailable"
             }

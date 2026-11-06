@@ -9,7 +9,7 @@ import org.json.JSONObject
  * to inspect the phone. Android runtime permissions and OS service state remain mandatory.
  */
 internal enum class OrionSensorScope {
-    MOTION, DEVICE_STATE, LOCATION, SCREEN_CONTEXT, MICROPHONE, NOTIFICATIONS, APP_USAGE, ROUTINE_REMINDERS, CONTACTS, NETWORK
+    MOTION, DEVICE_STATE, LOCATION, SCREEN_CONTEXT, MICROPHONE, NOTIFICATIONS, APP_USAGE, CHRONOS_AWARENESS, ROUTINE_REMINDERS, CONTACTS, NETWORK
 }
 
 internal data class OrionSensorGrant(

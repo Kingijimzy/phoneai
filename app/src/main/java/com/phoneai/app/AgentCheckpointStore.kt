@@ -161,7 +161,7 @@ object AgentCheckpointStore {
             .put("steps", JSONArray())
         val saved = save(c, o)
         if (saved && !previousParentId.isNullOrBlank()) {
-            runCatching { OrionWorkerJobStore(c).cancelParent(previousParentId, "parent_replaced_by_new_objective") }
+            runCatching { OrionSpecialistScheduler.cancelParent(c, previousParentId, "parent_replaced_by_new_objective") }
         }
         saved
     }
@@ -295,7 +295,7 @@ object AgentCheckpointStore {
             }
         }
         if (saved) {
-            parentTaskId?.let { id -> runCatching { OrionWorkerJobStore(c).cancelParent(id, "parent_paused") } }
+            parentTaskId?.let { id -> runCatching { OrionSpecialistScheduler.cancelParent(c, id, "parent_paused") } }
             runCatching { OrionRuntimeNotifier.postTaskOutcome(c, success = false) }
         }
         return saved
@@ -321,7 +321,7 @@ object AgentCheckpointStore {
         val saved = save(c, checkpoint)
         if (saved) {
             checkpoint.optString("taskId").takeIf { it.isNotBlank() }?.let { id ->
-                runCatching { OrionWorkerJobStore(c).cancelParent(id, "parent_stopped") }
+                runCatching { OrionSpecialistScheduler.cancelParent(c, id, "parent_stopped") }
             }
         }
         saved
