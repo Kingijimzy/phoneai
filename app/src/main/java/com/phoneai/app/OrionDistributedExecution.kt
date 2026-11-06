@@ -37,7 +37,8 @@ internal class OrionDistributedTaskStore(context: Context, private val clock: ()
         if (parent.status in TERMINAL || parent.envelope.validate(clock()).isNotEmpty()) return@synchronized null
         val child = OrionTaskEnvelope.create(objective, kind, parent.envelope.ownerScope, capabilities,
             parentTaskId = parentId, rootTaskId = parent.envelope.rootTaskId,
-            deadlineAt = parent.envelope.deadlineAt, policyVersion = parent.envelope.policyVersion, now = clock())
+            deadlineAt = parent.envelope.deadlineAt, policyVersion = parent.envelope.policyVersion,
+            now = clock(), rootObjective = parent.envelope.rootObjective)
         if (enqueue(child)) child else null
     }
 
