@@ -32,8 +32,6 @@ class ActionLogStoreTest {
             OrionTaskOutcome.Status.COMPLETE
         )
         val event = ActionLogStore.all(context).first()
-        val argsValue = event.arguments
-        throw IllegalStateException("DEBUG_FINAL_ARGS=" + argsValue + " | hasTarget=" + argsValue.contains("workspace/report.txt") + " | hasRedacted=" + argsValue.contains("[redacted]"))
         assertEquals("workspace_write", event.tool)
         assertTrue("Unexpected sanitized arguments: ${event.arguments}", event.arguments.contains("workspace/report.txt"))
         assertTrue(event.arguments.contains("[redacted]"))
