@@ -31,7 +31,8 @@ internal object OrionAgentDelegation {
             append("\nDelegation ID: ").append(id)
             append("\nParent checkpoint ID: ").append(parentTaskId ?: "not attached")
             append("\nParent objective node ID: ").append(parentObjectiveId ?: "not attached")
-            append("\nYour assigned objective: ").append(objective)
+            append("\nRoot Orion objective: ").append(rootObjective)
+            append("\nYour assigned specialist objective: ").append(objective)
             append("\nAccess scope: ").append(access.name)
             append("\nAllowed data capabilities: ").append(allowedTools.sorted().joinToString().ifBlank { "none" })
             append("\nMemory scope: ").append(memoryScope)
@@ -116,7 +117,7 @@ internal object OrionAgentDelegation {
             },
             maxModelCalls = if (agent.id == "coach") 2 else 1,
             rootObjective = AgentPrivacyFilter.safeCommand(rootObjective ?: objective)
-                .replace(Regex("\\\\s+"), " ").trim().take(700).ifBlank { safeObjective }
+                .replace(Regex("\\s+"), " ").trim().take(700).ifBlank { safeObjective }
         )
     }
 
@@ -172,7 +173,7 @@ internal object OrionAgentDelegation {
         val safeObjective = AgentPrivacyFilter.safeCommand(objective)
             .replace(Regex("(?i)(api[_ -]?key|token|secret|password)\\s*[:=]\\s*[^\\s,;]+"), "[redacted]")
             .replace(Regex("\\s+"), " ").trim().take(700)
-        val safeRootObjective = rootObjective?.let { AgentPrivacyFilter.safeCommand(it).replace(Regex("\\\\s+"), " ").trim().take(700) }
+        val safeRootObjective = rootObjective?.let { AgentPrivacyFilter.safeCommand(it).replace(Regex("\\s+"), " ").trim().take(700) }
         record.optString("agentId") == agentId && record.optString("objective") == safeObjective &&
             (safeRootObjective == null || record.optString("rootObjective", safeObjective) == safeRootObjective) &&
             record.optString("parentObjectiveId").takeIf { it.isNotBlank() && it != "null" } == parentObjectiveId?.trim()?.takeIf { Regex("^[a-z][a-z0-9_-]{0,31}$").matches(it) }
@@ -224,7 +225,7 @@ internal object OrionAgentDelegation {
         }.toSet()
         if (tools.size != toolsArray.length()) return@synchronized null
         val rootObjective = AgentPrivacyFilter.safeCommand(record.optString("rootObjective", objective))
-            .replace(Regex("\\\\s+"), " ").trim().take(700)
+            .replace(Regex("\\s+"), " ").trim().take(700)
         if (rootObjective.isBlank()) return@synchronized null
         val canonical = create(profile, parentTaskId, objective, parentObjectiveId, rootObjective)
         // Persisted preferences are not authorization: reject widened access or tool grants.
