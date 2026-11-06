@@ -369,12 +369,31 @@ object MemoryStore {
             MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) &&
                 OrionMemoryLifecycle.isActive(c, it.id)
         }
-        val ranked = MemoryRanking.select(approved, query)
-        val graphIds = if (query.isNullOrBlank()) emptySet() else
-            runCatching { OrionKnowledgeGraph.relatedMemoryIds(c, query) }.getOrDefault(emptySet())
-        val graphMatches = approved.filter { it.id in graphIds }
         val boundedLimit = limit.coerceIn(1, 12)
-        val items = (ranked + graphMatches).distinctBy { it.id }.take(boundedLimit)
+        val pinned = approved.filter { it.pinned }.sortedByDescending { it.updated }
+        val lexical = if (query.isNullOrBlank()) emptyList() else
+            MemoryRanking.hybridRank(
+                approved.filterNot { it.pinned },
+                { it.text + " " + it.category },
+                query,
+                limit = (boundedLimit * 3).coerceAtMost(30)
+            )
+        val lexicalIds = lexical.mapTo(hashSetOf()) { it.id }
+        val graphIds = if (query.isNullOrBlank()) emptySet() else
+            runCatching { OrionKnowledgeGraph.relatedMemoryIds(c, query, limit = 24) }.getOrDefault(emptySet())
+        val graphMatches = approved.filter { it.id in graphIds && !it.pinned }
+        // Promote graph-only neighbors before ordinary lexical results. Previously graph
+        // matches were appended after a 25-item recency-filled list and were almost always
+        // truncated by the final prompt limit, so two-hop Cerebro recall rarely reached the model.
+        val graphOnly = graphMatches.filterNot { it.id in lexicalIds }
+            .sortedWith(compareByDescending<Memory> { it.confidence }.thenByDescending { it.updated })
+        val availableSlots = (boundedLimit - pinned.size).coerceAtLeast(0)
+        val graphQuota = if (graphOnly.isEmpty() || availableSlots == 0) 0
+            else maxOf(1, availableSlots / 3)
+        val recent = approved.sortedByDescending { it.updated }
+        val items = (pinned + graphOnly.take(graphQuota) + lexical + graphMatches + recent)
+            .distinctBy { it.id }
+            .take(boundedLimit)
         if (items.isEmpty()) return "(no owner-approved, non-sensitive memories yet; proposals require review)"
         return items.joinToString("\n") {
             "[${it.id}] (${it.category}, source=${it.sourceRole}, confidence=${(it.confidence * 100).toInt()}%" +
