@@ -672,7 +672,56 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 "\nREGISTERED ALTERNATIVES (re-check live state, scope and capability immediately before use): " + alternatives.joinToString(", ")
             }
             verifiedResult += "\n" + recovery.promptLine() + alternativeNote
+            // Requirement 5: verify, then retry once with an alternative before honestly reporting failure.
+            // Reads are already retried via retryRead; this covers write/diagnostic actions whose
+            // verification did not confirm completion. The alternative is a bounded, read-safe probe
+            // that re-perceives state or explicitly checks the goal — it never repeats the failed call.
+            var recovered = false
             if (!isNonLoggedAction(tool, args)) {
+                val risk = RecoveryPolicy.riskOf(tool, ToolRegistry.access(tool) ?: ToolAccess.WRITE, consequential)
+                val failureKind = RecoveryPolicy.classify(verifiedResult)
+                val autoRetryAllowed = risk != RecoveryPolicy.Risk.CONSEQUENTIAL
+                    && failureKind != RecoveryPolicy.Failure.PERMISSION
+                    && failureKind != RecoveryPolicy.Failure.DENIED_OR_BLOCKED
+                    && !stopped
+                if (autoRetryAllowed && alternatives.isNotEmpty()) {
+                    // Prefer tools that re-perceive state or explicitly verify the goal.
+                    val probe = when {
+                        alternatives.contains("verify_action") -> "verify_action"
+                        alternatives.contains("read_screen") -> "read_screen"
+                        alternatives.contains("wait_for") -> "wait_for"
+                        else -> alternatives.first()
+                    }
+                    val probeArgs = when (probe) {
+                        "verify_action" -> JSONObject().put("question", "Was the goal of the previous '$tool' action completed?")
+                        "read_screen" -> JSONObject()
+                        "wait_for" -> JSONObject().put("millis", 1500)
+                        else -> JSONObject()
+                    }
+                    val probeResult = try {
+                        OrionExecutionLoop.dispatch(probe, stopped) {
+                            exec(probe, probeArgs)
+                        }
+                    } catch (_: Exception) {
+                        OrionExecutionLoop.DispatchResult(OrionExecutionLoop.DispatchState.FAILED, "error: alternative probe could not run")
+                    }
+                    if (probeResult.state == OrionExecutionLoop.DispatchState.DISPATCHED
+                        && !probeResult.value.trimStart().startsWith("error", ignoreCase = true)
+                        && probeResult.value.contains("LOCAL VERIFY PASS:", ignoreCase = true)) {
+                        recovered = true
+                        taskProofs.recordVerified(probe, probeResult.value)
+                        verifiedResult = probeResult.value + "\nRECOVERED: an alternative verification step confirmed the action outcome after the first attempt did not verify."
+                        runCatching {
+                            OrionEvidenceLedger.recordRecovery(
+                                svc, evidenceTaskId(), tool,
+                                "retry_with_alternative",
+                                "retry_with_alternative_$probe"
+                            )
+                        }.getOrDefault(false)
+                    }
+                }
+            }
+            if (!recovered && !isNonLoggedAction(tool, args)) {
                 failedCallGuard.recordFailure(tool, args)
                 try { OrionMemoryCapabilityExecutor.recordFailure(svc, currentTask, tool, verifiedResult) } catch (_: Exception) { }
             }
@@ -774,25 +823,20 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     private fun chatSystem(query: String? = null): String {
         val n = Prefs.userName(svc)
-        // Keep the central chat brain aware of the real installed app map, not just the tool names.
-        // Compact context is used for ordinary turns; architecture questions receive the detailed map.
-        val appMap = OrionAppAwareness.context(svc, query)
-        val delegationLedger = OrionAgentDelegation.promptSummary(svc, 3)
-        val workerLedger = OrionWorkerJobStore(svc).promptSummary(4)
-        val capabilityQuestion = query?.let {
-            Regex("(?i)\\b(?:phone actions|what can you do|actually execute|list.*(?:tools|actions|capabilities)|tools?.*(?:available|execute))\\b")
-                .containsMatchIn(it)
-        } == true
+        val q = query.orEmpty()
+        // Single executive context from OrionCentralBrain: identity, live registry, skills, tasks,
+        // extensions, memory recall, chronos/proactive/calendar awareness, diagnostics and the
+        // shared orchestration contract. This is the same context used by systemPrompt(), so Talk
+        // and Command see one consistent capability picture.
+        val central = runCatching { OrionCentralBrain.contextFor(svc, q) }.getOrDefault("")
+        val capabilityQuestion = Regex("(?i)\\b(?:phone actions|what can you do|actually execute|list.*(?:tools|actions|capabilities)|tools?.*(?:available|execute))\\b")
+            .containsMatchIn(q)
         val capabilityContext = if (capabilityQuestion) "\n\n" + capabilityQuestionSummary() else ""
-        // Ordinary Talk turns remain lightweight; explicit self-diagnosis requests receive
-        // a fresh local diagnostic report without making a provider/network health claim.
-        val selfDiagnosticRequest = OrionSelfDiagnostics.isExplicitRequest(query)
+        val selfDiagnosticRequest = OrionSelfDiagnostics.isExplicitRequest(q)
         val selfDiagnosticContext = if (selfDiagnosticRequest) {
             runCatching { OrionSelfDiagnostics.inspect(svc, recordActivity = true).promptBlock() }
                 .getOrDefault("Local self-diagnostics could not be completed. Do not claim the system is healthy.")
         } else ""
-        // Automatic Cerebro recall is scoped to this message and uses only approved, active, non-sensitive memories.
-        val recallContext = query?.let { OrionRecall.forTurn(svc, it) }.orEmpty()
         return "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; all other authorized tools run without an approval prompt. " +
@@ -802,13 +846,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "ORION CAPABILITY TRUTH: Describe a capability as available only when the current registered tool/skill inventory, settings, permissions, and actual connection state support it. A name in a prompt or a recognized provider name is not proof of an implementation. Distinguish public GitHub lookup from private repository access; a Telegram bot bridge from a Telegram user account; accessible screen nodes from complete screen understanding; recorded gesture routines from semantic automation; and local Android speech recognition/TTS from a remote live-voice provider. Do not claim private Gmail/Drive/GitHub access, Gemini Live, source editing, builds, installs, task completion, or live facts unless the corresponding authorized capability actually exists and its call/result verifies the claim. State whether work is proposed, applied, built, tested, or installed. Never ask the user to run a skill or command themselves when Orion has a registered, authorized tool to do it; otherwise state the precise missing tool, permission, connection, or workspace. " +
             "If the user wants an action performed on the phone (open an app, tap, send, search, inspect the screen, play a game), reply with exactly the single word ACTION and nothing else so the guarded tool agent can handle it. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; every other authorized action executes immediately after its capability, scope and validation checks. " +
             "User name: " + (if (n.isEmpty()) "unknown" else n) + ". Now: " + Tools(svc).time() +
-            ".\nACTUAL ORION CAPABILITY INVENTORY (generated from this installed app, not model assumptions):\n" +
-            "Registered tools: " + runCatching { ToolRegistry.names().distinct().sorted().joinToString(", ") }.getOrDefault("unavailable") +
-            "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
-            "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
-            "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc)) +
-            (if (recallContext.isBlank()) "" else "\n\n" + recallContext)
+            ".\n\nSHARED EXECUTIVE CONTEXT (Orion Central Brain):\n" + central +
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
