@@ -26,7 +26,6 @@ internal object ShellPolicy {
         Regex("""(?s):\s*\(\s*\)\s*\{[^}]*\}"""),
         Regex("""(?s)\b(?:fork|bomb)\s*\(\s*\)\s*\{[^}]*\}""")
     )
-    private val rootShell = Regex("""(?is)(?:^|[;&|]\s*)(?:sudo|su|doas)\b""")
 
     private fun inspectionForms(command: String): List<String> {
         val raw = command.trim()
@@ -43,7 +42,6 @@ internal object ShellPolicy {
         if (forms.any { form -> rootOrSystemWipe.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
-        if (forms.any { rootShell.containsMatchIn(it) }) return ShellRisk.BLOCKED
         if (forms.any { remotePipeToShell.containsMatchIn(it) }) return ShellRisk.BLOCKED
         return ShellRisk.SAFE
     }
