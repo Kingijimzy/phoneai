@@ -814,7 +814,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
             "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
             "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + OrionRecall.forTurn(svc, query).let { if (it.isBlank()) "" else "\n\n" + it } + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1232,6 +1232,7 @@ Rules:
             sb.append("\n\n").append(presetInstruction)
             if (!request.isNullOrBlank()) OrionMemoryCapabilityExecutor.learnFromRequest(svc, request)
             sb.append(OrionMemoryCapabilityExecutor.promptContext(svc, request))
+            OrionRecall.forTurn(svc, request).takeIf { it.isNotBlank() }?.let { sb.append("\n\n").append(it) }
             sb.append("\n\nYour specialist team (use ask_agent for synchronous delegation or queue_agent for eligible background work; specialist screens remain optional under Tools → Agents):\n")
                 .append(AgentProfiles.rosterBlock(svc))
             sb.append("\n\n").append(OrionAgentDelegation.promptSummary(svc, 3))
