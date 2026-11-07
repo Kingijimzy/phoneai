@@ -34,15 +34,12 @@ object ActionLogStore {
         val preserved = mutableMapOf<String, String>()
         val argsCopy = JSONObject()
         args.keys().forEachRemaining { key ->
-            System.out.println("DEBUG_KEY key=$key inTarget=${key in targetKeys}")
             if (key in targetKeys) {
                 preserved[key] = args.optString(key)
             } else {
                 argsCopy.put(key, args.get(key))
             }
         }
-        System.out.println("DEBUG_ARGS_COPY=" + argsCopy.toString())
-        System.out.println("DEBUG_PRESERVED=" + preserved.toString())
 
         // Sanitize the remaining arguments (without target keys).
         val safe = JSONObject(AgentPrivacyFilter.safeArguments(argsCopy))
