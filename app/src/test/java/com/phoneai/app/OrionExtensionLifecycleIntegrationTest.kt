@@ -109,7 +109,7 @@ class OrionExtensionLifecycleIntegrationTest {
             .put("tests", JSONArray().put(
                 JSONObject().put("input", JSONObject().put("values", listOf(1, 2, 3))).put("expect", 6)
             ).put(
-                JSONObject().put("input", JSONObject().put("values", listOf())).put("expect", 0)
+                JSONObject().put("input", JSONObject().put("values", emptyList<Int>())).put("expect", 0)
             ).put(
                 JSONObject().put("input", JSONObject().put("values", listOf(10, -5))).put("expect", 5)
             )))
