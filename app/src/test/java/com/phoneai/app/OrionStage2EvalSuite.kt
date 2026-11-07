@@ -269,7 +269,7 @@ internal class OrionStage2EvalSuite {
 
     @Test
     fun stage2_extensionFailedTestNeverActivates() {
-        val executor = OrionPythonCapabilityExecutor(context)
+        val executor = OrionPythonCapabilityExecutor(context, null)
 
         // Create a draft with broken source
         val createResult = executor.execute("extension_create", JSONObject()
@@ -363,7 +363,8 @@ internal class OrionStage2EvalSuite {
             kind = OrionTaskEnvelope.Kind.DIAGNOSTICS,
             capabilities = listOf("diagnostics")
         )
-        val childTask = child ?: fail("child task should be created")
+        assertNotNull("child task should be created", child)
+        val childTask = child!!.envelope
         assertEquals("child should reference parent", parent.taskId, childTask.parentTaskId)
         assertEquals("child should inherit rootTaskId", parent.rootTaskId, childTask.rootTaskId)
         assertEquals("child should inherit rootObjective", parent.rootObjective, childTask.rootObjective)
@@ -379,8 +380,10 @@ internal class OrionStage2EvalSuite {
         val command = "stage 2 continuity test command"
         assertTrue("checkpoint begin should succeed", checkpoint.begin(context, command))
 
-        val pending = checkpoint.pending(context) ?: fail("pending checkpoint should exist")
-        assertEquals("command should match", command.take(2000), pending.optString("command"))
+        val pending = checkpoint.pending(context)
+        assertNotNull("pending checkpoint should exist", pending)
+        val pendingJson = pending!!
+        assertEquals("command should match", command.take(2000), pendingJson.optString("command"))
 
         assertTrue("checkpoint complete should succeed", checkpoint.complete(context))
 
@@ -394,8 +397,10 @@ internal class OrionStage2EvalSuite {
         assertTrue("begin should succeed", checkpoint.begin(context, "pause resume test"))
 
         assertTrue("pause should succeed", checkpoint.pause(context))
-        val paused = checkpoint.pending(context) ?: fail("paused checkpoint should exist")
-        assertEquals("status should be paused", "paused", paused.optString("status"))
+        val paused = checkpoint.pending(context)
+        assertNotNull("paused checkpoint should exist", paused)
+        val pausedJson = paused!!
+        assertEquals("status should be paused", "paused", pausedJson.optString("status"))
 
         assertTrue("resume should succeed", checkpoint.clear(context))
     }
