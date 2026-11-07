@@ -28,14 +28,14 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode"),
+        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state"),
         OrionCapabilityAdapters.Backend.DEV -> OrionDevCapabilityExecutor(service, pythonExecutor).supports(tool)
     }
 
@@ -201,6 +201,15 @@ internal object OrionRuntimeCapabilityExecutor {
                 val on = args.optBoolean("on", false)
                 Prefs.setOfflineMode(service, on)
                 "offline mode ${if (on) "enabled" else "disabled"}"
+            }
+            "soul_state" -> {
+                val state = OrionSoulLifecycle.state(service)
+                "Soul Engine: ${OrionSoulLifecycle.label(service)} (${OrionSoulLifecycle.millisInState(service)} ms in state; last: ${OrionSoulLifecycle.lastAction(service)})"
+            }
+            "document_extract" -> {
+                val uri = args.optString("uri", "")
+                if (uri.isBlank()) "error: document_extract requires a content URI from the file picker; use the attachment UI to select a document first."
+                else "error: document_extract requires the file-picker activity to pass a content URI; call it from the document attachment flow, not directly from chat."
             }
             else -> null
         }

@@ -13,6 +13,9 @@ import androidx.core.content.ContextCompat
  */
 internal object OrionSoulEngine {
     fun contextFor(context: Context, request: String): String {
+        val app = context.applicationContext
+        // Record genuine lifecycle state: Central Brain is thinking about this request.
+        OrionSoulLifecycle.thinking(app, request.take(120))
         val registeredTools = try { ToolRegistry.names().toSet() } catch (_: Exception) { emptySet() }
         val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(context, it.id) }.map { it.id }.toSet()
         val enabledTools = registeredTools.filter { name ->
@@ -62,6 +65,7 @@ internal object OrionSoulEngine {
         lines += "LIVE INVENTORY CONTRACT: refreshed for every user message before planning. For each requested action inspect the relevant tool, pack, skill, provider, Android permission and worker state. If a required item is OFF, explain exactly what is off and why it is needed, then ask the owner to enable or grant it and wait. If UNKNOWN, never assume ON. After a setting changes, rediscover before dispatch."
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
         lines += "SELF-EXTENDING TOOL STATUS: " + generatedExtensions.size + " saved extension(s); " + generatedExtensions.count { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) } + " enabled, verified, source-hash-matching extension(s)."
+        lines += "SOUL ENGINE LIFECYCLE: " + OrionSoulLifecycle.label(app) + " (" + OrionSoulLifecycle.millisInState(app) + " ms in state; last: " + OrionSoulLifecycle.lastAction(app) + ")."
         lines += "When a goal exposes a missing reusable capability, inspect extension_list and registered tool contracts, generate a minimal draft with extension_create, and test only through a real sandbox. Never call static preflight a sandbox test, execute generated source through shell or the normal app-process Python runtime, or claim a draft is active. Enable only after runtime test evidence matches the exact source hash and the user approves. Record observable results and revise failed drafts instead of repeating the same failed source."
         lines += "SOUL ENGINE CONTINUITY: keep the user goal, current step, discovered capability gap, test evidence, and recovery state connected across tool calls. Distinguish facts from assumptions; continue other useful parts of a goal while an extension remains a draft."
         lines += "PERSISTED SOUL SESSION: mode=${session?.mode ?: "TALK"}; goal=${session?.goal?.ifBlank { "none saved" } ?: "state unavailable"}; watching=${(session?.watching?.joinToString() ?: "none").ifBlank { "none" } ?: "state unavailable"}; last outcome=${session?.lastOutcome?.ifBlank { "none recorded" } ?: "state unavailable"}."

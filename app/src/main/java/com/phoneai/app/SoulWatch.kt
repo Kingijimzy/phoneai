@@ -31,6 +31,8 @@ internal object SoulEngineWatcher {
 
     fun run(context: Context): TickResult {
         val c = context.applicationContext
+        // Genuine lifecycle state: the watcher tick means the Soul is monitoring.
+        OrionSoulLifecycle.watcherTick(c)
         val service = PhoneAiService.instance
         // Force a fresh durable schedule read before reporting scheduler health; a stale
         // process-global storage-error flag is not evidence that disk is currently healthy.
