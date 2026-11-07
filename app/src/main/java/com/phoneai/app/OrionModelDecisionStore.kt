@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.util.UUID
+import org.json.JSONObject
 
 /**
  * Local decision ledger for model/tool execution turns.
