@@ -56,7 +56,7 @@ internal object OrionCalendarMonitor {
                 "${CalendarContract.Events.DTSTART} ASC"
             )
         }.getOrNull()
-        run?.use { cursor ->
+        return run?.use { cursor ->
             val out = ArrayList<UpcomingEvent>()
             val idCol = cursor.getColumnIndex(CalendarContract.Events._ID)
             val titleCol = cursor.getColumnIndex(CalendarContract.Events.TITLE)
@@ -77,9 +77,8 @@ internal object OrionCalendarMonitor {
                     )
                 }
             }
-            return out
-        }: runCatching
-        return emptyList()
+            out
+        } ?: emptyList()
     }
 
     /** Events starting within the next hour, formatted as a short labelled block. */
@@ -95,9 +94,9 @@ internal object OrionCalendarMonitor {
         return buildString {
             appendLine("OWNER-GRANTED CALENDAR CONTEXT (upcoming personal events; read on demand, not stored):")
             events.forEach { e ->
-                val when = if (e.minutesFromNow < 60) "in ${e.minutesFromNow} min"
+                val startsIn = if (e.minutesFromNow < 60) "in ${e.minutesFromNow} min"
                 else "in about ${e.minutesFromNow / 60} hours"
-                appendLine("- ${e.title} $when" + (if (e.location.isNullOrBlank()) "" else " @ ${e.location}"))
+                appendLine("- ${e.title} $startsIn" + (if (e.location.isNullOrBlank()) "" else " @ ${e.location}"))
             }
             appendLine("Calendar events are read only when this turn is answered; no calendar data is persisted by Orion.")
         }.take(900)
