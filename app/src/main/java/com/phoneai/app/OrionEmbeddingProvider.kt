@@ -49,9 +49,9 @@ internal object OrionEmbeddingProvider {
             tfliteLoaded = true
             var fd: android.content.res.AssetFileDescriptor? = null
             try {
-                fd = context.assets.openFd(TFLITE_ASSET).takeIf { it.isReadOnly }
+                fd = context.assets.openFd(TFLITE_ASSET)
                 if (fd == null) return@synchronized
-                val channel: FileChannel = fd!!.inputStream.channel
+                val channel: FileChannel = java.io.FileInputStream(fd!!.fileDescriptor).channel
                 val model = channel.map(FileChannel.MapMode.READ_ONLY, fd!!.startOffset, fd!!.declaredLength)
                 interpreter = Interpreter(model)
             } catch (_: Exception) {
@@ -107,24 +107,17 @@ internal object OrionEmbeddingProvider {
         // int32 token ids of shape [1, maxTokens]; we pad/truncate to 64 tokens.
         val maxTokens = 64
         val input = IntArray(maxTokens)
-        val tokens = MemoryRanking.tokens(text).map(::MemoryRanking.stem).take(maxTokens)
+        val tokens = Regex("[A-Za-z0-9]+").findAll(text.lowercase()).map { it.value }.take(maxTokens).toList()
         for (i in tokens.indices) input[i] = (tokens[i].hashCode() and 0x7fffffff) % 30000
 
-        val inputBuffer = ByteBuffer.allocateDirect(maxTokens * 4)
-            .order(ByteOrder.nativeOrder())
-            .asIntBuffer()
-            .put(input)
-            .rewind()
+        val inputBuffer = ByteBuffer.allocateDirect(maxTokens * 4).order(ByteOrder.nativeOrder())
+        input.forEach { inputBuffer.putInt(it) }
+        inputBuffer.rewind()
 
-        val output = FloatArray(EMBEDDING_DIM)
-        val outputBuffer = ByteBuffer.allocateDirect(EMBEDDING_DIM * 4)
-            .order(ByteOrder.nativeOrder())
-            .asFloatBuffer()
-            .put(output)
-            .rewind()
-
+        val outputBuffer = ByteBuffer.allocateDirect(EMBEDDING_DIM * 4).order(ByteOrder.nativeOrder())
         interpreter.run(inputBuffer, outputBuffer)
-        outputBuffer.rewind().get(output)
+        outputBuffer.rewind()
+        val output = FloatArray(EMBEDDING_DIM) { outputBuffer.float }
 
         // L2-normalise.
         var norm = 0.0
@@ -154,7 +147,7 @@ internal object OrionEmbeddingProvider {
             val json = JSONObject(response.use { it.body!!.string() })
             val arr = json.getJSONArray("embedding")
             val out = FloatArray(arr.length())
-            for (i in 0 until arr.length()) out[i] = arr.toFloat(i)
+            for (i in 0 until arr.length()) out[i] = arr.getDouble(i).toFloat()
             return out
         }
     }
