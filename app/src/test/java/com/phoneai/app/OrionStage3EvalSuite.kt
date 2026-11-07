@@ -204,8 +204,7 @@ internal class OrionStage3EvalSuite {
         val saved = MacroStore.save(context, "test routine", steps)
         assertTrue("macro save should succeed", saved)
         val found = MacroStore.find(context, "test routine")
-        assertNotNull("macro should be found", found)
-        val savedMacro = found!!
+        val savedMacro = requireNotNull(found) { "macro should be found" }
         assertEquals("macro name should match", "test routine", savedMacro.first)
         // Clean up
         MacroStore.delete(context, "test routine")
@@ -313,8 +312,7 @@ internal class OrionStage3EvalSuite {
     fun stage3_securityPolicyDetectsEmbeddedSecrets() {
         val finding = OrionSecurityPolicy.findEmbeddedSecret("my key is sk-live-abcdefghijklmnopqrstuvwxyz")
         assertNotNull("should detect OpenAI-style API key", finding)
-        assertNotNull("expected a secret finding", finding)
-        val secretFinding = finding!!
+        val secretFinding = requireNotNull(finding) { "expected a secret finding" }
         assertTrue("finding kind should mention token", secretFinding.kind.contains("token") || secretFinding.kind.contains("API"))
     }
 
@@ -418,7 +416,9 @@ internal class OrionStage3EvalSuite {
         // pwd is allowed as read-only
         val result = api.shell("""["pwd"]""")
         // May succeed or fail depending on workspace initialization; either way it should return JSON
-        assertTrue("shell should return JSON", result.startsWith("{") || result.startsWith("error"))
+        // pwd returns the workspace root path itself; other commands return JSON or an error string.
+        assertTrue("shell should return the workspace root, JSON or an error, got: $result",
+            result.endsWith("orion-python/workspace") || result.startsWith("{") || result.startsWith("error"))
     }
 
     /* ========================================================================
