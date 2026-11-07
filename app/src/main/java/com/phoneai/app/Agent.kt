@@ -682,7 +682,6 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
                 val failureKind = RecoveryPolicy.classify(verifiedResult)
                 val autoRetryAllowed = risk != RecoveryPolicy.Risk.CONSEQUENTIAL
                     && failureKind != RecoveryPolicy.Failure.PERMISSION
-                    && failureKind != RecoveryPolicy.Failure.DENIED_OR_BLOCKED
                     && !stopped
                 if (autoRetryAllowed && alternatives.isNotEmpty()) {
                     // Prefer tools that re-perceive state or explicitly verify the goal.
