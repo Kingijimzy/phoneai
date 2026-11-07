@@ -151,7 +151,8 @@ class OrionInitiativeTest {
         OrionFollowUpStore.add(context, "call the plumber", dueAt = now + 30 * 60_000L)
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        val actual = item ?: fail("expected a due follow-up candidate")
+        assertNotNull("expected a due follow-up candidate", item)
+        val actual = item!!
         assertEquals("followup", actual.kind)
         assertTrue(actual.body.contains("plumber"))
     }
@@ -161,7 +162,8 @@ class OrionInitiativeTest {
         TaskStore.add(context, "fix the roof", dueAt = now - 2 * 60 * 60_000L, priority = "urgent")
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        val actual = item ?: fail("expected an overdue task candidate")
+        assertNotNull("expected an overdue task candidate", item)
+        val actual = item!!
         assertEquals("task", actual.kind)
         assertEquals(2, actual.urgency)
     }
