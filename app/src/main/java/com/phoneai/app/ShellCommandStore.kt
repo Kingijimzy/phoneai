@@ -61,7 +61,7 @@ internal object ShellCommandStore {
 
     /** Number of stored shell command records. */
     fun count(c: Context): Int {
-        return runCatching { JSONArray(prefs(c).getString(KEY, "[]") ?: "[]") }?.length() ?: 0
+        return runCatching { JSONArray(prefs(c).getString(KEY, "[]") ?: "[]").length() }.getOrDefault(0)
     }
 
     /** Clear all stored shell command records. */
