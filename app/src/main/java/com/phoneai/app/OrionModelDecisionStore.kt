@@ -76,7 +76,7 @@ internal class OrionModelDecisionStore private constructor(context: Context) :
         turnId: String? = null
     ): String {
         val safeTool = tool.trim().take(120)
-        val safeArgs = AgentPrivacyFilter.safeArguments(arguments).take(2000)
+        val safeArgs = AgentPrivacyFilter.safeArguments(runCatching { JSONObject(arguments) }.getOrElse { JSONObject().put("arguments", arguments) }).take(2000)
         val safeReason = reason.trim().take(1200)
         if (safeTool.isBlank() || safeReason.isBlank()) return "error: tool and reason are required."
         val id = UUID.randomUUID().toString()
