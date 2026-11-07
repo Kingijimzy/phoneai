@@ -3,6 +3,9 @@ package com.phoneai.app
 import android.content.Context
 import org.robolectric.RuntimeEnvironment
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -18,6 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * These tests use Robolectric + Context to exercise real file-backed stores,
  * not mocked doubles. Gradle compilation/execution is required to run them.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 internal class OrionStage2EvalSuite {
 
     private val context: Context = RuntimeEnvironment.getApplication()
@@ -119,7 +124,7 @@ internal class OrionStage2EvalSuite {
         val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
         val result = devAgent.readSourceFile("calculator.py")
 
-        assertFalse("read should not be blocked", result.blocker.isNotBlank())
+        assertFalse("read should not be blocked", result.blocker?.isNotBlank() == true)
         assertTrue("should contain file content", result.evidence.contains("def add"))
         assertTrue("should not claim code was written", !result.codeWritten)
     }
@@ -211,7 +216,7 @@ internal class OrionStage2EvalSuite {
                 "workspace_read" -> ws.read(args.optString("path"))
                 else -> "error: unknown tool $tool"
             }
-        }
+        })
 
         assertEquals("completed", run.status)
         assertEquals(2, run.completedSteps)
