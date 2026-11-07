@@ -125,10 +125,10 @@ class OrionModelDecisionStoreTest {
 
     @Test
     fun emptyToolOrReasonIsRejected() {
-        val result1 = store.record("", "some reason", "test")
+        val result1 = store.record("", "{}", "some reason")
         assertTrue(result1.startsWith("error:"))
 
-        val result2 = store.record("tool", "", "test")
+        val result2 = store.record("tool", "{}", "")
         assertTrue(result2.startsWith("error:"))
     }
 }
