@@ -33,6 +33,9 @@ class OrionProactiveEngineTest {
         Prefs.setCalendarLookaheadHours(context, 24)
         Prefs.setLastProactiveSpokenAt(context, 0L)
         clearSpokenHistory(context)
+        // TaskStore keeps a process-wide cache that survives Robolectric resets; isolate each test.
+        TaskStore.all(context).toList().forEach { TaskStore.delete(context, it.id) }
+        OrionFollowUpStore.pending(context).toList().forEach { OrionFollowUpStore.done(context, it.id) }
     }
 
     @After fun tearDown() {
