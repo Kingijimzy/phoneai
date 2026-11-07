@@ -35,7 +35,7 @@ internal object OrionSoulLifecycle {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val raw = prefs.getString(KEY_STATE, "STOPPED")
-        State.valueOf(raw.takeIf { it.isNotBlank() } ?: "STOPPED")
+        State.valueOf(raw?.takeIf { it.isNotBlank() } ?: "STOPPED")
     }
 
     /** Enter a new lifecycle state, recording when and what triggered it. Returns the previous state. */
