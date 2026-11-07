@@ -27,8 +27,9 @@ internal class OrionDecisionScheduler(
         Decision(true, "startup_recovery_queued", OrionRuntime.WorkType.RESTORE_PENDING)
     }
 
-    fun onWindowChanged(packageName: String?): Decision = synchronized(lock) {
-        val key = packageName.orEmpty().trim().take(100).ifBlank { "unknown-window" }
+    fun onWindowChanged(): Decision = synchronized(lock) {
+        // Chronos stores only a coarse local category; the durable queue gets no package name.
+        val key = WINDOW_EVENT_KEY
         val now = clock()
         if (key == lastWindowKey && now - lastWindowAt < WINDOW_DEBOUNCE_MS) {
             return@synchronized Decision(false, "duplicate_window_event", null)
@@ -75,6 +76,7 @@ internal class OrionDecisionScheduler(
     }
 
     companion object {
+        const val WINDOW_EVENT_KEY = "window-transition"
         const val WINDOW_DEBOUNCE_MS = 2_000L
         const val TASK_DEBOUNCE_MS = 5_000L
         const val PRESENCE_DEDUPE_WINDOW_MS = 60_000L

@@ -26,6 +26,15 @@ internal class OrionWorkerLeaseStore(context: Context, private val clock: () -> 
         val idempotencyKey: String
     )
     data class Completion(val taskId: String, val idempotencyKey: String, val resultRef: String, val completedAt: Long)
+    enum class LeaseState { ACTIVE, EXPIRED, MISSING, COMPLETED }
+
+    /** Distinguishes a live worker from a process-death gap without replaying an active lease. */
+    fun state(taskId: String): LeaseState = synchronized(lock) {
+        val root = read()
+        if (root.optJSONObject("completions")?.has(taskId) == true) return@synchronized LeaseState.COMPLETED
+        val lease = root.optJSONObject("leases")?.optJSONObject(taskId) ?: return@synchronized LeaseState.MISSING
+        if (lease.optLong("expiresAt") > clock()) LeaseState.ACTIVE else LeaseState.EXPIRED
+    }
 
     private val lock = Any()
     private val file = File(context.applicationContext.filesDir, "orion_worker_leases.json")

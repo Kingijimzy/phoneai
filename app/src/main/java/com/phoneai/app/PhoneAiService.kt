@@ -75,7 +75,14 @@ class PhoneAiService : AccessibilityService(), AgentUi {
      */
     private val autonomyTick = object : Runnable {
         override fun run() {
-            if (OrionAutonomySettings.read(this@PhoneAiService).mode == OrionMode.AUTOPILOT) {
+            if (OrionAutonomyRunPolicy.canRun(
+                    mode = OrionAutonomySettings.read(this@PhoneAiService).mode,
+                    coreEnabled = AgentPolicy.enabled(this@PhoneAiService, "orion_core"),
+                    proactiveEnabled = AgentPolicy.enabled(this@PhoneAiService, "proactive"),
+                    serviceConnected = instance === this@PhoneAiService,
+                    agentReady = ::agent.isInitialized,
+                    userTaskRunning = running
+                )) {
                 val runtime = orionRuntime
                 if (runtime != null && runtime.enqueue(
                         OrionRuntime.WorkType.SOUL_WATCH, "autonomy-tick", 2,
@@ -221,7 +228,8 @@ class PhoneAiService : AccessibilityService(), AgentUi {
             // Android may interrupt and later resume an accessibility service without recreating it.
             // Resume the bounded local queue only when a fresh real window event arrives.
             if (orionRuntime?.snapshot()?.state == OrionRuntime.State.PAUSED) orionRuntime?.resume()
-            decisionScheduler?.onWindowChanged(event.packageName?.toString())
+            OrionChronosAwareness.onWindowChanged(this, event.packageName?.toString())
+            decisionScheduler?.onWindowChanged()
             requestContinuousWatcherObservation("window_changed")
             scheduleRuntimeDrain()
         }
@@ -423,6 +431,7 @@ class PhoneAiService : AccessibilityService(), AgentUi {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        OrionChronosAwareness.clear(this)
         orionRuntime?.stop()
         main.removeCallbacks(autonomyTick)
         runtimeRetryRunnable?.let { main.removeCallbacks(it) }
@@ -1926,16 +1935,23 @@ class PhoneAiService : AccessibilityService(), AgentUi {
      * The goal goes through the normal agent loop, so every gate and approval still applies.
      */
     private fun runDueAutonomyGoal() {
-        if (OrionAutonomySettings.read(this).mode != OrionMode.AUTOPILOT) return
-        if (running || !::agent.isInitialized) return
-        val goal = AutonomyGoalStore.due(this, System.currentTimeMillis()).firstOrNull() ?: return
-        AutonomyGoalStore.markRan(this, goal.id, "started")
+        if (!OrionAutonomyRunPolicy.canRun(
+                mode = OrionAutonomySettings.read(this).mode,
+                coreEnabled = AgentPolicy.enabled(this, "orion_core"),
+                proactiveEnabled = AgentPolicy.enabled(this, "proactive"),
+                serviceConnected = instance === this,
+                agentReady = ::agent.isInitialized,
+                userTaskRunning = running
+            )) return
+        // Claim is persisted atomically before Agent starts; a process interruption will not
+        // replay the same consequential goal immediately after service reconnection.
+        val goal = AutonomyGoalStore.claimNextDue(this, System.currentTimeMillis()) ?: return
         running = true
         try {
             agent.run(goal.prompt)
-            AutonomyGoalStore.markRan(this, goal.id, "ran")
+            AutonomyGoalStore.recordResult(this, goal.id, "submitted_to_agent")
         } catch (e: Exception) {
-            AutonomyGoalStore.markRan(this, goal.id, "error: " + (e.message ?: "failed"))
+            AutonomyGoalStore.recordResult(this, goal.id, "dispatch_error: " + (e.message ?: "failed"))
         } finally {
             main.post { finishRun() }
         }

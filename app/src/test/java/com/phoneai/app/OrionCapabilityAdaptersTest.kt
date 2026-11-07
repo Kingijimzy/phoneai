@@ -67,7 +67,7 @@ class OrionCapabilityAdaptersTest {
 
     @Test fun everyRegisteredToolHasAnExplicitBackendOwner() {
         assertEquals(ToolRegistry.all.map { it.name }.toSet(), OrionCapabilityAdapters.routes().map { it.tool }.toSet())
-        assertTrue(OrionCapabilityAdapters.routes().none { it.backend == OrionCapabilityAdapters.Backend.CORE })
+        assertTrue(OrionCapabilityAdapters.Backend.values().none { it.name == "CORE" })
     }
 
     @Test fun integrationMemoryTaskResearchAndUtilityFamiliesAreRoutedExplicitly() {
@@ -213,8 +213,8 @@ class OrionCapabilityAdaptersTest {
         val python = OrionCapabilityAdapters.routes()
             .filter { it.backend == OrionCapabilityAdapters.Backend.PYTHON }
         assertEquals(
-            setOf("python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
-                "extension_enable", "extension_run", "extension_disable"),
+            setOf("python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+                "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"),
             python.map { it.tool }.toSet()
         )
         python.forEach {
@@ -254,8 +254,8 @@ class OrionCapabilityAdaptersTest {
         )
     }
     
-    @Test fun directPythonRequiresOwnerApprovalBecauseProotSharesAppUid() {
-        assertTrue(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
+    @Test fun directPythonUsesTheSharedExecutionPolicyWithoutExtraPerToolApproval() {
+        assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_exec"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("extension_run"))
         assertFalse(OrionPythonCapabilityExecutor.requiresExplicitApproval("python_unknown"))
     }

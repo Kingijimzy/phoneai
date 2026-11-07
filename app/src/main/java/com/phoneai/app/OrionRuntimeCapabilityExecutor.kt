@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * Concrete local-runtime and file capability executor.
  * This owns the execution implementation for these backend families; Agent remains responsible
- * for task planning, policy gates, approvals and evidence; Tasks owns durable checkpoint/recovery operations.
+ * for task planning, capability gates, the three-action confirmation policy and evidence; Tasks owns durable checkpoint/recovery operations.
  */
 internal object OrionRuntimeCapabilityExecutor {
     /**
@@ -28,14 +28,15 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "project_create", "project_list", "project_inspect")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify", "document_extract")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> false
+        OrionCapabilityAdapters.Backend.RUNTIME_STATE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state")
+        OrionCapabilityAdapters.Backend.DEV -> tool in setOf("dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary", "macro_save", "macro_run", "macro_list", "macro_delete")
     }
 
     fun execute(
@@ -61,19 +62,20 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.DEVICE -> OrionDeviceCapabilityExecutor.execute(
             tool, args, service, tools, stopped, confirm, validateAction, verifyAction, verifySend, look, play, readScreen
         )
-        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools, confirm)
+        OrionCapabilityAdapters.Backend.MCP -> OrionMcpCapabilityExecutor.execute(tool, args, service, tools)
         OrionCapabilityAdapters.Backend.INTEGRATIONS -> OrionIntegrationCapabilityExecutor.execute(tool, args, service, tools, githubAccountRead)
         OrionCapabilityAdapters.Backend.SKILLS -> OrionSkillsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.RESEARCH -> OrionResearchCapabilityExecutor.execute(tool, args, service, tools, researchCancelled)
         OrionCapabilityAdapters.Backend.COMMUNICATION -> OrionCommunicationCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm)
         OrionCapabilityAdapters.Backend.MEMORY -> OrionMemoryCapabilityExecutor.execute(tool, args, service, tools, stopped)
-        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, confirm, askUser)
+        OrionCapabilityAdapters.Backend.TASKS -> OrionTasksCapabilityExecutor.execute(tool, args, service, tools, stopped, askUser)
         OrionCapabilityAdapters.Backend.UTILITIES -> OrionUtilitiesCapabilityExecutor.execute(tool, args, tools, stopped)
-        OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.execute(tool, args, service, confirm)
+        OrionCapabilityAdapters.Backend.DIAGNOSTICS -> OrionDiagnosticsCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.execute(tool, args, service, stopped)
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.execute(tool, args, service)
-        OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, confirm, openBrowser)
+        OrionCapabilityAdapters.Backend.DEV -> OrionDevCapabilityExecutor(service, pythonExecutor).execute(tool, args, confirm, stopped)
+        OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
             "termux_command" -> TermuxBridgeRunner.executeReadOnly(service, args.optString("command"), stopped)
@@ -84,11 +86,131 @@ internal object OrionRuntimeCapabilityExecutor {
             "find_files" -> tools.findFiles(args.optString("query"))
             "open_file" -> tools.openFile(args.optString("id"))
             "save_file" -> tools.saveFile(args.optString("filename"), args.optString("content"), args.optString("folder", "Orion"))
-            "workspace_write" -> ShellRunner.writeFile(service, args.optString("path"), args.optString("content"))
+            "workspace_write" -> {
+                val path = args.optString("path")
+                val gate = OrionCodingPlanner.writeGate(service, path)
+                if (gate != null) gate else {
+                    val workspace = OrionPythonWorkspace(service)
+                    val before = workspace.readForUndo(path)
+                    val result = workspace.write(path, args.optString("content"))
+                    if (result.startsWith("saved ")) {
+                        val after = workspace.readForUndo(path)
+                        if (after == null || !WorkspaceUndoStore(service).recordWrite(path, before, after)) {
+                            val rolledBack = if (before == null) {
+                                workspace.delete(path) && workspace.readForUndo(path) == null
+                            } else {
+                                workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                            }
+                            if (rolledBack) "error: workspace write was rolled back because its undo receipt could not be saved"
+                            else "error: workspace write completed but its undo receipt failed and rollback could not be verified; inspect the file before retrying"
+                        } else {
+                            OrionCodingPlanner.noteFileWritten(service, path)
+                            "wrote ${args.optString("content").length} chars to shared workspace/$path\nLOCAL VERIFY PASS: workspace file read-back matches the written content."
+                        }
+                    } else result
+                }
+            }
+            "workspace_delete" -> {
+                val path = args.optString("path")
+                val workspace = OrionPythonWorkspace(service)
+                val before = workspace.readForUndo(path)
+                if (before == null) "error: workspace file is missing, unreadable, or outside the safe workspace"
+                else if (!workspace.delete(path)) "error: workspace delete failed"
+                else if (!WorkspaceUndoStore(service).recordDelete(path, before, path)) {
+                    val restored = workspace.restoreFromTrash(path).startsWith("restored ") && workspace.readForUndo(path) == before
+                    if (restored) "error: workspace delete was reversed because its undo receipt could not be saved"
+                    else "error: workspace delete completed but receipt save and restoration both failed; inspect the workspace before retrying"
+                } else if (workspace.readForUndo(path) != null) "error: delete did not verify; the file is still present"
+                else "deleted shared workspace/$path (reversible; moved to recycle)\nLOCAL VERIFY PASS: deleted file is absent from the workspace and recoverable from the recycle location."
+            }
+            "workspace_move" -> {
+                val source = args.optString("source")
+                val destination = args.optString("destination")
+                val workspace = OrionPythonWorkspace(service)
+                val content = workspace.readForUndo(source)
+                if (content == null) "error: workspace source is missing, unreadable, or outside the safe workspace"
+                else if (workspace.readForUndo(destination) != null) "error: destination already exists; refusing to overwrite it"
+                else {
+                    val moved = workspace.move(source, destination)
+                    if (!moved.startsWith("moved ")) moved
+                    else if (!WorkspaceUndoStore(service).recordMove(source, destination, content)) {
+                        val reversed = workspace.move(destination, source).startsWith("moved ") &&
+                            workspace.readForUndo(source) == content && workspace.readForUndo(destination) == null
+                        if (reversed) "error: workspace move was reversed because its undo receipt could not be saved"
+                        else "error: workspace move completed but receipt save and rollback could not be verified; inspect both paths before retrying"
+                    } else if (workspace.readForUndo(source) != null || workspace.readForUndo(destination) != content)
+                        "error: move did not verify; inspect both paths before retrying"
+                    else moved + " (reversible)\nLOCAL VERIFY PASS: source is absent and destination matches the moved file."
+                }
+            }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
+            "trash_list" -> OrionPythonWorkspace(service).listTrash()
+            "trash_restore" -> {
+                val path = args.optString("path")
+                val result = OrionPythonWorkspace(service).restoreFromTrash(path)
+                if (result.startsWith("restored ")) result + "\nLOCAL VERIFY PASS: restored file is present at its original workspace path."
+                else result
+            }
+            "trash_empty" -> {
+                val count = OrionPythonWorkspace(service).emptyTrash()
+                "emptied recycle location ($count file(s) permanently removed)"
+            }
+            "backup_list" -> OrionPythonWorkspace(service).listBackup()
+            "backup_restore" -> {
+                val path = args.optString("path")
+                val result = OrionPythonWorkspace(service).restoreFromBackup(path)
+                if (result.startsWith("restored ")) result + "\nLOCAL VERIFY PASS: restored file is present at its original workspace path."
+                else result
+            }
             "project_create" -> OrionProjectWorkspace(service).create(args.optString("name"), args.optString("language", "python"))
             "project_list" -> OrionProjectWorkspace(service).list()
             "project_inspect" -> OrionProjectWorkspace(service).inspect(args.optString("name"))
+            "project_plan" -> OrionCodingPlanner.create(
+                service, args.optString("name"), args.optString("language"), args.optString("objective"),
+                args.optString("entry_point"), args.optJSONArray("files")
+            )
+            "project_verify" -> OrionCodingPlanner.verify(
+                service, args.optString("name"), args.optBoolean("run_tests", false)
+            )
+            "model_decision_log" -> {
+                val id = OrionModelDecisionStore.get(service).record(
+                    tool = args.optString("tool"),
+                    arguments = args.optString("arguments"),
+                    reason = args.optString("reason"),
+                    provider = args.optString("provider").takeIf { it.isNotBlank() },
+                    model = args.optString("model").takeIf { it.isNotBlank() },
+                    taskId = args.optString("taskId").takeIf { it.isNotBlank() },
+                    turnId = args.optString("turnId").takeIf { it.isNotBlank() }
+                )
+                "recorded model decision [$id]"
+            }
+            "model_decision_search" -> {
+                val hits = OrionModelDecisionStore.get(service).search(args.optString("query"))
+                if (hits.isEmpty()) "no model decisions matched that query"
+                else hits.joinToString("\n") { "[${it.id}] ${it.tool} · ${it.verification} · ${it.reason.take(120)}" }
+            }
+            "model_status" -> {
+                val sb = StringBuilder("Selected provider: ${Prefs.provider(service, false).label}")
+                sb.append("\nVision provider: ${Prefs.provider(service, true).label}")
+                sb.append("\nOffline mode: ${Prefs.offlineMode(service)}")
+                sb.append("\nAuto-switch: ${Prefs.autoSwitch(service)}")
+                sb.append("\nPaid providers allowed: ${Prefs.allowPaidProviders(service)}")
+                sb.toString()
+            }
+            "model_offline_mode" -> {
+                val on = args.optBoolean("on", false)
+                Prefs.setOfflineMode(service, on)
+                "offline mode ${if (on) "enabled" else "disabled"}"
+            }
+            "soul_state" -> {
+                val state = OrionSoulLifecycle.state(service)
+                "Soul Engine: ${OrionSoulLifecycle.label(service)} (${OrionSoulLifecycle.millisInState(service)} ms in state; last: ${OrionSoulLifecycle.lastAction(service)})"
+            }
+            "document_extract" -> {
+                val uri = args.optString("uri", "")
+                if (uri.isBlank()) "error: document_extract requires a content URI from the file picker; use the attachment UI to select a document first."
+                else "error: document_extract requires the file-picker activity to pass a content URI; call it from the document attachment flow, not directly from chat."
+            }
             else -> null
         }
         else -> null
@@ -98,7 +220,6 @@ internal object OrionRuntimeCapabilityExecutor {
         tool: String,
         args: JSONObject,
         service: PhoneAiService,
-        confirm: (String) -> Boolean,
         openBrowser: (String) -> Unit
     ): String? = when (tool) {
         "open_url" -> service.openUrl(args.optString("url"))
@@ -108,15 +229,7 @@ internal object OrionRuntimeCapabilityExecutor {
         "browser_verify" -> BrowserAutomation.verifyPage(args.optString("expected_text"), args.optString("previous_url")).take(1200)
         "browser_click_verify", "browser_click" -> {
             val target = args.optString("target").trim()
-            val risky = Regex("(?i)\\b(submit|send|post|publish|buy|purchase|pay|checkout|delete|remove|transfer|withdraw|order|trade|subscribe|confirm|place order|save changes)\\b")
-                .containsMatchIn(target)
-            val approved = !risky || confirm(
-                if (tool == "browser_click_verify")
-                    "Orion is about to click '$target' and inspect the resulting page. This may submit or change data. Continue?"
-                else "Orion is about to click '$target' on the current webpage. This may submit or change data. Continue?"
-            )
-            if (!approved) "error: user cancelled browser click"
-            else if (tool == "browser_click_verify") BrowserAutomation.clickAndVerify(target, args.optString("expected_text")).take(1800)
+            if (tool == "browser_click_verify") BrowserAutomation.clickAndVerify(target, args.optString("expected_text")).take(1800)
             else BrowserAutomation.click(target)
         }
         "browser_type" -> BrowserAutomation.type(args.optString("target"), args.optString("text"))

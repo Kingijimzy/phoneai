@@ -13,19 +13,14 @@ internal object OrionDiagnosticsCapabilityExecutor {
     fun execute(
         tool: String,
         args: JSONObject,
-        context: Context,
-        confirm: (String) -> Boolean = { false }
+        context: Context
     ): String? = when (tool) {
         "self_diagnose" -> OrionSelfDiagnostics.inspect(context, recordActivity = true).promptBlock()
-        "repair_apply" -> applyRegisteredRepair(context, args.optString("repair_id"), confirm)
+        "repair_apply" -> applyRegisteredRepair(context, args.optString("repair_id"))
         else -> null
     }
 
-    private fun applyRegisteredRepair(
-        context: Context,
-        repairId: String,
-        confirm: (String) -> Boolean
-    ): String {
+    private fun applyRegisteredRepair(context: Context, repairId: String): String {
         if (repairId != WORKSPACE_REPAIR_ID) {
             return "error: unsupported repair_id; available app-owned repair: $WORKSPACE_REPAIR_ID"
         }
@@ -72,7 +67,6 @@ internal object OrionDiagnosticsCapabilityExecutor {
             finding = finding,
             proposal = proposal,
             planDigest = digest,
-            requestOwnerApproval = confirm,
             sandboxTest = { workspace.canEnsureRoot() },
             apply = {
                 when (workspace.ensureRootForRepair()) {
