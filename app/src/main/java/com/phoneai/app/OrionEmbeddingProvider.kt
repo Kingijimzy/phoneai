@@ -1,10 +1,11 @@
 package com.phoneai.app
 
 import android.content.Context
-import com.squareup.okhttp3.MediaType.Companion.toMediaTypeOrNull
-import com.squareup.okhttp3.OkHttpClient
-import com.squareup.okhttp3.Request
-import com.squareup.okhttp3.RequestBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
@@ -145,7 +146,7 @@ internal object OrionEmbeddingProvider {
             .toString()
         val request = Request.Builder()
             .url(url)
-            .post(RequestBody.Companion.toRequestBody(body, "application/json".toMediaTypeOrNull()))
+            .post(body.toRequestBody("application/json".toMediaTypeOrNull()))
             .header("Content-Type", "application/json")
             .build()
         okHttp.newCall(request).execute().use { response ->
