@@ -33,6 +33,9 @@ class OrionProactiveEngineTest {
         Prefs.setCalendarLookaheadHours(context, 24)
         Prefs.setLastProactiveSpokenAt(context, 0L)
         clearSpokenHistory(context)
+        // TaskStore keeps a process-wide cache that survives Robolectric resets; isolate each test.
+        TaskStore.all(context).toList().forEach { TaskStore.delete(context, it.id) }
+        OrionFollowUpStore.pending(context).toList().forEach { OrionFollowUpStore.remove(context, it.id) }
     }
 
     @After fun tearDown() {
@@ -129,8 +132,7 @@ class OrionProactiveEngineTest {
         OrionFollowUpStore.add(context, "call the plumber", dueAt = now + 30 * 60_000L)
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        assertNotNull("expected a due follow-up candidate", item)
-        val actual = item!!
+        val actual = requireNotNull(item) { "expected a due follow-up candidate" }
         assertEquals("followup", actual.kind)
         assertTrue(actual.body.contains("plumber"))
     }
@@ -141,8 +143,7 @@ class OrionProactiveEngineTest {
         TaskStore.add(context, "fix the roof", dueAt = now - 2 * 60 * 60_000L, priority = "urgent")
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        assertNotNull("expected an overdue task candidate", item)
-        val actual = item!!
+        val actual = requireNotNull(item) { "expected an overdue task candidate" }
         assertEquals("task", actual.kind)
         assertEquals(2, actual.urgency)
     }
