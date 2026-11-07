@@ -85,4 +85,97 @@ class WorkspaceUndoStoreTest {
         val tooLarge = "x".repeat(OrionPythonWorkspace.MAX_FILE_BYTES + 1)
         assertFalse(undo.recordWrite("large.txt", null, tooLarge))
     }
+
+    @Test fun deletedFileGoesToTrashInsteadOfBeingPermanentlyRemoved() {
+        assertTrue(workspace.write("trash-me.txt", "to be recycled").startsWith("saved "))
+        assertTrue(workspace.delete("trash-me.txt"))
+        assertNull(workspace.readForUndo("trash-me.txt"))
+        val listing = workspace.listTrash()
+        assertTrue(listing.contains("trash-me.txt"))
+        val restored = workspace.restoreFromTrash("trash-me.txt")
+        assertTrue(restored.startsWith("restored "))
+        assertEquals("to be recycled", workspace.readForUndo("trash-me.txt"))
+        // clean up: delete again to leave workspace clean
+        workspace.delete("trash-me.txt")
+    }
+
+    @Test fun restoreFromTrashReturnsFileToOriginalPath() {
+        assertTrue(workspace.write("restore-me.txt", "original content").startsWith("saved "))
+        assertTrue(workspace.delete("restore-me.txt"))
+        assertNull(workspace.readForUndo("restore-me.txt"))
+        val result = workspace.restoreFromTrash("restore-me.txt")
+        assertTrue(result.startsWith("restored "))
+        assertEquals("original content", workspace.readForUndo("restore-me.txt"))
+    }
+
+    @Test fun restoreFromTrashFailsWhenDestinationExists() {
+        assertTrue(workspace.write("already-there.txt", "exists").startsWith("saved "))
+        assertTrue(workspace.write("trashed.txt", "trashed content").startsWith("saved "))
+        assertTrue(workspace.delete("trashed.txt"))
+        val result = workspace.restoreFromTrash("already-there.txt")
+        assertTrue(result.startsWith("error:"))
+    }
+
+    @Test fun emptyTrashPermanentlyRemovesAllTrashedFiles() {
+        assertTrue(workspace.write("t1.txt", "one").startsWith("saved "))
+        assertTrue(workspace.write("t2.txt", "two").startsWith("saved "))
+        assertTrue(workspace.delete("t1.txt"))
+        assertTrue(workspace.delete("t2.txt"))
+        assertEquals(2, workspace.trashCount())
+        assertEquals(2, workspace.emptyTrash())
+        assertEquals(0, workspace.trashCount())
+        assertTrue(workspace.listTrash().contains("(trash empty)"))
+    }
+
+    @Test fun interruptedWritePartFilesAreCleanedUp() {
+        assertTrue(workspace.write("clean.txt", "clean content").startsWith("saved "))
+        val partFile = File(context.filesDir, "orion-python/workspace/.orion-clean.txt.part")
+        partFile.writeText("partial garbage from interrupted write")
+        assertTrue(partFile.exists())
+        assertEquals(1, workspace.cleanupInterruptedWrites())
+        assertFalse(partFile.exists())
+    }
+
+    @Test fun overwriteUndoRestoresOriginalContentsExactlyAcceptanceTest() {
+        // Acceptance test: Orion overwrites a file, reverses the operation and restores the original contents exactly.
+        val path = "acceptance.txt"
+        val original = "This is the original file content.\nIt has multiple lines.\nAnd important data."
+        val overwrite = "This is the overwritten content.\nIt replaces the original."
+
+        // Step 1: Create the file with original content
+        assertTrue(workspace.write(path, original).startsWith("saved "))
+        assertEquals(original, workspace.readForUndo(path))
+
+        // Step 2: Record the write (simulating Orion's file-operation transaction record)
+        assertTrue(undo.recordWrite(path, null, original))
+
+        // Step 3: Overwrite the file
+        assertTrue(workspace.write(path, overwrite).startsWith("saved "))
+        assertEquals(overwrite, workspace.readForUndo(path))
+
+        // Step 4: Record the overwrite (before = original, after = overwritten)
+        assertTrue(undo.recordWrite(path, original, overwrite))
+
+        // Step 5: Undo the overwrite
+        assertEquals("Undid the last workspace file change successfully.", undo.undoLast())
+
+        // Step 6: Verify original contents are restored exactly
+        assertEquals(original, workspace.readForUndo(path))
+        assertNotEquals(overwrite, workspace.readForUndo(path))
+    }
+
+    @Test fun deleteThenUndoRestoresFromTrash() {
+        val path = "trash-undo.txt"
+        val content = "content to be deleted and restored"
+        assertTrue(workspace.write(path, content).startsWith("saved "))
+        assertTrue(workspace.delete(path)) // moves to trash
+        assertNull(workspace.readForUndo(path))
+
+        // Record the delete with trash path
+        assertTrue(undo.recordDelete(path, content, path))
+
+        // Undo should restore from trash
+        assertEquals("Undid the last workspace file change successfully.", undo.undoLast())
+        assertEquals(content, workspace.readForUndo(path))
+    }
 }

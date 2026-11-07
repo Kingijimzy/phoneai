@@ -21,6 +21,27 @@ internal object OrionRecall {
     private const val MIN_SCORE = 0.15
 
     /** [memories] must already be limited to what may enter a prompt (approved, non-sensitive, active). */
+    fun top(context: Context, memories: List<Memory>, query: String, k: Int = 6): List<Hit> {
+        val q = query.trim()
+        if (q.length < 3 || memories.isEmpty()) return emptyList()
+        val queryVector = OrionEmbeddingProvider.embed(context, q)
+        val links = OrionEntityIndex.linked(memories, q)
+        return memories.mapNotNull { m ->
+            val meaning = OrionEmbeddingProvider.cosine(queryVector, OrionEmbeddingProvider.embed(context, m.text)).coerceAtLeast(0.0)
+            val keyword = (MemoryRanking.score(m, q) / 40.0).coerceIn(0.0, 1.0)
+            val link = links[m.id] ?: 0.0
+            val score = MEANING * meaning + KEYWORD * keyword + LINKED * link + (if (m.pinned) PINNED else 0.0)
+            val why = buildList {
+                if (meaning >= 0.2) add("meaning")
+                if (keyword > 0.0) add("keyword")
+                if (link > 0.0) add(if (link >= 1.0) "linked" else "linked-2")
+            }
+            if (why.isEmpty() || score < MIN_SCORE) null else Hit(m, score, why)
+        }.sortedByDescending { it.score }.take(k)
+    }
+
+    /** Backward-compatible pure fallback: feature-hash embedding only, no TFLite/Ollama tiers.
+     * Kept for unit tests that run without an Android Context. */
     fun top(memories: List<Memory>, query: String, k: Int = 6): List<Hit> {
         val q = query.trim()
         if (q.length < 3 || memories.isEmpty()) return emptyList()
@@ -61,7 +82,7 @@ internal object OrionRecall {
                 MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) && OrionMemoryLifecycle.isActive(c, it.id)
             }
             val experience = runCatching { ExperienceStore.promptBlock(c, q, 3) }.getOrDefault("")
-            format(top(usable, q), experience)
+            format(top(c, usable, q), experience)
         }.getOrDefault("")
     }
 }

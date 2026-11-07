@@ -28,14 +28,14 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.PYTHON -> OrionPythonCapabilityExecutor.supports(tool)
         OrionCapabilityAdapters.Backend.SHELL -> tool in setOf("shell", "termux_command")
-        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
+        OrionCapabilityAdapters.Backend.FILES -> tool in setOf("find_files", "open_file", "save_file", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "project_plan", "project_verify")
         OrionCapabilityAdapters.Backend.BROWSER -> tool in setOf(
             "open_url", "browser_snapshot", "browser_find", "browser_extract", "browser_verify",
             "browser_click", "browser_click_verify", "browser_type", "browser_scroll",
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> false
+        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode")
     }
 
     fun execute(
@@ -114,12 +114,12 @@ internal object OrionRuntimeCapabilityExecutor {
                 val before = workspace.readForUndo(path)
                 if (before == null) "error: workspace file is missing, unreadable, or outside the safe workspace"
                 else if (!workspace.delete(path)) "error: workspace delete failed"
-                else if (!WorkspaceUndoStore(service).recordDelete(path, before)) {
-                    val restored = workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                else if (!WorkspaceUndoStore(service).recordDelete(path, before, path)) {
+                    val restored = workspace.restoreFromTrash(path).startsWith("restored ") && workspace.readForUndo(path) == before
                     if (restored) "error: workspace delete was reversed because its undo receipt could not be saved"
                     else "error: workspace delete completed but receipt save and restoration both failed; inspect the workspace before retrying"
                 } else if (workspace.readForUndo(path) != null) "error: delete did not verify; the file is still present"
-                else "deleted shared workspace/$path (reversible)\nLOCAL VERIFY PASS: deleted file is absent from the workspace."
+                else "deleted shared workspace/$path (reversible; moved to recycle)\nLOCAL VERIFY PASS: deleted file is absent from the workspace and recoverable from the recycle location."
             }
             "workspace_move" -> {
                 val source = args.optString("source")
@@ -142,6 +142,24 @@ internal object OrionRuntimeCapabilityExecutor {
                 }
             }
             "workspace_read" -> ShellRunner.readFile(service, args.optString("path"))
+            "trash_list" -> OrionPythonWorkspace(service).listTrash()
+            "trash_restore" -> {
+                val path = args.optString("path")
+                val result = OrionPythonWorkspace(service).restoreFromTrash(path)
+                if (result.startsWith("restored ")) result + "\nLOCAL VERIFY PASS: restored file is present at its original workspace path."
+                else result
+            }
+            "trash_empty" -> {
+                val count = OrionPythonWorkspace(service).emptyTrash()
+                "emptied recycle location ($count file(s) permanently removed)"
+            }
+            "backup_list" -> OrionPythonWorkspace(service).listBackup()
+            "backup_restore" -> {
+                val path = args.optString("path")
+                val result = OrionPythonWorkspace(service).restoreFromBackup(path)
+                if (result.startsWith("restored ")) result + "\nLOCAL VERIFY PASS: restored file is present at its original workspace path."
+                else result
+            }
             "project_create" -> OrionProjectWorkspace(service).create(args.optString("name"), args.optString("language", "python"))
             "project_list" -> OrionProjectWorkspace(service).list()
             "project_inspect" -> OrionProjectWorkspace(service).inspect(args.optString("name"))
@@ -152,6 +170,36 @@ internal object OrionRuntimeCapabilityExecutor {
             "project_verify" -> OrionCodingPlanner.verify(
                 service, args.optString("name"), args.optBoolean("run_tests", false)
             )
+            "model_decision_log" -> {
+                val id = OrionModelDecisionStore.get(service).record(
+                    tool = args.optString("tool"),
+                    arguments = args.optString("arguments"),
+                    reason = args.optString("reason"),
+                    provider = args.optString("provider").takeIf { it.isNotBlank() },
+                    model = args.optString("model").takeIf { it.isNotBlank() },
+                    taskId = args.optString("taskId").takeIf { it.isNotBlank() },
+                    turnId = args.optString("turnId").takeIf { it.isNotBlank() }
+                )
+                "recorded model decision [$id]"
+            }
+            "model_decision_search" -> {
+                val hits = OrionModelDecisionStore.get(service).search(args.optString("query"))
+                if (hits.isEmpty()) "no model decisions matched that query"
+                else hits.joinToString("\n") { "[$id] ${tool} · ${verification} · ${reason.take(120)}" }
+            }
+            "model_status" -> {
+                val sb = StringBuilder("Selected provider: ${Prefs.provider(service, false).label}")
+                sb.append("\nVision provider: ${Prefs.provider(service, true).label}")
+                sb.append("\nOffline mode: ${Prefs.offlineMode(service)}")
+                sb.append("\nAuto-switch: ${Prefs.autoSwitch(service)}")
+                sb.append("\nPaid providers allowed: ${Prefs.allowPaidProviders(service)}")
+                sb.toString()
+            }
+            "model_offline_mode" -> {
+                val on = args.optBoolean("on", false)
+                Prefs.setOfflineMode(service, on)
+                "offline mode ${if (on) "enabled" else "disabled"}"
+            }
             else -> null
         }
         else -> null

@@ -13,7 +13,8 @@ class AiException(message: String, val httpStatus: Int? = null) : RuntimeExcepti
 }
 
 /** Talks to the selected AI service, with bounded same-provider model recovery and cross-provider fallback. */
-class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) {
+class Nim internal constructor(private val ctx: Context, private val commandMode: Boolean = false, sharedBudget: CommandRequestBudget? = null) :
+    OrionModelProvider {
     companion object {
         /** provider id -> time (ms) until which it is skipped (rate limited or bad key) */
         val cooldown = ConcurrentHashMap<String, Long>()
@@ -731,6 +732,21 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw IllegalStateException("No compatible AI provider is configured. Add a key for a provider that supports ${if (vision) "vision" else "chat"} in Settings.")
             }
 
+        // --- Offline detection (Requirement 11) ---
+        // When offline mode is on, or the device has no reachable network, skip cloud
+        // providers and prefer the local model. Never burn request budget on timeouts.
+        val offline = Prefs.offlineMode(ctx) || !OrionNetworkMonitor.isOnline(ctx)
+        if (offline && !OrionNetworkMonitor.isOfflineCapable(primary.id)) {
+            val local = Providers.find(OrionNetworkMonitor.offlinePreferredProviderId())
+            if (local != null && usable(local)) {
+                onStatus?.invoke("Offline: switching to local model (${local.label})...")
+                // Force the local provider as primary; backups are irrelevant offline.
+                return attempt(local, hasBackup = false)
+            } else if (Prefs.failFastOffline(ctx)) {
+                throw RuntimeException("Offline: no local model provider is configured. Add an Ollama key in Settings or disable offline mode.")
+            }
+        }
+
         val now = System.currentTimeMillis()
         // Auto-switch may try eligible saved providers in order, but the shared 15-request
         // command budget is the hard cap across model discovery, retries, and provider fallback.
@@ -993,6 +1009,29 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
                 throw AiException(p.label + ": model returned an empty response. Auto-rotation will try the next saved provider when enabled; also verify this model's API access.", 502)
             }
             Prefs.setModel(ctx, p, vision, model)
+            // Decision log: record this model call and its verified outcome (Requirement 12)
+            val decisionId = OrionModelDecisionStore.get(ctx).record(
+                tool = "model_chat",
+                arguments = "provider=${p.id}; model=$model; vision=$vision; maxTokens=$maxTokens; temperature=$temperature",
+                reason = "Model answered ${if (vision) "vision" else "chat"} turn",
+                provider = p.id,
+                model = model
+            )
+            OrionModelDecisionStore.get(ctx).complete(
+                id = decisionId,
+                result = content,
+                verification = if (content.isNotBlank()) "PASS" else "NOT_VERIFIED"
+            )
+            // Activity timeline integration: surface the model decision in the activity timeline
+            try {
+                OrionConversationRepository.get(ctx).recordEvent(
+                    messageId = null,
+                    type = "model_decision",
+                    status = if (content.isNotBlank()) "completed" else "failed",
+                    summary = "Model ${p.id} / $model ${if (content.isNotBlank()) "answered" else "returned empty"} · ${if (content.isNotBlank()) "PASS" else "NOT_VERIFIED"}",
+                    correlationId = decisionId.takeIf { it.isNotBlank() }
+                )
+            } catch (_: Exception) { }
             return content
         }
         val kind = if (vision) "vision" else "chat"

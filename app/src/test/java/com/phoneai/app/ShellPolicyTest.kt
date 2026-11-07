@@ -56,4 +56,21 @@ class ShellPolicyTest {
         assertEquals(ShellRisk.SAFE, ShellPolicy.classify("python3 run_script.py"))
         assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("rm -rf /system"))
     }
+
+    @Test fun factoryResetAttemptsAreHardBlocked() {
+        listOf("factory reset", "factory_reset", "wipe data", "wipe.cache", "format userdata",
+            "erase all", "recovery --wipe data", "recovery --wipe cache", "recovery --wipe all",
+            "fastboot erase system", "fastboot format userdata", "fastboot wipe data",
+            "settings put global device_provisioned 0",
+            "settings put secure setup_wizard_finished 0").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+    }
+
+    @Test fun normalSettingsChangesAreNotFactoryReset() {
+        listOf("settings put global wifi_on 1", "settings put secure location_mode 3",
+            "getprop ro.build.version.sdk").forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
+    }
+
+    @Test fun quotedFactoryResetCommandsRemainBlocked() {
+        listOf("factory 'reset'", "wipe \"data\"", "format '/data'").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+    }
 }

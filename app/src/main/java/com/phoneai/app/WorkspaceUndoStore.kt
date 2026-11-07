@@ -28,10 +28,11 @@ internal class WorkspaceUndoStore(context: Context) {
             .put("before", before ?: JSONObject.NULL).put("after", after).put("at", System.currentTimeMillis()))
     }
 
-    fun recordDelete(path: String, before: String): Boolean = synchronized(lock) {
+    fun recordDelete(path: String, before: String, trashPath: String? = null): Boolean = synchronized(lock) {
         if (!validSnapshot(before)) return@synchronized false
         append(JSONObject().put("operation", "workspace_delete").put("path", path)
             .put("beforeExists", true).put("before", before).put("afterExists", false)
+            .put("trashPath", trashPath ?: JSONObject.NULL)
             .put("at", System.currentTimeMillis()))
     }
 
@@ -71,8 +72,14 @@ internal class WorkspaceUndoStore(context: Context) {
             }
             "workspace_delete" -> {
                 val before = entry.optString("before")
-                workspace.readForUndo(path) == null &&
-                    workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                val trashPath = entry.optString("trashPath", null)
+                val restored = if (trashPath != null && trashPath.isNotBlank()) {
+                    workspace.restoreFromTrash(path).startsWith("restored ") && workspace.readForUndo(path) == before
+                } else {
+                    workspace.readForUndo(path) == null &&
+                        workspace.write(path, before).startsWith("saved ") && workspace.readForUndo(path) == before
+                }
+                restored
             }
             "workspace_move" -> {
                 val destination = entry.optString("destination")

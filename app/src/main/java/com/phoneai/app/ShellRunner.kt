@@ -216,6 +216,16 @@ object ShellRunner {
             else -> result
         }
         AgentPolicy.log(c.applicationContext, "shell:$where", command, null, verifiedResult)
+        // Dedicated shell command record with secret redaction for independent audit.
+        val exitCode = when {
+            verifiedResult.startsWith("EXIT 0 · SUCCESS\n") -> 0
+            verifiedResult.startsWith("error: EXIT ") -> {
+                val tail = verifiedResult.substringAfter("error: EXIT ").takeWhile { it.isDigit() }
+                tail.toIntOrNull()
+            }
+            else -> null
+        }
+        ShellCommandStore.record(c.applicationContext, ShellExecutionRouting.backend(where).name.lowercase(), command, exitCode, verifiedResult, exitCode == 0)
         return verifiedResult
     }
 

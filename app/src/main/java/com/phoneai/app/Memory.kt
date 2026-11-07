@@ -355,7 +355,7 @@ object MemoryStore {
     fun search(c: Context, query: String): List<Memory> {
         val memories = all(c)
         if (MemoryRanking.tokens(query).isEmpty()) return memories.sortedByDescending { it.updated }.take(10)
-        val hybrid = MemoryRanking.hybridRank(memories, { it.text + " " + it.category }, query, 15)
+        val hybrid = MemoryRanking.hybridRank(c, memories, { it.text + " " + it.category }, query, 15)
         if (hybrid.isNotEmpty()) return hybrid
         return memories.map { it to MemoryRanking.score(it, query) }
             .filter { it.second > 0 }
@@ -374,6 +374,7 @@ object MemoryStore {
         val pinned = approved.filter { it.pinned }.sortedByDescending { it.updated }
         val lexical = if (query.isNullOrBlank()) emptyList() else
             MemoryRanking.hybridRank(
+                c,
                 approved.filterNot { it.pinned },
                 { it.text + " " + it.category },
                 query,

@@ -86,6 +86,12 @@ internal object OrionCentralBrain {
         // Preserve the existing capability-aware Soul Engine as the source of live state.
         addObservedSection("soul_engine_context") { OrionSoulEngine.contextFor(app, request)?.take(5_200) }
         addObservedSection("chronos_awareness") { OrionChronosAwareness.summary(app).take(500) }
+        addObservedSection("proactive_awareness") {
+            val item = OrionProactiveEngine.evaluate(app)
+            if (item == null) null else
+                "PROACTIVE AWARENESS (one item at most, throttled and quiet-period gated): ${item.kind} — ${item.body}"
+        }
+        addObservedSection("calendar_awareness") { OrionCalendarMonitor.soon(app, Prefs.calendarLookaheadHours(app)).take(500) }
         addObservedSection("specialist_delegation_ledger") { OrionAgentDelegation.promptSummary(app, 4) }
         addObservedSection("background_specialist_job_ledger") { OrionWorkerJobStore(app).promptSummary(4) }
 

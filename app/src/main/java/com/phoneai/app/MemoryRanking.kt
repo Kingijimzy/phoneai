@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import android.content.Context
+
 /** Pure memory selection/similarity helpers so recall behaviour is unit-testable without Android. */
 internal object MemoryRanking {
     private val stop = setOf("the", "and", "for", "with", "that", "this", "you", "your", "are", "was", "has", "have", "not", "but", "can", "his", "her", "its", "our", "who", "what", "when", "how")
@@ -198,12 +200,31 @@ internal object MemoryRanking {
         return x.indices.sumOf { (x[it] * y[it]).toDouble() }.coerceIn(-1.0, 1.0)
     }
 
+    /** Cosine similarity using the best available embedding tier (TFLite → Ollama → feature hash). */
+    fun embeddingSimilarity(context: Context, a: String, b: String): Double =
+        OrionEmbeddingProvider.similarity(context, a, b)
+
     /**
      * Local hybrid retrieval, adapted from Ultron Cerebro: BM25 + word TF-IDF cosine +
      * character-trigram TF-IDF cosine + dense feature-hash embedding cosine, fused with RRF.
      * All features are computed on-device; no network or external model is used.
      */
-    fun <T> hybridRank(items: List<T>, textOf: (T) -> String, query: String, limit: Int = 10): List<T> {
+    fun <T> hybridRank(items: List<T>, textOf: (T) -> String, query: String, limit: Int = 10): List<T> =
+        hybridRank(null, items, textOf, query, limit)
+
+    /**
+     * Local hybrid retrieval with an optional Android Context. When [context] is provided,
+     * the dense-embedding tier uses `OrionEmbeddingProvider` (TFLite → Ollama → feature hash);
+     * otherwise the pure feature-hash embedding is used. All features are computed on-device
+     * unless the owner has opted in to Ollama third-party sending.
+     */
+    fun <T> hybridRank(
+        context: Context?,
+        items: List<T>,
+        textOf: (T) -> String,
+        query: String,
+        limit: Int = 10
+    ): List<T> {
         if (items.isEmpty() || limit <= 0) return emptyList()
         val queryTokens = tokens(query).toList()
         val docs = items.map { tokenList(textOf(it)) }
@@ -249,7 +270,10 @@ internal object MemoryRanking {
                 .withIndex().associate { it.value.index to it.index + 1 }
         val rankA = ranks(bm25)
         val rankB = ranks(cosine)
-        val denseEmbeddings = items.map { embeddingSimilarity(query, textOf(it)) }
+        val denseEmbeddings = items.mapIndexed { i, it ->
+            if (context != null) OrionEmbeddingProvider.similarity(context, query, textOf(it))
+            else embeddingSimilarity(query, textOf(it))
+        }
         val rankC = ranks(trigramCosine)
         val rankD = ranks(denseEmbeddings)
         return items.indices
