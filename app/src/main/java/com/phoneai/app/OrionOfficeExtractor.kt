@@ -22,7 +22,7 @@ object OrionOfficeExtractor {
                 .entries.joinToString("\n\n") { "Slide ${slideNo(it.key)}:\n" + paragraphs(it.value, "a:p", "a:t") }
             else -> sheets(parts)
         }
-        return text.replace(Regex("[ \\t]+"), " ").trim().take(maxChars)
+        return text.replace(Regex("[ ]{2,}"), " ").trim().take(maxChars)
     }
 
     private fun slideNo(name: String): Int = Regex("(\\d+)").find(name.substringAfterLast('/'))?.value?.toIntOrNull() ?: 0
