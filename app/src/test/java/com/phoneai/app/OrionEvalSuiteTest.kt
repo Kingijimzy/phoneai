@@ -128,15 +128,15 @@ class OrionEvalSuiteTest {
             { OrionEntityIndex.linked(owner, "what should I eat").isEmpty() }),
         // ----- original 40: slot reading and consolidation -----
         Scenario("reads a city", "paraphrase", "slot", "Slot(city, lagos)",
-            { slot("I live in Lagos.") == Slot("city", "lagos") }),
+            { slot("I live in Lagos.") == OrionMemoryConsolidation.Slot("city", "lagos") }),
         Scenario("reads a move", "paraphrase", "slot", "Slot(city, abuja)",
-            { slot("I moved to Abuja last month") == Slot("city", "abuja") }),
+            { slot("I moved to Abuja last month") == OrionMemoryConsolidation.Slot("city", "abuja") }),
         Scenario("reads a job", "paraphrase", "slot", "Slot(job, mechanic)",
-            { slot("I work as a mechanic and love it") == Slot("job", "mechanic") }),
+            { slot("I work as a mechanic and love it") == OrionMemoryConsolidation.Slot("job", "mechanic") }),
         Scenario("reads an employer", "paraphrase", "slot", "Slot(employer, acme ltd)",
-            { slot("I work at Acme Ltd") == Slot("employer", "acme ltd") }),
+            { slot("I work at Acme Ltd") == OrionMemoryConsolidation.Slot("employer", "acme ltd") }),
         Scenario("reads a relative's name", "paraphrase", "slot", "Slot(relative:sister, amaka)",
-            { slot("My sister is called Amaka") == Slot("relative:sister", "amaka") }),
+            { slot("My sister is called Amaka") == OrionMemoryConsolidation.Slot("relative:sister", "amaka") }),
         Scenario("a liking is not a slot", "paraphrase", "slot", "null-slot",
             { slot("I like jollof rice") == null }),
         Scenario("a new city conflicts with the old one", "paraphrase", "consolidation", "conflicts-id-2",
@@ -231,7 +231,8 @@ class OrionEvalSuiteTest {
         val total = results.size
         val failing = results.filter { !it.second }.joinToString { it.first }
         println("ORION EVAL SCORE: $passed/$total")
-        println("ORION EVAL CATEGORIES: ${results.groupBy { scenarios.first { it.name == it.first }.category }.map { (k, v) -> "$k=${v.count { it.second }}/${v.size}" }.joinToString(", ")}")
+        val categoryByName = scenarios.associate { it.name to it.category }
+        println("ORION EVAL CATEGORIES: ${results.groupBy { categoryByName[it.first] ?: "unknown" }.map { (k, v) -> "$k=${v.count { it.second }}/${v.size}" }.joinToString(", ")}")
         val baselineFile = java.io.File("eval/baseline.txt")
         val previousScore = baselineFile.takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() ?: 40
         // The set must keep at least the original 40 memory scenarios
