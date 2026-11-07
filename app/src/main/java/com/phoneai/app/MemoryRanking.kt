@@ -53,11 +53,18 @@ internal object MemoryRanking {
         setOf("code", "coding", "program", "kotlin", "python", "script", "developer", "app", "build"),
         setOf("work", "job", "career", "company", "business", "employer", "office"),
         setOf("live", "lives", "living", "reside", "resides", "home", "house", "apartment", "city", "lagos", "address", "location", "based"),
+        setOf("team", "club", "support", "supporter", "football", "soccer", "fan", "league", "match", "favourite", "favorite"),
         setOf("family", "wife", "husband", "mother", "father", "brother", "sister", "son", "daughter", "kid", "child"),
         setOf("food", "eat", "meal", "dinner", "lunch", "breakfast", "restaurant", "cook"),
         setOf("sleep", "wake", "morning", "night", "routine", "schedule", "alarm"),
         setOf("money", "budget", "salary", "pay", "price", "cost", "balance")
     )
+
+    /** Index of the concept group a word belongs to (after stemming), or null. Used by the local embedding. */
+    internal fun conceptIndex(word: String): Int? {
+        val stem = stem(word)
+        return concepts.indexOfFirst { g -> g.any { stem(it) == stem } }.takeIf { it >= 0 }
+    }
 
     /** Cheap suffix stripping so "trading", "trader" and "trades" meet. */
     fun stem(word: String): String {

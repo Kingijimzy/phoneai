@@ -298,6 +298,7 @@ object LifeLoop {
     }
 
     private fun post(c: Context, kind: String, text: String): Boolean {
+        if (!OrionProactiveSpacing.tryClaim(c)) return false
         if (Build.VERSION.SDK_INT >= 33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (!androidx.core.app.NotificationManagerCompat.from(c).areNotificationsEnabled()) return false

@@ -76,7 +76,7 @@ object ShellRunner {
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         // Defense in depth: every backend applies the same catastrophic hard-block policy.
         if (ShellPolicy.isIrreversible(normalized)) {
-            return "error: blocked by Ultron's three irreversible Windows command checks"
+            return ShellPolicy.blockMessage(normalized)
         }
         if (normalized == "cd" || normalized.startsWith("cd ")) {
             return changeDirectory(c, normalized.removePrefix("cd").trim())
@@ -108,7 +108,7 @@ object ShellRunner {
         if (normalized.isEmpty()) return "error: command is required"
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         if (ShellPolicy.isIrreversible(normalized)) {
-            return "error: blocked by Ultron's three irreversible Windows command checks"
+            return ShellPolicy.blockMessage(normalized)
         }
         val effectiveTimeout = maxOf(timeoutSec, ShellExecutionRouting.commandTimeoutMs(normalized) / 1000L)
             .coerceIn(1L, 180L)
@@ -144,7 +144,7 @@ object ShellRunner {
         if (normalized.isEmpty()) return "error: command is required"
         if (normalized.length > 2000) return "error: command exceeds the 2,000 character limit"
         if (ShellPolicy.isIrreversible(normalized)) {
-            return "error: blocked by Ultron's three irreversible Windows command checks"
+            return ShellPolicy.blockMessage(normalized)
         }
         // Buffer complete lines so credentials split across process read chunks are redacted together.
         val pending = StringBuilder()

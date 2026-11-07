@@ -21,7 +21,7 @@ class ActionLogStoreTest {
         ActionLogStore.clear(context)
     }
 
-    @Test fun actionArgumentsResultsAndVerificationAreNeverPersisted() {
+    @Test fun secretsAreRedactedBeforeStorage() {
         val args = org.json.JSONObject()
             .put("api_key", "sk-live-secret")
             .put("password", "never-store-this")
@@ -31,13 +31,25 @@ class ActionLogStoreTest {
             "Workspace file read-back verified.",
             OrionTaskOutcome.Status.COMPLETE
         )
-        assertTrue(ActionLogStore.all(context).isEmpty())
-        assertFalse(File(context.filesDir, "orion_action_log.json").exists())
+        val raw = File(context.filesDir, "orion_action_log.json").readText()
+        assertFalse(raw.contains("sk-live-secret"))
+        assertFalse(raw.contains("never-store-this"))
+        val e = ActionLogStore.all(context).single()
+        assertEquals("workspace_write", e.tool)
+        assertEquals("ok", e.outcome)
+        assertTrue(e.arguments.contains("report.txt"))
     }
 
-    @Test fun legacyShellActionRecordIsNotStored() {
-        ActionLogStore.record(context, "shell", "command returned")
-        assertTrue(ActionLogStore.all(context).isEmpty())
-        assertFalse(File(context.filesDir, "orion_action_log.json").exists())
+    @Test fun legacyRecordIsStoredAndFailuresMarked() {
+        ActionLogStore.record(context, "shell", "error: not found")
+        val e = ActionLogStore.all(context).single()
+        assertEquals("failed", e.outcome)
+    }
+
+    @Test fun logIsCappedAndNeverFedToPrompts() {
+        repeat(130) { ActionLogStore.record(context, "t$it", "ok") }
+        assertEquals(100, ActionLogStore.all(context).size)
+        assertEquals("t129", ActionLogStore.all(context).first().tool)
+        assertEquals("", ActionLogStore.recentFailureHints(context))
     }
 }

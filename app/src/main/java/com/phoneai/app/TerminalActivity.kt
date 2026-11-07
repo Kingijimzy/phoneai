@@ -70,7 +70,7 @@ class TerminalActivity : Activity() {
     private fun runInput() {
         val cmd = input.text.toString().trim(); if (cmd.isEmpty()) return
         if (ShellPolicy.isIrreversible(cmd)) {
-            append("$ $cmd\nBlocked: this matches one of Ultron's three irreversible Windows command strings.\n")
+            append("$ $cmd\nBlocked: " + ShellPolicy.blockMessage(cmd).removePrefix("error: ") + "\n")
             return
         }
         executeCommand(cmd)

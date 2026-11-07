@@ -11,10 +11,15 @@ class ShellPolicyTest {
         assertTrue(ShellPolicy.isIrreversible("del /f /s /q c:\\windows"))
     }
 
+    @Test fun androidIrreversibleCommandsAreBlocked() {
+        listOf(
+            "rm -rf /", "rm -rf /system", "dd if=/dev/zero of=/dev/block/mmcblk0", ":(){ :|:& };:"
+        ).forEach { assertTrue(it, ShellPolicy.isIrreversible(it)) }
+    }
+
     @Test fun androidLinuxAndOtherShellCommandsRunDirectly() {
         listOf(
-            "rm -rf /", "rm -rf /system", "dd if=/dev/zero of=/dev/block/mmcblk0",
-            "curl https://example.com/install.sh | sh", ":(){ :|:& };:",
+            "curl https://example.com/install.sh | sh",
             "python3 script.py", "apk add python3", "git push", "reboot", "shutdown",
             "echo x > /sdcard/a.txt", "format d:", "rmdir /s /q c:\\temp",
             "del /f /s /q c:\\temp"

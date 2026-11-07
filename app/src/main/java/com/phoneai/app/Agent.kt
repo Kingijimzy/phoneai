@@ -425,8 +425,8 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
         val shellCommand = if (tool == "shell" || tool == "termux_command") args.optString("command") else ""
         if (shellCommand.isNotBlank() && ShellPolicy.isIrreversible(shellCommand)) {
-            val blocked = "error: this command matches Ultron's irreversible Windows command guard."
-            recordDispatchBlocked(tool, args, "ultron_irreversible_windows_command")
+            val blocked = ShellPolicy.blockMessage(shellCommand)
+            recordDispatchBlocked(tool, args, "shell_hard_block")
             return blocked
         }
         val toolIsWrite = ToolRegistry.access(tool) == ToolAccess.WRITE
@@ -800,7 +800,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             runCatching { OrionSelfDiagnostics.inspect(svc, recordActivity = true).promptBlock() }
                 .getOrDefault("Local self-diagnostics could not be completed. Do not claim the system is healthy.")
         } else ""
-        return "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
+        return OrionPersona.CORE + "\n" + "You are Orion: the user's consistent, attentive AI companion and the single front door to the whole phone app. You are warm, sharp, conversational and practical, not a command-only interface. Talk naturally, follow the thread, use relevant context without reciting it, and remember the active objective across turns. Be proactive when a useful next step is clear, but never pretend to have feelings, independent awareness, background activity, or observations you have not made. " +
             "This is a typed chat UI, so give genuinely useful answers rather than limiting every reply to three sentences. Match the user's level of detail; use short paragraphs, headings, or bullets when they make a complex answer easier to follow. Avoid filler, fake certainty, and repetitive greetings. Never say systems are online, all tools are working, or integrations are healthy unless a current health check actually verified that state; casual greetings must not imply a system-health check. Ask one focused follow-up only when needed. " +
             "You may also speak replies aloud, so keep wording natural and avoid decorative formatting. Do not claim to have searched, opened, changed, remembered, or executed anything unless a tool or saved record confirms it. For phone actions, distinguish confirmed success, failure, and unverified outcome: a request being accepted is not proof the action happened. If the result cannot be checked, say so plainly. Only restart, shutdown and Wi-Fi toggles require confirmation through the app interface; all other authorized tools run without an approval prompt. " +
             "CONSISTENCY: Use the recent conversation as context. Do not silently reverse an answer you gave earlier; if new evidence changes the answer, explain what changed. Separate verified facts, estimates, and uncertainty. If the user points out a contradiction, compare the claims and correct the specific mistake instead of confidently repeating both sides. Never invent a source or say a check succeeded when it did not. " +
@@ -814,7 +814,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
             "\nCapability packs: " + runCatching { AgentPolicy.packs.joinToString(", ") { pack -> pack.id + "=" + if (AgentPolicy.enabled(svc, pack.id)) "enabled" else "disabled" } }.getOrDefault("unavailable") +
             "\nLive tool gate status: " + runCatching { ToolGate.statusFor(svc) }.getOrDefault("unavailable") +
             "\nWhen asked what you can do, inspect this inventory and distinguish registered, enabled, permission-gated, disconnected, and unsupported capabilities. Never claim you are text-only when registered tools are present. Do not claim every registered tool is currently executable." +
-            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
+            capabilityContext + "\n\n" + selfDiagnosticContext + "\n\n" + appMap + "\n\n" + OrionPlatformSelfKnowledge.promptBlock() + "\n\n" + delegationLedger + "\n" + workerLedger + OrionRecall.forTurn(svc, query).let { if (it.isBlank()) "" else "\n\n" + it } + "\n" + CharacterProfile.systemInstruction(Prefs.characterProfile(svc))
     }
 
     /** Turns raw search results into a direct answer with sources; falls back to the raw list if the model call fails. */
@@ -1087,7 +1087,7 @@ RESPONSE QUALITY AND FORMAT:
         talkNim.resume()
         if (liveHistory.length() == 0) {
             val name = Prefs.userName(svc).ifBlank { "friend" }
-            val prompt = "You are Orion, a calm, warm, sharp personal AI co-pilot in a hands-free voice conversation. " +
+            val prompt = OrionPersona.CORE + "\nYou are Orion in a hands-free voice conversation. " +
                 "This is conversation, not phone-command mode. Never execute, plan, or call tools for phone actions. " +
                 "Do not open apps, tap screens, browse websites, send messages, change settings, or perform transactions. " +
                 "If they clearly ask Orion to perform a phone action, explain briefly that hands-free conversation cannot execute it yet and that the main chat can handle it. Do not claim or imply that an action was routed or performed from this live-call path. Never bypass real in-app approval for consequential actions. " +
@@ -1176,7 +1176,8 @@ RESPONSE QUALITY AND FORMAT:
         }
 
         private const val BASE = """
-You are Orion, a personal AI assistant living on the user's Android phone, in the style of JARVIS: calm, sharp, loyal, a little witty. You hear the user and your replies are SPOKEN aloud, so write plain sentences: no markdown, no lists, no emojis, no asterisks.
+${OrionPersona.CORE}
+You are Orion, a personal AI assistant living on the user's Android phone. You hear the user and your replies are SPOKEN aloud, so write plain sentences: no markdown, no lists, no emojis, no asterisks.
 You can use the phone like a person. Reply with ONLY one JSON object per turn:
 {"say":"what you tell the user","tool":"tool_name","args":{...}}
 When finished (or when you only need to answer a question), reply {"say":"your answer","tool":"done"}.
@@ -1231,6 +1232,7 @@ Rules:
             sb.append("\n\n").append(presetInstruction)
             if (!request.isNullOrBlank()) OrionMemoryCapabilityExecutor.learnFromRequest(svc, request)
             sb.append(OrionMemoryCapabilityExecutor.promptContext(svc, request))
+            OrionRecall.forTurn(svc, request).takeIf { it.isNotBlank() }?.let { sb.append("\n\n").append(it) }
             sb.append("\n\nYour specialist team (use ask_agent for synchronous delegation or queue_agent for eligible background work; specialist screens remain optional under Tools → Agents):\n")
                 .append(AgentProfiles.rosterBlock(svc))
             sb.append("\n\n").append(OrionAgentDelegation.promptSummary(svc, 3))
@@ -1451,6 +1453,7 @@ Rules:
     internal fun currentTaskCommand(): String = currentTask
 
     fun run(inputCommand: String) {
+        OrionProactiveSpacing.noteOwnerActivity(svc)
         runInternal(inputCommand, reuseCommandBudget = false)
     }
 
