@@ -37,7 +37,7 @@ internal class OrionDevCapabilityExecutor(
             "dev_understand" -> {
                 val path = args.optString("path", ".")
                 devAgent.understandRepository(path).let { r ->
-                    if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.summary + " " + r.evidence.take(1500)
+                    if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.summary + " " + r.evidence.take(1500)
                 }
             }
             "dev_read" -> {
@@ -94,9 +94,9 @@ internal class OrionDevCapabilityExecutor(
                 val name = args.optString("name")
                 if (name.isBlank()) "error: name is required"
                 else {
-                    val run = macroExecutor.executeMacro(name) { toolName, toolArgs ->
+                    val run = macroExecutor.executeMacro(name, toolInvoker = { toolName, toolArgs ->
                         dispatchMacroTool(toolName, toolArgs, confirm, stopped)
-                    }
+                    }, confirm = confirm, stopped = stopped)
                     when (run.status) {
                         "completed" -> "Macro '$name' completed: ${run.completedSteps}/${run.totalSteps} steps verified. " +
                             run.results.entries.joinToString("; ") { "step ${it.key}: ${it.value.take(120)}" }
@@ -142,7 +142,7 @@ internal class OrionDevCapabilityExecutor(
                 else OrionPythonWorkspace(context).write(path, content)
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
-            "python_exec" -> pythonExecutor.execute("python_exec", args, confirm, stopped) ?: "error: python executor unavailable"
+            "python_exec" -> pythonExecutor?.execute("python_exec", args, confirm, stopped) ?: "error: python executor unavailable"
             else -> "error: macro step tool '$tool' is not permitted in macro routines"
         }
     }
