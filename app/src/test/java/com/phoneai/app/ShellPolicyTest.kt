@@ -73,4 +73,14 @@ class ShellPolicyTest {
     @Test fun quotedFactoryResetCommandsRemainBlocked() {
         listOf("factory 'reset'", "wipe \"data\"", "format '/data'").forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
     }
+
+    @Test fun keyStorageReadsAreBlockedButOrdinaryCommandsAreNot() {
+        listOf(
+            "cat /data/data/com.phoneai.app/shared_prefs/phoneai.xml",
+            "ls /data/user/0/com.phoneai.app/files",
+            "cat /data/misc/keystore/user_0/1000_USRPKEY_x",
+            "grep -r orion_api_credentials /sdcard"
+        ).forEach { assertEquals(it, ShellRisk.BLOCKED, r(it)) }
+        listOf("ls /sdcard", "keytool -list -keystore app.jks", "python3 script.py").forEach { assertEquals(it, ShellRisk.SAFE, r(it)) }
+    }
 }
