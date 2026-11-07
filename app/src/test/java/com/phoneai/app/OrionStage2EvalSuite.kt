@@ -1,8 +1,10 @@
 package com.phoneai.app
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import org.robolectric.RuntimeEnvironment
 import org.junit.Test
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -18,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 internal class OrionStage2EvalSuite {
 
-    private val context: Context = ApplicationProvider.getApplicationContext()
+    private val context: Context = RuntimeEnvironment.getApplication()
 
     /* ========================================================================
        1. Multi-file Python workspace (Req 11)
@@ -82,7 +84,7 @@ internal class OrionStage2EvalSuite {
     fun stage2_pythonWorkspaceCleanupInterruptedWrites() {
         val ws = OrionPythonWorkspace(context)
         // Create an orphaned .part file
-        val partFile = java.io.File(ws.root.toString(), ".orion-orphaned.part")
+        val partFile = java.io.File(context.filesDir, "orion-python/workspace/.orion-orphaned.part")
         partFile.writeText("orphan")
 
         val cleaned = ws.cleanupInterruptedWrites()
@@ -103,7 +105,7 @@ internal class OrionStage2EvalSuite {
         val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
         val result = devAgent.understandRepository(".")
 
-        assertFalse("dev agent should not report a blocker", result.blocker.isNotBlank())
+        assertFalse("dev agent should not report a blocker", result.blocker?.isNotBlank() == true)
         assertTrue("should mention project type", result.summary.contains("Python") || result.summary.contains("Android") || result.summary.contains("unknown"))
         assertTrue("should not claim files were modified", !result.codeWritten)
         assertTrue("filesChanged should be 0 for read-only inspection", result.filesChanged == 0)
@@ -168,13 +170,13 @@ internal class OrionStage2EvalSuite {
 
         val executor = OrionMacroExecutor(context)
         // Use a toolInvoker that delegates to the workspace directly for testing
-        val run = executor.executeMacro("test_macro") { tool, args ->
+        val run = executor.executeMacro("test_macro", toolInvoker = { tool, args ->
             when (tool) {
                 "workspace_read" -> ws.read(args.optString("path"))
                 "workspace_write" -> ws.write(args.optString("path"), args.optString("content"))
                 else -> "error: unknown tool $tool"
             }
-        }
+        })
 
         assertEquals("completed", run.status)
         assertEquals(2, run.completedSteps)
@@ -184,7 +186,7 @@ internal class OrionStage2EvalSuite {
     @Test
     fun stage2_macroExecutorStopsOnFailedStep() {
         val executor = OrionMacroExecutor(context)
-        val run = executor.executeMacro("nonexistent_macro") { _, _ -> null }
+        val run = executor.executeMacro("nonexistent_macro", toolInvoker = { _, _ -> null })
 
         assertEquals("failed", run.status)
         assertNotNull("should report failure reason", run.results["error"])
@@ -203,7 +205,7 @@ internal class OrionStage2EvalSuite {
         MacroStore.save(context, "dep_macro", steps)
 
         val executor = OrionMacroExecutor(context)
-        val run = executor.executeMacro("dep_macro") { tool, args ->
+        val run = executor.executeMacro("dep_macro", toolInvoker = { tool, args ->
             when (tool) {
                 "workspace_write" -> ws.write(args.optString("path"), args.optString("content"))
                 "workspace_read" -> ws.read(args.optString("path"))
@@ -221,7 +223,7 @@ internal class OrionStage2EvalSuite {
 
     @Test
     fun stage2_extensionGenerateTestEnableRollback() {
-        val executor = OrionPythonCapabilityExecutor(context)
+        val executor = OrionPythonCapabilityExecutor(context, null)
 
         // Create a disabled draft
         val createResult = executor.execute("extension_create", JSONObject()
@@ -353,13 +355,13 @@ internal class OrionStage2EvalSuite {
         val child = store.createChild(
             parentId = parent.taskId,
             objective = "child analysis step",
-            kind = OrionTaskEnvelope.Kind.ANALYSIS,
+            kind = OrionTaskEnvelope.Kind.DIAGNOSTICS,
             capabilities = listOf("diagnostics")
         )
-        assertNotNull("child task should be created", child)
-        assertEquals("child should reference parent", parent.taskId, child.parentTaskId)
-        assertEquals("child should inherit rootTaskId", parent.rootTaskId, child.rootTaskId)
-        assertEquals("child should inherit rootObjective", parent.rootObjective, child.rootObjective)
+        val childTask = child ?: fail("child task should be created")
+        assertEquals("child should reference parent", parent.taskId, childTask.parentTaskId)
+        assertEquals("child should inherit rootTaskId", parent.rootTaskId, childTask.rootTaskId)
+        assertEquals("child should inherit rootObjective", parent.rootObjective, childTask.rootObjective)
     }
 
     /* ========================================================================
@@ -413,7 +415,7 @@ internal class OrionStage2EvalSuite {
         )
         for (cmd in destructive) {
             val verdict = ShellPolicy.classify(cmd)
-            assertEquals("should block: $cmd", ShellPolicy.Verdict.BLOCKED, verdict)
+            assertEquals("should block: $cmd", ShellRisk.BLOCKED, verdict)
         }
     }
 
@@ -422,7 +424,7 @@ internal class OrionStage2EvalSuite {
         val safe = listOf("ls workspace", "pwd", "echo hello", "python3 --version")
         for (cmd in safe) {
             val verdict = ShellPolicy.classify(cmd)
-            assertEquals("should allow: $cmd", ShellPolicy.Verdict.SAFE, verdict)
+            assertEquals("should allow: $cmd", ShellRisk.SAFE, verdict)
         }
     }
 
