@@ -1,7 +1,10 @@
 package com.phoneai.app
 
 import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import org.robolectric.RuntimeEnvironment
+import android.graphics.Bitmap
+import android.graphics.Rect
+import org.json.JSONArray
 import org.junit.Test
 import org.junit.Assert.*
 
@@ -28,7 +31,7 @@ import org.junit.Assert.*
  */
 internal class OrionStage3EvalSuite {
 
-    private val context: Context = ApplicationProvider.getApplicationContext()
+    private val context: Context = RuntimeEnvironment.getApplication()
 
     /* ========================================================================
        Req 20 — Chronos: Context and Awareness Engine
@@ -191,13 +194,12 @@ internal class OrionStage3EvalSuite {
 
     @Test
     fun stage3_macroStoreSaveAndFind() {
-        import org.json.JSONArray
         val steps = JSONArray().put("read_file").put("verify_action")
         val saved = MacroStore.save(context, "test routine", steps)
         assertTrue("macro save should succeed", saved)
         val found = MacroStore.find(context, "test routine")
-        assertNotNull("macro should be found", found)
-        assertEquals("macro name should match", "test routine", found.first)
+        val savedMacro = found ?: fail("macro should be found")
+        assertEquals("macro name should match", "test routine", savedMacro.first)
         // Clean up
         MacroStore.delete(context, "test routine")
         assertNull("macro should be deleted", MacroStore.find(context, "test routine"))
@@ -209,7 +211,6 @@ internal class OrionStage3EvalSuite {
 
     @Test
     fun stage3_visualElementDetectorDetectsRegions() {
-        import android.graphics.Bitmap
         val bitmap = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
         val regions = VisualElementDetector.detect(bitmap)
         // A blank bitmap may produce zero regions; that's acceptable.
@@ -226,7 +227,6 @@ internal class OrionStage3EvalSuite {
     @Test
     fun stage3_visualElementDetectorRespectsExcludedRects() {
         import android.graphics.Bitmap
-        import android.graphics.Rect
         val bitmap = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
         val excluded = listOf(Rect(0, 0, 200, 300)) // exclude everything
         val regions = VisualElementDetector.detect(bitmap, excluded = excluded)
@@ -239,7 +239,6 @@ internal class OrionStage3EvalSuite {
 
     @Test
     fun stage3_voiceSpeechChunkerSplitsSentences() {
-        import com.phoneai.app.SpeechChunker
         val chunks = SpeechChunker.split("Hello world. How are you? I am fine.")
         assertTrue("chunker should produce non-empty chunks", chunks.isNotEmpty())
         // Each chunk should be bounded.
@@ -250,7 +249,6 @@ internal class OrionStage3EvalSuite {
 
     @Test
     fun stage3_voiceCleanRemovesMarkdown() {
-        import com.phoneai.app.Voice
         // Voice.clean is private; test through SpeechChunker which is the public split logic.
         import com.phoneai.app.SpeechChunker
         val text = SpeechChunker.split("**bold** and `code` and https://example.com link.")
@@ -308,7 +306,8 @@ internal class OrionStage3EvalSuite {
     fun stage3_securityPolicyDetectsEmbeddedSecrets() {
         val finding = OrionSecurityPolicy.findEmbeddedSecret("my key is sk-live-abcdefghijklmnopqrstuvwxyz")
         assertNotNull("should detect OpenAI-style API key", finding)
-        assertTrue("finding kind should mention token", finding.kind.contains("token") || finding.kind.contains("API"))
+        val secretFinding = finding ?: fail("expected a secret finding")
+        assertTrue("finding kind should mention token", secretFinding.kind.contains("token") || secretFinding.kind.contains("API"))
     }
 
     @Test
@@ -429,11 +428,11 @@ internal class OrionStage3EvalSuite {
     @Test
     fun stage3_orionIntegrationPlannerProducesPlan() {
         val plan = OrionIntegrationPlanner.planFor(
-            context, "test request", emptyList()
+            context, "test request", emptySet()
         )
         assertNotNull("integration plan should not be null", plan)
-        assertTrue("plan should have a provider", plan.provider.isNotBlank())
-        assertTrue("plan should have a state", plan.state.isNotBlank())
+        assertTrue("plan should have a provider", plan.provider.name.isNotBlank())
+        assertTrue("plan should have a state", plan.state.name.isNotBlank())
     }
 
     /* ========================================================================
@@ -443,15 +442,12 @@ internal class OrionStage3EvalSuite {
     @Test
     fun stage3_tradingDeskExecutorExists() {
         // Verify the trading capability executor class loads
-        val executor = OrionTradingDeskCapabilityExecutor()
-        assertNotNull("trading desk executor should load", executor)
-        assertTrue("should have supports method", ::OrionTradingDeskCapabilityExecutor.supports.isPublic)
+        assertTrue("trading desk executor should register its capability", OrionTradingDeskCapabilityExecutor.supports("trading_calendar"))
     }
 
     @Test
     fun stage3_tradingReadOnlyExecutorExists() {
-        val executor = OrionTradingReadOnlyCapabilityExecutor()
-        assertNotNull("trading read-only executor should load", executor)
+        assertTrue("read-only executor should register its capability", OrionTradingReadOnlyCapabilityExecutor.supports("trade_history_summary"))
     }
 
     /* ========================================================================
