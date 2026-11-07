@@ -129,8 +129,9 @@ class OrionProactiveEngineTest {
         OrionFollowUpStore.add(context, "call the plumber", dueAt = now + 30 * 60_000L)
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        assertEquals("followup", item.kind)
-        assertTrue(item.body.contains("plumber"))
+        val actual = item ?: fail("expected a due follow-up candidate")
+        assertEquals("followup", actual.kind)
+        assertTrue(actual.body.contains("plumber"))
     }
 
     @Test fun overdueTaskCreatesHighUrgencyCandidate() {
@@ -139,8 +140,9 @@ class OrionProactiveEngineTest {
         TaskStore.add(context, "fix the roof", dueAt = now - 2 * 60 * 60_000L, priority = "urgent")
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        assertEquals("task", item.kind)
-        assertEquals(2, item.urgency)
+        val actual = item ?: fail("expected an overdue task candidate")
+        assertEquals("task", actual.kind)
+        assertEquals(2, actual.urgency)
     }
 
     private fun midnight(context: Context): Long {
