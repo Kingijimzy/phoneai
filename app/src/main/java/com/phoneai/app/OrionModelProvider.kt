@@ -22,10 +22,10 @@ internal interface OrionModelProvider {
     fun chat(
         messages: JSONArray,
         vision: Boolean,
-        maxTokens: Int,
-        temperature: Double,
-        fastResponse: Boolean,
-        onDelta: ((String) -> Unit)?
+        maxTokens: Int = 400,
+        temperature: Double = 0.2,
+        fastResponse: Boolean = false,
+        onDelta: ((String) -> Unit)? = null
     ): String
 
     /** Probe whether a specific model on a provider can answer chat; empty string means OK. */
