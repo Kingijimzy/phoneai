@@ -2,10 +2,13 @@ package com.phoneai.app
 
 import android.content.Context
 import org.robolectric.RuntimeEnvironment
-import android.graphics.Bitmap
+
 import android.graphics.Rect
 import org.json.JSONArray
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.junit.Assert.*
 
 /**
@@ -29,6 +32,8 @@ import org.junit.Assert.*
  * These tests use Robolectric + Context to exercise real file-backed stores,
  * not mocked doubles. Gradle compilation/execution is required to run them.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 internal class OrionStage3EvalSuite {
 
     private val context: Context = RuntimeEnvironment.getApplication()
@@ -226,7 +231,7 @@ internal class OrionStage3EvalSuite {
 
     @Test
     fun stage3_visualElementDetectorRespectsExcludedRects() {
-        import android.graphics.Bitmap
+
         val bitmap = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888)
         val excluded = listOf(Rect(0, 0, 200, 300)) // exclude everything
         val regions = VisualElementDetector.detect(bitmap, excluded = excluded)
@@ -250,7 +255,7 @@ internal class OrionStage3EvalSuite {
     @Test
     fun stage3_voiceCleanRemovesMarkdown() {
         // Voice.clean is private; test through SpeechChunker which is the public split logic.
-        import com.phoneai.app.SpeechChunker
+
         val text = SpeechChunker.split("**bold** and `code` and https://example.com link.")
         assertTrue("chunker should handle markdown-like text", text.isNotEmpty())
     }
