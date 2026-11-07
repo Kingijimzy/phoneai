@@ -237,6 +237,8 @@ object LifeLoop {
         var checked = 0
         val now = System.currentTimeMillis()
         val orders = StandingOrders.all(c)
+        // Genuine lifecycle state: LifeLoop running means the Soul is monitoring.
+        OrionSoulLifecycle.watcherTick(c)
         StandingOrders.storageError()?.let { error ->
             AgentPolicy.log(c, "standing_order", "storage", null, "skipped safely: $error")
             return 0

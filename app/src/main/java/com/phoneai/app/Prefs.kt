@@ -410,6 +410,18 @@ object Prefs {
     fun autoMemory(c: Context): Boolean = sp(c).getBoolean("automemory", true)
     fun setAutoMemory(c: Context, v: Boolean) = sp(c).edit().putBoolean("automemory", v).apply()
 
+    /** Whether memory text may be sent to an external embedding endpoint (e.g. Ollama). Off by default: memory never leaves the device unless the owner opts in. */
+    fun embeddingThirdPartyAllowed(c: Context): Boolean = sp(c).getBoolean("embedding_third_party", false)
+    fun setEmbeddingThirdPartyAllowed(c: Context, v: Boolean) = sp(c).edit().putBoolean("embedding_third_party", v).apply()
+
+    /** Ollama base URL for the embeddings endpoint; empty means not configured. */
+    fun ollamaBaseUrl(c: Context): String = sp(c).getString("ollama_base_url", "http://127.0.0.1:11434") ?: "http://127.0.0.1:11434"
+    fun setOllamaBaseUrl(c: Context, v: String) = sp(c).edit().putString("ollama_base_url", v.take(200)).apply()
+
+    /** Embedding model name sent to Ollama; empty means default. */
+    fun ollamaEmbeddingModel(c: Context): String = sp(c).getString("ollama_embedding_model", "nomic-embed-text") ?: "nomic-embed-text"
+    fun setOllamaEmbeddingModel(c: Context, v: String) = sp(c).edit().putString("ollama_embedding_model", v.take(100)).apply()
+
     /** A separate in-app disclosure is shown before the AccessibilityService can be enabled. */
     fun accessibilityDisclosureSeen(c: Context): Boolean = sp(c).getBoolean("accessibility_disclosure_seen", false)
     fun setAccessibilityDisclosureSeen(c: Context, v: Boolean) = sp(c).edit().putBoolean("accessibility_disclosure_seen", v).apply()
@@ -432,4 +444,38 @@ object Prefs {
         val safe = CharacterProfile.get(id).id
         sp(c).edit().putString("character_profile", safe).apply()
     }
+
+    /** Quiet period: Orion will not speak up proactively between startHour and endHour (local 24h). */
+    fun quietPeriodStartHour(c: Context): Int = sp(c).getInt("quiet_start_hour", 22).coerceIn(0, 23)
+    fun setQuietPeriodStartHour(c: Context, v: Int) = sp(c).edit().putInt("quiet_start_hour", v.coerceIn(0, 23)).apply()
+    fun quietPeriodEndHour(c: Context): Int = sp(c).getInt("quiet_end_hour", 7).coerceIn(0, 23)
+    fun setQuietPeriodEndHour(c: Context, v: Int) = sp(c).edit().putInt("quiet_end_hour", v.coerceIn(0, 23)).apply()
+
+    /** Maximum proactive notifications per hour; 0 disables proactive speaking entirely. */
+    fun proactiveMaxPerHour(c: Context): Int = sp(c).getInt("proactive_max_per_hour", 3).coerceIn(0, 60)
+    fun setProactiveMaxPerHour(c: Context, v: Int) = sp(c).edit().putInt("proactive_max_per_hour", v.coerceIn(0, 60)).apply()
+
+    /** Minimum milliseconds between proactive spoken interruptions (default 20 minutes). */
+    fun proactiveMinIntervalMs(c: Context): Long = sp(c).getLong("proactive_min_interval_ms", 20L * 60L * 1000L).coerceAtLeast(5 * 60_000L)
+    fun setProactiveMinIntervalMs(c: Context, v: Long) = sp(c).edit().putLong("proactive_min_interval_ms", v.coerceAtLeast(5 * 60_000L)).apply()
+
+    /** Battery percent below which Orion may suggest charging before a long task (0 disables). */
+    fun proactiveBatteryLowThreshold(c: Context): Int = sp(c).getInt("proactive_battery_low", 20).coerceIn(0, 100)
+    fun setProactiveBatteryLowThreshold(c: Context, v: Int) = sp(c).edit().putInt("proactive_battery_low", v.coerceIn(0, 100)).apply()
+
+    /** Timestamp of the last proactive spoken interruption, for throttling. */
+    fun lastProactiveSpokenAt(c: Context): Long = sp(c).getLong("last_proactive_spoken_at", 0L)
+    fun setLastProactiveSpokenAt(c: Context, v: Long) = sp(c).edit().putLong("last_proactive_spoken_at", v).apply()
+
+    /** Calendar events consent duration is managed through OrionSensorConsent; this is the lookahead window. */
+    fun calendarLookaheadHours(c: Context): Int = sp(c).getInt("calendar_lookahead_hours", 24).coerceIn(1, 168)
+    fun setCalendarLookaheadHours(c: Context, v: Int) = sp(c).edit().putInt("calendar_lookahead_hours", v.coerceIn(1, 168)).apply()
+
+    /** When on, Orion skips cloud providers entirely and prefers the local model (Ollama). */
+    fun offlineMode(c: Context): Boolean = sp(c).getBoolean("offline_mode", false)
+    fun setOfflineMode(c: Context, v: Boolean) = sp(c).edit().putBoolean("offline_mode", v).apply()
+
+    /** When offline and no local provider is configured, fail fast instead of burning budget on timeouts. */
+    fun failFastOffline(c: Context): Boolean = sp(c).getBoolean("fail_fast_offline", true)
+    fun setFailFastOffline(c: Context, v: Boolean) = sp(c).edit().putBoolean("fail_fast_offline", v).apply()
 }

@@ -24,6 +24,19 @@ class MemoryRankingTest {
         assertNull(MemoryRanking.findSuperseded(listOf(unrelated), "preference", "User prefers light theme in the app"))
     }
 
+    @Test fun explicitSingleValueConflictSupersedesEvenWithLowWordOverlap() {
+        val old = mem(1, "fact", "I live in Lagos Nigeria", 1)
+        assertEquals(
+            old,
+            MemoryRanking.findSuperseded(listOf(old), "fact", "I live in Abuja")
+        )
+    }
+
+    @Test fun differentRepeatableGraphFactsAreNotTreatedAsConflicts() {
+        val old = mem(1, "fact", "I like football", 1)
+        assertNull(MemoryRanking.findSuperseded(listOf(old), "fact", "I like music"))
+    }
+
     @Test fun selectKeepsPinnedAndRelevantBeforeRecent() {
         val list = listOf(
             mem(1, "fact", "Birthday is in March", 1, pinned = true),
@@ -35,10 +48,76 @@ class MemoryRankingTest {
         assertEquals(listOf(1, 2, 4), picked)
     }
 
+    @Test fun automaticTurnRecallSelectsAtMostSixAndFindsParaphrasedCityQuestions() {
+        val memories = listOf(
+            mem(1, "fact", "User lives in Lagos Nigeria", 10),
+            mem(2, "fact", "User likes football", 9),
+            mem(3, "project", "Orion is an Android assistant", 8),
+            mem(4, "preference", "User prefers concise answers", 7),
+            mem(5, "routine", "Reviews forex charts before London session", 6),
+            mem(6, "fact", "Uses Kotlin for Android development", 5),
+            mem(7, "fact", "Enjoys jollof rice", 4),
+            mem(8, "fact", "Listens to afrobeats", 3)
+        )
+        val query = "Which city is my home?"
+        assertTrue("paraphrased location query should match the stored city fact",
+            MemoryRanking.score(memories.first(), query) > 0)
+        val recalled = MemoryRanking.select(memories, query, limit = 6, relevantLimit = 6)
+        assertTrue(recalled.any { it.id == 1 })
+        assertEquals(6, recalled.size)
+    }
+
     @Test fun scoreIsZeroWithoutOverlap() {
         assertEquals(0, MemoryRanking.score(mem(1, "fact", "Likes football", 1), "bybit"))
         assertTrue(MemoryRanking.score(mem(2, "project", "Bybit swing trading", 1), "bybit") > 0)
         assertNotNull(MemoryRanking.tokens("The quick brown fox"))
+    }
+
+    @Test fun trigramSimilarityFindsSmallTyposWithoutMatchingUnrelatedWords() {
+        assertTrue(MemoryRanking.trigramSimilarity("trading", "tradng") >= 0.24)
+        assertEquals(0.0, MemoryRanking.trigramSimilarity("trading", "football"), 0.0001)
+        assertTrue(MemoryRanking.score(mem(5, "fact", "User follows trading setups", 1L), "tradng") > 0)
+    }
+
+    @Test fun hybridRankUsesTrigramSignalForFuzzyRecall() {
+        val documents = listOf(
+            "Bybit trading plan and liquidity sweeps",
+            "Football fixtures and match results",
+            "Jollof rice cooking notes"
+        )
+        assertEquals(
+            "Bybit trading plan and liquidity sweeps",
+            MemoryRanking.hybridRank(documents, { it }, "bybit tradng", limit = 1).single()
+        )
+    }
+
+    @Test fun trigramFeaturesAreBoundedAndWordLocal() {
+        val grams = MemoryRanking.characterTrigrams("ABC DEF")
+        assertEquals(listOf("abc", "def"), grams)
+        assertTrue(MemoryRanking.characterTrigrams("a".repeat(1000)).size <= 60)
+    }
+
+    @Test fun localDenseEmbeddingRecallsRelatedConceptsWithoutNetwork() {
+        assertTrue(MemoryRanking.embeddingSimilarity(
+            "Which city is my home?",
+            "User lives in Lagos Nigeria"
+        ) > 0.0)
+        assertTrue(MemoryRanking.embeddingSimilarity(
+            "my currency trading approach",
+            "I trade forex"
+        ) > 0.0)
+    }
+
+    @Test fun hybridRankUsesLocalEmbeddingForParaphrasedRecall() {
+        val documents = listOf(
+            "User lives in Lagos Nigeria",
+            "User likes football",
+            "Orion is an Android assistant"
+        )
+        assertEquals(
+            "User lives in Lagos Nigeria",
+            MemoryRanking.hybridRank(documents, { it }, "Which city is my home?", 1).single()
+        )
     }
 }
 

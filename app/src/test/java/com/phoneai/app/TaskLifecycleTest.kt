@@ -28,7 +28,7 @@ class TaskLifecycleTest {
         assertNull(t.replan())
     }
 
-    @Test fun failureRecoversBoundedlyThenRecords() {
+    @Test fun oneAlternateRouteRecoveryIsAllowedThenTheTaskStops() {
         var t = walkToVerify()
         t = t.fail()!!
         assertEquals(Phase.RECOVER, t.phase)
@@ -37,11 +37,7 @@ class TaskLifecycleTest {
         assertEquals(Phase.EXECUTE, t.phase)
         t = t.advance()!!
         t = t.fail()!!
-        assertEquals(2, t.recoveries)
-        t = t.replan()!!
-        repeat(3) { t = t.advance()!! } // PLAN→CHECK→AUTH→EXECUTE
-        t = t.fail()!!
-        assertEquals("third failure ends the task instead of retrying forever", Phase.RECORD, t.phase)
+        assertEquals("second failure ends the task; no third route is attempted", Phase.RECORD, t.phase)
         assertFalse(t.verified)
     }
 

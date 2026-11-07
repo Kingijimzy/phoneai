@@ -2,7 +2,6 @@ package com.phoneai.app
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.ComponentName
 import android.provider.Settings
@@ -30,14 +29,14 @@ import java.util.concurrent.TimeUnit
  */
 internal class OrionPythonPhoneApi(
     private val context: Context,
-    private val confirm: (String) -> Boolean = { false },
+    @Suppress("UNUSED_PARAMETER") confirm: (String) -> Boolean = { false },
     private val readOnly: Boolean = false,
     private val toolInvoker: ((String, JSONObject) -> String)? = null
 ) {
     private val workspace = OrionPythonWorkspace(context)
     private val toolCalls = java.util.concurrent.atomic.AtomicInteger(0)
 
-    /** Calls any registered Orion tool through the same gated dispatcher the agent uses (approvals, loop guard, evidence log). */
+    /** Calls any registered Orion tool through the same gated dispatcher the agent uses (capability checks, three-action confirmation, loop guard and evidence log). */
     fun tool(name: String, args: JSONObject): String {
         PythonToolBridgePolicy.check(name, toolCalls.get())?.let { return error(it) }
         val invoke = toolInvoker ?: return error("tool calls are not available in this run")
@@ -117,15 +116,9 @@ internal class OrionPythonPhoneApi(
         catch (e: Exception) { error("contacts query failed: ${e.javaClass.simpleName}") }
     }
 
-    /** Opens the real Android accessibility settings page after owner confirmation. */
-    fun accessibility_open_settings(): String {
-        if (!confirm("Open Android Accessibility settings so you can enable Orion's system-bound service?"))
-            return error("owner declined opening Android Accessibility settings")
-        return try {
-            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            JSONObject().put("opened", true).put("action", Settings.ACTION_ACCESSIBILITY_SETTINGS).toString()
-        } catch (e: Exception) { error("could not open Android Accessibility settings: ${e.javaClass.simpleName}") }
-    }
+    /** Opens Android's own accessibility settings through the shared device-action dispatcher. */
+    fun accessibility_open_settings(): String =
+        tool("system_intent", JSONObject().put("action", "accessibility_settings"))
 
     /** Reports the Android-owned accessibility binding; Python cannot start or impersonate this service. */
     fun accessibility_status(): String {
@@ -160,9 +153,7 @@ internal class OrionPythonPhoneApi(
         if (!OrionSensorConsent.read(context, OrionSensorScope.SCREEN_CONTEXT).active())
             return error("screen context grant is not enabled")
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
-        if (!confirm("Python requests an accessibility tap on the visible text: \"$target\". Continue?"))
-            return error("owner declined or did not approve the UI action")
-        return Tools(service).clickText(target)
+        return tool("click_text", JSONObject().put("text", target))
     }
 
     fun ui_tap(x: Double, y: Double): String {
@@ -175,9 +166,7 @@ internal class OrionPythonPhoneApi(
         val metrics = context.resources.displayMetrics
         if (x > metrics.widthPixels || y > metrics.heightPixels) return error("tap coordinates are outside the current display")
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
-        if (!confirm("Python requests an accessibility tap at screen coordinates ${x.toInt()}, ${y.toInt()}. Continue?"))
-            return error("owner declined or did not approve the UI action")
-        return service.tap(x.toFloat(), y.toFloat())
+        return tool("tap", JSONObject().put("x", x).put("y", y).put("allow_coordinates", true))
     }
 
     fun ui_swipe(x1: Double, y1: Double, x2: Double, y2: Double): String {
@@ -192,9 +181,8 @@ internal class OrionPythonPhoneApi(
             values.filterIndexed { index, _ -> index % 2 == 1 }.any { it > metrics.heightPixels })
             return error("swipe coordinates are outside the current display")
         if (!screenSafe(service)) return error("accessibility actions are blocked on a potentially sensitive surface")
-        if (!confirm("Python requests an accessibility swipe from (${x1.toInt()}, ${y1.toInt()}) to (${x2.toInt()}, ${y2.toInt()}). Continue?"))
-            return error("owner declined or did not approve the UI action")
-        return service.swipe(x1.toFloat(), y1.toFloat(), x2.toFloat(), y2.toFloat(), 350L)
+        return tool("swipe", JSONObject().put("x1", x1).put("y1", y1).put("x2", x2).put("y2", y2)
+            .put("ms", 350).put("allow_coordinates", true))
     }
 
     private fun screenSafe(service: PhoneAiService): Boolean = screenSnapshotIfSafe(service) != null
@@ -251,12 +239,12 @@ internal class OrionPythonPhoneApi(
 
     fun ws_send(sessionId: String, text: String): String {
         if (readOnly) return error("WebSocket sends are disabled by the read-only autonomy profile")
-        return OrionPythonWebSocketTransport.send(context, sessionId, text, confirm = confirm)
+        return OrionPythonWebSocketTransport.send(context, sessionId, text)
     }
 
     fun ws_send_binary(sessionId: String, base64: String): String {
         if (readOnly) return error("WebSocket sends are disabled by the read-only autonomy profile")
-        return OrionPythonWebSocketTransport.send(context, sessionId, base64, binaryBase64 = true, confirm = confirm)
+        return OrionPythonWebSocketTransport.send(context, sessionId, base64, binaryBase64 = true)
     }
 
     fun ws_receive(sessionId: String, timeoutMs: Int): String =
@@ -264,21 +252,20 @@ internal class OrionPythonPhoneApi(
 
     fun ws_close(sessionId: String): String = OrionPythonWebSocketTransport.close(sessionId)
 
-    /** GET is autonomous for explicitly owner-granted hosts; POST requires per-call approval unless the host has a write grant. */
-    fun http_get(url: String): String = request(url, "GET", "", requireApproval = false)
+    /** GET and POST run immediately for explicitly owner-granted hosts; POST requires a saved host write grant. */
+    fun http_get(url: String): String = request(url, "GET", "")
 
     fun http_post(url: String, body: String): String {
         if (readOnly) return error("HTTP POST is disabled by the read-only autonomy profile")
         if (body.length > 32_000) return error("HTTP body is limited to 32 KB")
-        return request(url, "POST", body, requireApproval = true)
+        return request(url, "POST", body)
     }
 
-    private fun request(url: String, method: String, body: String, requireApproval: Boolean): String {
+    private fun request(url: String, method: String, body: String): String {
         val endpoint = OrionPythonNetworkPolicy.validate(context, url)
             ?: return error("network request blocked: grant NETWORK and explicitly allow this host first")
-        if (requireApproval && !endpoint.allowWrites &&
-            !confirm("Python requests an HTTP POST to owner-approved host ${endpoint.host}. Send this external request?"))
-            return error("owner approval is required for HTTP POST to this host")
+        if (method == "POST" && !endpoint.allowWrites)
+            return error("HTTP write access is not granted for ${endpoint.host}; enable this host's write permission in Python network settings")
         val client = OkHttpClient.Builder()
             .proxy(Proxy.NO_PROXY)
             .dns(object : Dns {

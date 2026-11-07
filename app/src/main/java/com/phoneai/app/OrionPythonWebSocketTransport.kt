@@ -145,12 +145,11 @@ internal object OrionPythonWebSocketTransport {
         context: Context,
         id: String,
         data: String,
-        binaryBase64: Boolean = false,
-        confirm: (String) -> Boolean = { false }
+        binaryBase64: Boolean = false
     ): String {
         val session = authorized(context, id) ?: return error("WebSocket session is missing, closed, or its network grant was revoked")
-        if (!session.allowWrites && !confirm("Send data over the owner-approved WebSocket host ${session.host}?"))
-            return error("owner approval is required to send WebSocket data to this host")
+        if (!session.allowWrites)
+            return error("WebSocket write access is not granted for ${session.host}; enable this host's write permission in Python network settings")
         if (data.toByteArray(Charsets.UTF_8).size > MAX_FRAME_BYTES * 2) return error("outgoing frame exceeds the 64 KiB limit")
         if (session.closed) return error("WebSocket session is closed")
         val socket = session.socket ?: return error("WebSocket is not connected")

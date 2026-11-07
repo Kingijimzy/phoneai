@@ -1,0 +1,108 @@
+package com.phoneai.app
+
+import android.content.Context
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowContentResolver
+import android.provider.CalendarContract
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class OrionCalendarMonitorTest {
+    private lateinit var context: Context
+
+    @Before fun setUp() {
+        context = RuntimeEnvironment.getApplication()
+        OrionSensorScope.values().forEach { OrionSensorConsent.revoke(context, it) }
+    }
+
+    @After fun tearDown() {
+        OrionSensorScope.values().forEach { OrionSensorConsent.revoke(context, it) }
+    }
+
+    @Test fun notEnabledWithoutConsent() {
+        assertFalse(OrionCalendarMonitor.isEnabled(context))
+        assertTrue(OrionCalendarMonitor.upcoming(context, 24).isEmpty())
+        assertTrue(OrionCalendarMonitor.soon(context, 24).isBlank())
+    }
+
+    @Test fun enabledWithConsent() {
+        OrionSensorConsent.grant(context, OrionSensorScope.CALENDAR_EVENTS, 4 * 60 * 60 * 1000L)
+        assertTrue(OrionCalendarMonitor.isEnabled(context))
+        // No events inserted, so empty
+        assertTrue(OrionCalendarMonitor.upcoming(context, 24).isEmpty())
+    }
+
+    @Test fun upcomingEventIsReturned() {
+        OrionSensorConsent.grant(context, OrionSensorScope.CALENDAR_EVENTS, 4 * 60 * 60 * 1000L)
+        val now = System.currentTimeMillis()
+        val future = now + 90 * 60_000L // 90 min from now
+
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues()
+        values.put(CalendarContract.Events.DTSTART, future)
+        values.put(CalendarContract.Events.TITLE, "Team standup")
+        values.put(CalendarContract.Events.EVENT_LOCATION, "Conference room B")
+        values.put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+        resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+
+        val events = OrionCalendarMonitor.upcoming(context, 24, now)
+        assertFalse(events.isEmpty())
+        assertEquals("Team standup", events.first().title)
+        assertTrue(events.first().minutesFromNow > 0)
+        assertTrue(events.first().minutesFromNow <= 120)
+    }
+
+    @Test fun eventOutsideLookaheadIsNotReturned() {
+        OrionSensorConsent.grant(context, OrionSensorScope.CALENDAR_EVENTS, 4 * 60 * 60 * 1000L)
+        val now = System.currentTimeMillis()
+        val farFuture = now + 48 * 60 * 60_000L // 48 hours, beyond 24h lookahead
+
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues()
+        values.put(CalendarContract.Events.DTSTART, farFuture)
+        values.put(CalendarContract.Events.TITLE, "Next week meeting")
+        values.put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+        resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+
+        val events = OrionCalendarMonitor.upcoming(context, 24, now)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test fun soonReturnsLabelledBlock() {
+        OrionSensorConsent.grant(context, OrionSensorScope.CALENDAR_EVENTS, 4 * 60 * 60 * 1000L)
+        val now = System.currentTimeMillis()
+        val future = now + 45 * 60_000L // 45 min from now
+
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues()
+        values.put(CalendarContract.Events.DTSTART, future)
+        values.put(CalendarContract.Events.TITLE, "Dentist appointment")
+        values.put(CalendarContract.Events.EVENT_TIMEZONE, "UTC")
+        resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+
+        val block = OrionCalendarMonitor.soon(context, 24, now)
+        assertNotNull(block)
+        assertTrue(block.contains("OWNER-GRANTED CALENDAR CONTEXT"))
+        assertTrue(block.contains("Dentist appointment"))
+    }
+
+    @Test fun lastNotifiedEventIdDefaultsToZero() {
+        assertEquals(0L, OrionCalendarMonitor.lastNotifiedEventId(context))
+    }
+
+    @Test fun markEventNotifiedPersists() {
+        OrionCalendarMonitor.markEventNotified(context, 42L)
+        assertEquals(42L, OrionCalendarMonitor.lastNotifiedEventId(context))
+    }
+}

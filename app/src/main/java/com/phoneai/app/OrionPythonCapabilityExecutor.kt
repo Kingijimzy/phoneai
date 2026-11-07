@@ -2,23 +2,23 @@ package com.phoneai.app
 
 import android.content.Context
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Owns direct Python execution and the generated-extension lifecycle.
  * Generated extensions remain restricted data transforms; they receive no Android, file,
- * network, shell or device capabilities. Agent still owns the shared preflight/approval/evidence
- * boundary and supplies its confirmation/cancellation callbacks.
+ * network, shell or device capabilities. Agent still owns the shared preflight, three-action
+ * confirmation, cancellation and evidence boundary.
  */
 internal class OrionPythonCapabilityExecutor(
     private val context: Context,
-    private val tools: Tools,
+    private val tools: Tools?,
     private val extensionStore: SelfExtendingExtensionStore = SelfExtendingExtensionStore(context),
     private val extensionSandbox: ExtensionSandbox = RestrictedPythonSandbox { source, inputJson ->
         OrionPythonRuntime.runExtension(context, source, inputJson)
     }
 ) {
-    private val testReports = ConcurrentHashMap<String, ExtensionTestReport>()
+    private val testReceipts = ExtensionTestReceiptStore(context)
+    private val versionHistory = ExtensionVersionHistory(context)
 
     fun execute(
         tool: String,
@@ -33,13 +33,17 @@ internal class OrionPythonCapabilityExecutor(
             "python_exec" -> {
                 val code = args.optString("code")
                 if (stopped()) "error: task was stopped before Python execution."
-                else tools.pythonExec(code, confirm, stopped)
+                else tools?.pythonExec(code, confirm, stopped)
+                    ?: "error: Python tool bridge is unavailable in this execution context."
             }
             "workspace_list" -> OrionPythonWorkspace(context).list()
             "extension_list" -> listExtensions()
+            "extension_history" -> extensionHistory(args)
+            "extension_rollback" -> rollbackExtension(args)
             "extension_create" -> createDraft(args)
+            "extension_update" -> updateDraft(args)
             "extension_test" -> testDraft(args, stopped)
-            "extension_enable" -> enable(args, confirm)
+            "extension_enable" -> enable(args)
             "extension_run" -> runExtension(args, stopped)
             "extension_disable" -> disable(args)
             else -> null
@@ -76,6 +80,23 @@ internal class OrionPythonCapabilityExecutor(
         }
     }
 
+    private fun updateDraft(args: JSONObject): String {
+        val id = args.optString("id").trim()
+        val name = args.optString("name").trim()
+        val runtime = args.optString("runtime", "python").trim().lowercase()
+        val source = args.optString("source")
+        val invalid = SelfExtendingExtensionPolicy.validateIdentity(id, name)
+            ?: SelfExtendingExtensionPolicy.validateSource(runtime, source)
+        if (invalid != null) return "error: $invalid"
+        val extension = GeneratedExtension(
+            id, name, runtime, source, SelfExtendingExtensionPolicy.sha256(source),
+            args.optString("description").take(240), System.currentTimeMillis()
+        )
+        return if (extensionStore.saveRevision(extension)) {
+            "Saved new disabled revision for $id. Run extension_test before activation; the previous activated version remains archived."
+        } else "error: revision rejected; disable the active extension first, use a new source hash, and check registry integrity"
+    }
+
     private fun testDraft(args: JSONObject, stopped: () -> Boolean): String {
         val id = args.optString("id").trim()
         val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
@@ -89,36 +110,72 @@ internal class OrionPythonCapabilityExecutor(
         val report = extensionSandbox.test(extension, cases)
         if (stopped()) return "error: task stopped during extension tests; no promotion was attempted."
         if (!report.passed) {
-            testReports.remove(id)
+            testReceipts.remove(id, extension.sourceSha256)
             return "error: SANDBOX TEST FAILED for $id: ${report.summary} Fix the source (create a new draft id) and test again; the extension is not enabled."
         }
 
-        testReports[id] = report
+        if (!testReceipts.record(id, report)) {
+            return "error: sandbox tests passed but their durable verification receipt could not be saved; extension remains disabled"
+        }
         val ownerAutoActivation = OrionOwnerDialSettings.read(context).autoActivateVerifiedExtensions
-        val autoActivated = ownerAutoActivation && extensionStore.promote(id, report, userApproved = true)
+        val autoActivated = ownerAutoActivation && activateVerifiedVersion(extension, report, approved = true)
         AgentPolicy.log(
             context, "extension:$id", "auto-activate", autoActivated,
             if (autoActivated) "owner pre-approval promoted exact-hash sandbox-tested extension"
             else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
-            else "owner auto-activation is off; awaiting explicit extension_enable approval"
+            else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
         return if (autoActivated) {
-            testReports.remove(id)
             "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
             "SANDBOX TEST PASSED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} " +
                 if (ownerAutoActivation) "Automatic promotion failed; inspect registry and use explicit extension_enable approval."
-                else "Next: extension_enable (requires explicit approval)."
+                else "Next: extension_enable (requires an explicit extension_enable tool request)."
         }
     }
 
-    private fun enable(args: JSONObject, confirm: (String) -> Boolean): String {
+    private fun enable(args: JSONObject): String {
         val id = args.optString("id").trim()
-        val report = testReports[id]
-            ?: return "error: no successful runtime sandbox test exists for this extension in the current agent session; static preflight cannot enable generated code"
-        if (!confirm("Enable generated extension $id after its verified sandbox test?")) return "Extension enable cancelled."
-        return if (extensionStore.promote(id, report, userApproved = true)) "Extension $id is enabled."
-        else "error: extension promotion failed; test report/source hash may be stale or storage may be unavailable"
+        val extension = try { extensionStore.all().firstOrNull { it.id == id } } catch (_: Exception) { null }
+            ?: return "error: extension draft not found or registry unreadable"
+        val report = testReceipts.get(id, extension.sourceSha256)
+            ?: return "error: no successful runtime sandbox test receipt matches the current source; run extension_test again"
+        return if (activateVerifiedVersion(extension, report, approved = true)) "Extension $id is enabled and its verified version is archived."
+        else "error: extension promotion failed; verification or version history could not be committed"
+    }
+
+    private fun activateVerifiedVersion(extension: GeneratedExtension, report: ExtensionTestReport, approved: Boolean): Boolean {
+        if (!extensionStore.promote(extension.id, report, userApproved = approved)) return false
+        if (versionHistory.record(extension.copy(enabled = true, verified = true))) return true
+        extensionStore.disable(extension.id)
+        return false
+    }
+
+    private fun extensionHistory(args: JSONObject): String {
+        val id = args.optString("id").trim()
+        if (id.isBlank()) return "error: extension id is required"
+        val rows = versionHistory.all(id)
+        if (rows.isEmpty()) return "No activated versions are archived for $id."
+        val activeHash = runCatching { extensionStore.enabled(id)?.sourceSha256 }.getOrNull()
+        return rows.joinToString("\n") { row ->
+            "v${row.version} hash=${row.sourceSha256.take(12)} ${if (row.sourceSha256 == activeHash) "[ACTIVE]" else ""} activated=${row.activatedAtMillis}"
+        }
+    }
+
+    private fun rollbackExtension(args: JSONObject): String {
+        val id = args.optString("id").trim()
+        val active = try { extensionStore.enabled(id) } catch (_: Exception) { null }
+            ?: return "error: extension is not currently enabled"
+        val previous = versionHistory.previous(id, active.sourceSha256)
+            ?: return "error: no previous activated version is archived"
+        val receipt = testReceipts.get(id, previous.sourceSha256)
+            ?: return "error: previous version has no passing sandbox receipt for its exact source; rollback refused"
+        if (!versionHistory.record(active.copy(enabled = true, verified = true))) {
+            return "error: could not preserve the current version before rollback"
+        }
+        return if (extensionStore.activateVersion(previous, receipt, approved = true)) {
+            "Extension $id rolled back to verified version ${previous.version}."
+        } else "error: rollback activation failed; current version remains unchanged"
     }
 
     private fun runExtension(args: JSONObject, stopped: () -> Boolean): String {
@@ -137,17 +194,21 @@ internal class OrionPythonCapabilityExecutor(
 
     private fun disable(args: JSONObject): String {
         val id = args.optString("id").trim()
-        return if (extensionStore.disable(id)) "Extension $id disabled; source retained."
+        val active = runCatching { extensionStore.enabled(id) }.getOrNull()
+        if (active != null && !versionHistory.record(active)) {
+            return "error: active version could not be archived; extension remains enabled"
+        }
+        return if (extensionStore.disable(id)) "Extension $id disabled; source and activated version history retained."
         else "error: extension could not be disabled or registry is unavailable"
     }
 
     companion object {
         /** PRoot runs under the app UID; direct CPython is trusted code until OS-level isolation exists. */
-        fun requiresExplicitApproval(tool: String): Boolean = tool == "python_exec"
+        fun requiresExplicitApproval(tool: String): Boolean = false
 
         private val supportedTools = setOf(
-            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_test",
-            "extension_enable", "extension_run", "extension_disable"
+            "python_exec", "workspace_list", "extension_list", "extension_create", "extension_update", "extension_test",
+            "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback"
         )
         fun supports(tool: String): Boolean = tool in supportedTools
     }

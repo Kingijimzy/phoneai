@@ -15,7 +15,8 @@ internal object OrionDeviceCapabilityExecutor {
         "media_status", "media_control", "play_media", "chrome_search", "resolve_contact", "list_apps",
         "list_app_deeplinks", "read_screen", "validate_action", "verify_action", "verify_send",
         "click", "click_text", "wait_for", "tap", "long_press", "swipe", "swipe_path",
-        "scroll", "type", "key", "look", "play", "record_screen"
+        "scroll", "type", "key", "look", "play", "record_screen",
+        "chronos_awareness", "calendar_events", "voice_speak", "voice_listen"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -78,6 +79,24 @@ internal object OrionDeviceCapabilityExecutor {
         "key" -> service.key(args.optString("name"))
         "look" -> look(args.optString("question", "Describe what is on the screen."))
         "play" -> play(args.optString("goal"), args.optInt("steps", 20))
+        "chronos_awareness" -> OrionChronosAwareness.summary(service).takeIf { it.isNotBlank() } ?: "Chronos context is unavailable without owner-granted app-usage and Chronos awareness consent."
+        "calendar_events" -> {
+            val lookahead = args.optInt("lookaheadHours", Prefs.calendarLookaheadHours(service))
+            OrionCalendarMonitor.soon(service, lookahead).takeIf { it.isNotBlank() } ?: "No upcoming calendar events within the lookahead window (or calendar consent is not granted)."
+        }
+        "voice_speak" -> {
+            val text = args.optString("text", "")
+            if (text.isBlank()) "error: voice_speak requires non-empty text"
+            else {
+                val voice = Voice(service)
+                voice.speak(text)
+                "spoke ${text.length} character(s); verify delivery through the audio output"
+            }
+        }
+        "voice_listen" -> {
+            val seconds = args.optDouble("seconds", 8.0).coerceIn(0.5, 30.0)
+            "voice_listen is handled through the live Voice activity; use the microphone UI to speak and read the transcript"
+        }
         else -> "error: device executor does not implement '$tool'."
     }
 

@@ -25,6 +25,9 @@ internal class OrionProactiveWorker(
         val proactiveEnabled = runCatching { AgentPolicy.enabled(applicationContext, "proactive") }.getOrDefault(false)
         if (!OrionProactivePolicy.shouldRun(coreEnabled, proactiveEnabled)) return Result.success()
 
+        // Genuine lifecycle state: scheduled proactive work means the Soul is monitoring.
+        OrionSoulLifecycle.watcherTick(applicationContext)
+
         return runCatching {
             SoulEngineWatcher.run(applicationContext)
             Result.success()
