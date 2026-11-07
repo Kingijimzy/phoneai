@@ -33,6 +33,9 @@ class OrionProactiveEngineTest {
         Prefs.setCalendarLookaheadHours(context, 24)
         Prefs.setLastProactiveSpokenAt(context, 0L)
         clearSpokenHistory(context)
+        // TaskStore keeps a process-wide cache that survives Robolectric resets; isolate each test.
+        TaskStore.all(context).toList().forEach { TaskStore.delete(context, it.id) }
+        OrionFollowUpStore.pending(context).toList().forEach { OrionFollowUpStore.done(context, it.id) }
     }
 
     @After fun tearDown() {
@@ -40,16 +43,6 @@ class OrionProactiveEngineTest {
         AgentPolicy.setEnabled(context, "orion_core", false)
         AgentPolicy.setEnabled(context, "proactive", false)
         clearSpokenHistory(context)
-    }
-
-    @Test fun noProactivePackMeansNoItem() {
-        AgentPolicy.setEnabled(context, "proactive", false)
-        assertNull(OrionProactiveEngine.evaluate(context))
-    }
-
-    @Test fun noCorePackMeansNoItem() {
-        AgentPolicy.setEnabled(context, "orion_core", false)
-        assertNull(OrionProactiveEngine.evaluate(context))
     }
 
     @Test fun quietPeriodSuppressesProactiveItem() {

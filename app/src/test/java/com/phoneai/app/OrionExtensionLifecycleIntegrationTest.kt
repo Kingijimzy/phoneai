@@ -49,12 +49,12 @@ class OrionExtensionLifecycleIntegrationTest {
             val input = JSONObject(inputJson)
             if (source.contains("REJECT_ME")) {
                 JSONObject().put("ok", false).put("error", "restricted operation detected").toString()
-            } else if (source.contains("SUM_VALUES")) {
+            } else if (source.contains("INPUT[\"values\"]") || source.contains("INPUT.get(\"values\"")) {
                 val values = input.optJSONArray("values") ?: JSONArray()
                 var total = 0
                 for (i in 0 until values.length()) total += values.getInt(i)
                 JSONObject().put("ok", true).put("result", total).toString()
-            } else if (source.contains("ECHO_GREETING")) {
+            } else if (source.contains("INPUT.get(\"greeting\"")) {
                 JSONObject().put("ok", true).put("result", "echo:" + input.optString("greeting", "")).toString()
             } else {
                 JSONObject().put("ok", true).put("result", "ok").toString()
@@ -99,7 +99,7 @@ class OrionExtensionLifecycleIntegrationTest {
 
         // Draft must not be runnable yet
         val runBeforeEnable = runTool("extension_run", JSONObject().put("id", id)
-            .put("input", JSONObject().put("values", listOf(1, 2, 3))))
+            .put("input", JSONObject().put("values", JSONArray(listOf(1, 2, 3)))))
         assertTrue("extension_run must reject a disabled extension: $runBeforeEnable",
             runBeforeEnable.startsWith("error"))
 
@@ -107,11 +107,11 @@ class OrionExtensionLifecycleIntegrationTest {
         val testResult = runTool("extension_test", JSONObject()
             .put("id", id)
             .put("tests", JSONArray().put(
-                JSONObject().put("input", JSONObject().put("values", listOf(1, 2, 3))).put("expect", 6)
+                JSONObject().put("input", JSONObject().put("values", JSONArray(listOf(1, 2, 3)))).put("expect", 6)
             ).put(
-                JSONObject().put("input", JSONObject().put("values", emptyList<Int>())).put("expect", 0)
+                JSONObject().put("input", JSONObject().put("values", JSONArray(emptyList<Int>()))).put("expect", 0)
             ).put(
-                JSONObject().put("input", JSONObject().put("values", listOf(10, -5))).put("expect", 5)
+                JSONObject().put("input", JSONObject().put("values", JSONArray(listOf(10, -5)))).put("expect", 5)
             )))
         assertTrue("extension_test should pass all cases: $testResult",
             testResult.contains("SANDBOX TEST PASSED"))
@@ -132,7 +132,7 @@ class OrionExtensionLifecycleIntegrationTest {
         // ── 4. Use it ──
         val runResult = runTool("extension_run", JSONObject()
             .put("id", id)
-            .put("input", JSONObject().put("values", listOf(4, 5, 6))))
+            .put("input", JSONObject().put("values", JSONArray(listOf(4, 5, 6)))))
         assertTrue("extension_run should return a result: $runResult",
             runResult.contains("EXTENSION RESULT for $id"))
         assertTrue("extension_run result should contain the computed sum: $runResult",
@@ -142,7 +142,7 @@ class OrionExtensionLifecycleIntegrationTest {
         // The sandbox enforces input/output contracts: wrong input produces no wrong result.
         val wrongRun = runTool("extension_run", JSONObject()
             .put("id", id)
-            .put("input", JSONObject().put("values", listOf(1))))
+            .put("input", JSONObject().put("values", JSONArray(listOf(1)))))
         assertTrue("extension_run with different input should return a different result: $wrongRun",
             wrongRun.contains("EXTENSION RESULT for $id") && wrongRun.contains("1"))
 
@@ -187,7 +187,7 @@ class OrionExtensionLifecycleIntegrationTest {
         // After rollback, v1 (sum) behavior is active again
         val v1Run = runTool("extension_run", JSONObject()
             .put("id", id)
-            .put("input", JSONObject().put("values", listOf(7, 8))))
+            .put("input", JSONObject().put("values", JSONArray(listOf(7, 8)))))
         assertTrue("after rollback, v1 sum should be active: $v1Run",
             v1Run.contains("15"))
 
@@ -214,7 +214,7 @@ class OrionExtensionLifecycleIntegrationTest {
         val testResult = runTool("extension_test", JSONObject()
             .put("id", id)
             .put("tests", JSONArray().put(
-                JSONObject().put("input", JSONObject().put("values", listOf(1, 2))).put("expect", 999)
+                JSONObject().put("input", JSONObject().put("values", JSONArray(listOf(1, 2)))).put("expect", 999)
             )))
         assertTrue("extension_test must fail for wrong expected output: $testResult",
             testResult.contains("SANDBOX TEST FAILED"))
@@ -244,14 +244,14 @@ class OrionExtensionLifecycleIntegrationTest {
         runTool("extension_test", JSONObject()
             .put("id", id)
             .put("tests", JSONArray().put(
-                JSONObject().put("input", JSONObject().put("values", listOf(2, 3))).put("expect", 5)
+                JSONObject().put("input", JSONObject().put("values", JSONArray(listOf(2, 3)))).put("expect", 5)
             )))
         runTool("extension_enable", JSONObject().put("id", id))
 
         // Confirm v1 is active (sum: 2+3=5)
         val v1Run = runTool("extension_run", JSONObject()
             .put("id", id)
-            .put("input", JSONObject().put("values", listOf(2, 3))))
+            .put("input", JSONObject().put("values", JSONArray(listOf(2, 3)))))
         assertTrue("v1 should sum to 5: $v1Run", v1Run.contains("5"))
 
         // Roll back with no previous version → error

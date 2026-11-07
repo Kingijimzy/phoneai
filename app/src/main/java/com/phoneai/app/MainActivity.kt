@@ -271,7 +271,6 @@ class MainActivity : ComponentActivity() {
             "capability_report" -> { destination = OrionCapabilityReportActivity::class.java; intent = Intent(this, destination) }
             "agent_control" -> { destination = AgentControlActivity::class.java; intent = Intent(this, destination) }
             "termux_bridge" -> { destination = TermuxBridgeActivity::class.java; intent = Intent(this, destination) }
-            "owner_control" -> { destination = OwnerControlCenterActivity::class.java; intent = Intent(this, destination) }
             "gemini_live" -> { destination = GeminiLiveActivity::class.java; intent = Intent(this, destination) }
             else -> {
                 Toast.makeText(this, "This Orion destination is not registered yet: $route", Toast.LENGTH_LONG).show()

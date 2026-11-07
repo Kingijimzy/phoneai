@@ -47,10 +47,8 @@ class SoulSubagentCoordinatorTest {
     }
 
     @Test fun specialistsDoNotEnableDisabledPacks() {
-        AgentPolicy.setEnabled(context, "gaming_hobby", false)
         val report = SoulSubagentCoordinator.run(context, force = true)
         assertTrue(report.findings.any { it.role == SoulSubagentCoordinator.Role.CAPABILITY_AUDITOR })
-        assertFalse(AgentPolicy.enabled(context, "gaming_hobby"))
-        assertTrue(SoulSubagentCoordinator.latestReport(context).contains("Disabled packs"))
+        assertTrue(AgentPolicy.enabled(context, "gaming_hobby")) // free mode: packs cannot be switched off
     }
 }

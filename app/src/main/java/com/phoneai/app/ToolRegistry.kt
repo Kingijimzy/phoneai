@@ -137,7 +137,7 @@ internal object ToolRegistry {
         tool("gaming_focus_preset", ToolAccess.WRITE, "gaming_focus_preset {minutes: 20|45|60}: schedule a local reminder timer only; do not change DND, Game Turbo, FPS, root or app permissions"),
         tool("device_info", ToolAccess.READ, "device_info {}: report device information"),
         tool("record_screen", ToolAccess.WRITE, "record_screen {action}: start or stop an Android-approved screen recording saved in Movies/Orion"),
-        tool("document_extract", ToolAccess.READ, "document_extract {uri}: extract text from a user-selected document (TXT, Markdown, CSV, JSON, XML, HTML, LOG; max 1 MB); PDF and Office files are not supported"),
+        tool("document_extract", ToolAccess.READ, "document_extract {uri}: extract text from a user-selected document (TXT, Markdown, CSV, JSON, XML, HTML, LOG, DOCX, XLSX, PPTX; max 1 MB); PDF is not supported"),
         tool("voice_speak", ToolAccess.WRITE, "voice_speak {text}: speak text through Android TTS or the installed neural voice; shared with chat, not a separate assistant"),
         tool("voice_listen", ToolAccess.READ, "voice_listen {seconds?}: listen for speech and return the transcript; respects offline-only and permission settings"),
         tool("remember", ToolAccess.WRITE, "remember {category, text}: save long-term memory; category preference, project, decision, task, conversation, or fact"),

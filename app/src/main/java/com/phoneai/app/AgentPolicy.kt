@@ -45,7 +45,7 @@ object AgentPolicy {
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    fun enabled(c: Context, id: String) = p(c).getBoolean("pack_$id", defaultOn(id))
+    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
@@ -119,6 +119,12 @@ object AgentPolicy {
         "shell", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get",
         "goal_add", "goal_list", "goal_remove", "goal_toggle" -> "orion_core"
+        "model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state",
+        "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set" -> "orion_core"
+        "chronos_awareness", "calendar_events", "voice_speak", "voice_listen" -> "phone_control"
+        "document_extract", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty",
+        "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
+        "macro_save", "macro_run", "macro_list", "macro_delete" -> "workspace_shell"
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
         "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",

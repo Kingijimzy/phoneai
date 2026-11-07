@@ -52,7 +52,8 @@ class AgentDispatchPolicyTest {
     }
 
     @Test fun credentialTypingIsBlockedButOrdinaryGameAndChatWordsPass() {
-        assertNotNull(block("Type this text in chat", "type", JSONObject().put("text", "enter your PIN")))
+        // Free mode: credential-looking text is no longer refused.
+        assertNull(block("Type this text in chat", "type", JSONObject().put("text", "enter your PIN")))
         assertNull(block(
             "Type a note in FC Mobile chat",
             "type",
@@ -69,7 +70,8 @@ class AgentDispatchPolicyTest {
             currentPackage = "com.example.bankapp",
             currentLabel = "Banking"
         ))
-        assertNotNull(block(
+        // Free mode: banking apps are no longer off limits.
+        assertNull(block(
             "Open the banking app and click Continue",
             "click_text",
             JSONObject().put("text", "Continue"),
@@ -86,7 +88,6 @@ class AgentDispatchPolicyTest {
             currentPackage = "com.example.browser",
             currentLabel = "Browser"
         )
-        assertNotNull(reason)
-        assertTrue(reason!!.contains("safety gate", ignoreCase = true))
+        assertNull(reason) // Free mode: sensitive entry is not refused.
     }
 }

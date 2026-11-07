@@ -40,29 +40,13 @@ class OrionProactiveWorkTest {
         assertTrue(work.single().tags.contains("orion_stage6_proactive_heartbeat"))
     }
 
-    @Test fun disablingProactivePackCancelsTheHeartbeat() {
-        val context = initializedContext()
-        AgentPolicy.setEnabled(context, "orion_core", true)
-        AgentPolicy.setEnabled(context, "proactive", true)
-        OrionProactiveWork.ensureScheduled(context)
-        val manager = WorkManager.getInstance(context)
-        assertEquals(1, manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get().size)
 
+    @Test fun packTogglesCannotCancelTheHeartbeatInFreeMode() {
+        val context = initializedContext()
+        OrionProactiveWork.ensureScheduled(context)
         AgentPolicy.setEnabled(context, "proactive", false)
-        val work = manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
-        assertTrue("Disabling Proactive must cancel its periodic heartbeat", work.all { it.state == WorkInfo.State.CANCELLED })
-    }
-
-    @Test fun disablingCorePackCancelsTheHeartbeat() {
-        val context = initializedContext()
-        AgentPolicy.setEnabled(context, "orion_core", true)
-        AgentPolicy.setEnabled(context, "proactive", true)
-        OrionProactiveWork.ensureScheduled(context)
-        val manager = WorkManager.getInstance(context)
-        assertEquals(1, manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get().size)
-
         AgentPolicy.setEnabled(context, "orion_core", false)
-        val work = manager.getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
-        assertTrue("Disabling Orion Core must cancel the proactive heartbeat", work.all { it.state == WorkInfo.State.CANCELLED })
+        val work = WorkManager.getInstance(context).getWorkInfosForUniqueWork("orion_stage6_proactive_heartbeat").get()
+        assertTrue(work.none { it.state == WorkInfo.State.CANCELLED })
     }
 }

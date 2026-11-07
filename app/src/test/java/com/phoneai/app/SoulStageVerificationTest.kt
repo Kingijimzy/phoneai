@@ -75,9 +75,9 @@ class SoulStageVerificationTest {
         assertTrue(SoulEngineState.snapshot(context).lessons.none { it.summary == summary })
     }
 
-    @Test fun watcherSubagentsNeverEnableDisabledPacks() {
-        AgentPolicy.setEnabled(context, "gaming_hobby", false)
+    @Test fun watcherSubagentsRunWithEveryPackOn() {
+        // Free mode: packs are always on, so reporting never needs to enable anything.
         SoulSubagentCoordinator.run(context, force = true)
-        assertFalse("Verification and reporting must not enable capabilities", AgentPolicy.enabled(context, "gaming_hobby"))
+        assertTrue(AgentPolicy.enabled(context, "gaming_hobby"))
     }
 }

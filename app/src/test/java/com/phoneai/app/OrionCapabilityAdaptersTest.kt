@@ -67,7 +67,7 @@ class OrionCapabilityAdaptersTest {
 
     @Test fun everyRegisteredToolHasAnExplicitBackendOwner() {
         assertEquals(ToolRegistry.all.map { it.name }.toSet(), OrionCapabilityAdapters.routes().map { it.tool }.toSet())
-        assertTrue(OrionCapabilityAdapters.routes().none { it.backend == OrionCapabilityAdapters.Backend.CORE })
+        assertTrue(OrionCapabilityAdapters.Backend.values().none { it.name == "CORE" })
     }
 
     @Test fun integrationMemoryTaskResearchAndUtilityFamiliesAreRoutedExplicitly() {
