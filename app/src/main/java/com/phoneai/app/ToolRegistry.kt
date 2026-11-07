@@ -199,7 +199,18 @@ internal object ToolRegistry {
         tool("model_decision_log", ToolAccess.WRITE, "model_decision_log {tool, arguments, reason, provider?, model?, taskId?, turnId?}: record an AI model or tool decision before execution; updated with result and verification after completion"),
         tool("model_decision_search", ToolAccess.READ, "model_decision_search {query}: search local model/tool decision records by tool, arguments, reason, or result; shows verification status and provenance"),
         tool("model_status", ToolAccess.READ, "model_status {}: show configured provider readiness, offline mode, selected chat/vision provider, and last successful model"),
-        tool("model_offline_mode", ToolAccess.WRITE, "model_offline_mode {on: boolean}: force cloud-provider skipping and local-only model use when offline; set fail_fast_offline to avoid burning budget on timeouts")
+        tool("model_offline_mode", ToolAccess.WRITE, "model_offline_mode {on: boolean}: force cloud-provider skipping and local-only model use when offline; set fail_fast_offline to avoid burning budget on timeouts"),
+        tool("dev_understand", ToolAccess.READ, "dev_understand {path?}: inspect a workspace directory structure, detect project type and list key source/config files without modifying anything; read-only repository reconnaissance"),
+        tool("dev_read", ToolAccess.READ, "dev_read {path}: read the exact contents of one workspace source or text file; read-only inspection, no modifications"),
+        tool("dev_write", ToolAccess.WRITE, "dev_write {path, content}: create or overwrite one workspace source file; an automatic backup is made before any overwrite; does not compile, test or install anything"),
+        tool("dev_python", ToolAccess.WRITE, "dev_python {code}: run bounded Python code in the restricted sandbox; output is execution evidence, not proof of compilation or test success"),
+        tool("dev_shell", ToolAccess.WRITE, "dev_shell {command}: run a bounded shell command for build/test operations under ShellPolicy hard blocks; output and exit status are evidence only"),
+        tool("dev_plan", ToolAccess.READ, "dev_plan {path, proposed_change}: inspect one file and prepare a change plan without modifying it; read-only planning step"),
+        tool("dev_summary", ToolAccess.READ, "dev_summary {}: report the Dev Agent's current workspace status (files, backups, recycle) without claiming any build/test/install result"),
+        tool("macro_save", ToolAccess.WRITE, "macro_save {name, steps:[{stepIndex, tool, arguments, dependsOn?, requiredVerification?}]}: save a named multi-step routine for later execution; read-only until run"),
+        tool("macro_run", ToolAccess.WRITE, "macro_run {name}: execute a saved macro routine step by step with dependency tracking and bounded retry; each step is verified before the next runs"),
+        tool("macro_list", ToolAccess.READ, "macro_list {}: list all saved macro routine names"),
+        tool("macro_delete", ToolAccess.WRITE, "macro_delete {name}: delete a saved macro routine by name")
     )
 
     private val byName: Map<String, ToolDefinition> = all.associateBy { it.name }
@@ -233,7 +244,9 @@ internal object ToolRegistry {
         "task_list", "task_add", "task_update", "ask_user", "remember", "recall",
         "service_status", "skills_list", "extension_list", "capability_note",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set",
-        "model_decision_log", "model_decision_search", "model_status", "model_offline_mode"
+        "model_decision_log", "model_decision_search", "model_status", "model_offline_mode",
+        "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
+        "macro_save", "macro_run", "macro_list", "macro_delete"
     )
 
     private val requestFamilies: List<Pair<Regex, Set<String>>> = listOf(
@@ -269,10 +282,12 @@ internal object ToolRegistry {
         Regex("(?i)\\b(agent|subagent|sub-agent|delegate|delegat(e|ion)|specialist|team|researcher|coder|writer|planner)\\b") to setOf(
             "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "skills_list"
         ),
-        Regex("(?i)\\b(code|coding|program|python|script|calculator|file|folder|save|download|build|compile|test|apk|linux|termux|shell|extension|skill)\\b") to setOf(
+        Regex("(?i)\\b(code|coding|program|python|script|calculator|file|folder|save|download|build|compile|test|apk|linux|termux|shell|extension|skill|dev\\s|macro\\s|routine)\\b") to setOf(
             "extension_list", "extension_create", "extension_test", "extension_enable", "extension_run",
             "extension_disable", "find_files", "open_file", "save_file", "termux_command", "shell",
-            "python_exec", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "skills_list"
+            "python_exec", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "backup_list", "backup_restore", "trash_list", "trash_restore", "trash_empty", "project_create", "project_list", "project_inspect", "skills_list",
+            "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
+            "macro_save", "macro_run", "macro_list", "macro_delete"
         ),
         Regex("(?i)\\b(message|send|telegram|sms|email|gmail|call|contact|notification|publish|post|social|communication)\\b") to setOf(
             "resolve_contact", "telegram_status", "telegram_inbox", "telegram_send", "dial", "sms",

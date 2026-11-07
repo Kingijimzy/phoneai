@@ -35,7 +35,8 @@ internal object OrionRuntimeCapabilityExecutor {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode")
+        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode"),
+        OrionCapabilityAdapters.Backend.DEV -> OrionDevCapabilityExecutor(service, pythonExecutor).supports(tool)
     }
 
     fun execute(
@@ -73,6 +74,7 @@ internal object OrionRuntimeCapabilityExecutor {
         OrionCapabilityAdapters.Backend.TRADING_READONLY -> OrionTradingReadOnlyCapabilityExecutor.execute(tool, args, service)
         OrionCapabilityAdapters.Backend.TRADING_DESK -> OrionTradingDeskCapabilityExecutor.execute(tool, args, service, stopped)
         OrionCapabilityAdapters.Backend.GAMING -> OrionGamingCapabilityExecutor.execute(tool, args, service)
+        OrionCapabilityAdapters.Backend.DEV -> OrionDevCapabilityExecutor(service, pythonExecutor).execute(tool, args, confirm, stopped)
         OrionCapabilityAdapters.Backend.BROWSER -> executeBrowser(tool, args, service, openBrowser)
         OrionCapabilityAdapters.Backend.SHELL -> when (tool) {
             "shell" -> tools.shell(args.optString("command"), args.optString("where"))
