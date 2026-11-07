@@ -35,8 +35,8 @@ internal object OrionRuntimeCapabilityExecutor {
             "browser_navigate", "browser_back", "browser_handoff", "browser_wait",
             "browser_tabs", "browser_upload", "browser_close"
         )
-        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state"),
-        OrionCapabilityAdapters.Backend.DEV -> OrionDevCapabilityExecutor(service, pythonExecutor).supports(tool)
+        OrionCapabilityAdapters.Backend.CORE -> tool in setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state")
+        OrionCapabilityAdapters.Backend.DEV -> tool in setOf("dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary", "macro_save", "macro_run", "macro_list", "macro_delete")
     }
 
     fun execute(
@@ -187,7 +187,7 @@ internal object OrionRuntimeCapabilityExecutor {
             "model_decision_search" -> {
                 val hits = OrionModelDecisionStore.get(service).search(args.optString("query"))
                 if (hits.isEmpty()) "no model decisions matched that query"
-                else hits.joinToString("\n") { "[$id] ${tool} · ${verification} · ${reason.take(120)}" }
+                else hits.joinToString("\n") { "[${it.id}] ${it.tool} · ${it.verification} · ${it.reason.take(120)}" }
             }
             "model_status" -> {
                 val sb = StringBuilder("Selected provider: ${Prefs.provider(service, false).label}")
