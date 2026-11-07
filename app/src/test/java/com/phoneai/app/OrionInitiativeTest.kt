@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -150,8 +151,9 @@ class OrionInitiativeTest {
         OrionFollowUpStore.add(context, "call the plumber", dueAt = now + 30 * 60_000L)
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        assertEquals("followup", item.kind)
-        assertTrue(item.body.contains("plumber"))
+        val actual = item ?: fail("expected a due follow-up candidate")
+        assertEquals("followup", actual.kind)
+        assertTrue(actual.body.contains("plumber"))
     }
 
     @Test fun autopilotOverdueTaskCreatesHighUrgency() {
@@ -159,8 +161,9 @@ class OrionInitiativeTest {
         TaskStore.add(context, "fix the roof", dueAt = now - 2 * 60 * 60_000L, priority = "urgent")
         val item = OrionProactiveEngine.evaluate(context, now)
         assertNotNull(item)
-        assertEquals("task", item.kind)
-        assertEquals(2, item.urgency)
+        val actual = item ?: fail("expected an overdue task candidate")
+        assertEquals("task", actual.kind)
+        assertEquals(2, actual.urgency)
     }
 
     @Test fun autopilotQuietPeriodSuppressesProactiveItem() {
