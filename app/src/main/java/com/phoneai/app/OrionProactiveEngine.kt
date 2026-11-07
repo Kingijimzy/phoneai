@@ -173,7 +173,7 @@ internal object OrionProactiveEngine {
     private fun inQuietPeriod(context: Context, now: Long): Boolean {
         val start = Prefs.quietPeriodStartHour(context)
         val end = Prefs.quietPeriodEndHour(context)
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val hour = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
         return if (start < end) hour in start until end
         else hour >= start || hour < end // wraps midnight
     }
