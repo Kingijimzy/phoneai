@@ -374,8 +374,7 @@ internal class OrionStage2EvalSuite {
         val command = "stage 2 continuity test command"
         assertTrue("checkpoint begin should succeed", checkpoint.begin(context, command))
 
-        val pending = checkpoint.pending(context)
-        assertNotNull("pending checkpoint should exist", pending)
+        val pending = checkpoint.pending(context) ?: fail("pending checkpoint should exist")
         assertEquals("command should match", command.take(2000), pending.optString("command"))
 
         assertTrue("checkpoint complete should succeed", checkpoint.complete(context))
@@ -390,8 +389,7 @@ internal class OrionStage2EvalSuite {
         assertTrue("begin should succeed", checkpoint.begin(context, "pause resume test"))
 
         assertTrue("pause should succeed", checkpoint.pause(context))
-        val paused = checkpoint.pending(context)
-        assertNotNull("paused checkpoint should exist", paused)
+        val paused = checkpoint.pending(context) ?: fail("paused checkpoint should exist")
         assertEquals("status should be paused", "paused", paused.optString("status"))
 
         assertTrue("resume should succeed", checkpoint.clear(context))
