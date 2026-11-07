@@ -16,8 +16,24 @@ internal object OrionMemoryCapabilityExecutor {
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
-    fun memoryPromptBlock(context: Context, request: String?, maxChars: Int, limit: Int = 6): String =
-        MemoryStore.promptBlock(context, request, limit).take(maxChars)
+    /**
+     * Labelled recall for this message (meaning + keyword + entity links, governed memories only).
+     * Falls back to the per-task memory block when nothing matches or there is no request text.
+     * Past experience is not included here: OrionCentralBrain injects episodic recall once.
+     */
+    fun memoryPromptBlock(context: Context, request: String?, maxChars: Int, limit: Int = 6): String {
+        val q = request?.trim().orEmpty()
+        if (q.length >= 3) {
+            val recalled = runCatching {
+                val usable = MemoryStore.all(context).filter {
+                    MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) && OrionMemoryLifecycle.isActive(context, it.id)
+                }
+                OrionRecall.format(OrionRecall.top(context, usable, q, limit), "")
+            }.getOrDefault("")
+            if (recalled.isNotBlank()) return recalled.take(maxChars)
+        }
+        return MemoryStore.promptBlock(context, request, limit).take(maxChars)
+    }
 
     fun recordFailure(service: PhoneAiService, request: String, tool: String, result: String) =
         ExperienceStore.recordFailure(service, request, tool, result)
