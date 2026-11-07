@@ -104,6 +104,11 @@ internal object OrionProactiveEngine {
         return candidates.maxByOrNull { it.urgency }
     }
 
+    /** Get all pending proactive items (for context integration). */
+    fun getPendingNotifications(context: Context): List<ProactiveItem> {
+        return evaluate(context)?.let { listOf(it) } ?: emptyList()
+    }
+
     private fun parseBatteryPercent(deviceCtx: String): Int {
         val m = Regex("battery=(\\d+)%").find(deviceCtx)
         return m?.groupValues?.get(1)?.toIntOrNull() ?: -1

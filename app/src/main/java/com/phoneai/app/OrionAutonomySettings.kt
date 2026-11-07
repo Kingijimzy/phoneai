@@ -13,7 +13,13 @@ internal data class OrionAutonomyConfig(
     val maxRetries: Int = 2,
     val notifyOnCompletion: Boolean = true,
     val notifyOnFailure: Boolean = true,
-    val notifyOnApproval: Boolean = true
+    val notifyOnApproval: Boolean = true,
+    
+    // Proactive intelligence settings
+    val proactiveEnabled: Boolean = true,
+    val proactiveMaxPerHour: Int = 10,
+    val quietHoursStart: Int = 22,  // 10 PM
+    val quietHoursEnd: Int = 7      // 7 AM
 )
 
 internal object OrionAutonomyRunPolicy {
@@ -74,7 +80,11 @@ internal object OrionAutonomySettings {
             maxRetries = p.getInt("orion_max_retries", 2),
             notifyOnCompletion = p.getBoolean("orion_notify_completion", true),
             notifyOnFailure = p.getBoolean("orion_notify_failure", true),
-            notifyOnApproval = p.getBoolean("orion_notify_approval", true)
+            notifyOnApproval = p.getBoolean("orion_notify_approval", true),
+            proactiveEnabled = p.getBoolean("orion_proactive_enabled", true),
+            proactiveMaxPerHour = p.getInt("orion_proactive_max_per_hour", 10),
+            quietHoursStart = p.getInt("orion_quiet_hours_start", 22),
+            quietHoursEnd = p.getInt("orion_quiet_hours_end", 7)
         ))
     }
     fun write(c: Context, config: OrionAutonomyConfig) {
@@ -87,6 +97,10 @@ internal object OrionAutonomySettings {
             .putBoolean("orion_notify_completion", v.notifyOnCompletion)
             .putBoolean("orion_notify_failure", v.notifyOnFailure)
             .putBoolean("orion_notify_approval", v.notifyOnApproval)
+            .putBoolean("orion_proactive_enabled", v.proactiveEnabled)
+            .putInt("orion_proactive_max_per_hour", v.proactiveMaxPerHour)
+            .putInt("orion_quiet_hours_start", v.quietHoursStart)
+            .putInt("orion_quiet_hours_end", v.quietHoursEnd)
             .apply()
     }
 }

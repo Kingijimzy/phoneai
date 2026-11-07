@@ -143,4 +143,12 @@ internal object OrionChronosAwareness {
         "deriv", "crypto", "exchange", "authenticator", "password", "credential",
         "1password", "bitwarden", "keepass", "paypal", "stripe"
     )
+
+    /** Lightweight device context for decision engines. */
+    data class DeviceContext(
+        val batteryLevel: Int?,
+        val isCharging: Boolean,
+        val networkType: String?,
+        val isPowerSaveMode: Boolean
+    )
 }
