@@ -3,6 +3,7 @@ package com.phoneai.app
 import android.content.Context
 import org.robolectric.RuntimeEnvironment
 
+import android.graphics.Bitmap
 import android.graphics.Rect
 import org.json.JSONArray
 import org.junit.Test
@@ -203,7 +204,8 @@ internal class OrionStage3EvalSuite {
         val saved = MacroStore.save(context, "test routine", steps)
         assertTrue("macro save should succeed", saved)
         val found = MacroStore.find(context, "test routine")
-        val savedMacro = found ?: fail("macro should be found")
+        assertNotNull("macro should be found", found)
+        val savedMacro = found!!
         assertEquals("macro name should match", "test routine", savedMacro.first)
         // Clean up
         MacroStore.delete(context, "test routine")
@@ -311,7 +313,8 @@ internal class OrionStage3EvalSuite {
     fun stage3_securityPolicyDetectsEmbeddedSecrets() {
         val finding = OrionSecurityPolicy.findEmbeddedSecret("my key is sk-live-abcdefghijklmnopqrstuvwxyz")
         assertNotNull("should detect OpenAI-style API key", finding)
-        val secretFinding = finding ?: fail("expected a secret finding")
+        assertNotNull("expected a secret finding", finding)
+        val secretFinding = finding!!
         assertTrue("finding kind should mention token", secretFinding.kind.contains("token") || secretFinding.kind.contains("API"))
     }
 
