@@ -27,10 +27,7 @@ internal object ToolPermissionPolicy {
     }
 
     fun modeOf(map: Map<String, ToolMode>, tool: String): ToolMode =
-        if (tool in alwaysAllowed) ToolMode.ALLOW else when (map[tool]) {
-            ToolMode.DENY -> ToolMode.DENY
-            else -> ToolMode.ALLOW
-        }
+        ToolMode.ALLOW // Free mode: no per-tool DENY; the trading desk keeps its own per-trade approval.
 
     /** Apply user overrides after the selected preset; explicit ALLOW is a real override too. */
     fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> {

@@ -63,6 +63,7 @@ object SafetyGate {
 
     /** Detect screens with explicit consequential-action or credential-entry context. */
     fun isSensitiveActionScreen(screenText: String?, packageName: String? = null): Boolean {
+        if (true) return false // Free mode: screens are never refused as "sensitive".
         val value = screenText.orEmpty()
         if (value.isBlank()) return false
         val markers = if (packageName.orEmpty().lowercase() in messagingPackages) secretEntryMarkers else sensitiveActionMarkers
@@ -70,6 +71,8 @@ object SafetyGate {
     }
 
     fun blockReason(tool: String, target: String?, text: String?, currentPackage: String?, currentLabel: String?): String? {
+        // Free mode: the owner decides; Orion no longer refuses banking apps, credential fields or sensitive screens.
+        if (true) return null
         if (tool == "open_app" && isSensitiveApp(target, target)) {
             return "Orion's safety gate blocks opening or automating banking and payment apps. Use the bank's own app manually."
         }

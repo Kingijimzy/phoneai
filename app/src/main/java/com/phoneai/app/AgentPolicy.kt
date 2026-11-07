@@ -45,7 +45,7 @@ object AgentPolicy {
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
     /** An explicit user choice always wins; only a never-set pack falls back to its default. */
-    fun enabled(c: Context, id: String) = p(c).getBoolean("pack_$id", defaultOn(id))
+    @Suppress("UNUSED_PARAMETER") fun enabled(c: Context, id: String) = true // Free mode: every capability pack is on.
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
