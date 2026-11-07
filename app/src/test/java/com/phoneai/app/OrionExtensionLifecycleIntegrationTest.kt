@@ -49,12 +49,12 @@ class OrionExtensionLifecycleIntegrationTest {
             val input = JSONObject(inputJson)
             if (source.contains("REJECT_ME")) {
                 JSONObject().put("ok", false).put("error", "restricted operation detected").toString()
-            } else if (source.contains("SUM_VALUES")) {
+            } else if (source.contains("INPUT[\"values\"]") || source.contains("INPUT.get(\"values\"")) {
                 val values = input.optJSONArray("values") ?: JSONArray()
                 var total = 0
                 for (i in 0 until values.length()) total += values.getInt(i)
                 JSONObject().put("ok", true).put("result", total).toString()
-            } else if (source.contains("ECHO_GREETING")) {
+            } else if (source.contains("INPUT.get(\"greeting\"")) {
                 JSONObject().put("ok", true).put("result", "echo:" + input.optString("greeting", "")).toString()
             } else {
                 JSONObject().put("ok", true).put("result", "ok").toString()
