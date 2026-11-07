@@ -15,6 +15,7 @@ internal object ShellPolicy {
     )
     private val factoryResetProtection = listOf(
         Regex("""(?is)\b(?:factory.reset|wipe.data|wipe.cache|format.userdata|erase.all|factory_reset|--wipe\s+(?:all|data))"""),
+        Regex("""(?is)\bformat\s+/(?:data|system|vendor|product|odm|boot|cache|sdcard|storage)(?:/|\s|$)"""),
         Regex("""(?is)\brecovery\s+--wipe\s+(?:data|cache|all)\b"""),
         Regex("""(?is)\b(?:fastboot)\s+(?:erase|format|wipe)\b"""),
         Regex("""(?is)\bsettings\s+put\s+(?:global|secure|system)\s+(?:device_provisioned|setup_wizard).*0\b""")

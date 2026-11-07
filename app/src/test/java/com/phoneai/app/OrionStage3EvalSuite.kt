@@ -416,7 +416,9 @@ internal class OrionStage3EvalSuite {
         // pwd is allowed as read-only
         val result = api.shell("""["pwd"]""")
         // May succeed or fail depending on workspace initialization; either way it should return JSON
-        assertTrue("shell should return JSON", result.startsWith("{") || result.startsWith("error"))
+        // pwd returns the workspace root path itself; other commands return JSON or an error string.
+        assertTrue("shell should return the workspace root, JSON or an error, got: $result",
+            result.endsWith("orion-python/workspace") || result.startsWith("{") || result.startsWith("error"))
     }
 
     /* ========================================================================

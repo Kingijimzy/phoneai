@@ -62,6 +62,8 @@ internal class OrionStage2EvalSuite {
         assertTrue("file should contain overwritten content", ws.read("config.txt").contains("overwritten content"))
 
         // Restore from backup should bring back the original
+        // Restore refuses to overwrite a live file; remove it first (it goes to the recycle area), then restore.
+        assertTrue("remove before restore", ws.delete("config.txt"))
         val restoreResult = ws.restoreFromBackup("config.txt")
         assertTrue("restore should succeed, got: $restoreResult", restoreResult.startsWith("restored "))
         assertTrue("restored file should contain original content", ws.read("config.txt").contains("original content"))
@@ -90,6 +92,7 @@ internal class OrionStage2EvalSuite {
         val ws = OrionPythonWorkspace(context)
         // Create an orphaned .part file
         val partFile = java.io.File(context.filesDir, "orion-python/workspace/.orion-orphaned.part")
+        partFile.parentFile!!.mkdirs()
         partFile.writeText("orphan")
 
         val cleaned = ws.cleanupInterruptedWrites()
@@ -228,7 +231,13 @@ internal class OrionStage2EvalSuite {
 
     @Test
     fun stage2_extensionGenerateTestEnableRollback() {
-        val executor = OrionPythonCapabilityExecutor(context, null)
+        // The real CPython runtime (Chaquopy) is not available in JVM unit tests; this stand-in adds a + b
+        // so the lifecycle (create → test → enable → run → rollback) is exercised without it.
+        val fakeSandbox: (String, String) -> String = { _, inputJson ->
+            val i = JSONObject(inputJson)
+            JSONObject().put("ok", true).put("result", i.optInt("a", 0) + i.optInt("b", 0)).toString()
+        }
+        val executor = OrionPythonCapabilityExecutor(context, null, extensionSandbox = RestrictedPythonSandbox(fakeSandbox))
 
         // Create a disabled draft
         val createResult = executor.execute("extension_create", JSONObject()

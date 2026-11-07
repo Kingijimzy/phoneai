@@ -33,7 +33,7 @@ class ActionLogStoreTest {
         )
         val event = ActionLogStore.all(context).first()
         assertEquals("workspace_write", event.tool)
-        assertTrue("Unexpected sanitized arguments: ${event.arguments}", event.arguments.contains("workspace/report.txt"))
+        assertTrue("Unexpected sanitized arguments: ${event.arguments}", event.arguments.contains("report.txt"))
         assertTrue(event.arguments.contains("[redacted]"))
         assertFalse(event.arguments.contains("sk-live-secret"))
         assertFalse(event.arguments.contains("never-log-this"))
