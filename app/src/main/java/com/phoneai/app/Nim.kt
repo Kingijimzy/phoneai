@@ -1025,6 +1025,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             // Activity timeline integration: surface the model decision in the activity timeline
             try {
                 OrionConversationRepository.get(ctx).recordEvent(
+                    context = ctx,
                     messageId = null,
                     type = "model_decision",
                     status = if (content.isNotBlank()) "completed" else "failed",
