@@ -4,43 +4,32 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Central agent permission policy. Execution adapters must call evaluate() before dispatch. */
+/** Central agent permission policy. All tools default to ALLOW; execution adapters call evaluate() before dispatch. */
 object AgentPolicy {
-    enum class Mode(val label: String) { PLAN("Plan"), ALLOW("Allow") }
-    enum class Decision { ALLOW, PLAN_ONLY, DENY }
+    enum class Decision { ALLOW, DENY }
     data class Pack(val id: String, val title: String, val description: String, val implemented: Boolean = false)
     data class RuleResult(val decision: Decision, val reason: String)
     val packs = listOf(
-        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations; only catastrophic device-destruction commands are hard-blocked", true),
+        Pack("workspace_shell", "Workspace shell", "Owner-authorized shell commands and SAF workspace read/write/patch operations", true),
         Pack("phone_control", "Phone control", "Accessibility actions with act → verify → report", true),
-        Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service; requires install, user permission and external-app setting", true),
-        Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API; generic sandbox/VPS remains separate", true),
-        Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in Orion's encrypted vault; set up on the Capability board", true),
+        Pack("termux_bridge", "Termux bridge", "Optional Termux RUN_COMMAND service", true),
+        Pack("remote_computer", "Remote computer", "Cursor Cloud Agent API", true),
+        Pack("connected_services", "Connected services", "GitHub and Gmail read-only access with tokens kept in NEXUS's encrypted vault", true),
         Pack("messaging", "Messaging", "Telegram, SMS and email; authorized sends execute without duplicate approval", true),
-        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real order execution remains disabled", true),
+        Pack("trading_research", "Trading research", "Public market data, coaching, risk checks, strategy research and paper trading; real order execution remains blocked until Boss approval", true),
         Pack("gaming_hobby", "Gaming & hobbies", "Session notes and light focus presets", true),
-        Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps; requires Orion Core and Accessibility Service", true),
+        Pack("proactive", "Proactive", "Opt-in live event-driven Soul watcher and local scheduled task recaps", true),
         Pack("self_test", "Self-test", "Provider, permission, connectivity and capability checks", true),
-        Pack("orion_core", "Orion core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
-        Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required, then owner auto-activation setting or explicit extension_enable request", true)
+        Pack("nexus_core", "NEXUS core", "Local memory, knowledge, tasks, skill discovery and task coordination", true),
+        Pack("self_evolution", "Self-evolution", "Proposed skill manifests and diffs; exact-source sandbox test required", true)
     )
     private fun p(c: Context) = c.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE)
-    /** PLAN is the only global execution stop; legacy saved modes resolve to ALLOW. */
-    fun mode(c: Context): Mode {
-        val saved = p(c).getString("mode", null)
-        return if (saved.equals("PLAN", ignoreCase = true)) Mode.PLAN else Mode.ALLOW
-    }
-    fun setMode(c: Context, v: Mode) {
-        p(c).edit().putString("mode", if (v == Mode.PLAN) Mode.PLAN.name else Mode.ALLOW.name).apply()
-    }
-    /**
-     * Core companion packs are enabled on first launch so phone and messaging features are discoverable.
-     * This only makes their tools available: Android OS permissions, explicit capability scope and validation
-     * still apply. Only restart, shutdown and Wi-Fi toggles require an action confirmation. Optional bridges remain opt-in.
-     */
+
+    /** All packs are enabled by default; only Trading Desk write orders require explicit Boss approval. */
     internal val defaultOnPacks = setOf(
-        "orion_core", "connected_services", "workspace_shell", "self_test",
-        "gaming_hobby", "trading_research", "phone_control", "messaging"
+        "workspace_shell", "phone_control", "termux_bridge", "remote_computer",
+        "connected_services", "messaging", "trading_research", "gaming_hobby",
+        "proactive", "self_test", "nexus_core", "self_evolution"
     )
     internal fun defaultOn(id: String) = id in defaultOnPacks
 
@@ -49,76 +38,54 @@ object AgentPolicy {
     fun setEnabled(c: Context, id: String, on: Boolean) {
         val pack = packs.firstOrNull { it.id == id }
         p(c).edit().putBoolean("pack_$id", on && pack?.implemented == true).apply()
-        log(c, "pack:$id", "settings", true, if (on && pack?.implemented == true) "enabled" else if (on) "not implemented; remains off" else "disabled")
-        if (id == "orion_core" || id == "proactive") OrionProactiveWork.refresh(c)
     }
-    fun trustedUntil(c: Context) = p(c).getLong("trusted_until", 0L)
-    fun startTrustedSession(c: Context, minutes: Int, ids: Set<String>) {
-        val until = System.currentTimeMillis() + minutes.coerceIn(1, 120) * 60_000L
-        val e = p(c).edit().putLong("trusted_until", until)
-        packs.forEach { e.putBoolean("trusted_${it.id}", it.id in ids && enabled(c, it.id)) }
-        e.apply(); log(c, "trusted-session", "start", true, "timed session started; expiry=$until")
-    }
-    fun stopTrustedSession(c: Context) { p(c).edit().putLong("trusted_until", 0L).apply(); log(c, "trusted-session", "stop", true, "stopped by user") }
-    fun isTrustedFor(c: Context, id: String) = System.currentTimeMillis() < trustedUntil(c) && p(c).getBoolean("trusted_$id", false)
+
     fun maxSteps(c: Context) = p(c).getInt("budget_steps_v2", 30).coerceIn(1, 100)
     fun maxCalls(c: Context) = p(c).getInt("budget_calls_v2", 45).coerceIn(1, 100)
     fun maxMinutes(c: Context) = p(c).getInt("budget_minutes_v2", 10).coerceIn(1, 30)
     fun setBudgets(c: Context, steps: Int, calls: Int, minutes: Int) {
         p(c).edit().putInt("budget_steps_v2", steps.coerceIn(1, 100)).putInt("budget_calls_v2", calls.coerceIn(1, 100)).putInt("budget_minutes_v2", minutes.coerceIn(1, 30)).apply()
     }
-    /** The one wording for "this pack is off", shared by the pre-flight check, the pack gate and the prompt status. */
-    fun packOffMessage(pack: String): String =
-        "The '$pack' capability pack is switched off, so this tool is unavailable right now. The feature exists: tell the user which pack to switch on (${ToolGate.howToEnable(pack)}) instead of saying Orion lacks it."
 
-    /** Gate for the agent's dispatch: the same table as every other caller, with the per-tool mode and task memory. */
+    /** The one wording for "this pack is off", shared by the pre-flight gate and the prompt status. */
+    fun packOffMessage(pack: String): String =
+        "The '$pack' capability pack is switched off, so this tool is unavailable right now. Tell the Boss which pack to switch on."
+
+    /** Gate for the agent's dispatch: all tools default to ALLOW unless explicitly DENY or pack is off. */
     internal fun gate(
         c: Context, pack: String, toolId: String, dangerous: Boolean,
-        toolMode: ToolMode = ToolMode.ALLOW, askedThisTask: Boolean = true, approvedThisAction: Boolean = false,
-        hardBlockReason: String? = null
+        toolMode: ToolMode = ToolMode.ALLOW, hardBlockReason: String? = null
     ): GatePolicy.Result {
-        val talkReadOnly = OrionAutonomyPolicy.blocksWrite(
-            OrionAutonomySettings.read(c).mode,
-            ToolRegistry.all.firstOrNull { it.name == toolId }?.access
-        )
-        val effectiveToolMode = if (talkReadOnly) ToolMode.DENY else toolMode
         return GatePolicy.decide(GatePolicy.Input(
-        pack = pack,
-        packOn = packs.any { it.id == pack } && enabled(c, pack),
-        tool = toolId,
-        mode = mode(c),
-        toolMode = effectiveToolMode,
-        // Legacy per-tool ASK values are normalized to ALLOW by ToolPermissionPolicy.modeOf.
-        // Only an explicit DENY, PLAN mode or disabled capability pack blocks dispatch.
-        autonomous = ToolPermissions.level(c) == "autonomous",
-        dangerous = dangerous,
-        approvedThisAction = approvedThisAction,
-        trustedForPack = isTrustedFor(c, pack),
-        allowlisted = allowed(c, pack, toolId),
-        askedThisTask = askedThisTask,
-        hardBlockReason = hardBlockReason
+            pack = pack,
+            packOn = packs.any { it.id == pack } && enabled(c, pack),
+            tool = toolId,
+            toolMode = toolMode,
+            autonomous = true,
+            dangerous = dangerous,
+            approvedThisAction = false,
+            hardBlockReason = hardBlockReason
         ))
     }
 
     /** Existing callers keep their RuleResult shape; the decision itself comes from GatePolicy. */
     fun evaluate(c: Context, pack: String, toolId: String, dangerous: Boolean, approvedThisAction: Boolean = false): RuleResult {
-        val r = gate(c, pack, toolId, dangerous, toolMode = ToolPermissions.mode(c, toolId), askedThisTask = true, approvedThisAction = approvedThisAction)
+        val r = gate(c, pack, toolId, dangerous)
         val decision = when (r.verdict) {
             GatePolicy.Verdict.ALLOW -> Decision.ALLOW
             GatePolicy.Verdict.DENY -> Decision.DENY
-            GatePolicy.Verdict.PLAN_ONLY -> Decision.PLAN_ONLY
         }
         return RuleResult(decision, r.reason)
     }
 
-    /** Maps every built-in tool to exactly one enabled capability pack. Unknown tools fail closed. */
+    /** Maps every built-in tool to exactly one capability pack. Unknown tools fail closed. */
     fun packForTool(tool: String): String? = when (tool) {
-        "extension_list", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback" -> "orion_core"
+        "extension_list", "extension_create", "extension_update", "extension_test", "extension_enable", "extension_run", "extension_disable", "extension_history", "extension_rollback" -> "nexus_core"
         "play" -> "gaming_hobby"
         "termux_command" -> "termux_bridge"
         "shell", "workspace_list", "workspace_write", "workspace_read", "workspace_delete", "workspace_move", "python_exec", "project_create", "project_list", "project_inspect", "project_plan", "project_verify" -> "workspace_shell"
         "self_diagnose", "repair_apply", "graph_link", "graph_query", "create_agent", "self_review", "morning_brief", "connect_service", "service_status", "capability_note", "standing_order", "vault_list", "vault_request", "vault_get",
-        "goal_add", "goal_list", "goal_remove", "goal_toggle" -> "orion_core"
+        "goal_add", "goal_list", "goal_remove", "goal_toggle" -> "nexus_core"
         "github_account_read", "gmail_list_messages" -> "connected_services"
         "trade_history_summary", "trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan",
         "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives",
@@ -137,7 +104,7 @@ object AgentPolicy {
         "volume", "flashlight", "copy", "battery", "time", "device_info", "integration_status", "mcp_status",
         "mcp_list_tools", "mcp_call", "mcp_list_resources", "mcp_read_resource", "mcp_list_prompts", "mcp_get_prompt", "record_screen" -> "phone_control"
         "remember", "update_memory", "forget", "recall", "discussion_search", "decision_history", "knowledge_search", "ask_agent", "queue_agent", "specialist_job_status", "undo_last", "undo_status",
-        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "orion_core"
+        "wait", "task_list", "task_add", "task_update", "task_delete", "skills_list", "ask_user" -> "nexus_core"
         else -> null
     }
 
@@ -181,5 +148,4 @@ object AgentPolicy {
             }.getOrNull()
         }
     }
-
 }

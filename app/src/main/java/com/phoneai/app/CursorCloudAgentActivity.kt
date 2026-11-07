@@ -219,7 +219,7 @@ class CursorCloudAgentActivity : Activity() {
             return
         }
         val decision = AgentPolicy.evaluate(this, "remote_computer", "cursor_cloud_agents", dangerous = true)
-        if (decision.decision == AgentPolicy.Decision.DENY || decision.decision == AgentPolicy.Decision.PLAN_ONLY) {
+        if (decision.decision == AgentPolicy.Decision.DENY) {
             Toast.makeText(this, "Cursor task not started: ${decision.reason}", Toast.LENGTH_LONG).show()
             AgentPolicy.log(this, "cursor_cloud_agents", "start-task", false, decision.reason)
             return

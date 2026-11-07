@@ -3,25 +3,20 @@ package com.phoneai.app
 import android.content.Context
 import org.json.JSONObject
 
-internal enum class ToolMode { ALLOW, ASK, DENY }
+internal enum class ToolMode { ALLOW, DENY }
 
-/** Default-ALLOW tool permissions with optional explicit DENY; legacy ASK values resolve to ALLOW. */
+/** Default-ALLOW tool permissions. Tools can be explicitly DENY but default to ALLOW. */
 internal object ToolPermissionPolicy {
-    /** Tools Orion always needs to talk to the user; they can never be denied. */
+    /** Tools NEXUS always needs; they can never be denied. */
     val alwaysAllowed = setOf("ask_user", "wait", "time")
 
-    val levels = listOf("careful", "balanced", "autonomous", "read_only")
-
     fun levelLabel(level: String) = when (level) {
-        "careful" -> "Careful: default ALLOW; use explicit DENY for tools you want disabled"
-        "autonomous" -> "Autonomous: act without asking; only restart, shutdown and Wi-Fi toggles require confirmation"
+        "autonomous" -> "Autonomous: act without asking; only Trading Desk orders and restart/shutdown/Wi-Fi toggles require Boss confirmation"
         "read_only" -> "Read-only: look and answer, never change anything"
         else -> "Balanced: default behaviour"
     }
 
-    /** Builds the per-tool map for a preset level from the real registry access classes. */
     fun preset(level: String, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> = when (level) {
-        "careful" -> emptyMap()
         "read_only" -> tools.filter { it.access == ToolAccess.WRITE && it.name !in alwaysAllowed }.associate { it.name to ToolMode.DENY }
         else -> emptyMap()
     }
@@ -32,7 +27,6 @@ internal object ToolPermissionPolicy {
             else -> ToolMode.ALLOW
         }
 
-    /** Apply user overrides after the selected preset; explicit ALLOW is a real override too. */
     fun applyPreset(level: String, overrides: Map<String, ToolMode>, tools: List<ToolDefinition> = ToolRegistry.all): Map<String, ToolMode> {
         val registered = tools.map { it.name }.toSet() - alwaysAllowed
         return preset(level, tools) + overrides.filterKeys { it in registered }
@@ -52,19 +46,16 @@ internal object ToolPermissionPolicy {
     } catch (_: Exception) { emptyMap() }
 
     fun denyMessage(tool: String) =
-        "error: the user has denied the tool '$tool' in Orion's Tool permissions. Do not try to work around it with another tool; tell the user it is blocked and how to allow it (Settings > Tool permissions)."
+        "error: the Boss has denied the tool '$tool' in NEXUS's Tool permissions. Do not try to work around it with another tool; tell the Boss it is blocked and how to allow it (Settings > Tool permissions)."
 }
 
 object ToolPermissions {
     private fun sp(c: Context) = c.getSharedPreferences("phoneai", Context.MODE_PRIVATE)
     internal fun map(c: Context): Map<String, ToolMode> = ToolPermissionPolicy.parse(sp(c).getString("tool_modes", "{}"))
     internal fun mode(c: Context, tool: String): ToolMode = ToolPermissionPolicy.modeOf(map(c), tool)
-    /** True when the owner explicitly cycled this tool, rather than inheriting the global preset. */
     internal fun hasOverride(c: Context, tool: String): Boolean = tool in overrides(c)
     internal fun set(c: Context, m: Map<String, ToolMode>) { sp(c).edit().putString("tool_modes", ToolPermissionPolicy.serialize(m)).apply() }
-
-    /** Return the selected preset even when the UI labels the effective per-tool map as custom. */
-    fun level(c: Context): String = baseLevel(c)
+    internal fun level(c: Context): String = baseLevel(c)
 
     private fun baseLevel(c: Context): String {
         val p = sp(c)
@@ -77,8 +68,6 @@ object ToolPermissions {
     private fun overrides(c: Context): Map<String, ToolMode> {
         val p = sp(c)
         if (p.contains("tool_overrides")) return ToolPermissionPolicy.parse(p.getString("tool_overrides", "{}"))
-        // One-time migration: older builds stored a flattened effective map after the user
-        // edited a single tool. Preserve those choices rather than silently discarding them.
         return if (p.getString("tool_level", "balanced") == "custom") {
             ToolPermissionPolicy.parse(p.getString("tool_modes", "{}"))
         } else emptyMap()
@@ -111,4 +100,6 @@ object ToolPermissions {
             .putString("tool_modes", ToolPermissionPolicy.serialize(updated))
             .apply()
     }
+
+    internal val levels = listOf("careful", "balanced", "autonomous", "read_only")
 }

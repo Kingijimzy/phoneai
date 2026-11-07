@@ -113,8 +113,7 @@ class OrionCapabilityReportActivity : Activity() {
         contextCard.addView(label("CONVERSATION & ROUTING", 10f, 0xFFAAAAAA.toInt(), true))
         val executionMode = runCatching { Prefs.executionMode(this) }.getOrDefault("UNKNOWN")
         val modeDescription = when (executionMode) {
-            "PLAN" -> "Plan mode: prepare and reason about actions; execution is restricted by mode policy."
-            "ACT" -> "Act mode: execute supported actions through Orion's normal permission and safety gates."
+            "ACT" -> "Act mode: execute supported actions through NEXUS's normal permission and safety gates."
             "FULL" -> "Full mode: broader action policy may apply, but approvals and safety gates still apply."
             else -> "Mode could not be read."
         }

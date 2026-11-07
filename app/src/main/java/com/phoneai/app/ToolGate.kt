@@ -3,13 +3,13 @@ package com.phoneai.app
 import android.content.Context
 
 /**
- * Stage 2: one place that says which tools are usable right now and why not.
- * The model is told this in its prompt, so it reports the real cause ("the shell pack is off, switch it on")
- * instead of concluding that Orion lacks the capability. Pure logic, unit tested.
+ * Tool status reporting. No preflight denials — all tools default to ALLOW.
+ * Trading Desk orders and restart/shutdown/Wi-Fi toggles require explicit Boss confirmation
+ * (handled in Agent.kt dispatch).
  */
 internal object ToolGate {
 
-    /** Groups unavailable tools by cause. Returns "" when everything is ready, so the prompt stays short. */
+    /** Returns empty string when everything is ready; otherwise lists what's off. */
     fun summarize(
         tools: List<String>,
         modeOf: (String) -> ToolMode,
@@ -26,42 +26,27 @@ internal object ToolGate {
             if (!packOn(pack)) offByPack.getOrPut(pack) { ArrayList() } += tool
         }
         if (offByPack.isEmpty() && denied.isEmpty()) return ""
-        val sb = StringBuilder("TOOL STATUS RIGHT NOW (true for this moment; use it, do not guess):\n")
+        val sb = StringBuilder("TOOL STATUS RIGHT NOW:\n")
         offByPack.forEach { (pack, list) ->
             sb.append("- ").append(titleOf(pack)).append(" is OFF, so these are unavailable: ")
                 .append(list.take(6).joinToString(", ")).append(if (list.size > 6) " and ${list.size - 6} more" else "")
-                .append(". Tell the user to switch it on in ").append(howToEnable(pack)).append(". The feature exists; it is not missing.\n")
+                .append(". Switch it on in ").append(howToEnable(pack)).append(".\n")
         }
         if (denied.isNotEmpty()) {
-            sb.append("- The user has set these to DENY: ").append(denied.take(8).joinToString(", "))
-                .append(". Do not use them; say the user can change this in Tool permissions.\n")
+            sb.append("- The Boss has set these to DENY: ").append(denied.take(8).joinToString(", "))
+                .append(". Change this in Tool permissions.\n")
         }
-        sb.append("- Everything else is ready. Tools marked ASK ask the user once per task.")
+        sb.append("- Everything else is ready.\n")
         return sb.toString()
     }
 
-    /**
-     * The first gate, run before any user prompt: a tool the user set to DENY, or a tool whose pack is switched off,
-     * is refused immediately. Previously Orion could ask "allow this tool?" and then refuse it anyway.
-     */
-    fun preflightDenial(c: Context, tool: String): String? {
-        val denied = ToolPermissions.mode(c, tool) == ToolMode.DENY
-        val pack = AgentPolicy.packForTool(tool)
-        val packOn = pack == null || AgentPolicy.enabled(c, pack)
-        if (CapabilityRegistry.forBuiltInTool(tool, denied, packOn).usable) return null
-        return if (denied) ToolPermissionPolicy.denyMessage(tool)
-        else pack?.let { "error: " + AgentPolicy.packOffMessage(it) }
-    }
+    /** No preflight denial — tools default to ALLOW. Returns null always. */
+    fun preflightDenial(c: Context, tool: String): String? = null
 
-    /** Where the user switches a pack on. Kept in one place so the model and the screens agree. */
-    fun howToEnable(pack: String): String = when (pack) {
-        "connected_services" -> "the Capability board (Connected services)"
-        "workspace_shell" -> "Agent control > Packs > Workspace shell"
-        "orion_core" -> "Agent control > Packs > Orion core"
-        else -> "Agent control > Packs"
-    }
+    /** Where the user switches a pack on. */
+    fun howToEnable(pack: String): String = "Agent control > Packs"
 
-    /** The live status for the system prompt, built from the same registry rule the pre-flight gate uses. */
+    /** The live status for the system prompt. */
     fun statusFor(c: Context): String {
         val rows = ToolRegistry.all.map { it.name }
             .filterNot { it in ToolPermissionPolicy.alwaysAllowed }

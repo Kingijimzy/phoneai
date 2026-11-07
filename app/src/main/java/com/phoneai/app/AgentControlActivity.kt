@@ -216,11 +216,12 @@ class AgentControlActivity : Activity() {
     }
 
     private fun chooseMode() {
-        val modes = AgentPolicy.Mode.values()
-        AlertDialog.Builder(this).setTitle("Approval mode")
-            .setItems(modes.map { it.label }.toTypedArray()) { _, which ->
-                AgentPolicy.setMode(this, modes[which])
-                AgentPolicy.log(this, "policy", "mode-change", true, "mode set to ${modes[which].name}")
+        val modes = listOf("Autonomous", "Read-only")
+        AlertDialog.Builder(this).setTitle("Execution mode")
+            .setItems(modes.toTypedArray()) { _, which ->
+                val level = if (which == 0) "autonomous" else "read_only"
+                ToolPermissions.applyLevel(this, level)
+                AgentPolicy.log(this, "policy", "mode-change", true, "mode set to $level")
                 refresh()
             }.show()
     }
@@ -361,7 +362,7 @@ class AgentControlActivity : Activity() {
         }
         val policy = AgentPolicy.evaluate(this, "self_test", "self_test", dangerous = false)
         when (policy.decision) {
-            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
+            AgentPolicy.Decision.DENY -> {
                 testReport.text = "BLOCKED · ${policy.reason}"
                 AgentPolicy.log(this, "self_test", "run", false, policy.reason)
                 return

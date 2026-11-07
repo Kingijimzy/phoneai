@@ -200,7 +200,7 @@ class TermuxBridgeActivity : Activity() {
             dangerous = !TermuxCommandPolicy.isReadOnly(text)
         )
         when (decision.decision) {
-            AgentPolicy.Decision.DENY, AgentPolicy.Decision.PLAN_ONLY -> {
+            AgentPolicy.Decision.DENY -> {
                 AgentPolicy.log(this, "termux_command", "dispatch", false, decision.reason)
                 toast("BLOCKED: ${decision.reason}")
             }

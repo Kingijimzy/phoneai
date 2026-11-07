@@ -18,14 +18,9 @@ internal object AgentDispatchPolicy {
         targetLabel: String = "",
         currentPackage: String? = null,
         currentLabel: String? = null,
-        stopped: Boolean = false,
-        executionMode: String = "ACT"
+        stopped: Boolean = false
     ): String? {
         cancellationBlockReason(tool, stopped)?.let { return it }
-
-        if (executionMode.equals("PLAN", ignoreCase = true) && ToolRegistry.find(tool)?.access == ToolAccess.WRITE) {
-            return "Plan mode is active; write actions are blocked. Switch to Act mode only when you are ready to execute."
-        }
 
         TaskScopePolicy.blockReason(request, tool)?.let {
             return "task scope guard blocked tool. $it"

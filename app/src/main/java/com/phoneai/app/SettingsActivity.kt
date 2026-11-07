@@ -641,10 +641,10 @@ class SettingsActivity : Activity() {
         add(s2, button("Execution mode · " + Prefs.executionMode(this), false) {
             showChoiceDialog(
                 "Execution mode",
-                "PLAN blocks write actions. ACT follows your task scope and existing approvals. FULL permits broader tool use but never bypasses safety checks, task scope, or confirmations.",
-                listOf("PLAN · plan and inspect, no write actions", "ACT · execute within the request scope", "FULL · broader tools, safety gates remain"),
+                "ACT executes within the request scope. FULL permits broader tool use but never bypasses safety checks, task scope, or confirmations.",
+                listOf("ACT · execute within the request scope", "FULL · broader tools, safety gates remain"),
                 { index ->
-                    Prefs.setExecutionMode(this, listOf("PLAN", "ACT", "FULL")[index])
+                    Prefs.setExecutionMode(this, listOf("ACT", "FULL")[index])
                     recreate()
                 }
             )
