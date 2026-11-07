@@ -364,7 +364,7 @@ internal class OrionStage2EvalSuite {
             capabilities = listOf("diagnostics")
         )
         assertNotNull("child task should be created", child)
-        val childTask = child!!.envelope
+        val childTask = child!!
         assertEquals("child should reference parent", parent.taskId, childTask.parentTaskId)
         assertEquals("child should inherit rootTaskId", parent.rootTaskId, childTask.rootTaskId)
         assertEquals("child should inherit rootObjective", parent.rootObjective, childTask.rootObjective)
