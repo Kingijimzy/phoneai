@@ -13,6 +13,9 @@ import androidx.core.content.ContextCompat
  */
 internal object OrionSoulEngine {
     fun contextFor(context: Context, request: String): String {
+        val app = context.applicationContext
+        // Record genuine lifecycle state: Central Brain is thinking about this request.
+        OrionSoulLifecycle.thinking(app, request.take(120))
         val registeredTools = try { ToolRegistry.names().toSet() } catch (_: Exception) { emptySet() }
         val enabledPacks = AgentPolicy.packs.filter { AgentPolicy.enabled(context, it.id) }.map { it.id }.toSet()
         val enabledTools = registeredTools.filter { name ->
@@ -30,6 +33,11 @@ internal object OrionSoulEngine {
             )
         } catch (_: Exception) { null }
 
+        val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
+        val deniedTools = runCatching {
+            ToolPermissions.map(context).filterValues { it == ToolMode.DENY }.keys
+        }.getOrDefault(emptySet())
+
         // One deterministic request-time coordinator owns goal classification, live
         // capability discovery, integration state and readiness. Agent still owns dispatch,
         // approval, cancellation and verification; this layer never grants permission.
@@ -39,13 +47,17 @@ internal object OrionSoulEngine {
             enabledPacks = enabledPacks,
             termuxReady = termuxReady,
             permissionStates = platformInventory.permissionStates,
-            integration = planner
+            integration = planner,
+            deniedTools = deniedTools,
+            generatedExtensions = generatedExtensions
         )
         val capabilitySnapshot = taskContext.capabilities
         val session = runCatching { SoulEngineState.snapshot(context) }.getOrNull()
         val relatedMemory = runCatching { SoulEngineState.relatedContext(context, request, 3) }.getOrDefault(emptyList())
         val lines = mutableListOf<String>()
         lines += "ORION SOUL ENGINE — LIVE LOCAL CONTEXT"
+        // Placed first so the 5000-character cap can never cut the live state.
+        lines += "SOUL ENGINE LIFECYCLE: " + OrionSoulLifecycle.label(app) + " (" + OrionSoulLifecycle.millisInState(app) + " ms in state; last: " + OrionSoulLifecycle.lastAction(app) + ")."
         lines += OrionGoalUnderstanding.promptLine(request)
         lines += "GOAL UNDERSTANDING RULES: treat short follow-ups such as continue, go ahead, do it, and try again as referring to the active conversation task when context exists. Keep greetings and small talk conversational without tool calls. For real tasks, identify the outcome and target, inspect available capabilities, execute only through registered tools, then verify observable results. Ask one focused question only when a necessary target is genuinely ambiguous. A recognized goal never grants account access or approval."
         lines += "This is a capability-aware executive layer connected to the same AI chat and tool agent, not a separate chatbot."
@@ -54,7 +66,6 @@ internal object OrionSoulEngine {
         lines += platformInventory.lines
         lines += "LIVE INVENTORY CONTRACT: refreshed for every user message before planning. For each requested action inspect the relevant tool, pack, skill, provider, Android permission and worker state. If a required item is OFF, explain exactly what is off and why it is needed, then ask the owner to enable or grant it and wait. If UNKNOWN, never assume ON. After a setting changes, rediscover before dispatch."
         lines += "Operating loop: understand the user's outcome -> inspect actual tools/skills/connection state -> select a supported path -> obtain only required authorization -> act through registered tools -> inspect results -> report verified completion or the precise blocker."
-        val generatedExtensions = runCatching { SelfExtendingExtensionStore(context).all() }.getOrDefault(emptyList())
         lines += "SELF-EXTENDING TOOL STATUS: " + generatedExtensions.size + " saved extension(s); " + generatedExtensions.count { it.enabled && it.verified && it.sourceSha256 == SelfExtendingExtensionPolicy.sha256(it.source) } + " enabled, verified, source-hash-matching extension(s)."
         lines += "When a goal exposes a missing reusable capability, inspect extension_list and registered tool contracts, generate a minimal draft with extension_create, and test only through a real sandbox. Never call static preflight a sandbox test, execute generated source through shell or the normal app-process Python runtime, or claim a draft is active. Enable only after runtime test evidence matches the exact source hash and the user approves. Record observable results and revise failed drafts instead of repeating the same failed source."
         lines += "SOUL ENGINE CONTINUITY: keep the user goal, current step, discovered capability gap, test evidence, and recovery state connected across tool calls. Distinguish facts from assumptions; continue other useful parts of a goal while an extension remains a draft."
@@ -72,7 +83,7 @@ internal object OrionSoulEngine {
             lines += "Resume policy: reconcile each prior step with current observable state; do not repeat completed or uncertain mutations blindly. If an action was in flight at process death, verify its outcome or ask the user before retrying. Update the checkpoint only through the registered executor and report recovered failures honestly."
         }
         lines += "Never pretend a provider is connected because its name is recognized. Never ask for passwords, PINs, one-time codes, or raw tokens in chat. Use official authorization screens and store only provider-issued credentials in the encrypted vault. Keep the task context and resume after authorization returns."
-        lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permissions, account access, installs, external writes, and destructive actions require the relevant user approval."
+        lines += "If capability is missing, inspect the real tool/skill registry and available code/build workspace first. Research official documentation only through an available research tool. Modify source or run builds only when a connected workspace provides those operations; distinguish proposed changes from applied changes, passing tests/builds, and installed releases. Never claim the installed app can rebuild or modify itself without an authorized code/build tool. Do not execute downloaded scripts, APKs, or arbitrary skill code. New permission grants, account sign-in, and OS-controlled access require the owner to complete the actual system or provider setup; this is not a generic action approval. Once a capability is enabled and scope and validation checks pass, execute authorized actions immediately without a confirmation prompt. Only restart, shutdown, and Wi-Fi toggling use the confirmation surface."
         if (planner != null) {
             lines += "Integration intent: ${planner.provider}; observed state: ${planner.state}; next step: ${planner.nextStep}; required capabilities: ${planner.requiredCapabilities.joinToString().ifBlank { "none identified" }}."
             lines += "Integration assessment: ${planner.explanation}"

@@ -4,11 +4,16 @@ import android.content.Context
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /** Shared app-private coding workspace for Python, Alpine shell and project file tools. Paths cannot escape or follow symlinks. */
 internal class OrionPythonWorkspace(context: Context) {
     private val filesDir = context.applicationContext.filesDir
     private val root = File(filesDir, "orion-python/workspace")
+    private val trash = File(filesDir, "orion-python/trash")
+    private val backup = File(filesDir, "orion-python/backup")
     companion object {
         const val MAX_FILE_BYTES = 2 * 1024 * 1024
         const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
@@ -114,6 +119,12 @@ internal class OrionPythonWorkspace(context: Context) {
         val current = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         val previous = if (file.isFile) file.length() else 0L
         if (current - previous + bytes.size > MAX_TOTAL_BYTES) return "error: workspace storage quota (256 MiB) exceeded"
+        // Automatic backup before any destructive overwrite: preserve the exact prior contents
+        // so the owner can always restore the pre-write state from the recycle/backup area.
+        if (file.isFile) {
+            val backedUp = backup(path)
+            if (!backedUp) return "error: could not create automatic backup before overwrite"
+        }
         val temp = File(parent, ".orion-${file.name}.part")
         return try {
             FileOutputStream(temp).use { it.write(bytes); it.fd.sync() }
@@ -133,10 +144,161 @@ internal class OrionPythonWorkspace(context: Context) {
             "error: workspace write failed (${e.javaClass.simpleName})"
         }
     }
+    /** Snapshot helper for the conflict-safe undo journal; null means absent or unreadable. */
+    @Synchronized fun readForUndo(path: String): String? {
+        val file = resolve(path, false) ?: return null
+        if (!file.exists()) return null
+        if (!file.isFile || file.length() > MAX_FILE_BYTES || java.nio.file.Files.isSymbolicLink(file.toPath())) return null
+        return runCatching { FileInputStream(file).use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
+    }
+
+    /** Move a regular workspace file without replacing an existing destination. */
+    @Synchronized fun move(source: String, destination: String): String {
+        val from = resolve(source, true) ?: return "error: invalid or missing source workspace file"
+        val to = resolve(destination, false) ?: return "error: invalid destination workspace path"
+        if (!from.isFile || java.nio.file.Files.isSymbolicLink(from.toPath())) return "error: source is not a regular workspace file"
+        if (to.exists()) return "error: destination already exists; refusing to overwrite it"
+        val parent = to.parentFile ?: return "error: invalid destination workspace path"
+        if (!parent.exists() && !parent.mkdirs()) return "error: could not create destination directory"
+        if (!insideRoot(parent) || hasSymlink(parent)) return "error: destination crossed a symlink boundary"
+        return try {
+            // No REPLACE_EXISTING and no renameTo fallback: a destination race must fail,
+            // never overwrite a file that appeared after the preflight check.
+            java.nio.file.Files.move(from.toPath(), to.toPath())
+            "moved $source -> $destination"
+        } catch (e: Exception) {
+            "error: workspace move failed (${e.javaClass.simpleName}); destination was not overwritten"
+        }
+    }
+
     @Synchronized fun delete(path: String): Boolean {
         val file = resolve(path, true) ?: return false
         if (!file.isFile || java.nio.file.Files.isSymbolicLink(file.toPath())) return false
-        return file.delete()
+        ensureTrashRoot()
+        val relative = normalizePath(path) ?: return false
+        val target = File(trash, relative)
+        val parent = target.parentFile ?: return false
+        if (!parent.mkdirs() && !parent.isDirectory) return false
+        return file.renameTo(target)
+    }
+
+    /** List files currently in the recycle location, as relative paths. */
+    @Synchronized fun listTrash(): String {
+        ensureTrashRoot()
+        return trash.walkTopDown()
+            .filter { it != trash && it.isFile && !java.nio.file.Files.isSymbolicLink(it.toPath()) }
+            .map { trash.toPath().relativize(it.toPath()).toString() }
+            .sorted().joinToString("\n").ifBlank { "(trash empty)" }.take(12_000)
+    }
+
+    /** Restore a file from the recycle location back into the workspace at its original path. */
+    @Synchronized fun restoreFromTrash(path: String): String {
+        val relative = normalizePath(path) ?: return "error: invalid workspace path"
+        val source = File(trash, relative)
+        if (!source.isFile || java.nio.file.Files.isSymbolicLink(source.toPath())) return "error: no trashed file at $path"
+        val destination = resolve(path, false) ?: return "error: invalid workspace path"
+        if (destination.exists()) return "error: $path already exists in workspace; remove it first, then restore"
+        val parent = destination.parentFile ?: return "error: invalid workspace path"
+        if (!parent.mkdirs() && !parent.isDirectory) return "error: could not create workspace directory"
+        if (!insideRoot(parent) || hasSymlink(parent)) return "error: restore path crossed a symlink boundary"
+        return try {
+            java.nio.file.Files.move(source.toPath(), destination.toPath())
+            "restored $path from recycle"
+        } catch (e: Exception) {
+            "error: restore from recycle failed (${e.javaClass.simpleName})"
+        }
+    }
+
+    /** Permanently remove all files from the recycle location. */
+    @Synchronized fun emptyTrash(): Int {
+        ensureTrashRoot()
+        var count = 0
+        trash.walkTopDown().filter { it != trash && it.isFile }.forEach {
+            if (it.delete()) count++
+        }
+        return count
+    }
+
+    /** Returns the number of files currently in the recycle location. */
+    @Synchronized fun trashCount(): Int {
+        ensureTrashRoot()
+        return trash.walkTopDown().filter { it != trash && it.isFile }.count()
+    }
+
+    /** Remove partial ".part" temp files left by interrupted writes, and orphaned trash entries whose
+     *  workspace file has been re-created. Safe to call at any time. */
+    @Synchronized fun cleanupInterruptedWrites(): Int {
+        ensureRoot()
+        ensureTrashRoot()
+        var count = 0
+        root.walkTopDown().filter { it.isFile && it.name.startsWith(".orion-") && it.name.endsWith(".part") }.forEach {
+            if (it.delete()) count++
+        }
+        return count
+    }
+
+    private fun ensureTrashRoot() {
+        if (!trash.exists()) trash.mkdirs()
+    }
+
+    private fun ensureBackupRoot() {
+        if (!backup.exists()) backup.mkdirs()
+    }
+
+    /** Copy an existing workspace file into the recycle/backup area with a timestamp suffix,
+     *  so destructive overwrites can always be reversed. Returns false if the file cannot be read
+     *  or the backup cannot be written. */
+    @Synchronized fun backup(path: String): Boolean {
+        val file = resolve(path, true) ?: return false
+        if (!file.isFile || java.nio.file.Files.isSymbolicLink(file.toPath())) return false
+        ensureBackupRoot()
+        val relative = normalizePath(path) ?: return false
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
+        val target = File(backup, "${relative.replace("/", "_")}.$stamp.bak")
+        val parent = target.parentFile ?: return false
+        if (!parent.mkdirs() && !parent.isDirectory) return false
+        return runCatching {
+            FileInputStream(file).use { src ->
+                FileOutputStream(target).use { dst -> src.copyTo(dst) }
+            }
+            true
+        }.getOrDefault(false)
+    }
+
+    /** List files currently in the automatic backup area, as relative paths. */
+    @Synchronized fun listBackup(): String {
+        ensureBackupRoot()
+        return backup.walkTopDown()
+            .filter { it != backup && it.isFile && !java.nio.file.Files.isSymbolicLink(it.toPath()) }
+            .map { backup.toPath().relativize(it.toPath()).toString() }
+            .sorted().joinToString("\n").ifBlank { "(backup empty)" }.take(12_000)
+    }
+
+    /** Restore a file from the automatic backup area back into the workspace at its original path. */
+    @Synchronized fun restoreFromBackup(path: String): String {
+        val relative = normalizePath(path) ?: return "error: invalid workspace path"
+        // Find the most recent backup for this path
+        ensureBackupRoot()
+        val prefix = "${relative.replace("/", "_")}."
+        val candidates = backup.listFiles()?.filter { it.name.startsWith(prefix) && it.name.endsWith(".bak") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        val source = candidates.firstOrNull() ?: return "error: no backup found for $path"
+        val destination = resolve(path, false) ?: return "error: invalid workspace path"
+        if (destination.exists()) return "error: $path already exists in workspace; remove it first, then restore"
+        val parent = destination.parentFile ?: return "error: invalid workspace path"
+        if (!parent.mkdirs() && !parent.isDirectory) return "error: could not create workspace directory"
+        if (!insideRoot(parent) || hasSymlink(parent)) return "error: restore path crossed a symlink boundary"
+        return try {
+            java.nio.file.Files.copy(source.toPath(), destination.toPath())
+            "restored $path from automatic backup"
+        } catch (e: Exception) {
+            "error: restore from backup failed (${e.javaClass.simpleName})"
+        }
+    }
+
+    /** Returns the number of files currently in the automatic backup area. */
+    @Synchronized fun backupCount(): Int {
+        ensureBackupRoot()
+        return backup.walkTopDown().filter { it != backup && it.isFile }.count()
     }
 
     private fun ensureRoot() {

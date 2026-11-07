@@ -17,12 +17,30 @@ internal object OrionCapabilityDiscovery {
         val state: CapabilityRegistry.State get() = entry.state
     }
 
+    data class ExtensionFact(
+        val id: String,
+        val displayName: String,
+        val description: String,
+        val enabled: Boolean,
+        val verified: Boolean,
+        val sourceHashMatches: Boolean
+    ) {
+        val usable: Boolean get() = enabled && verified && sourceHashMatches
+        val state: String get() = when {
+            usable -> "verified-enabled"
+            !sourceHashMatches -> "blocked-source-hash-mismatch"
+            verified && !enabled -> "tested-disabled"
+            else -> "draft-or-unverified"
+        }
+    }
+
     data class Snapshot(
         val registeredCount: Int,
         val availableCount: Int,
         val tools: List<ToolFact>,
         val blockers: List<String>,
-        val integrationStates: Map<String, String>
+        val integrationStates: Map<String, String>,
+        val extensions: List<ExtensionFact> = emptyList()
     ) {
         fun promptLines(): List<String> {
             val lines = mutableListOf<String>()
@@ -41,6 +59,18 @@ internal object OrionCapabilityDiscovery {
             lines += "When asked what you can actually execute, group tools into eligible-to-attempt (not live-tested), Android permission/consent required, setup/disabled/denied, and unsupported. State that consequential actions may still require confirmation. Never present a registry name as proof of successful execution."
             lines += "CAPABILITY HONESTY: eligibility means registration, enabled pack and known prerequisites only. It does not prove the backend is reachable, healthy, permission-ready, or able to complete the requested action. Never describe an eligible tool as tested or successfully executable until a real dispatch returns and its outcome is verified."
             lines += "Capability rule: only registered capabilities whose registry state is available or available_limited may be selected. Unknown permission or connection state is not permission to act. Verify each action with observable output."
+            val executableExtensions = extensions.filter { it.usable }
+            lines += "Verified generated extensions: " + executableExtensions.joinToString("; ") {
+                "${it.id} (${it.displayName}) — ${it.description.take(120)}; invoke only through extension_run with this exact id"
+            }.ifBlank { "none" } + "."
+            val unavailableExtensions = extensions.filterNot { it.usable }
+            if (unavailableExtensions.isNotEmpty()) {
+                lines += "Generated extension drafts/disabled/invalid (not callable): " + unavailableExtensions.joinToString("; ") {
+                    "${it.id}=${it.state}"
+                } + "."
+            }
+            lines += "A generated extension is discoverable as executable only when enabled, sandbox-tested, and its current source hash matches the tested source hash. Drafts and stale/tampered extensions are not tools. Route execution through extension_run; never invoke source directly."
+
             lines += "GRANTED CAPABILITY RULE: when a tool is registered, its pack is enabled, and its declared prerequisites are satisfied, use it fully for the requested task. Do not invent extra application-level restrictions, silently narrow its documented functions, or ask for duplicate consent. Still honor actual Android OS/runtime permissions, real connection/authentication requirements, explicit confirmations required for consequential actions, cancellation, and tool errors. If unavailable, name the exact unmet prerequisite and continue with a compatible registered alternative when possible."
             return lines
         }
@@ -62,7 +92,8 @@ internal object OrionCapabilityDiscovery {
         termuxReady: Boolean,
         permissionStates: Map<String, PermissionState> = emptyMap(),
         integrationStates: Map<String, String> = emptyMap(),
-        deniedTools: Set<String> = emptySet()
+        deniedTools: Set<String> = emptySet(),
+        generatedExtensions: Collection<GeneratedExtension> = emptyList()
     ): Snapshot {
         // Duplicate registrations are a programming error: do not silently pick one contract.
         val duplicateNames = registeredTools.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
@@ -120,7 +151,17 @@ internal object OrionCapabilityDiscovery {
             availableCount = facts.count { it.available },
             tools = facts,
             blockers = blockers,
-            integrationStates = integrationStates.toMap()
+            integrationStates = integrationStates.toMap(),
+            extensions = generatedExtensions.distinctBy { it.id }.map { extension ->
+                ExtensionFact(
+                    id = extension.id,
+                    displayName = extension.displayName,
+                    description = extension.description,
+                    enabled = extension.enabled,
+                    verified = extension.verified,
+                    sourceHashMatches = extension.sourceSha256 == SelfExtendingExtensionPolicy.sha256(extension.source)
+                )
+            }
         )
     }
 }

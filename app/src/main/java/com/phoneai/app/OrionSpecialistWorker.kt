@@ -29,6 +29,10 @@ import java.util.concurrent.atomic.AtomicReference
  */
 internal class OrionSpecialistWorker(appContext: Context, params: WorkerParameters) : Worker(appContext, params) {
     override fun doWork(): Result {
+        val droneTaskId = inputData.getString(KEY_TASK_ID)?.takeIf { it.isNotBlank() }
+        if (droneTaskId != null) return runDroneTask(droneTaskId)
+        // Every legacy WorkManager wake also reconciles and reschedules both execution ledgers.
+        runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(applicationContext) }
         val jobId = inputData.getString(KEY_JOB_ID)?.takeIf { it.isNotBlank() } ?: return Result.failure()
         val store = OrionWorkerJobStore(applicationContext)
         val existing = store.all().firstOrNull { it.id == jobId } ?: return Result.failure()
@@ -246,6 +250,30 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         return deliverResult(completed)
     }
 
+    private fun runDroneTask(taskId: String): Result {
+        runCatching { OrionUnifiedExecutionCoordinator.reconcileAndSchedule(applicationContext) }
+        val tasks = OrionDistributedTaskStore(applicationContext)
+        val record = tasks.get(taskId) ?: return Result.failure()
+        when (record.status) {
+            "completed", "cancelled" -> return Result.success()
+            "failed", "needs_review", "cancel_requested" -> return Result.failure()
+            "running" -> return Result.retry()
+            "queued", "retry_wait" -> Unit
+            else -> return Result.failure()
+        }
+        try {
+            setForegroundAsync(foregroundInfo(taskId)).get(8, TimeUnit.SECONDS)
+        } catch (_: Exception) {
+            return Result.retry()
+        }
+        return when (val result = OrionUnifiedExecutionCoordinator.dispatchDroneTask(applicationContext, taskId)) {
+            is OrionCoordinatedResult.Completed -> Result.success()
+            is OrionCoordinatedResult.Deferred -> if (runAttemptCount < 6) Result.retry() else Result.failure()
+            is OrionCoordinatedResult.NeedsOwner -> Result.failure()
+            is OrionCoordinatedResult.Failed -> Result.failure()
+        }
+    }
+
     private fun deliverResult(job: OrionWorkerJobStore.Job): Result {
         val sessionId = job.conversationId ?: return Result.failure()
         val summary = "Specialist result ready (job ${job.id}, ${job.kind.name.lowercase()}): ${job.result.take(380)}"
@@ -285,19 +313,24 @@ internal class OrionSpecialistWorker(appContext: Context, params: WorkerParamete
         } else ForegroundInfo(7315, notification)
     }
 
-    companion object { const val KEY_JOB_ID = "orion_specialist_job_id" }
+    companion object {
+        const val KEY_JOB_ID = "orion_specialist_job_id"
+        const val KEY_TASK_ID = "orion_distributed_task_id"
+    }
 }
 
 /** Unique work prevents duplicate scheduler calls from creating duplicate provider execution. */
 internal object OrionSpecialistScheduler {
-    fun enqueue(context: Context, jobId: String): Boolean = try {
-        val request = OneTimeWorkRequestBuilder<OrionSpecialistWorker>()
-            .setInputData(Data.Builder().putString(OrionSpecialistWorker.KEY_JOB_ID, jobId).build())
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
-        WorkManager.getInstance(context.applicationContext)
-            .enqueueUniqueWork("orion-specialist-$jobId", ExistingWorkPolicy.KEEP, request)
-        true
-    } catch (_: Exception) { false }
+    /** Legacy specialist jobs and Drone Swarm tasks share the same Android scheduler boundary. */
+    fun enqueue(context: Context, jobId: String): Boolean =
+        OrionUnifiedExecutionCoordinator.scheduleLegacyJob(context, jobId)
+
+    fun enqueueDistributed(context: Context, taskId: String): Boolean =
+        OrionUnifiedExecutionCoordinator.scheduleDroneTask(context, taskId)
+
+    fun cancelParent(context: Context, parentTaskId: String, reason: String): Int =
+        OrionUnifiedExecutionCoordinator.cancelParent(context, parentTaskId, reason)
+
+    fun cancel(context: Context, jobId: String, reason: String = "cancelled_by_owner"): Boolean =
+        OrionUnifiedExecutionCoordinator.cancelLegacyJob(context, jobId, reason)
 }

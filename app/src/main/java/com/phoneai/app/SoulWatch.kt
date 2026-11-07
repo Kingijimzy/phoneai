@@ -31,6 +31,8 @@ internal object SoulEngineWatcher {
 
     fun run(context: Context): TickResult {
         val c = context.applicationContext
+        // Genuine lifecycle state: the watcher tick means the Soul is monitoring.
+        OrionSoulLifecycle.watcherTick(c)
         val service = PhoneAiService.instance
         // Force a fresh durable schedule read before reporting scheduler health; a stale
         // process-global storage-error flag is not evidence that disk is currently healthy.
@@ -107,10 +109,27 @@ internal object SoulEngineWatcher {
             )
         }
 
-        // External reads/notifications only happen for explicitly configured standing orders
-        // and only while the Proactive pack remains enabled. Process one order per watcher tick.
+        // Start with the local work already completed; Chronos may refine this action label below.
         var action = if (p3.probesRun > 0) "local_capability_audit+p3_probe" else "local_capability_audit"
         if (subagents.findings.isNotEmpty()) action += "+subagents"
+
+        // Chronos may create one low-pressure, review-only suggestion from coarse focus duration.
+        // It never dispatches an action and is gated by both owner switches and ambient-context consent.
+        val chronosSuggestion = runCatching { OrionChronosAwareness.proactiveSuggestion(c) }.getOrNull()
+        if (!chronosSuggestion.isNullOrBlank()) {
+            val category = OrionChronosAwareness.summary(c).substringAfter("category=").substringBefore(";")
+            val proposed = runCatching {
+                SoulEngineState.proposeWatchIssue(
+                    c, "chronos",
+                    "Chronos: optional break after extended $category focus",
+                    chronosSuggestion
+                )
+            }.getOrDefault(false)
+            if (proposed && OrionChronosAwareness.markSuggestionShown(c)) action = "chronos_review_suggestion"
+        }
+
+        // External reads/notifications only happen for explicitly configured standing orders
+        // and only while the Proactive pack remains enabled. Process one order per watcher tick.
         if (AgentPolicy.enabled(c, "orion_core") && AgentPolicy.enabled(c, "proactive")) {
             if (StandingOrders.storageError() == null && schedulerOrders.any { StandingOrderPolicy.due(it, System.currentTimeMillis()) }) {
                 val dispatched = runCatching { LifeLoop.tickOne(c) }.getOrDefault(0)

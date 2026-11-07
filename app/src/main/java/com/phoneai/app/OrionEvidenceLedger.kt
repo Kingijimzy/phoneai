@@ -30,7 +30,10 @@ internal object OrionEvidenceLedger {
         val startedAt: Long,
         val finishedAt: Long,
         val argsFingerprint: String,
-        val summary: String
+        val summary: String,
+        val redactedArgs: String = "",
+        /** One-way repair-plan identity only; never contains action arguments. */
+        val planDigest: String = ""
     )
 
     private fun digest(value: String): String = MessageDigest.getInstance("SHA-256")
@@ -55,11 +58,9 @@ internal object OrionEvidenceLedger {
             .take(MAX_TEXT)
     }
 
-    private fun outcome(result: String): Outcome = when {
+    private fun outcome(result: String, trustedVerification: Boolean): Outcome = when {
         result.trimStart().startsWith("error", true) -> Outcome.FAILED
-        result.contains("LOCAL VERIFY PASS:", true) -> Outcome.VERIFIED
-        result.contains("PASS:", true) && !result.contains("UNVERIFIED:", true) && !result.contains("FAIL:", true) -> Outcome.VERIFIED
-        Regex("\\b(message sent|email sent|sent successfully|delivered|read by recipient|deleted successfully|completed successfully)\\b", RegexOption.IGNORE_CASE).containsMatchIn(result) -> Outcome.VERIFIED
+        trustedVerification -> Outcome.VERIFIED
         else -> Outcome.EXECUTED_UNVERIFIED
     }
 
@@ -71,16 +72,16 @@ internal object OrionEvidenceLedger {
         tool: String,
         args: JSONObject,
         startedAt: Long,
-        result: String
+        result: String,
+        trustedVerification: Boolean = false
     ): Boolean = append(context, JSONObject()
         .put("id", digest("$startedAt|$tool|$taskId|$result").take(24))
         .put("taskId", safeTaskId(taskId))
         .put("backend", backend.take(32))
         .put("tool", tool.take(80))
-        .put("outcome", outcome(result).name)
+        .put("outcome", outcome(result, trustedVerification).name)
         .put("startedAt", startedAt)
         .put("finishedAt", System.currentTimeMillis())
-        .put("argsFingerprint", digest(args.toString()))
         .put("summary", safeSummary(tool, result))
     )
 
@@ -105,7 +106,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.CONTEXT_RETRIEVED.name)
             .put("startedAt", now)
             .put("finishedAt", now)
-            .put("argsFingerprint", digest(objective))
             .put("summary", "Objective-scoped memory context retrieved; source=$source; chars=$retrievedChars.")
         )
     }
@@ -120,7 +120,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.DENIED.name)
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
-            .put("argsFingerprint", digest(args.toString()))
             .put("summary", "Dispatch denied before execution: " + category.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48))
         )
     /**
@@ -156,8 +155,8 @@ internal object OrionEvidenceLedger {
             })
             .put("startedAt", now)
             .put("finishedAt", now)
-            .put("argsFingerprint", planDigest.lowercase())
             .put("summary", result)
+            .put("planDigest", planDigest.lowercase())
         )
     }
 
@@ -171,7 +170,6 @@ internal object OrionEvidenceLedger {
             .put("outcome", Outcome.RECOVERY.name)
             .put("startedAt", System.currentTimeMillis())
             .put("finishedAt", System.currentTimeMillis())
-            .put("argsFingerprint", "")
             .put("summary", "Recovery selected: " + strategy.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.take(48) + "; reason retained only in task context.")
         )
 
@@ -205,6 +203,33 @@ internal object OrionEvidenceLedger {
         }
     }
 
+    /** One-time migration: remove argument payloads/fingerprints written by older builds. */
+    fun purgeArgumentFields(context: Context): Boolean = synchronized(lock) {
+        val atomic = AtomicFile(file(context))
+        val root = try { atomic.openRead().bufferedReader().use { JSONObject(it.readText()) } }
+        catch (_: java.io.FileNotFoundException) { return@synchronized true }
+        catch (_: Exception) { return@synchronized false }
+        val events = root.optJSONArray("events") ?: return@synchronized true
+        var changed = false
+        for (i in 0 until events.length()) {
+            val event = events.optJSONObject(i) ?: continue
+            if (event.has("argsFingerprint")) { event.remove("argsFingerprint"); changed = true }
+            if (event.has("redactedArgs")) { event.remove("redactedArgs"); changed = true }
+        }
+        if (!changed) return@synchronized true
+        var stream: FileOutputStream? = null
+        try {
+            stream = atomic.startWrite()
+            stream.write(root.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+            true
+        } catch (_: Exception) {
+            val failed = stream
+            if (failed != null) runCatching { atomic.failWrite(failed) }
+            false
+        }
+    }
+
     fun events(context: Context, taskId: String? = null): List<Event> = synchronized(lock) {
         val root = try { AtomicFile(file(context)).openRead().bufferedReader().use { JSONObject(it.readText()) } }
         catch (_: Exception) { return@synchronized emptyList() }
@@ -217,7 +242,7 @@ internal object OrionEvidenceLedger {
             val outcome = runCatching { Outcome.valueOf(row.optString("outcome")) }.getOrNull() ?: return@mapNotNull null
             Event(row.optString("id"), id, row.optString("backend"), row.optString("tool"),
                 outcome, row.optLong("startedAt"), row.optLong("finishedAt"),
-                row.optString("argsFingerprint"), row.optString("summary"))
+                "", row.optString("summary"), "", row.optString("planDigest"))
         }
     }
 

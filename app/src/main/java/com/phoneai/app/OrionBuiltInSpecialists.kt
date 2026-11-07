@@ -136,7 +136,7 @@ internal class OrionBuiltInSpecialists(private val context: Context) {
                 report.put("status", "patch_staged_pending_owner_approval")
                     .put("patch_proposal_id", proposal.id)
                     .put("replacement_sha256", proposal.replacementSha256)
-                    .put("apply_contract", "No workspace write has occurred. Apply only through OrionWorkspacePatchStore.applyApproved after explicit owner confirmation for this exact proposal; source hash is rechecked before writing.")
+                    .put("apply_contract", "No workspace write has occurred. Apply only through a registered workspace patch execution route after the proposal source hash and sandbox test are rechecked. Do not show a generic confirmation prompt. If no apply route is registered, report the proposal as staged and never claim it was applied.")
             } else {
                 report.put("status", "review_only_no_patch_provided")
                     .put("next_input", "To stage a complete-file patch, include NEW_FILE_CONTENT followed by one fenced replacement body. No workspace write occurs during review.")

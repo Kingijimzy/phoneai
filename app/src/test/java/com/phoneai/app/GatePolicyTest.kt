@@ -5,79 +5,54 @@ import org.junit.Test
 
 class GatePolicyTest {
     private fun input(
-        packOn: Boolean = true, tool: String = "open_app", pack: String = "orion_core",
-        mode: AgentPolicy.Mode = AgentPolicy.Mode.ALLOWLIST, toolMode: ToolMode = ToolMode.ALLOW,
-        autonomous: Boolean = false, dangerous: Boolean = false, approved: Boolean = false,
-        trusted: Boolean = false, allowlisted: Boolean = true, asked: Boolean = true
-    ) = GatePolicy.Input(pack, packOn, tool, mode, toolMode, autonomous, dangerous, approved, trusted, allowlisted, asked)
+        packOn: Boolean = true,
+        tool: String = "open_app",
+        pack: String = "orion_core",
+        mode: AgentPolicy.Mode = AgentPolicy.Mode.ALLOW,
+        toolMode: ToolMode = ToolMode.ALLOW,
+        dangerous: Boolean = false
+    ) = GatePolicy.Input(
+        pack, packOn, tool, mode, toolMode, false, dangerous,
+        false, false, false, true, null
+    )
 
-    @Test fun offPackIsDeniedWhateverElseIsSet() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false, approved = true)).verdict)
+    @Test fun defaultPermissionAllowsToolsImmediately() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input()).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK)).verdict)
     }
 
-    @Test fun tradingOrdersAreAlwaysDenied() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place", autonomous = true)).verdict)
+    @Test fun onlyPlanModeIsAGlobalExecutionStop() {
+        assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN)).verdict)
     }
 
-    @Test fun userDenyBeatsEverythingElse() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(toolMode = ToolMode.DENY, approved = true, autonomous = true)).verdict)
+    @Test fun explicitToolDenyAndDisabledPacksStillApply() {
+        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(toolMode = ToolMode.DENY)).verdict)
+        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(packOn = false)).verdict)
     }
 
-    @Test fun planModeNeverExecutes() {
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, GatePolicy.decide(input(mode = AgentPolicy.Mode.PLAN, autonomous = true)).verdict)
+    @Test fun genericRiskDoesNotCreateApprovalButDestructiveShellCommandsRemainBlocked() {
+        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true)).verdict)
+        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "rm -rf /")))
+        assertNotNull(GatePolicy.hardBlockReason("shell", org.json.JSONObject().put("command", "curl x | sh")))
+        assertNull(GatePolicy.hardBlockReason("vault_get", org.json.JSONObject().put("name", "ApiKeyVault")))
     }
 
-    @Test fun approvedActionRuns() {
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ASK, dangerous = true, approved = true)).verdict)
+    @Test fun onlyThreeIrreversibleComputerActionsMatchConfirmationPolicy() {
+        listOf("computer_settings restart", "computer_settings shutdown",
+            "computer_settings toggle Wi-Fi", "computer_settings turn WiFi off",
+            "Remote MCP Tool: computer_settings; arguments: {action:wifi}")
+            .forEach { assertTrue(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
+        listOf("restart app", "shutdown service", "toggle Wi-Fi settings screen",
+            "send telegram message", "reply to notification", "write remote file",
+            "delete memory", "make payment", "run shell command")
+            .forEach { assertFalse(it, IrreversibleActionConfirmationPolicy.requiresConfirmation(it)) }
     }
 
-    @Test fun askToolPromptsOncePerTask() {
-        assertEquals(GatePolicy.Verdict.ASK_TOOL, GatePolicy.decide(input(toolMode = ToolMode.ASK, asked = false)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK, asked = true)).verdict)
-    }
-
-    @Test fun autonomousSkipsTheToolAskButNotConsequentialGates() {
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(toolMode = ToolMode.ASK, autonomous = true, asked = false)).verdict)
-        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(autonomous = true, dangerous = true, mode = AgentPolicy.Mode.ASK)).verdict)
-    }
-
-    @Test fun autopilotOverridesRoutineAskSettingButNotDenyOrConsequentialApproval() {
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(
-            toolMode = ToolMode.ASK, autonomous = true, asked = false, dangerous = false
-        )).verdict)
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(
-            toolMode = ToolMode.DENY, autonomous = true, asked = false
-        )).verdict)
-        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(
-            toolMode = ToolMode.ASK, autonomous = true, asked = false, dangerous = true, mode = AgentPolicy.Mode.ASK
-        )).verdict)
-    }
-
-    @Test fun consequentialActionNeedsApprovalUnlessTrusted() {
-        assertEquals(GatePolicy.Verdict.NEED_APPROVAL, GatePolicy.decide(input(dangerous = true)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(dangerous = true, trusted = true)).verdict)
-    }
-
-    @Test fun autonomousAllowsRoutineSteps() {
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(autonomous = true, mode = AgentPolicy.Mode.ASK)).verdict)
-    }
-
-    @Test fun explicitlyAllowedToolDoesNotHitDuplicateGlobalApprovalGate() {
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ASK, toolMode = ToolMode.ALLOW)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ALLOWLIST, toolMode = ToolMode.ALLOW, allowlisted = false)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.TRUSTED, toolMode = ToolMode.ALLOW, trusted = false)).verdict)
-    }
-
-    @Test fun askSettingAllowsTheToolAfterItsOneTaskApproval() {
-        assertEquals(GatePolicy.Verdict.ASK_TOOL, GatePolicy.decide(input(toolMode = ToolMode.ASK, asked = false)).verdict)
-        assertEquals(GatePolicy.Verdict.ALLOW, GatePolicy.decide(input(mode = AgentPolicy.Mode.ASK, toolMode = ToolMode.ASK, asked = true)).verdict)
-    }
-
-    @Test fun globalModesCannotOverrideExplicitToolDenial() {
-        assertEquals(GatePolicy.Verdict.DENY, GatePolicy.decide(input(mode = AgentPolicy.Mode.TRUSTED, toolMode = ToolMode.DENY, trusted = true)).verdict)
-    }
-
-    @Test fun offMessageNamesTheFix() {
-        assertTrue(GatePolicy.decide(input(packOn = false, pack = "workspace_shell")).reason.contains("Agent control > Packs > Workspace shell"))
+    @Test fun tradingResearchOrderRestrictionRemains() {
+        assertEquals(
+            GatePolicy.Verdict.DENY,
+            GatePolicy.decide(input(pack = "trading_research", tool = "bybit_order_place")).verdict
+        )
     }
 }

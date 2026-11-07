@@ -22,18 +22,26 @@ class AgentHooksTest {
   assertNull(AgentHooks.scopeBlockReason("Write and send this message to Amma","click_text",JSONObject().put("text","Send")))
   assertNull(AgentHooks.scopeBlockReason("Prepare and send the reply to Amma","click_text",JSONObject().put("text","Send")))
  }
- @Test fun confirmationForDangerousTarget(){assertTrue(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")));assertFalse(AgentHooks.requiresConfirmation("read_screen",JSONObject()))}
- @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
+ @Test fun onlyRestartShutdownAndWifiToggleRequireConfirmation(){
+  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","restart")))
+  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","shutdown")))
+  assertTrue(AgentHooks.requiresConfirmation("computer_settings",JSONObject().put("action","wifi_toggle")))
+  assertFalse(AgentHooks.requiresConfirmation("browser_click",JSONObject().put("target","Delete account")))
+  assertFalse(AgentHooks.requiresConfirmation("notification_action",JSONObject().put("action","reply")))
+  assertFalse(AgentHooks.requiresConfirmation("type",JSONObject().put("text","Hello"),"WhatsApp message"))
+  assertFalse(AgentHooks.requiresConfirmation("telegram_send",JSONObject().put("message","Hello")))
+ }
+ @Test fun completionNeedsProof(){val p=AgentHooks.ProofRecorder();assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.record("open_app","WhatsApp opened");assertFalse(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed);p.recordVerified("open_app","WhatsApp opened\\nLOCAL VERIFY PASS: target app is visible");assertTrue(AgentHooks.completionDecision("Open WhatsApp",p.snapshot()).allowed)}
  @Test fun proofRecorderRecognizesExplicitPostActionUiVerification() {
   val p=AgentHooks.ProofRecorder()
-  p.record("click_text","Action returned. LOCAL VERIFY PASS: visible state changed after this action.")
+  p.recordVerified("click_text","Action returned. LOCAL VERIFY PASS: visible state changed after this action.")
   assertTrue(p.snapshot().single().success)
   assertTrue(p.snapshot().single().verified)
   assertTrue(AgentHooks.completionDecision("Open Settings",p.snapshot()).allowed)
  }
  @Test fun clearingProofsPreventsPriorTaskSuccessFromAuthorizingNewTask() {
   val proofs=AgentHooks.ProofRecorder(); proofs.record("open_app","WhatsApp opened")
-  assertTrue(AgentHooks.completionDecision("Open WhatsApp",proofs.snapshot()).allowed)
+  assertFalse(AgentHooks.completionDecision("Open WhatsApp",proofs.snapshot()).allowed)
   proofs.clear(); assertTrue(proofs.snapshot().isEmpty())
   assertFalse(AgentHooks.completionDecision("Open Settings",proofs.snapshot()).allowed)
  }
@@ -50,6 +58,8 @@ class AgentHooksTest {
   p.record("verify_action","PASS: visible screen state changed. Current screen evidence: message sent")
   assertFalse("Screen change/OCR is not confirmation",AgentHooks.completionDecision("Send a WhatsApp message",p.snapshot()).allowed)
   p.record("send","WhatsApp message sent to Amma")
+  assertFalse("Untrusted tool text cannot prove delivery",AgentHooks.completionDecision("Send a WhatsApp message",p.snapshot()).allowed)
+  p.recordVerified("verify_send","PASS: exact contact, message and sent status are visible")
   assertTrue(AgentHooks.completionDecision("Send a WhatsApp message",p.snapshot()).allowed)
  }
  @Test fun sendVerificationRequiresContactExactMessageAndVisibleStatus(){
