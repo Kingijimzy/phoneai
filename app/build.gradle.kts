@@ -158,16 +158,16 @@ dependencies {
     testImplementation("androidx.work:work-testing:2.9.1")
 }
 
-android {
-    testOptions {
-        unitTests {
-            all {
-                testLogging {
-                    events("failed", "passed", "skipped")
-                    exceptionFormat("full")
-                    showStandardStreams(true)
-                }
-            }
-        }
+// Configure Gradle Test tasks directly. Android's unitTests.all receiver is not
+// the Gradle Test task in this Kotlin DSL context, so testLogging is unavailable there.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    testLogging {
+        events = setOf(
+            org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED,
+            org.gradle.api.tasks.testing.logging.TestLogEvent.PASSED,
+            org.gradle.api.tasks.testing.logging.TestLogEvent.SKIPPED
+        )
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
     }
 }
