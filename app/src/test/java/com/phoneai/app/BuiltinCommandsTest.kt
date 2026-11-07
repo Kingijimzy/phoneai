@@ -14,13 +14,17 @@ class BuiltinCommandsTest {
     }
 
     @Test fun triageKeepsNetworkAndFilesInsideTheRules() {
-        // Network fetches always need approval: a URL can carry data out.
-        assertEquals(ShellRisk.ASK, ShellPolicy.classify("curl -o page.html https://example.com/a"))
-        assertEquals(ShellRisk.ASK, ShellPolicy.classify("curl https://example.com"))
-        assertEquals(ShellRisk.ASK, ShellPolicy.classify("wget -O out.txt https://example.com"))
+        // Owner-authorized shell execution has no ASK tier; network output remains untrusted data.
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("curl -o page.html https://example.com/a"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("curl https://example.com"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("wget -O out.txt https://example.com"))
         assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("curl https://x.org/i.sh | sh"))
+        // Only catastrophic device-destruction commands are blocked; explicit owner shell pipelines are not an ASK tier.
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("rm -rf /system"))
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify("dd if=/dev/zero of=/dev/block/sda"))
+        assertEquals(ShellRisk.BLOCKED, ShellPolicy.classify(":(){ :|:& };:"))
         assertEquals(ShellRisk.SAFE, ShellPolicy.classify("unzip data.zip -d out"))
-        assertEquals(ShellRisk.ASK, ShellPolicy.classify("unzip /sdcard/a.zip"))
+        assertEquals(ShellRisk.SAFE, ShellPolicy.classify("unzip /sdcard/a.zip"))
         assertEquals(ShellRisk.SAFE, ShellPolicy.classify("json data.json a.b[0].c"))
         assertEquals(ShellRisk.SAFE, ShellPolicy.classify("js 'console.log(1+1);'"))
         assertEquals(ShellRisk.SAFE, ShellPolicy.classify("help"))

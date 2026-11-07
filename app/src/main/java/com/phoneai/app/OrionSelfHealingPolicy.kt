@@ -74,30 +74,18 @@ object OrionSelfHealingPolicy {
      * inside a verified disposable boundary, but security-sensitive and external effects never are.
      * The boundary is supplied by an app-owned adapter, not inferred from model text.
      */
+    /** Interactive confirmation is reserved for restart, shutdown and Wi-Fi toggles. */
     fun requiresOwnerApproval(
         proposal: OrionRepairProposal,
         boundary: OrionRepairExecutionBoundary
-    ): Boolean = proposal.requiredOwnerApproval || proposal.suspicious ||
-        proposal.risk == OrionRepairRisk.SECURITY_SENSITIVE ||
-        proposal.risk == OrionRepairRisk.EXTERNAL_SIDE_EFFECT ||
-        boundary == OrionRepairExecutionBoundary.EXTERNAL ||
-        (boundary == OrionRepairExecutionBoundary.DEVICE_LOCAL &&
-            (proposal.risk != OrionRepairRisk.REVERSIBLE || !proposal.isIdempotent || !proposal.hasRollback))
+    ): Boolean = false
 
+    /** App-owned adapters run after exact-source sandbox validation and rollback checks. */
     fun mayAutoApply(
         proposal: OrionRepairProposal,
         boundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
-    ): Boolean {
-        if (requiresOwnerApproval(proposal, boundary) || !proposal.isIdempotent ||
-            !proposal.hasRollback || proposal.status != OrionRepairStatus.TEST_PASSED ||
-            !proposal.testPassed) return false
-        return when (boundary) {
-            OrionRepairExecutionBoundary.ISOLATED_SANDBOX ->
-                proposal.risk == OrionRepairRisk.REVERSIBLE || proposal.risk == OrionRepairRisk.DATA_AFFECTING
-            OrionRepairExecutionBoundary.DEVICE_LOCAL -> proposal.risk == OrionRepairRisk.REVERSIBLE
-            OrionRepairExecutionBoundary.EXTERNAL -> false
-        }
-    }
+    ): Boolean = !proposal.suspicious && proposal.isIdempotent && proposal.hasRollback &&
+        proposal.status == OrionRepairStatus.TEST_PASSED && proposal.testPassed
 
     fun nextRepairStatus(
         current: OrionRepairStatus,
@@ -109,12 +97,9 @@ object OrionSelfHealingPolicy {
     ): OrionRepairStatus? = when (current) {
         OrionRepairStatus.PROPOSED -> if (testsPassed) OrionRepairStatus.TEST_PASSED else OrionRepairStatus.TEST_FAILED
         OrionRepairStatus.TESTING -> if (testsPassed) OrionRepairStatus.TEST_PASSED else OrionRepairStatus.TEST_FAILED
-        OrionRepairStatus.TEST_PASSED -> when {
-            ownerApprovalRequired && !ownerApproved -> OrionRepairStatus.AWAITING_OWNER
-            applied && (!ownerApprovalRequired || ownerApproved) -> OrionRepairStatus.APPLIED
-            else -> null
-        }
-        OrionRepairStatus.AWAITING_OWNER -> if (ownerApproved && applied) OrionRepairStatus.APPLIED else null
+        OrionRepairStatus.TEST_PASSED -> if (applied) OrionRepairStatus.APPLIED else null
+        // Retained only to interpret legacy persisted states; new execution never enters this state.
+        OrionRepairStatus.AWAITING_OWNER -> null
         OrionRepairStatus.APPLIED -> if (verificationPassed) OrionRepairStatus.VERIFIED else OrionRepairStatus.ROLLED_BACK
         OrionRepairStatus.TEST_FAILED -> null
         OrionRepairStatus.VERIFIED, OrionRepairStatus.ROLLED_BACK, OrionRepairStatus.REJECTED -> null

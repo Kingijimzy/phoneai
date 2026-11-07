@@ -15,14 +15,14 @@ internal object OrionExecutionReadiness {
         val reason: String,
         val recommendedTool: String?,
         val verificationRequirement: String,
-        val requiresApproval: Boolean
+        val requiresOwnerInput: Boolean
     ) {
         fun promptLines(): List<String> = listOf(
             "EXECUTION READINESS: next_step=${nextStep.name.lowercase().replace('_', '-')}; " +
-                "recommended_tool=${recommendedTool ?: "none"}; requires_approval=$requiresApproval.",
+                "recommended_tool=${recommendedTool ?: "none"}; requires_owner_input=$requiresOwnerInput.",
             "Readiness reason: $reason",
             "Required verification: $verificationRequirement",
-            "Execution constraint: this is a recommendation, not proof that any action ran. Dispatch policy and user approvals still apply."
+            "Execution constraint: this is a recommendation, not proof that any action ran. Only restart, shutdown and Wi-Fi toggles require confirmation; all other authorized actions execute immediately after capability and scope checks."
         )
     }
 
@@ -57,7 +57,7 @@ internal object OrionExecutionReadiness {
                 OrionIntegrationPlanner.NextStep.ASK_TO_CONNECT -> {
                     val tool = choose("connect_service")
                     return if (tool != null) Plan(NextStep.OPEN_CONNECTION_SETUP,
-                        "The provider is not connected but the secure connection setup tool is available.", tool,
+                        integration.explanation + " The secure connection setup tool is available.", tool,
                         "Return from setup and re-check actual connection state and granted scopes.", true)
                     else Plan(NextStep.ENABLE_OR_INSTALL_CAPABILITY,
                         "Connection setup is required but no registered setup tool is currently available.", choose("capability_note"),
@@ -82,7 +82,7 @@ internal object OrionExecutionReadiness {
             if (shell != null) return Plan(NextStep.EXECUTE_SUPPORTED_TOOL,
                 if (explicitTermux) "The explicitly requested optional Termux backend is available."
                 else "Orion's built-in workspace shell is available; no external terminal app is required.",
-                shell, "Inspect command output and exit/result status; never infer task completion from dispatch alone.", true)
+                shell, "Inspect command output and exit/result status; never infer task completion from dispatch alone.", false)
             return Plan(NextStep.PREPARE_SHELL_SETUP,
                 if (explicitTermux) "Termux was explicitly requested but its optional bridge is unavailable. Enable that bridge or ask Orion to use its built-in terminal."
                 else "Orion's built-in shell is unavailable. Enable the workspace-shell capability pack; Termux is not required.",
@@ -101,7 +101,7 @@ internal object OrionExecutionReadiness {
         val tool = choose(*candidates.toTypedArray())
         if (tool != null) return Plan(NextStep.EXECUTE_SUPPORTED_TOOL,
             "At least one matching registered tool is currently available. Use the narrowest suitable tool and verify its returned evidence.",
-            tool, goal.verification, ToolRegistry.access(tool) == ToolAccess.WRITE)
+            tool, goal.verification, false)
         return Plan(NextStep.RESEARCH_AND_PROPOSE,
             "No matching tool is currently available in the live capability snapshot; do not claim the task was executed.",
             choose("capability_note", "live_web_search", "service_status"),

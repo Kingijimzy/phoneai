@@ -18,91 +18,67 @@ class ToolPermissionsPersistenceTest {
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("phoneai_agent_policy", Context.MODE_PRIVATE).edit().clear().commit()
         writeTool = ToolRegistry.all.first {
             it.access == ToolAccess.WRITE && it.name !in ToolPermissionPolicy.alwaysAllowed
         }.name
     }
 
-    @Test fun perToolOverrideSurvivesGlobalModeChanges() {
-        ToolPermissions.applyLevel(context, "careful")
-        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
-
-        ToolPermissions.cycle(context, writeTool) // ASK -> DENY
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-
-        ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-
-        ToolPermissions.applyLevel(context, "autonomous")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-    }
-
-    @Test fun explicitAllowOverrideSurvivesRestrictivePreset() {
-        ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-
-        ToolPermissions.cycle(context, writeTool) // DENY -> ALLOW
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
-
-        ToolPermissions.applyLevel(context, "careful")
+    @Test fun defaultPermissionIsAllow() {
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun autonomousBaseRemainsActiveAfterPerToolOverride() {
-        ToolPermissions.applyLevel(context, "autonomous")
-        assertEquals("autonomous", ToolPermissions.level(context))
-
-        ToolPermissions.cycle(context, writeTool) // ALLOW -> ASK
-        assertEquals("autonomous", ToolPermissions.level(context))
-        assertEquals(ToolMode.ASK, ToolPermissions.mode(context, writeTool))
+    @Test fun explicitDenyIsIgnoredInFreeMode() {
+        ToolPermissions.applyLevel(context, "careful")
+        ToolPermissions.cycle(context, writeTool) // would be DENY; free mode never refuses
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+        ToolPermissions.applyLevel(context, "read_only")
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun explicitAskOverrideStillPromptsUnderAutonomousPreset() {
-        ToolPermissions.applyLevel(context, "autonomous")
-        ToolPermissions.cycle(context, writeTool) // ALLOW -> ASK
-        assertEquals(true, ToolPermissions.hasOverride(context, writeTool))
+    @Test fun readOnlyPresetDoesNotBlockInFreeMode() {
+        ToolPermissions.applyLevel(context, "read_only")
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+    }
 
-        AgentPolicy.setEnabled(context, "phone_control", true)
-        AgentPolicy.setMode(context, AgentPolicy.Mode.ASK)
+    @Test fun autonomousPresetStaysAllowEvenAfterCycling() {
+        ToolPermissions.applyLevel(context, "autonomous")
+        assertEquals("autonomous", ToolPermissions.level(context))
+        ToolPermissions.cycle(context, writeTool)
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+    }
+
+    @Test fun legacyAskValueMigratesToAllowWithoutPrompt() {
+        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
+            .putString("tool_modes", org.json.JSONObject().put(writeTool, "ASK").toString())
+            .commit()
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+    }
+
+    @Test fun planModeIsTheOnlyGlobalExecutionStop() {
+        AgentPolicy.setMode(context, AgentPolicy.Mode.PLAN)
+        val planned = AgentPolicy.gate(
+            context, "trading_research", "live_sports", dangerous = false,
+            toolMode = ToolMode.ALLOW, askedThisTask = false
+        )
+        assertEquals(GatePolicy.Verdict.PLAN_ONLY, planned.verdict)
+
+        AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
+        AgentPolicy.setEnabled(context, "trading_research", true)
+        val allowed = AgentPolicy.gate(
+            context, "trading_research", "live_sports", dangerous = false,
+            toolMode = ToolMode.ALLOW, askedThisTask = false
+        )
+        assertEquals(GatePolicy.Verdict.ALLOW, allowed.verdict)
+    }
+
+    @Test fun legacyAskDoesNotCreateAnApprovalVerdict() {
+        AgentPolicy.setMode(context, AgentPolicy.Mode.ALLOW)
+        AgentPolicy.setEnabled(context, "trading_research", true)
         val result = AgentPolicy.gate(
-            context, "phone_control", writeTool, dangerous = false,
-            toolMode = ToolPermissions.mode(context, writeTool), askedThisTask = false
+            context, "trading_research", "live_sports", dangerous = false,
+            toolMode = ToolMode.ASK, askedThisTask = false
         )
         assertEquals(GatePolicy.Verdict.ALLOW, result.verdict)
-    }
-
-    @Test fun deterministicReadCannotRunInPlanMode() {
-        ToolPermissions.applyLevel(context, "balanced")
-        AgentPolicy.setEnabled(context, "trading_research", true)
-        AgentPolicy.setMode(context, AgentPolicy.Mode.PLAN)
-
-        val result = AgentPolicy.gate(
-            context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolPermissions.mode(context, "live_sports"), askedThisTask = false
-        )
-        assertEquals(GatePolicy.Verdict.PLAN_ONLY, result.verdict)
-    }
-
-    @Test fun deterministicReadHonoursExplicitAskOverride() {
-        ToolPermissions.applyLevel(context, "balanced")
-        ToolPermissions.cycle(context, "live_sports") // ALLOW -> ASK
-        AgentPolicy.setEnabled(context, "trading_research", true)
-        AgentPolicy.setMode(context, AgentPolicy.Mode.ASK)
-
-        val result = AgentPolicy.gate(
-            context, "trading_research", "live_sports", dangerous = false,
-            toolMode = ToolPermissions.mode(context, "live_sports"), askedThisTask = false
-        )
-        assertEquals(GatePolicy.Verdict.ASK_TOOL, result.verdict)
-    }
-
-    @Test fun legacyCustomToolMapIsMigratedAsOverrides() {
-        context.getSharedPreferences("phoneai", Context.MODE_PRIVATE).edit()
-            .putString("tool_level", "custom")
-            .putString("tool_modes", org.json.JSONObject().put(writeTool, "DENY").toString())
-            .commit()
-
-        ToolPermissions.applyLevel(context, "balanced")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
     }
 }

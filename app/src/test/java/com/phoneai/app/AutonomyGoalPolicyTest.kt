@@ -31,4 +31,27 @@ class AutonomyGoalPolicyTest {
     @Test fun aDisabledGoalIsNeverDue() {
         assertFalse(AutonomyGoalPolicy.due(goal(last = 0L, enabled = false), 1_000L))
     }
+
+    @Test fun aClockMovingBackwardsDoesNotMakeAClaimedGoalDue() {
+        assertFalse(AutonomyGoalPolicy.due(goal(last = 20_000L), 10_000L))
+    }
+
+    @Test fun scheduledExecutionRequiresAllOwnerSwitchesAndAnIdleLiveService() {
+        fun canRun(
+            mode: OrionMode = OrionMode.AUTOPILOT,
+            core: Boolean = true,
+            proactive: Boolean = true,
+            service: Boolean = true,
+            agent: Boolean = true,
+            running: Boolean = false
+        ) = OrionAutonomyRunPolicy.canRun(mode, core, proactive, service, agent, running)
+
+        assertTrue(canRun())
+        assertFalse(canRun(mode = OrionMode.ASSIST))
+        assertFalse(canRun(core = false))
+        assertFalse(canRun(proactive = false))
+        assertFalse(canRun(service = false))
+        assertFalse(canRun(agent = false))
+        assertFalse(canRun(running = true))
+    }
 }

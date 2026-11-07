@@ -13,6 +13,7 @@ class OrionTaskEnvelopeTest {
         val child = OrionTaskEnvelope.create(
             "Research one subtask", kind = OrionTaskEnvelope.Kind.RESEARCH,
             parentTaskId = parent.taskId, rootTaskId = parent.rootTaskId,
+            rootObjective = parent.rootObjective,
             capabilities = listOf("research_web", "read_screen"),
             evidenceRefs = listOf("evidence:123"), now = now
         )
@@ -21,6 +22,7 @@ class OrionTaskEnvelopeTest {
         assertEquals(child, restored)
         assertEquals(parent.taskId, restored.parentTaskId)
         assertEquals(parent.rootTaskId, restored.rootTaskId)
+        assertEquals(parent.objective, restored.rootObjective)
     }
 
     @Test fun rejectsExpiredDeadlineAndMalformedTraceContext() {
@@ -45,5 +47,36 @@ class OrionTaskEnvelopeTest {
         val json = OrionTaskEnvelope.create("Inspect", now = 1_800_000_000_000L).toJson()
             .put("kind", "ARBITRARY_COMMAND")
         assertFalse(runCatching { OrionTaskEnvelope.fromJson(JSONObject(json.toString())) }.isSuccess)
+    }
+
+    @Test fun descendantsKeepTheOriginalRootObjectiveAcrossMultipleLevels() {
+        val now = 1_800_000_000_000L
+        val root = OrionTaskEnvelope.create("Complete the Orion adoption", now = now)
+        val child = OrionTaskEnvelope.create(
+            "Implement Cerebro retrieval", kind = OrionTaskEnvelope.Kind.DELEGATED_STEP,
+            parentTaskId = root.taskId, rootTaskId = root.rootTaskId,
+            rootObjective = root.rootObjective, now = now
+        )
+        val grandchild = OrionTaskEnvelope.create(
+            "Add graph retrieval tests", kind = OrionTaskEnvelope.Kind.DELEGATED_STEP,
+            parentTaskId = child.taskId, rootTaskId = child.rootTaskId,
+            rootObjective = child.rootObjective, now = now
+        )
+        assertEquals(root.objective, child.rootObjective)
+        assertEquals(root.objective, grandchild.rootObjective)
+        assertEquals(root.objective, OrionTaskEnvelope.fromJson(grandchild.toJson()).rootObjective)
+        assertTrue(grandchild.validate(now).isEmpty())
+    }
+
+    @Test fun taskEnvelopeRedactsSecretsFromBothRootAndChildObjectives() {
+        val task = OrionTaskEnvelope.create(
+            "Research Android docs api_key=child-secret",
+            rootObjective = "Complete setup with access_token=root-secret",
+            now = 1_800_000_000_000L
+        )
+        val json = task.toJson().toString()
+        assertFalse(json.contains("child-secret"))
+        assertFalse(json.contains("root-secret"))
+        assertTrue(json.contains("[redacted]"))
     }
 }

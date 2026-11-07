@@ -1,5 +1,7 @@
 package com.phoneai.app
 
+import android.content.Context
+
 import org.json.JSONObject
 
 /**
@@ -14,8 +16,24 @@ internal object OrionMemoryCapabilityExecutor {
 
     fun supports(tool: String): Boolean = tool in supportedTools
 
-    fun memoryPromptBlock(service: PhoneAiService, request: String?, maxChars: Int): String =
-        MemoryStore.promptBlock(service, request).take(maxChars)
+    /**
+     * Labelled recall for this message (meaning + keyword + entity links, governed memories only).
+     * Falls back to the per-task memory block when nothing matches or there is no request text.
+     * Past experience is not included here: OrionCentralBrain injects episodic recall once.
+     */
+    fun memoryPromptBlock(context: Context, request: String?, maxChars: Int, limit: Int = 6): String {
+        val q = request?.trim().orEmpty()
+        if (q.length >= 3) {
+            val recalled = runCatching {
+                val usable = MemoryStore.all(context).filter {
+                    MemoryGovernancePolicy.canUseInPrompt(it.reviewStatus, it.sensitivity) && OrionMemoryLifecycle.isActive(context, it.id)
+                }
+                OrionRecall.format(OrionRecall.top(context, usable, q, limit), "")
+            }.getOrDefault("")
+            if (recalled.isNotBlank()) return recalled.take(maxChars)
+        }
+        return MemoryStore.promptBlock(context, request, limit).take(maxChars)
+    }
 
     fun recordFailure(service: PhoneAiService, request: String, tool: String, result: String) =
         ExperienceStore.recordFailure(service, request, tool, result)
@@ -39,10 +57,8 @@ internal object OrionMemoryCapabilityExecutor {
         runCatching { KnowledgeGraph.learnFrom(service, request) }
     }
 
-    /** Assemble the memory/knowledge context in one place; every passage remains untrusted data. */
+    /** Assemble non-episodic learning and graph context. Episodic recall is injected once by OrionCentralBrain. */
     fun promptContext(service: PhoneAiService, request: String?): String = buildString {
-        append("\n\nLong-term memory (id, category, text):\n")
-            .append(MemoryStore.promptBlock(service, request).take(if (request.isNullOrBlank()) 1400 else 900))
         AgentLessons.promptBlock(service, "orion", 8).takeIf { it.isNotBlank() }?.let {
             append("\n\nThings you have learned about how this user likes to work (their own words):\n").append(it)
         }
@@ -126,8 +142,13 @@ internal object OrionMemoryCapabilityExecutor {
         "graph_link" -> tools.graphLink(args.optString("a"), args.optString("relation"), args.optString("b"))
         "graph_query" -> tools.graphQuery(args.optString("entity"))
         "self_review" -> tools.selfReview()
-        "undo_status" -> UndoStore.status(service)
-        "undo_last" -> if (stopped()) "error: task was stopped before undo." else UndoStore.undoLast(service)
+        "undo_status" -> WorkspaceUndoStore(service).status() + " " + UndoStore.status(service)
+        "undo_last" -> if (stopped()) "error: task was stopped before undo." else {
+            val workspaceUndo = WorkspaceUndoStore(service)
+            if (workspaceUndo.latestTimestamp() > UndoStore.latestTimestamp(service))
+                workspaceUndo.undoLast() ?: UndoStore.undoLast(service)
+            else UndoStore.undoLast(service)
+        }
         else -> "error: memory executor does not implement '$tool'."
     }
 }

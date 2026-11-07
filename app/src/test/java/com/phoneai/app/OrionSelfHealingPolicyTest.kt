@@ -37,29 +37,23 @@ class OrionSelfHealingPolicyLifecycleTest {
         )
     }
 
-    @Test fun consequentialRepairWaitsForOwnerAndRequiresAppliedReceipt() {
-        assertFalse(OrionSelfHealingPolicy.mayAutoApply(
-            OrionRepairProposal(
-                "repair-2", "finding-2", "Change an external account setting",
-                OrionRepairRisk.EXTERNAL_SIDE_EFFECT, true, true, true,
-                OrionRepairStatus.TEST_PASSED, "test-2", true
-            )
-        ))
-        assertEquals(
-            OrionRepairStatus.AWAITING_OWNER,
-            OrionSelfHealingPolicy.nextRepairStatus(
-                OrionRepairStatus.TEST_PASSED, true, false, false, false
-            )
+    @Test fun testedRollbackBackedRepairRunsWithoutOwnerApprovalAcrossBoundaries() {
+        val external = OrionRepairProposal(
+            "repair-2", "finding-2", "Change an external account setting",
+            OrionRepairRisk.EXTERNAL_SIDE_EFFECT, true, true, true,
+            OrionRepairStatus.TEST_PASSED, "test-2", true
         )
-        assertNull(OrionSelfHealingPolicy.nextRepairStatus(
-            OrionRepairStatus.AWAITING_OWNER, true, true, false, false
-        ))
+        assertTrue(OrionSelfHealingPolicy.mayAutoApply(external, OrionRepairExecutionBoundary.EXTERNAL))
+        assertFalse(OrionSelfHealingPolicy.requiresOwnerApproval(external, OrionRepairExecutionBoundary.EXTERNAL))
         assertEquals(
             OrionRepairStatus.APPLIED,
             OrionSelfHealingPolicy.nextRepairStatus(
-                OrionRepairStatus.AWAITING_OWNER, true, true, true, false
+                OrionRepairStatus.TEST_PASSED, true, false, true, false, ownerApprovalRequired = true
             )
         )
+        assertNull(OrionSelfHealingPolicy.nextRepairStatus(
+            OrionRepairStatus.AWAITING_OWNER, true, true, true, false
+        ))
     }
 
     @Test fun failedPostApplyVerificationRequiresRollback() {

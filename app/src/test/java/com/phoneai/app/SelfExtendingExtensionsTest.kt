@@ -66,6 +66,7 @@ class SelfExtendingExtensionsTest {
         assertTrue(store.saveDraft(draft()))
         assertFalse(store.saveDraft(draft()))
         assertNotNull(SelfExtendingExtensionPolicy.validateSource("ruby", "puts 'hi'"))
+        assertNotNull(SelfExtendingExtensionPolicy.validateSource("javascript", "function run(x) { return x; }"))
     }
 
     @Test fun disabledOrTamperedExtensionsAreNeverReturnedAsExecutable() {

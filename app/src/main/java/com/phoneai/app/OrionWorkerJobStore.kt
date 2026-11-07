@@ -44,7 +44,7 @@ internal class OrionWorkerJobStore(context: Context, private val clock: () -> Lo
     private val file = File(app.filesDir, "orion_worker_jobs.json")
     private val atomic = AtomicFile(file)
     private val maxJobs = 32
-    private val maxActive = 1
+    private val maxActive = 3
     private var jobs = mutableListOf<Job>()
 
     init {

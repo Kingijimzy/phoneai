@@ -47,7 +47,7 @@ internal object OrionRepairLifecycle {
     ): Boolean {
         val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
             it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
-                it.argsFingerprint == planDigest
+                it.planDigest == planDigest
         }
         val chatHas = runCatching {
             OrionConversationRepository.get(context).hasEventForSession(
@@ -62,7 +62,7 @@ internal object OrionRepairLifecycle {
         planDigest: String, summary: String, verified: Boolean = false, failed: Boolean = false): Boolean {
         val ledgerHas = OrionEvidenceLedger.events(context, taskId).any {
             it.backend == "repair_lifecycle" && it.tool == "repair_${stage.lowercase()}" &&
-                it.argsFingerprint == planDigest
+                it.planDigest == planDigest
         }
         val eventId = stageEventId(taskId, planDigest, stage)
         val repository = OrionConversationRepository.get(context)
@@ -85,7 +85,7 @@ internal object OrionRepairLifecycle {
     fun execute(
         context: Context, sessionId: String, taskId: String,
         finding: OrionDiagnosticFinding, proposal: OrionRepairProposal, planDigest: String,
-        ownerApprovalDigest: String?, sandboxTest: () -> Boolean, apply: () -> String?,
+        @Suppress("UNUSED_PARAMETER") ownerApprovalDigest: String?, sandboxTest: () -> Boolean, apply: () -> String?,
         verify: () -> Boolean, rollback: () -> Boolean, verifyRollback: () -> Boolean,
         executionBoundary: OrionRepairExecutionBoundary = OrionRepairExecutionBoundary.DEVICE_LOCAL
     ): Receipt {
@@ -96,7 +96,6 @@ internal object OrionRepairLifecycle {
             proposal.summary.isNotBlank() && proposal.hasRollback) {
             expectedPlanDigest(sessionId, taskId, finding, proposal, executionBoundary)
         } else ""
-        val ownerApproved = ownerApprovalDigest?.equals(expectedDigest, ignoreCase = true) == true
         if (sessionId.isBlank() || taskId.isBlank() || !digest.matches(Regex("^[a-f0-9]{64}$")) ||
             digest != expectedDigest || !finding.isActionable() || finding.id != proposal.findingId || proposal.id.isBlank() ||
             proposal.summary.isBlank() || !proposal.hasRollback) {
@@ -114,7 +113,7 @@ internal object OrionRepairLifecycle {
                 OrionConversationRepository.get(app).hasEventForSession(app, sessionId, eventId)
             }.getOrDefault(false)
         }
-        val priorPlanEvents = OrionEvidenceLedger.events(app, taskId).filter { it.argsFingerprint == digest }
+        val priorPlanEvents = OrionEvidenceLedger.events(app, taskId).filter { it.planDigest == digest }
         if (durableTerminalReceipt || priorPlanEvents.any { it.tool in terminalOrUncertain.map { stage -> "repair_" + stage.lowercase() } }) {
             return Receipt(Result.POLICY_BLOCKED, digest,
                 "This exact repair plan already reached an apply or uncertain state; it cannot be replayed.")
@@ -144,28 +143,15 @@ internal object OrionRepairLifecycle {
         }
         if (!sandboxPassed) return Receipt(Result.SANDBOX_FAILED, digest, "Sandbox validation failed; repair was not applied.")
 
-        // Only the trusted adapter can declare the execution boundary. Sandbox data mutations
-        // are autonomous when isolated, idempotent and rollback-backed; dangerous/suspicious
-        // work and every external effect still require owner approval.
-        val approvalRequired = OrionSelfHealingPolicy.requiresOwnerApproval(proposal, executionBoundary)
+        // Only the three device actions use interactive confirmation. Repairs use trusted,
+        // app-owned adapters and run immediately after exact-plan sandbox and rollback checks.
         val safeAutoApply = OrionSelfHealingPolicy.mayAutoApply(
             proposal.copy(status = OrionRepairStatus.TEST_PASSED, testPassed = true),
             executionBoundary
         )
-        if (approvalRequired && !ownerApproved) {
-            val saved = emit(app, sessionId, taskId, "AWAITING_OWNER", digest,
-                "Sandbox passed; explicit owner approval is required before application.")
-            return Receipt(if (saved) Result.AWAITING_OWNER else Result.PERSISTENCE_FAILED, digest,
-                "Repair is waiting for explicit owner approval.")
-        }
-        if (approvalRequired && ownerApproved) {
-            if (!emit(app, sessionId, taskId, "OWNER_APPROVED", digest,
-                    "Owner approved this exact repair plan digest.")) {
-                return Receipt(Result.PERSISTENCE_FAILED, digest, "Approval receipt failed; application is blocked.")
-            }
-        } else if (!safeAutoApply) {
+        if (!safeAutoApply) {
             return Receipt(Result.POLICY_BLOCKED, digest,
-                "Repair does not meet the risk-aware, boundary-specific, idempotent and rollback-backed auto-apply policy.")
+                "Repair failed sandbox, suspicion, idempotency or rollback-backed execution policy.")
         }
 
         // Atomically claim the one-shot transition before entering any side-effecting adapter.
@@ -253,12 +239,12 @@ internal object OrionRepairLifecycle {
             .take(limit.coerceIn(1, 20))
         if (recent.isEmpty()) return ""
         return buildString {
-            appendLine("PERSISTED REPAIR / OWNER-APPROVAL LIFECYCLE")
+            appendLine("PERSISTED REPAIR LIFECYCLE")
             recent.asReversed().forEach { event ->
                 val stage = event.tool.removePrefix("repair_").uppercase()
                 appendLine("- task=${event.taskId}; stage=$stage; outcome=${event.outcome}; ${event.summary.take(220)}")
             }
-            appendLine("These are durable repair receipts, not permission. A proposal is not owner approval. Revalidate the exact plan digest, current finding, sandbox result and owner decision before application. Never replay APPLY_STARTED/APPLY_UNCERTAIN plans; reconcile actual state first.")
+            appendLine("These are durable repair receipts, not permission. Revalidate the exact plan digest, current finding, sandbox result and live adapter preconditions before application. Never replay APPLY_STARTED/APPLY_UNCERTAIN plans; reconcile actual state first.")
         }.take(2_400)
     }
 }

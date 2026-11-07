@@ -13,7 +13,8 @@ import java.util.Locale
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
         "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
-        "morning_brief", "standing_order", "goal_add", "goal_list", "goal_remove", "goal_toggle"
+        "morning_brief", "standing_order", "goal_add", "goal_list", "goal_remove", "goal_toggle",
+        "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set"
     )
 
     fun supports(tool: String): Boolean = tool in supportedTools
@@ -58,7 +59,6 @@ internal object OrionTasksCapabilityExecutor {
         service: PhoneAiService,
         tools: Tools,
         stopped: () -> Boolean,
-        confirm: (String) -> Boolean,
         askUser: (String, List<String>, String) -> String
     ): String = when (tool) {
         "ask_agent" -> if (stopped()) "error: task was stopped before specialist delegation."
@@ -189,10 +189,54 @@ internal object OrionTasksCapabilityExecutor {
             val id = args.optInt("id", -1)
             when {
                 stopped() -> "error: task was stopped before deletion."
-                !confirm("Delete task #$id permanently?") -> "Task deletion cancelled."
-                stopped() -> "error: task was stopped after approval; task was not deleted."
                 TaskStore.delete(service, id) -> "Deleted task #$id."
                 else -> "error: task #$id was not deleted; it may not exist or device storage may be unavailable"
+            }
+        }
+        "proactive_check" -> {
+            val item = OrionProactiveEngine.evaluate(service)
+            if (item == null) "No proactive item to speak right now (quiet period, throttle, or nothing due)."
+            else "PROACTIVE ${item.kind.toUpperCase(Locale.ROOT)} [urgency=${item.urgency}]: ${item.title} — ${item.body}"
+        }
+        "proactive_status" -> {
+            val app = service.applicationContext
+            val cfg = OrionAutonomySettings.read(app)
+            "Proactive: pack=${if (AgentPolicy.enabled(app, "proactive")) "on" else "off"} · core=${if (AgentPolicy.enabled(app, "orion_core")) "on" else "off"} · mode=${cfg.mode} · quiet=${Prefs.quietPeriodStartHour(app)}:00–${Prefs.quietPeriodEndHour(app)}:00 · max/hour=${Prefs.proactiveMaxPerHour(app)} · minInterval=${(Prefs.proactiveMinIntervalMs(app) / 60_000L)}min · batteryLow=${Prefs.proactiveBatteryLowThreshold(app)}% · calendarLookahead=${Prefs.calendarLookaheadHours(app)}h"
+        }
+        "followup_add" -> {
+            val text = args.optString("text").trim()
+            if (text.isBlank()) "error: followup_add requires non-empty text"
+            else {
+                val dueMinutes = args.optInt("dueAtMinutes", 0)
+                val dueAt = if (dueMinutes > 0) System.currentTimeMillis() + dueMinutes.toLong() * 60_000L else null
+                val turnIndex = args.optInt("turnIndex", 0)
+                val id = OrionFollowUpStore.add(service, text, dueAt, turnIndex)
+                if (id.isBlank()) "error: follow-up was not saved"
+                else "Follow-up saved (id=$id): ${text.take(120)}" + (if (dueAt != null) " due in $dueMinutes min" else "")
+            }
+        }
+        "followup_list" -> {
+            val items = OrionFollowUpStore.pending(service)
+            if (items.isEmpty()) "No pending follow-ups."
+            else items.joinToString("\n") { f ->
+                val due = f.dueAt?.let { SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()).format(Date(it)) } ?: "no due date"
+                "- id=${f.id} due=$due: ${f.text.take(100)}"
+            }
+        }
+        "followup_done" -> {
+            val id = args.optString("id").trim()
+            if (id.isBlank()) "error: followup_done requires an id"
+            else if (OrionFollowUpStore.done(service, id)) "Follow-up $id marked done."
+            else "error: no pending follow-up matches id $id"
+        }
+        "quiet_period_set" -> {
+            val start = args.optInt("startHour", -1)
+            val end = args.optInt("endHour", -1)
+            if (start !in 0..23 || end !in 0..23) "error: quiet_period_set requires startHour and endHour in 0..23"
+            else {
+                Prefs.setQuietPeriodStartHour(service, start)
+                Prefs.setQuietPeriodEndHour(service, end)
+                "Quiet period set to ${start}:00–${end}:00 local time; Orion will not speak proactively during those hours."
             }
         }
         else -> "error: tasks executor does not implement '$tool'."

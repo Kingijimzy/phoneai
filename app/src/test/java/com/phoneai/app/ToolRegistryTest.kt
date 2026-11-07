@@ -12,7 +12,18 @@ class ToolRegistryTest {
         assertTrue(OrionPythonCapabilityExecutor.supports("workspace_list"))
     }
 
-@Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
+    @Test fun workspaceFileMutationsAreRegisteredRoutedAndReversible() {
+        listOf("workspace_write", "workspace_delete", "workspace_move").forEach { name ->
+            assertEquals(ToolAccess.WRITE, ToolRegistry.access(name))
+            assertEquals("workspace_shell", AgentPolicy.packForTool(name))
+            assertEquals(OrionCapabilityAdapters.Backend.FILES, OrionCapabilityAdapters.route(name)?.backend)
+            assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.FILES, name))
+        }
+        assertTrue(ToolRegistry.find("workspace_delete")!!.promptLine.contains("journaled for conflict-safe undo"))
+        assertTrue(ToolRegistry.find("workspace_move")!!.promptLine.contains("without overwriting"))
+    }
+
+    @Test fun deviceLocationToolIsRegisteredAndMappedToPhoneControl() {
         assertTrue(ToolRegistry.all.any { it.name == "device_location" })
         assertEquals("phone_control", AgentPolicy.packForTool("device_location"))
     }
@@ -23,7 +34,7 @@ class ToolRegistryTest {
         assertTrue(names.containsAll(setOf(
             "read_screen", "verify_send", "type", "click_text", "browser_snapshot",
             "browser_type", "weather", "bybit_public_ticker", "telegram_send",
-            "mcp_call", "remember", "recall", "discussion_search", "decision_history", "record_decision", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
+            "mcp_call", "remember", "recall", "discussion_search", "decision_history", "task_delete", "ask_user", "termux_command", "trade_history_summary", "gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"
         )))
     }
 
@@ -55,6 +66,11 @@ class ToolRegistryTest {
             assertEquals(OrionCapabilityAdapters.Backend.TRADING_DESK, OrionCapabilityAdapters.route(it)?.backend)
             assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.TRADING_DESK, it))
         }
+    }
+
+    @Test fun decisionRecordMutationIsNotExposedAsAnAgentTool() {
+        assertNull(ToolRegistry.find("record_decision"))
+        assertNull(AgentPolicy.packForTool("record_decision"))
     }
 
     @Test fun everyRegisteredToolMapsToAnExistingCapabilityPack() {
@@ -99,14 +115,11 @@ class ToolRegistryTest {
         assertTrue(ToolRegistry.find("swipe")!!.promptLine.contains("allow_coordinates:true"))
     }
 
-    @Test fun termuxAiCommandsAreRestrictedToExactReadOnlyDiagnostics() {
-        assertTrue(TermuxCommandPolicy.isReadOnly("pwd"))
-        assertTrue(TermuxCommandPolicy.isReadOnly("git status --short"))
-        assertTrue(TermuxCommandPolicy.isReadOnly("python --version"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("pwd; rm -rf ~"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("git status; touch marker"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("apt install python"))
-        assertFalse(TermuxCommandPolicy.isReadOnly("rm -rf /"))
+    @Test fun termuxCommandToolUsesTheTermuxBridgeWithoutReadOnlyAllowlist() {
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
+        assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
+        assertEquals(OrionCapabilityAdapters.Backend.SHELL, OrionCapabilityAdapters.route("termux_command")?.backend)
+        assertTrue(OrionRuntimeCapabilityExecutor.supports(OrionCapabilityAdapters.Backend.SHELL, "termux_command"))
     }
 
     @Test fun promptCatalogIsGeneratedFromToolDefinitions() {
@@ -128,18 +141,15 @@ class ToolRegistryTest {
         assertEquals("orion_core", AgentPolicy.packForTool("discussion_search"))
         assertTrue(OrionMemoryCapabilityExecutor.supports("discussion_search"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("decision_history"))
-        assertEquals(ToolAccess.WRITE, ToolRegistry.access("record_decision"))
         assertEquals("orion_core", AgentPolicy.packForTool("decision_history"))
-        assertEquals("orion_core", AgentPolicy.packForTool("record_decision"))
         assertTrue(OrionMemoryCapabilityExecutor.supports("decision_history"))
-        assertTrue(OrionMemoryCapabilityExecutor.supports("record_decision"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("read_screen"))
         assertEquals("phone_control", AgentPolicy.packForTool("look"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("verify_send"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("type"))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
-        assertEquals(ToolAccess.READ, ToolRegistry.access("termux_command"))
-        assertTrue(ToolRegistry.find("termux_command")!!.promptLine.contains("read-only diagnostic"))
+        assertEquals(ToolAccess.WRITE, ToolRegistry.access("termux_command"))
+        assertFalse(ToolRegistry.find("termux_command")!!.promptLine.contains("read-only diagnostic"))
         assertEquals("termux_bridge", AgentPolicy.packForTool("termux_command"))
         assertEquals(ToolAccess.READ, ToolRegistry.access("trade_history_summary"))
         assertEquals("trading_research", AgentPolicy.packForTool("trade_history_summary"))
@@ -197,7 +207,7 @@ class ToolRegistryPromptAvailabilityTest {
         val research = ToolRegistry.detailedToolNames("research the latest OpenAI news and verify sources")
         assertTrue(research.containsAll(setOf("live_news", "live_web_search", "research_web")))
         val memory = ToolRegistry.detailedToolNames("remember this decision and recall my previous lesson")
-        assertTrue(memory.containsAll(setOf("remember", "record_decision", "recall", "discussion_search")))
+        assertTrue(memory.containsAll(setOf("remember", "recall", "discussion_search")))
         val agents = ToolRegistry.detailedToolNames("create a research subagent and delegate the task")
         assertTrue(agents.containsAll(setOf("create_agent", "ask_agent")))
     }

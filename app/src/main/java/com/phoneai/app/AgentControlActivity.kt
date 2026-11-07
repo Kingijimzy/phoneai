@@ -42,12 +42,12 @@ class AgentControlActivity : Activity() {
         setContentView(scroll)
         addText("ORION / AGENT CONTROL", 10f, Theme.MUTED, true, 0)
         addText("Approval & capabilities", 26f, Theme.TEXT, true, 4)
-        addText("Core phone and messaging tools are available by default. Optional services may need setup or permission; consequential actions still require confirmation. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
+        addText("Core phone and messaging tools are available by default. Optional services may need setup or Android permission. Only restart, shutdown and Wi-Fi toggles require confirmation; all other authorized actions run immediately. Unsupported integrations stay visibly off.", 13f, Theme.MUTED, false, 8)
         addButton("‹ Back to settings") { finish() }
 
         section("APPROVAL MODE")
         modeStatus = addText("", 14f, Theme.TEXT, true, 5)
-        addText("Plan = suggest only. Ask = approve every action (default). Allowlist = run only listed tools. Trusted session = timed, logged trust for selected enabled packs.", 12f, Theme.MUTED, false, 4)
+        addText("Plan = suggest actions without executing. Allow = execute immediately, except restart, shutdown and Wi-Fi toggles which ask once. Capability packs and Android permissions still apply.", 12f, Theme.MUTED, false, 4)
         addButton("Choose approval mode") { chooseMode() }
         addButton("Start trusted session (15–120 min)") { startTrusted() }
         addButton("STOP / LOCK TRUST NOW", true) {
@@ -94,7 +94,6 @@ class AgentControlActivity : Activity() {
         section("BUDGETS & MODEL SPLIT")
         addText("Current per-task limits: ${AgentPolicy.maxSteps(this)} steps · ${AgentPolicy.maxCalls(this)} calls · ${AgentPolicy.maxMinutes(this)} minutes.", 12f, Theme.MUTED, false, 4)
         addButton("Set task budgets") { chooseBudgets() }
-        addButton("Configure tool allowlist") { configureAllowlist() }
         addButton("Propose a new skill") { proposeSkill() }
         addButton("Review / revoke skills") { reviewSkills() }
         addButton("Manage custom agents") { manageCustomAgents() }
@@ -219,7 +218,7 @@ class AgentControlActivity : Activity() {
     private fun chooseMode() {
         val modes = AgentPolicy.Mode.values()
         AlertDialog.Builder(this).setTitle("Approval mode")
-            .setItems(modes.map { "${it.label}${if (it == AgentPolicy.Mode.ASK) " · default" else ""}" }.toTypedArray()) { _, which ->
+            .setItems(modes.map { it.label }.toTypedArray()) { _, which ->
                 AgentPolicy.setMode(this, modes[which])
                 AgentPolicy.log(this, "policy", "mode-change", true, "mode set to ${modes[which].name}")
                 refresh()
@@ -240,7 +239,6 @@ class AgentControlActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("Session duration")
                     .setItems(arrayOf("15 minutes", "30 minutes", "60 minutes", "120 minutes")) { _, idx ->
                         AgentPolicy.startTrustedSession(this, minutes[idx], enabled.filterIndexed { i, _ -> selected[i] }.map { it.id }.toSet())
-                        AgentPolicy.setMode(this, AgentPolicy.Mode.TRUSTED)
                         refresh()
                     }.show()
             }.setNegativeButton("CANCEL", null).show()
@@ -258,31 +256,6 @@ class AgentControlActivity : Activity() {
                     AgentPolicy.setBudgets(this, v[0], v[1], v[2]); AgentPolicy.log(this, "budget", "update", true, "task limits updated")
                     refresh()
                 } else Toast.makeText(this, "Enter three whole numbers separated by commas.", Toast.LENGTH_LONG).show()
-            }.show()
-    }
-
-    private fun configureAllowlist() {
-        val available = AgentPolicy.packs.filter { it.implemented && AgentPolicy.enabled(this, it.id) }
-        if (available.isEmpty()) {
-            Toast.makeText(this, "Enable a supported capability pack first.", Toast.LENGTH_LONG).show()
-            return
-        }
-        AlertDialog.Builder(this).setTitle("Choose pack for allowlist")
-            .setItems(available.map { it.title }.toTypedArray()) { _, index ->
-                val pack = available[index]
-                val input = android.widget.EditText(this).apply {
-                    hint = "Exact tool IDs separated by commas"
-                    setText(AgentPolicy.allowlist(this@AgentControlActivity, pack.id).joinToString(", "))
-                    setSingleLine(false)
-                }
-                AlertDialog.Builder(this).setTitle("Allowlisted tools · ${pack.title}")
-                    .setMessage("Use exact registered tool IDs. Unknown tools are denied. In Allowlist mode, only these tools may run automatically; consequential actions still need approval unless a trusted session covers the pack.")
-                    .setView(input).setNegativeButton("CANCEL", null)
-                    .setPositiveButton("SAVE") { _, _ ->
-                        AgentPolicy.setAllowlist(this, pack.id, input.text.toString().split(",").map { it.trim() })
-                        AgentPolicy.log(this, "allowlist", "update", true, "allowlist updated for pack ${pack.id}")
-                        Toast.makeText(this, "Allowlist saved.", Toast.LENGTH_SHORT).show()
-                    }.show()
             }.show()
     }
 
@@ -392,12 +365,6 @@ class AgentControlActivity : Activity() {
                 testReport.text = "BLOCKED · ${policy.reason}"
                 AgentPolicy.log(this, "self_test", "run", false, policy.reason)
                 return
-            }
-            AgentPolicy.Decision.NEED_APPROVAL -> {
-                AlertDialog.Builder(this).setTitle("Approve self-test?")
-                    .setMessage("This test makes one selected-provider probe if a key is saved, plus public weather, news and sports lookups. It does not perform phone actions or trading orders. Provider probe may consume API quota.")
-                    .setNegativeButton("CANCEL") { _, _ -> AgentPolicy.log(this, "self_test", "run", false, "user cancelled diagnostic") }
-                    .setPositiveButton("RUN TESTS") { _, _ -> executeSelfTest() }.show()
             }
             AgentPolicy.Decision.ALLOW -> executeSelfTest()
         }
@@ -553,7 +520,7 @@ class AgentControlActivity : Activity() {
     }
 
     private fun refresh() {
-        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Ask\nTrusted until: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
+        modeStatus.text = "Mode: ${AgentPolicy.mode(this).label} · default is Allow\nTrusted pack session: ${if (AgentPolicy.trustedUntil(this) > System.currentTimeMillis()) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(AgentPolicy.trustedUntil(this))) else "not active"}"
         packStatus.text = "Enabled: ${AgentPolicy.packs.count { AgentPolicy.enabled(this, it.id) }} · unsupported packs remain off. Only enabled packs should be dispatchable."
         commandModelStatus.text = commandModelSummary()
         val installed = termuxInstalled()

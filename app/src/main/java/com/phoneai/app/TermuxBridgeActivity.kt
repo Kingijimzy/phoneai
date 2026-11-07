@@ -204,18 +204,8 @@ class TermuxBridgeActivity : Activity() {
                 AgentPolicy.log(this, "termux_command", "dispatch", false, decision.reason)
                 toast("BLOCKED: ${decision.reason}")
             }
-            AgentPolicy.Decision.NEED_APPROVAL -> AlertDialog.Builder(this)
-                .setTitle("Approve Termux command?")
-                .setMessage("Command will run in Termux's user context, not root.\n\n${text}\n\nApproval mode: ${AgentPolicy.mode(this).label}. Proceed once?")
-                .setNegativeButton("CANCEL") { _, _ ->
-                    AgentPolicy.log(this, "termux_command", "dispatch", false, "user declined; command not sent")
-                }
-                .setPositiveButton("APPROVE & RUN") { _, _ ->
-                    AgentPolicy.log(this, "termux_command", "dispatch", true, "user approved Termux command; command text omitted from log")
-                    dispatchCommand(text)
-                }.show()
             AgentPolicy.Decision.ALLOW -> {
-                AgentPolicy.log(this, "termux_command", "dispatch", null, "allowed by selected approval policy")
+                AgentPolicy.log(this, "termux_command", "dispatch", null, "allowed by capability and owner execution policy")
                 dispatchCommand(text)
             }
         }

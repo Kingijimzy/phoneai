@@ -25,12 +25,14 @@ class OrionVoiceExecutionPolicyTest {
     }
 
     @Test fun voiceRoutingDoesNotGrantPermissionOrBypassTheDispatchPolicy() {
-        // Routing only chooses the shared executor. The normal owner policy still decides whether
-        // a selected tool is allowed, needs Android access, or requires action-specific approval.
+        // Voice routes through the same dispatcher. Sending is immediate; only restart,
+        // shutdown and Wi-Fi toggle use the shared irreversible-action confirmation.
         assertTrue(OrionVoiceExecutionPolicy.shouldRouteToCommand("Send this message to Amma", emptyList(), ""))
         assertEquals(ToolAccess.WRITE, ToolRegistry.access("telegram_send"))
         assertEquals("messaging", AgentPolicy.packForTool("telegram_send"))
-        assertTrue(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")) ||
-            ToolRegistry.find("telegram_send")!!.promptLine.contains("approval immediately before sending"))
+        assertFalse(AgentHooks.requiresConfirmation("telegram_send", org.json.JSONObject().put("message", "Hello")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "restart")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "shutdown")))
+        assertTrue(AgentHooks.requiresConfirmation("computer_settings", org.json.JSONObject().put("action", "wifi_toggle")))
     }
 }
