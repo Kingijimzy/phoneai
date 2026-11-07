@@ -44,7 +44,7 @@ internal class OrionDevCapabilityExecutor(
                 val path = args.optString("path")
                 if (path.isBlank()) "error: path is required"
                 else devAgent.readSourceFile(path).let { r ->
-                    if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.summary + "\n" + r.evidence
+                    if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.summary + "\n" + r.evidence
                 }
             }
             "dev_write" -> {
@@ -53,21 +53,21 @@ internal class OrionDevCapabilityExecutor(
                 if (path.isBlank()) "error: path is required"
                 else if (content.isBlank()) "error: content is required"
                 else devAgent.writeSourceFile(path, content).let { r ->
-                    if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.summary
+                    if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.summary
                 }
             }
             "dev_python" -> {
                 val code = args.optString("code")
                 if (code.isBlank()) "error: code is required"
                 else devAgent.runPythonCode(code, confirm, stopped).let { r ->
-                    if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.evidence
+                    if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.evidence
                 }
             }
             "dev_shell" -> {
                 val command = args.optString("command")
                 if (command.isBlank()) "error: command is required"
                 else devAgent.runShellCommand(command, stopped).let { r ->
-                    if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.evidence
+                    if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.evidence
                 }
             }
             "dev_plan" -> {
@@ -76,11 +76,11 @@ internal class OrionDevCapabilityExecutor(
                 if (path.isBlank()) "error: path is required"
                 else if (proposedChange.isBlank()) "error: proposed_change is required"
                 else devAgent.planChange(path, proposedChange).let { r ->
-                    if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.summary + "\n" + r.evidence
+                    if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.summary + "\n" + r.evidence
                 }
             }
             "dev_summary" -> devAgent.projectSummary().let { r ->
-                if (r.blocker.isNotBlank()) "error: ${r.blocker}" else r.summary
+                if (!r.blocker.isNullOrBlank()) "error: ${r.blocker}" else r.summary
             }
             "macro_save" -> {
                 val name = args.optString("name")
