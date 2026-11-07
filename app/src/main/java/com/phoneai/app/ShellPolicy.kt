@@ -28,6 +28,13 @@ internal object ShellPolicy {
         Regex("""(?is)\b(?:python(?:3)?|perl|ruby|node)\s+(?:-[ce]|-e)\s+[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)""")
     )
     private val remotePipeToShell = Regex("""(?is)\b(?:curl|wget)\b[^;&|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b""")
+    /** Prompt-injected shell reads of API keys, app prefs or keystore files could be exfiltrated. */
+    private val keyStorage = listOf(
+        Regex("(?i)shared_prefs"),
+        Regex("(?i)/data/(data|user/\\d+)/com\\.phoneai\\.app"),
+        Regex("(?i)/data/misc/(keystore|keychain)|android_?keystore"),
+        Regex("(?i)orion_api_credentials|apikeyvault")
+    )
     private val forkBomb = listOf(
         Regex("""(?s):\s*\(\s*\)\s*\{[^}]*\}"""),
         Regex("""(?s)\b(?:fork|bomb)\s*\(\s*\)\s*\{[^}]*\}""")
@@ -49,6 +56,7 @@ internal object ShellPolicy {
         if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
+        if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { remotePipeToShell.containsMatchIn(it) }) return ShellRisk.BLOCKED
         return ShellRisk.SAFE
     }
