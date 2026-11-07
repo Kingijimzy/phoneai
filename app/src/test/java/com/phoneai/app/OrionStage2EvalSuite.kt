@@ -100,7 +100,7 @@ internal class OrionStage2EvalSuite {
         ws.write("MainActivity.kt", "class MainActivity {\n  fun onCreate() {}\n}\n")
         ws.write("build.gradle.kts", "plugins { id('com.android.application') }\n")
 
-        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context))
+        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
         val result = devAgent.understandRepository(".")
 
         assertFalse("dev agent should not report a blocker", result.blocker.isNotBlank())
@@ -114,7 +114,7 @@ internal class OrionStage2EvalSuite {
         val ws = OrionPythonWorkspace(context)
         ws.write("calculator.py", "def add(a, b): return a + b\n")
 
-        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context))
+        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
         val result = devAgent.readSourceFile("calculator.py")
 
         assertFalse("read should not be blocked", result.blocker.isNotBlank())
@@ -125,7 +125,7 @@ internal class OrionStage2EvalSuite {
     @Test
     fun stage2_devAgentWritesSourceFileWithBackup() {
         val ws = OrionPythonWorkspace(context)
-        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context))
+        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
 
         val writeResult = devAgent.writeSourceFile("new_module.py", "def hello(): return 'world'\n")
         assertTrue("write should succeed", writeResult.codeWritten)
@@ -139,7 +139,7 @@ internal class OrionStage2EvalSuite {
 
     @Test
     fun stage2_devAgentHonestyContract() {
-        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context))
+        val devAgent = OrionDevAgent(context, OrionPythonCapabilityExecutor(context, null))
         val result = devAgent.projectSummary()
 
         // The Dev Agent should never claim build/test/install success without evidence
