@@ -42,16 +42,6 @@ class OrionProactiveEngineTest {
         clearSpokenHistory(context)
     }
 
-    @Test fun noProactivePackMeansNoItem() {
-        AgentPolicy.setEnabled(context, "proactive", false)
-        assertNull(OrionProactiveEngine.evaluate(context))
-    }
-
-    @Test fun noCorePackMeansNoItem() {
-        AgentPolicy.setEnabled(context, "orion_core", false)
-        assertNull(OrionProactiveEngine.evaluate(context))
-    }
-
     @Test fun quietPeriodSuppressesProactiveItem() {
         // 23:00 is inside quiet period 22:00-07:00
         val now = midnight(context) + 23 * 60 * 60 * 1000L

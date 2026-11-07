@@ -1,61 +1,34 @@
 package com.phoneai.app
 
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Free mode: the owner decides what Orion does. The safety gate no longer refuses banking apps, credential
+ * fields or "sensitive" screens. The detection helpers remain only so credentials are not copied into
+ * memory or logs.
+ */
 class SafetyGateTest {
-    @Test fun ordinaryGameAndChatScreensAreNotSensitive() {
-        val game = "FC Mobile · transfer market · purchase players · trading tokens · wallet · card collection · pin your favorite team"
-        val chat = "Can you transfer the file? I bought a card and pinned the message in our group chat."
-        assertFalse(SafetyGate.isSensitiveActionScreen(game))
-        assertFalse(SafetyGate.isSensitiveActionScreen(chat))
-        assertNull(SafetyGate.blockReason("type", null, "transfer the file to my friend", "com.example.chat", "Chat"))
-        assertNull(SafetyGate.blockReason("type", null, "I purchased FC points yesterday", "com.example.game", "FC Mobile"))
-    }
-
-    @Test fun genericFinancialVocabularyDoesNotBlockTyping() {
-        listOf("transfer", "purchase", "trading", "wallet", "card", "pin").forEach { word ->
-            assertNull("Unexpected block for $word", SafetyGate.blockReason("type", null, "The word $word appears in ordinary conversation.", "com.example.chat", "Chat"))
+    @Test fun nothingIsBlockedAtDispatch() {
+        listOf("enter your PIN", "card number", "my password is hunter2", "4111 1111 1111 1111").forEach { text ->
+            assertNull(text, SafetyGate.blockReason("type", null, text, "com.example.chat", "Chat"))
         }
-        assertFalse(SafetyGate.containsSensitiveCredentialText("I pinned the chat and collected a card."))
+        assertNull(SafetyGate.blockReason("browser_type", "password input", "hello", "com.example.browser", "Browser"))
+        assertNull(SafetyGate.blockReason("click", null, null, "com.example.bankapp", "Banking"))
+        assertNull(SafetyGate.blockReason("open_app", "Banking", null, "com.example.chat", "Chat"))
     }
 
-    @Test fun explicitCredentialContextsAreBlocked() {
-        listOf("enter your PIN", "card number", "CVV", "enter your password", "one-time code", "bank account number", "recovery phrase", "private key", "my password is hunter2").forEach { text ->
-            assertNotNull("Expected credential block for: $text", SafetyGate.blockReason("type", null, text, "com.example.chat", "Chat"))
-        }
-        assertNotNull(SafetyGate.blockReason("browser_type", "password input", "hello", "com.example.browser", "Browser"))
-        assertNotNull(SafetyGate.blockReason("browser_type", "card number", "hello", "com.example.browser", "Browser"))
-        assertNotNull(SafetyGate.blockReason("browser_type", "PIN", "1234", "com.example.browser", "Browser"))
-        assertNull(SafetyGate.blockReason("browser_type", "pin your favorite team", "Orion", "com.example.game", "FC Mobile"))
-        assertNull(SafetyGate.blockReason("type", null, "I read an article about password managers and trading card games.", "com.example.chat", "Chat"))
-        assertFalse(SafetyGate.isSensitiveActionScreen("A guide about password managers, pinned messages, and card collections."))
+    @Test fun screensAreNeverRefusedAsSensitive() {
+        assertFalse(SafetyGate.isSensitiveActionScreen("Confirm payment to continue"))
+        assertFalse(SafetyGate.isSensitiveActionScreen("Enter your PIN", "com.whatsapp"))
+        assertFalse(SafetyGate.isSensitiveActionScreen("Place order"))
     }
 
-    @Test fun actionScreenRequiresConsequentialContext() {
-        assertTrue(SafetyGate.isSensitiveActionScreen("Confirm payment to continue"))
-        assertTrue(SafetyGate.isSensitiveActionScreen("Enter your PIN"))
-        assertTrue(SafetyGate.isSensitiveActionScreen("Place order"))
-        assertFalse(SafetyGate.isSensitiveActionScreen("Trading tips: how to buy a new player card"))
-        assertFalse(SafetyGate.isSensitiveActionScreen("Wallet inventory and card collection"))
-        assertFalse(SafetyGate.isSensitiveActionScreen("Transfer market opens at 6 PM"))
-    }
-
-    @Test fun sensitiveAppsAndLongCardNumbersRemainProtected() {
+    @Test fun credentialDetectionStillKeepsSecretsOutOfMemory() {
+        assertTrue(SafetyGate.containsSensitiveCredentialText("my password is hunter2"))
         assertTrue(SafetyGate.isSensitiveApp("com.example.bankapp", "Banking"))
-        assertTrue(SafetyGate.isSensitiveApp("com.google.android.apps.authenticator2", "Google Authenticator"))
-        assertNotNull(SafetyGate.blockReason("type", null, "4111 1111 1111 1111", "com.example.chat", "Chat"))
-        assertNull(SafetyGate.blockReason("read_screen", null, null, "com.example.bankapp", "Banking"))
-        assertNotNull(SafetyGate.blockReason("click", null, null, "com.example.bankapp", "Banking"))
-    }
-
-    @Test fun chatAppsOnlyPauseForSecretEntryNotMoneyTalk() {
-        val chat = "[3] Please send money for the bank account, verification code is 1234, pay now"
-        assertTrue(SafetyGate.isSensitiveActionScreen(chat))
-        assertFalse(SafetyGate.isSensitiveActionScreen(chat, "com.whatsapp"))
-        assertTrue(SafetyGate.isSensitiveActionScreen("Enter your PIN to continue", "com.whatsapp"))
+        assertFalse(SafetyGate.containsSensitiveCredentialText("I pinned the chat and collected a card."))
     }
 }

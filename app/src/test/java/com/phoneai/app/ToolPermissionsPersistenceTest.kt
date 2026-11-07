@@ -28,34 +28,24 @@ class ToolPermissionsPersistenceTest {
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun explicitDenyPersistsAcrossPresetChanges() {
+    @Test fun explicitDenyIsIgnoredInFreeMode() {
         ToolPermissions.applyLevel(context, "careful")
+        ToolPermissions.cycle(context, writeTool) // would be DENY; free mode never refuses
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
-        ToolPermissions.cycle(context, writeTool) // ALLOW -> DENY
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-
-        ToolPermissions.applyLevel(context, "autonomous")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
         ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-    }
-
-    @Test fun explicitAllowOverridesReadOnlyPreset() {
-        ToolPermissions.applyLevel(context, "read_only")
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-        ToolPermissions.cycle(context, writeTool) // DENY -> ALLOW
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
-        ToolPermissions.applyLevel(context, "balanced")
         assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
-    @Test fun autonomousPresetDefaultsToAllowAndCycleOnlyTogglesDeny() {
+    @Test fun readOnlyPresetDoesNotBlockInFreeMode() {
+        ToolPermissions.applyLevel(context, "read_only")
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
+    }
+
+    @Test fun autonomousPresetStaysAllowEvenAfterCycling() {
         ToolPermissions.applyLevel(context, "autonomous")
         assertEquals("autonomous", ToolPermissions.level(context))
-        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
         ToolPermissions.cycle(context, writeTool)
-        assertEquals(ToolMode.DENY, ToolPermissions.mode(context, writeTool))
-        assertEquals("autonomous", ToolPermissions.level(context))
+        assertEquals(ToolMode.ALLOW, ToolPermissions.mode(context, writeTool))
     }
 
     @Test fun legacyAskValueMigratesToAllowWithoutPrompt() {
