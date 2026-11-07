@@ -236,18 +236,18 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
 
     /** Starts a fresh request budget and identical-failure counter for one user command. */
     /** AI requests used by the current command (for the cost line). */
-    fun requestsUsed(): Int = commandRequestBudget.used()
+    override fun requestsUsed(): Int = commandRequestBudget.used()
 
-    fun beginCommand() {
+    override fun beginCommand() {
         commandRequestBudget.reset()
     }
 
-    fun resume() {
+    override fun resume() {
         synchronized(connectionLock) { cancelled = false }
     }
 
     /** Aborts the request in flight and prevents a concurrently starting request from attaching. */
-    fun cancel() {
+    override fun cancel() {
         val connection = synchronized(connectionLock) {
             cancelled = true
             active
@@ -438,7 +438,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             (r.code == 400 && (r.body.contains("API key", true) || r.body.contains("api_key", true)))
 
     /** Every model id this provider's key can see. Successful results are cached for ten minutes. */
-    fun allModels(p: Provider): List<String> {
+    override fun allModels(p: Provider): List<String> {
         val key = Prefs.key(ctx, p.id)
         if (key.isEmpty()) throw IllegalStateException("No ${p.label} key saved.")
         if (!Prefs.allowPaidProviders(ctx) && p.requiresPaidOptIn) {
@@ -487,7 +487,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
      * A model appearing in /models is not proof that its chat endpoint is enabled for this key.
      * Returns an empty string only when a real chat completion returns usable text.
      */
-    fun testModel(p: Provider, model: String, vision: Boolean): String {
+    override fun testModel(p: Provider, model: String, vision: Boolean): String {
         // A model-picker probe is its own user command and must not inherit the
         // previous probe's request count when the same Nim instance is reused.
         beginCommand()
@@ -706,7 +706,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
     }
 
     /** A command begins at its explicit caller; the shared budget covers every fallback. */
-    fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int = 400, temperature: Double = 0.2, fastResponse: Boolean = false, onDelta: ((String) -> Unit)? = null): String {
+    override fun chat(messages: JSONArray, vision: Boolean, maxTokens: Int, temperature: Double, fastResponse: Boolean, onDelta: ((String) -> Unit)?): String {
         if (cancelled) throw RuntimeException("Stopped.")
         // Do not reset here: Agent.run() can call chat() several times for one
         // multi-step user command. Its explicit beginCommand() must cover the
@@ -725,7 +725,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
         }
         fun usable(p: Provider): Boolean = configured(p) && modelAllowed(p)
 
-        val primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
+        var primary = if (configured(selected)) selected else Providers.all.firstOrNull { usable(it) }
             ?: if (Providers.all.any { configured(it) }) {
                 throw IllegalStateException("Only paid or metered providers are configured. Orion blocked the request because paid-provider use is off; enable the explicit setting in Settings only if you accept possible charges.")
             } else {
@@ -741,7 +741,7 @@ class Nim internal constructor(private val ctx: Context, private val commandMode
             if (local != null && usable(local)) {
                 onStatus?.invoke("Offline: switching to local model (${local.label})...")
                 // Force the local provider as primary; backups are irrelevant offline.
-                return attempt(local, hasBackup = false)
+                primary = local
             } else if (Prefs.failFastOffline(ctx)) {
                 throw RuntimeException("Offline: no local model provider is configured. Add an Ollama key in Settings or disable offline mode.")
             }
