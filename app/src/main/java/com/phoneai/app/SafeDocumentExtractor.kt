@@ -22,7 +22,7 @@ object SafeDocumentExtractor {
 
     data class Extracted(val name: String, val mimeType: String, val text: String, val bytesRead: Int)
 
-    private val allowedExtensions = setOf("txt", "md", "markdown", "csv", "tsv", "json", "xml", "html", "htm", "log")
+    private val allowedExtensions = setOf("txt", "md", "markdown", "csv", "tsv", "json", "xml", "html", "htm", "log") + OrionOfficeExtractor.supported
 
     fun extract(resolver: ContentResolver, uri: Uri): Extracted {
         val mime = resolver.getType(uri)?.substringBefore(';')?.lowercase(Locale.ROOT) ?: "application/octet-stream"
@@ -38,7 +38,7 @@ object SafeDocumentExtractor {
         }
         val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
         if (ext !in allowedExtensions) {
-            throw IllegalArgumentException("Unsupported document type: .$ext. Supported formats: TXT, Markdown, CSV/TSV, JSON, XML, HTML, and LOG. PDF and Office files are not supported yet.")
+            throw IllegalArgumentException("Unsupported document type: .$ext. Supported formats: TXT, Markdown, CSV/TSV, JSON, XML, HTML, LOG, DOCX, XLSX and PPTX. PDF is not supported yet.")
         }
         if (declaredSize > MAX_BYTES) {
             throw IllegalArgumentException("This document is larger than the 1 MB limit. Choose a smaller text file.")
@@ -58,6 +58,11 @@ object SafeDocumentExtractor {
             }
         }
         val bytes = output.toByteArray()
+        if (ext in OrionOfficeExtractor.supported) {
+            val office = OrionOfficeExtractor.extract(ext, bytes, MAX_CHARS)
+            if (office.isBlank()) throw IllegalArgumentException("This document is empty.")
+            return Extracted(name, mime, office, bytes.size)
+        }
         if (bytes.any { it == 0.toByte() }) {
             throw IllegalArgumentException("This file appears to contain binary data, not plain text. Choose a supported text document.")
         }

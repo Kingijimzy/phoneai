@@ -15,6 +15,7 @@ internal object ShellPolicy {
     )
     private val factoryResetProtection = listOf(
         Regex("""(?is)\b(?:factory.reset|wipe.data|wipe.cache|format.userdata|erase.all|factory_reset|--wipe\s+(?:all|data))"""),
+        Regex("""(?is)\bformat\s+/(?:data|system|vendor|product|odm|boot|cache|sdcard|storage)(?:/|\s|$)"""),
         Regex("""(?is)\brecovery\s+--wipe\s+(?:data|cache|all)\b"""),
         Regex("""(?is)\b(?:fastboot)\s+(?:erase|format|wipe)\b"""),
         Regex("""(?is)\bsettings\s+put\s+(?:global|secure|system)\s+(?:device_provisioned|setup_wizard).*0\b""")
@@ -28,6 +29,13 @@ internal object ShellPolicy {
         Regex("""(?is)\b(?:python(?:3)?|perl|ruby|node)\s+(?:-[ce]|-e)\s+[^;&|]*?/dev/(?:block(?:/|\b)|sd[a-z]\b|nvme\d+n\d+\b|mmcblk\d+\b|loop\d+\b|dm-\d+\b)""")
     )
     private val remotePipeToShell = Regex("""(?is)\b(?:curl|wget)\b[^;&|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b""")
+    /** Prompt-injected shell reads of API keys, app prefs or keystore files could be exfiltrated. */
+    private val keyStorage = listOf(
+        Regex("(?i)shared_prefs"),
+        Regex("(?i)/data/(data|user/\\d+)/com\\.phoneai\\.app"),
+        Regex("(?i)/data/misc/(keystore|keychain)|android_?keystore"),
+        Regex("(?i)orion_api_credentials|apikeyvault")
+    )
     private val forkBomb = listOf(
         Regex("""(?s):\s*\(\s*\)\s*\{[^}]*\}"""),
         Regex("""(?s)\b(?:fork|bomb)\s*\(\s*\)\s*\{[^}]*\}""")
@@ -49,6 +57,7 @@ internal object ShellPolicy {
         if (forms.any { form -> factoryResetProtection.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> rawBlockDeviceWrite.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { form -> forkBomb.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
+        if (forms.any { form -> keyStorage.any { it.containsMatchIn(form) } }) return ShellRisk.BLOCKED
         if (forms.any { remotePipeToShell.containsMatchIn(it) }) return ShellRisk.BLOCKED
         return ShellRisk.SAFE
     }

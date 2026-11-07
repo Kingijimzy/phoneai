@@ -12,7 +12,7 @@ import org.json.JSONObject
  */
 internal object OrionCapabilityAdapters {
     enum class Backend {
-        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, DIAGNOSTICS, TRADING_READONLY, TRADING_DESK, GAMING, CORE, DEV
+        SHELL, PYTHON, FILES, BROWSER, MCP, DEVICE, SKILLS, INTEGRATIONS, COMMUNICATION, MEMORY, TASKS, RESEARCH, UTILITIES, DIAGNOSTICS, TRADING_READONLY, TRADING_DESK, GAMING, RUNTIME_STATE, DEV
     }
 
     data class Route(val backend: Backend, val tool: String)
@@ -57,7 +57,7 @@ internal object OrionCapabilityAdapters {
         Backend.TRADING_READONLY to setOf("trade_history_summary"),
         Backend.TRADING_DESK to setOf("trading_calendar", "trading_sessions", "trade_risk_check", "setup_scan", "strategy_backtest", "market_forecast", "market_conditions", "strategy_list", "strategy_save", "strategy_record_result", "paper_trade", "trading_kill_switch", "positions_monitor", "bybit_sync", "habit_report", "crypto_derivatives", "memecoin_check", "memecoin_watch", "wallet_check", "wallet_watch", "chain_overview"),
         Backend.GAMING to setOf("gaming_session_summary", "gaming_session_note_add", "gaming_focus_preset"),
-        Backend.CORE to setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state"),
+        Backend.RUNTIME_STATE to setOf("model_decision_log", "model_decision_search", "model_status", "model_offline_mode", "soul_state"),
         Backend.DEV to setOf(
             "dev_understand", "dev_read", "dev_write", "dev_python", "dev_shell", "dev_plan", "dev_summary",
             "macro_save", "macro_run", "macro_list", "macro_delete"

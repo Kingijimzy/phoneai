@@ -13,8 +13,38 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.Robolectric
 import org.robolectric.shadows.ShadowContentResolver
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
 import android.provider.CalendarContract
+
+/** Robolectric ships no calendar provider; this in-memory one honours the columns and bounds the monitor reads. */
+class FakeCalendarProvider : ContentProvider() {
+    companion object { val rows = mutableListOf<ContentValues>() }
+    override fun onCreate() = true
+    override fun insert(uri: Uri, values: ContentValues?): Uri? {
+        rows += ContentValues(values ?: return null)
+        return Uri.withAppendedPath(uri, rows.size.toString())
+    }
+    override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, sort: String?): Cursor {
+        val cols = projection ?: arrayOf("_id", "title", "dtstart", "eventLocation")
+        val cursor = MatrixCursor(cols)
+        val from = args?.getOrNull(0)?.toLongOrNull() ?: Long.MIN_VALUE
+        val to = args?.getOrNull(1)?.toLongOrNull() ?: Long.MAX_VALUE
+        rows.withIndex().filter { (_, v) -> (v.getAsLong("dtstart") ?: 0L).let { it >= from && it < to } && v.getAsString("eventTimezone") != null }
+            .sortedBy { it.value.getAsLong("dtstart") }.forEach { (i, v) ->
+                cursor.addRow(cols.map { c -> if (c == "_id") i + 1 else v.get(c) }.toTypedArray())
+            }
+        return cursor
+    }
+    override fun update(uri: Uri, v: ContentValues?, s: String?, a: Array<String>?) = 0
+    override fun delete(uri: Uri, s: String?, a: Array<String>?) = 0
+    override fun getType(uri: Uri): String? = null
+}
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -23,6 +53,8 @@ class OrionCalendarMonitorTest {
 
     @Before fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        FakeCalendarProvider.rows.clear()
+        Robolectric.setupContentProvider(FakeCalendarProvider::class.java, CalendarContract.AUTHORITY)
         OrionSensorScope.values().forEach { OrionSensorConsent.revoke(context, it) }
     }
 
