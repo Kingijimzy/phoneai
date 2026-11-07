@@ -3,8 +3,6 @@ package com.phoneai.app
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Tracks follow-ups the owner mentioned in conversation so Orion can
@@ -78,7 +76,7 @@ internal object OrionFollowUpStore {
             )
 
     /** Follow-ups due within the lookahead window (minutes). */
-    dueSoon(context: Context, withinMinutes: Long, now: Long = System.currentTimeMillis()): List<FollowUp> =
+    fun dueSoon(context: Context, withinMinutes: Long, now: Long = System.currentTimeMillis()): List<FollowUp> =
         pending(context).filter { item ->
             item.dueAt != null && item.dueAt!! > now && item.dueAt!! <= now + withinMinutes * 60_000L
         }
@@ -125,7 +123,4 @@ internal object OrionFollowUpStore {
         prefs(context).edit().putString(KEY_ITEMS, arr.toString()).apply()
     }
 
-    companion object {
-        @Volatile private var idCounter = AtomicInteger(0)
-    }
 }
