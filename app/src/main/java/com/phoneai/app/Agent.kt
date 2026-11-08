@@ -220,6 +220,18 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         commandNim = commandNim
     )
 
+    // Phase 0C: Mission Controller
+    private val missionController = OrionMissionController(
+        context = svc.applicationContext,
+        unifiedRuntime = unifiedRuntime,
+        svc = svc,
+        ui = ui,
+        tools = tools,
+        localExecutor = local,
+        pythonExecutor = pythonExecutor,
+        commandNim = commandNim
+    )
+
     // History and state (delegated to unified runtime but kept for compatibility)
     private val chatHist = JSONArray()
     @Volatile private var pendingAgentTopic: String? = null
@@ -292,15 +304,28 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         }
     }
 
-    /** Public entry points - delegate to unified runtime */
+    /** Public entry points - delegate to unified runtime or mission controller */
 
     fun runConversation(input: String) = withInteractionTrace { unifiedRuntime.runChat(input) }
 
     fun runLiveConversation(input: String) = withInteractionTrace { unifiedRuntime.runVoice(input) }
 
-    fun run(inputCommand: String) = withInteractionTrace { unifiedRuntime.runCommand(inputCommand) }
+    /** Command mode uses mission controller for persistent lifecycle, specialist delegation, recovery */
+    fun run(inputCommand: String) = withInteractionTrace {
+        // Use mission controller for command mode - enables persistence, specialists, pause/resume
+        missionController.startMission(inputCommand)
+    }
 
-    fun runResume(input: String) = withInteractionTrace { unifiedRuntime.runResume(input) }
+    fun runResume(input: String) = withInteractionTrace {
+        // Resume uses mission controller to restore and continue
+        val activeMission = missionController.getCurrentMission()
+            ?: runCatching { missionController.restoreActiveMission() }.getOrNull()
+        if (activeMission != null && activeMission.canResume) {
+            missionController.resumeMission(activeMission.id, OrionMissionController.ResumeStrategy.CONTINUE)
+        } else {
+            unifiedRuntime.runResume(input)
+        }
+    }
 
     /** Stop all execution */
     fun stop() {
@@ -309,6 +334,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         commandNim.cancel()
         talkNim.cancel()
         unifiedRuntime.stop()
+        missionController.cancelMission()
     }
 
     /** Drop conversational context after the user explicitly clears the active chat. */
@@ -329,6 +355,7 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
         activeObjectiveId = ""
         OrionObjectiveGraph.clear(svc)
         unifiedRuntime.reset()
+        missionController.cancelMission() // Clear any active mission
     }
 
     /** Reset the full agent state (alias for resetConversationContext). */
@@ -336,6 +363,9 @@ class Agent(private val svc: PhoneAiService, private val ui: AgentUi) {
 
     /** Current task command for external access */
     internal fun currentTaskCommand(): String = currentTask
+
+    /** Access to mission controller for Phase 0C observability and control */
+    fun getMissionController(): OrionMissionController = missionController
 
     /** Chat system prompt - now built by unified runtime */
     private fun chatSystem(query: String? = null): String {
