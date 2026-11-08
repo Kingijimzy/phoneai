@@ -51,7 +51,7 @@ internal class OrionCapabilityBroker(
         reason: String
     ): CapabilityGrant {
         // Validate tools exist and are registered
-        val validTools = requestedTools.filter { ToolRegistry.all.any { it.name == it } }
+        val validTools = requestedTools.filter { tool -> ToolRegistry.all.any { registered -> registered.name == tool } }
         val invalidTools = requestedTools - validTools
 
         if (validTools.isEmpty()) {
