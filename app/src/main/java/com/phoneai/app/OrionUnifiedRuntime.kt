@@ -40,13 +40,13 @@ internal class OrionUnifiedRuntime(
     private val capabilityDiscovery: OrionCapabilityDiscovery = OrionCapabilityDiscovery,
 
     // Decision Engine components — all share one service and read one context
-    private val intentIntelligence: OrionIntentIntelligence = OrionIntentIntelligence(svc),
-    private val reasoningEngine: OrionReasoningEngine = OrionReasoningEngine(svc),
-    private val decisionEngine: OrionDecisionEngine = OrionDecisionEngine(svc),
-    private val planningEngine: OrionPlanningEngine = OrionPlanningEngine(svc),
-    private val predictiveIntelligence: OrionPredictiveIntelligence = OrionPredictiveIntelligence(svc),
-    private val policyEngine: OrionPolicyEngine = OrionPolicyEngine(svc),
-    private val contextIntegration: OrionContextIntegration = OrionContextIntegration(svc)
+    internal val intentIntelligence: OrionIntentIntelligence = OrionIntentIntelligence(svc),
+    internal val reasoningEngine: OrionReasoningEngine = OrionReasoningEngine(svc),
+    internal val decisionEngine: OrionDecisionEngine = OrionDecisionEngine(svc),
+    internal val planningEngine: OrionPlanningEngine = OrionPlanningEngine(svc),
+    internal val predictiveIntelligence: OrionPredictiveIntelligence = OrionPredictiveIntelligence(svc),
+    internal val policyEngine: OrionPolicyEngine = OrionPolicyEngine(svc),
+    internal val contextIntegration: OrionContextIntegration = OrionContextIntegration(svc)
 ) {
 
     // ========================================================================
