@@ -2565,7 +2565,7 @@ Rules:
                     }
                 }
             }
-            val say = step.optString("say")
+            val say = OrionHonesty.scrub(step.optString("say"), (0 until ranSteps.length()).map { ranSteps.optJSONObject(it)?.optString("tool").orEmpty().lowercase() }.toSet())
             if (say.isNotBlank()) ui.say(say)
             if (!planAnnounced) {
                 step.optJSONArray("plan")?.let { arr ->

@@ -110,6 +110,7 @@ internal object ToolRegistry {
         tool("call_place", ToolAccess.WRITE, "call_place {number}: place a phone call directly"),
         tool("call_answer", ToolAccess.WRITE, "call_answer {}: answer the ringing call"),
         tool("call_end", ToolAccess.WRITE, "call_end {}: hang up the current call"),
+        tool("show_file", ToolAccess.READ, "show_file {path}: show a file to Kingi — text and code come back into the chat; images, PDFs and other files open in their viewer. Use after creating any file"),
         tool("clipboard_read", ToolAccess.READ, "clipboard_read {}: read the text currently on the clipboard"),
         tool("battery", ToolAccess.READ, "battery {}: report battery status"),
         tool("chronos_awareness", ToolAccess.READ, "chronos_awareness {}: report coarse app category and focus duration from owner-granted Chronos context; no app identifier or screen content is retained"),

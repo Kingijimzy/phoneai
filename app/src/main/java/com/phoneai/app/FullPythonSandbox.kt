@@ -1,6 +1,5 @@
 package com.phoneai.app
 
-import android.util.Base64
 import org.json.JSONObject
 
 /**
@@ -37,8 +36,8 @@ internal class FullPythonSandbox(
 
     private fun invoke(source: String, input: Any?): JSONObject {
         val inputText = when (input) { null, JSONObject.NULL -> "null"; is JSONObject, is org.json.JSONArray, is Number, is Boolean -> input.toString(); else -> JSONObject.quote(input.toString()) }
-        val b64 = Base64.encodeToString(inputText.toByteArray(), Base64.NO_WRAP)
-        val code = "import json, base64\nINPUT = json.loads(base64.b64decode('$b64').decode())\nRESULT = None\n" +
+        val hex = inputText.toByteArray().joinToString("") { "%02x".format(it) }
+        val code = "import json\nINPUT = json.loads(bytes.fromhex('$hex').decode())\nRESULT = None\n" +
             source + "\nprint('$marker' + json.dumps(RESULT))\n"
         val out = try { runFull(code) } catch (e: Exception) { return JSONObject().put("ok", false).put("error", (e.message ?: "run failed").take(200)) }
         val line = out.lineSequence().lastOrNull { it.contains(marker) }

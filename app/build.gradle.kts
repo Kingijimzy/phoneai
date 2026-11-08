@@ -13,6 +13,11 @@ chaquopy {
     defaultConfig {
         // Python is bundled in the APK for ARM64 devices; no Termux bridge required.
         version = "3.11"
+        // Pure-Python libraries scripts commonly need; available to the bundled-Python fallback runner.
+        pip {
+            install("requests")
+            install("beautifulsoup4")
+        }
     }
 }
 

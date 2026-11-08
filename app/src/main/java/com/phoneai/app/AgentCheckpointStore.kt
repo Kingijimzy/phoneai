@@ -148,7 +148,11 @@ object AgentCheckpointStore {
 
     fun begin(c: Context, command: String): Boolean = synchronized(lock) {
         val existing = readCheckpoint(c)
-        if (existing?.optString("status") == "running") return@synchronized false
+        // A "running" checkpoint nobody has touched for 90s belongs to a dead run (process killed, step cap):
+        // it is archived and resumable later, never allowed to block a new request.
+        val staleRunning = existing?.optString("status") == "running" &&
+            System.currentTimeMillis() - existing.optLong("updatedAt", 0L) > 90_000L
+        if (existing?.optString("status") == "running" && !staleRunning) return@synchronized false
         val previousParentId = existing?.takeIf { isPending(it) }?.optString("taskId")
         if (existing != null && isPending(existing) && !archive(c, existing)) return@synchronized false
         val now = System.currentTimeMillis()
