@@ -12,7 +12,7 @@ import java.util.Locale
  */
 internal object OrionTasksCapabilityExecutor {
     private val supportedTools = setOf(
-        "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
+        "agent_jobs", "agent_cancel", "agent_reassign", "ask_agent", "queue_agent", "specialist_job_status", "create_agent", "task_list", "task_add", "task_update", "task_delete", "ask_user",
         "morning_brief", "standing_order", "goal_add", "goal_list", "goal_remove", "goal_toggle",
         "proactive_check", "proactive_status", "followup_add", "followup_list", "followup_done", "quiet_period_set"
     )
@@ -138,6 +138,29 @@ internal object OrionTasksCapabilityExecutor {
                             (item.optString("parentTaskId").takeIf { it.isNotBlank() }?.let { " (parent $it)" } ?: "")
                     }
             taskLines + recovery + archivedText + delegationText + "\n" + OrionWorkerJobStore(service).promptSummary()
+        }
+        "agent_jobs" -> {
+            val now = System.currentTimeMillis()
+            val rows = OrionWorkerJobStore(service).all().sortedByDescending { it.updatedAt }.take(12)
+            if (rows.isEmpty()) "No specialist jobs." else rows.joinToString("\n") { j ->
+                "${j.id} [${j.status.name.lowercase()}] ${j.kind.name.lowercase()} age=${(now - j.createdAt) / 1000}s attempts=${j.attempts} :: ${j.objective.take(90)}" +
+                    (if (j.result.isNotBlank()) " | result: ${j.result.take(80)}" else "")
+            } + "\nCompare results across jobs for conflicts; cancel what is stuck, reassign what suits another specialist, merge what succeeded."
+        }
+        "agent_cancel" -> {
+            val id = args.optString("job_id").trim()
+            if (OrionWorkerJobStore(service).cancel(id, args.optString("reason", "cancelled by Orion"))) "cancelled specialist job $id"
+            else "error: job $id not found or already finished"
+        }
+        "agent_reassign" -> {
+            val id = args.optString("job_id").trim()
+            val store = OrionWorkerJobStore(service)
+            val job = store.all().firstOrNull { it.id == id }
+            if (job == null) "error: job $id not found"
+            else {
+                store.cancel(id, "reassigned to ${args.optString("agent")}")
+                tools.queueAgent(args.optString("agent"), job.objective, job.parentObjectiveId.orEmpty(), "reassign-" + id.takeLast(8) + "-" + args.optString("agent"))
+            }
         }
         "specialist_job_status" -> {
             val id = args.optString("job_id").trim()

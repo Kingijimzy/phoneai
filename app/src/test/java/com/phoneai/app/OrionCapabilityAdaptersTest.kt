@@ -177,7 +177,7 @@ class OrionCapabilityAdaptersTest {
         val utilities = OrionCapabilityAdapters.routes()
             .filter { it.backend == OrionCapabilityAdapters.Backend.UTILITIES }
         assertEquals(
-            setOf("settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "call_status", "call_place", "call_answer", "call_end", "battery",
+            setOf("settings", "alarm", "timer", "volume", "flashlight", "copy", "clipboard_read", "show_file", "call_status", "call_place", "call_answer", "call_end", "battery",
                 "time", "wait", "device_info", "device_location"),
             utilities.map { it.tool }.toSet()
         )

@@ -44,7 +44,7 @@ internal object OrionPythonRuntime {
         val manifest = LinuxRuntimePolicy.productionManifest
         if (!installer.isReady(manifest)) {
             val installed = installer.install(manifest)
-            if (installed.isFailure) return "error: Alpine runtime installation failed: ${(installed.exceptionOrNull()?.message ?: "unknown error").take(220)}"
+            if (installed.isFailure) return runBundled(app, workspaceRoot, code, "Linux runtime install failed: ${(installed.exceptionOrNull()?.message ?: "unknown error").take(120)}")
         }
 
         // Package installation is persistent in the app-private Alpine rootfs. The owner's
@@ -59,10 +59,10 @@ internal object OrionPythonRuntime {
                 manifest, "apk add --no-cache python3 || { rc=\$?; echo \"CPYTHON_INSTALL_DIAGNOSTICS\"; echo \"--- filesystem ---\"; df -h / /var/cache/apk 2>&1; echo \"--- inodes ---\"; df -i / 2>&1; echo \"--- package state ---\"; apk info -e python3 2>&1; echo \"--- repositories ---\"; cat /etc/apk/repositories 2>&1; exit \$rc; }",
                 180_000L, onOutput = onOutput, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped
             )
-            if (!install.startsWith("exit=0")) return "error: CPython package installation failed; no Python execution was started. Full installer diagnostics follow:\\n${install.take(MAX_OUTPUT_CHARS)}"
+            if (!install.startsWith("exit=0")) return runBundled(app, workspaceRoot, code, "CPython install in the Linux runtime failed: " + install.take(160).replace("\n", " "))
             val verified = installer.execute(manifest, "python3 --version && python3 -c 'import sys, platform; print(sys.executable); print(platform.machine()); print(sys.prefix)'", 12_000L, workspaceHostPath = workspaceRoot.absolutePath, shouldStop = stopped)
             if (!verified.startsWith("exit=0") || !verified.contains("Python 3.")) {
-                return "error: apk reported success but CPython verification failed; execution was not started.\\n${verified.take(MAX_OUTPUT_CHARS)}"
+                return runBundled(app, workspaceRoot, code, "Linux CPython verification failed")
             }
         }
 
@@ -107,6 +107,16 @@ internal object OrionPythonRuntime {
         if (quotaExceededDuringRun || quotaAfter == "exceeded") return "error: Python exceeded the 256 MiB workspace quota and was stopped. Further execution is blocked until the workspace is cleaned.\n${result.take(MAX_OUTPUT_CHARS)}"
         return result.take(MAX_OUTPUT_CHARS)
     }
+
+    /**
+     * Fallback that always works: the CPython bundled in the APK (stdlib, urllib/ssl, sqlite, requests,
+     * beautifulsoup4), running in the same persistent workspace. Used when the Linux guest cannot start.
+     */
+    private fun runBundled(app: Context, workspaceRoot: File, code: String, why: String): String = try {
+        if (!Python.isStarted()) Python.start(AndroidPlatform(app))
+        val r = Python.getInstance().getModule("orion_full").callAttr("run_full", code, workspaceRoot.absolutePath, 120).toString()
+        "[ran in Orion's built-in Python (workspace: ${workspaceRoot.name}); $why]\n" + r.take(MAX_OUTPUT_CHARS)
+    } catch (e: Exception) { "error: built-in Python failed too (${(e.message ?: e.javaClass.simpleName).take(160)}); $why" }
 
     /** Generated extensions remain restricted data transforms; they receive no host capabilities. */
     @Synchronized
