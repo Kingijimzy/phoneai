@@ -17,6 +17,7 @@ import java.security.MessageDigest
  */
 internal object SelfExtendingExtensionPolicy {
     const val MAX_SOURCE_BYTES = 8_000
+    const val MAX_FULL_SOURCE_BYTES = 64_000
     const val MAX_OUTPUT_CHARS = 8 * 1024
     const val MAX_TESTS = 12
     private val idPattern = Regex("^[a-z][a-z0-9_]{2,47}$")
@@ -35,8 +36,13 @@ internal object SelfExtendingExtensionPolicy {
 
     fun validateSource(runtime: String, source: String): String? {
         if (source.isBlank()) return "Generated source is empty."
-        if (source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 8,000-byte runtime limit."
-        if (runtime != "python") return "Only Python extensions are executable in this build; JavaScript activation is disabled until an isolated JavaScript sandbox exists."
+        if (runtime != "python_full" && source.toByteArray(Charsets.UTF_8).size > MAX_SOURCE_BYTES) return "Generated source exceeds the 8,000-byte runtime limit."
+        if (runtime == "python_full") {
+            // Full CPython in Orion's workspace runtime: files, network, packages, the phone bridge.
+            if (source.toByteArray(Charsets.UTF_8).size > MAX_FULL_SOURCE_BYTES) return "Source exceeds the 64,000-byte limit."
+            return null
+        }
+        if (runtime != "python") return "Supported extension runtimes: python (pure data transform) and python_full (files, network, packages, phone bridge)."
         OrionSecurityPolicy.findEmbeddedSecret(source)?.let { return it.message }
         if (runtime == "python" && forbiddenPython.any { it.containsMatchIn(source) }) {
             return "Source uses a restricted Python operation; request a simpler capability-scoped implementation."

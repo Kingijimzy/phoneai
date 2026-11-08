@@ -13,9 +13,9 @@ internal class OrionPythonCapabilityExecutor(
     private val context: Context,
     private val tools: Tools?,
     private val extensionStore: SelfExtendingExtensionStore = SelfExtendingExtensionStore(context),
-    private val extensionSandbox: ExtensionSandbox = RestrictedPythonSandbox { source, inputJson ->
-        OrionPythonRuntime.runExtension(context, source, inputJson)
-    }
+    private val extensionSandbox: ExtensionSandbox = FullPythonSandbox(
+        RestrictedPythonSandbox { source, inputJson -> OrionPythonRuntime.runExtension(context, source, inputJson) }
+    ) { code -> tools?.pythonExec(code, { true }, { false }) ?: "error: Python tool bridge is unavailable in this execution context." }
 ) {
     private val testReceipts = ExtensionTestReceiptStore(context)
     private val versionHistory = ExtensionVersionHistory(context)
@@ -126,6 +126,7 @@ internal class OrionPythonCapabilityExecutor(
             else if (ownerAutoActivation) "owner auto-activation was enabled but promotion failed validation"
             else "owner auto-activation is off; awaiting an explicit extension_enable tool request"
         )
+        if (autoActivated) runCatching { OrionLessons.learn(context, "Built and activated tool '$id' (${extension.displayName}): ${extension.description.take(100)}. Reuse it via extension_run before building anything similar.") }
         return if (autoActivated) {
             "SANDBOX TEST PASSED and AUTO-ACTIVATED for $id (source hash ${report.testedSourceSha256.take(12)}): ${report.summary} The exact tested extension is enabled through the registered extension tool."
         } else {
