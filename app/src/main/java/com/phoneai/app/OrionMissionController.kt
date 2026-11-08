@@ -43,7 +43,7 @@ internal class OrionMissionController(
     @Volatile private var isPaused = false
 
     // Concurrency bounds
-    private val MAX_CONCURRENT_SPECIALISTS = 3
+    internal val MAX_CONCURRENT_SPECIALISTS = 3
     private val SPECIALIST_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes
     private val MAX_MISSION_STEPS = 20
     private val MAX_MISSION_DURATION_MS = 30 * 60 * 1000L // 30 minutes

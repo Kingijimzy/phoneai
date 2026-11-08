@@ -34,38 +34,46 @@ internal class OrionSpecialistRuntime(
         var verdict = SpecialistVerdict.FAILED
         var result = "Specialist did not produce a result"
 
+        // Specialist timeout: 10 minutes max
+        val TIMEOUT_MS = 10 * 60 * 1000L
+
         try {
-            session.status = SpecialistStatus.RUNNING
+            withTimeout(TIMEOUT_MS) {
+                session.status = SpecialistStatus.RUNNING
 
-            // Build a scoped unified runtime for this specialist
-            val specialistRuntime = buildScopedRuntime(session)
+                // Build a scoped unified runtime for this specialist
+                val specialistRuntime = buildScopedRuntime(session)
 
-            // Execute the specialist's objective through the decision pipeline
-            val intent = specialistRuntime.analyzeCurrentIntent(session.objective)
-            val decision = specialistRuntime.decideForIntent(intent)
+                // Execute the specialist's objective through the decision pipeline
+                val intent = specialistRuntime.analyzeCurrentIntent(session.objective)
+                val decision = specialistRuntime.decideForIntent(intent)
 
-            if (!decision.canProceed || decision.executionPlan == null || decision.executionPlan!!.steps.isEmpty()) {
-                result = "Specialist cannot proceed: ${decision.blocker ?: "no executable plan"}"
-                verdict = SpecialistVerdict.FAILED
-            } else {
-                // Execute the plan
-                val outcome = specialistRuntime.executePlan(
-                    decision.executionPlan!!, decision,
-                    specialistRuntime.predictObstaclesForPlan(decision.executionPlan!!, intent),
-                    OrionUnifiedRuntime.Modality.COMMAND,
-                    specialistRuntime.lastContext!!
-                )
+                if (!decision.canProceed || decision.executionPlan == null || decision.executionPlan!!.steps.isEmpty()) {
+                    result = "Specialist cannot proceed: ${decision.blocker ?: "no executable plan"}"
+                    verdict = SpecialistVerdict.FAILED
+                } else {
+                    // Execute the plan
+                    val outcome = specialistRuntime.executePlan(
+                        decision.executionPlan!!, decision,
+                        specialistRuntime.predictObstaclesForPlan(decision.executionPlan!!, intent),
+                        OrionUnifiedRuntime.Modality.COMMAND,
+                        specialistRuntime.lastContext!!
+                    )
 
-                // Verify
-                val verification = specialistRuntime.verifyOutcome(outcome, intent, specialistRuntime.lastContext)
-                verdict = if (verification.passed) SpecialistVerdict.VERIFIED else SpecialistVerdict.UNVERIFIED
-                result = outcome.notes.joinToString("; ")
-                evidence += outcome.notes
-                toolCalls = outcome.completed.size + outcome.failed.size
+                    // Verify
+                    val verification = specialistRuntime.verifyOutcome(outcome, intent, specialistRuntime.lastContext)
+                    verdict = if (verification.passed) SpecialistVerdict.VERIFIED else SpecialistVerdict.UNVERIFIED
+                    result = outcome.notes.joinToString("; ")
+                    evidence += outcome.notes
+                    toolCalls = outcome.completed.size + outcome.failed.size
+                }
             }
-
         } catch (e: Exception) {
-            result = "error: specialist execution failed: ${e.javaClass.simpleName}: ${e.message}"
+            result = if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                "error: specialist timed out after ${TIMEOUT_MS / 60000} minutes"
+            } else {
+                "error: specialist execution failed: ${e.javaClass.simpleName}: ${e.message}"
+            }
             verdict = SpecialistVerdict.FAILED
         } finally {
             val completedAt = System.currentTimeMillis()
